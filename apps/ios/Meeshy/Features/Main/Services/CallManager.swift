@@ -178,13 +178,6 @@ final class CallManager: ObservableObject {
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
     /// masquée pour éviter le doublon visuel au retour au premier plan.
     @Published private(set) var isSystemPiPActive: Bool = false
-    @Published private(set) var activeAudioEffect: AudioEffectConfig? {
-        didSet {
-            if let effect = activeAudioEffect {
-                analyticsEffectsUsed.insert(effect.effectType.rawValue)
-            }
-        }
-    }
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
     /// Outbound video auto-suspended by the graceful-degradation survival layer
@@ -1979,40 +1972,6 @@ final class CallManager: ObservableObject {
     var localVideoTrack: Any? { webRTCService.localVideoTrack }
     var remoteVideoTrack: Any? { webRTCService.remoteVideoTrack }
 
-    // MARK: - Audio Effects
-
-    // Audit 2026-07-05: `CallEffectsOverlay` dropped its voice-effects UI entry
-    // point on 2026-07-02 (no production capture hook feeds `processAudioBuffer`),
-    // but this API stayed reachable. `CallAudioEffectsService` builds an
-    // independent `AVAudioEngine` tapping the live mic input node — starting it
-    // while a call's WebRTC `RTCAudioSession` (`.voiceChat`) already owns the
-    // hardware input is two AU-HAL clients contending for the same input, which
-    // iOS does not reliably support (silent capture loss or a broken mic).
-    // Refuse to engage a non-nil effect until a real capture hook exists; `nil`
-    // (clear/teardown) always passes through since it never touches the engine.
-    func setAudioEffect(_ effect: AudioEffectConfig?) {
-        guard effect == nil else {
-            Logger.calls.warning("setAudioEffect ignored — no production capture hook wired yet (see CallEffectsOverlay 2026-07-02)")
-            return
-        }
-        webRTCService.setAudioEffect(nil)
-        activeAudioEffect = nil
-        HapticFeedback.light()
-    }
-
-    func updateAudioEffectParams(_ config: AudioEffectConfig) {
-        guard activeAudioEffect != nil else {
-            Logger.calls.warning("updateAudioEffectParams ignored — no active effect (setAudioEffect is currently a no-op, see 2026-07-05 audit)")
-            return
-        }
-        webRTCService.updateAudioEffectParams(config)
-        activeAudioEffect = config
-    }
-
-    func clearAudioEffect() {
-        setAudioEffect(nil)
-    }
-
     // MARK: - Call Waiting (§11.15)
 
     func rejectPendingCall() {
@@ -3040,9 +2999,8 @@ final class CallManager: ObservableObject {
         pendingIceCandidates = []
         thermalMonitor.stopMonitoring()
         // Snapshot analytics before state is torn down so the payload has access
-        // to callId, callDuration, callStartDate, activeAudioEffect, etc.
+        // to callId, callDuration, callStartDate, etc.
         emitCallAnalyticsIfNeeded(reason: reason)
-        activeAudioEffect = nil
         hasLocalVideoTrack = false
         hasRemoteVideoTrack = false
         callStartDate = nil
@@ -3983,9 +3941,7 @@ extension CallManager: ThermalStateMonitorDelegate {
             self.pip.setMaxFrameRate(self.pipFrameRate(for: state))
             if state == .critical {
                 self.webRTCService.videoFilters.reset()
-                self.activeAudioEffect = nil
-                self.webRTCService.setAudioEffect(nil)
-                Logger.calls.warning("Thermal critical — disabled all filters (video + audio)")
+                Logger.calls.warning("Thermal critical — disabled all filters (video)")
                 if self.isVideoEnabled {
                     self.isVideoEnabled = false
                     // §5.4 — use downgradeFromVideo (sets transceiver direction +

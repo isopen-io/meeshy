@@ -55,6 +55,18 @@ export class CallCleanupService {
   // message that every other terminal path posts.
   private postSummary: ((callId: string) => Promise<void>) | null = null;
 
+  // Phantom-ringing safety net — set via `setMissedCallCancelPushCallback()`
+  // once the socket layer's CallEventsHandler is ready. A callee whose VoIP
+  // push was delivered but whose socket never joined the call room does not
+  // observe the `call:ended` broadcast (it never joined `ROOMS.call`/
+  // `ROOMS.conversation`, and the per-user-room fanout requires a live
+  // socket). Without this, GC tier 1 (initiated/ringing > 120s → missed) —
+  // the fallback for when the in-process ringing timer never fired — leaves
+  // that callee's CallKit screen ringing until its own client-side timeout,
+  // even though every other missed-call path sends the silent `call_cancel`
+  // background push that tears it down.
+  private missedCallCancelPush: ((callId: string, conversationId: string | undefined, duration: number) => Promise<void>) | null = null;
+
   constructor(
     private prisma: PrismaClient,
     private callService?: CallService,
@@ -87,6 +99,16 @@ export class CallCleanupService {
   setPostSummaryCallback(postSummary: (callId: string) => Promise<void>): void {
     this.postSummary = postSummary;
     logger.info('[CallCleanupService] Post-summary callback attached — GC-ended calls will get a summary message');
+  }
+
+  // Phantom-ringing safety net (see field doc above) — injected from server
+  // startup once CallEventsHandler exists, mirroring attachSocketServer/
+  // setCallService/setPostSummaryCallback.
+  setMissedCallCancelPushCallback(
+    cancelPush: (callId: string, conversationId: string | undefined, duration: number) => Promise<void>
+  ): void {
+    this.missedCallCancelPush = cancelPush;
+    logger.info('[CallCleanupService] Missed-call cancel-push callback attached — phantom-ringing callees will be released on GC tier 1');
   }
 
   start(): void {
@@ -427,6 +449,18 @@ export class CallCleanupService {
     if (this.postSummary) {
       this.postSummary(callId).catch((error) => {
         logger.error('[CallCleanupService] Failed to post call summary for GC-ended call', { callId, error });
+      });
+    }
+
+    // Phantom-ringing safety net — only tier 1's `missed` reason applies:
+    // tier 2/3/heartbeat force-ends only ever fire on calls that were
+    // ANSWERED (connecting/active/reconnecting), whose participants already
+    // hold a live call-room socket and so already observe the broadcast
+    // above. Best-effort, mirrors postSummary's fire-and-forget error
+    // handling — a push failure must never break GC.
+    if (this.missedCallCancelPush && endReason === CallEndReason.missed) {
+      this.missedCallCancelPush(callId, session?.conversationId ?? undefined, duration).catch((error) => {
+        logger.error('[CallCleanupService] Failed to send missed-call cancel push for GC-ended call', { callId, error });
       });
     }
 

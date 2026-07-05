@@ -1093,6 +1093,122 @@ describe('CallCleanupService', () => {
   });
 
   // -------------------------------------------------------------------------
+  // setMissedCallCancelPushCallback — phantom-ringing safety net: GC tier 1
+  // (initiated/ringing > 120s → missed) must send the same `call_cancel`
+  // background push as every other missed-call path, or a callee whose VoIP
+  // push was delivered but whose socket never joined the call room keeps
+  // ringing until its own client-side timeout.
+  // -------------------------------------------------------------------------
+  describe('setMissedCallCancelPushCallback', () => {
+    it('invokes the callback with callId, conversationId and duration for a tier-1 missed force-end', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const cancelPush = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setMissedCallCancelPushCallback(cancelPush);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cancel-1');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-1' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(cancelPush).toHaveBeenCalledWith('call-cancel-1', 'conv-cancel-1', expect.any(Number));
+    });
+
+    it('does not invoke the callback for a tier-2 (failed) force-end', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const cancelPush = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setMissedCallCancelPushCallback(cancelPush);
+
+      const staleConnecting = makeStaleCall(CallStatus.connecting, 100_000, 'call-cancel-2');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([staleConnecting])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-2' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(cancelPush).not.toHaveBeenCalled();
+    });
+
+    it('does not invoke the callback for a tier-3 (garbageCollected) force-end', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const cancelPush = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setMissedCallCancelPushCallback(cancelPush);
+
+      const staleCall = makeStaleCall(CallStatus.active, 3 * 60 * 60 * 1000, 'call-cancel-3');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([staleCall]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-3' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(cancelPush).not.toHaveBeenCalled();
+    });
+
+    it('does not invoke the callback when the race guard skips the write (call already transitioned)', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const cancelPush = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setMissedCallCancelPushCallback(cancelPush);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cancel-race');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-race' });
+      setupTransactionPassthrough(prisma, 0); // already transitioned — no write
+
+      await service.runCleanup();
+
+      expect(cancelPush).not.toHaveBeenCalled();
+    });
+
+    it('does not throw and still counts the call as cleaned when the callback rejects', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const cancelPush = jest.fn().mockRejectedValue(new Error('push failed')) as MockFn;
+      service.setMissedCallCancelPushCallback(cancelPush);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cancel-fail');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-fail' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+      expect(result.errors).toBe(0);
+    });
+
+    it('is a no-op (no crash) when no callback was registered', async () => {
+      const service = new CallCleanupService(prisma as any);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cancel-none');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-none' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // forceEndCall (tested indirectly via runCleanup)
   // -------------------------------------------------------------------------
   describe('forceEndCall — broadcast variants', () => {

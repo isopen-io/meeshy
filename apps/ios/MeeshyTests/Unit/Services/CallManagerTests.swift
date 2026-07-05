@@ -275,7 +275,6 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     var isConnected: Bool = false
     var localVideoTrack: Any?
     var remoteVideoTrack: Any?
-    var audioEffectsService: CallAudioEffectsServiceProviding?
     let videoFilterPipeline = VideoFilterPipeline()
 
     var configureCallCount = 0
@@ -338,8 +337,6 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     func restartIce() { restartIceCallCount += 1 }
     func applyAudioEncoding(maxBitrateBps: Int) {}
     func sendDTMF(digits: String) {}
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
 
 @MainActor
@@ -3052,64 +3049,6 @@ final class CallManagerDTMFTests: XCTestCase {
     }
 }
 
-// MARK: - Audio Effects Guard (2026-07-05 audit)
-//
-// `CallAudioEffectsService` builds an independent `AVAudioEngine` tapping the
-// live mic input node. `CallEffectsOverlay` removed its UI entry point on
-// 2026-07-02 because no production capture hook feeds it, but `setAudioEffect`
-// stayed reachable — engaging it during a live call would start a second
-// AVAudioEngine contending with WebRTC's own `RTCAudioSession` for the same
-// hardware input. These tests lock in the guard that keeps it a documented
-// no-op until a real capture hook exists.
-
-@MainActor
-final class CallManagerAudioEffectGuardTests: XCTestCase {
-
-    private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    private func funcBody(named signature: String, in source: String) -> String? {
-        guard let range = source.range(of: signature) else { return nil }
-        let blockEnd = source.range(of: "}", range: range.upperBound..<source.endIndex)?.upperBound
-            ?? source.endIndex
-        return String(source[range.lowerBound..<blockEnd])
-    }
-
-    func test_setAudioEffect_guardsNonNilEffect_inSourceCode() throws {
-        let source = try callManagerSource()
-        guard let body = funcBody(named: "func setAudioEffect(_ effect: AudioEffectConfig?)", in: source) else {
-            XCTFail("setAudioEffect not found in CallManager.swift"); return
-        }
-
-        XCTAssertTrue(
-            body.contains("guard effect == nil"),
-            "setAudioEffect must refuse a non-nil effect — CallAudioEffectsService's " +
-            "AVAudioEngine has no production capture hook and would collide with the " +
-            "live call's RTCAudioSession if engaged"
-        )
-    }
-
-    func test_updateAudioEffectParams_guardsNoActiveEffect_inSourceCode() throws {
-        let source = try callManagerSource()
-        guard let body = funcBody(named: "func updateAudioEffectParams(_ config: AudioEffectConfig)", in: source) else {
-            XCTFail("updateAudioEffectParams not found in CallManager.swift"); return
-        }
-
-        XCTAssertTrue(
-            body.contains("guard activeAudioEffect != nil"),
-            "updateAudioEffectParams must refuse to forward when no effect is active " +
-            "(setAudioEffect is a no-op for non-nil effects, so this should never fire in production)"
-        )
-    }
-}
-
 // MARK: - call:force-leave Server→Client Handler
 
 @MainActor
@@ -4068,7 +4007,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
     }
 
     /// `emitCallAnalyticsIfNeeded` must be called in `endCallInternal` BEFORE
-    /// `activeAudioEffect = nil` and `callStartDate = nil` — it reads these live values.
+    /// `callStartDate = nil` — it reads this live value.
     func test_endCallInternal_emitsAnalyticsBeforeStateReset() throws {
         let source = try callManagerSource()
         guard let body = endCallInternalBody(in: source) else {
@@ -4077,13 +4016,13 @@ final class CallManagerAnalyticsTests: XCTestCase {
         guard let analyticsIdx = body.range(of: "emitCallAnalyticsIfNeeded(reason:")?.lowerBound else {
             XCTFail("emitCallAnalyticsIfNeeded not found in endCallInternal"); return
         }
-        guard let effectIdx = body.range(of: "activeAudioEffect = nil")?.lowerBound else {
-            XCTFail("activeAudioEffect = nil not found in endCallInternal"); return
+        guard let stateResetIdx = body.range(of: "callStartDate = nil")?.lowerBound else {
+            XCTFail("callStartDate = nil not found in endCallInternal"); return
         }
         XCTAssertTrue(
-            analyticsIdx < effectIdx,
-            "emitCallAnalyticsIfNeeded must fire before activeAudioEffect = nil — " +
-            "analytics reads the active effect state to include in the payload."
+            analyticsIdx < stateResetIdx,
+            "emitCallAnalyticsIfNeeded must fire before callStartDate = nil — " +
+            "analytics reads the live call state to include in the payload."
         )
     }
 

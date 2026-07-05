@@ -726,10 +726,7 @@ protocol WebRTCClientProviding: AnyObject {
     /// `disconnect()` when nothing is buffered.
     func disconnectAfterFlushingPendingSend()
 
-    var audioEffectsService: CallAudioEffectsServiceProviding? { get }
     var videoFilterPipeline: VideoFilterPipeline { get }
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws
 }
 
 // MARK: - DataChannel Transcription Message

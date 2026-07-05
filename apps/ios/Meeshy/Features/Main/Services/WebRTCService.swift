@@ -42,7 +42,6 @@ final class WebRTCService {
 
     var videoFilters: VideoFilterPipeline { client.videoFilterPipeline }
 
-    var audioEffectsService: CallAudioEffectsServiceProviding? { client.audioEffectsService }
     var localVideoTrack: Any? { client.localVideoTrack }
     var remoteVideoTrack: Any? { client.remoteVideoTrack }
 
@@ -473,25 +472,6 @@ final class WebRTCService {
 
     func sendDTMF(digits: String) {
         client.sendDTMF(digits: digits)
-    }
-
-    // MARK: - Audio Effects
-
-    func setAudioEffect(_ effect: AudioEffectConfig?) {
-        do {
-            try client.setAudioEffect(effect)
-            Logger.webrtc.info("Audio effect set via service: \(effect?.effectType.rawValue ?? "none")")
-        } catch {
-            Logger.webrtc.error("Failed to set audio effect: \(error.localizedDescription)")
-        }
-    }
-
-    func updateAudioEffectParams(_ config: AudioEffectConfig) {
-        do {
-            try client.updateAudioEffectParams(config)
-        } catch {
-            Logger.webrtc.error("Failed to update audio effect params: \(error.localizedDescription)")
-        }
     }
 
     // MARK: - ICE Restart
