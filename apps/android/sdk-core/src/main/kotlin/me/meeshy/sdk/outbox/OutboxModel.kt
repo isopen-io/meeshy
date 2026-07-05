@@ -55,6 +55,70 @@ public object OutboxLanes {
 }
 
 /**
+ * The lane category a mutation kind drains on. Message mutations share a
+ * per-conversation FIFO lane whose concrete id is only known at enqueue time
+ * (from the conversation id), so they carry no fixed lane string here; every
+ * other kind drains on exactly one fixed shared lane.
+ */
+public sealed interface OutboxLaneAssignment {
+    /** Drains on the dynamic per-conversation message lane ([OutboxLanes.forMessage]). */
+    public data object PerConversation : OutboxLaneAssignment
+
+    /** Drains on one fixed shared lane. */
+    public data class Shared(val lane: String) : OutboxLaneAssignment
+}
+
+/**
+ * Single source of truth mapping each [OutboxKind] to the lane it drains on.
+ *
+ * The worker derives its shared-lane drain sweep from [sharedDrainLanes] rather
+ * than a hand-maintained list, so a kind that has a registered sender can never
+ * again be enqueued onto a lane the worker forgets to drain — the BLOCK/FRIEND
+ * omission bug (see NOTES 2026-07-04) is structurally impossible once every kind
+ * has an assignment here (enforced by the exhaustive `when`).
+ */
+public object OutboxLaneMap {
+    public fun assignmentFor(kind: OutboxKind): OutboxLaneAssignment = when (kind) {
+        OutboxKind.SEND_MESSAGE,
+        OutboxKind.EDIT_MESSAGE,
+        OutboxKind.DELETE_MESSAGE,
+        -> OutboxLaneAssignment.PerConversation
+
+        OutboxKind.ADD_REACTION,
+        OutboxKind.REMOVE_REACTION,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.REACTION)
+
+        OutboxKind.READ_RECEIPT -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
+        OutboxKind.UPDATE_CONVERSATION_PREFS ->
+            OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_PREFS)
+        OutboxKind.UPDATE_PROFILE -> OutboxLaneAssignment.Shared(OutboxLanes.PROFILE)
+        OutboxKind.UPDATE_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.PUBLISH_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.STORY)
+        OutboxKind.UPLOAD_MEDIA -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA)
+
+        OutboxKind.BLOCK_USER,
+        OutboxKind.UNBLOCK_USER,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.BLOCK)
+
+        OutboxKind.SEND_FRIEND_REQUEST -> OutboxLaneAssignment.Shared(OutboxLanes.FRIEND)
+    }
+
+    /**
+     * Every fixed shared lane at least one mutation kind drains on, in stable
+     * enum-declaration order, deduplicated. The worker drains exactly these
+     * (plus the dynamic per-conversation message lanes), so no registered kind
+     * is ever stranded.
+     */
+    public val sharedDrainLanes: List<String> = OutboxKind.entries
+        .asSequence()
+        .map(::assignmentFor)
+        .filterIsInstance<OutboxLaneAssignment.Shared>()
+        .map { it.lane }
+        .distinct()
+        .toList()
+}
+
+/**
  * Whether a row's [OutboxEntity.dependsOn] prerequisite lets it run yet
  * (ARCHITECTURE.md §5). The dependency is resolved purely from the prerequisite
  * row's current state, so it is fully testable without a database.

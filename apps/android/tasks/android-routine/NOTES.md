@@ -978,6 +978,22 @@ Append-only log of gotchas and decisions that save time next run.
   established `StoryRepositoryTest`/`MediaUploadQueueTest` pattern. Assert the queued row via
   `outbox.deliverable(lane)`; don't mock the final `OutboxRepository`.
 
+## 2026-07-05 — resolved: the lane-in-drain-list gotcha, structurally (outbox-lane-map-ssot)
+- The 2026-07-04 follow-up ("a worker drain-list test that asserts every lane with a registered
+  sender is drained") is **closed — one better than a test**. Instead of a Robolectric worker test
+  guarding the hand-maintained `lanes` list, the list is **gone**: a new pure `OutboxLaneMap`
+  (`sdk-core/.../outbox/OutboxModel.kt`) is the SSOT `OutboxKind → OutboxLaneAssignment`
+  (`PerConversation` | `Shared(lane)`, exhaustive `when` → every kind must have an assignment or it
+  won't compile), and `OutboxFlushWorker` now drains `OutboxLaneMap.sharedDrainLanes` (derived,
+  deduped, stable enum order) instead of a literal `listOf(...)`. A kind with a registered sender can
+  no longer be stranded on an undrained lane — the BLOCK/FRIEND omission class is now impossible, not
+  merely tested for. Bonus: the derivation drops the always-empty `PRESENCE`/`SOCIAL` lanes (no kind
+  maps there, no enqueue site) from the sweep — a behaviour-preserving no-op (draining an empty lane
+  did nothing). +9 pure tests over `assignmentFor`/`sharedDrainLanes` (per-arm mapping, dedup,
+  per-conversation exclusion, non-blank invariant, BLOCK/FRIEND regression). **Lesson generalised:**
+  when two lists must stay in lockstep (senders keyed by kind ↔ lanes drained), don't guard the drift
+  with a test — **derive one from the other** so the drift can't exist.
+
 ## 2026-07-04 — pattern: durable friend-request send + the lane-in-drain-list gotcha
 - **Adding an `OutboxKind` + `OutboxLanes.X` is NOT enough — you MUST also add lane `X` to the
   `OutboxFlushWorker` shared-lane drain list.** The prior `block-outbox-durable` slice added
@@ -985,6 +1001,8 @@ Append-only log of gotchas and decisions that save time next run.
   silent no-op, invisible to the JVM tests because there is no worker integration test). This slice
   added both `BLOCK` and `FRIEND` to the list. **Follow-up: a worker drain-list test** (Robolectric)
   that asserts every lane with a registered sender is drained would have caught it — worth wiring.
+  ✅ **RESOLVED 2026-07-05 (`outbox-lane-map-ssot`)** — went one better: derived the drain list from a
+  kind→lane SSOT (`OutboxLaneMap`) so the drift is structurally impossible. See the 2026-07-05 entry above.
 - **Optimistic flip of a shared singleton cache must come AFTER the durable enqueue commits, not
   before.** `DiscoverViewModel.connect` first flipped `FriendshipCache` (an app-wide `@Singleton`)
   then enqueued in a `viewModelScope` coroutine — a cancellation between the two (VM cleared on
