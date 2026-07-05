@@ -868,6 +868,32 @@ export class CallEventsHandler {
   }
 
   /**
+   * Public entry point for `CallCleanupService`'s GC tier 1 (initiated/
+   * ringing > 120s → missed) — the safety net that fires when the
+   * in-process ringing timer (`buildRingingTimeoutHandler`) never runs, e.g.
+   * a crash before `rehydrateActiveCalls` re-armed it, or the timer callback
+   * itself threw. That normal path already reaches `sendCallCancellationPushes`
+   * via `broadcastCallEnded`, sending the silent `call_cancel` APNs push that
+   * stops CallKit ringing for a phantom-ringing callee — one whose VoIP push
+   * was delivered but whose socket never joined the call room, so the
+   * socket-fanout `call:ended` in `resolveCallEndedRooms` never reaches them.
+   * Without this wrapper, the GC-tier fallback silently skipped that push and
+   * such a callee's CallKit screen would ring until its own client-side
+   * timeout.
+   */
+  async sendMissedCallCancellationPushForTerminatedCall(
+    callId: string,
+    conversationId: string | undefined,
+    duration: number
+  ): Promise<void> {
+    return this.sendCallCancellationPushes(callId, conversationId, {
+      callId,
+      duration,
+      reason: CallEndReason.missed
+    });
+  }
+
+  /**
    * Translates a final transcription segment to each active participant's
    * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
    * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
