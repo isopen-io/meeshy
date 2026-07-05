@@ -19,4 +19,13 @@
     <string name="profile_detail_regional_language">Idioma secundário</string>
     <string name="profile_detail_country">País</string>
     <string name="profile_detail_timezone">Fuso horário</string>
+    <string name="profile_stats_title">Estatísticas</string>
+    <string name="profile_stat_messages">Mensagens</string>
+    <string name="profile_stat_conversations">Conversas</string>
+    <string name="profile_stat_translations">Traduções</string>
+    <string name="profile_stat_friend_requests">Pedidos de amizade</string>
+    <string name="profile_stat_languages">Idiomas</string>
+    <string name="profile_stat_member_days">Dias como membro</string>
+    <string name="profile_achievements_title">Conquistas</string>
+    <string name="profile_achievements_unlocked">%1$d de %2$d desbloqueados</string>
 </resources>
