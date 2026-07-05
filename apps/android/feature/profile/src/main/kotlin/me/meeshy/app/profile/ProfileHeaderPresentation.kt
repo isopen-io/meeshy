@@ -28,6 +28,7 @@ data class ProfileHeaderPresentation(
     val systemLanguage: String?,
     val regionalLanguage: String?,
     val country: String?,
+    val timezone: String?,
 )
 
 object ProfileHeaderBuilder {
@@ -54,5 +55,6 @@ object ProfileHeaderBuilder {
             systemLanguage = user.systemLanguage?.takeIf { it.isNotBlank() },
             regionalLanguage = user.regionalLanguage?.takeIf { it.isNotBlank() },
             country = user.registrationCountry?.takeIf { it.isNotBlank() },
+            timezone = user.timezone?.takeIf { it.isNotBlank() },
         )
 }

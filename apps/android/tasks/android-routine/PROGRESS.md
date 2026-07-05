@@ -2,7 +2,7 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (started)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows)** → rest`
 
 > On 2026-07-05 the **profile-header enrichment** landed (slice `profile-header-presentation`,
 > §K): the pure `:feature:profile` `ProfileHeaderBuilder.build(user, now) → ProfileHeaderPresentation`
@@ -324,11 +324,13 @@ cache-complete + mutation-complete + list-display-complete (only mood-emoji pres
 needs a `moodEmoji` field the roster record doesn't carry yet — deferred until a mood/status model
 lands). The routine advanced to the next-richest area with untapped pure cores. The **profile-header
 enrichment** landed first (`profile-header-presentation`): pure `ProfileHeaderBuilder` →
-`ProfileHeaderPresentation` (presence · completion-ring % · E2EE · member-since), consumed by the
-read-only `ProfileScreen`. **Next highest-value §K slices (all pure-core-rich):**
-1. **`profile-details-rows`** — a pure `ProfileDetailRows.build(header)` projecting the identity block's
-   secondary rows (languages as flag+label chips, country, timezone) into a tested list the sheet
-   renders; extends the header without new network.
+`ProfileHeaderPresentation` (presence · completion-ring % · E2EE · member-since), then the **secondary
+identity rows** landed (`profile-details-rows`, 2026-07-05): pure `ProfileDetailRows.build(header)`
+projecting language (flag+name via `LanguageData`) · country (ISO→regional-indicator flag) · timezone
+into a tested list, with case-insensitive dup-language collapse; consumed by the read-only `ProfileScreen`.
+**Next highest-value §K slices (all pure-core-rich):**
+1. ~~**`profile-details-rows`**~~ ✅ shipped 2026-07-05 — see run log. `timezone` added to the header
+   presentation. +14 tests.
 2. **`profile-stats-model`** — the pure `:core:model` `UserStats` + `UserStatsApi` + repository
    (cache-first) mirroring the gateway stats contract (messages/conversations/translations counts),
    the SSOT the future stats dashboard cards render.
@@ -727,6 +729,39 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-05 — slice `profile-details-rows` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1484/#1483/#1481/
+  #1480/#1479/#1477/#1476/#1475/#1473) are all unrelated gateway/iOS/web work by another author — left
+  untouched. Branched `claude/apps/android/profile-details-rows` off latest `origin/main` (`048e40b`, the
+  merged `profile-header-presentation` #1482); the designated `claude/fervent-darwin-n7rvr5` was exactly
+  at main.
+- **Why this slice:** the #1 recommended §K follow-up — extend the just-landed profile header with its
+  **secondary identity rows** (languages · country · timezone). Pure, richly branch-covered, no network.
+- **Added / changed (production):**
+  - `:feature:profile` `ProfileDetailRows.kt` (new) — pure `ProfileDetailRows.build(header) →
+    List<ProfileDetailRow>` + `ProfileDetailKind` enum + `@Immutable ProfileDetailRow(kind, flag?, value)`.
+    Rules: languages resolve flag+name from the `LanguageData` SSOT (`info(code.lowercase())`), unknown
+    code → `flag=null`, `value=code.uppercase()`; a regional language equal to the system one
+    (case-insensitively) is **collapsed**; country → regional-indicator flag iff exactly two ASCII letters
+    (else `flag=null`, plain text kept); timezone → flagless raw row. Order: system · regional · country ·
+    timezone.
+  - `:feature:profile` `ProfileHeaderPresentation.kt` — added `timezone: String?` (blank→null degraded in
+    `ProfileHeaderBuilder`, consistent with country).
+  - `:feature:profile` `ProfileScreen.kt` — read-only view renders the rows below "member since" via
+    `ProfileDetailsSection`/`ProfileDetailRowView` (label↔flag+value, `onSurfaceVariant`); empty list →
+    nothing. 4 new label strings × 4 locales (EN/FR/ES/PT).
+- **Tests (red → green):** +14 `ProfileDetailRowsTest` (empty, known/uppercase/unknown language, distinct
+  vs collapsed-equal regional, regional-without-system, 2-letter country flag, uppercase country, full-name
+  country, non-letter 2-char, timezone, full composition order) + 2 extended `ProfileHeaderBuilderTest`
+  (timezone blank→null + pass-through, now 22). Test authored first against a non-existent `ProfileDetailRows`
+  (compile-RED). Behavioural through the public API; every `when`/branch arm exercised.
+- **Verification:** full `gradle assembleDebug testDebugUnitTest` (`meeshy.sh check`) **green** in 3m01s
+  (system Gradle 8.14.3; wrapper dist 403-blocked — see NOTES). Diff = `apps/android` only (3 prod + 4 res
+  + 2 test + docs).
+- **Reviewer verdict:** **PASS** — pure projector in `:feature:profile` (product-side, consuming the header
+  SSOT), `LanguageData` reused (no flag/name re-implementation), no prod logic outside android, near-total
+  branch coverage incl. unknown-code / case-collapse / non-code-country / empty edges, UI kept dumb.
 
 ### 2026-07-05 — slice `outbox-lane-map-ssot` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The four open PRs (#1477/#1476/

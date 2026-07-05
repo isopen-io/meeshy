@@ -235,6 +235,7 @@ fun ProfileScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                header?.let { ProfileDetailsSection(it) }
             }
         }
     }
@@ -254,6 +255,49 @@ private fun presenceDotColor(state: PresenceState?): Color? = when (state) {
 /** Localized medium-date label for the "member since" line. */
 private fun formatMemberSince(epochMillis: Long): String =
     DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMillis))
+
+/** The read-only secondary identity rows (languages · country · timezone). */
+@Composable
+private fun ProfileDetailsSection(header: ProfileHeaderPresentation) {
+    val rows = remember(header) { ProfileDetailRows.build(header) }
+    if (rows.isEmpty()) return
+    Spacer(Modifier.height(4.dp))
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        rows.forEach { row -> ProfileDetailRowView(row) }
+    }
+}
+
+@Composable
+private fun ProfileDetailRowView(row: ProfileDetailRow) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(profileDetailLabel(row.kind)),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            row.flag?.let {
+                Text(text = it, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(text = row.value, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+private fun profileDetailLabel(kind: ProfileDetailKind): Int = when (kind) {
+    ProfileDetailKind.SYSTEM_LANGUAGE -> R.string.profile_detail_system_language
+    ProfileDetailKind.REGIONAL_LANGUAGE -> R.string.profile_detail_regional_language
+    ProfileDetailKind.COUNTRY -> R.string.profile_detail_country
+    ProfileDetailKind.TIMEZONE -> R.string.profile_detail_timezone
+}
 
 /** A circular progress ring around the avatar showing the profile-completion percentage. */
 @Composable

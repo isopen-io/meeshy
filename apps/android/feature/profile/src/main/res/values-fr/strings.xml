@@ -15,4 +15,8 @@
     <string name="profile_completion">Profil complété à %1$d%%</string>
     <string name="profile_presence_online">En ligne</string>
     <string name="profile_presence_away">Absent</string>
+    <string name="profile_detail_system_language">Langue principale</string>
+    <string name="profile_detail_regional_language">Langue secondaire</string>
+    <string name="profile_detail_country">Pays</string>
+    <string name="profile_detail_timezone">Fuseau horaire</string>
 </resources>
