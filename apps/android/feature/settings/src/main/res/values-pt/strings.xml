@@ -19,6 +19,9 @@
     <string name="settings_language_dialog_close">Fechar</string>
     <string name="settings_regional_language">Idioma regional</string>
     <string name="settings_push_notifications">Notificações push</string>
+    <string name="settings_new_message_notifications">Novas mensagens</string>
+    <string name="settings_notification_sound">Som</string>
+    <string name="settings_notification_vibration">Vibração</string>
     <string name="settings_two_factor">Autenticação de dois fatores</string>
     <string name="settings_active_sessions">Sessões ativas</string>
     <string name="settings_blocked_users">Usuários bloqueados</string>

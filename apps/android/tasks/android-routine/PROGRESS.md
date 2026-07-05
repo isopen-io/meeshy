@@ -2,7 +2,7 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme + interface language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme + interface language + notification master toggles)** → rest`
 
 > On 2026-07-05 the **persisted interface (UI chrome) language** landed (slice `settings-interface-language`,
 > §L — mirrors the theme slice one step further): the pure `:core:model` `AppLanguage` helpers are the SSOT —
@@ -453,19 +453,26 @@ into a tested list, with case-insensitive dup-language collapse; consumed by the
 6. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
    remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
 
-**Recommended next:** Settings §L theme persistence ✅ and interface-language persistence ✅ shipped
-(`settings-theme-mode`, `settings-interface-language`, 2026-07-05 — see run log). The next clean pure-core §L
-slices, in value order:
-1. **Notification-preference toggles** — the `settings_push_notifications` switch is local `remember` state
-   today (lost on recompose/relaunch); back it with the local-first user-preference store (§L "Local-first
-   user preferences (7 categories)"). The `UserNotificationPreferences` model already exists in `:core:model`.
-   Same pure-codec + DataStore-store + ViewModel-intent shape as the last two slices, low risk.
-2. **Regional (content) language preference** — the still-no-op `settings_regional_language` row. Distinct
+**Recommended next:** Settings §L theme ✅, interface-language ✅ and **notification master toggles ✅**
+shipped (`settings-theme-mode`, `settings-interface-language`, `settings-notification-prefs`, 2026-07-05 — see
+run log). The next clean pure-core §L slices, in value order:
+1. **DND schedule editor** — the `UserNotificationPreferences` block already carries `dndEnabled`/
+   `dndStartTime`/`dndEndTime`/`dndDays` and the shipped codec + `NotificationPreferencesStore` already persist
+   them losslessly. Add a pure `:core:model` `DndWindow` helper (is-now-inside-the-window, wrap-around
+   midnight, per-day gating) + the time-range + day-chip rows wired to the existing store. High-branch pure
+   core, reuses this slice's durable seam — no new store.
+2. **Per-event notification type toggles** — expose the remaining `UserNotificationPreferences` booleans
+   (mention/reaction/reply/post-like/comment/story-reaction/…) as a grouped, searchable section over the same
+   store; add a pure grouping/ordering builder. Mostly UI over the seam already shipped.
+3. **Backend sync of notification prefs** — wire the local block through a new outbox lane so the device-local
+   choice debounce-syncs to the gateway (`PATCH /users/me/preferences`), mirroring `edit-profile-optimistic`.
+   Closes the "online-only vs device-local" gap noted in `feature-parity.md §L`.
+4. **Regional (content) language preference** — the still-no-op `settings_regional_language` row. Distinct
    from the interface language just shipped: this is a *Prisme content*-preference (`ContentLanguagePreferences`
    / backend profile), resolved via `LanguageResolver`, NOT the app UI locale. Wire it through the
    content-preference/profile path (optimistic + offline-queued, like `edit-profile-optimistic`), not the
    `InterfaceLanguageStore`.
-3. Or the tracked **worker drain-list Robolectric test** (asserts every `OutboxLanes.*` with a registered
+5. Or the tracked **worker drain-list Robolectric test** (asserts every `OutboxLanes.*` with a registered
    sender is drained — would have caught the historic BLOCK/FRIEND omission, now also covers `PROFILE`).
 
 ---
@@ -858,6 +865,48 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-05 — slice `settings-notification-prefs` ✅ shipped
+- **Step 0 (housekeeping):** the prior iteration's Android PR **#1508 (`settings-interface-language`)** was
+  still open from the last run — merged it first (`mergeable_state: clean`, diff apps/android-only, reviewer
+  PASS documented), squash → `main` `7e7b554`. The other open PRs are non-Android gateway/web/calls fixes.
+  Then branched `claude/apps/android/settings-notification-prefs` off the freshly-merged `origin/main`.
+- **Why this slice:** the §L "Recommended next" #2 — the `settings_push_notifications` switch was ephemeral
+  `remember { mutableStateOf(true) }` (lost on recompose/relaunch). Backing it with a durable store closes a
+  visible data-loss gap and mirrors the theme/language pattern. The `UserNotificationPreferences` model
+  already existed in `:core:model` (30+ fields, untested, unused) — this slice makes it real.
+- **Pure core (`:core:model` `NotificationPreferencesCodec.kt`):** since the block is a whole record (not an
+  enum token), it round-trips as JSON. `UserNotificationPreferences.storageValue` (`encodeDefaults` so every
+  field survives) + `notificationPreferencesFromStorage(raw)` (blank/absent/malformed/wrong-shape → safe
+  defaults via `runCatching`, partial token fills missing with defaults, unknown keys ignored). RED first
+  (`NotificationPreferencesCodecTest`, 10: full-toggle round-trip, defaults round-trip, non-empty-JSON token,
+  null/blank/whitespace/corrupt/wrong-shape → defaults, partial-fill, unknown-keys-ignored).
+- **Durable store (`:sdk-core` `notification/NotificationPreferencesStore.kt`):** interface +
+  `InMemoryNotificationPreferencesStore` (tests/previews) + `DataStoreNotificationPreferencesStore` (decodes
+  through the pure codec, hydrates on cold start via `stateIn(Eagerly)`). `@Singleton` in `SdkModule` over
+  `preferencesDataStoreFile("meeshy_notifications")`. `NotificationPreferencesStoreTest` (7: in-memory
+  default/seed/update; DataStore default-empty, set-reflected, hydrate-already-persisted, **corrupt-stored-
+  value → defaults**). Reused the one-DataStore-per-file-per-process hydration pattern (see NOTES).
+- **Wiring:** `SettingsViewModel` mirrors `notificationPreferencesStore.preferences` into
+  `SettingsUiState.notifications` + four per-toggle intents (`setPushEnabled`/`setSoundEnabled`/
+  `setVibrationEnabled`/`setNewMessageEnabled`) that read-modify-write the whole block through a private
+  `updateNotifications { copy(...) }` — a single toggle never clobbers the others.
+  `SettingsScreen` replaces the ephemeral switch with a reusable `NotificationToggleRow` driven by state; push
+  is the **master** toggle (the three sub-toggles disable + dim when push is off — coherent UX, no dead end).
+  EN/FR/ES/PT strings added for the three new rows. The two existing VM test factories got the new ctor arg
+  (no assertion touched). `SettingsViewModelNotificationTest` (8: default-block, reflects-persisted,
+  set-push-persists+surfaces, set-sound-preserves-others, set-vibration, set-new-message, successive-toggles-
+  compose-without-clobber, toggle-streams-into-state).
+- **Verification:** `gradle :core:model:… :sdk-core:… :feature:settings:testDebugUnitTest` green, then full
+  `gradle assembleDebug testDebugUnitTest` → BUILD SUCCESSFUL (0 failures, system Gradle 8.14.3). +25 new tests
+  (codec 10, store 7, VM 8).
+- **Reviewer gate:** PASS — diff `apps/android` only (14 files); behaviour-through-public-API tests, no
+  tautologies, no floor lowered (two theme/language test factories only gained the required ctor arg); SDK
+  purity (pure codec in `:core:model`, stateless store in `:sdk-core`, the "which toggle / master-gates-subs"
+  product orchestration in `:feature:settings`), SSOT (one codec, `.copy` merge), UDF (immutable
+  `StateFlow<UiState>`), instant-app (cold-start hydration, no wrong-config flash), no dead ends (every toggle
+  has a live consumer). Surpasses iOS, whose notification prefs are online-only server round-trips — here the
+  toggle is instant + durable device-side (backend sync is a tracked follow-up).
 
 ### 2026-07-05 — slice `settings-interface-language` ✅ shipped
 - **Step 0 (housekeeping):** the prior iteration's Android PR **#1504 (`settings-theme-mode`)** was still open
