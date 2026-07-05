@@ -2686,10 +2686,30 @@ final class CallManager: ObservableObject {
                 // capturer/transceiver concurrently, leaving video stuck broken.
                 // Awaiting the prior task's `.value` first serializes every hold
                 // transition without relying on cancellation to stop in-flight work.
+                //
+                // Mirrors toggleVideo/applySurvivalVideoSend: a direction flip alone
+                // (inside downgradeFromVideo) never reaches the peer. If ANY other
+                // renegotiation fires while on hold (e.g. an ICE restart from a
+                // WiFi↔cellular handoff — exactly what a GSM call causes), it would
+                // otherwise bake the stale recvOnly direction into the SDP and
+                // permanently negotiate it, breaking outbound video for the rest of
+                // the call even after unhold. Renegotiating immediately keeps the
+                // locally-flipped direction and the negotiated SDP state in sync.
                 let previousTask = holdVideoTask
                 holdVideoTask = Task { [weak self] in
                     await previousTask?.value
-                    _ = await self?.webRTCService.downgradeFromVideo()
+                    guard let self, !Task.isCancelled else { return }
+                    let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
+                    guard !Task.isCancelled else { return }
+                    self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                    if needsRenegotiation,
+                       let callId = self.currentCallId,
+                       let userId = self.remoteUserId,
+                       let offer = await self.webRTCService.createOffer(),
+                       self.currentCallId == callId {
+                        self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)
+                        Logger.calls.info("[CALL] hold renegotiation offer sent (video=false)")
+                    }
                 }
                 MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                 Logger.calls.info("CallKit hold — video suspended, peer notified (callId=\(callId))")
@@ -2698,10 +2718,28 @@ final class CallManager: ObservableObject {
             if isVideoSuspendedByHold {
                 isVideoSuspendedByHold = false
                 if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
+                    // Companion fix: without renegotiating here, unhold only flips
+                    // the local track/direction back — the peer's negotiated SDP
+                    // state (possibly stuck at recvOnly from a hold-time ICE
+                    // restart) never actually gets corrected, leaving outbound
+                    // video silently broken for the rest of the call. Chains onto
+                    // the previous task rather than cancelling it for the same
+                    // reason as the hold path above.
                     let previousTask = holdVideoTask
                     holdVideoTask = Task { [weak self] in
                         await previousTask?.value
-                        _ = try? await self?.webRTCService.upgradeToVideo()
+                        guard let self, !Task.isCancelled else { return }
+                        guard let needsRenegotiation = try? await self.webRTCService.upgradeToVideo() else { return }
+                        guard !Task.isCancelled else { return }
+                        self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                        if needsRenegotiation,
+                           let callId = self.currentCallId,
+                           let userId = self.remoteUserId,
+                           let offer = await self.webRTCService.createOffer(),
+                           self.currentCallId == callId {
+                            self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)
+                            Logger.calls.info("[CALL] unhold renegotiation offer sent (video=true)")
+                        }
                     }
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
                     Logger.calls.info("CallKit unhold — video restored, peer notified (callId=\(callId))")
