@@ -1981,13 +1981,30 @@ final class CallManager: ObservableObject {
 
     // MARK: - Audio Effects
 
+    // Audit 2026-07-05: `CallEffectsOverlay` dropped its voice-effects UI entry
+    // point on 2026-07-02 (no production capture hook feeds `processAudioBuffer`),
+    // but this API stayed reachable. `CallAudioEffectsService` builds an
+    // independent `AVAudioEngine` tapping the live mic input node — starting it
+    // while a call's WebRTC `RTCAudioSession` (`.voiceChat`) already owns the
+    // hardware input is two AU-HAL clients contending for the same input, which
+    // iOS does not reliably support (silent capture loss or a broken mic).
+    // Refuse to engage a non-nil effect until a real capture hook exists; `nil`
+    // (clear/teardown) always passes through since it never touches the engine.
     func setAudioEffect(_ effect: AudioEffectConfig?) {
-        webRTCService.setAudioEffect(effect)
-        activeAudioEffect = effect
+        guard effect == nil else {
+            Logger.calls.warning("setAudioEffect ignored — no production capture hook wired yet (see CallEffectsOverlay 2026-07-02)")
+            return
+        }
+        webRTCService.setAudioEffect(nil)
+        activeAudioEffect = nil
         HapticFeedback.light()
     }
 
     func updateAudioEffectParams(_ config: AudioEffectConfig) {
+        guard activeAudioEffect != nil else {
+            Logger.calls.warning("updateAudioEffectParams ignored — no active effect (setAudioEffect is currently a no-op, see 2026-07-05 audit)")
+            return
+        }
         webRTCService.updateAudioEffectParams(config)
         activeAudioEffect = config
     }
