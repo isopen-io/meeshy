@@ -3,6 +3,16 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-05 (`settings-theme-mode`): DataStore allows only one active instance per file per process.**
+  A test that writes through one `DataStore`, cancels its scope, then opens a *second* `DataStore` over the
+  same file to prove persistence will hang/`TimeoutCancellationException` — cancelling the scope doesn't
+  reliably release the file from DataStore's internal `activeFiles` registry within the same JVM. To test
+  cold-start hydration, share ONE `DataStore` instance across two store wrappers and assert the freshly
+  constructed wrapper's `stateIn` reads the already-persisted value. That's the real unit under test
+  (the wrapper's hydration), not androidx's file persistence. Also: back a DataStore-backed `StateFlow`
+  with `stateIn(scope, SharingStarted.Eagerly, default)` so cold start has no flash of the default before
+  the persisted value loads; decode the stored token through a pure codec that maps garbage → the safe
+  default so a corrupt/legacy value can never brick the surface.
 - **2026-07-05 (`edit-profile-optimistic`): outbox kinds can be pre-declared but wired only partway.**
   `OutboxKind.UPDATE_PROFILE` already existed with a lane (`OutboxLanes.PROFILE`, in `sharedDrainLanes`)
   but no `OutboxFlushWorker` sender and no `OutboxCoalescer` rule — an enqueued row would drain, find no

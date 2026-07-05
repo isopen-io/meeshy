@@ -3,6 +3,11 @@
     <string name="settings_title">Paramètres</string>
     <string name="settings_back">Retour</string>
     <string name="settings_section_profile">Profil</string>
+    <string name="settings_section_appearance">Apparence</string>
+    <string name="settings_theme">Thème</string>
+    <string name="settings_theme_system">Système</string>
+    <string name="settings_theme_light">Clair</string>
+    <string name="settings_theme_dark">Sombre</string>
     <string name="settings_section_language">Langue</string>
     <string name="settings_section_notifications">Notifications</string>
     <string name="settings_section_privacy">Confidentialité et sécurité</string>

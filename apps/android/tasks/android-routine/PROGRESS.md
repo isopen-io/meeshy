@@ -2,7 +2,25 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme)** → rest`
+
+> On 2026-07-05 the **persisted light/dark/system theme** landed (slice `settings-theme-mode`, §L — the
+> first Settings §L slice, opening the area): the pure `:core:model` `AppTheme` helpers are the SSOT —
+> `AppThemeMode.resolveDarkMode(systemInDark)` (LIGHT→false, DARK→true, AUTO→system), `storageValue`
+> (stable `@SerialName` token), `next()` (tap-to-cycle AUTO→LIGHT→DARK→wrap), and `appThemeModeFromStorage`
+> (trim/case-insensitive, `"system"` alias, corrupt/blank/unknown → AUTO so a legacy value never breaks the
+> appearance). The durable seam is a DataStore-backed `ThemeStore` (`:sdk-core` — `InMemoryThemeStore` for
+> tests + `DataStoreThemeStore` that decodes through the pure codec, hydrates the persisted choice on cold
+> start via `stateIn(Eagerly)` so there's no flash of the wrong theme, provided as a `@Singleton` in
+> `SdkModule` over `preferencesDataStoreFile("meeshy_theme")`). Wiring: `SettingsViewModel` mirrors the store
+> into `SettingsUiState.themeMode` and drives it through `setThemeMode`/`cycleTheme`; `SettingsScreen` renders
+> an Appearance section with a Material3 segmented System/Light/Dark picker (EN/FR/ES/PT); `MainActivity`
+> re-themes the whole app live via a `ThemeViewModel` that folds `resolveDarkMode(isSystemInDarkTheme())` into
+> `MeeshyTheme(darkTheme=…)`. No dead ends — every derived value has a live consumer. +23 tests
+> (`AppThemeTest` 12, `ThemeStoreTest` 6, `SettingsViewModelThemeTest` 5). `assembleDebug` + full
+> `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses iOS whose theme is a plain enum toggle — here the
+> codec is corruption-proof and the store is a reusable durable building block. Reviewer: PASS (diff
+> apps/android only; behaviour-through-public-API tests; SDK-purity/UDF/instant-app honoured).
 
 > On 2026-07-05 the **optimistic + offline profile edit** landed (slice `edit-profile-optimistic`, §K): the
 > already-declared `OutboxKind.UPDATE_PROFILE` (lane `PROFILE`, drained but with no sender) is now wired
@@ -417,11 +435,17 @@ into a tested list, with case-insensitive dup-language collapse; consumed by the
 6. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
    remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
 
-**Recommended next:** avatar + banner upload is media-pipeline heavy (needs the durable `UPLOAD_MEDIA`
-chain + an image picker), so a cleaner next pure-core slice is **Settings §L theme persistence** (a
-tested `SettingsRepository` theme store) or the tracked **worker drain-list Robolectric test** (asserts
-every `OutboxLanes.*` with a registered sender is drained — would have caught the historic BLOCK/FRIEND
-omission, and now covers the new `PROFILE` lane wiring).
+**Recommended next:** Settings §L theme persistence ✅ shipped (`settings-theme-mode`, 2026-07-05 — see run
+log). The next clean pure-core §L slices, in value order:
+1. **Interface-language persistence** — mirror the theme pattern: a pure `AppLanguage` codec (reuse
+   `LanguageData`/`AppThemeMode`-style storage token) + a `LanguageStore` (DataStore) + the two
+   `settings_section_language` rows wired to it (currently no-op `onClick = {}`), with the app locale
+   applied at `MainActivity`. Same shape as this slice, low risk.
+2. **Notification-preference toggles** — the `settings_push_notifications` switch is local `remember` state
+   today (lost on recompose/relaunch); back it with the local-first user-preference store (§L "Local-first
+   user preferences (7 categories)"). The `UserNotificationPreferences` model already exists in `:core:model`.
+3. Or the tracked **worker drain-list Robolectric test** (asserts every `OutboxLanes.*` with a registered
+   sender is drained — would have caught the historic BLOCK/FRIEND omission, now also covers `PROFILE`).
 
 ---
 _Historical Contacts/Calls backlog below._
@@ -813,6 +837,35 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-05 — slice `settings-theme-mode` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (`list_pull_requests state=open` → the
+  five open PRs are all non-Android gateway/web/shared fixes; none `claude/apps/android/*`). Branched
+  `claude/apps/android/settings-theme-mode` off latest `origin/main` (`73f5201`).
+- **Why this slice:** the §L "Recommended next" — persisted light/dark/system theme. Opens the Settings §L
+  area with a clean, high-branch pure core (no media/upload dependency).
+- **Pure core (`:core:model` `AppTheme.kt`):** `resolveDarkMode(systemInDark)`, `storageValue`, `next()`,
+  `appThemeModeFromStorage(raw)` — all total over the enum, corrupt/blank/unknown/`"system"` → AUTO. RED
+  first (`AppThemeTest`, 12 cases: every resolver arm, round-trip codec, null/blank/unknown/case/alias, cycle
+  wrap ×3).
+- **Durable store (`:sdk-core` `theme/ThemeStore.kt`):** `ThemeStore` interface + `InMemoryThemeStore`
+  (tests/previews) + `DataStoreThemeStore` (Preferences DataStore, decodes via the pure codec, hydrates on
+  cold start with `stateIn(Eagerly)`). Added `libs.datastore.preferences` to `:sdk-core`; `@Singleton`
+  provider in `SdkModule` over `preferencesDataStoreFile("meeshy_theme")`. `ThemeStoreTest` (6: in-memory
+  default/seed/update, DataStore default-on-empty, set-reflected, hydrate-already-persisted). Note: DataStore
+  enforces one active instance per file per process — the hydration test shares one DataStore across two
+  wrappers rather than reopening the file (see NOTES).
+- **Wiring:** `SettingsViewModel` mirrors `themeStore.themeMode` into `SettingsUiState.themeMode` + `setThemeMode`/
+  `cycleTheme` intents (`SettingsViewModelThemeTest`, 5: default, reflects-persisted, set-persists-and-surfaces,
+  cycle-wrap, streams-into-state). `SettingsScreen` Appearance section = Material3 segmented System/Light/Dark
+  picker (EN/FR/ES/PT strings). `MainActivity` + new `:app` `ThemeViewModel` re-theme live via
+  `MeeshyTheme(darkTheme = mode.resolveDarkMode(isSystemInDarkTheme()))`.
+- **Verification:** `gradle :app:assembleDebug` green; full `gradle testDebugUnitTest` green (0 failures;
+  touched-module totals: core/model 461, sdk-core 426, feature/settings 5, app 34). +23 new tests.
+- **Reviewer gate:** PASS — diff `apps/android` only (9 modified + 6 new, incl. docs/tests); behaviour-through-
+  public-API tests, no tautologies, no floor lowered; SDK-purity (pure codec in model, stateless store in
+  sdk-core, orchestration in app/feature), SSOT (one `resolveDarkMode`, reused by MainActivity), UDF (immutable
+  `StateFlow<UiState>`), instant-app (cold-start hydration, no wrong-theme flash), no dead ends.
 
 ### 2026-07-05 — slice `profile-stats-timeline` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (`list_pull_requests state=open` → `[]`).
