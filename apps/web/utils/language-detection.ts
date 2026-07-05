@@ -184,7 +184,11 @@ export function getUserPreferredLanguage(): string {
 export function detectBestInterfaceLanguage(): string {
   if (typeof window === 'undefined') return 'en';
 
-  const interfaceLanguages = ['en', 'fr', 'pt']; // Langues d'interface supportées
+  // Langues d'interface avec un bundle de traduction complet dans /apps/web/locales/
+  // (en / es / fr / pt — voir INTERFACE_LANGUAGES dans types/frontend.ts). de / it
+  // sont proposées dans le sélecteur mais n'ont pas encore de bundle : on ne les
+  // auto-détecte pas ici pour ne pas afficher une UI anglaise déguisée en allemand.
+  const interfaceLanguages = ['en', 'es', 'fr', 'pt'];
   const browserLanguages = navigator.languages || [navigator.language || 'en'];
   
   
