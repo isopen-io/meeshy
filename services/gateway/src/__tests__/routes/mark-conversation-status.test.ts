@@ -221,7 +221,9 @@ describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset'
       conversationId: CONVERSATION_ID,
       unreadCount: 0,
     });
-    // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false.
+    // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false —
+    // neither the legacy name nor the dual-emitted message:read-status-updated.
     expect(mockEmit2).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
+    expect(mockEmit2).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
   });
 });

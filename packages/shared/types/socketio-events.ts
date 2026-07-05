@@ -170,6 +170,14 @@ export const SERVER_EVENTS = {
   /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
   CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
   READ_STATUS_UPDATED: 'read-status:updated',
+  /**
+   * Same payload as `READ_STATUS_UPDATED`, correctly namespaced under the
+   * `message:` entity per the `entity:action-word` convention (the legacy
+   * name hyphenates the entity itself, `read-status`, which violates it).
+   * Emitted in parallel with `READ_STATUS_UPDATED` for ~3 months so clients
+   * can migrate independently; see tasks/socketio-events-cleanup.md #3.
+   */
+  MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   CONVERSATION_UPDATED: 'conversation:updated',
@@ -1307,6 +1315,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
+  [SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;

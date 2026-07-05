@@ -464,14 +464,17 @@ export class MeeshySocketIOManager {
         await this.readStatusService.markMessagesAsReceived(participantId, conversationId, latestMessageId);
 
         const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
-        this.io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
+        const drainPayload = {
           conversationId,
           participantId,
           userId,
           type: 'received' as const,
           updatedAt: new Date(),
           summary,
-        });
+        };
+        const drainRoom = this.io.to(ROOMS.conversation(conversationId));
+        drainRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, drainPayload);
+        drainRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, drainPayload);
         logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId });
       })
     );

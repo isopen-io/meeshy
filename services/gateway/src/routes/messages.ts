@@ -580,6 +580,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               emitter = emitter.to(userRoom);
             }
             emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+            emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
           }
         } catch (socketError) {
           logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
