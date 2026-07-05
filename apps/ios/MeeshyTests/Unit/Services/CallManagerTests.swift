@@ -1897,7 +1897,9 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         // transceiver mutation, so a rapid hold→unhold could run a cancelled
         // downgrade concurrently with a fresh upgrade. handleHold must instead
         // await the previous task's `.value` before starting its own, serializing
-        // every hold transition.
+        // every hold transition — and must ALSO serialize with `toggleVideo` and
+        // the network-survival controller (`applySurvivalVideoSend`), since all
+        // three actuate the same camera/transceiver.
         let source = try callManagerSource()
         guard let funcRange = source.range(of: "func handleHold") else {
             XCTFail("handleHold not found"); return
@@ -1909,22 +1911,38 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         ].compactMap { $0 }.min() ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<nextFunc])
 
-        let previousTaskCaptures = body.components(separatedBy: "let previousTask = holdVideoTask").count - 1
+        let previousHoldCaptures = body.components(separatedBy: "let previousHold = holdVideoTask").count - 1
         XCTAssertEqual(
-            previousTaskCaptures, 2,
+            previousHoldCaptures, 2,
             "Both the hold and unhold branches must capture the in-flight holdVideoTask before replacing it"
         )
-
-        let awaitedCompletions = body.components(separatedBy: "await previousTask?.value").count - 1
+        let previousToggleCaptures = body.components(separatedBy: "let previousToggle = videoToggleTask").count - 1
         XCTAssertEqual(
-            awaitedCompletions, 2,
-            "Both branches must await the previous task's completion before mutating the camera/transceiver"
+            previousToggleCaptures, 2,
+            "Both branches must also capture the in-flight videoToggleTask — a manual toggle racing " +
+            "a hold transition actuates the same camera/transceiver."
+        )
+        let previousSurvivalCaptures = body.components(separatedBy: "let previousSurvival = survivalVideoTask").count - 1
+        XCTAssertEqual(
+            previousSurvivalCaptures, 2,
+            "Both branches must also capture the in-flight survivalVideoTask — a network-survival " +
+            "suspend/resume racing a hold transition actuates the same camera/transceiver."
         )
 
+        let awaitedHold = body.components(separatedBy: "await previousHold?.value").count - 1
+        XCTAssertEqual(
+            awaitedHold, 2,
+            "Both branches must await the previous hold task's completion before mutating the camera/transceiver"
+        )
+        let awaitedToggle = body.components(separatedBy: "await previousToggle?.value").count - 1
+        XCTAssertEqual(awaitedToggle, 2, "Both branches must await the previous toggle task's completion")
+        let awaitedSurvival = body.components(separatedBy: "await previousSurvival?.value").count - 1
+        XCTAssertEqual(awaitedSurvival, 2, "Both branches must await the previous survival task's completion")
+
         guard let assignRange = body.range(of: "holdVideoTask = Task"),
-              let awaitRange = body.range(of: "await previousTask?.value", range: assignRange.upperBound..<body.endIndex),
+              let awaitRange = body.range(of: "await previousHold?.value", range: assignRange.upperBound..<body.endIndex),
               let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
-            XCTFail("Expected holdVideoTask = Task, await previousTask?.value, then downgradeFromVideo() in that order"); return
+            XCTFail("Expected holdVideoTask = Task, await previousHold?.value, then downgradeFromVideo() in that order"); return
         }
         XCTAssertLessThan(
             awaitRange.lowerBound, downgradeRange.lowerBound,
@@ -4425,15 +4443,34 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
         let toggleFunc = String(source[funcRange.lowerBound..<searchEnd])
 
         XCTAssertTrue(
-            toggleFunc.contains("let previousTask = videoToggleTask"),
+            toggleFunc.contains("let previousToggle = videoToggleTask"),
             "toggleVideo must capture the previous videoToggleTask before overwriting it, " +
             "so the new Task can await its completion."
         )
         XCTAssertTrue(
-            toggleFunc.contains("await previousTask?.value"),
-            "toggleVideo must await the previous task's completion before invoking " +
+            toggleFunc.contains("await previousToggle?.value"),
+            "toggleVideo must await the previous toggle task's completion before invoking " +
             "upgradeToVideo/downgradeFromVideo, otherwise two toggles can actuate the " +
             "camera/transceiver concurrently (cancel() alone does not stop in-flight work)."
+        )
+        // Regression guard: toggleVideo also must serialize with CallKit hold/unhold
+        // and the network-survival controller — a hold landing exactly as a manual
+        // toggle fires (or vice versa) actuates the same camera/transceiver otherwise.
+        XCTAssertTrue(
+            toggleFunc.contains("let previousHold = holdVideoTask"),
+            "toggleVideo must also capture the in-flight holdVideoTask before starting its own Task."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("await previousHold?.value"),
+            "toggleVideo must await the previous hold task's completion too."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("let previousSurvival = survivalVideoTask"),
+            "toggleVideo must also capture the in-flight survivalVideoTask before starting its own Task."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("await previousSurvival?.value"),
+            "toggleVideo must await the previous survival task's completion too."
         )
     }
 }
