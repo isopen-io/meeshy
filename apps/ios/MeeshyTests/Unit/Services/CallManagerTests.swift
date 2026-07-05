@@ -3052,6 +3052,64 @@ final class CallManagerDTMFTests: XCTestCase {
     }
 }
 
+// MARK: - Audio Effects Guard (2026-07-05 audit)
+//
+// `CallAudioEffectsService` builds an independent `AVAudioEngine` tapping the
+// live mic input node. `CallEffectsOverlay` removed its UI entry point on
+// 2026-07-02 because no production capture hook feeds it, but `setAudioEffect`
+// stayed reachable — engaging it during a live call would start a second
+// AVAudioEngine contending with WebRTC's own `RTCAudioSession` for the same
+// hardware input. These tests lock in the guard that keeps it a documented
+// no-op until a real capture hook exists.
+
+@MainActor
+final class CallManagerAudioEffectGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func funcBody(named signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let blockEnd = source.range(of: "}", range: range.upperBound..<source.endIndex)?.upperBound
+            ?? source.endIndex
+        return String(source[range.lowerBound..<blockEnd])
+    }
+
+    func test_setAudioEffect_guardsNonNilEffect_inSourceCode() throws {
+        let source = try callManagerSource()
+        guard let body = funcBody(named: "func setAudioEffect(_ effect: AudioEffectConfig?)", in: source) else {
+            XCTFail("setAudioEffect not found in CallManager.swift"); return
+        }
+
+        XCTAssertTrue(
+            body.contains("guard effect == nil"),
+            "setAudioEffect must refuse a non-nil effect — CallAudioEffectsService's " +
+            "AVAudioEngine has no production capture hook and would collide with the " +
+            "live call's RTCAudioSession if engaged"
+        )
+    }
+
+    func test_updateAudioEffectParams_guardsNoActiveEffect_inSourceCode() throws {
+        let source = try callManagerSource()
+        guard let body = funcBody(named: "func updateAudioEffectParams(_ config: AudioEffectConfig)", in: source) else {
+            XCTFail("updateAudioEffectParams not found in CallManager.swift"); return
+        }
+
+        XCTAssertTrue(
+            body.contains("guard activeAudioEffect != nil"),
+            "updateAudioEffectParams must refuse to forward when no effect is active " +
+            "(setAudioEffect is a no-op for non-nil effects, so this should never fire in production)"
+        )
+    }
+}
+
 // MARK: - call:force-leave Server→Client Handler
 
 @MainActor
