@@ -787,6 +787,29 @@ export class CallEventsHandler {
   }
 
   /**
+   * CallService throws plain `Error`s formatted as `"<CODE>: <description>"`
+   * (e.g. getCallSession's `CALL_NOT_FOUND: Call session not found`, thrown
+   * when the peer ends the call in the same instant a toggle is in flight).
+   * Relay the real code/message when it matches a known CALL_ERROR_CODES
+   * value so the client can react appropriately (e.g. silently clean up on
+   * CALL_NOT_FOUND instead of surfacing a generic toggle-failed toast);
+   * fall back to the generic code for anything unrecognized (DB errors,
+   * etc.) so raw internals are never leaked to the client.
+   */
+  private mapMediaToggleError(error: unknown, fallbackMessage: string): CallError {
+    const message = error instanceof Error ? error.message : undefined;
+    if (!message) {
+      return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
+    }
+    const match = message.match(/^([A-Z_]+):\s*(.+)$/);
+    const knownCodes = new Set<string>(Object.values(CALL_ERROR_CODES));
+    if (match && knownCodes.has(match[1])) {
+      return { code: match[1], message: match[2] } as CallError;
+    }
+    return { code: message, message } as CallError;
+  }
+
+  /**
    * Resolve target userId to their socket IDs within a call room
    */
   private async resolveTargetSockets(
@@ -2335,13 +2358,7 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling audio', error);
 
-        const errorMessage = error.message || 'Failed to toggle audio';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
-
-        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
+        socket.emit(CALL_EVENTS.ERROR, this.mapMediaToggleError(error, 'Failed to toggle audio'));
       }
     });
 
@@ -2431,13 +2448,7 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling video', error);
 
-        const errorMessage = error.message || 'Failed to toggle video';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
-
-        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
+        socket.emit(CALL_EVENTS.ERROR, this.mapMediaToggleError(error, 'Failed to toggle video'));
       }
     });
 
