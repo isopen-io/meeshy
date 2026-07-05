@@ -146,4 +146,32 @@ describe('getEmailValidationError', () => {
     // Edge case: passes all checks but fails the final regex
     expect(getEmailValidationError('user@-example.com')).toBe('Format d\'email invalide');
   });
+
+  it('should return error for a local part longer than 64 chars', () => {
+    // Regression: EMAIL_REGEX has an unbounded local part, so before the
+    // explicit cap this slipped through as "valid" while isValidEmail rejected
+    // it — inline field validation and submit-gating disagreed.
+    const email = 'a'.repeat(65) + '@example.com';
+    expect(email.length).toBeLessThanOrEqual(255); // reachable (not caught by total-length check)
+    expect(getEmailValidationError(email)).toBe('Partie avant @ trop longue (maximum 64 caractères)');
+  });
+
+  it('should accept a local part of exactly 64 chars', () => {
+    expect(getEmailValidationError('a'.repeat(64) + '@example.com')).toBeNull();
+  });
+
+  it('should never disagree with isValidEmail (SSOT invariant)', () => {
+    const samples = [
+      'user@example.com', 'first.last@example.co.uk', 'user+tag@example.com',
+      '123@example.com', 'USER@EXAMPLE.COM', '  user@example.com  ',
+      'debu@', 'debute@email', 'test@.com', '@example.com', 'user@domain', '',
+      'not-an-email', 'user@', '@', 'user@@example.com', 'user@example..com',
+      '.user@example.com', 'user.@example.com', 'user@.example.com', 'user@example.',
+      'user@-example.com', 'user@example.com.', 'a'.repeat(65) + '@b.co',
+      'a'.repeat(64) + '@b.co', 'a'.repeat(250) + '@example.com', 'a@b.co',
+    ];
+    for (const email of samples) {
+      expect(getEmailValidationError(email) === null).toBe(isValidEmail(email));
+    }
+  });
 });

@@ -1,48 +1,58 @@
-# Iteration 106 — Plan d'implémentation (2026-07-05) — F80
+# Iteration 106 — Plan d'implémentation (2026-07-05)
 
-## Objectives
-Corriger `validatePhoneNumber` (`apps/web/utils/phone-validator.ts`) pour borner le **nombre de
-chiffres** (8-15, conforme E.164) au lieu de la longueur brute de la chaîne — qui impute à tort le
-préfixe international `+`/`00` au budget — et signaler les formats invalides comme tels.
+## Objectifs
+Éliminer la divergence F73 entre `isValidEmail` et `getEmailValidationError`
+(`packages/shared/utils/email-validator.ts`) : garantir l'invariant
+`getEmailValidationError(x) === null ⟺ isValidEmail(x) === true`, en rétablissant la Single Source of
+Truth (le validateur booléen canonique) sous la couche de messages.
 
-## Affected modules
-- `apps/web/utils/phone-validator.ts` (production, pur).
-- `apps/web/__tests__/utils/phone-validator.test.ts` (tests — mise à jour des cas encodant le bug +
-  nouveaux cas d'équivalence de préfixe).
+## Modules affectés
+- `packages/shared/utils/email-validator.ts` (source, fonction pure `getEmailValidationError`).
+- `packages/shared/__tests__/email-validator.test.ts` (tests).
+- Bénéficiaires automatiques (aucun changement) : `apps/web/hooks/use-field-validation.ts`,
+  `use-register-form.ts`, `use-registration-validation.ts`.
 
-## Implementation phases
-1. **RED/adapter** : mettre à jour les tests pour la sémantique juste (15 chiffres valides, 16 →
-   `phoneTooLong`, espaces/tirets → `phoneInvalidFormat`, équivalence de préfixe).
-2. **GREEN** : réordonner (format d'abord), borner sur `digits.length` après retrait du préfixe.
-3. **REFACTOR/docs** : JSDoc + exemples parlant de chiffres.
+## Phases d'implémentation
+1. **RED** — repro Node autonome (impls verbatim) prouvant `getEmailValidationError('a'×65+'@b.co') === null`
+   alors qu'`isValidEmail === false`. ✅
+2. **GREEN** —
+   - Ajout garde `localPart.length > 64` → message « Partie avant @ trop longue (maximum 64 caractères) ».
+   - Garde finale : `EMAIL_REGEX.test(...)` → `!isValidEmail(email)` (délégation SSOT).
+   - JSDoc : invariant explicite. ✅
+3. **Tests** — 4 cas ajoutés : local part 65 (message dédié), local part 64 (valide), invariant de
+   parité sur 27 échantillons, régression documentée. ✅
+4. **Validation** — vitest ciblé + suite complète shared + build tsc. ✅
+5. **Docs** — analyse + plan + push. ⏳
 
-## Dependencies
-Aucune. Fichier pur, aucun changement de signature, aucun appelant à modifier.
+## Dépendances
+Aucune. Fonctions pures, pas de migration, pas de changement de schéma ni d'API.
 
-## Estimated risks
-FAIBLE. Élargit la borne haute (aucun rejet nouveau sur la borne haute), resserre marginalement la
-borne basse (cas `+`/`00` + < 8 chiffres, sans appelant/test dépendant), reclasse espaces/tirets en
-format (libellé plus exact). Voir Risk assessment de l'analyse.
+## Risques estimés
+Très faibles : les nouvelles gardes **mirroir** `isValidEmail` (aucun email nouvellement rejeté qui
+serait accepté par le validateur canonique) ; comportement inchangé sur tous les cas existants (prouvé
+par sweep de parité + 44 tests existants verts).
 
-## Rollback strategy
-Révert du commit unique ; fichier isolé sans dépendance transverse.
+## Stratégie de rollback
+`git revert` du commit unique. Fonction pure, sans état, sans effet de bord.
 
-## Validation criteria
-- `npx jest __tests__/utils/phone-validator.test.ts` vert.
-- `tsc --noEmit` sans nouvelle erreur sur le fichier.
+## Critères de validation
+- [x] RED prouvé avant le fix.
+- [x] `email-validator.test.ts` 48/48.
+- [x] Suite shared 1284/1284 (45/45 fichiers), 0 régression.
+- [x] `bun run build` 0 erreur.
+- [ ] CI verte après push.
 
-## Completion status
-- [x] Analyse rédigée
-- [x] Plan rédigé
-- [x] Tests mis à jour + étendus
-- [x] Implémentation
-- [x] Validation (jest 44/44 vert, tsc sans erreur sur le fichier)
-- [x] Commit + push + PR
+## Statut d'achèvement
+**Implémentation + validation locale : COMPLET.** Reste : commit, push, ouverture PR, CI.
 
 ## Progress tracking
-Démarré à `main` @ `968aaa0`. `npx jest __tests__/utils/phone-validator.test.ts` → 44/44 passés.
-`tsc --noEmit` sans nouvelle erreur sur `phone-validator.ts`.
+- [x] Analyse rédigée (`2026-07-05-iteration-106-analyse.md`).
+- [x] Fix implémenté.
+- [x] Tests verts.
+- [x] Build vert.
+- [ ] Poussé sur `claude/brave-archimedes-9bcdyw` + PR.
 
-## Future improvements
-- F25b : fusionner les deux validateurs téléphone vers `libphonenumber-js` (country-aware) comme SSOT,
-  supprimer le validateur simple. Refactor MOYEN à planifier hors cycle bugfix.
+## Améliorations futures
+- **F74** : lookbehind manquant dans `resolveDisplayContent` (dead code — à faire si câblé).
+- **F75** : suffixe `generateCommunityIdentifier` non garanti à 6 car. (proba négligeable).
+- Reports antérieurs : F51b, F56b, F60b, F67b, F68b, F69, F70 (voir analyse).

@@ -1,122 +1,140 @@
 # Iteration 106 — Analyse d'optimisation (2026-07-05)
 
 ## Protocole (démarrage)
-`main` @ `968aaa0` (« Merge PR #1499 — brave-archimedes-5sc6q5 / F72 noms composés »), working tree
-propre après `git checkout -B main origin/main` (le `main` local était divergent, resynchronisé sur
-`origin/main`). Branche de travail `claude/brave-archimedes-1jtx8e` recréée depuis `origin/main`,
-0 commit non-mergé à préserver.
+`main` @ `73f5201` (« feat(android): optimistic + offline profile edit … #1500 »), working tree propre.
+Branche de travail `claude/brave-archimedes-9bcdyw` recréée depuis `origin/main`
+(`git checkout -B … origin/main`), 0 commit non-mergé à préserver. `git config user.email/name`
+positionné (`noreply@anthropic.com` / `Claude`).
 
-**13 PR ouvertes au démarrage** (#1497 → #1514), majoritairement iOS/gateway calls, gateway typing,
-web i18n (`detectBestInterfaceLanguage`, F79), gateway translation (`isUrlOnly`, F76), shared email
-(`getEmailValidationError`, F73), preferences communauté (F71). **Toutes disjointes** de la cible
-retenue ici (`apps/web/utils/phone-validator.ts`) — laissées à leurs sessions.
+**4 PR ouvertes au démarrage**, toutes disjointes de la cible retenue :
+- **#1501** gateway réactions (`ReactionService.reactionSummary`),
+- **#1499** gateway `normalize.ts` (capitalisation noms, F72, itération 105),
+- **#1498** calls (`CallEventsHandler` / `CallManager.tsx`),
+- **#1497** community preferences (`community-preferences.ts` / `use-socket-cache-sync`, F71, itération 104).
+
+Les itérations 104 (F71) et 105 (F72) sont **en vol mais pas encore mergées** dans `main` ⇒ ce cycle
+est numéroté **106**. Cible retenue : **F73** — divergence entre `isValidEmail` et
+`getEmailValidationError` (`packages/shared/utils/email-validator.ts`), strictement disjointe de toutes
+les PR ouvertes.
 
 ### Revue d'ingénierie (constat de démarrage)
-Backlog F-series : plus haute étiquette observée F79 (#1510). Cette itération prend **F80**.
+Balayage systématique (agent d'exploration, 64 tool-uses) des helpers **purs** de `packages/shared/utils`,
+`apps/web/utils` et `apps/web/lib`, hors zones déjà traitées en itérations 100-105 (`truncate`,
+`format-number`, `calendar-date`, `initials`, `mention-parser`, `conversation-helpers`, `duration-format`,
+`relative-time`, `time-remaining`, `presence-format`, `normalize`). Vérifiés corrects et écartés :
+`object-id`, `safe-redirect`, `presence-visibility`, `sender-identity`, `user-display-name`,
+`avatar-utils`, `participant-helpers`, `client-message-id`, `optimistic-message`, `route-utils`,
+`tag-colors`, `phone-validator`, `phone-validation-robust`, `user-adapter`, `language-normalize`,
+`community-identifier`, `translation-cleaner`. Trois candidats retenus, un seul avec appelants **live**
+sur les deux versants → F73.
 
-Balayage ciblé des utilitaires **purs** peu contestés d'`apps/web/utils/`, hors zones déjà traitées
-(itérations 100-105 : `truncate`, `format-number`, `initials`, `xss-protection`, `translation-cleaner`,
-`calendar-date`, `mention-parser`, `conversation-helpers`, `duration-format`, `relative-time`,
-`time-remaining`, `presence-format`, `date-format`, `normalize`) et hors fichiers des 13 PR ouvertes.
-
-Cible retenue : **F80** — `validatePhoneNumber` (validateur simple `phone-validator.ts`) compte le
-préfixe international `+`/`00` dans le budget de longueur, rejetant à tort les E.164 de 15 chiffres.
-Signalé une première fois en itération 105 (« rejet des E.164 à 15 chiffres — réel mais laissé pour un
-cycle dédié ») ; c'est ce cycle dédié. **Distinct** de la divergence de modules F25b (deux validateurs
-`phone-validator` simple vs `phone-validation-robust` libphonenumber, refactor MOYEN documenté aux
-itérations 49/69/70) — ici on corrige un bug de correction **dans** le validateur simple, sans le
-fusionner.
-
-## Cible : F80 — `validatePhoneNumber` impute le préfixe `+`/`00` au budget de longueur E.164
+## Cible : F73 — `getEmailValidationError` plus permissif que `isValidEmail` (les deux divergent)
 
 ### Current state
-`apps/web/utils/phone-validator.ts` expose `validatePhoneNumber(phone: string)` — validateur **pur**,
-sans pays, source des messages d'erreur d'inscription. Implémentation d'origine (l.19-60) :
-```ts
-const trimmed = phone.trim();
-if (trimmed.length < 8)  return { isValid: false, error: 'phoneTooShort' };
-if (trimmed.length > 15) return { isValid: false, error: 'phoneTooLong' };
-const phoneRegex = /^(\+|00)?\d+$/;
-if (!phoneRegex.test(trimmed)) return { isValid: false, error: 'phoneInvalidFormat' };
-return { isValid: true };
-```
-Contrôle de **longueur AVANT le format**, sur la longueur **totale de la chaîne** (préfixe compris).
-Consommé en production :
-- `hooks/use-register-form.ts:133-138` — validation du numéro **à la soumission de l'inscription**
-  (bloque l'inscription et affiche le toast d'erreur).
-- `hooks/use-field-validation.ts:43-44` — `getPhoneValidationError` (validation de champ live).
-- `components/auth/register-form/PhoneField.tsx`, `PhoneResetFlow.tsx` — `formatPhoneNumberInput`.
+`packages/shared/utils/email-validator.ts` expose **deux** validateurs censés encoder **la même règle**
+(l'en-tête du fichier liste des exemples accept/reject identiques) :
+- `isValidEmail(email): boolean` — verdict booléen canonique (12 gardes + regex finale).
+- `getEmailValidationError(email): string | null` — couche de **messages d'erreur** conviviaux ;
+  retourne `null` = « valide ».
+
+`getEmailValidationError` réimplémente un **sous-ensemble** des gardes de `isValidEmail` puis la même
+regex finale. Une garde manque : le **plafond de 64 caractères sur la partie locale** (RFC 5321),
+présent dans `isValidEmail:62` mais absent de `getEmailValidationError`. Comme la `EMAIL_REGEX` a une
+partie locale **non bornée** (`[…]+`), un local part de 65+ car. passe la regex et
+`getEmailValidationError` retourne `null` alors qu'`isValidEmail` retourne `false`.
+
+Appelés en production (versants **divergents**) :
+- `apps/web/hooks/use-field-validation.ts:33` — validation **inline** du champ email : utilise
+  **uniquement** `getEmailValidationError`. `null` ⇒ champ marqué « valide » ⇒ enchaîne sur
+  `checkAvailability` (fetch backend).
+- `apps/web/hooks/use-register-form.ts:121` — **gating de soumission** : utilise `isValidEmail`.
+- `apps/web/hooks/use-registration-validation.ts:169` — message via `getEmailValidationError`.
 
 ### Problems identified
-- **[LIVE, inscription bloquée] E.164 maximal rejeté.** La norme E.164 autorise jusqu'à **15 chiffres**
-  (hors préfixe international). Avec le préfixe `+`, `+123456789012345` fait **16 caractères** →
-  `trimmed.length > 15` → `phoneTooLong`. Un numéro international **valide de 15 chiffres** est refusé
-  à l'inscription. Avec `00`, `00` + 15 chiffres = 17 caractères → même rejet dès 15 chiffres.
-- **[LIVE, incohérence prouvée] Verdict dépendant de la graphie du préfixe.** Le **même** numéro exprimé
-  de trois façons équivalentes reçoit trois budgets de chiffres différents :
-  - sans préfixe : `\d+` → **15 chiffres** autorisés (`123456789012345`, 15 car. ✓) ;
-  - préfixe `+` : `+` + 14 chiffres max (le `+` consomme 1 car.) → **14 chiffres** ;
-  - préfixe `00` : `00` + 13 chiffres max → **13 chiffres**.
-  Un numéro devrait être jugé identiquement quelle que soit la façon dont l'utilisateur écrit le
-  préfixe international.
-- **[LIVE, message trompeur] Espaces/tirets signalés « trop long ».** Comme la longueur est contrôlée
-  avant le format, `+33 6 12 34 56 78` (17 car.) sort `phoneTooLong` — alors que le vrai problème est
-  un **format invalide** (espaces). Les tests existants documentent d'ailleurs ce contournement en
-  commentaire (« With spaces, the total length exceeds 15 chars, so it fails phoneTooLong first »),
-  signe que l'ordre longueur-avant-format est un accident et non un choix.
+- **[LIVE] « valide en inline mais soumission refusée ».** Pour un email dont la partie locale fait
+  ≥ 65 car. avec un total ≤ 255 (ex. `'a'.repeat(65) + '@b.co'`, 70 car.) :
+  `getEmailValidationError` → `null` (champ vert, requête `check-availability` envoyée au gateway),
+  mais `isValidEmail` → `false` (soumission bloquée). Les deux fonctions, supposées équivalentes,
+  **contredisent** l'une l'autre → UX déroutante (« aucune erreur affichée mais impossible de
+  s'inscrire ») + requête backend inutile sur un email que l'inscription rejettera.
+- Sens de la divergence **unique** : `getEmailValidationError = null` ∧ `isValidEmail = false`
+  (jamais l'inverse — les gardes de `getError` sont un sous-ensemble strict). Prouvé par balayage.
+- La divergence « domaine > 253 » est **inatteignable** (domaine > 253 ⇒ total > 255 ⇒ capté par le
+  plafond de longueur totale en amont, dans les deux fonctions). Seul le plafond local part est
+  réellement atteignable.
 
 ### Root cause
-Le budget de longueur (8-15) est appliqué à la **longueur brute de la chaîne** — qui inclut le préfixe
-international `+` (1 car.) ou `00` (2 car.) — et non au **nombre de chiffres** du numéro. E.164 borne le
-**nombre de chiffres**, pas la longueur de la représentation. De plus, contrôler la longueur avant le
-format fait remonter des erreurs de format sous l'étiquette « trop long ».
+`getEmailValidationError` **réimplémente** la validation au lieu de déléguer son verdict final à la
+source unique (`isValidEmail`). Toute garde présente dans `isValidEmail` mais oubliée dans `getError`
+(ici le cap 64 sur le local part) crée une divergence silencieuse. Un validateur « à messages » ne
+devrait jamais posséder sa propre notion de validité.
 
 ### Business impact
-Rejet silencieux à l'inscription pour les numéros internationaux longs (jusqu'à 15 chiffres) saisis
-avec un préfixe `+`/`00` — précisément la saisie recommandée pour un produit multi-pays. L'utilisateur
-voit « numéro trop long » sur un numéro parfaitement valide, sans recours évident. Incohérence de
-message (« trop long » sur un numéro espacé) qui dégrade la confiance dans le formulaire.
+Bug d'inscription silencieux : un email au local part exceptionnellement long (plausible : préfixes
+techniques, adresses de test, catch-all) apparaît valide dans le formulaire puis échoue à la
+soumission — friction précisément sur le funnel d'acquisition, là où l'état de l'art (Google/Apple
+sign-up) donne un feedback inline cohérent et immédiat.
 
 ### Technical impact
-Fichier pur, testé (`__tests__/utils/phone-validator.test.ts`). Deux tests encodent explicitement le
-bug (max « 15 caractères » et rejet « trop long » sur `+123456789012345` de 15 chiffres) et deux autres
-s'appuient sur l'ordre longueur-avant-format pour classer les espaces/tirets en `phoneTooLong` — ils
-seront corrigés pour refléter la sémantique juste (chiffres bornés 8-15, format signalé comme format).
+Correction locale au fichier SSOT (`email-validator.ts`) :
+1. Ajout d'un message convivial spécifique `localPart.length > 64` (miroir d'`isValidEmail:62`).
+2. **Délégation du verdict final** : la garde finale passe de `EMAIL_REGEX.test(...)` à
+   `!isValidEmail(email)`. `getEmailValidationError` devient une pure couche de messages au-dessus du
+   validateur canonique ⇒ invariant garanti **`getEmailValidationError(x) === null ⟺ isValidEmail(x)`**,
+   robuste à toute évolution future des règles d'`isValidEmail`. Aucun changement de signature ni de
+   contrat ; les 3 appelants web héritent automatiquement de la cohérence.
 
 ### Risk assessment
-**FAIBLE.** Changement local d'une fonction pure. La borne haute passe de « ≥ 16 car. » à « > 15
-chiffres » : élargit l'acceptation (aucun numéro auparavant valide n'est rejeté sur la borne haute).
-La borne basse passe de « < 8 car. » à « < 8 chiffres » : ne resserre que les cas pathologiques
-`+` / `00` + < 8 chiffres (numéros internationaux trop courts) — aucun test ni appelant n'en dépend.
-Le reclassement espaces/tirets `phoneTooLong` → `phoneInvalidFormat` n'affecte que le libellé du toast
-(plus exact). Aucun impact fonctionnel côté appelants (ils lisent `isValid` + mappent l'erreur).
+Très faible. Fonctions pures. Comportement **identique** sur tous les cas existants (les messages
+spécifiques restent inchangés ; la garde finale déléguée retourne le même message générique `Format
+d'email invalide` que la regex dans exactement les mêmes cas + les caps de longueur). Aucun email
+actuellement accepté par `isValidEmail` n'est nouvellement rejeté (les nouvelles gardes miroir
+`isValidEmail`). Prouvé par sweep de parité sur 27 échantillons.
 
-### Proposed improvements
-1. Vérifier le **format d'abord** (`^(\+|00)?\d+$`) → `phoneInvalidFormat` (espaces/tirets/lettres).
-2. Extraire les **chiffres** (retrait du préfixe `+`/`00`) et borner **8-15 chiffres** :
-   `< 8` → `phoneTooShort`, `> 15` → `phoneTooLong`.
-3. Mettre à jour la JSDoc et les exemples pour parler de **chiffres** et non de caractères.
-4. Corriger/étendre les tests : `+123456789012345` (15 chiffres) devient **valide** ; `phoneTooLong`
-   testé avec 16 chiffres ; espaces/tirets attendus en `phoneInvalidFormat` ; ajout de cas
-   d'équivalence de préfixe (même numéro `+`/`00`/sans → même verdict).
+### Proposed improvements (implémenté ce cycle)
+- `email-validator.ts` : garde `localPart.length > 64` (message dédié) + garde finale
+  `!isValidEmail(email)`. JSDoc : ajout de l'invariant explicite.
 
 ### Expected benefits
-- Inscription débloquée pour les E.164 longs valides.
-- Verdict prisme-cohérent indépendant de la graphie du préfixe.
-- Messages d'erreur exacts (format ≠ longueur).
+- Zéro divergence inline/soumission : un email refusé à l'inscription est refusé **aussi** en inline
+  (avec un message spécifique pour le local part trop long).
+- SSOT restaurée : `getEmailValidationError` ne peut plus dériver d'`isValidEmail`.
+- Suppression d'une requête `check-availability` inutile pour un email intrinsèquement invalide.
 
 ### Implementation complexity
-**FAIBLE** — un fichier de production + un fichier de test, purement Jest-testable côté web.
+Faible (1 fonction pure, ~7 lignes nettes + 4 tests). Aucun changement de signature/contrat.
 
 ### Validation criteria
-- `bun/npx jest __tests__/utils/phone-validator.test.ts` vert.
-- `+123456789012345` (15 chiffres) → valide ; `+1234567890123456` (16) → `phoneTooLong`.
-- `+33 6 12 34 56 78` → `phoneInvalidFormat` (et non `phoneTooLong`).
-- Équivalence : `123456789012345`, `+123456789012345`, `00123456789012345`… jugés cohéremment.
-- `tsc` sans nouvelle erreur.
+- [x] RED prouvé d'abord (repro Node autonome, impls copiées verbatim) :
+      `getEmailValidationError('a'×65 + '@b.co')` → `null` tandis qu'`isValidEmail` → `false`.
+- [x] GREEN (fix + sweep de parité sur 27 échantillons) : invariant
+      `getError(x) === null ⟺ isValidEmail(x)` vérifié partout ; message local-part-trop-long spécifique.
+- [x] GREEN vitest : `email-validator.test.ts` **48/48** (44 existants + 4 neufs : local part 65,
+      local part 64 valide, invariant SSOT sur 27 cas, régression documentée).
+- [x] Suite complète `packages/shared` : **1284/1284** (45/45 fichiers), 0 régression.
+- [x] `bun run build` (tsc `--project`) : **0 erreur**.
+- [ ] CI verte après push.
 
-## Candidats écartés (documentés)
-- **F25b** — fusion des deux validateurs téléphone (`phone-validator` simple ↔ `phone-validation-robust`
-  libphonenumber). Refactor comportemental MOYEN (itérations 49/69/70), hors scope d'un cycle bugfix pur.
-- **F69** — `sanitizeFileName` (255 car.) : 0 appelant production, reporté.
-- **F70** — `deepCleanTranslationOutput` : code mort, reporté.
+## Candidats écartés ce cycle (documentés)
+- **F74 — `resolveDisplayContent` (`apps/web/utils/mention-display.ts:6`)** : `MENTION_DISPLAY_REGEX`
+  omet le lookbehind gauche `(?<![\p{L}\p{N}_-])` que la SSOT `mention-parser.ts:59` applique pour
+  ignorer le `@` interne des emails → `bob@marie.com` réécrit en `bob@Marie Claire.com` si un
+  participant `marie` existe. **Écarté : 0 appelant live** (référencé uniquement dans docs/manifests
+  de couverture). Latent, à corriger si le helper est câblé. Reporté (§ futur).
+- **F75 — `generateCommunityIdentifier` (`apps/web/utils/community-identifier.ts:25`)** :
+  `Math.random().toString(36).substring(2, 8)` peut produire un suffixe < 6 car. quand la
+  représentation base-36 est courte (valeurs « rondes »). **Écarté : probabilité négligeable**
+  (~2⁻ᵏ, mantisse 52 bits ⇒ quasi toujours ≥ 10 chiffres base-36) ; appelants live mais impact
+  pratique nul. À durcir (boucle/`padEnd`) si une itération touche ce helper. Reporté (§ futur).
+
+## Améliorations futures (report)
+- **F51b** (LOW) : réécriture des docs `notifications/`.
+- **F56b** (LOW) : `likeCount` absolu sur `post:reaction-added/removed` — collision potentielle avec
+  #1501 (`ReactionService`) ; après merge.
+- **F60b** (LOW) : parité parsing mention iOS/Android sur `MENTION_HANDLE_CHARS` (tiret).
+- **F67b** (LOW) : audit découpage jour-calendaire iOS (`RelativeTimeFormatter`, `Calendar.startOfDay`).
+- **F68b** (LOW) : contrepartie iOS des initiales (`String` avatar) — parité point-de-code.
+- **F69** (LOW) : `sanitizeFileName` plafond 255 sur nom sans extension (latent, 0 appelant).
+- **F70** (LOW) : `deepCleanTranslationOutput` apostrophes FR (code mort, 0 appelant).
+- **F74** (LOW, neuf) : lookbehind manquant dans `resolveDisplayContent` (dead code, 0 appelant).
+- **F75** (LOW, neuf) : suffixe `generateCommunityIdentifier` non garanti à 6 car. (proba négligeable).

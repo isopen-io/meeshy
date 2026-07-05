@@ -156,6 +156,7 @@ struct FloatingCallPillView: View {
             + (callManager.remoteUsername.map { " — \($0)" } ?? "")
         )
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Leading Visual (remote video thumbnail or avatar)

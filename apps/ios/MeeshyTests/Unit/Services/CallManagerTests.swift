@@ -275,7 +275,6 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     var isConnected: Bool = false
     var localVideoTrack: Any?
     var remoteVideoTrack: Any?
-    var audioEffectsService: CallAudioEffectsServiceProviding?
     let videoFilterPipeline = VideoFilterPipeline()
 
     var configureCallCount = 0
@@ -338,8 +337,6 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     func restartIce() { restartIceCallCount += 1 }
     func applyAudioEncoding(maxBitrateBps: Int) {}
     func sendDTMF(digits: String) {}
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
 
 @MainActor
@@ -1897,7 +1894,9 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         // transceiver mutation, so a rapid hold→unhold could run a cancelled
         // downgrade concurrently with a fresh upgrade. handleHold must instead
         // await the previous task's `.value` before starting its own, serializing
-        // every hold transition.
+        // every hold transition — and must ALSO serialize with `toggleVideo` and
+        // the network-survival controller (`applySurvivalVideoSend`), since all
+        // three actuate the same camera/transceiver.
         let source = try callManagerSource()
         guard let funcRange = source.range(of: "func handleHold") else {
             XCTFail("handleHold not found"); return
@@ -1909,22 +1908,38 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         ].compactMap { $0 }.min() ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<nextFunc])
 
-        let previousTaskCaptures = body.components(separatedBy: "let previousTask = holdVideoTask").count - 1
+        let previousHoldCaptures = body.components(separatedBy: "let previousHold = holdVideoTask").count - 1
         XCTAssertEqual(
-            previousTaskCaptures, 2,
+            previousHoldCaptures, 2,
             "Both the hold and unhold branches must capture the in-flight holdVideoTask before replacing it"
         )
-
-        let awaitedCompletions = body.components(separatedBy: "await previousTask?.value").count - 1
+        let previousToggleCaptures = body.components(separatedBy: "let previousToggle = videoToggleTask").count - 1
         XCTAssertEqual(
-            awaitedCompletions, 2,
-            "Both branches must await the previous task's completion before mutating the camera/transceiver"
+            previousToggleCaptures, 2,
+            "Both branches must also capture the in-flight videoToggleTask — a manual toggle racing " +
+            "a hold transition actuates the same camera/transceiver."
+        )
+        let previousSurvivalCaptures = body.components(separatedBy: "let previousSurvival = survivalVideoTask").count - 1
+        XCTAssertEqual(
+            previousSurvivalCaptures, 2,
+            "Both branches must also capture the in-flight survivalVideoTask — a network-survival " +
+            "suspend/resume racing a hold transition actuates the same camera/transceiver."
         )
 
+        let awaitedHold = body.components(separatedBy: "await previousHold?.value").count - 1
+        XCTAssertEqual(
+            awaitedHold, 2,
+            "Both branches must await the previous hold task's completion before mutating the camera/transceiver"
+        )
+        let awaitedToggle = body.components(separatedBy: "await previousToggle?.value").count - 1
+        XCTAssertEqual(awaitedToggle, 2, "Both branches must await the previous toggle task's completion")
+        let awaitedSurvival = body.components(separatedBy: "await previousSurvival?.value").count - 1
+        XCTAssertEqual(awaitedSurvival, 2, "Both branches must await the previous survival task's completion")
+
         guard let assignRange = body.range(of: "holdVideoTask = Task"),
-              let awaitRange = body.range(of: "await previousTask?.value", range: assignRange.upperBound..<body.endIndex),
+              let awaitRange = body.range(of: "await previousHold?.value", range: assignRange.upperBound..<body.endIndex),
               let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
-            XCTFail("Expected holdVideoTask = Task, await previousTask?.value, then downgradeFromVideo() in that order"); return
+            XCTFail("Expected holdVideoTask = Task, await previousHold?.value, then downgradeFromVideo() in that order"); return
         }
         XCTAssertLessThan(
             awaitRange.lowerBound, downgradeRange.lowerBound,
@@ -3052,64 +3067,6 @@ final class CallManagerDTMFTests: XCTestCase {
     }
 }
 
-// MARK: - Audio Effects Guard (2026-07-05 audit)
-//
-// `CallAudioEffectsService` builds an independent `AVAudioEngine` tapping the
-// live mic input node. `CallEffectsOverlay` removed its UI entry point on
-// 2026-07-02 because no production capture hook feeds it, but `setAudioEffect`
-// stayed reachable — engaging it during a live call would start a second
-// AVAudioEngine contending with WebRTC's own `RTCAudioSession` for the same
-// hardware input. These tests lock in the guard that keeps it a documented
-// no-op until a real capture hook exists.
-
-@MainActor
-final class CallManagerAudioEffectGuardTests: XCTestCase {
-
-    private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    private func funcBody(named signature: String, in source: String) -> String? {
-        guard let range = source.range(of: signature) else { return nil }
-        let blockEnd = source.range(of: "}", range: range.upperBound..<source.endIndex)?.upperBound
-            ?? source.endIndex
-        return String(source[range.lowerBound..<blockEnd])
-    }
-
-    func test_setAudioEffect_guardsNonNilEffect_inSourceCode() throws {
-        let source = try callManagerSource()
-        guard let body = funcBody(named: "func setAudioEffect(_ effect: AudioEffectConfig?)", in: source) else {
-            XCTFail("setAudioEffect not found in CallManager.swift"); return
-        }
-
-        XCTAssertTrue(
-            body.contains("guard effect == nil"),
-            "setAudioEffect must refuse a non-nil effect — CallAudioEffectsService's " +
-            "AVAudioEngine has no production capture hook and would collide with the " +
-            "live call's RTCAudioSession if engaged"
-        )
-    }
-
-    func test_updateAudioEffectParams_guardsNoActiveEffect_inSourceCode() throws {
-        let source = try callManagerSource()
-        guard let body = funcBody(named: "func updateAudioEffectParams(_ config: AudioEffectConfig)", in: source) else {
-            XCTFail("updateAudioEffectParams not found in CallManager.swift"); return
-        }
-
-        XCTAssertTrue(
-            body.contains("guard activeAudioEffect != nil"),
-            "updateAudioEffectParams must refuse to forward when no effect is active " +
-            "(setAudioEffect is a no-op for non-nil effects, so this should never fire in production)"
-        )
-    }
-}
-
 // MARK: - call:force-leave Server→Client Handler
 
 @MainActor
@@ -4068,7 +4025,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
     }
 
     /// `emitCallAnalyticsIfNeeded` must be called in `endCallInternal` BEFORE
-    /// `activeAudioEffect = nil` and `callStartDate = nil` — it reads these live values.
+    /// `callStartDate = nil` — it reads this live value.
     func test_endCallInternal_emitsAnalyticsBeforeStateReset() throws {
         let source = try callManagerSource()
         guard let body = endCallInternalBody(in: source) else {
@@ -4077,13 +4034,13 @@ final class CallManagerAnalyticsTests: XCTestCase {
         guard let analyticsIdx = body.range(of: "emitCallAnalyticsIfNeeded(reason:")?.lowerBound else {
             XCTFail("emitCallAnalyticsIfNeeded not found in endCallInternal"); return
         }
-        guard let effectIdx = body.range(of: "activeAudioEffect = nil")?.lowerBound else {
-            XCTFail("activeAudioEffect = nil not found in endCallInternal"); return
+        guard let stateResetIdx = body.range(of: "callStartDate = nil")?.lowerBound else {
+            XCTFail("callStartDate = nil not found in endCallInternal"); return
         }
         XCTAssertTrue(
-            analyticsIdx < effectIdx,
-            "emitCallAnalyticsIfNeeded must fire before activeAudioEffect = nil — " +
-            "analytics reads the active effect state to include in the payload."
+            analyticsIdx < stateResetIdx,
+            "emitCallAnalyticsIfNeeded must fire before callStartDate = nil — " +
+            "analytics reads the live call state to include in the payload."
         )
     }
 
@@ -4425,15 +4382,34 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
         let toggleFunc = String(source[funcRange.lowerBound..<searchEnd])
 
         XCTAssertTrue(
-            toggleFunc.contains("let previousTask = videoToggleTask"),
+            toggleFunc.contains("let previousToggle = videoToggleTask"),
             "toggleVideo must capture the previous videoToggleTask before overwriting it, " +
             "so the new Task can await its completion."
         )
         XCTAssertTrue(
-            toggleFunc.contains("await previousTask?.value"),
-            "toggleVideo must await the previous task's completion before invoking " +
+            toggleFunc.contains("await previousToggle?.value"),
+            "toggleVideo must await the previous toggle task's completion before invoking " +
             "upgradeToVideo/downgradeFromVideo, otherwise two toggles can actuate the " +
             "camera/transceiver concurrently (cancel() alone does not stop in-flight work)."
+        )
+        // Regression guard: toggleVideo also must serialize with CallKit hold/unhold
+        // and the network-survival controller — a hold landing exactly as a manual
+        // toggle fires (or vice versa) actuates the same camera/transceiver otherwise.
+        XCTAssertTrue(
+            toggleFunc.contains("let previousHold = holdVideoTask"),
+            "toggleVideo must also capture the in-flight holdVideoTask before starting its own Task."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("await previousHold?.value"),
+            "toggleVideo must await the previous hold task's completion too."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("let previousSurvival = survivalVideoTask"),
+            "toggleVideo must also capture the in-flight survivalVideoTask before starting its own Task."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("await previousSurvival?.value"),
+            "toggleVideo must await the previous survival task's completion too."
         )
     }
 }
@@ -4815,6 +4791,35 @@ final class CallErrorNonFatalWhitelistTests: XCTestCase {
         XCTAssertLessThan(
             checkRange.lowerBound, teardownRange.lowerBound,
             "the TARGET_NOT_FOUND early-return must guard BEFORE the call:error teardown"
+        )
+    }
+
+    func test_callErrorForADifferentCall_isIgnored_beforeAnyCodeSpecificHandling() throws {
+        // Root-cause fix for the class of bug behind test_targetNotFound_isNonFatal
+        // above: TARGET_NOT_FOUND/RATE_LIMIT_EXCEEDED/INVALID_SIGNAL were each
+        // whitelisted one prod incident at a time because `CallError` carried no
+        // callId — every code had to be manually proven safe. Any error naming a
+        // DIFFERENT call than the one currently active must be ignored regardless
+        // of its code, and this guard must run before the per-code whitelist so a
+        // future/unlisted code can't still tear down an unrelated healthy call.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("errorCallId != self.currentCallId"),
+            "call:error must guard on event.callId vs currentCallId — an error for a different " +
+            "call must never affect this device's active, healthy call"
+        )
+        guard let callIdGuardRange = source.range(of: "errorCallId != self.currentCallId"),
+              let targetNotFoundRange = source.range(of: "event.code == \"TARGET_NOT_FOUND\""),
+              let teardownRange = source.range(of: "self.failCall(message)") else {
+            XCTFail("expected the callId guard, the per-code whitelist, and the teardown to coexist"); return
+        }
+        XCTAssertLessThan(
+            callIdGuardRange.lowerBound, targetNotFoundRange.lowerBound,
+            "the callId scoping guard must run BEFORE the per-code whitelist checks"
+        )
+        XCTAssertLessThan(
+            callIdGuardRange.lowerBound, teardownRange.lowerBound,
+            "the callId scoping guard must run BEFORE the call:error teardown"
         )
     }
 }

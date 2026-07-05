@@ -85,6 +85,37 @@ final class CallsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.calls.count, 1)
     }
 
+    /// Regression test: `CacheFirstLoader.load` awaits a cache read (and, on
+    /// miss, the network fetch) before ever touching `calls`/`loadState`. If
+    /// the initial `.task`-driven `loadCalls()` for `.all` is still in flight
+    /// when the user switches to `.missed`, and the `.all` fetch resolves
+    /// AFTER the `.missed` one already applied its results, the stale `.all`
+    /// completion must not clobber the current filter's list.
+    func test_loadCalls_staleFilterResolvesAfterNewer_doesNotClobberCurrentResults() async {
+        let (sut, service) = makeSUT()
+        service.gate(filter: .all)
+        service.historyResultByFilter[.all] = .success(Self.page([Self.makeRecord(id: "stale-all")]))
+        service.historyResultByFilter[.missed] = .success(Self.page([Self.makeRecord(id: "fresh-missed", direction: "missed")]))
+
+        let staleLoad = Task { await sut.loadCalls() }
+        // Let the stale (.all) load actually start and suspend on the gate
+        // before switching filters — otherwise the ordering isn't exercised.
+        while !service.invokedFilters.contains(.all) {
+            await Task.yield()
+        }
+
+        sut.setFilter(.missed)
+        while sut.calls.map(\.callId) != ["fresh-missed"] {
+            await Task.yield()
+        }
+
+        await service.releaseGate(for: .all)
+        await staleLoad.value
+
+        XCTAssertEqual(sut.filter, .missed)
+        XCTAssertEqual(sut.calls.map(\.callId), ["fresh-missed"])
+    }
+
     func test_loadCalls_whenServiceFails_setsErrorState() async {
         struct StubError: Error {}
         let (sut, service) = makeSUT()
