@@ -35,6 +35,7 @@ boot_emulator() {
   }
   echo "Boot de l'emulateur ${AVD}..."
   nohup "$EMULATOR_BIN" -avd "$AVD" -netdelay none -netspeed full \
+    -dns-server 8.8.8.8,1.1.1.1 \
     >/tmp/meeshy-emulator.log 2>&1 &
   "$ADB" wait-for-device
   until [[ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; do
