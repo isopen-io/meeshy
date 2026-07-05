@@ -1258,6 +1258,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       hydrates on cold start, corrupt value → AUTO), `SettingsViewModel` pick/cycle
       intents + segmented picker, `MainActivity` re-themes live via `ThemeViewModel`
       (`settings-theme-mode`, 2026-07-05). +23 tests.
+- [x] Interface (UI chrome) language with persisted preference — pure `AppLanguage`
+      supported-set/codec/resolver (`:core:model`, `supportedCodes` from
+      `LanguageData.interfaceLanguages`, `fromStorage`/`storageValue`/`resolveInterfaceLocaleTag`;
+      corrupt/legacy/unsupported → System `null`), durable DataStore-backed
+      `InterfaceLanguageStore` (`:sdk-core`, hydrates on cold start), `SettingsViewModel`
+      pick intent + display-language dialog picker (System + fr/en/es/ar), `MainActivity`
+      re-localises the whole Compose tree live via `LanguageViewModel` +
+      `createConfigurationContext` (minSdk-26 safe, no AppCompat) (`settings-interface-language`,
+      2026-07-05). +32 tests. NB: **display** language only; the **regional** language row stays
+      a no-op — it is a Prisme *content*-preference (backend profile / content store), not the
+      app UI locale, and belongs to a separate content-preference slice.
 - [ ] Notification preferences (push/email/sound/vibration, per-event types, DND schedule)
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)

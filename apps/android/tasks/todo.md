@@ -4,22 +4,26 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-theme-mode` ✅
-**Persisted light/dark/system theme** — the first §L slice, opening the Settings area. Pure `:core:model`
-`AppTheme` SSOT (`resolveDarkMode`/`storageValue`/`next`/`appThemeModeFromStorage`; corrupt/blank/unknown/
-`"system"` → AUTO). Durable DataStore-backed `ThemeStore` (`:sdk-core`: `InMemoryThemeStore` +
-`DataStoreThemeStore`, hydrates on cold start via `stateIn(Eagerly)`, `@Singleton` in `SdkModule`).
-`SettingsViewModel` pick/cycle intents + `SettingsScreen` Material3 segmented System/Light/Dark picker
-(EN/FR/ES/PT); `MainActivity` re-themes live via a new `:app` `ThemeViewModel`. No dead ends. +23 tests
-(`AppThemeTest` 12, `ThemeStoreTest` 6, `SettingsViewModelThemeTest` 5). Full `assembleDebug` + all
-`testDebugUnitTest` green (system Gradle 8.14.3). Diff = `apps/android` only. See PROGRESS.md run log.
+## This loop (Phase: Settings §L) — slice `settings-interface-language` ✅
+**Persisted interface (UI chrome) language** — mirrors the theme slice one step further. Pure `:core:model`
+`AppLanguage` SSOT (`supportedCodes` from `LanguageData.interfaceLanguages` fr/en/es/ar; `fromStorage`/
+`storageValue` codec + `resolveInterfaceLocaleTag`; `"system"`/blank/absent/unsupported → `null` = follow
+device). Durable DataStore-backed `InterfaceLanguageStore` (`:sdk-core`: `InMemoryInterfaceLanguageStore` +
+`DataStoreInterfaceLanguageStore`, hydrates on cold start via `stateIn(Eagerly)`, `@Singleton` in `SdkModule`).
+`SettingsViewModel` `setInterfaceLanguage` intent + `SettingsScreen` display-language dialog picker (System +
+flags/native names, EN/FR/ES/PT); `MainActivity` re-localises the whole Compose tree live via `LanguageViewModel`
++ a `createConfigurationContext` provider (minSdk-26 safe, no AppCompat). Regional-language row left no-op on
+purpose (Prisme content-preference, not app locale). +32 tests (`AppLanguageTest` 18, `InterfaceLanguageStoreTest`
+9, `SettingsViewModelLanguageTest` 5). Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle
+8.14.3). Diff = `apps/android` only. See PROGRESS.md run log.
 
 ### Next
-1. **Interface-language persistence** (§L) — mirror this slice: pure `AppLanguage` codec + DataStore
-   `LanguageStore` + wire the two `settings_section_language` rows (today `onClick = {}`) + apply the app
-   locale at `MainActivity`. Same low-risk shape.
-2. **Notification-preference toggles** (§L) — back the `settings_push_notifications` switch (today ephemeral
+1. **Notification-preference toggles** (§L) — back the `settings_push_notifications` switch (today ephemeral
    `remember` state) with the local-first user-preference store; `UserNotificationPreferences` already exists.
+   Same pure-codec + DataStore-store + ViewModel-intent shape.
+2. **Regional (content) language preference** (§L) — the still-no-op `settings_regional_language` row; wire it
+   through the Prisme *content*-preference / profile path (`LanguageResolver`, optimistic+offline), NOT the
+   interface `InterfaceLanguageStore`.
 3. Or the tracked **worker drain-list Robolectric test**, or pivot back to **Calls §H** platform-glue.
 
 ## Prior loop (Phase: Contacts / outbox hardening) — slice `outbox-lane-map-ssot` ✅
