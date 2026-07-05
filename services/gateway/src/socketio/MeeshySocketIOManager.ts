@@ -39,6 +39,7 @@ import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
+import { getBlockedUserIdsAmong } from '../utils/blocking';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
@@ -557,17 +558,24 @@ export class MeeshySocketIOManager {
    */
   /**
    * Masque la présence des contacts selon leurs préférences privacy (cascade
-   * showOnlineStatus maître + showLastSeen). Anonymes → défaut (montrés).
-   * Appliqué à l'émission (pas au cache) pour couvrir aussi le cache-hit.
+   * showOnlineStatus maître + showLastSeen) ET le blocage bidirectionnel avec
+   * `viewerId` — même règle que `GET /users/presence` (`PresenceVisibilityService`).
+   * Anonymes → défaut (montrés, non-bloquables). Appliqué à l'émission (pas au
+   * cache) pour couvrir aussi le cache-hit.
    */
   private async _applyPresencePrefs(
+    viewerId: string,
     users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
   ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
     if (users.length === 0) return users;
-    const prefsMap = await this.privacyPreferencesService.getPreferencesForUsers(
-      users.map(u => ({ id: u.userId, isAnonymous: false })),
-    );
+    const [prefsMap, blockedUserIds] = await Promise.all([
+      this.privacyPreferencesService.getPreferencesForUsers(
+        users.map(u => ({ id: u.userId, isAnonymous: false })),
+      ),
+      getBlockedUserIdsAmong(this.prisma, viewerId, users.map(u => u.userId)),
+    ]);
     return users.map(u => {
+      if (blockedUserIds.has(u.userId)) return { ...u, isOnline: false, lastActiveAt: null };
       const p = prefsMap.get(u.userId);
       if (p && !p.showOnlineStatus) return { ...u, isOnline: false, lastActiveAt: null };
       return { ...u, lastActiveAt: p && !p.showLastSeen ? null : u.lastActiveAt };
@@ -579,6 +587,7 @@ export class MeeshySocketIOManager {
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
         const users = await this._applyPresencePrefs(
+          userId,
           cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
         );
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
@@ -634,7 +643,7 @@ export class MeeshySocketIOManager {
           }
 
           this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
-          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: await this._applyPresencePrefs(users) });
+          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: await this._applyPresencePrefs(userId, users) });
           logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
       }
@@ -1651,7 +1660,23 @@ export class MeeshySocketIOManager {
           // Broadcaster dans toutes les conversations de l'utilisateur (batch: 1 emit au lieu de N)
           const rooms = participantRows.map(p => ROOMS.conversation(p.conversationId));
           if (rooms.length > 0) {
-            this.io.to(rooms).emit(SERVER_EVENTS.USER_STATUS, {
+            // PRIVACY: exclure les sockets des viewers en relation de blocage
+            // bidirectionnel avec ce user — même règle que GET /users/presence
+            // (PresenceVisibilityService). Un socket.id est aussi une room
+            // Socket.IO (auto-join), donc .except(socketId) l'exclut du
+            // broadcast même s'il est par ailleurs membre de `rooms`.
+            const onlineOtherUserIds = [...this.connectedUsers.keys()].filter(id => id !== user.id);
+            const blockedUserIds = onlineOtherUserIds.length > 0
+              ? await getBlockedUserIdsAmong(this.prisma, user.id, onlineOtherUserIds)
+              : new Set<string>();
+            const blockedSocketIds = [...blockedUserIds].flatMap(
+              id => [...(this.userSockets.get(id) ?? [])],
+            );
+
+            const emitter = blockedSocketIds.length > 0
+              ? this.io.to(rooms).except(blockedSocketIds)
+              : this.io.to(rooms);
+            emitter.emit(SERVER_EVENTS.USER_STATUS, {
               userId: user.id,
               username: displayName,
               isOnline,
