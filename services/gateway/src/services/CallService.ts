@@ -781,6 +781,21 @@ export class CallService {
   }
 
   /**
+   * MongoDB can detect two transactions racing on the same CallSession
+   * document BEFORE either side's app-level `version` guard returns
+   * `count: 0` — Prisma surfaces that as P2034 ("write conflict or
+   * deadlock, please retry") instead of letting our own conditional
+   * `updateMany` resolve the race. Every version-guarded terminal write
+   * (join/end/leave) must treat P2034 the same as its own local
+   * version-conflict signal — fall back to the fresh-state path instead of
+   * throwing a raw Prisma error at the client (prod 2026-07-04, callId
+   * observed on `call:join`: two `call:join` 3-11ms apart).
+   */
+  private isTransientWriteConflict(error: unknown): boolean {
+    return (error as { code?: string } | null)?.code === 'P2034';
+  }
+
+  /**
    * TOCTOU close (audit 2026-07-02): `activeParticipants.length >= 2` below
    * reads a snapshot fetched before this method's own write, so two callers
    * racing to join the same call (a third party racing the intended callee,
@@ -925,17 +940,7 @@ export class CallService {
     }).then(
       () => 'joined' as const,
       (error) => {
-        if (error === versionConflict) {
-          return 'conflict' as const;
-        }
-        // MongoDB can also detect the two racing transactions at the
-        // document level BEFORE our version guard returns count=0 — Prisma
-        // surfaces that as P2034 ("write conflict or deadlock, please
-        // retry"). Same semantics as versionConflict: retry against fresh
-        // state, where the already-joined check resolves a same-user
-        // double-join idempotently (observed in prod 2026-07-04: two
-        // call:join within ms → one joined, one errored to the client).
-        if ((error as { code?: string })?.code === 'P2034') {
+        if (error === versionConflict || this.isTransientWriteConflict(error)) {
           return 'conflict' as const;
         }
         throw error;
@@ -1214,7 +1219,7 @@ export class CallService {
     }).then(
       () => 'left' as const,
       (error) => {
-        if (error === leaveVersionConflict) {
+        if (error === leaveVersionConflict || this.isTransientWriteConflict(error)) {
           return 'conflict' as const;
         }
         throw error;
@@ -1423,7 +1428,7 @@ export class CallService {
     }).then(
       () => 'ended' as const,
       (error) => {
-        if (error === versionConflict) {
+        if (error === versionConflict || this.isTransientWriteConflict(error)) {
           return 'conflict' as const;
         }
         throw error;
