@@ -1269,7 +1269,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       2026-07-05). +32 tests. NB: **display** language only; the **regional** language row stays
       a no-op — it is a Prisme *content*-preference (backend profile / content store), not the
       app UI locale, and belongs to a separate content-preference slice.
-- [ ] Notification preferences (push/email/sound/vibration, per-event types, DND schedule)
+- [~] Notification preferences (push/email/sound/vibration, per-event types, DND schedule) —
+      **durable master toggles landed** (`settings-notification-prefs`, 2026-07-05): pure
+      `:core:model` JSON codec for the whole `UserNotificationPreferences` block
+      (`storageValue`/`notificationPreferencesFromStorage` — blank/absent/corrupt/partial/unknown-key
+      → safe defaults, never crashes), durable DataStore-backed `NotificationPreferencesStore`
+      (`:sdk-core`, hydrates on cold start, corrupt stored value → defaults), `SettingsViewModel`
+      per-toggle intents (push/new-message/sound/vibration) that persist the whole block without
+      clobbering the other fields, `SettingsScreen` state-driven `Switch` rows (push is the master —
+      the three sub-toggles disable when push is off). +25 tests. **Still open:** email + the remaining
+      per-event types + DND schedule editor + offline-queued backend sync (this slice is device-local only).
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync
