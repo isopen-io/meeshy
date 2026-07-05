@@ -306,6 +306,59 @@ export class CallService {
   }
 
   /**
+   * Force-terminates a CallSession that a normal endCall/leaveCall path could
+   * not cleanly resolve — e.g. the ending participant no longer resolves, or
+   * the authoritative write itself failed — after the caller has already told
+   * the call room the call ended (CallEventsHandler's disconnect force-cleanup
+   * fallback and call:end optimistic-broadcast recovery paths). Mirrors
+   * CallCleanupService.forceEndCall's terminal-write protocol: scoped to
+   * ACTIVE_STATUSES (a no-op, returning null, if another path already resolved
+   * the call) and bumps `version` so a version-guarded writer that read the
+   * row moments earlier can't silently clobber this terminal state.
+   */
+  async forceEndOrphanedCallSession(
+    callId: string,
+    endReason: CallEndReason
+  ): Promise<{ duration: number; conversationId: string } | null> {
+    const session = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      select: { startedAt: true, conversationId: true }
+    });
+    if (!session) return null;
+
+    const now = new Date();
+    const duration = Math.max(0, Math.floor((now.getTime() - session.startedAt.getTime()) / 1000));
+
+    const ended = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.callSession.updateMany({
+        where: { id: callId, status: { in: ACTIVE_STATUSES } },
+        data: {
+          status: CallStatus.ended,
+          endedAt: now,
+          duration,
+          endReason,
+          version: { increment: 1 }
+        }
+      });
+      if (updated.count === 0) return false;
+
+      await tx.callParticipant.updateMany({
+        where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
+        data: { leftAt: now }
+      });
+      return true;
+    });
+
+    if (!ended) return null;
+
+    this.clearHeartbeats(callId);
+    this.clearRingingTimeout(callId);
+    await this.releaseActiveCallClaim(session.conversationId, callId);
+
+    return { duration, conversationId: session.conversationId };
+  }
+
+  /**
    * Mark a participant as backgrounded, granting them an extended heartbeat
    * grace period (BACKGROUND_HEARTBEAT_TIMEOUT_MS) so CallKit audio calls
    * survive iOS socket suspension (~45s after backgrounding).

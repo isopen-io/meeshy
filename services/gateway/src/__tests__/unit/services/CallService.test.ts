@@ -4381,4 +4381,64 @@ describe('CallService - createCallSummaryMessage', () => {
 
     await expect(callService.createCallSummaryMessage('call-123')).rejects.toThrow('DB connection lost');
   });
+
+  describe('forceEndOrphanedCallSession', () => {
+    it('returns null without starting a transaction when the call session no longer exists', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue(null);
+
+      const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.connectionLost);
+
+      expect(result).toBeNull();
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('force-ends an active session: bumps version, tags endReason, marks remaining participants left, releases the claim', async () => {
+      const startedAt = new Date(Date.now() - 42_000);
+      mockPrisma.callSession.findUnique.mockResolvedValue({ startedAt, conversationId: 'conv-123' });
+
+      const callSessionUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+      const callParticipantUpdateMany = jest.fn().mockResolvedValue({ count: 2 });
+      mockPrisma.$transaction.mockImplementation(async (cb: any) => cb({
+        callSession: { updateMany: callSessionUpdateMany },
+        callParticipant: { updateMany: callParticipantUpdateMany }
+      }));
+
+      const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.connectionLost);
+
+      expect(result?.conversationId).toBe('conv-123');
+      expect(result?.duration).toBeGreaterThanOrEqual(42);
+      expect(callSessionUpdateMany).toHaveBeenCalledWith({
+        where: { id: 'call-123', status: { in: expect.any(Array) } },
+        data: expect.objectContaining({
+          status: CallStatus.ended,
+          endReason: CallEndReason.connectionLost,
+          version: { increment: 1 }
+        })
+      });
+      expect(callParticipantUpdateMany).toHaveBeenCalledWith({
+        where: { callSessionId: 'call-123', OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
+        data: { leftAt: expect.any(Date) }
+      });
+      expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
+        where: { id: 'conv-123', activeCallId: 'call-123' },
+        data: { activeCallId: null }
+      });
+    });
+
+    it('no-ops without touching participants or the active-call claim when another path already resolved the call', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue({ startedAt: new Date(), conversationId: 'conv-123' });
+      const callParticipantUpdateMany = jest.fn();
+      mockPrisma.$transaction.mockImplementation(async (cb: any) => cb({
+        callSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        callParticipant: { updateMany: callParticipantUpdateMany }
+      }));
+      mockPrisma.conversation.updateMany.mockClear();
+
+      const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.connectionLost);
+
+      expect(result).toBeNull();
+      expect(callParticipantUpdateMany).not.toHaveBeenCalled();
+      expect(mockPrisma.conversation.updateMany).not.toHaveBeenCalled();
+    });
+  });
 });
