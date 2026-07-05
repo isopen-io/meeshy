@@ -1104,6 +1104,16 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
+
+        // Calling-stack audit 2026-07-05 (2) — this was the last call:*
+        // handler with no rate limit at all; it fans out into 2-4 Prisma
+        // queries plus a TURN-secret HMAC mint per matching call, with no
+        // client payload required to trigger it (see SOCKET_RATE_LIMITS.CALL_CHECK_ACTIVE).
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_CHECK_ACTIVE, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
         const myConvs = await this.prisma.participant.findMany({
           where: { userId, isActive: true },
           select: { conversationId: true }
