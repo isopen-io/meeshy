@@ -2,7 +2,22 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → **Calls (started)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (started)** → rest`
+
+> On 2026-07-05 the **profile-header enrichment** landed (slice `profile-header-presentation`,
+> §K): the pure `:feature:profile` `ProfileHeaderBuilder.build(user, now) → ProfileHeaderPresentation`
+> (precedent `FeedPostBuilder`) is the tested SSOT projecting a `MeeshyUser` into the read-only header —
+> the display-name ladder (reuses `MeeshyUser.effectiveDisplayName`), the `@handle` (null on a blank
+> username), blank→null degradation of every optional text field (bio/avatar/languages/country), the
+> three-state presence (reuses the `UserPresence.state` SSOT — offline/unknown → no dot, online → green,
+> idle > 5min → amber), the completion % clamped into `0..100` (a malformed server value can never
+> over/under-fill the ring), the E2EE flag (`signalIdentityKeyPublic` present & non-blank), and the
+> member-since epoch (reuses `isoToEpochMillisOrNull`, null on absent/garbage `createdAt`). The existing
+> `ProfileScreen` read-only view now consumes it: an accent-coloured `ProfileCompletionRing` Canvas arc
+> around the avatar, a bordered green/amber presence dot overlaid bottom-right, an E2EE lock badge, a
+> "Profile N% complete" label and a localized "member since" line (EN/FR/ES/PT). No orphan code — every
+> derived field has a live consumer in the header. +22 behavioural tests. `assembleDebug` +
+> `testDebugUnitTest` (full) green. This opens the §K Profile area (all pure, richly branch-covered).
 
 > Calls kicked off 2026-06-30 with the pure call-lifecycle FSM (`core:model`
 > `me.meeshy.sdk.model.call` — `CallState`/`CallEndReason`/`CallEvent`/`CallStateMachine`). On
@@ -303,6 +318,27 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 (prunes the preview pools + cancels its durable rows). Surpasses iOS, which drops an offline pick.
 
 ## Next slice (pick one for the next run)
+
+**Pivoted to Profile/Account (`feature-parity.md §K`) 2026-07-05.** Contacts (§J) is now
+cache-complete + mutation-complete + list-display-complete (only mood-emoji presence remains, which
+needs a `moodEmoji` field the roster record doesn't carry yet — deferred until a mood/status model
+lands). The routine advanced to the next-richest area with untapped pure cores. The **profile-header
+enrichment** landed first (`profile-header-presentation`): pure `ProfileHeaderBuilder` →
+`ProfileHeaderPresentation` (presence · completion-ring % · E2EE · member-since), consumed by the
+read-only `ProfileScreen`. **Next highest-value §K slices (all pure-core-rich):**
+1. **`profile-details-rows`** — a pure `ProfileDetailRows.build(header)` projecting the identity block's
+   secondary rows (languages as flag+label chips, country, timezone) into a tested list the sheet
+   renders; extends the header without new network.
+2. **`profile-stats-model`** — the pure `:core:model` `UserStats` + `UserStatsApi` + repository
+   (cache-first) mirroring the gateway stats contract (messages/conversations/translations counts),
+   the SSOT the future stats dashboard cards render.
+3. **`edit-profile-optimistic`** — richer `ProfileViewModel` edit path (content-language selection,
+   optimistic + offline-queued save via the outbox), building on the existing display-name/bio edit.
+4. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
+   remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
+
+---
+_Historical Contacts/Calls backlog below._
 
 **Pivoted to Contacts (`feature-parity.md §J`) 2026-07-04.** The Calls area's remaining work is
 WebRTC/Telecom/FCM platform glue with no more pure testable cores, so the routine advanced to the

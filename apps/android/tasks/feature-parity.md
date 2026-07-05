@@ -1165,11 +1165,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       profile/report surface (the `setBlockedDurably(.., true)` half is ready, awaiting its UI).
 
 ## K. Profile & Account
-- [ ] View profile (by id / username / public handle / email / phone)
-- [ ] Full profile sheet: banner, identity, Profile / Conversations / Stats tabs, achievements
+- [~] View profile (by id / username / public handle / email / phone) — `:feature:profile`
+      `ProfileScreen`/`ProfileViewModel` load own (session) or other (`getProfile(id)`) profiles.
+      **Header enrichment shipped** (slice `profile-header-presentation`, 2026-07-05): the pure
+      `ProfileHeaderBuilder.build(user, now) → ProfileHeaderPresentation` (`:feature:profile`, precedent
+      `FeedPostBuilder`) is the tested SSOT for the read-only header — display-name ladder (reuses
+      `MeeshyUser.effectiveDisplayName`), `@handle`, blank→null optional fields, presence (reuses
+      `UserPresence.state`), completion % clamped `0..100`, E2EE flag (`signalIdentityKeyPublic`
+      present), and member-since epoch (reuses `isoToEpochMillisOrNull`). **Pending:** resolve by
+      public handle / email / phone; banner.
+- [~] Full profile sheet: banner, identity, Profile / Conversations / Stats tabs, achievements —
+      **identity block advanced** (slice `profile-header-presentation`): the read-only `ProfileScreen`
+      now renders the presence dot (green/amber, semantic, bordered) overlaid on the avatar, the
+      accent-coloured completion ring around it, an E2EE lock badge, and a localized "member since"
+      line (EN/FR/ES/PT). **Pending:** banner, tabs (Profile/Conversations/Stats), achievements.
 - [ ] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
 - [ ] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges
-- [ ] Profile completion ring
+- [x] Profile completion ring — **shipped** (slice `profile-header-presentation`, 2026-07-05): the
+      accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
+      `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
+      over/under-fills the ring), plus a "Profile N% complete" label. 22 `ProfileHeaderBuilderTest` cases.
 - [ ] Profile QR code display + save/share; share profile via message/email/copy link
 - [ ] Block / unblock users; report a user (reason + details)
 - [ ] Change email / phone (two-step verification)

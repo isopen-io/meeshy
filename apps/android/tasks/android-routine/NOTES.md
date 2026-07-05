@@ -2,7 +2,25 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Environment
+- **The Gradle wrapper's 8.11.1 distribution zip is blocked in the web container (403 from
+  github.com/gradle releases via the agent proxy).** `./gradlew` / `./apps/android/meeshy.sh check`
+  therefore fail to *bootstrap*. A system Gradle **8.14.3** is preinstalled at `/opt/gradle/bin/gradle`
+  and drives the same build fine — run the gate as `cd apps/android && /opt/gradle/bin/gradle
+  assembleDebug testDebugUnitTest` (online; Google/Maven artifacts *do* resolve through the proxy, only
+  the wrapper's github-hosted distribution zip is blocked). Do **not** edit `gradle-wrapper.properties`
+  to work around this — CI/other envs rely on 8.11.1; keep the wrapper untouched and just use the
+  system binary for local verification. `--offline` fails on a cold cache (AGP 8.7.3 not pre-seeded);
+  run online the first time so Gradle can fetch AGP + deps. (2026-07-05, slice `profile-header-presentation`.)
+
 ## Design lessons
+- **Reuse the existing pure SSOTs when building a projection — don't re-derive.** (2026-07-05, slice
+  `profile-header-presentation`.) `ProfileHeaderBuilder` composes three already-tested SSOTs rather than
+  re-implementing them: the display-name ladder is `MeeshyUser.effectiveDisplayName`, presence is
+  `UserPresence(isOnline, lastActiveAt).state(now)`, and member-since is `isoToEpochMillisOrNull`. The
+  builder's own new logic (blank→null degradation, `coerceIn(0,100)` on the completion %, `@handle`
+  formatting, E2EE = key-present) is what the 22 tests target — no test re-asserts a borrowed SSOT's
+  behaviour. Keeps the builder thin and the branch-coverage honest.
 - **"Absent" ≠ "epoch 0" — a 0L-defaulting parse silently poisons time-delta logic.**
   (2026-07-04, slice `presence-away-indicator`.) `isoToEpochMillis` returns `0L` for both an absent/
   unparseable string **and** the legitimate `1970-01-01T00:00:00Z`. Reusing it for presence
