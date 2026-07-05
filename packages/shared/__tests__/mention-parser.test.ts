@@ -119,9 +119,34 @@ describe('parseMentions', () => {
     });
   });
 
+  describe('@username avec tiret (charset username /^[a-zA-Z0-9_-]+$/)', () => {
+    const hyphenParticipants: MentionParticipant[] = [
+      { userId: 'h1', username: 'marie-claire', displayName: 'Marie Claire' },
+      { userId: 'h2', username: 'jean',         displayName: 'Jean' },
+    ];
+
+    it('résout un username contenant un tiret', () => {
+      expect(parseMentions('coucou @marie-claire !', hyphenParticipants)).toEqual(['h1']);
+    });
+
+    it('ne tronque pas @marie-claire au premier tiret', () => {
+      // 'marie' seul n'est pas un participant : avant le fix, `\w` capturait 'marie'
+      // (non résolu) et marie-claire n'était jamais notifiée.
+      expect(parseMentions('@marie-claire', hyphenParticipants)).toEqual(['h1']);
+    });
+
+    it('sans participants, retourne le handle brut complet avec tiret', () => {
+      expect(parseMentions('@marie-claire', [])).toEqual(['@marie-claire']);
+    });
+  });
+
   describe('hasMentions', () => {
     it('détecte @ comme mention', () => {
       expect(hasMentions('Salut @Andre Tabeth')).toBe(true);
+    });
+
+    it('détecte un @username à tiret', () => {
+      expect(hasMentions('Salut @marie-claire')).toBe(true);
     });
 
     it('détecte @username comme mention', () => {

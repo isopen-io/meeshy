@@ -1,7 +1,7 @@
 import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
 import type { ApiResponse, PaginationMeta, MessagesListResponse } from '@meeshy/shared/types';
-import { hasMentions as hasMentionsShared } from '@meeshy/shared/types/mention';
+import { hasMentions as hasMentionsShared, extractMentions as extractMentionsShared } from '@meeshy/shared/types/mention';
 import { generateClientMessageId } from '@/utils/client-message-id';
 import { getCurrentInterfaceLocale } from '@/stores/language-store';
 
@@ -259,8 +259,7 @@ export const messagesService = {
    * Extrait les mentions d'un message
    */
   extractMentions(content: string): string[] {
-    const mentions = content.match(/@(\w+)/g);
-    return mentions ? mentions.map(mention => mention.substring(1)) : [];
+    return extractMentionsShared(content);
   },
 };
 
