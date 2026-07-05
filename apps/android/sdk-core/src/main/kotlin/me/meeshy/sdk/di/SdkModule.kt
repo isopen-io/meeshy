@@ -14,6 +14,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
+import me.meeshy.sdk.language.DataStoreInterfaceLanguageStore
+import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.SharedPrefsEmojiUsageStore
@@ -49,6 +51,16 @@ object SdkModule {
             context.preferencesDataStoreFile("meeshy_theme")
         }
         return DataStoreThemeStore(dataStore, scope)
+    }
+
+    @Provides
+    @Singleton
+    fun providesInterfaceLanguageStore(@ApplicationContext context: Context): InterfaceLanguageStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_language")
+        }
+        return DataStoreInterfaceLanguageStore(dataStore, scope)
     }
 
     @Provides

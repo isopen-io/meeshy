@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,12 +24,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
+import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.AppThemeMode
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshySpacing
@@ -126,7 +130,11 @@ fun SettingsScreen(
             }
 
             SettingsSection(title = stringResource(R.string.settings_section_language)) {
-                SettingsRow(label = stringResource(R.string.settings_display_language), detail = null, onClick = {})
+                InterfaceLanguageRow(
+                    label = stringResource(R.string.settings_display_language),
+                    selected = state.interfaceLanguage,
+                    onSelect = viewModel::setInterfaceLanguage,
+                )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_regional_language), detail = null, onClick = {})
             }
@@ -238,6 +246,85 @@ private fun ThemePickerRow(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun InterfaceLanguageRow(
+    label: String,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val systemLabel = stringResource(R.string.settings_language_system)
+    val detail = selected?.let { AppLanguage.info(it)?.nativeName } ?: systemLabel
+
+    SettingsRow(label = label, detail = detail, onClick = { showDialog = true })
+
+    if (showDialog) {
+        InterfaceLanguageDialog(
+            selected = selected,
+            systemLabel = systemLabel,
+            onSelect = {
+                onSelect(it)
+                showDialog = false
+            },
+            onDismiss = { showDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun InterfaceLanguageDialog(
+    selected: String?,
+    systemLabel: String,
+    onSelect: (String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_display_language)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                LanguageOptionRow(
+                    label = systemLabel,
+                    isSelected = selected == null,
+                    onClick = { onSelect(null) },
+                )
+                AppLanguage.supportedLanguages.forEach { language ->
+                    LanguageOptionRow(
+                        label = "${language.flag}  ${language.nativeName}",
+                        isSelected = selected == language.code,
+                        onClick = { onSelect(language.code) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_language_dialog_close))
+            }
+        },
+    )
+}
+
+@Composable
+private fun LanguageOptionRow(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .semantics { role = Role.RadioButton }
+            .padding(vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = isSelected, onClick = onClick)
+        Spacer(Modifier.width(MeeshySpacing.sm))
+        Text(text = label, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
