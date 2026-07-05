@@ -1015,6 +1015,36 @@ describe('CallService', () => {
       expect(result.status).toBe(CallStatus.ended);
     });
 
+    it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the terminal write (sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call)', async () => {
+      const participant = createMockParticipant();
+      const callWithParticipant = createMockCallSession({
+        status: CallStatus.active,
+        answeredAt: new Date(Date.now() - 30_000),
+        participants: [participant]
+      });
+      const currentCall = {
+        ...callWithParticipant,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [{ ...participant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+      const p2034 = Object.assign(
+        new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction'),
+        { code: 'P2034' }
+      );
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithParticipant);
+      mockPrisma.$transaction.mockRejectedValueOnce(p2034);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(currentCall);
+
+      const result = await callService.leaveCall(validLeaveData);
+
+      expect(result.status).toBe(CallStatus.ended);
+    });
+
     it('should not end call when other participants remain', async () => {
       const participant = createMockParticipant();
       const otherParticipant = createMockParticipant({
@@ -1321,6 +1351,36 @@ describe('CallService', () => {
       await expect(callService.endCall('call-123', 'user-123', 'participant-123')).rejects.toThrow(
         'NOT_A_PARTICIPANT: You are not in this call'
       );
+    });
+
+    it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the terminal write (sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call)', async () => {
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.active,
+        participants: [initiatorParticipant]
+      });
+      const currentCall = {
+        ...mockCall,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+      const p2034 = Object.assign(
+        new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction'),
+        { code: 'P2034' }
+      );
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockRejectedValueOnce(p2034);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(currentCall);
+
+      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      expect(result.status).toBe(CallStatus.ended);
     });
 
     it('should allow any active participant to end a P2P call (spec C4)', async () => {
