@@ -24,6 +24,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -44,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
+import me.meeshy.sdk.model.AppThemeMode
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -111,6 +115,14 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
+                ThemePickerRow(
+                    label = stringResource(R.string.settings_theme),
+                    selected = state.themeMode,
+                    onSelect = viewModel::setThemeMode,
+                )
             }
 
             SettingsSection(title = stringResource(R.string.settings_section_language)) {
@@ -189,6 +201,42 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(MeeshySpacing.xl))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ThemePickerRow(
+    label: String,
+    selected: AppThemeMode,
+    onSelect: (AppThemeMode) -> Unit,
+) {
+    val options = listOf(
+        AppThemeMode.AUTO to R.string.settings_theme_system,
+        AppThemeMode.LIGHT to R.string.settings_theme_light,
+        AppThemeMode.DARK to R.string.settings_theme_dark,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(MeeshySpacing.sm))
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, (mode, labelRes) ->
+                SegmentedButton(
+                    selected = mode == selected,
+                    onClick = { onSelect(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                ) {
+                    Text(stringResource(labelRes))
+                }
+            }
         }
     }
 }

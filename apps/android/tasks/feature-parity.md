@@ -1252,7 +1252,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## L. Settings & Privacy
 - [ ] Settings hub: profile card, appearance/theme + interface language, notifications,
       transcription, voice profile, data, tools, support, about, logout
-- [ ] Light/dark/system theme with persisted preference
+- [x] Light/dark/system theme with persisted preference — pure `AppThemeMode`
+      codec/resolver/cycle (`:core:model`, `resolveDarkMode`/`storageValue`/`next`/
+      `appThemeModeFromStorage`), durable DataStore-backed `ThemeStore` (`:sdk-core`,
+      hydrates on cold start, corrupt value → AUTO), `SettingsViewModel` pick/cycle
+      intents + segmented picker, `MainActivity` re-themes live via `ThemeViewModel`
+      (`settings-theme-mode`, 2026-07-05). +23 tests.
 - [ ] Notification preferences (push/email/sound/vibration, per-event types, DND schedule)
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
