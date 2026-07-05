@@ -1,7 +1,7 @@
 import { apiService } from './api.service';
 import { logger } from '@/utils/logger';
 import type { ApiResponse } from '@meeshy/shared/types';
-import { hasMentions as hasMentionsShared, type MentionSuggestion } from '@meeshy/shared/types/mention';
+import { hasMentions as hasMentionsShared, extractMentions as extractMentionsShared, type MentionSuggestion } from '@meeshy/shared/types/mention';
 
 export interface MentionSuggestionsParams {
   conversationId: string;
@@ -164,8 +164,7 @@ export const mentionsService = {
    * @returns Array des usernames (sans le @)
    */
   extractMentions(content: string): string[] {
-    const mentions = content.match(/@(\w+)/g);
-    return mentions ? mentions.map(mention => mention.substring(1)) : [];
+    return extractMentionsShared(content);
   },
 };
 

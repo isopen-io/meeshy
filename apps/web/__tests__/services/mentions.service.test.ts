@@ -257,4 +257,12 @@ describe('mentionsService.extractMentions', () => {
   it('handles underscore and digits in username', () => {
     expect(mentionsService.extractMentions('@user_42 hello')).toEqual(['user_42']);
   });
+
+  it('extracts a hyphenated username without truncating at the hyphen', () => {
+    expect(mentionsService.extractMentions('salut @marie-claire')).toEqual(['marie-claire']);
+  });
+
+  it('lowercases and dedups (shared SSOT parity)', () => {
+    expect(mentionsService.extractMentions('@Alice @alice')).toEqual(['alice']);
+  });
 });
