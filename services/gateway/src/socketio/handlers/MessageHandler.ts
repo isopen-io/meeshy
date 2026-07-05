@@ -1207,6 +1207,7 @@ export class MessageHandler {
       emitter = emitter.to(userRoom);
     }
     emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+    emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
     handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms: [...seen], deliveredCount: summary.deliveredCount });
   }
 

@@ -3832,6 +3832,15 @@ describe('MeeshySocketIOManager', () => {
         SERVER_EVENTS.READ_STATUS_UPDATED,
         expect.objectContaining({ conversationId: convId2, userId, type: 'received' })
       );
+      // Dual-emitted alongside the legacy name — see tasks/socketio-events-cleanup.md #3.
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED,
+        expect.objectContaining({ conversationId: convId1, userId, type: 'received' })
+      );
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED,
+        expect.objectContaining({ conversationId: convId2, userId, type: 'received' })
+      );
     });
 
     it('keeps only the latest messageId when same conversationId appears multiple times', async () => {
