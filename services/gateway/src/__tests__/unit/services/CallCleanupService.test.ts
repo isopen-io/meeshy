@@ -1093,6 +1093,66 @@ describe('CallCleanupService', () => {
   });
 
   // -------------------------------------------------------------------------
+  // setQualityStreakCleanupCallback — sibling-drift fix (2026-07-05):
+  // CallEventsHandler.clearQualityDegradedStreaks is only reachable from that
+  // instance, so GC-ended calls (this 4th terminal path) leaked their
+  // qualityDegradedStreaks entries forever until this bridge existed.
+  // -------------------------------------------------------------------------
+  describe('setQualityStreakCleanupCallback', () => {
+    it('invokes the callback with the callId when a call is force-ended', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const clearQualityStreaks = jest.fn() as MockFn;
+      service.setQualityStreakCleanupCallback(clearQualityStreaks);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-streak-1');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-streak-1' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(clearQualityStreaks).toHaveBeenCalledWith('call-streak-1');
+    });
+
+    it('does not invoke the callback when the race guard skips the write (call already transitioned)', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const clearQualityStreaks = jest.fn() as MockFn;
+      service.setQualityStreakCleanupCallback(clearQualityStreaks);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-streak-race');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-streak-race' });
+      setupTransactionPassthrough(prisma, 0); // already transitioned — no write
+
+      await service.runCleanup();
+
+      expect(clearQualityStreaks).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op (no crash) when no callback was registered', async () => {
+      const service = new CallCleanupService(prisma as any);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-streak-none');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-streak-none' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // forceEndCall (tested indirectly via runCleanup)
   // -------------------------------------------------------------------------
   describe('forceEndCall — broadcast variants', () => {
