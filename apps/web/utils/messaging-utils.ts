@@ -34,7 +34,7 @@ export function validateMessageContent(
     return { isValid: false, error: 'Le message ne peut pas être vide' };
   }
   
-  if (content.length > maxLength) {
+  if (content.trim().length > maxLength) {
     return { isValid: false, error: `Le message ne peut pas dépasser ${maxLength} caractères` };
   }
   

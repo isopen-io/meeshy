@@ -14,10 +14,25 @@
 
 export function truncateFilename(filename: string, maxLength: number = 32): string {
   if (filename.length <= maxLength) return filename;
-  const ext = filename.split('.').pop() || '';
-  const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
-  const truncatedName = nameWithoutExt.substring(0, maxLength - ext.length - 4) + '...';
-  return `${truncatedName}.${ext}`;
+
+  const ELLIPSIS = '...';
+  if (maxLength <= ELLIPSIS.length) return filename.slice(0, Math.max(0, maxLength));
+
+  // Une extension n'existe que sur un point **interne** (`lastIndexOf > 0`) :
+  // un point de tête (`.gitignore`) ou de queue (`fichier.`) n'en est pas une.
+  const dotIndex = filename.lastIndexOf('.');
+  const ext = dotIndex > 0 ? filename.slice(dotIndex + 1) : '';
+  const nameBudget = maxLength - ext.length - ELLIPSIS.length - 1;
+
+  // On préserve l'extension seulement s'il reste de la place pour au moins un
+  // caractère de nom ; sinon on tronque tout le nom, borné par `maxLength`
+  // (sans quoi un nom sans extension ou une extension trop longue produisait
+  // une sortie plus longue que l'entrée).
+  if (ext && nameBudget >= 1) {
+    return `${filename.slice(0, nameBudget)}${ELLIPSIS}.${ext}`;
+  }
+
+  return `${filename.slice(0, maxLength - ELLIPSIS.length)}${ELLIPSIS}`;
 }
 
 export function truncateText(

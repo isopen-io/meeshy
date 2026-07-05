@@ -80,6 +80,16 @@ describe('messaging-utils', () => {
       const result = validateMessageContent('Hello!');
       expect(result.isValid).toBe(true);
     });
+
+    it('should measure the trimmed length, matching the sent (trimmed) payload', () => {
+      // maxLength visible characters + trailing whitespace: the payload sent by
+      // prepareMessageMetadata is content.trim() (== maxLength chars, valid), so
+      // validation must agree instead of rejecting on the untrimmed length.
+      const content = 'a'.repeat(MAX_MESSAGE_LENGTH) + '   ';
+      const result = validateMessageContent(content);
+      expect(result.isValid).toBe(true);
+      expect(prepareMessageMetadata(content, 'en').content.length).toBe(MAX_MESSAGE_LENGTH);
+    });
   });
 
   describe('prepareMessageMetadata', () => {
