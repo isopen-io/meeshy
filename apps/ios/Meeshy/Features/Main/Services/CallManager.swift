@@ -394,6 +394,17 @@ final class CallManager: ObservableObject {
     private var analyticsPacketLossSum: Double = 0
     private var analyticsEffectsUsed: Set<String> = []
     private var analyticsVideoFiltersUsed: Bool = false
+    /// Cumulative reconnection attempts across the WHOLE call, for the
+    /// "reconnectionCount" analytics field. Deliberately separate from
+    /// `reconnectAttempt` (the live FSM retry budget, capped at
+    /// `maxReconnectAttempts` and zeroed by every `transitionToConnected` —
+    /// including a mid-call ICE-restart recovery, not just call start). Without
+    /// this, a call that survived several network blips and then ended
+    /// normally reported `reconnectionCount: 0`, identical to a call that never
+    /// had any trouble — defeating the one metric meant to flag connectivity
+    /// issues. Incremented alongside `reconnectAttempt` in `attemptReconnection`
+    /// and reset only in `endCallInternal`.
+    private var analyticsTotalReconnects: Int = 0
 
     /// Periodic refresh of TURN credentials before TTL expiry. Cancelled on call end.
     private var turnRefreshTask: Task<Void, Never>?
@@ -1845,6 +1856,7 @@ final class CallManager: ObservableObject {
                 }
                 guard !Task.isCancelled else { return }
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                self.updateAudioSessionModeForCurrentVideoState()
 
                 // User intent is authoritative: forget any survival state so the
                 // controller never fights a manual toggle (and re-evaluates fresh).
@@ -2846,7 +2858,7 @@ final class CallManager: ObservableObject {
             "setupTimeMs":         setupMetrics.setupTimeMs,
             "negotiationTimeMs":   setupMetrics.negotiationTimeMs,
             "durationSeconds":     callDuration,
-            "reconnectionCount":   reconnectAttempt,
+            "reconnectionCount":   analyticsTotalReconnects,
             "networkTransitions":  analyticsNetworkTransitions,
             "averageRtt":          averageRtt,
             "averagePacketLoss":   averagePacketLoss,
@@ -2980,6 +2992,7 @@ final class CallManager: ObservableObject {
         hasRemoteVideoTrack = false
         callStartDate = nil
         reconnectAttempt = 0
+        analyticsTotalReconnects = 0
         // Reset inconditionnel de l'état vidéo per-call. Avant, seul
         // `resetEndedStateForNewCall` (fenêtre settle 1,5 s) le faisait : un
         // appel démarré plus tard héritait d'`isRemoteVideoEnabled == false`
@@ -3127,6 +3140,33 @@ final class CallManager: ObservableObject {
                 Logger.calls.warning("RTCAudioSession setConfiguration deactivation skipped — CallKit owns the session lifecycle (\(error.localizedDescription))")
             } catch {
                 Logger.calls.error("RTCAudioSession configuration failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Re-applies just the AVAudioSession `.mode` (`.videoChat` vs `.voiceChat`)
+    /// to match the CURRENT `isVideoEnabled`, without touching category,
+    /// options, or activation. `configureAudioSession()` only ever runs once
+    /// at call setup — a mid-call A/V switch (manual `toggleVideo()`, or the
+    /// thermal-critical forced video downgrade) flips the WebRTC transceiver
+    /// and the local track but never re-applies this, leaving the session
+    /// tuned for the WRONG acoustic path (`.videoChat` expects loudspeaker +
+    /// camera framing; `.voiceChat` is tuned for near-field/earpiece AEC) for
+    /// the rest of the call. Calling the full `configureAudioSession()`
+    /// instead would risk a mid-call activation glitch (it decides
+    /// `active:` from `callUsesCallKit`); this only ever changes `.mode`.
+    private func updateAudioSessionModeForCurrentVideoState() {
+        guard !ProcessInfo.processInfo.isiOSAppOnMac else { return }
+        let mode: AVAudioSession.Mode = isVideoEnabled ? .videoChat : .voiceChat
+        audioSessionQueue.sync {
+            let session = RTCAudioSession.sharedInstance()
+            session.lockForConfiguration()
+            defer { session.unlockForConfiguration() }
+            do {
+                try session.session.setMode(mode)
+                Logger.calls.info("[AUDIO_SESS] mode updated to \(mode.rawValue) for video=\(self.isVideoEnabled)")
+            } catch {
+                Logger.calls.error("[AUDIO_SESS] mode update failed: \(error.localizedDescription)")
             }
         }
     }
@@ -3902,6 +3942,7 @@ extension CallManager: ThermalStateMonitorDelegate {
                     // semantically wrong. Mirror the manual toggleVideo() path.
                     let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
                     self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                    self.updateAudioSessionModeForCurrentVideoState()
                     self.videoSurvivalController.reset()
                     // P0-3 — signal the peer (avatar placeholder, not a frozen frame).
                     if let callId = self.currentCallId {
@@ -4213,6 +4254,7 @@ extension CallManager: WebRTCServiceDelegate {
         }
 
         reconnectAttempt += 1
+        analyticsTotalReconnects += 1
         guard reconnectAttempt <= QualityThresholds.maxReconnectAttempts else {
             if let uuid = activeCallUUID {
                 callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)

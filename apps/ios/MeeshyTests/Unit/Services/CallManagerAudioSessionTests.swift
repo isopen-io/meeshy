@@ -3862,4 +3862,46 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
             "Task { @MainActor } closure — Notification is not Sendable in Swift 6."
         )
     }
+
+    // MARK: - Regression 2026-07-05: AVAudioSession mode must track isVideoEnabled mid-call
+
+    /// `configureAudioSession()` only runs once at call setup and picks
+    /// `.videoChat`/`.voiceChat` from `isVideoEnabled` at that moment. A manual
+    /// `toggleVideo()` mid-call flips the WebRTC transceiver/track but must also
+    /// re-apply the AVAudioSession mode — otherwise the session stays tuned for
+    /// the acoustic path (loudspeaker + camera framing vs. near-field/earpiece
+    /// AEC) of whichever A/V type the call STARTED as, not what it is now.
+    func test_toggleVideo_reappliesAudioSessionMode() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "func toggleVideo() {") else {
+            XCTFail("toggleVideo() not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("updateAudioSessionModeForCurrentVideoState()"),
+            "toggleVideo() must re-apply the AVAudioSession mode after the media switch " +
+            "succeeds — otherwise a mid-call A/V switch leaves the session tuned for the " +
+            "wrong acoustic path (.videoChat vs .voiceChat) for the rest of the call."
+        )
+    }
+
+    /// The thermal-critical branch forces a one-way video→audio-only downgrade
+    /// (distinct from the user-initiated, bidirectional `toggleVideo()`), and
+    /// flips `isVideoEnabled` itself — so it needs the same mode re-application.
+    func test_thermalCriticalVideoDowngrade_reappliesAudioSessionMode() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {") else {
+            XCTFail("thermalStateDidChange(to:) not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("updateAudioSessionModeForCurrentVideoState()"),
+            "thermalStateDidChange's critical-state video downgrade must re-apply the " +
+            "AVAudioSession mode after flipping isVideoEnabled to false, mirroring toggleVideo()."
+        )
+    }
 }

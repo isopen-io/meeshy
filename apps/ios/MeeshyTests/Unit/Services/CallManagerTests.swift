@@ -4122,6 +4122,94 @@ final class CallManagerAnalyticsTests: XCTestCase {
             "so the gateway can recognize and route iOS analytics payloads."
         )
     }
+
+    // MARK: - Regression 2026-07-05: reconnectionCount must reflect the WHOLE
+    // call's reconnection history, not just the live FSM retry budget.
+
+    private func attemptReconnectionBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "private func attemptReconnection(escalate:") else { return nil }
+        let bodyEnd = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    private func transitionToConnectedBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "private func transitionToConnected() {") else { return nil }
+        let bodyEnd = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    /// `reconnectAttempt` is the live FSM retry budget (capped at
+    /// `maxReconnectAttempts`, zeroed on every reconnect success) — using it
+    /// directly for the "reconnectionCount" analytics field means a call that
+    /// recovered from several network blips and then ended normally reports 0,
+    /// identical to a trouble-free call. A separate cumulative counter must be
+    /// incremented alongside it and used for the analytics field instead.
+    func test_attemptReconnection_incrementsAnalyticsTotalReconnects() throws {
+        let source = try callManagerSource()
+        guard let body = attemptReconnectionBody(in: source) else {
+            XCTFail("attemptReconnection not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("analyticsTotalReconnects += 1"),
+            "attemptReconnection must increment analyticsTotalReconnects alongside " +
+            "reconnectAttempt, so the cumulative count survives across reconnect cycles."
+        )
+    }
+
+    /// `transitionToConnected` zeroes the live `reconnectAttempt` budget on
+    /// EVERY successful (re)connect — including a mid-call ICE-restart recovery,
+    /// not just call start. `analyticsTotalReconnects` must NOT be reset here,
+    /// or a call with multiple recoveries would only ever report its last
+    /// recovery cycle's count.
+    func test_transitionToConnected_doesNotResetAnalyticsTotalReconnects() throws {
+        let source = try callManagerSource()
+        guard let body = transitionToConnectedBody(in: source) else {
+            XCTFail("transitionToConnected not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("reconnectAttempt = 0"),
+            "transitionToConnected must still reset the live reconnectAttempt budget."
+        )
+        XCTAssertFalse(
+            body.contains("analyticsTotalReconnects"),
+            "transitionToConnected must NOT reset analyticsTotalReconnects — it accumulates " +
+            "across the whole call and is only cleared in endCallInternal."
+        )
+    }
+
+    /// `analyticsTotalReconnects` must be reset only once the call has fully
+    /// ended, mirroring `reconnectAttempt`'s reset in the same method.
+    func test_endCallInternal_resetsAnalyticsTotalReconnects() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("analyticsTotalReconnects = 0"),
+            "endCallInternal must reset analyticsTotalReconnects so the next call starts clean."
+        )
+    }
+
+    /// The analytics payload's "reconnectionCount" must read the cumulative
+    /// counter, not the live per-cycle FSM budget. The payload dict itself is
+    /// built in `emitCallAnalyticsSnapshot` (shared by periodic in-progress
+    /// snapshots and the final teardown emit — see
+    /// test_emitCallAnalyticsIfNeeded_passesCallIdToSocket above), not in
+    /// `emitCallAnalyticsIfNeeded` itself.
+    func test_emitCallAnalyticsSnapshot_usesTotalReconnectsForReconnectionCount() throws {
+        let source = try callManagerSource()
+        guard let snapshotRange = source.range(of: "private func emitCallAnalyticsSnapshot(") else {
+            XCTFail("emitCallAnalyticsSnapshot not found in CallManager.swift"); return
+        }
+        let snapshotBody = String(source[snapshotRange.lowerBound...].prefix(2600))
+        XCTAssertTrue(
+            snapshotBody.contains("\"reconnectionCount\":   analyticsTotalReconnects"),
+            "The analytics payload must report analyticsTotalReconnects (cumulative), not " +
+            "reconnectAttempt (the live, per-cycle FSM retry budget zeroed on every reconnect)."
+        )
+    }
 }
 
 // MARK: - CXCallUpdate hasVideo on A/V toggle (audit Phase 3)
