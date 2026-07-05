@@ -1586,23 +1586,11 @@ struct CallView: View {
     }
 
     private var callTypeBadge: some View {
-        HStack(spacing: 6) {
-            Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .accessibilityHidden(true)
-            Text(callManager.isVideoEnabled ? String(localized: "call.type.video", defaultValue: "Appel vidéo", bundle: .main) : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main))
-                .font(.caption2.weight(.semibold))
-        }
-        .foregroundColor(MeeshyColors.indigo400)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(MeeshyColors.indigo400.opacity(0.15))
-                .overlay(
-                    Capsule()
-                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 0.5)
-                )
+        CallTypeBadgeView(
+            isVideo: callManager.isVideoEnabled,
+            label: callManager.isVideoEnabled
+                ? String(localized: "call.type.video", defaultValue: "Appel vidéo", bundle: .main)
+                : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main)
         )
     }
 
