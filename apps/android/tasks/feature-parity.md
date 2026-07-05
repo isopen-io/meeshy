@@ -1185,7 +1185,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       into an ordered, tested list the sheet renders as label↔flag+value rows; a regional language equal
       to the system one (case-insensitively) is collapsed. `timezone` added to the header presentation.
       +14 `ProfileDetailRowsTest` cases. **Pending:** banner, tabs (Profile/Conversations/Stats), achievements.
-- [ ] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
+- [~] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
+      **Text + content-language editing shipped optimistic + offline** (slice `edit-profile-optimistic`,
+      2026-07-05): the already-declared `OutboxKind.UPDATE_PROFILE` (lane `PROFILE`, drained but senderless)
+      is now wired end-to-end. Pure cores: `:core:model` `ProfileEditApply.apply(user, request)` — the
+      edit-merge SSOT with `PATCH /users/me` omit-null parity (a null field is absent → unchanged, non-null
+      overwrites) so the optimistic paint matches the server exactly; `:feature:profile`
+      `ProfileEditRequestBuilder.build(...)` — trims the editor buffers and degrades blank→null (a blank edit
+      is a server-side no-op, never an accidental clear); and the `OutboxCoalescer` `UPDATE_PROFILE` rule
+      (latest full-snapshot wins, keyed by the own user id). Wiring: `SessionRepository.applyProfileEdit`
+      (optimistic republish of the merged identity, inert with no session), `UserRepository.enqueueProfileEdit`
+      (optimistic flip + durable enqueue on the profile lane, `null`/blank session inert — mirrors
+      `setBlockedDurably`), an `OutboxFlushWorker` `UPDATE_PROFILE` sender (decode → `updateProfile` →
+      `adopt(server user)`) with an `onExhausted` `refresh()` rollback to server truth. `ProfileViewModel`
+      now carries the three content-language buffers, saves through the optimistic/offline path (editor
+      closes instantly, worker woken only on a real `cmid`, local-enqueue failure reopens the editor), and
+      guards the editor buffers from being clobbered by a background session emission mid-edit. `ProfileScreen`
+      renders three `LanguageData`-backed content-language dropdowns (flag + name) in the edit form (EN/FR/ES/PT).
+      +31 tests (ProfileEditApply 7, ProfileEditRequestBuilder 6, OutboxCoalescer +3, SessionRepository +2,
+      UserRepository 4, ProfileViewModelEdit 9). Surpasses iOS, whose profile edit is online-only.
+      **Pending:** avatar + banner upload (media pipeline), first/last-name fields in the form.
 - [~] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges —
       **stats projection SSOT + read-only dashboard shipped** (slice `profile-stats-presentation`,
       2026-07-05): the pure `UserStatsBuilder.build(stats) → UserStatsPresentation` (`:feature:profile`,

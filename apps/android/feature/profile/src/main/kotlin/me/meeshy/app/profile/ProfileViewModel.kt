@@ -3,6 +3,7 @@ package me.meeshy.app.profile
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,8 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.ProfileStatsCacheRepository
 import me.meeshy.sdk.user.UserRepository
@@ -24,6 +25,9 @@ data class ProfileUiState(
     val isEditing: Boolean = false,
     val displayName: String = "",
     val bio: String = "",
+    val systemLanguage: String = "",
+    val regionalLanguage: String = "",
+    val customDestinationLanguage: String = "",
     val errorMessage: String? = null,
     val isSaving: Boolean = false,
     val stats: UserStatsPresentation? = null,
@@ -35,6 +39,7 @@ class ProfileViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val userRepository: UserRepository,
     private val statsCache: ProfileStatsCacheRepository,
+    private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -51,7 +56,12 @@ class ProfileViewModel @Inject constructor(
             // Own profile — observe session
             viewModelScope.launch {
                 sessionRepository.currentUser.collect { user ->
-                    _state.update { it.copy(user = user, displayName = user?.displayName ?: "", bio = user?.bio ?: "") }
+                    // While the user is actively editing, only refresh the read-only
+                    // reference; never clobber the in-flight editor buffers with a
+                    // background session emission.
+                    _state.update { s ->
+                        if (s.isEditing) s.copy(user = user) else s.withBuffersFrom(user)
+                    }
                     user?.id?.takeIf { it.isNotBlank() }?.let {
                         loadStatsOnce(it)
                         loadTimelineOnce()
@@ -65,30 +75,40 @@ class ProfileViewModel @Inject constructor(
 
     fun onDisplayNameChange(value: String) = _state.update { it.copy(displayName = value) }
     fun onBioChange(value: String) = _state.update { it.copy(bio = value) }
-    fun startEditing() = _state.update { it.copy(isEditing = true) }
-    fun cancelEditing() = _state.update { s ->
-        s.copy(isEditing = false, displayName = s.user?.displayName ?: "", bio = s.user?.bio ?: "")
-    }
+    fun onSystemLanguageChange(code: String) = _state.update { it.copy(systemLanguage = code) }
+    fun onRegionalLanguageChange(code: String) = _state.update { it.copy(regionalLanguage = code) }
+    fun onCustomDestinationLanguageChange(code: String) =
+        _state.update { it.copy(customDestinationLanguage = code) }
 
+    fun startEditing() = _state.update { it.copy(isEditing = true).withBuffersFrom(it.user) }
+    fun cancelEditing() = _state.update { it.copy(isEditing = false).withBuffersFrom(it.user) }
+
+    /**
+     * Saves the edit optimistically (ARCHITECTURE.md §4/§5). The editor closes
+     * immediately and [UserRepository.enqueueProfileEdit] re-paints the session
+     * identity locally, then durably queues the `UPDATE_PROFILE` mutation — so the
+     * save survives offline and process death. A non-`null` `cmid` wakes the flush
+     * worker; a local enqueue failure surfaces the error and reopens the editor so
+     * the user can retry.
+     */
     fun saveProfile() {
         val current = _state.value
-        _state.update { it.copy(isSaving = true, errorMessage = null) }
+        val request = ProfileEditRequestBuilder.build(
+            displayName = current.displayName,
+            bio = current.bio,
+            systemLanguage = current.systemLanguage,
+            regionalLanguage = current.regionalLanguage,
+            customDestinationLanguage = current.customDestinationLanguage,
+        )
+        _state.update { it.copy(isEditing = false, isSaving = false, errorMessage = null) }
         viewModelScope.launch {
             try {
-                val request = UpdateProfileRequest(
-                    displayName = current.displayName.trim().takeIf { it.isNotEmpty() },
-                    bio = current.bio.trim().takeIf { it.isNotEmpty() },
-                )
-                when (val result = userRepository.updateProfile(request)) {
-                    is NetworkResult.Success ->
-                        _state.update { it.copy(user = result.data, isEditing = false, isSaving = false) }
-                    is NetworkResult.Failure ->
-                        _state.update { it.copy(isSaving = false, errorMessage = result.error.message) }
-                }
+                val cmid = userRepository.enqueueProfileEdit(request)
+                if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(isSaving = false, errorMessage = e.message) }
+                _state.update { it.copy(isEditing = true, errorMessage = e.message) }
             }
         }
     }
@@ -100,7 +120,7 @@ class ProfileViewModel @Inject constructor(
                 when (val result = userRepository.getProfile(id)) {
                     is NetworkResult.Success -> {
                         val user = result.data
-                        _state.update { it.copy(user = user, isLoading = false, displayName = user.displayName ?: "", bio = user.bio ?: "") }
+                        _state.update { it.copy(isLoading = false).withBuffersFrom(user) }
                         loadStatsOnce(user.id.takeIf { it.isNotBlank() } ?: id)
                     }
                     is NetworkResult.Failure ->
@@ -171,6 +191,20 @@ class ProfileViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Re-seeds [user] and every editor buffer from [user]. Used whenever the state
+     * is not mid-edit, so the editor always opens on the freshest identity and a
+     * cancel/refresh restores it — the single place the buffer↔user mapping lives.
+     */
+    private fun ProfileUiState.withBuffersFrom(user: MeeshyUser?): ProfileUiState = copy(
+        user = user,
+        displayName = user?.displayName ?: "",
+        bio = user?.bio ?: "",
+        systemLanguage = user?.systemLanguage ?: "",
+        regionalLanguage = user?.regionalLanguage ?: "",
+        customDestinationLanguage = user?.customDestinationLanguage ?: "",
+    )
 
     companion object {
         const val USER_ID_ARG = "userId"

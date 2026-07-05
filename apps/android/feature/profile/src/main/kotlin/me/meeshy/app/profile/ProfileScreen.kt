@@ -2,6 +2,7 @@ package me.meeshy.app.profile
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,10 +20,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,7 +42,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +62,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.profile.R
+import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshySpacing
@@ -173,6 +180,21 @@ fun ProfileScreen(
                     minLines = 3,
                     maxLines = 5,
                     modifier = Modifier.fillMaxWidth(),
+                )
+                ContentLanguageField(
+                    label = stringResource(R.string.profile_system_language_label),
+                    selectedCode = state.systemLanguage,
+                    onSelect = viewModel::onSystemLanguageChange,
+                )
+                ContentLanguageField(
+                    label = stringResource(R.string.profile_regional_language_label),
+                    selectedCode = state.regionalLanguage,
+                    onSelect = viewModel::onRegionalLanguageChange,
+                )
+                ContentLanguageField(
+                    label = stringResource(R.string.profile_custom_language_label),
+                    selectedCode = state.customDestinationLanguage,
+                    onSelect = viewModel::onCustomDestinationLanguageChange,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -543,5 +565,53 @@ private fun ProfileCompletionRing(
             size = arcSize,
             style = stroke,
         )
+    }
+}
+
+/**
+ * A content-language slot in the edit form. Renders the current selection as a
+ * flag + name (via the `LanguageData` SSOT) in a read-only field that opens a
+ * dropdown of every supported language; an unset slot shows the empty label.
+ * The selected code is reported back through [onSelect] — the ViewModel owns the
+ * buffer, keeping this composable a stateless projection of its argument.
+ */
+@Composable
+private fun ContentLanguageField(
+    label: String,
+    selectedCode: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = LanguageData.info(selectedCode)
+    val display = selected?.let { "${it.flag} ${it.name}" }
+        ?: stringResource(R.string.profile_language_unset)
+    Box(modifier = modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = display,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        // Transparent overlay so a tap anywhere on the field opens the menu — a
+        // read-only OutlinedTextField does not emit clicks on its own.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clickable { expanded = true },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LanguageData.allLanguages.forEach { lang ->
+                DropdownMenuItem(
+                    text = { Text("${lang.flag} ${lang.name}") },
+                    onClick = {
+                        onSelect(lang.code)
+                        expanded = false
+                    },
+                )
+            }
+        }
     }
 }

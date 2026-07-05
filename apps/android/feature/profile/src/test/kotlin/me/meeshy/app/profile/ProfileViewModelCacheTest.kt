@@ -68,6 +68,7 @@ class ProfileViewModelCacheTest {
         sessionRepository = mockk(relaxed = true),
         userRepository = userRepo,
         statsCache = statsCache,
+        workManager = mockk(relaxed = true),
         savedStateHandle = SavedStateHandle(mapOf(ProfileViewModel.USER_ID_ARG to viewedId)),
     )
 
@@ -82,6 +83,7 @@ class ProfileViewModelCacheTest {
             sessionRepository = session,
             userRepository = userRepo,
             statsCache = statsCache,
+            workManager = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(),
         )
     }
