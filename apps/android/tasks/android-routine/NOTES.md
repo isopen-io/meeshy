@@ -2,6 +2,45 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lessons
+- **2026-07-05 (`settings-interface-language`): re-localise a pure-Compose app app-wide with no AppCompat.**
+  minSdk 26 and the app is a `ComponentActivity` (not `AppCompatActivity`), so `AppCompatDelegate.setApplicationLocales`
+  isn't the free path (needs appcompat + the metadata service, and would become a *second* persistence SSOT next to
+  our DataStore). Instead: keep DataStore as the single persisted SSOT, and *apply* the locale by wrapping the whole
+  Compose tree — `CompositionLocalProvider(LocalContext provides base.createConfigurationContext(cfg.apply{setLocale}), LocalConfiguration provides cfg)` — so every `stringResource` re-resolves. Works on every API ≥17, no new
+  dependency, and the *decision* (`resolveInterfaceLocaleTag` → tag or null) stays a pure tested function; the
+  wrapper is the only (coverage-exempt) glue. Also: `null` = "follow the device locale" (System) is a cleaner model
+  than a magic sentinel — the pure codec maps corrupt/unsupported/`"system"`/blank all to `null`, and the applier
+  no-ops on `null` so an untranslated device locale still falls through Android's own resource resolution.
+  Distinguish **interface** language (app UI chrome → app locale, this slice) from **regional/content** language
+  (Prisme `ContentLanguagePreferences` → `LanguageResolver`, backend profile) — they are different stores; don't
+  wire the content row to the interface store.
+- **2026-07-05 (`settings-theme-mode`): DataStore allows only one active instance per file per process.**
+  A test that writes through one `DataStore`, cancels its scope, then opens a *second* `DataStore` over the
+  same file to prove persistence will hang/`TimeoutCancellationException` — cancelling the scope doesn't
+  reliably release the file from DataStore's internal `activeFiles` registry within the same JVM. To test
+  cold-start hydration, share ONE `DataStore` instance across two store wrappers and assert the freshly
+  constructed wrapper's `stateIn` reads the already-persisted value. That's the real unit under test
+  (the wrapper's hydration), not androidx's file persistence. Also: back a DataStore-backed `StateFlow`
+  with `stateIn(scope, SharingStarted.Eagerly, default)` so cold start has no flash of the default before
+  the persisted value loads; decode the stored token through a pure codec that maps garbage → the safe
+  default so a corrupt/legacy value can never brick the surface.
+- **2026-07-05 (`edit-profile-optimistic`): outbox kinds can be pre-declared but wired only partway.**
+  `OutboxKind.UPDATE_PROFILE` already existed with a lane (`OutboxLanes.PROFILE`, in `sharedDrainLanes`)
+  but no `OutboxFlushWorker` sender and no `OutboxCoalescer` rule — an enqueued row would drain, find no
+  sender, and `markExhausted("No sender registered…")`. When a slice "just needs an outbox mutation," grep
+  `buildSenders()` + `OutboxCoalescer.decide` for the kind first; a lane assignment alone is not a live path.
+- **2026-07-05: PATCH omit-null is the optimistic-merge contract.** kotlinx serialization omits null fields
+  (`encodeDefaults=false`), so the gateway `PATCH /users/me` never receives a null field → it's "leave
+  unchanged," not "clear." The optimistic local merge (`ProfileEditApply`) must use the exact same rule
+  (null → keep existing, non-null → overwrite) or the optimistic paint and the server result diverge. This
+  also means a blank editor field must degrade to `null` in the request builder (a blank edit = no-op),
+  never an empty string (which would clear the field server-side).
+- **2026-07-05: guard editor buffers against background state emissions.** The own-profile VM collects
+  `SessionRepository.currentUser`; naively re-seeding the editable buffers on every emission clobbers a
+  user's in-flight typing when a background `refresh()` fires. Fix: only re-seed the buffers when
+  `!isEditing`; while editing, advance only the read-only `user` reference.
+
 ## Environment
 - **The Gradle wrapper's 8.11.1 distribution zip is blocked in the web container (403 from
   github.com/gradle releases via the agent proxy).** `./gradlew` / `./apps/android/meeshy.sh check`
@@ -214,6 +253,13 @@ Append-only log of gotchas and decisions that save time next run.
   is an **infix member of `MockKStubScope`** (the receiver `coEvery {…}` returns) — do **not**
   `import io.mockk.coAnswers` (there is no such top-level symbol; it fails to resolve). Used in
   `contacts-friends-room-cache`.
+- **A `relaxed = true` MockK returns a NON-null fabricated instance even for a `T?` return type**
+  (e.g. `suspend fun cachedStats(id): UserStats?` → a mock `UserStats`, not `null`). (2026-07-05, slice
+  `profile-stats-room-cache`.) This silently defeats a "cache is cold → paints nothing" assumption: the
+  relaxed cache mock hands back data, so a network-failure test that expected an empty state suddenly sees
+  a painted one and fails. When a test needs a **cold** collaborator, stub it explicitly —
+  `coEvery { cache.cachedStats(any()) } returns null` (a small `coldStatsCache()` factory) — rather than
+  trusting `relaxed` to yield null. Only trust `relaxed` for values you don't assert on.
 - **Dagger `@Inject constructor` ignores Kotlin default args:** a param like
   `clock: CacheClock = SystemCacheClock` still demands a binding and there is none for
   `CacheClock`. For `@Singleton` repos that need `now`, call `SystemCacheClock.nowMillis()`
@@ -1066,3 +1112,18 @@ Append-only log of gotchas and decisions that save time next run.
   are allowed, so **do NOT pass `--offline`** (the AGP plugin marker isn't pre-cached → resolution
   fails). `meeshy.sh` calls `./gradlew`, so invoke `gradle` directly for `assembleDebug`/
   `testDebugUnitTest` until a full wrapper dist can be primed.
+
+## 2026-07-05 — durable-preference codec: record-token (JSON) vs enum-token variant
+- The theme/language stores persist a **single enum token** with a pure `when`-based codec. The
+  notification block (`settings-notification-prefs`) persists a **whole record**
+  (`UserNotificationPreferences`, 30+ fields), so the codec round-trips as **JSON**, not an enum
+  string. Kept the same corruption-proof contract: `notificationPreferencesFromStorage(raw)` wraps
+  `decodeFromString` in `runCatching` → blank/absent/malformed/wrong-shape all degrade to
+  `UserNotificationPreferences()` defaults; `ignoreUnknownKeys` drops legacy fields; `encodeDefaults`
+  makes every field survive the round-trip. Same `:core:model` purity (private `Json` instance,
+  precedent `CallSignalMapper`) + `:sdk-core` DataStore store + `stateIn(Eagerly)` hydration pattern.
+- **ViewModel intent shape for a multi-field record:** don't add 30 setters. One private
+  `updateNotifications { copy(field = value) }` read-modify-writes the whole block from
+  `store.preferences.value`, so a single toggle never clobbers the others (tested by the
+  successive-toggles-compose case). Screen: push is the **master** — sub-toggles `enabled = pushEnabled`
+  so a coherent parent/child relationship, no dead ends.

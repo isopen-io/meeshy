@@ -877,6 +877,32 @@ export class CallEventsHandler {
   }
 
   /**
+   * Public entry point for `CallCleanupService`'s GC tier 1 (initiated/
+   * ringing > 120s → missed) — the safety net that fires when the
+   * in-process ringing timer (`buildRingingTimeoutHandler`) never runs, e.g.
+   * a crash before `rehydrateActiveCalls` re-armed it, or the timer callback
+   * itself threw. That normal path already reaches `sendCallCancellationPushes`
+   * via `broadcastCallEnded`, sending the silent `call_cancel` APNs push that
+   * stops CallKit ringing for a phantom-ringing callee — one whose VoIP push
+   * was delivered but whose socket never joined the call room, so the
+   * socket-fanout `call:ended` in `resolveCallEndedRooms` never reaches them.
+   * Without this wrapper, the GC-tier fallback silently skipped that push and
+   * such a callee's CallKit screen would ring until its own client-side
+   * timeout.
+   */
+  async sendMissedCallCancellationPushForTerminatedCall(
+    callId: string,
+    conversationId: string | undefined,
+    duration: number
+  ): Promise<void> {
+    return this.sendCallCancellationPushes(callId, conversationId, {
+      callId,
+      duration,
+      reason: CallEndReason.missed
+    });
+  }
+
+  /**
    * Translates a final transcription segment to each active participant's
    * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
    * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
@@ -1113,6 +1139,16 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
+
+        // Calling-stack audit 2026-07-05 (2) — this was the last call:*
+        // handler with no rate limit at all; it fans out into 2-4 Prisma
+        // queries plus a TURN-secret HMAC mint per matching call, with no
+        // client payload required to trigger it (see SOCKET_RATE_LIMITS.CALL_CHECK_ACTIVE).
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_CHECK_ACTIVE, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
         const myConvs = await this.prisma.participant.findMany({
           where: { userId, isActive: true },
           select: { conversationId: true }
@@ -2094,7 +2130,8 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated'
+            message: 'User not authenticated',
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2121,7 +2158,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.INVALID_SIGNAL,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined
+            details: validationDetails ? { issues: validationDetails } : undefined,
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2145,7 +2183,8 @@ export class CallEventsHandler {
           if (!iceAllowed) {
             socket.emit(CALL_EVENTS.ERROR, {
               code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED,
-              message: 'Too many ICE candidates — slow down'
+              message: 'Too many ICE candidates — slow down',
+              callId: data.callId
             } as CallError);
             ack?.({ success: false });
             return;
@@ -2165,7 +2204,8 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not in this call'
+            message: 'You are not in this call',
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2179,8 +2219,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.SIGNAL_SENDER_MISMATCH,
-            message: 'Signal sender does not match authenticated user'
-          });
+            message: 'Signal sender does not match authenticated user',
+            callId: data.callId
+          } as CallError);
           return;
         }
 
@@ -2196,8 +2237,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant not found in call'
-          });
+            message: 'Target participant not found in call',
+            callId: data.callId
+          } as CallError);
           return;
         }
 
@@ -2227,8 +2269,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant has no active connection'
-          });
+            message: 'Target participant has no active connection',
+            callId: data.callId
+          } as CallError);
           ack?.({ success: false });
           return;
         }
@@ -2272,7 +2315,8 @@ export class CallEventsHandler {
 
         socket.emit(CALL_EVENTS.ERROR, {
           code: 'SIGNAL_FAILED',
-          message: 'Failed to forward WebRTC signal'
+          message: 'Failed to forward WebRTC signal',
+          callId: data.callId
         } as CallError);
       }
     });

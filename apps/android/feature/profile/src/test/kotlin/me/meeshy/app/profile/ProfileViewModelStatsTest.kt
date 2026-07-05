@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.UserStats
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.user.ProfileStatsCacheRepository
 import me.meeshy.sdk.user.UserRepository
 import org.junit.After
 import org.junit.Before
@@ -40,6 +41,13 @@ class ProfileViewModelStatsTest {
         ),
     )
 
+    private fun coldStatsCache(): ProfileStatsCacheRepository {
+        val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
+        coEvery { cache.cachedStats(any()) } returns null
+        coEvery { cache.cachedTimeline() } returns null
+        return cache
+    }
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -53,10 +61,13 @@ class ProfileViewModelStatsTest {
     private fun otherProfileViewModel(
         session: SessionRepository = mockk(relaxed = true),
         userRepo: UserRepository,
+        statsCache: ProfileStatsCacheRepository = coldStatsCache(),
         viewedId: String = "u1",
     ) = ProfileViewModel(
         sessionRepository = session,
         userRepository = userRepo,
+        statsCache = statsCache,
+        workManager = mockk(relaxed = true),
         savedStateHandle = SavedStateHandle(mapOf(ProfileViewModel.USER_ID_ARG to viewedId)),
     )
 
@@ -115,6 +126,8 @@ class ProfileViewModelStatsTest {
         val vm = ProfileViewModel(
             sessionRepository = session,
             userRepository = userRepo,
+            statsCache = coldStatsCache(),
+            workManager = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(),
         )
 
@@ -137,6 +150,8 @@ class ProfileViewModelStatsTest {
         val vm = ProfileViewModel(
             sessionRepository = session,
             userRepository = userRepo,
+            statsCache = coldStatsCache(),
+            workManager = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(),
         )
         advanceUntilIdle()

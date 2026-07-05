@@ -3,6 +3,11 @@
     <string name="settings_title">Ajustes</string>
     <string name="settings_back">Atrás</string>
     <string name="settings_section_profile">Perfil</string>
+    <string name="settings_section_appearance">Apariencia</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_theme_system">Sistema</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_dark">Oscuro</string>
     <string name="settings_section_language">Idioma</string>
     <string name="settings_section_notifications">Notificaciones</string>
     <string name="settings_section_privacy">Privacidad y seguridad</string>
@@ -10,8 +15,13 @@
     <string name="settings_section_about">Acerca de</string>
     <string name="settings_section_danger">Zona de peligro</string>
     <string name="settings_display_language">Idioma de visualización</string>
+    <string name="settings_language_system">Idioma del sistema</string>
+    <string name="settings_language_dialog_close">Cerrar</string>
     <string name="settings_regional_language">Idioma regional</string>
     <string name="settings_push_notifications">Notificaciones push</string>
+    <string name="settings_new_message_notifications">Mensajes nuevos</string>
+    <string name="settings_notification_sound">Sonido</string>
+    <string name="settings_notification_vibration">Vibración</string>
     <string name="settings_two_factor">Autenticación de dos factores</string>
     <string name="settings_active_sessions">Sesiones activas</string>
     <string name="settings_blocked_users">Usuarios bloqueados</string>

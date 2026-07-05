@@ -6,6 +6,10 @@
     <string name="profile_edit">Editar</string>
     <string name="profile_display_name_label">Nome de exibição</string>
     <string name="profile_bio_label">Bio</string>
+    <string name="profile_system_language_label">Idioma principal</string>
+    <string name="profile_regional_language_label">Idioma secundário</string>
+    <string name="profile_custom_language_label">Idioma de tradução personalizado</string>
+    <string name="profile_language_unset">Não definido</string>
     <string name="profile_cancel">Cancelar</string>
     <string name="profile_save">Salvar</string>
     <string name="profile_unknown">Desconhecido</string>

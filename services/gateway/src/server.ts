@@ -1321,6 +1321,15 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         this.callCleanupService.setQualityStreakCleanupCallback(
           (callId) => callEventsHandler.clearQualityDegradedStreaks(callId)
         );
+        // Phantom-ringing safety net — a callee whose VoIP push was
+        // delivered but whose socket never joined the call room needs the
+        // same `call_cancel` background push every other missed-call path
+        // sends, or GC tier 1 (ringing timer never fired) leaves their
+        // CallKit screen ringing until its own client-side timeout.
+        this.callCleanupService.setMissedCallCancelPushCallback(
+          (callId, conversationId, duration) =>
+            callEventsHandler.sendMissedCallCancellationPushForTerminatedCall(callId, conversationId, duration)
+        );
         // CALL-RESILIENCE (item H) — re-arm the in-process ringing timers a
         // crash/restart wiped, so pre-answer calls interrupted by the restart
         // resolve to `missed` (with their push notification) on the nominal

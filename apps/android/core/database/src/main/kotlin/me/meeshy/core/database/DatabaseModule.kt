@@ -13,6 +13,7 @@ import me.meeshy.core.database.dao.FriendDao
 import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
+import me.meeshy.core.database.dao.ProfileStatsCacheDao
 import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
@@ -64,6 +65,10 @@ internal object DatabaseModule {
     @Provides
     fun providesSuggestionDao(database: MeeshyDatabase): SuggestionDao =
         database.suggestionDao()
+
+    @Provides
+    fun providesProfileStatsCacheDao(database: MeeshyDatabase): ProfileStatsCacheDao =
+        database.profileStatsCacheDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 }

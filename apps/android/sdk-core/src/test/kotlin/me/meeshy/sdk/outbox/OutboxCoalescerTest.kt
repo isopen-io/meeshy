@@ -168,4 +168,31 @@ class OutboxCoalescerTest {
         assertThat(OutboxCoalescer.decide(toU2, listOf(toU1)))
             .isEqualTo(CoalesceDecision.Enqueue(toU2))
     }
+
+    @Test
+    fun `a first profile edit is enqueued`() {
+        val edit = row("p1", OutboxKind.UPDATE_PROFILE, "me")
+
+        assertThat(OutboxCoalescer.decide(edit, emptyList()))
+            .isEqualTo(CoalesceDecision.Enqueue(edit))
+    }
+
+    @Test
+    fun `a repeated profile edit keeps only the latest snapshot`() {
+        val first = row("p1", OutboxKind.UPDATE_PROFILE, "me")
+        val second = row("p2", OutboxKind.UPDATE_PROFILE, "me")
+
+        // Each edit carries the full PATCH body — the newest subsumes the pending one.
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("p1"), second))
+    }
+
+    @Test
+    fun `a profile edit for a different user id is not coalesced`() {
+        val mine = row("p1", OutboxKind.UPDATE_PROFILE, "me")
+        val theirs = row("p2", OutboxKind.UPDATE_PROFILE, "someone-else")
+
+        assertThat(OutboxCoalescer.decide(theirs, listOf(mine)))
+            .isEqualTo(CoalesceDecision.Enqueue(theirs))
+    }
 }

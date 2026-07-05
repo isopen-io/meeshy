@@ -1185,7 +1185,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       into an ordered, tested list the sheet renders as label↔flag+value rows; a regional language equal
       to the system one (case-insensitively) is collapsed. `timezone` added to the header presentation.
       +14 `ProfileDetailRowsTest` cases. **Pending:** banner, tabs (Profile/Conversations/Stats), achievements.
-- [ ] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
+- [~] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
+      **Text + content-language editing shipped optimistic + offline** (slice `edit-profile-optimistic`,
+      2026-07-05): the already-declared `OutboxKind.UPDATE_PROFILE` (lane `PROFILE`, drained but senderless)
+      is now wired end-to-end. Pure cores: `:core:model` `ProfileEditApply.apply(user, request)` — the
+      edit-merge SSOT with `PATCH /users/me` omit-null parity (a null field is absent → unchanged, non-null
+      overwrites) so the optimistic paint matches the server exactly; `:feature:profile`
+      `ProfileEditRequestBuilder.build(...)` — trims the editor buffers and degrades blank→null (a blank edit
+      is a server-side no-op, never an accidental clear); and the `OutboxCoalescer` `UPDATE_PROFILE` rule
+      (latest full-snapshot wins, keyed by the own user id). Wiring: `SessionRepository.applyProfileEdit`
+      (optimistic republish of the merged identity, inert with no session), `UserRepository.enqueueProfileEdit`
+      (optimistic flip + durable enqueue on the profile lane, `null`/blank session inert — mirrors
+      `setBlockedDurably`), an `OutboxFlushWorker` `UPDATE_PROFILE` sender (decode → `updateProfile` →
+      `adopt(server user)`) with an `onExhausted` `refresh()` rollback to server truth. `ProfileViewModel`
+      now carries the three content-language buffers, saves through the optimistic/offline path (editor
+      closes instantly, worker woken only on a real `cmid`, local-enqueue failure reopens the editor), and
+      guards the editor buffers from being clobbered by a background session emission mid-edit. `ProfileScreen`
+      renders three `LanguageData`-backed content-language dropdowns (flag + name) in the edit form (EN/FR/ES/PT).
+      +31 tests (ProfileEditApply 7, ProfileEditRequestBuilder 6, OutboxCoalescer +3, SessionRepository +2,
+      UserRepository 4, ProfileViewModelEdit 9). Surpasses iOS, whose profile edit is online-only.
+      **Pending:** avatar + banner upload (media pipeline), first/last-name fields in the form.
 - [~] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges —
       **stats projection SSOT + read-only dashboard shipped** (slice `profile-stats-presentation`,
       2026-07-05): the pure `UserStatsBuilder.build(stats) → UserStatsPresentation` (`:feature:profile`,
@@ -1209,8 +1228,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **own** profile only (me-only endpoint — never for a viewed id), failure-inert like stats;
       `ProfileScreen` renders an accent-coherent line+area sparkline (Canvas) with an empty-state label
       (EN/FR/ES/PT). +17 tests (`StatsTimelineBuilderTest` 11, `ProfileViewModelTimelineTest` 6).
-      **Pending:** a durable Room stats/timeline cache (cache-first cold paint, iOS `CacheCoordinator.stats`
-      / `.timeline`), and the dedicated full-screen dashboard.
+      **Durable Room cache shipped** (slice `profile-stats-room-cache`, 2026-07-05): `:core:database`
+      `ProfileStatsCacheEntity`/`ProfileStatsCacheDao` (`profile_stats_cache` keyed JSON store, DB v9→v10) +
+      `:sdk-core` `ProfileStatsCacheRepository` (per-user stats key + me-only timeline key; cold-vs-synced-empty
+      by row presence — absent → `null`, present `[]` → `emptyList`; undecodable payload → cache miss).
+      `ProfileViewModel` rewired cache-first for both surfaces (paint cached projection → revalidate →
+      write-through on success; network overwrites cache, a failed fetch keeps the cached paint). This is the
+      Android analogue of iOS `CacheCoordinator.stats`/`.timeline` and closes the §K cache gap. +20 tests
+      (`ProfileStatsCacheRepositoryTest` 11 Robolectric, `ProfileViewModelCacheTest` 6, +3 existing hardened).
+      **Pending:** the dedicated full-screen dashboard.
 - [x] Profile completion ring — **shipped** (slice `profile-header-presentation`, 2026-07-05): the
       accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
       `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
@@ -1226,8 +1252,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## L. Settings & Privacy
 - [ ] Settings hub: profile card, appearance/theme + interface language, notifications,
       transcription, voice profile, data, tools, support, about, logout
-- [ ] Light/dark/system theme with persisted preference
-- [ ] Notification preferences (push/email/sound/vibration, per-event types, DND schedule)
+- [x] Light/dark/system theme with persisted preference — pure `AppThemeMode`
+      codec/resolver/cycle (`:core:model`, `resolveDarkMode`/`storageValue`/`next`/
+      `appThemeModeFromStorage`), durable DataStore-backed `ThemeStore` (`:sdk-core`,
+      hydrates on cold start, corrupt value → AUTO), `SettingsViewModel` pick/cycle
+      intents + segmented picker, `MainActivity` re-themes live via `ThemeViewModel`
+      (`settings-theme-mode`, 2026-07-05). +23 tests.
+- [x] Interface (UI chrome) language with persisted preference — pure `AppLanguage`
+      supported-set/codec/resolver (`:core:model`, `supportedCodes` from
+      `LanguageData.interfaceLanguages`, `fromStorage`/`storageValue`/`resolveInterfaceLocaleTag`;
+      corrupt/legacy/unsupported → System `null`), durable DataStore-backed
+      `InterfaceLanguageStore` (`:sdk-core`, hydrates on cold start), `SettingsViewModel`
+      pick intent + display-language dialog picker (System + fr/en/es/ar), `MainActivity`
+      re-localises the whole Compose tree live via `LanguageViewModel` +
+      `createConfigurationContext` (minSdk-26 safe, no AppCompat) (`settings-interface-language`,
+      2026-07-05). +32 tests. NB: **display** language only; the **regional** language row stays
+      a no-op — it is a Prisme *content*-preference (backend profile / content store), not the
+      app UI locale, and belongs to a separate content-preference slice.
+- [~] Notification preferences (push/email/sound/vibration, per-event types, DND schedule) —
+      **durable master toggles landed** (`settings-notification-prefs`, 2026-07-05): pure
+      `:core:model` JSON codec for the whole `UserNotificationPreferences` block
+      (`storageValue`/`notificationPreferencesFromStorage` — blank/absent/corrupt/partial/unknown-key
+      → safe defaults, never crashes), durable DataStore-backed `NotificationPreferencesStore`
+      (`:sdk-core`, hydrates on cold start, corrupt stored value → defaults), `SettingsViewModel`
+      per-toggle intents (push/new-message/sound/vibration) that persist the whole block without
+      clobbering the other fields, `SettingsScreen` state-driven `Switch` rows (push is the master —
+      the three sub-toggles disable when push is off). +25 tests. **Still open:** email + the remaining
+      per-event types + DND schedule editor + offline-queued backend sync (this slice is device-local only).
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync
