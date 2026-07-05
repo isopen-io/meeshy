@@ -1008,6 +1008,30 @@ final class AddTransportCCTests: XCTestCase {
             "When extmapStartId (5) is taken, Transport-CC must be assigned ID 6"
         )
     }
+
+    func test_addTransportCC_appliesToBothMLines_whenVideoIsTheLastLine() {
+        // Regression for a forward-walking-index bug: a fixed `0..<lines.count`
+        // range computed before any insertion desyncs once the audio insertion
+        // shifts every later line by +1. With no attribute lines trailing the
+        // video m-line (and no terminating \r\n to leave a buffering empty
+        // element), the shifted video m-line index used to fall outside the
+        // original loop bound and never received its own extmap.
+        let sdp = "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\nm=video 9 UDP/TLS/RTP/SAVPF 96"
+        let result = P2PWebRTCClient.addTransportCC(sdp)
+        let ccURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+        let lines = result.components(separatedBy: "\r\n")
+
+        guard let audioIdx = lines.firstIndex(where: { $0.hasPrefix("m=audio ") }),
+              let videoIdx = lines.firstIndex(where: { $0.hasPrefix("m=video ") }) else {
+            return XCTFail("expected both m-lines to survive munging")
+        }
+        let audioSection = lines[audioIdx..<videoIdx]
+        let videoSection = lines[videoIdx...]
+        XCTAssertTrue(audioSection.contains(where: { $0.contains(ccURI) }),
+                      "audio m-section must contain its own Transport-CC extmap")
+        XCTAssertTrue(videoSection.contains(where: { $0.contains(ccURI) }),
+                      "video m-section must also contain a Transport-CC extmap, not just audio")
+    }
 }
 
 // MARK: - IceServer TURN URL validation tests

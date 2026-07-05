@@ -96,12 +96,16 @@ enum CallSignalStrength: Equatable {
 struct CallSignalGlyph: View {
     let strength: CallSignalStrength
 
+    // Audit P2-iOS-9 — see CallView/IncomingCallView: skip animating
+    // repeated bar-strength changes for motion-sensitive users.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         Image(systemName: "cellularbars", variableValue: strength.barsFraction)
             .font(.caption.weight(.semibold))
             .foregroundStyle(strength.color)
             .accessibilityLabel(strength.accessibilityLabel)
-            .animation(.easeInOut(duration: 0.3), value: strength)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: strength)
     }
 }
 
@@ -120,6 +124,10 @@ struct TransientCallSignalGlyph: View {
     static let recoveryLingerSeconds: UInt64 = 30
 
     @State private var isVisible = false
+    // Audit P2-iOS-9 — see CallView/IncomingCallView: the appear/disappear
+    // scale+opacity transition is skipped for motion-sensitive users, matching
+    // every other animated element in the call chrome.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -130,7 +138,7 @@ struct TransientCallSignalGlyph: View {
         }
         .adaptiveOnChange(of: strength.isDegraded) { _, isDegraded in
             guard isDegraded else { return }
-            withAnimation(.easeInOut(duration: 0.25)) { isVisible = true }
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { isVisible = true }
         }
         // Compte à rebours de retrait : armé quand le glyphe est visible sur un
         // lien redevenu sain ; toute re-dégradation change l'`id` → SwiftUI
@@ -139,7 +147,7 @@ struct TransientCallSignalGlyph: View {
             guard isVisible, !strength.isDegraded else { return }
             try? await Task.sleep(nanoseconds: Self.recoveryLingerSeconds * 1_000_000_000)
             if !Task.isCancelled {
-                withAnimation(.easeInOut(duration: 0.4)) { isVisible = false }
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) { isVisible = false }
             }
         }
     }
