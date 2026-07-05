@@ -124,6 +124,21 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute — client refreshes at ~80% of TTL (minutes apart), not a steady stream
     keyPrefix: 'socket:call:ice-servers-refresh'
   },
+  // Calling-stack audit 2026-07-05 — BACKGROUNDED/FOREGROUNDED were the last
+  // call:* handlers left unrate-limited (every sibling lifecycle event does
+  // check). Each triggers a full nested Prisma call-session lookup, so a
+  // flooding client could still amplify DB load even though authorization
+  // (resolveActiveCallParticipantId) was already enforced.
+  CALL_BACKGROUNDED: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute — one app-lifecycle transition notification per background, generous buffer
+    keyPrefix: 'socket:call:backgrounded'
+  },
+  CALL_FOREGROUNDED: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute — mirrors CALL_BACKGROUNDED
+    keyPrefix: 'socket:call:foregrounded'
+  },
   REACTION_ADD: {
     maxRequests: 30,
     windowMs: 60000, // 1 minute — prevents emoji spam floods
