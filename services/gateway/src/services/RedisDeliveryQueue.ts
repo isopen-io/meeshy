@@ -20,17 +20,30 @@ return entries
 // or 'deleted' for the same message — those are distinct events that must
 // all replay on drain, in FIFO order, so the recipient's final state matches
 // the sender's (edit/delete after an offline 'new' must not be dropped).
-// Returns 1 when pushed, 0 when the (messageId, eventType) pair was already present.
+//
+// A repeated 'edited'/'deleted' for the SAME messageId is not a true duplicate
+// to drop — its payload may carry newer content (e.g. two edits while the
+// recipient is offline). Dropping the second one would replay only the first,
+// stale edit on reconnect. So for 'edited'/'deleted' the existing entry is
+// overwritten in place with the latest payload instead of being no-op'd; only
+// 'new' (whose content never changes after the fact) keeps the drop behavior.
+// Returns 1 when pushed, 0 when a 'new' duplicate was dropped, 2 when a stale
+// 'edited'/'deleted' entry was replaced in place.
 // KEYS[1] = queue key, ARGV[1] = serialized entry, ARGV[2] = messageId,
 // ARGV[3] = TTL, ARGV[4] = normalized eventType
 const ENQUEUE_DEDUP_LUA = `
 local entries = redis.call('LRANGE', KEYS[1], 0, -1)
-for _, entry in ipairs(entries) do
+for i, entry in ipairs(entries) do
   local ok, decoded = pcall(cjson.decode, entry)
   if ok and decoded and decoded.messageId == ARGV[2] then
     local decodedEventType = decoded.eventType or 'new'
     if decodedEventType == ARGV[4] then
-      return 0
+      if ARGV[4] == 'new' then
+        return 0
+      end
+      redis.call('LSET', KEYS[1], i - 1, ARGV[1])
+      redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+      return 2
     end
   end
 end
@@ -66,12 +79,14 @@ export class RedisDeliveryQueue {
     if (redis) {
       try {
         const key = queueKey(userId);
-        const pushed = await redis.eval(
+        const result = await redis.eval(
           ENQUEUE_DEDUP_LUA, 1, key,
           serialized, entry.messageId, String(DELIVERY_QUEUE_TTL_SECONDS), normalizedEventType(entry)
         );
-        if (pushed === 0) {
+        if (result === 0) {
           logger.debug('Delivery queue dedup: messageId already queued', { userId, messageId: entry.messageId });
+        } else if (result === 2) {
+          logger.debug('Delivery queue: replaced stale entry with latest payload', { userId, messageId: entry.messageId, eventType: normalizedEventType(entry) });
         }
         return;
       } catch (error) {
@@ -89,8 +104,17 @@ export class RedisDeliveryQueue {
       }
     }
     const existing = this.memoryQueue.get(userId) ?? [];
-    if (existing.some(e => e.messageId === entry.messageId && normalizedEventType(e) === normalizedEventType(entry))) {
-      logger.debug('Delivery queue dedup (memory): messageId+eventType already queued', { userId, messageId: entry.messageId, eventType: normalizedEventType(entry) });
+    const eventType = normalizedEventType(entry);
+    const staleIndex = existing.findIndex(e => e.messageId === entry.messageId && normalizedEventType(e) === eventType);
+    if (staleIndex !== -1) {
+      if (eventType === 'new') {
+        logger.debug('Delivery queue dedup (memory): messageId+eventType already queued', { userId, messageId: entry.messageId, eventType });
+        return;
+      }
+      const replaced = [...existing];
+      replaced[staleIndex] = entry;
+      this.memoryQueue.set(userId, replaced);
+      logger.debug('Delivery queue (memory): replaced stale entry with latest payload', { userId, messageId: entry.messageId, eventType });
       return;
     }
     const bounded = existing.length >= MEMORY_QUEUE_MAX_PER_USER

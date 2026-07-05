@@ -936,7 +936,7 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     expect(drained.map(d => d.eventType ?? 'new')).toEqual(['new', 'deleted']);
   });
 
-  test('dedup (memory): a repeated "edited" event for the same messageId IS still deduped', async () => {
+  test('dedup (memory): a repeated identical "edited" event for the same messageId collapses to one entry', async () => {
     const queue = new RedisDeliveryQueue(makeCacheStore(null));
     const edited = makePayload({ messageId: 'msg-edit-twice', eventType: 'edited' });
 
@@ -944,6 +944,43 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     await queue.enqueue('user-offline', edited);
 
     expect(await queue.size('user-offline')).toBe(1);
+  });
+
+  test('dedup (memory): a second, DIFFERING "edited" event replaces the first instead of being dropped', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const firstEdit = makePayload({ messageId: 'msg-edited-twice', eventType: 'edited', payload: { content: 'typo fix' } });
+    const secondEdit = makePayload({ messageId: 'msg-edited-twice', eventType: 'edited', payload: { content: 'final content' } });
+
+    await queue.enqueue('user-offline', firstEdit);
+    await queue.enqueue('user-offline', secondEdit);
+
+    const drained = await queue.drain('user-offline');
+    expect(drained).toHaveLength(1);
+    expect(drained[0].payload.content).toBe('final content');
+  });
+
+  test('dedup (memory): a second, DIFFERING "deleted" event replaces the first instead of being dropped', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const firstDelete = makePayload({ messageId: 'msg-deleted-twice', eventType: 'deleted', payload: { deletedBy: 'user-a' } });
+    const secondDelete = makePayload({ messageId: 'msg-deleted-twice', eventType: 'deleted', payload: { deletedBy: 'moderator-x' } });
+
+    await queue.enqueue('user-offline', firstDelete);
+    await queue.enqueue('user-offline', secondDelete);
+
+    const drained = await queue.drain('user-offline');
+    expect(drained).toHaveLength(1);
+    expect(drained[0].payload.deletedBy).toBe('moderator-x');
+  });
+
+  test('dedup (memory): replacing a stale "edited" entry preserves its FIFO position among other messages', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    await queue.enqueue('user-offline', makePayload({ messageId: 'msg-edited-twice', eventType: 'edited', payload: { content: 'typo fix' } }));
+    await queue.enqueue('user-offline', makePayload({ messageId: 'other-msg' }));
+    await queue.enqueue('user-offline', makePayload({ messageId: 'msg-edited-twice', eventType: 'edited', payload: { content: 'final content' } }));
+
+    const drained = await queue.drain('user-offline');
+    expect(drained.map(d => d.messageId)).toEqual(['msg-edited-twice', 'other-msg']);
+    expect(drained[0].payload.content).toBe('final content');
   });
 });
 
@@ -992,6 +1029,18 @@ describe('RedisDeliveryQueue (Redis dedup via eval)', () => {
 
     expect(redis.eval).toHaveBeenCalledTimes(2);
     expect(await queue.size('user-r2')).toBe(1); // llen returns 1
+  });
+
+  test('dedup (Redis): eval returns 2 when a stale "edited"/"deleted" entry was replaced in place (no extra push, no error)', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(2) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await expect(
+      queue.enqueue('user-r3', makePayload({ messageId: 'm-replaced', eventType: 'edited', payload: { content: 'final' } }))
+    ).resolves.toBeUndefined();
+
+    expect(redis.eval).toHaveBeenCalledTimes(1);
+    expect(redis.rpush).not.toHaveBeenCalled();
   });
 });
 
