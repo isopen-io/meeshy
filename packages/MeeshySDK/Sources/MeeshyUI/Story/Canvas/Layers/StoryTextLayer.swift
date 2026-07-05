@@ -38,6 +38,15 @@ public final class StoryTextLayer: CATextLayer {
     private var hiddenString: NSAttributedString?
     public private(set) var glyphsHidden: Bool = false
 
+    /// Tracé (render-space) du cadre pour les formes path-based (losange /
+    /// nuage / bulle BD), calculé par `configure`. `nil` pour les formes à
+    /// coins (rounded / pill / rectangle) qui passent par `cornerRadius`.
+    private var pathFramePath: CGPath?
+    /// Frame (render-space) de la sous-calque de glyphes pour les formes
+    /// path-based — le texte y est centré dans la région de contenu de la
+    /// forme (hors queue de bulle / bulles de pensée).
+    private var pathGlyphFrame: CGRect?
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -91,7 +100,13 @@ public final class StoryTextLayer: CATextLayer {
         // largeur design (marge symétrique) pour qu'un texte long wrappe sur
         // plusieurs lignes au lieu de déborder du canvas. `size()` mesurait en
         // mono-ligne, ce qui forçait des largeurs hors-canvas et un rendu tronqué.
-        let maxDesignWidth = CanvasGeometry.designWidth * 0.88
+        // Le losange double l'encombrement du texte (rect inscrit dans le
+        // rhombe) — sa largeur de mesure est plafonnée à 44 % pour que la forme
+        // complète tienne dans le canvas.
+        let isFramed = text.resolvedBackgroundStyle != .none
+        let frameShape = text.parsedFrameShape
+        let widthFraction: CGFloat = (isFramed && frameShape == .diamond) ? 0.44 : 0.88
+        let maxDesignWidth = CanvasGeometry.designWidth * widthFraction
         let designSize = designAttr.boundingRect(
             with: CGSize(width: maxDesignWidth, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
@@ -102,18 +117,37 @@ public final class StoryTextLayer: CATextLayer {
         // before the first and after the last character so the framing box never
         // hugs the glyphs (bug #7 : "padding automatique ≥ 1 caractère 'o'").
         // Unframed text keeps the historical 8 px-per-side inset so existing
-        // layout/snapshot expectations are unchanged.
-        let isFramed = text.resolvedBackgroundStyle != .none
+        // layout/snapshot expectations are unchanged. Les formes path-based
+        // (losange / nuage / bulle BD) réservent en plus l'espace de la forme
+        // (pointes du rhombe, bosses du nuage, queue de la bulle) — voir
+        // `frameMetrics`.
         let oGlyphWidth = isFramed
             ? ceil(("o" as NSString).size(withAttributes: [.font: designFont]).width)
             : 0
-        let hPadPerSide = max(8, oGlyphWidth)
-        let designBounds = CGSize(width: ceil(designSize.width) + hPadPerSide * 2,
-                                  height: ceil(designSize.height) + 16)
+        let metrics = Self.frameMetrics(shape: frameShape,
+                                        isFramed: isFramed,
+                                        textSize: designSize,
+                                        oGlyphWidth: oGlyphWidth)
 
         // Render-space bounds is the linear projection of the design bounds.
-        let renderedBounds = geometry.render(designBounds)
+        let renderedBounds = geometry.render(metrics.bounds)
         bounds = CGRect(origin: .zero, size: renderedBounds)
+
+        // Formes path-based : tracé + zone de glyphes projetés en render-space
+        // (projection uniforme — `CanvasGeometry.scaleFactor` est le même en x
+        // et y). Consommés par `applyBackgroundStyle`.
+        if isFramed, frameShape.usesCustomPath {
+            let designPath = Self.framePath(shape: frameShape,
+                                            in: CGRect(origin: .zero, size: metrics.bounds))
+            var scaleTransform = CGAffineTransform(scaleX: geometry.scaleFactor,
+                                                   y: geometry.scaleFactor)
+            pathFramePath = designPath?.copy(using: &scaleTransform)
+            pathGlyphFrame = CGRect(origin: geometry.render(metrics.glyphRect.origin),
+                                    size: geometry.render(metrics.glyphRect.size))
+        } else {
+            pathFramePath = nil
+            pathGlyphFrame = nil
+        }
 
         // Render-space font for actual painting — applique aussi le textStyle.
         let renderedFontSize = geometry.render(designFontSize)
@@ -203,6 +237,25 @@ public final class StoryTextLayer: CATextLayer {
             return
 
         case .solid(let hex):
+            let fillColor = parseHexColor(hex) ?? .black.withAlphaComponent(0.5)
+            if let framePath = pathFramePath {
+                // Forme path-based (losange / nuage / bulle BD) : le fond est
+                // un `CAShapeLayer` sous-calque. Un sous-calque composite
+                // TOUJOURS au-dessus du contenu propre du parent — les glyphes
+                // visibles passent donc dans une sous-calque dédiée posée
+                // au-dessus de la forme (même pattern que `.glass`) et les
+                // glyphes propres du parent deviennent transparents.
+                let shape = CAShapeLayer()
+                shape.frame = CGRect(origin: .zero, size: bounds.size)
+                shape.path = framePath
+                shape.fillColor = fillColor.cgColor
+                shape.zPosition = -1
+                shape.contentsScale = UIScreen.main.scale
+                addSublayer(shape)
+                backgroundFillLayer = shape
+                installGlyphSublayer(frame: pathGlyphFrame ?? bounds)
+                return
+            }
             // Fond solide posé sur le `backgroundColor` de la calque ELLE-MÊME
             // (peint AVANT le contenu → les glyphes s'affichent par-dessus), et
             // NON en sous-calque (qui composerait au-dessus des glyphes et les
@@ -211,14 +264,23 @@ public final class StoryTextLayer: CATextLayer {
             // +16 design-px. `masksToBounds` reste false : `cornerRadius`
             // arrondit le fond sans rogner les glyphes (le contenu n'est clippé
             // que si `masksToBounds == true`).
-            backgroundColor = (parseHexColor(hex) ?? .black.withAlphaComponent(0.5)).cgColor
+            backgroundColor = fillColor.cgColor
             cornerRadius = frameCornerRadius(height: bounds.height)
 
         case .glass(let radius):
             let backdrop = StoryGlassBackdropLayer()
             backdrop.frame = bounds
-            backdrop.cornerRadius = frameCornerRadius(height: bounds.height)
-            backdrop.masksToBounds = true
+            if let framePath = pathFramePath {
+                // Le blur épouse la forme : masque CAShapeLayer au lieu du
+                // couple cornerRadius + masksToBounds des formes à coins.
+                let mask = CAShapeLayer()
+                mask.frame = CGRect(origin: .zero, size: bounds.size)
+                mask.path = framePath
+                backdrop.mask = mask
+            } else {
+                backdrop.cornerRadius = frameCornerRadius(height: bounds.height)
+                backdrop.masksToBounds = true
+            }
             backdrop.zPosition = -1
             backdrop.contentsScale = UIScreen.main.scale
             // Sigma is design-px; project to render-px so the blur "feels" the
@@ -235,18 +297,28 @@ public final class StoryTextLayer: CATextLayer {
             // au-dessus, `zPosition` 0 > -1), et les glyphes propres du parent
             // sont rendus transparents — sinon ils peindraient une 2e fois SOUS
             // le verre, ré-introduisant le « blanc sur black » hors édition.
-            let glyphs = CATextLayer()
-            glyphs.frame = bounds
-            glyphs.contentsScale = UIScreen.main.scale
-            glyphs.alignmentMode = alignmentMode
-            glyphs.isWrapped = true
-            glyphs.truncationMode = .none
-            glyphs.zPosition = 0
-            glyphs.string = glyphsHidden ? hiddenString : visibleString
-            addSublayer(glyphs)
-            glyphLayer = glyphs
-            string = hiddenString
+            installGlyphSublayer(frame: pathGlyphFrame ?? bounds)
         }
+    }
+
+    /// Sous-calque de glyphes posée au-dessus du fond (backdrop glass ou forme
+    /// path-based) ; les glyphes propres du parent sont rendus transparents.
+    /// Pour les formes path-based, `frame` est la zone de contenu centrée de
+    /// la forme (`pathGlyphFrame`) ; pour le glass à coins, la calque couvre
+    /// tout `bounds` (comportement historique inchangé).
+    @MainActor
+    private func installGlyphSublayer(frame: CGRect) {
+        let glyphs = CATextLayer()
+        glyphs.frame = frame
+        glyphs.contentsScale = UIScreen.main.scale
+        glyphs.alignmentMode = alignmentMode
+        glyphs.isWrapped = true
+        glyphs.truncationMode = .none
+        glyphs.zPosition = 0
+        glyphs.string = glyphsHidden ? hiddenString : visibleString
+        addSublayer(glyphs)
+        glyphLayer = glyphs
+        string = hiddenString
     }
 
     /// Owner hook : when the parent canvas (`StoryCanvasUIView` / compositor) has
@@ -266,13 +338,163 @@ public final class StoryTextLayer: CATextLayer {
 
     /// Corner radius of the framing box, derived from the text object's
     /// `frameShape`. `.rounded` ≈ 15 % of height (legacy), `.pill` = full
-    /// capsule, `.rectangle` = near-square corners.
+    /// capsule, `.rectangle` = near-square corners. Les formes path-based ne
+    /// passent jamais ici (fond via `pathFramePath`) — la valeur `.rounded`
+    /// est un défaut défensif.
     private func frameCornerRadius(height: CGFloat) -> CGFloat {
         switch textObject?.parsedFrameShape ?? .rounded {
-        case .rounded:   return max(4, height * 0.15)
+        case .rounded, .diamond, .cloud, .speech: return max(4, height * 0.15)
         case .pill:      return height / 2
         case .rectangle: return max(2, height * 0.04)
         }
+    }
+
+    // MARK: - Frame geometry (path-based shapes)
+
+    /// Hauteur (design px) de la bande réservée à la queue de la bulle BD.
+    nonisolated static let speechTailHeight: CGFloat = 40
+    /// Rayon (design px) des bosses du nuage.
+    nonisolated static let cloudPuffRadius: CGFloat = 26
+    /// Hauteur (design px) de la bande réservée aux bulles de pensée du nuage.
+    nonisolated static let cloudThoughtHeight: CGFloat = 48
+
+    /// Encombrement design-space du cadre + zone de glyphes pour une forme.
+    nonisolated struct FrameMetrics: Equatable {
+        let bounds: CGSize
+        let glyphRect: CGRect
+    }
+
+    /// Calcule l'encombrement du cadre et la zone où les glyphes sont peints,
+    /// en design px. Formes à coins : pad horizontal ≥ 1 'o' (framé) ou 8 px,
+    /// +16 vertical — comportement historique inchangé. Formes path-based :
+    /// - losange : rect w×h inscrit dans un rhombe de diagonales (2w, 2h) —
+    ///   les coins du texte touchent exactement les bords, glyphes centrés ;
+    /// - bulle BD : corps arrondi + bande basse pour la queue ;
+    /// - nuage : bosses tout autour + bande basse pour les bulles de pensée.
+    ///
+    /// `nonisolated static` pour être testable sans instancier de calque.
+    nonisolated static func frameMetrics(shape: StoryTextFrameShape,
+                                         isFramed: Bool,
+                                         textSize: CGSize,
+                                         oGlyphWidth: CGFloat) -> FrameMetrics {
+        let w = ceil(textSize.width)
+        let h = ceil(textSize.height)
+        let hPad = max(8, oGlyphWidth)
+        guard isFramed, shape.usesCustomPath else {
+            return FrameMetrics(bounds: CGSize(width: w + hPad * 2, height: h + 16),
+                                glyphRect: CGRect(x: hPad, y: 8, width: w, height: h))
+        }
+        switch shape {
+        case .rounded, .pill, .rectangle:
+            // Couvert par le guard (usesCustomPath == false) — jamais atteint.
+            return FrameMetrics(bounds: CGSize(width: w + hPad * 2, height: h + 16),
+                                glyphRect: CGRect(x: hPad, y: 8, width: w, height: h))
+        case .diamond:
+            let width = max(w * 2, w + hPad * 2)
+            let height = max(h * 2, h + 16)
+            return FrameMetrics(bounds: CGSize(width: width, height: height),
+                                glyphRect: CGRect(x: (width - w) / 2,
+                                                  y: (height - h) / 2,
+                                                  width: w, height: h))
+        case .speech:
+            return FrameMetrics(bounds: CGSize(width: w + hPad * 2,
+                                               height: h + 16 + speechTailHeight),
+                                glyphRect: CGRect(x: hPad, y: 8, width: w, height: h))
+        case .cloud:
+            let puff = cloudPuffRadius
+            return FrameMetrics(bounds: CGSize(width: w + hPad * 2 + puff * 2,
+                                               height: h + 16 + puff * 2 + cloudThoughtHeight),
+                                glyphRect: CGRect(x: hPad + puff, y: 8 + puff,
+                                                  width: w, height: h))
+        }
+    }
+
+    /// Tracé design-space du cadre pour les formes path-based ; `nil` pour les
+    /// formes à coins (rendues par `cornerRadius`). Les sous-tracés se
+    /// chevauchent volontairement : un fill nonzero peint chaque pixel UNE
+    /// seule fois, donc pas de couture ni de sur-opacité même avec un fond
+    /// translucide (hex "…A6").
+    nonisolated static func framePath(shape: StoryTextFrameShape, in rect: CGRect) -> CGPath? {
+        switch shape {
+        case .rounded, .pill, .rectangle:
+            return nil
+
+        case .diamond:
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+            path.closeSubpath()
+            return path
+
+        case .speech:
+            let body = CGRect(x: rect.minX, y: rect.minY,
+                              width: rect.width,
+                              height: max(1, rect.height - speechTailHeight))
+            let radius = max(0, min(body.height * 0.3, body.width * 0.2))
+            let path = CGMutablePath()
+            path.addRoundedRect(in: body, cornerWidth: radius, cornerHeight: radius)
+            // Queue pointée bas-gauche, chevauchant le corps de 2 px.
+            let baseX = body.minX + body.width * 0.20
+            let baseWidth = min(body.width * 0.30, speechTailHeight * 1.6)
+            path.move(to: CGPoint(x: baseX, y: body.maxY - 2))
+            path.addLine(to: CGPoint(x: baseX + baseWidth, y: body.maxY - 2))
+            path.addLine(to: CGPoint(x: max(rect.minX, baseX - speechTailHeight * 0.25),
+                                     y: rect.maxY))
+            path.closeSubpath()
+            return path
+
+        case .cloud:
+            let puff = cloudPuffRadius
+            let body = CGRect(x: rect.minX, y: rect.minY,
+                              width: rect.width,
+                              height: max(1, rect.height - cloudThoughtHeight))
+            let inner = body.insetBy(dx: puff, dy: puff)
+            guard inner.width > 0, inner.height > 0 else {
+                return CGPath(ellipseIn: body, transform: nil)
+            }
+            let path = CGMutablePath()
+            let radius = max(0, min(inner.height, inner.width) * 0.25)
+            path.addRoundedRect(in: inner, cornerWidth: radius, cornerHeight: radius)
+            addCloudPuffs(to: path, around: inner, radius: puff)
+            // Bulles de pensée en cascade vers le bas-gauche, contenues dans
+            // la bande `cloudThoughtHeight`.
+            let large = puff * 0.6
+            let small = puff * 0.35
+            let cx = max(inner.minX + puff, inner.minX + inner.width * 0.15)
+            path.addEllipse(in: CGRect(x: cx - large, y: body.maxY - large * 0.4,
+                                       width: large * 2, height: large * 2))
+            path.addEllipse(in: CGRect(x: cx - puff * 0.8 - small,
+                                       y: body.maxY + large * 1.4,
+                                       width: small * 2, height: small * 2))
+            return path
+        }
+    }
+
+    /// Ajoute une rangée de cercles (rayon `radius`) centrés sur le périmètre
+    /// de `rect` — les bosses du nuage. Espacement ~1.5 rayon pour un
+    /// chevauchement moelleux sans trous.
+    private nonisolated static func addCloudPuffs(to path: CGMutablePath,
+                                                  around rect: CGRect,
+                                                  radius: CGFloat) {
+        func addAlong(from a: CGPoint, to b: CGPoint) {
+            let distance = hypot(b.x - a.x, b.y - a.y)
+            let steps = max(1, Int(ceil(distance / (radius * 1.5))))
+            for i in 0...steps {
+                let t = CGFloat(i) / CGFloat(steps)
+                let center = CGPoint(x: a.x + (b.x - a.x) * t,
+                                     y: a.y + (b.y - a.y) * t)
+                path.addEllipse(in: CGRect(x: center.x - radius,
+                                           y: center.y - radius,
+                                           width: radius * 2,
+                                           height: radius * 2))
+            }
+        }
+        addAlong(from: CGPoint(x: rect.minX, y: rect.minY), to: CGPoint(x: rect.maxX, y: rect.minY))
+        addAlong(from: CGPoint(x: rect.maxX, y: rect.minY), to: CGPoint(x: rect.maxX, y: rect.maxY))
+        addAlong(from: CGPoint(x: rect.maxX, y: rect.maxY), to: CGPoint(x: rect.minX, y: rect.maxY))
+        addAlong(from: CGPoint(x: rect.minX, y: rect.maxY), to: CGPoint(x: rect.minX, y: rect.minY))
     }
 
     /// Calcule les attributs de stroke (`strokeColor`, `strokeWidth`) pour un
