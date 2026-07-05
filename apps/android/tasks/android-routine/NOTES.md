@@ -1112,3 +1112,18 @@ Append-only log of gotchas and decisions that save time next run.
   are allowed, so **do NOT pass `--offline`** (the AGP plugin marker isn't pre-cached → resolution
   fails). `meeshy.sh` calls `./gradlew`, so invoke `gradle` directly for `assembleDebug`/
   `testDebugUnitTest` until a full wrapper dist can be primed.
+
+## 2026-07-05 — durable-preference codec: record-token (JSON) vs enum-token variant
+- The theme/language stores persist a **single enum token** with a pure `when`-based codec. The
+  notification block (`settings-notification-prefs`) persists a **whole record**
+  (`UserNotificationPreferences`, 30+ fields), so the codec round-trips as **JSON**, not an enum
+  string. Kept the same corruption-proof contract: `notificationPreferencesFromStorage(raw)` wraps
+  `decodeFromString` in `runCatching` → blank/absent/malformed/wrong-shape all degrade to
+  `UserNotificationPreferences()` defaults; `ignoreUnknownKeys` drops legacy fields; `encodeDefaults`
+  makes every field survive the round-trip. Same `:core:model` purity (private `Json` instance,
+  precedent `CallSignalMapper`) + `:sdk-core` DataStore store + `stateIn(Eagerly)` hydration pattern.
+- **ViewModel intent shape for a multi-field record:** don't add 30 setters. One private
+  `updateNotifications { copy(field = value) }` read-modify-writes the whole block from
+  `store.preferences.value`, so a single toggle never clobbers the others (tested by the
+  successive-toggles-compose case). Screen: push is the **master** — sub-toggles `enabled = pushEnabled`
+  so a coherent parent/child relationship, no dead ends.

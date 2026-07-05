@@ -140,23 +140,30 @@ fun SettingsScreen(
             }
 
             SettingsSection(title = stringResource(R.string.settings_section_notifications)) {
-                var pushEnabled by remember { mutableStateOf(true) }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_push_notifications),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = pushEnabled,
-                        onCheckedChange = { pushEnabled = it },
-                    )
-                }
+                val notifications = state.notifications
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_push_notifications),
+                    checked = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setPushEnabled,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_new_message_notifications),
+                    checked = notifications.newMessageEnabled,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setNewMessageEnabled,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notification_sound),
+                    checked = notifications.soundEnabled,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setSoundEnabled,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notification_vibration),
+                    checked = notifications.vibrationEnabled,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setVibrationEnabled,
+                )
             }
 
             SettingsSection(title = stringResource(R.string.settings_section_privacy)) {
@@ -325,6 +332,37 @@ private fun LanguageOptionRow(
         RadioButton(selected = isSelected, onClick = onClick)
         Spacer(Modifier.width(MeeshySpacing.sm))
         Text(text = label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun NotificationToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange,
+        )
     }
 }
 

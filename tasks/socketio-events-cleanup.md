@@ -25,20 +25,21 @@ Le reste des items audités est documenté ici pour traitement séparé (impact 
 
 ---
 
-## 2. `STORY_TRANSLATION_UPDATED` mauvais namespace
+## 2. `STORY_TRANSLATION_UPDATED` mauvais namespace — ✅ Résolu (2026-07-05)
 
-**Problème** :
+**Problème (historique)** :
 ```typescript
 STORY_TRANSLATION_UPDATED: 'post:story-translation-updated',
 ```
-Le préfixe `post:` est incorrect — toutes les autres clés `STORY_*` utilisent `'story:...'`. Vraisemblablement une coquille issue d'un copy-paste de `POST_TRANSLATION_UPDATED`.
+Le préfixe `post:` était incorrect — toutes les autres clés `STORY_*` utilisent `'story:...'`. Vraisemblablement une coquille issue d'un copy-paste de `POST_TRANSLATION_UPDATED`.
 
-**Action proposée** :
-- Renommer en `'story:translation-updated'`
-- Garder l'ancien event émis en parallèle ~3 mois pour compat
-- Migrer web + iOS pour subscribe au nouveau nom
-
-**Impact** : breaking pour les clients qui écoutent `'post:story-translation-updated'`. Vérifier la liste des abonnés via `grep`.
+**Fix appliqué** : `STORY_TRANSLATION_UPDATED` vaut maintenant `'story:translation-updated'`
+(`packages/shared/types/socketio-events.ts:345`). iOS (`SocialSocketManager.swift:1078`)
+souscrit à `"story:translation-updated"` avec un commentaire documentant l'ancien nom
+`post:story-translation-updated` (retiré depuis le 2026-06-01, période de coexistence
+écoulée). Web (`use-social-socket.ts`) et gateway (`StoryTextObjectTranslationService.ts`)
+utilisent déjà la constante partagée `SERVER_EVENTS.STORY_TRANSLATION_UPDATED`, donc aucun
+risque de désynchronisation string littérale. Rien à reprendre ici.
 
 ---
 
@@ -194,10 +195,10 @@ demande avait été acceptée/refusée, seulement au prochain refetch complet.
 
 | Priorité | Item | Raison |
 |---|------|--------|
-| P1 | #2 STORY_TRANSLATION namespace | Bug bloquant pour story translations en prod si filtres mal câblés |
-| P1 | #5 CONVERSATION_CLOSED docstring | 30min — ambiguïté coûte plus cher qu'un fix |
+| ~~P1~~ | ~~#2 STORY_TRANSLATION namespace~~ | ✅ Résolu 2026-07-05 |
+| ~~P1~~ | ~~#5 CONVERSATION_CLOSED docstring~~ | ✅ Résolu 2026-06-30 |
 | P2 | #1 NOTIFICATION_NEW audit complet | Pattern récurrent qui pourrira chaque domaine ajouté |
-| P2 | #7 FRIEND_REQUEST events | Visibility équivalente au bug de conv créateur, juste pas remonté yet |
+| ~~P2~~ | ~~#7 FRIEND_REQUEST events~~ | ✅ Résolu 2026-07-01 (CANCELLED + NEW/ACCEPTED/REJECTED) |
 | ~~P3~~ | ~~#6 USER_UPDATED~~ | ✅ Résolu 2026-07-02 |
 | ~~P3~~ | ~~#3 READ_STATUS namespace~~ | ✅ Résolu 2026-07-05 |
 | P3 | #4 NOTIFICATION générique | À élucider d'abord |

@@ -5,11 +5,14 @@ import MeeshyUI
 // MARK: - Effects Panel Type
 
 // Voice-effects entry (`.audioEffects` / AudioEffectsPanel) removed 2026-07-02:
-// the audio-effects pipeline has no production capture hook —
-// `CallAudioEffectsService.processAudioBuffer` has had zero production callers
-// since the `MeeshyAudioProcessingModule` scaffold was dropped, so the panel
-// silently no-oped: the peer always heard the unmodified voice. Re-add the case
-// and the toolbar button once a real WebRTC capture hook feeds the service.
+// the audio-effects pipeline had no production capture hook — the underlying
+// `processAudioBuffer` had zero production callers since the
+// `MeeshyAudioProcessingModule` scaffold was dropped, so the panel silently
+// no-oped: the peer always heard the unmodified voice. The dead voice-effects
+// engine (service, types, `CallManager`/`WebRTCService` plumbing, tests) was
+// deleted outright in the 2026-07-05 audit — re-introduce the whole feature
+// from scratch (case, toolbar button, and a real WebRTC capture hook) if it's
+// ever revived.
 enum EffectsPanelType: Equatable {
     case videoFilters
 }
