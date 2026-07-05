@@ -61,6 +61,7 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
+import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -102,11 +103,17 @@ export class MessageHandler {
   /**
    * Short-lived in-process cache for (userId, conversationId) → participantId lookups.
    * Avoids a DB findFirst query on every message send for active users.
-   * TTL: 5 minutes. Invalidated on conversation leave / kick events via
+   * TTL: 5 minutes, size-bounded (BoundedTtlCache) so a long-running gateway
+   * process doesn't accumulate one entry per (user, conversation) pair forever.
+   * Also invalidated on conversation leave / kick events via
    * `invalidateParticipantCache`. Key: `${userId}:${conversationId}`.
    */
-  private participantIdCache = new Map<string, { participantId: string; expiresAt: number }>();
+  private static readonly PARTICIPANT_ID_CACHE_MAX = 10_000;
   private readonly PARTICIPANT_CACHE_TTL_MS = 5 * 60 * 1000;
+  private participantIdCache = new BoundedTtlCache<string, string>({
+    maxSize: MessageHandler.PARTICIPANT_ID_CACHE_MAX,
+    ttlMs: this.PARTICIPANT_CACHE_TTL_MS,
+  });
 
   constructor(deps: MessageHandlerDependencies) {
     this.io = deps.io;
@@ -1254,8 +1261,8 @@ export class MessageHandler {
 
     const cacheKey = `${userId}:${conversationId}`;
     const cached = this.participantIdCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.participantId;
+    if (cached) {
+      return cached;
     }
 
     const result = await resolveParticipant({
@@ -1266,10 +1273,7 @@ export class MessageHandler {
     });
 
     if (result?.participantId) {
-      this.participantIdCache.set(cacheKey, {
-        participantId: result.participantId,
-        expiresAt: Date.now() + this.PARTICIPANT_CACHE_TTL_MS,
-      });
+      this.participantIdCache.set(cacheKey, result.participantId);
     }
 
     return result?.participantId ?? null;
