@@ -21,7 +21,6 @@ struct CallView: View {
     // this check, the continuous pulse/ring animations ran indefinitely
     // even for motion-sensitive users (and burned battery).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var theme: ThemeManager { ThemeManager.shared }
     // Instance du CallManager (et non un `@StateObject` local) : les segments
     // distants (DataChannel) et `toggleTranscription` opèrent sur CELLE-CI —
     // l'ancienne instance locale orpheline ne transcrivait jamais rien et
@@ -717,7 +716,7 @@ struct CallView: View {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundColor(.white)
 
             // Duration + glyphe signal code couleur (P2-iOS-10 → 2026-07-04) :
             // invisible sur lien sain, apparaît à la dégradation, persiste en
@@ -1264,16 +1263,16 @@ struct CallView: View {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title3, design: .rounded).weight(.semibold))
-                .foregroundColor(theme.textPrimary.opacity(0.7))
+                .foregroundColor(.white.opacity(0.7))
 
             Text(endReasonText(reason))
                 .font(.callout.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(.white.opacity(0.7))
 
             if callManager.callDuration > 0 {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
-                    .foregroundColor(theme.textMuted.opacity(0.6))
+                    .foregroundColor(.white.opacity(0.45))
             }
 
             Spacer()
@@ -1451,7 +1450,7 @@ struct CallView: View {
                     .callControlGlass(diameter: 56, isActive: false, tint: .white)
                 Text(String(localized: "call.control.camera.caption", defaultValue: "Caméra", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(.white.opacity(0.7))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -1623,7 +1622,7 @@ struct CallView: View {
 
                 Text(caption)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(.white.opacity(0.7))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -1671,7 +1670,7 @@ struct CallView: View {
 
                 Text(String(localized: "call.end.caption", defaultValue: "Raccrocher", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(.white.opacity(0.7))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

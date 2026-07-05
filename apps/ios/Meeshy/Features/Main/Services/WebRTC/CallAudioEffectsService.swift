@@ -427,10 +427,13 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
             return
         }
 
-        let format = AVAudioFormat(
+        guard let format = AVAudioFormat(
             standardFormatWithSampleRate: AudioEffectsConstants.defaultSampleRate,
             channels: 1
-        )!
+        ) else {
+            Logger.audioEffects.error("Skipping engine graph rebuild — could not construct standard AVAudioFormat (sr=\(AudioEffectsConstants.defaultSampleRate)). Audio effects disabled for this session.")
+            return
+        }
 
         for node in voiceEffectNodes {
             engine.attach(node)
@@ -472,10 +475,13 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
 
     private func rebuildRenderBlocksOnConfigQueue() {
         var blocks: [(AURenderBlock, AVAudioFormat)] = []
-        let format = AVAudioFormat(
+        guard let format = AVAudioFormat(
             standardFormatWithSampleRate: AudioEffectsConstants.defaultSampleRate,
             channels: 1
-        )!
+        ) else {
+            Logger.audioEffects.error("Skipping render-block rebuild — could not construct standard AVAudioFormat (sr=\(AudioEffectsConstants.defaultSampleRate)). Audio effects disabled for this session.")
+            return
+        }
 
         for node in voiceEffectNodes {
             if let unit = node as? AVAudioUnit {
