@@ -719,6 +719,26 @@ l'une sans l'autre laisse un vecteur de fuite ouvert, parfois plus grave que cel
 fermer. Lister explicitement TOUS les canaux qui exposent un signal de présence/activité (présence,
 frappe, dernière vue, indicateurs de lecture en direct…) et vérifier qu'ils partagent tous la même
 politique de blocage avant de clore un correctif de ce type.
+## Leçon 68 — Un fix de sibling-drift peut lui-même en introduire un nouveau s'il ne couvre que les chemins terminaux qu'il possède (2026-07-05, itération 100, Vague 14 appels)
+
+`a813b31` (gateway/calls, plus tôt le même jour) a ajouté `CallEventsHandler.clearQualityDegradedStreaks`
+et l'a câblé sur les 3 chemins terminaux **que `CallEventsHandler` possède lui-même**
+(`broadcastCallEnded`, disconnect-leave à 0 participant, disconnect-force-cleanup). Un **4e** chemin
+terminal existe pour le même appel — `CallCleanupService.forceEndCall` (le tier GC cron 60s) — mais vit
+dans une classe séparée sans référence à l'instance `CallEventsHandler`, donc n'a reçu ni l'ancien
+bug (déjà documenté) ni son fix. Piège spécifique à ce cas : le fix a été écrit et testé en ne regardant
+QUE les call-sites internes à la classe qu'on modifie déjà — la recherche de siblings s'est arrêtée à la
+frontière de fichier au lieu de suivre "tous les chemins qui terminent un `CallSession`" (grep
+`callSession.updateMany.*status` ou équivalent, à travers TOUT `services/gateway/src`, pas juste le
+fichier en cours d'édition). Une classe séparée qui termine la même entité (ici via son propre GC/cron)
+compte comme sibling au même titre qu'une méthode sœur dans le même fichier.
+
+**Règle réutilisable** : quand on répare un sibling-drift ("chemin X était couvert, chemin Y ne l'était
+pas"), avant de committer, lister EXHAUSTIVEMENT tous les chemins qui écrivent le même état terminal
+sur la même entité — via un grep structurel sur le nom de la table/du champ concerné dans tout le
+service, pas seulement dans le fichier qu'on est en train d'éditer — et vérifier explicitement que
+chacun reçoit le fix, pas seulement ceux qui vivent dans la même classe. Un fix de sibling-drift qui
+ne couvre que 3 des 4 chemins réels n'est qu'un sibling-drift déplacé, pas résolu.
 ## Leçon 68 — F71 soldé : `community-preferences.ts` était une copie figée de `conversation-preferences.ts`, sans la diffusion socket ajoutée après-coup au sibling (2026-07-05, itération 104)
 
 Nouvelle variante de la famille « deux chemins jumeaux répondant à la même question produit divergent »
@@ -753,6 +773,29 @@ jamais automatiquement, et rien ne le signale (pas d'erreur, pas de test qui cas
 comportement silencieusement différent entre deux entités qui devraient se comporter pareil).
                                                
                                                
+## Leçon 69 — Une liste blanche de langues codée en dur diverge de la source de vérité des bundles (2026-07-05, itération 108)
+
+`detectBestInterfaceLanguage` (`apps/web/utils/language-detection.ts`) sélectionnait la langue de l'UI
+au montage via une liste blanche codée en dur `['en', 'fr', 'pt']`. L'espagnol y manquait alors que
+`locales/es/` est un bundle complet et que `es` est une entrée first-class de `INTERFACE_LANGUAGES`
+(`types/frontend.ts`), placée AVANT `fr`/`pt` qui, elles, étaient auto-détectées. Résultat : tout
+navigateur hispanophone recevait une UI anglaise — violation du Prisme Linguistique sur la surface
+chrome, exactement le genre de friction que le produit promet d'éliminer. La fonction jumelle
+`getUserPreferredLanguage` (même fichier, langue de contenu) gérait `es` correctement via
+`isSupportedLanguage` : divergence entre deux détecteurs du même module.
+
+**Fix** : `['en', 'es', 'fr', 'pt']` = exactement les 4 langues avec bundle complet ; `de`/`it` restent
+exclues (sans bundle, repli `en` intentionnel documenté). RED→GREEN : 3 tests (`['es-ES','en-US'] → 'es'`,
+`['es-419'] → 'es'`, garde-fou `['it-IT','de-DE'] → 'en'`). `language-detection.test.ts` 35/35,
+`use-language.test.tsx` (callers) 24/24.
+
+**Règle réutilisable** : quand une capacité produit (langue, thème, feature-flag) a une **source de
+vérité déclarative** (ici `INTERFACE_LANGUAGES` + présence du dossier `locales/<code>`), toute liste
+blanche codée en dur qui la re-liste ailleurs est un point de dérive garanti. Auditer systématiquement
+que chaque valeur « expédiée » (bundle présent, entrée dans le sélecteur) apparaît dans TOUS les chemins
+qui la filtrent — et distinguer l'omission-défaut (valeur expédiée mais absente : `es`) de
+l'omission-intentionnelle (valeur non expédiée, repli documenté : `de`/`it`). Un test garde-fou sur le
+cas intentionnel empêche un futur « fix » de casser l'exclusion voulue.
 ## Leçon 68 — F72 soldé : `capitalizeName` ne re-capitalisait qu'après un espace, mutilant Jean-Pierre/O'Brien à l'inscription (2026-07-05, itération 105)
 
 **Contexte** : `services/gateway/src/utils/normalize.ts` normalise les champs d'inscription

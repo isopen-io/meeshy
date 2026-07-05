@@ -55,6 +55,17 @@ export class CallCleanupService {
   // message that every other terminal path posts.
   private postSummary: ((callId: string) => Promise<void>) | null = null;
 
+  // Sibling-drift fix (2026-07-05) — `CallEventsHandler.clearQualityDegradedStreaks`
+  // is only reachable from that instance; without this bridge, calls this GC
+  // tier force-ends (stale ringing/connecting/active/heartbeat-timeout — see
+  // `forceEndCall`) never clear their `qualityDegradedStreaks` entries, unlike
+  // the three terminal paths CallEventsHandler already hooks into itself
+  // (call:end, call:leave, disconnect force-cleanup). A GC-reaped call is, if
+  // anything, the MOST likely candidate: an abandoned call nobody explicitly
+  // hung up is exactly the "last report was degraded" scenario this leak
+  // targets.
+  private clearQualityStreaks: ((callId: string) => void) | null = null;
+
   // Phantom-ringing safety net — set via `setMissedCallCancelPushCallback()`
   // once the socket layer's CallEventsHandler is ready. A callee whose VoIP
   // push was delivered but whose socket never joined the call room does not
@@ -99,6 +110,14 @@ export class CallCleanupService {
   setPostSummaryCallback(postSummary: (callId: string) => Promise<void>): void {
     this.postSummary = postSummary;
     logger.info('[CallCleanupService] Post-summary callback attached — GC-ended calls will get a summary message');
+  }
+
+  // Mirrors `setPostSummaryCallback` — injected from server startup once
+  // CallEventsHandler exists, so GC-ended calls also release their
+  // `qualityDegradedStreaks` entries (see the field comment above).
+  setQualityStreakCleanupCallback(clearQualityStreaks: (callId: string) => void): void {
+    this.clearQualityStreaks = clearQualityStreaks;
+    logger.info('[CallCleanupService] Quality-streak cleanup callback attached — GC-ended calls will release their streak entries');
   }
 
   // Phantom-ringing safety net (see field doc above) — injected from server
@@ -431,6 +450,8 @@ export class CallCleanupService {
     // timer; without this, the timer fires later against an already-terminal
     // row (a no-op thanks to the status guard) and lingers in memory.
     this.callService?.clearRingingTimeout(callId);
+    // Sibling-drift fix (2026-07-05) — see the field comment on `clearQualityStreaks`.
+    this.clearQualityStreaks?.(callId);
 
     // Release the conversation's active-call claim (CallService.initiateCall's
     // atomic race guard) so a new call can be started once this one is

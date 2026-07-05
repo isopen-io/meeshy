@@ -697,8 +697,17 @@ export class CallEventsHandler {
    * degraded leaks its entry forever — only the size-capped sweep in
    * call:quality-report ever reclaims it, and a moderate-traffic gateway can
    * run long enough to never hit that cap.
+   *
+   * Public: `CallCleanupService.forceEndCall` (GC tier — stale ringing/
+   * connecting/active/heartbeat-timeout calls) is a 4th terminal path with no
+   * reference to this handler's private map, wired in via
+   * `CallCleanupService.setQualityStreakCleanupCallback` (mirrors
+   * `setPostSummaryCallback`'s existing bridge for the same reason). GC-ended
+   * calls are actually the MOST likely to leak here — an abandoned call
+   * nobody explicitly hung up is exactly the "last report was degraded, call
+   * then ends" scenario this cleanup targets.
    */
-  private clearQualityDegradedStreaks(callId: string): void {
+  clearQualityDegradedStreaks(callId: string): void {
     const prefix = `${callId}:`;
     for (const key of this.qualityDegradedStreaks.keys()) {
       if (key.startsWith(prefix)) {
