@@ -10,4 +10,9 @@
     <string name="profile_save">Enregistrer</string>
     <string name="profile_unknown">Inconnu</string>
     <string name="profile_avatar">Avatar</string>
+    <string name="profile_e2ee">Chiffré de bout en bout</string>
+    <string name="profile_member_since">Membre depuis %1$s</string>
+    <string name="profile_completion">Profil complété à %1$d%%</string>
+    <string name="profile_presence_online">En ligne</string>
+    <string name="profile_presence_away">Absent</string>
 </resources>
