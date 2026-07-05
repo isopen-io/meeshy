@@ -184,8 +184,13 @@ export class AuthHandler {
       userId: user.id
     };
 
-    this._registerUser(user.id, socketUser, socket);
-
+    // Join every room this socket needs to receive messages in BEFORE
+    // registering the user as "connected". Delivery code (MessageHandler,
+    // MeeshySocketIOManager) gates the offline-delivery queue purely on
+    // `connectedUsers.has(userId)`: if we registered first, a message could
+    // arrive in the gap between registration and these awaited room joins
+    // completing, be skipped from the offline queue (recipient looks
+    // online), and never reach the room broadcast either — permanently lost.
     try {
       if (user.id && typeof user.id === 'string') {
         await Promise.allSettled([
@@ -197,8 +202,6 @@ export class AuthHandler {
       logger.error('failed to join personal rooms (JWT auth)', { userId: user.id, error });
     }
 
-    this.statusService.markConnected(user.id, false);
-    await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
     await this._joinUserConversations(socket, user.id, false);
 
     try {
@@ -206,6 +209,11 @@ export class AuthHandler {
     } catch (error) {
       logger.debug('failed to join conversation:any room (JWT auth)', { userId: user.id, error });
     }
+
+    this._registerUser(user.id, socketUser, socket);
+
+    this.statusService.markConnected(user.id, false);
+    await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -262,8 +270,8 @@ export class AuthHandler {
       sessionToken
     };
 
-    this._registerUser(participant.id, socketUser, socket);
-
+    // Join rooms before registering — see matching comment in
+    // _authenticateJWTUser for why registration must come last.
     try {
       if (socketUser.id && typeof socketUser.id === 'string') {
         await socket.join(socketUser.id);
@@ -271,8 +279,6 @@ export class AuthHandler {
     } catch (error) {
       logger.error('failed to join personal room for anonymous user', { anonymousId: socketUser.id, error });
     }
-
-    await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
 
     try {
       await socket.join(ROOMS.conversation(participant.conversationId));
@@ -283,6 +289,10 @@ export class AuthHandler {
         error,
       });
     }
+
+    this._registerUser(participant.id, socketUser, socket);
+
+    await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
