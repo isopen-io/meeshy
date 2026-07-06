@@ -2534,12 +2534,20 @@ describe('CallService - initiateCall phantom cleanup & transaction', () => {
 
   it('phantom cleanup: force-ends stale participations before initiating', async () => {
     const staleCallId = 'stale-call-1';
-    const staleStartedAt = new Date(Date.now() - 120_000);
+    // Well past PHANTOM_HEARTBEAT_GRACE_MS (120s) and no heartbeat recorded —
+    // unambiguously stale under the P0 fix's liveness gate.
+    const staleStartedAt = new Date(Date.now() - 5 * 60_000);
     const staleParticipation = {
       id: 'stale-part-1',
       callSessionId: staleCallId,
       leftAt: null,
-      callSession: { id: staleCallId, startedAt: staleStartedAt, conversationId: 'conv-other' }
+      callSession: {
+        id: staleCallId,
+        startedAt: staleStartedAt,
+        conversationId: 'conv-other',
+        status: CallStatus.active,
+        answeredAt: staleStartedAt
+      }
     };
     const mockConversation = createMockConversation();
     const newCall = createMockCallSession({
@@ -2632,11 +2640,19 @@ describe('CallService - initiateCall phantom cleanup & transaction', () => {
 
   it('phantom cleanup: logs error and continues when cleanup transaction fails', async () => {
     const staleCallId = 'stale-call-err';
+    // Stale enough to pass the liveness gate (P0 fix) and actually reach the
+    // transaction under test — a "now" timestamp would be classified as
+    // fresh and skipped before the transaction is ever attempted.
     const staleParticipation = {
       id: 'stale-part-err',
       callSessionId: staleCallId,
       leftAt: null,
-      callSession: { id: staleCallId, startedAt: new Date(), conversationId: 'conv-other' }
+      callSession: {
+        id: staleCallId,
+        startedAt: new Date(Date.now() - 5 * 60_000),
+        conversationId: 'conv-other',
+        status: CallStatus.active
+      }
     };
     const mockConversation = createMockConversation();
     const newCall = createMockCallSession({
@@ -2668,6 +2684,90 @@ describe('CallService - initiateCall phantom cleanup & transaction', () => {
     // Should NOT throw — cleanup failure is logged and swallowed
     const result = await callService.initiateCall(validInitiateData);
     expect(result).toBeDefined();
+  });
+
+  it('P0 fix (2026-07-06): does NOT force-end a genuinely live call in another conversation', async () => {
+    // Regression for: initiator is on a real, freshly-beating call in
+    // conv-other; starting a NEW call in conv-123 must not kill it. Recorded
+    // heartbeat proves liveness, so the query-level conversationId exclusion
+    // isn't even what saves it here — the staleness gate must too.
+    const liveCallId = 'live-call-1';
+    const liveParticipation = {
+      id: 'live-part-1',
+      callSessionId: liveCallId,
+      leftAt: null,
+      callSession: {
+        id: liveCallId,
+        startedAt: new Date(Date.now() - 10 * 60_000),
+        conversationId: 'conv-other',
+        status: CallStatus.active,
+        answeredAt: new Date(Date.now() - 10 * 60_000)
+      }
+    };
+    const mockConversation = createMockConversation();
+    const newCall = createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([liveParticipation]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    let createTxCalled = false;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      createTxCalled = true;
+      const session = { id: 'call-123' };
+      const tx = {
+        callSession: { create: jest.fn().mockResolvedValue(session) },
+        callParticipant: { create: jest.fn().mockResolvedValue({}) }
+      };
+      return cb(tx);
+    });
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+
+    // Record a fresh heartbeat for the live call BEFORE initiating the new one.
+    callService.recordHeartbeat(liveCallId, 'live-part-1');
+
+    await callService.initiateCall(validInitiateData);
+
+    // The ONLY $transaction call must be the new-call creation — the phantom
+    // cleanup's own transaction must never fire for a call with a fresh beat.
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(createTxCalled).toBe(true);
+  });
+
+  it('P0 fix (2026-07-06): the cross-conversation query excludes the target conversationId', async () => {
+    const mockConversation = createMockConversation();
+    const newCall = createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callSession: { create: jest.fn().mockResolvedValue({ id: 'call-123' }) },
+        callParticipant: { create: jest.fn().mockResolvedValue({}) }
+      };
+      return cb(tx);
+    });
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+
+    await callService.initiateCall(validInitiateData);
+
+    const findManyCall = mockPrisma.callParticipant.findMany.mock.calls[0] as any;
+    expect(findManyCall[0].where.callSession.conversationId).toEqual({ not: 'conv-123' });
   });
 
   it('session creation transaction: creates callSession and callParticipant', async () => {
