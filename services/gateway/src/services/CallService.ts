@@ -474,6 +474,10 @@ export class CallService {
       const staleCount = this.getStaleHeartbeats(session.id, this.PHANTOM_HEARTBEAT_GRACE_MS).length;
       return staleCount >= this.getHeartbeatParticipantCount(session.id);
     }
+    // Floored at `bootedAt` (CALL-RESILIENCE item H) — right after a restart
+    // `this.heartbeats` is empty for every call regardless of true age, so an
+    // anchor on `startedAt` alone would misclassify a real, long-running call
+    // as stale the instant any sweep touches it, before clients re-beat.
     const anchorMs = Math.max(startedAtMs, this.bootedAt.getTime());
     return now.getTime() - anchorMs > this.PHANTOM_HEARTBEAT_GRACE_MS;
   }
