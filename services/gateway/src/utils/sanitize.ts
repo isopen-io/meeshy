@@ -16,6 +16,29 @@ import { NotificationTypeEnum } from '@meeshy/shared';
 
 export class SecuritySanitizer {
   /**
+   * Predicate for object keys that must never be copied from untrusted input.
+   *
+   * Single source of truth for both `sanitizeJSON` (notification metadata) and
+   * `sanitizeMongoQuery` (request.query/body middleware) — they guard the same
+   * threat model (NoSQL operator injection + prototype pollution) and must not
+   * diverge. Blocks:
+   * - `$`-prefixed keys — MongoDB operators (`$ne`, `$gt`, `$where`, ...)
+   * - `__`-prefixed keys — `__proto__` and any private-style key
+   * - `constructor` / `prototype` — prototype-pollution vectors
+   *
+   * @param key - Object key from untrusted input
+   * @returns true if the key must be dropped
+   */
+  private static isDangerousKey(key: string): boolean {
+    return (
+      key.startsWith('__') ||
+      key.startsWith('$') ||
+      key === 'constructor' ||
+      key === 'prototype'
+    );
+  }
+
+  /**
    * Sanitize plain text content - strips ALL HTML tags and dangerous characters
    * Use for: notification titles, content, message previews, usernames
    *
@@ -94,7 +117,7 @@ export class SecuritySanitizer {
 
     for (const [key, value] of Object.entries(input)) {
       // Block dangerous keys (MongoDB operators, prototype pollution)
-      if (key.startsWith('__') || key.startsWith('$') || key === 'constructor' || key === 'prototype') {
+      if (SecuritySanitizer.isDangerousKey(key)) {
         continue;
       }
 
@@ -235,8 +258,10 @@ export class SecuritySanitizer {
 
     const sanitized: any = {};
     for (const [key, value] of Object.entries(obj)) {
-      // Block MongoDB operators ($ne, $gt, $regex, $where, etc.)
-      if (key.startsWith('$')) {
+      // Block MongoDB operators ($ne, $gt, $regex, $where, ...) AND
+      // prototype-pollution keys (__proto__, constructor, prototype).
+      // Shared guard with sanitizeJSON — same threat model, one source of truth.
+      if (SecuritySanitizer.isDangerousKey(key)) {
         continue;
       }
 

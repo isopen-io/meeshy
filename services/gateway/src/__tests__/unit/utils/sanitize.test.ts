@@ -946,6 +946,42 @@ describe('SecuritySanitizer', () => {
       const result = SecuritySanitizer.sanitizeMongoQuery(input);
       expect(result.level1.level2.level3.$where).toBeUndefined();
     });
+
+    it('should block prototype pollution via __proto__', () => {
+      const input = JSON.parse('{"username":"test","__proto__":{"isAdmin":true}}');
+      const result = SecuritySanitizer.sanitizeMongoQuery(input);
+      expect(result.username).toBe('test');
+      expect(Object.prototype.hasOwnProperty.call(result, '__proto__')).toBe(false);
+      expect(({} as { isAdmin?: boolean }).isAdmin).toBeUndefined();
+    });
+
+    it('should block constructor key', () => {
+      const input = { username: 'test', constructor: { prototype: { isAdmin: true } } };
+      const result = SecuritySanitizer.sanitizeMongoQuery(input);
+      expect(result.username).toBe('test');
+      expect(Object.prototype.hasOwnProperty.call(result, 'constructor')).toBe(false);
+    });
+
+    it('should block prototype key', () => {
+      const input = { username: 'test', prototype: { isAdmin: true } };
+      const result = SecuritySanitizer.sanitizeMongoQuery(input);
+      expect(result.username).toBe('test');
+      expect(result.prototype).toBeUndefined();
+    });
+
+    it('should block any __-prefixed key', () => {
+      const input = { username: 'test', __customKey__: 'value' };
+      const result = SecuritySanitizer.sanitizeMongoQuery(input);
+      expect(result.username).toBe('test');
+      expect(Object.prototype.hasOwnProperty.call(result, '__customKey__')).toBe(false);
+    });
+
+    it('should strip prototype pollution nested inside operator-free objects', () => {
+      const input = JSON.parse('{"user":{"name":"test","__proto__":{"isAdmin":true}}}');
+      const result = SecuritySanitizer.sanitizeMongoQuery(input);
+      expect(result.user.name).toBe('test');
+      expect(Object.prototype.hasOwnProperty.call(result.user, '__proto__')).toBe(false);
+    });
   });
 
   describe('isValidNotificationType', () => {
