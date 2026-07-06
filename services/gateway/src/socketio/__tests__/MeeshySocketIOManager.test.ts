@@ -1023,6 +1023,17 @@ describe('MeeshySocketIOManager', () => {
         translatedText: 'Bonjour',
         confidenceScore: 0.95,
       });
+      // The membership guard now runs on the cached path too — the requester
+      // must be an active participant of the message's conversation.
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-cached',
+        conversationId: 'conv-mine',
+        content: 'Hello',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-t4' });
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
       await handler({ messageId: 'msg-cached', targetLanguage: 'fr' });
@@ -1033,6 +1044,32 @@ describe('MeeshySocketIOManager', () => {
       }));
     });
 
+    it('does NOT serve a cached translation to a non-participant (IDOR guard)', async () => {
+      const socket = makeSocket('sock-t4b');
+      (manager as any).socketToUser.set('sock-t4b', 'user-t4b');
+      // Cache HIT — before the fix this branch emitted the translated content
+      // with no authorization check at all.
+      (translationService.getTranslation as jest.Mock).mockResolvedValue({
+        translatedText: 'Bonjour',
+        confidenceScore: 0.95,
+      });
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-cached-foreign',
+        conversationId: 'conv-not-mine',
+        content: 'Hello',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      // Requester is not an active participant of conv-not-mine.
+      prisma.participant.findFirst.mockResolvedValue(null);
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: 'msg-cached-foreign', targetLanguage: 'fr' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Access denied' }));
+      expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
+    });
+
     it('increments translations_sent stat when translation found', async () => {
       const socket = makeSocket('sock-t5');
       (manager as any).socketToUser.set('sock-t5', 'user-t5');
@@ -1040,6 +1077,15 @@ describe('MeeshySocketIOManager', () => {
         translatedText: 'Hello',
         confidenceScore: 0.9,
       });
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-stat',
+        conversationId: 'conv-mine',
+        content: 'Bonjour',
+        originalLanguage: 'fr',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-t5' });
       const before = manager.getStats().translations_sent;
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-stat', targetLanguage: 'en' });
@@ -2396,6 +2442,15 @@ describe('MeeshySocketIOManager', () => {
       const oldTime = Date.now() - 70_000;
       (manager as any).socketRateLimits.set(rateLimitKey, Array(10).fill(oldTime));
       (translationService.getTranslation as any).mockResolvedValue({ translatedText: 'Hi', confidenceScore: 0.9 });
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-fresh2',
+        conversationId: 'conv-mine',
+        content: 'Hi there',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-rw1' });
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-fresh2', targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
@@ -2915,6 +2970,16 @@ describe('MeeshySocketIOManager', () => {
     it('emits ERROR "Failed to get translation" when getTranslation throws', async () => {
       const socket = makeSocket('sock-trans-outer-err');
       (manager as any).socketToUser.set('sock-trans-outer-err', 'user-outer-err');
+      // Message + membership resolve so execution reaches getTranslation, which throws.
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-1',
+        conversationId: 'conv-mine',
+        content: 'Hello',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-outer' });
       (translationService.getTranslation as any).mockRejectedValue(new Error('Redis crash'));
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-1', targetLanguage: 'en' });

@@ -559,4 +559,69 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       expect(mockCreateCallSummaryMessageDc).toHaveBeenCalledWith(CALL_ID);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // CALL-RESILIENCE — call:ended must reach a still-ringing callee (joined
+  // neither the call room nor the conversation room, only their own user
+  // room) when the OTHER party disconnects instead of hanging up explicitly.
+  // Regression guard for the phantom-ringing bug: leaveParticipationAndBroadcast
+  // used to emit only to ROOMS.call/ROOMS.conversation, bypassing the shared
+  // broadcastCallEnded/resolveCallEndedRooms fanout that call:end already uses.
+  // -------------------------------------------------------------------------
+
+  describe('CALL-RESILIENCE: call:ended reaches a still-ringing callee via user-room fanout', () => {
+    it('fans call:ended out to every active member\'s user room when leaveCall itself ends the call', async () => {
+      const leftSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'ended',
+        duration: 12,
+        endReason: 'completed',
+        mode: 'p2p',
+      };
+      mockLeaveCallDc.mockResolvedValue(leftSession);
+
+      const prisma = makePrisma();
+      (prisma as any).participant = {
+        findMany: jest.fn<any>().mockResolvedValue([{ userId: 'still-ringing-callee' }]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      const roomsPassedToIo = (io.to as jest.MockedFunction<any>).mock.calls
+        .map(([rooms]) => rooms)
+        .flat();
+      expect(roomsPassedToIo).toContain(ROOMS.user('still-ringing-callee'));
+      expect(roomEmit).toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.objectContaining({ callId: CALL_ID }));
+    });
+
+    it('fans call:ended out to every active member\'s user room via the force-cleanup path', async () => {
+      mockLeaveCallDc.mockRejectedValue(new Error('DB error'));
+
+      const prisma = makePrisma();
+      (prisma as any).participant = {
+        findMany: jest.fn<any>().mockResolvedValue([{ userId: 'still-ringing-callee' }]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      const roomsPassedToIo = (io.to as jest.MockedFunction<any>).mock.calls
+        .map(([rooms]) => rooms)
+        .flat();
+      expect(roomsPassedToIo).toContain(ROOMS.user('still-ringing-callee'));
+      expect(roomEmit).toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.objectContaining({ callId: CALL_ID }));
+    });
+  });
 });

@@ -23,6 +23,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -60,6 +61,8 @@ data class ChatUiState(
     val hasMoreOlder: Boolean = true,
     val imageViewer: ImageViewerTarget? = null,
     val search: ChatSearchState = ChatSearchState(),
+    val mention: MentionAutocompleteState = MentionAutocompleteState(),
+    val mentionDisplayNames: Map<String, String> = emptyMap(),
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -89,6 +92,7 @@ class ChatViewModel @Inject constructor(
     private val showingOriginal = MutableStateFlow<Set<String>>(emptySet())
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
+    private var mentionRoster: List<MentionCandidate> = emptyList()
     private var isEmittingTyping = false
     private var typingReemitJob: Job? = null
     private var typingIdleJob: Job? = null
@@ -110,10 +114,16 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
                 if (conversation == null) return@collect
+                val roster = MentionRoster.fromParticipants(
+                    participants = conversation.participants,
+                    excludeUserId = sessionRepository.currentUser.value?.id,
+                )
+                mentionRoster = roster
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(),
                         accentColorHex = conversation.accentHex(),
+                        mentionDisplayNames = MentionRoster.displayNames(roster),
                     )
                 }
             }
@@ -247,11 +257,22 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onDraftChange(value: String) {
-        _state.update { it.copy(draft = value) }
+        _state.update { it.copy(draft = value, mention = it.mention.onTextChange(value, mentionRoster)) }
         if (value.isBlank()) {
             stopTypingEmission()
         } else {
             startTypingEmission()
+        }
+    }
+
+    /**
+     * Insert the picked candidate's handle into the draft (replacing the trailing
+     * `@fragment`), record it as a draft mention, and dismiss the suggestion panel.
+     */
+    fun onMentionSelected(candidate: MentionCandidate) {
+        _state.update { current ->
+            val (newDraft, newMention) = current.mention.select(candidate, current.draft)
+            current.copy(draft = newDraft, mention = newMention)
         }
     }
 
@@ -304,7 +325,7 @@ class ChatViewModel @Inject constructor(
         }
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = _state.value.replyingToMessageId
-        _state.update { it.copy(draft = "", replyingToMessageId = null) }
+        _state.update { it.copy(draft = "", replyingToMessageId = null, mention = it.mention.reset()) }
         viewModelScope.launch {
             try {
                 messageRepository.sendOptimistic(

@@ -226,12 +226,19 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
     /// appel démarré entre-temps héritait d'un état « vidéo suspendue »
     /// fantôme qu'aucun resume ne viendrait lever.
     private var generation = 0
+    /// Cancelled by `reset()` so a call ending mid-transition doesn't leave the
+    /// suspend/resume renegotiation running for up to `transitionTimeout` (20s
+    /// default) after the call has visibly ended — cancellation makes the
+    /// `Task.sleep` timeout race resolve immediately instead of waiting it out.
+    private var transitionTask: Task<Void, Never>?
 
     func reset() {
         state = .initial
         isVideoSuspended = false
         isTransitioning = false
         generation += 1
+        transitionTask?.cancel()
+        transitionTask = nil
     }
 
     private func performTransition(suspend: Bool) {
@@ -239,7 +246,7 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
         isTransitioning = true
         let timeoutSeconds = transitionTimeout
         let generation = self.generation
-        Task { [weak self] in
+        transitionTask = Task { [weak self] in
             // Race the (possibly hanging) renegotiation against a timeout. A
             // timeout is treated as a failure: we revert and let a later sustained
             // streak retry, and crucially `isTransitioning` is always cleared.
@@ -274,6 +281,7 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
                 }
             }
             self.isTransitioning = false
+            self.transitionTask = nil
         }
     }
 }

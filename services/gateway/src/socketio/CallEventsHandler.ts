@@ -576,15 +576,17 @@ export class CallEventsHandler {
 
       const dcStatus = leftSession.status as string;
       if (dcStatus === 'ended' || dcStatus === 'missed') {
-        this.clearQualityDegradedStreaks(participation.callSessionId);
         const dcEndedEvent: CallEndedEvent = {
           callId: leftSession.id,
           duration: leftSession.duration || 0,
           endedBy: userId,
           reason: (leftSession.endReason || 'completed') as CallEndReason
         };
-        io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
-        io.to(ROOMS.conversation(leftSession.conversationId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
+        // CALL-RESILIENCE — use the shared fanout (call + conversation + every
+        // active member's user room), not a narrow two-room emit: a still-ringing
+        // callee has joined neither room yet and would otherwise keep ringing
+        // until its own client-side timeout (see resolveCallEndedRooms).
+        await this.broadcastCallEnded(io, leftSession.id, leftSession.conversationId, dcEndedEvent);
         await this.postCallSummary(leftSession.id);
       }
 
@@ -641,7 +643,6 @@ export class CallEventsHandler {
           );
 
           if (forceEnded) {
-            this.clearQualityDegradedStreaks(participation.callSessionId);
             logger.info('✅ Socket: Force-ended call after disconnect error', {
               callId: participation.callSessionId,
               duration: forceEnded.duration
@@ -653,8 +654,12 @@ export class CallEventsHandler {
               endedBy: userId,
               reason: CallEndReason.connectionLost
             };
-            io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
-            io.to(ROOMS.conversation(participation.callSession.conversationId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
+            await this.broadcastCallEnded(
+              io,
+              participation.callSessionId,
+              participation.callSession.conversationId,
+              dcForceEndedEvent
+            );
             await this.postCallSummary(participation.callSessionId);
           }
         }
@@ -1512,13 +1517,17 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
+          ack?.({ success: false, error: 'User not authenticated' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
             message: 'User not authenticated'
           } as CallError);
           return;
         }
-        if (denyAnonymous()) return;
+        if (denyAnonymous()) {
+          ack?.({ success: false, error: 'Anonymous users cannot join calls' } as unknown as CallJoinAck);
+          return;
+        }
         rememberAuth(userId);
 
         // CVE-002: Rate limiting check
@@ -1529,12 +1538,16 @@ export class CallEventsHandler {
           this.rateLimiter,
           CALL_EVENTS.ERROR
         );
-        if (!rateLimitPassed) return;
+        if (!rateLimitPassed) {
+          ack?.({ success: false, error: 'Rate limit exceeded' } as unknown as CallJoinAck);
+          return;
+        }
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketJoinCallSchema, data);
         if (isValidationFailure(validation)) {
           const { error: validationError, details: validationDetails } = validation;
+          ack?.({ success: false, error: validationError } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
@@ -1558,6 +1571,7 @@ export class CallEventsHandler {
         // Resolve participantId from userId + callId
         const joinParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!joinParticipantId) {
+          ack?.({ success: false, error: 'You are not a participant in this conversation' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'
@@ -1764,6 +1778,7 @@ export class CallEventsHandler {
           ? errorMessage.split(':').slice(1).join(':').trim()
           : errorMessage;
 
+        ack?.({ success: false, error: message } as unknown as CallJoinAck);
         socket.emit(CALL_EVENTS.ERROR, {
           code: errorCode,
           message
@@ -2085,8 +2100,9 @@ export class CallEventsHandler {
                   reason: (callSession.endReason || 'completed') as CallEndReason
                 };
 
-                io.to(ROOMS.call(call.id)).emit(CALL_EVENTS.ENDED, endedEvent);
-                io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+                // CALL-RESILIENCE — shared fanout (call + conversation + every
+                // active member's user room); see broadcastCallEnded.
+                await this.broadcastCallEnded(io, callSession.id, callSession.conversationId, endedEvent);
 
                 // P3 — post the call-summary system message (idempotent).
                 await this.postCallSummary(callSession.id);

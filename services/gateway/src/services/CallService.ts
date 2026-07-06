@@ -366,6 +366,17 @@ export class CallService {
         data: { leftAt: now }
       });
       return true;
+    }).catch((error) => {
+      // Same protocol as joinCall/endCall/leaveCall (isTransientWriteConflict's
+      // doc comment): a P2034 here means another terminal writer (call:end,
+      // call:leave, the ringing-timeout GC) touched this same CallSession
+      // document concurrently and won — functionally identical to this
+      // transaction's own `updated.count === 0` no-op above, not a real
+      // failure. Without this, it was misreported to the caller's catch as
+      // "force cleanup also failed" and could leave the call non-terminal
+      // until the 60s GC tier reaps it.
+      if (this.isTransientWriteConflict(error)) return false;
+      throw error;
     });
 
     if (!ended) return null;
@@ -821,6 +832,7 @@ export class CallService {
         });
 
         this.clearHeartbeats(activeCall.id);
+        this.clearRingingTimeout(activeCall.id);
         await this.releaseActiveCallClaim(conversationId, activeCall.id);
 
         logger.info('Zombie call cleaned up', { zombieCallId: activeCall.id });
@@ -1221,7 +1233,7 @@ export class CallService {
       }).then(
         () => 'ended' as const,
         (error) => {
-          if (error === idemVersionConflict) {
+          if (error === idemVersionConflict || this.isTransientWriteConflict(error)) {
             return 'conflict' as const;
           }
           throw error;

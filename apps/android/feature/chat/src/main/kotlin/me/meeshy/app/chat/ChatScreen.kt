@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -82,6 +83,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -198,17 +200,24 @@ fun ChatScreen(
             val replyTarget = state.replyingToMessageId?.let { id ->
                 state.messages.firstOrNull { it.messageId == id }
             }
-            ChatComposer(
-                draft = state.draft,
-                canSend = state.canSend,
-                isEditing = state.isEditing,
-                replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
-                accentColor = accentColor,
-                onDraftChange = viewModel::onDraftChange,
-                onSend = viewModel::send,
-                onCancelEdit = viewModel::cancelEdit,
-                onCancelReply = viewModel::cancelReply,
-            )
+            Column {
+                MentionSuggestionStrip(
+                    mention = state.mention,
+                    accentColor = accentColor,
+                    onSelect = viewModel::onMentionSelected,
+                )
+                ChatComposer(
+                    draft = state.draft,
+                    canSend = state.canSend,
+                    isEditing = state.isEditing,
+                    replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
+                    accentColor = accentColor,
+                    onDraftChange = viewModel::onDraftChange,
+                    onSend = viewModel::send,
+                    onCancelEdit = viewModel::cancelEdit,
+                    onCancelReply = viewModel::cancelReply,
+                )
+            }
         },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -252,6 +261,7 @@ fun ChatScreen(
                                     MessageBubble(
                                         content = bubble,
                                         outgoingColor = accentColor,
+                                        mentionDisplayNames = state.mentionDisplayNames.ifEmpty { null },
                                         highlightTerm = state.search.highlightTerm,
                                         onLongPress = {
                                             viewModel.onMessageLongPress(bubble.messageId)
@@ -569,6 +579,62 @@ private fun TypingIndicator(typingUsers: List<String>, modifier: Modifier = Modi
         color = MeeshyTheme.tokens.textSecondary,
         modifier = modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
     )
+}
+
+/**
+ * Autocomplete panel floating above the composer while an `@mention` is in
+ * progress. Neutral surface (input-assistance chrome, like the keyboard's suggestion
+ * bar) — the accent tint stays reserved for message-content surfaces. Rows are
+ * capped and scroll; tapping one inserts the handle via [onSelect].
+ */
+@Composable
+private fun MentionSuggestionStrip(
+    mention: MentionAutocompleteState,
+    accentColor: Color,
+    onSelect: (me.meeshy.sdk.model.MentionCandidate) -> Unit,
+) {
+    if (!mention.isActive || mention.suggestions.isEmpty()) return
+    Surface(
+        color = MeeshyTheme.tokens.backgroundSecondary,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
+            items(mention.suggestions, key = { it.id }) { candidate ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(candidate) }
+                        .semantics { role = Role.Button }
+                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+                ) {
+                    MeeshyAvatar(
+                        name = candidate.displayName,
+                        size = 36.dp,
+                        containerColor = accentColor,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = candidate.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MeeshyTheme.tokens.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "@${candidate.username}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MeeshyTheme.tokens.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -1806,7 +1806,9 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
     /// and settled at `.connected` so the CallKit elapsed timer reflects the
     /// REAL connection, not the tap (user-reported "0:00 before the connection
     /// exists"). The settlement sites must exist: fulfill at connect, fail on
-    /// pre-connect teardown, 10 s safety net inside holdPendingAnswerAction.
+    /// pre-connect teardown, safety net inside holdPendingAnswerAction
+    /// (QualityThresholds.pendingAnswerActionSafetyNetSeconds — kept strictly
+    /// greater than sdpOfferTimeoutSeconds so it can never fire first).
     ///
     /// [Fix 2026-07-03] `CXProvider.setDelegate(_:queue: nil)` dispatches on
     /// CallKit's own private serial queue, NOT main — a `Thread.isMainThread`
