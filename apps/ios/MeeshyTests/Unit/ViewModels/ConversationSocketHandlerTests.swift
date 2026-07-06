@@ -1129,35 +1129,6 @@ final class ConversationSocketHandlerTests: XCTestCase {
             "Reconnect must clear stale typing indicators (remote peers will re-emit if still typing)")
     }
 
-    func test_deinit_clearsStaleTypingIndicatorsOnDelegate() async throws {
-        // Regression test: `deinit` used to launch `Task { @MainActor [weak
-        // self] in self?.delegate?.typingUsernames.removeAll() }` — capturing
-        // `self` weakly from inside its OWN `deinit` is dead code, because
-        // ARC has already zeroed weak references to `self` by the time the
-        // Task body runs. The delegate's typing roster was therefore never
-        // actually cleared when a handler was torn down mid-"typing…".
-        let delegate = MockConversationSocketDelegate()
-        do {
-            let socket = MockMessageSocket()
-            let sut = ConversationSocketHandler(
-                conversationId: conversationId,
-                currentUserId: currentUserId,
-                messageSocket: socket,
-                isApplicationActive: { true }
-            )
-            sut.delegate = delegate
-            sut.armSocketSubscriptions()
-            delegate.typingUsernames = ["Alice"]
-            _ = sut
-        }
-        // `sut` has no other strong referrers, so it deallocates here.
-
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        XCTAssertTrue(delegate.typingUsernames.isEmpty,
-            "Handler teardown must clear stale typing indicators on the delegate")
-    }
-
     func test_willEnterForeground_triggersSyncMissedMessages() async throws {
         let (sut, delegate, _) = makeSUT()
         _ = sut

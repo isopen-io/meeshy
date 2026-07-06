@@ -25,7 +25,6 @@ const GRACE_EXPIRY_MS = 31_000;
 
 const mockLeaveCallDc = jest.fn<any>();
 const mockCreateCallSummaryMessageDc = jest.fn<any>();
-const mockForceEndOrphanedCallSessionDc = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -40,7 +39,6 @@ jest.mock('../../../services/CallService', () => ({
     scheduleRingingTimeout: jest.fn<any>(),
     listHistory: jest.fn<any>(),
     handleMissedCall: jest.fn<any>(),
-    forceEndOrphanedCallSession: mockForceEndOrphanedCallSessionDc,
   })),
 }));
 
@@ -207,11 +205,6 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockCreateCallSummaryMessageDc.mockResolvedValue(null);
-    // Terminal write now goes through CallService.forceEndOrphanedCallSession
-    // (status-guarded + version-bumped) instead of a raw callSession.update
-    // inside the $transaction above — see CallService.test.ts for its own
-    // unit coverage. Default: succeeds, matching the count=0 fixtures below.
-    mockForceEndOrphanedCallSessionDc.mockResolvedValue({ duration: 60, conversationId: CONV_ID });
   });
 
   afterEach(() => {

@@ -105,7 +105,7 @@ struct LoginView: View {
                             endPoint: .trailing
                         )
                     )
-                    .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: MeeshyShadow.strong.radius, x: 0, y: 4)
+                    .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
                     .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.lg)
                     .accessibilityAddTraits(.isHeader)
 
@@ -514,7 +514,7 @@ struct LoginView: View {
                         )
                     )
                     .frame(height: 52)
-                    .shadow(color: MeeshyColors.error.opacity(isDark ? 0.4 : 0.2), radius: MeeshyShadow.strong.radius, y: 6)
+                    .shadow(color: MeeshyColors.error.opacity(isDark ? 0.4 : 0.2), radius: 12, y: 6)
 
                 if authManager.isLoading {
                     ProgressView().tint(.white)
@@ -561,8 +561,8 @@ struct LoginView: View {
                         Text(env.label)
                             .font(MeeshyFont.relative(11, weight: selectedEnv == env ? .bold : .medium))
                             .foregroundColor(selectedEnv == env ? .white : theme.textMuted)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                            .padding(.horizontal, MeeshySpacing.sm + 2)
+                            .padding(.vertical, MeeshySpacing.xs + 1)
                             .background(
                                 Capsule().fill(
                                     selectedEnv == env

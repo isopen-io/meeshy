@@ -421,6 +421,33 @@ describe('notificationSocketIO singleton', () => {
     });
   });
 
+  // ── setupEventListeners() → notification (legacy) ────────────────────────
+
+  describe('event: notification (legacy)', () => {
+    it('handles legacy notification event the same as notification:new', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onNotification(cb);
+
+      await notificationSocketIO.connect('tok');
+      const data = makeNotificationData({ id: 'legacy-1' });
+      currentSocketMock!._emit('notification', data);
+
+      expect(cb).toHaveBeenCalledTimes(1);
+      expect(cb.mock.calls[0][0].id).toBe('legacy-1');
+    });
+
+    it('both notification and notification:new trigger the same callbacks', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onNotification(cb);
+
+      await notificationSocketIO.connect('tok');
+      currentSocketMock!._emit('notification', makeNotificationData({ id: 'n1' }));
+      currentSocketMock!._emit('notification:new', makeNotificationData({ id: 'n2' }));
+
+      expect(cb).toHaveBeenCalledTimes(2);
+    });
+  });
+
   // ── setupEventListeners() → authenticated / error (no-op) ────────────────
 
   describe('event: authenticated and error (no-op handlers)', () => {

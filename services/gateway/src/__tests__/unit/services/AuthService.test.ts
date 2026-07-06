@@ -116,9 +116,12 @@ jest.mock('../../../utils/normalize', () => ({
     return trimmed;
   }),
   capitalizeName: jest.fn((name: string) => {
-    return name.trim().toLowerCase().replace(/(^|[\s'.-])(\p{L})/gu, (_m: string, sep: string, l: string) => sep + l.toUpperCase());
+    return name.trim().split(' ').map(word => {
+      if (word.length === 0) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }).join(' ');
   }),
-  normalizeDisplayName: jest.fn((displayName: string) => displayName.trim().replace(/[\r\n\t]/g, '')),
+  normalizeDisplayName: jest.fn((displayName: string) => displayName.trim().replace(/[\n\t]/g, '')),
   normalizePhoneNumber: jest.fn((phone: string) => {
     if (!phone) return '';
     let cleaned = phone.replace(/[\s\-().]/g, '');

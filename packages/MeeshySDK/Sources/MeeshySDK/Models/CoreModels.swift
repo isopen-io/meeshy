@@ -411,7 +411,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
         self.updatedAt = try c.decode(Date.self, forKey: .updatedAt)
 
-        self.lastMessagePreview = try c.decodeIfPresent(String.self, forKey: .lastMessagePreview)?.meeshyPreviewTruncated
+        self.lastMessagePreview = try c.decodeIfPresent(String.self, forKey: .lastMessagePreview)
         self.lastMessageTranslations = try c.decodeIfPresent([String: String].self, forKey: .lastMessageTranslations)
         self.lastMessageOriginalLanguage = try c.decodeIfPresent(String.self, forKey: .lastMessageOriginalLanguage)
         self.lastMessageAttachments = try c.decodeIfPresent([MeeshyMessageAttachment].self, forKey: .lastMessageAttachments) ?? []

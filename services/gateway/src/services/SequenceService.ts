@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 /**
  * SyncEngine unifié (spec §5, A1) — allocation atomique d'un numéro de séquence

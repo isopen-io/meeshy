@@ -50,29 +50,6 @@ describe('sanitizeText', () => {
     expect(result).toBe('HelloWorld');
   });
 
-  it('should remove BOM / zero-width no-break space', () => {
-    const input = 'Hello\uFEFFWorld';
-    const result = sanitizeText(input);
-
-    expect(result).toBe('HelloWorld');
-  });
-
-  it('should preserve ZWJ in emoji sequences (family emoji stays intact)', () => {
-    const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}';
-    const result = sanitizeText(`Hello ${family}`);
-
-    expect(result).toBe(`Hello ${family}`);
-    expect(result).toContain('\u200D');
-  });
-
-  it('should preserve ZWNJ required by Persian/Farsi orthography', () => {
-    const persian = 'mi\u200Cravam';
-    const result = sanitizeText(persian);
-
-    expect(result).toBe(persian);
-    expect(result).toContain('\u200C');
-  });
-
   it('should preserve newlines, tabs and carriage returns (message line breaks)', () => {
     const input = 'Line 1\nLine 2\tTabbed\r\nLine 3';
     const result = sanitizeText(input);

@@ -717,21 +717,16 @@ protocol WebRTCClientProviding: AnyObject {
     /// established. Valid characters: 0-9, A-D, *, #, comma (2 s pause).
     func sendDTMF(digits: String)
     func disconnect()
-    /// Same teardown as `disconnect()`, but first gives a just-enqueued
-    /// DataChannel send (e.g. the local hangup `bye`, see `sendHangupBye()`)
-    /// a bounded grace period to actually reach the wire before the
-    /// transport is destroyed. `RTCDataChannel.sendData` only enqueues onto
-    /// libwebrtc's SCTP thread — closing the peer connection immediately
-    /// after can silently drop an unflushed send. No-op difference from
-    /// `disconnect()` when nothing is buffered.
-    func disconnectAfterFlushingPendingSend()
 
+    var audioEffectsService: CallAudioEffectsServiceProviding? { get }
     var videoFilterPipeline: VideoFilterPipeline { get }
+    func setAudioEffect(_ effect: AudioEffectConfig?) throws
+    func updateAudioEffectParams(_ config: AudioEffectConfig) throws
 }
 
 // MARK: - DataChannel Transcription Message
 
-nonisolated struct DataChannelTranscriptionMessage: Codable, Sendable, Equatable {
+struct DataChannelTranscriptionMessage: Codable, Sendable {
     let type: String  // "transcription-segment"
     let text: String
     let speakerId: String
@@ -740,43 +735,6 @@ nonisolated struct DataChannelTranscriptionMessage: Codable, Sendable, Equatable
     let language: String
     let translatedText: String?
     let translatedLanguage: String?
-}
-
-// MARK: - DataChannel Control Messages
-
-/// Message de CONTRÔLE in-band sur le data channel — enveloppe minimale
-/// `{type, reason?}`. Le type `"bye"` signale le raccroché du pair en P2P
-/// direct : zéro aller-retour serveur, l'autre bout coupe instantanément
-/// (parité WhatsApp). Le fanout socket `call:ended` reste le chemin
-/// AUTORITATIF (et le seul qui atteint un pair dont le média est déjà mort) ;
-/// le bye n'est qu'un raccourci — les deux chemins sont dédupliqués par le
-/// garde `.ended` de `handleRemoteEnd`.
-nonisolated struct DataChannelControlMessage: Codable, Sendable, Equatable {
-    let type: String
-    let reason: String?
-}
-
-/// Routage typé des messages entrants du data channel. Pur et testable :
-/// une seule passe de décodage décide bye / segment de transcription / bruit
-/// (ping keep-alive, payload inconnu d'une version future).
-/// `nonisolated` : value type pur, décodable depuis n'importe quel contexte
-/// (le callback data channel WebRTC arrive hors main thread).
-nonisolated enum DataChannelInbound: Equatable {
-    case bye(reason: String?)
-    case transcription(DataChannelTranscriptionMessage)
-    case ignored
-
-    static func decode(_ data: Data) -> DataChannelInbound {
-        if let segment = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: data),
-           segment.type == "transcription-segment" {
-            return .transcription(segment)
-        }
-        if let control = try? JSONDecoder().decode(DataChannelControlMessage.self, from: data),
-           control.type == "bye" {
-            return .bye(reason: control.reason)
-        }
-        return .ignored
-    }
 }
 
 // MARK: - WebRTC Client Delegate
@@ -1031,17 +989,11 @@ nonisolated enum QualityThresholds {
     static let outgoingRingTimeoutSeconds: TimeInterval = 45.0
 
     /// Default TURN credential TTL (seconds) used when the signalling path does
-    /// not carry an explicit `ttl` field (VoIP push, socket-only incoming — neither
-    /// payload carries a `ttl`). Mirrors the gateway's own default
-    /// (`TURNCredentialService.credentialTTL`, `services/gateway/src/services/TURNCredentialService.ts`,
-    /// `TURN_CREDENTIAL_TTL` env, 24h) rather than guessing a shorter window: the
-    /// gateway raised its default from 600s to 86400s (CALL-FIX 2026-06-25) after the
-    /// short value silently killed TURN-relayed calls once credentials expired mid-call.
-    /// A client-side guess much shorter than the real TTL only costs an extra refresh
-    /// round-trip (harmless), but one that's a fraction of the true value — like the
-    /// previous 480s here — would have been actively misleading documentation for
-    /// anyone tuning this against the gateway.
-    static let turnDefaultCredentialTTLSeconds: TimeInterval = 86400
+    /// not carry an explicit `ttl` field (VoIP push, socket-only incoming). The
+    /// 80%-of-TTL refresh fires at 384 s — well before any standard TURN server
+    /// eviction window (Coturn default 600 s; Meeshy gateway issues 480 s by
+    /// default so credentials stay valid for the first 96 s after refresh).
+    static let turnDefaultCredentialTTLSeconds: TimeInterval = 480
 
     /// Minimum delay (seconds) before a TURN credential refresh, regardless of
     /// the TTL reported by the gateway. Guards against a malformed TTL=0 response
@@ -1085,15 +1037,6 @@ nonisolated enum QualityThresholds {
     /// How often the data-channel keep-alive ping fires. 15 s matches the
     /// TURN server's minimum activity requirement (Coturn refreshTimeout).
     static let dataChannelPingIntervalSeconds: TimeInterval = 15
-
-    /// Bound on how long `disconnectAfterFlushingPendingSend()` waits for a
-    /// just-enqueued DataChannel send (the local hangup `bye`) to actually
-    /// reach the wire before forcing teardown regardless. A stuck/never-
-    /// draining buffer (peer already gone) must not delay hangup indefinitely.
-    static let dataChannelFlushTimeoutMilliseconds: Int = 200
-
-    /// Poll interval while waiting for `dataChannelFlushTimeoutMilliseconds`.
-    static let dataChannelFlushPollIntervalMilliseconds: Int = 20
 
     /// How long a remote-quality-degraded badge stays visible before it
     /// auto-resets to healthy. 15 s is long enough to be meaningful without

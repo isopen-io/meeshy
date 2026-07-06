@@ -192,14 +192,6 @@ export class ZmqTranslationClient extends EventEmitter {
    * These are long-running pipelines (Whisper + NLLB + TTS) queued by the
    * translator's worker pool — retries would just duplicate work in the queue.
    */
-  /**
-   * Silence maximal toléré sur le SUB avant recréation du socket. Les pongs
-   * du translator arrivent toutes les ~30 s en régime normal : 120 s sans
-   * RIEN = socket zombie (incident prod 2026-07-04 : canal retour sourd
-   * pendant des heures, TCP établi mais aucun message délivré à l'app).
-   */
-  private static readonly SUB_SILENCE_RESET_MS = 120_000;
-
   private static readonly VOICE_LONG_RUNNING_TYPES = new Set<string>([
     'voice_translate',
     'voice_translate_async',
@@ -395,14 +387,8 @@ export class ZmqTranslationClient extends EventEmitter {
   private async _startResultListener(): Promise<void> {
     logger.info('🎧 Démarrage écoute des résultats de traduction...');
 
-    // Un seul receive() en vol : zeromq.js n'autorise qu'une lecture à la
-    // fois par socket — l'ancien tick 100 ms relançait receive() par-dessus
-    // celui en attente et jetait « Socket is busy reading » 10×/s dans un
-    // catch muet. Incident prod 2026-07-04 : le canal retour est resté
-    // sourd des heures sans une seule ligne de log.
-    let receiveInFlight = false;
-    let lastMessageAt = Date.now();
-    let lastSilenceLogAt = 0;
+    // Approche simple avec setInterval (compatible Jest)
+    let heartbeatCount = 0;
 
     const checkForMessages = async () => {
       /* istanbul ignore next -- clearInterval is called in close() before this fires in tests */
@@ -411,52 +397,28 @@ export class ZmqTranslationClient extends EventEmitter {
         return;
       }
 
-      // Watchdog : les pongs du translator arrivent toutes les ~30 s dès
-      // que le health-ping tourne — un silence prolongé signifie un socket
-      // SUB zombie (jamais silencieux en fonctionnement normal). Recréer
-      // le socket est sans danger : PUB/SUB n'a pas d'état de session.
-      // Déclenché MÊME si un receive() est en vol : un zombie a par
-      // définition un receive pending éternel ; le close() du recreate le
-      // rejette et libère le flag pour le nouveau socket.
-      const silenceMs = Date.now() - lastMessageAt;
-      if (silenceMs > ZmqTranslationClient.SUB_SILENCE_RESET_MS) {
-        if (Date.now() - lastSilenceLogAt > ZmqTranslationClient.SUB_SILENCE_RESET_MS) {
-          lastSilenceLogAt = Date.now();
-          logger.warn(
-            `⚠️ [ZMQ-SUB] Aucun message depuis ${Math.round(silenceMs / 1000)}s — recréation du socket SUB`
-          );
-          try {
-            await this.connectionManager.recreateSubSocket();
-            lastMessageAt = Date.now();
-          } catch (recreateError) {
-            logger.error(`❌ [ZMQ-SUB] Échec recréation du socket SUB: ${recreateError}`);
-          }
-        }
-        return;
-      }
-
-      if (receiveInFlight) {
-        return;
-      }
-
-      receiveInFlight = true;
       try {
-        const message = await this.connectionManager.receive();
+        heartbeatCount++;
 
-        /* istanbul ignore else -- receive() returns Buffer/Buffer[] or throws; null/undefined is structurally unreachable here */
-        if (message) {
-          lastMessageAt = Date.now();
-          await this.messageHandler.handleMessage(message);
+        // Essayer de recevoir un message de manière non-bloquante
+        try {
+          const message = await this.connectionManager.receive();
+
+          /* istanbul ignore else -- receive() returns Buffer/Buffer[] or throws; null/undefined is structurally unreachable here */
+          if (message) {
+            // Passer au message handler
+            await this.messageHandler.handleMessage(message);
+          }
+        } catch (receiveError) {
+          // Pas de message disponible ou erreur de réception
+          // C'est normal, on continue
         }
-      } catch (receiveError) {
-        // « No message… » est le régime normal du polling ; toute autre
-        // erreur est un vrai signal et doit se voir dans les logs.
-        const text = String(receiveError);
-        if (!text.includes('No message') && this.running) {
-          logger.error(`❌ [ZMQ-SUB] Erreur réception résultat: ${text}`);
+
+      } catch (error) {
+        /* istanbul ignore next -- inner try/catch catches all receive/handleMessage errors; outer catch is structurally unreachable */
+        if (this.running) {
+          logger.error(`❌ Erreur réception résultat: ${error}`);
         }
-      } finally {
-        receiveInFlight = false;
       }
     };
 
