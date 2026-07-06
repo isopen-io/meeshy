@@ -108,7 +108,9 @@ describe('CommentReactionService', () => {
         findMany: jest.fn(),
         deleteMany: jest.fn(),
         // Compteur autoritaire lu dans updateCommentReactionSummary (sync likeCount).
-        count: jest.fn().mockResolvedValue(1)
+        count: jest.fn().mockResolvedValue(1),
+        // Ventilation + total autoritaires recomputés dans updateCommentReactionSummary.
+        groupBy: jest.fn().mockResolvedValue([])
       },
       user: {
         findMany: jest.fn().mockResolvedValue([])
@@ -154,7 +156,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
-          commentReaction: { count: mockPrisma.commentReaction.count },
+          commentReaction: { count: mockPrisma.commentReaction.count, groupBy: mockPrisma.commentReaction.groupBy },
         });
       });
     });
@@ -323,7 +325,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
-          commentReaction: { count: mockPrisma.commentReaction.count },
+          commentReaction: { count: mockPrisma.commentReaction.count, groupBy: mockPrisma.commentReaction.groupBy },
         });
       });
     });
@@ -1043,7 +1045,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
-          commentReaction: { count: mockPrisma.commentReaction.count },
+          commentReaction: { count: mockPrisma.commentReaction.count, groupBy: mockPrisma.commentReaction.groupBy },
         });
       });
     });
@@ -1091,7 +1093,7 @@ describe('CommentReactionService', () => {
   // TRANSACTION WRAPS REACTION SUMMARY (Fix 3)
   // ==============================================
 
-  describe('updateCommentReactionSummary — uses $transaction', () => {
+  describe('updateCommentReactionSummary — $transaction + authoritative groupBy recompute', () => {
     beforeEach(() => {
       mockPrisma.postComment.findUnique.mockResolvedValue(createMockPostComment());
       mockPrisma.commentReaction.findMany.mockResolvedValue([]);
@@ -1104,7 +1106,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
-          commentReaction: { count: mockPrisma.commentReaction.count },
+          commentReaction: { count: mockPrisma.commentReaction.count, groupBy: mockPrisma.commentReaction.groupBy },
         });
       });
     });
@@ -1141,6 +1143,74 @@ describe('CommentReactionService', () => {
       });
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('test_addReaction_writesReactionSummaryFromGroupBy_notDelta', async () => {
+      // La carte reactionSummary DOIT être recomputée depuis groupBy(CommentReaction),
+      // pas dérivée par delta de la valeur préalable (auto-réparant vs emoji fantôme).
+      mockPrisma.postComment.findUnique.mockResolvedValue(
+        createMockPostComment({ reactionSummary: { '🔥': 99 }, reactionCount: 99 })
+      );
+      mockPrisma.commentReaction.groupBy.mockResolvedValue([
+        { emoji: '👍', _count: { emoji: 3 } },
+        { emoji: '❤️', _count: { emoji: 2 } }
+      ]);
+
+      await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '❤️'
+      });
+
+      expect(mockPrisma.commentReaction.groupBy).toHaveBeenCalledWith({
+        by: ['emoji'],
+        where: { commentId: testCommentId },
+        _count: { emoji: true }
+      });
+      expect(mockPrisma.postComment.update).toHaveBeenCalledWith({
+        where: { id: testCommentId },
+        data: { reactionSummary: { '👍': 3, '❤️': 2 }, reactionCount: 5, likeCount: 5 }
+      });
+    });
+
+    it('test_removeReaction_writesReactionSummaryFromGroupBy_notDelta', async () => {
+      mockPrisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.postComment.findUnique.mockResolvedValue(
+        createMockPostComment({ reactionSummary: { '👍': 3 }, reactionCount: 3 })
+      );
+      mockPrisma.commentReaction.groupBy.mockResolvedValue([
+        { emoji: '👍', _count: { emoji: 2 } }
+      ]);
+
+      await service.removeReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.postComment.update).toHaveBeenCalledWith({
+        where: { id: testCommentId },
+        data: { reactionSummary: { '👍': 2 }, reactionCount: 2, likeCount: 2 }
+      });
+    });
+
+    it('test_lastReactionRemoved_writesEmptySummaryAndZeroCounts', async () => {
+      mockPrisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.postComment.findUnique.mockResolvedValue(
+        createMockPostComment({ reactionSummary: { '👍': 1 }, reactionCount: 1 })
+      );
+      mockPrisma.commentReaction.groupBy.mockResolvedValue([]);
+
+      await service.removeReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.postComment.update).toHaveBeenCalledWith({
+        where: { id: testCommentId },
+        data: { reactionSummary: {}, reactionCount: 0, likeCount: 0 }
+      });
     });
   });
 
