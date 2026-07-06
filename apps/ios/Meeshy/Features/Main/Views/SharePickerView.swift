@@ -299,7 +299,7 @@ struct SharePickerView: View {
             // Fixed control-sized status glyph (26pt): fills the row's trailing action
             // slot at a deliberate control size, not reading text (74i/86i doctrine).
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 26))
+                .font(MeeshyFont.relative(26))
                 .foregroundColor(MeeshyColors.success)
                 .transition(.scale.combined(with: .opacity))
                 .accessibilityLabel(String(localized: "share.sent", defaultValue: "Envoy\u{00e9}", bundle: .main))
@@ -313,7 +313,7 @@ struct SharePickerView: View {
             } label: {
                 // Fixed control-sized action glyph (26pt): control size, not reading text.
                 Image(systemName: "paperplane.circle.fill")
-                    .font(.system(size: 26))
+                    .font(MeeshyFont.relative(26))
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .disabled(sendingToId != nil)

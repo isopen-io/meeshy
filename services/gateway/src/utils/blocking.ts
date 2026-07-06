@@ -39,35 +39,3 @@ export async function isBlockedBetween(
 
   return match !== null;
 }
-
-/**
- * Batched version of {@link isBlockedBetween} for filtering many candidates
- * against one user in a single round-trip (2 queries instead of N).
- *
- * Returns the subset of `candidateIds` that have a bidirectional block
- * relationship with `userId` (either side blocked the other).
- */
-export async function getBlockedUserIdsAmong(
-  prisma: PrismaClient,
-  userId: string,
-  candidateIds: string[]
-): Promise<Set<string>> {
-  const ids = [...new Set(candidateIds)].filter((id) => id !== userId);
-  if (ids.length === 0) {
-    return new Set();
-  }
-
-  const [blockedByCandidates, userRow] = await Promise.all([
-    prisma.user.findMany({
-      where: { id: { in: ids }, blockedUserIds: { has: userId } },
-      select: { id: true },
-    }),
-    prisma.user.findUnique({ where: { id: userId }, select: { blockedUserIds: true } }),
-  ]);
-
-  const blocked = new Set(blockedByCandidates.map((r) => r.id));
-  for (const bid of (userRow?.blockedUserIds ?? []) as string[]) {
-    if (ids.includes(bid)) blocked.add(bid);
-  }
-  return blocked;
-}

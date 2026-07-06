@@ -242,36 +242,6 @@ describe('language-detection', () => {
       const result = detectBestInterfaceLanguage();
       expect(result).toBe('en');
     });
-
-    it('should return es for a Spanish browser (es ships a full UI bundle)', () => {
-      Object.defineProperty(window.navigator, 'languages', {
-        value: ['es-ES', 'en-US'],
-        configurable: true,
-      });
-
-      const result = detectBestInterfaceLanguage();
-      expect(result).toBe('es');
-    });
-
-    it('should return es when Spanish is the only browser preference', () => {
-      Object.defineProperty(window.navigator, 'languages', {
-        value: ['es-419'],
-        configurable: true,
-      });
-
-      const result = detectBestInterfaceLanguage();
-      expect(result).toBe('es');
-    });
-
-    it('should still fall back to en for de/it (bundles pending, not auto-detected)', () => {
-      Object.defineProperty(window.navigator, 'languages', {
-        value: ['it-IT', 'de-DE'],
-        configurable: true,
-      });
-
-      const result = detectBestInterfaceLanguage();
-      expect(result).toBe('en');
-    });
   });
 
   describe('saveUserPreferredLanguage', () => {

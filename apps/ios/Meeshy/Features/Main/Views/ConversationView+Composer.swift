@@ -62,7 +62,7 @@ final class ConversationComposerTextModel: ObservableObject {
     private func scheduleDebouncedPersist(_ value: String) {
         debounceTask?.cancel()
         debounceTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(for: .seconds(0.4))
             guard !Task.isCancelled else { return }
             self?.onPersistNeeded?(value)
         }
@@ -743,10 +743,10 @@ extension ConversationView {
         }
         .frame(height: 100)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )

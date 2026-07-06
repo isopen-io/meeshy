@@ -63,7 +63,7 @@ struct VoiceProfileManageView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
+                    .font(MeeshyFont.relative(28))
                     .foregroundStyle(theme.textMuted)
             }
         }
@@ -91,7 +91,7 @@ struct VoiceProfileManageView: View {
             Spacer()
 
             Image(systemName: "person.wave.2.fill")
-                .font(.system(size: 64))
+                .font(MeeshyFont.relative(64))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.7)],
@@ -171,7 +171,7 @@ struct VoiceProfileManageView: View {
     private func statusCard(_ profile: VoiceProfile) -> some View {
         HStack(spacing: 12) {
             Image(systemName: statusIcon(for: profile.status))
-                .font(.system(size: 28))
+                .font(MeeshyFont.relative(28))
                 .foregroundColor(statusColor(for: profile.status))
 
             VStack(alignment: .leading, spacing: 4) {
@@ -199,7 +199,7 @@ struct VoiceProfileManageView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
@@ -218,7 +218,7 @@ struct VoiceProfileManageView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
@@ -260,7 +260,7 @@ struct VoiceProfileManageView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
@@ -291,7 +291,7 @@ struct VoiceProfileManageView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
@@ -335,7 +335,7 @@ struct VoiceProfileManageView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)

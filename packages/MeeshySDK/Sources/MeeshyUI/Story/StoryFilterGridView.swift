@@ -119,7 +119,7 @@ struct StoryFilterGridView: View {
 
     /// Downsamples `previewImage` to a tile-sized square once per slide so each
     /// tile's `StoryFilterProcessor.apply` runs on a small bitmap. Mirrors the
-    /// proven thumbnail-generation pattern (off-main downsample).
+    /// proven `StoryFilterPicker.generateThumbnails` pattern (off-main downsample).
     private func prepareThumbnailBase() async {
         guard let source = previewImage else {
             thumbnailBase = nil

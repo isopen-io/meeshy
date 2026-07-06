@@ -84,41 +84,16 @@ final class StoryComposerMergeEffectsTests: XCTestCase {
         current.background = "OLD"
         current.backgroundAudioId = "old-audio"
         current.backgroundAudioVolume = 0.8
+        current.stickerObjects = [
+            StorySticker(id: "s1", emoji: "🎉", x: 0.5, y: 0.5, scale: 1, rotation: 0)
+        ]
 
         let merged = StoryComposerView.mergeEffects(current: current, canvas: .init())
 
         XCTAssertNil(merged.background, "A canvas with no bg colour clears the legacy background hex")
         XCTAssertNil(merged.backgroundAudioId, "Removing the bg audio in the panel clears it on sync")
         XCTAssertNil(merged.backgroundAudioVolume)
-    }
-
-    // MARK: - Stickers passthrough (C13 — currentEffects source unique)
-
-    func test_mergeEffects_stickersPassThroughFromCurrent() {
-        var current = StoryEffects()
-        current.stickerObjects = [
-            StorySticker(id: "s1", emoji: "🎉", x: 0.72, y: 0.31, scale: 1.4, rotation: 12)
-        ]
-
-        let merged = StoryComposerView.mergeEffects(current: current, canvas: .init())
-
-        XCTAssertEqual(merged.stickerObjects?.count, 1,
-            "C13: currentEffects is the single source of truth for stickers — merge must never drop them")
-        XCTAssertEqual(merged.stickerObjects?.first?.x ?? 0, 0.72, accuracy: 0.0001,
-            "A canvas-gesture mutation written into current must survive the next sync (the old @State overwrite reverted it)")
-        XCTAssertEqual(merged.stickers, ["🎉"],
-            "Legacy emoji projection is derived from current at the sync choke point")
-    }
-
-    func test_mergeEffects_noStickers_clearsLegacyProjection() {
-        var current = StoryEffects()
-        current.stickers = ["👻"]
-
-        let merged = StoryComposerView.mergeEffects(current: current, canvas: .init())
-
-        XCTAssertNil(merged.stickerObjects)
-        XCTAssertNil(merged.stickers,
-            "A stale emoji projection must not outlive its deleted sticker objects")
+        XCTAssertNil(merged.stickerObjects, "Deleted stickers must not resurrect from current")
     }
 
     // MARK: - slideDuration stays nil by design (centralised duration 2026-05-28)

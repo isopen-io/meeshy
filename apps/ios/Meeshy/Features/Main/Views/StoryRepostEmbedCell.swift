@@ -32,7 +32,7 @@ struct StoryRepostEmbedCell: View {
             // a giant vertical column when the feed sits in a wide pane.
             .frame(maxWidth: 420)
             .frame(maxWidth: .infinity, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(String(localized: "story.repost.by", defaultValue: "Story by", bundle: .main)) \(repost.author)")
             .accessibilityHint(String(localized: "story.repost.open.hint", defaultValue: "Double tap to open in fullscreen", bundle: .main))

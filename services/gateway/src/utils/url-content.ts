@@ -9,13 +9,7 @@
  * masks/restores the URLs (see services/translator translator_engine.mask_urls).
  */
 
-// A URL token stops at the first character that cannot legally appear in a URL
-// (RFC 3986 unreserved + reserved + percent). `\S+` would be greedy and absorb
-// adjacent non-Latin text that carries no space separator (Chinese, Japanese,
-// Thai…), wrongly classifying `https://x.com你好` as URL-only and skipping
-// translation of the trailing text. Bounding the token to URL-legal characters
-// leaves that text intact for the strip check.
-const URL_TOKEN_REGEX = /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g;
+const URL_TOKEN_REGEX = /https?:\/\/\S+/g;
 
 /**
  * Returns true when `text` contains only HTTP(S) URLs and whitespace

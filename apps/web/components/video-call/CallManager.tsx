@@ -325,23 +325,6 @@ export function CallManager() {
       return;
     }
 
-    // Sibling-drift fix (2026-07-05): iOS's call:error subscriber whitelists
-    // these 3 codes as transient/non-fatal, each backed by a real prod
-    // incident (CallManager.swift ~3480-3510) — RATE_LIMIT_EXCEEDED throttles
-    // a single ICE candidate (redundant by design, gateway cap is 50/5s vs. a
-    // legitimate gathering flush of 15-25/ms) and killed a live call 382ms
-    // after connect when treated as fatal; TARGET_NOT_FOUND is the peer's
-    // socket momentarily missing from the call room during churn/reconnect
-    // and killed a healthy call while the peer re-joined seconds later;
-    // INVALID_SIGNAL is a per-message relay rejection, not an operation
-    // error. The gateway emits all 3 to web the same way it does to iOS
-    // (CallEventsHandler.ts call:signal/call:toggle-*), so an unrelated web
-    // call showed a scary, self-healing "error" mid-call with no fix here.
-    if (error?.code === 'RATE_LIMIT_EXCEEDED' || error?.code === 'TARGET_NOT_FOUND' || error?.code === 'INVALID_SIGNAL') {
-      logger.debug('[CallManager]', `Ignoring transient call:error (${error.code}): ${errorMessage}`);
-      return;
-    }
-
     logger.error('[CallManager]', 'Call error: ' + errorMessage, { error });
     toast.error(errorMessage);
   }, []);
@@ -546,25 +529,6 @@ export function CallManager() {
       });
     };
 
-    // Ask the server to replay any in-progress (ringing) call this socket
-    // missed — a call that started while the tab was reloading, asleep, or
-    // between a brief WebSocket drop and its reconnect. The live
-    // `call:initiated` broadcast only reaches sockets already in the user's
-    // room at the moment of `call:initiate`; without this, a web callee whose
-    // socket (re)connects mid-ring never sees the incoming-call banner and
-    // the call silently rings out to `missed`. Fired on EVERY connect
-    // (first or reconnect) — mirrors iOS `MessageSocketManager`'s
-    // unconditional `call:check-active` emit on connect. Idempotent: the
-    // gateway scopes the replay to the 60s ringing window and the client
-    // dedups by callId (see CallEventsHandler.ts `call:check-active`).
-    const checkForActiveCall = (socket: unknown) => {
-      // Only ever invoked from an already-established `connect` context
-      // (initial-connected branch, the `connect` event itself, or the
-      // socket-becomes-available poll below), so `.connected` is implied —
-      // mirrors how `attachListeners` is invoked from the same call sites.
-      if (socket) socket.emit(CLIENT_EVENTS.CALL_CHECK_ACTIVE);
-    };
-
     // Try immediately if socket already connected
     const socket = meeshySocketIOService.getSocket();
     // This effect instance hasn't observed a connect yet; if the socket is
@@ -573,14 +537,12 @@ export function CallManager() {
     hasConnectedRef.current = socket?.connected === true;
     if (socket?.connected) {
       attachListeners(socket);
-      checkForActiveCall(socket);
     }
 
     // Listen for future connections (instead of polling with setTimeout)
     const onConnect = () => {
       const s = meeshySocketIOService.getSocket();
       if (s) attachListeners(s);
-      checkForActiveCall(s);
 
       if (!hasConnectedRef.current) {
         hasConnectedRef.current = true;
@@ -607,7 +569,6 @@ export function CallManager() {
           if (s.connected) {
             hasConnectedRef.current = true;
             attachListeners(s);
-            checkForActiveCall(s);
           }
         }
       }, 1000);

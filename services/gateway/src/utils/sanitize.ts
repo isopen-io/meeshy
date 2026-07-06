@@ -35,15 +35,9 @@ export class SecuritySanitizer {
       FORCE_BODY: false
     });
 
-    // Additional protection: remove zero-width characters and control chars.
-    // Strip only the truly-invisible zero-width space (U+200B) and BOM/ZWNBSP
-    // (U+FEFF). Do NOT strip ZWNJ (U+200C) or ZWJ (U+200D): they are
-    // semantically significant \u2014 ZWJ joins emoji sequences (family, flags,
-    // profession emoji), ZWNJ is orthographically required in Persian/Farsi,
-    // and both drive conjunct formation in Indic scripts. Stripping them here
-    // would persist corrupted names/community content to the database.
+    // Additional protection: remove zero-width characters and control chars
     return sanitized
-      .replace(/[\u200B\uFEFF]/g, '') // Zero-width space + BOM only (invisible)
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width chars (invisible)
       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Control chars (keep \t \n \r)
       .replace(/[\uFFF9-\uFFFB]/g, '') // Interlinear annotation chars
       .trim();

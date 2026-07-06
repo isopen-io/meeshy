@@ -1105,3 +1105,80 @@ chacun trouvé un bug réel, tous deux des régressions introduites par le fix d
   2026-07-05 non encore documentés) : rien de nouveau, tout vérifié correct par lecture complète.
 - **Reste ouvert** (inchangé) : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non
   vidée.
+
+## Vague 17 — régression silencieuse gateway (commit `8ebd497b`, PR #1525) : ~450 lignes de fixes calling perdues (2026-07-06)
+
+Point d'entrée : routine calling-feature, deux agents d'exploration dédiés (gateway lecture seule,
+web lecture seule) mandatés à croiser tout candidat contre ce fichier + les PR #1558/#1563 déjà
+ouvertes (non mergées) avant de rapporter quoi que ce soit. L'agent web a trouvé un candidat distinct
+(offre de renégociation classée à tort comme doublon pendant la fenêtre `ensureLocalStream()` —
+confiance moyenne-haute, non corrigé cette session, voir note en fin de section). L'agent gateway a
+trouvé quelque chose de bien plus grave.
+
+- **[RÉGRESSION CRITIQUE, gateway, CONFIRMÉE + CORRIGÉE (sous-ensemble calling)]** Le commit
+  `8ebd497b` ("Quality Refactor: Typography, Design Tokens, and Reliability", auteur
+  `google-labs-jules[bot]`, un agent automatisé distinct de cette routine), mergé sur `main` via PR
+  #1525 le 2026-07-06, se décrit comme un refactor iOS SwiftUI (typographie, design tokens,
+  `DependencyContainer`). Son diff réel touche silencieusement **97 fichiers gateway**
+  (`-4083/+1117` lignes net), sans une seule mention dans le message de commit. Le sous-ensemble
+  calling (celui corrigé ici) : `CallService.ts` (-183 net), `CallCleanupService.ts` (-69 net),
+  `CallEventsHandler.ts` (-289 net), `server.ts` (-15) et `utils/socket-rate-limiter.ts` (-30) sont
+  revenus à un état antérieur au merge `cc9380a5` (parent direct de `8ebd497b`, qui avait pourtant
+  bien le code sain — vérifié par grep direct). Aucun commit entre `8ebd497b` et `HEAD`
+  (`485cc18d`) ne re-touche ces fichiers : la régression est restée invisible faute de tests (les
+  tests qui l'auraient attrapée ont été supprimés/tronqués **dans le même commit**, donc la CI est
+  restée verte).
+  Fixes ainsi perdus puis restaurés (checkout direct depuis `cc9380a5`, aucune perte car
+  `8ebd497b` est le seul commit à toucher ces fichiers entre les deux) :
+  - `CallService.isPhantomCallStale`/`PHANTOM_CONNECTING_GRACE_MS`/`PHANTOM_HEARTBEAT_GRACE_MS`
+    (Vague/commit `682c3527`) — sans ce fix, le phantom-cleanup au `initiateCall` force-terminait
+    N'IMPORTE QUEL appel non-terminal de l'initiateur, y compris un appel réel en cours dans une
+    AUTRE conversation.
+  - `CallService.forceEndOrphanedCallSession` (+ ses 2 sites d'appel dans `CallEventsHandler.ts` —
+    fallback disconnect, recovery optimiste de `call:end`) — sans lui, ces 2 chemins faisaient un
+    `callSession.update()` brut sans guard de `version` ni `endReason` correct (toujours
+    `'completed'`, même sur une perte de connexion).
+  - `CallCleanupService.forceEndCall` : `version: { increment: 1 }` sur l'`updateMany` terminal
+    (Vague 9, commit `6908bccb`) — sans lui, la course optimistic-lock déjà corrigée était rouverte.
+  - `CallEventsHandler.clearQualityDegradedStreaks` + le pont
+    `CallCleanupService.setQualityStreakCleanupCallback`/`clearQualityStreaks` (Vague 11-adjacent,
+    commit `f8db87f4`) + leur câblage dans `server.ts` — sans eux, la map en mémoire
+    `qualityDegradedStreaks` (clé `callId:participantId`) refuyait sur le chemin de terminaison GC.
+  - `missedCallCancelPush`/`setMissedCallCancelPushCallback`/
+    `sendMissedCallCancellationPushForTerminatedCall` + câblage `server.ts` (commit `d3672680`) —
+    sans eux, un callee dont le push VoIP est arrivé mais dont le socket n'a jamais rejoint la room
+    d'appel sonne jusqu'à son propre timeout client au lieu de recevoir le push silencieux
+    `call_cancel` du GC tier 1.
+  - `mapMediaToggleError` (Fix #2, tout début du backlog) — sans lui, `call:toggle-audio`/
+    `toggle-video` réémettaient le code générique `MEDIA_TOGGLE_FAILED` au lieu du vrai
+    `CALL_ERROR_CODES`.
+  - Rate limits `CALL_BACKGROUNDED`/`CALL_FOREGROUNDED`/`CALL_CHECK_ACTIVE` dans
+    `utils/socket-rate-limiter.ts` (Vague 11, audit 2026-07-03/05) — les 3 derniers handlers
+    `call:*` sans rate limit redevenaient non limités.
+  Restaurés par `git checkout cc9380a5 -- <fichier>` (source + tests), plus réinsertion manuelle du
+  câblage `server.ts` (2 callbacks) et des 4 entrées `SOCKET_RATE_LIMITS` (diff pur-suppression,
+  aucun conflit avec du code ajouté depuis). Fichier de test entièrement supprimé restauré :
+  `CallEventsHandler-gc-missed-cancel-push.test.ts` (142 lignes) et
+  `CallEventsHandler-check-active-rate-limit.test.ts` (135 lignes). Suite gateway filtrée
+  `[Cc]all` : 30/30 suites, 843/843 tests verts après restauration. `tsc --noEmit` : seule erreur
+  restante `SequenceService.ts` → `@prisma/client` racine (confirmée pré-existante, identique
+  avant/après ce diff via `git stash`, artefact sandbox sans rapport).
+- **PORTÉE NON TRAITÉE (important)** : `8ebd497b` touche **97 fichiers gateway au total**, pas
+  seulement le calling — messages, réactions, notifications, rate-limiting général, ZMQ
+  translation client, blocking/sanitize/normalize, `AuthHandler.ts` (course de livraison de
+  messages + guard de présence affaibli sur disconnect), etc. (`-4083/+1117` net sur l'ensemble).
+  Cette session, mandatée sur le calling, restaure UNIQUEMENT le sous-ensemble ci-dessus. Le reste
+  de la régression (~90 fichiers) reste sur `main` et nécessite une revue dédiée séparée — à ne pas
+  supposer résolu par ce fix.
+- **Piste distincte (web, NON corrigée, confiance moyenne-haute)** : `apps/web/hooks/
+  use-webrtc-p2p.ts` (classification ~L622-652) + `services/webrtc-service.ts` (`autoNegotiate`
+  armé dès le premier `createOffer()`/`createAnswer()`, pas seulement une fois la connexion établie
+  malgré le commentaire de classe L89-93). Le guard `offerInFlightRef` ne distingue pas "même SDP
+  renvoyée" de "nouvelle offre de renégociation" — seulement une présence par `fromUserId`. Si le
+  callee bascule vidéo tôt (avant la résolution de son premier `ensureLocalStream()`, ex. prompt
+  permission caméra lent) pendant que l'appelant toggle aussi tôt son A/V, la 2e offre (renégociation
+  légitime) peut arriver pendant que la 1re est encore en traitement et se faire droper comme
+  "doublon en vol" — le callee répond alors sur une offre perse (direction média désynchronisée). Le
+  test existant (`use-webrtc-p2p.test.tsx:478-520`) ne couvre que le cas SDP identique
+  (`'offer-sdp-dup'`), pas une offre distincte qui course. Non corrigé cette session (portée
+  volontairement limitée à la régression critique ci-dessus) — candidat pour la prochaine session.
