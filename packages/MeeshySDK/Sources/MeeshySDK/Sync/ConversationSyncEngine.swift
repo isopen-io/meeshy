@@ -921,7 +921,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     // regress the row to older content/position once a
                     // newer message has already been applied.
                     guard msg.createdAt > updated[idx].lastMessageAt else { return updated }
-                    updated[idx].lastMessagePreview = msg.content
+                    updated[idx].lastMessagePreview = msg.content.meeshyPreviewTruncated
                     updated[idx].lastMessageId = msg.id
                     if let resolvedSenderName, !resolvedSenderName.isEmpty {
                         updated[idx].lastMessageSenderName = resolvedSenderName
@@ -1009,7 +1009,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].lastMessagePreview = newContent
+                updated[idx].lastMessagePreview = newContent.meeshyPreviewTruncated
             }
             return updated
         }
@@ -1033,7 +1033,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 if let newLast {
-                    updated[idx].lastMessagePreview = newLast.content
+                    updated[idx].lastMessagePreview = newLast.content.meeshyPreviewTruncated
                     updated[idx].lastMessageId = newLast.id
                     if let name = newLast.senderName ?? newLast.senderUsername, !name.isEmpty {
                         updated[idx].lastMessageSenderName = name
@@ -1286,7 +1286,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].lastMessagePreview = messagePreview
+                updated[idx].lastMessagePreview = messagePreview.meeshyPreviewTruncated
                 updated[idx].lastMessageAt = messageAt
                 // Propagate the author so the conversation list renders
                 // "You: <preview>" in groups immediately — previously this
