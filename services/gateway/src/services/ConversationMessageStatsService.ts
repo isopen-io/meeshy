@@ -29,6 +29,20 @@ function countWords(content: string): number {
   return content.trim().split(/\s+/).length;
 }
 
+// A message counts as "text" for stats iff it has no attachments AND its
+// messageType is 'text'. This mirrors the authoritative recompute()
+// (`msgType === 'text' && attachments.length === 0`); the incremental path
+// MUST use the same rule or a non-text message (e.g. 'location', 'system')
+// with a caption inflates contentTypes.text until the next recompute.
+function isTextMessageStat(
+  attachmentTypes: string[],
+  content: string,
+  messageType?: string,
+): boolean {
+  const hasTextContent = !!(content && content.trim().length > 0);
+  return attachmentTypes.length === 0 && hasTextContent && (messageType || 'text') === 'text';
+}
+
 function countCharacters(content: string): number {
   return content ? content.length : 0;
 }
@@ -96,6 +110,7 @@ export class ConversationMessageStatsService {
     content: string,
     attachmentTypes: string[],
     originalLanguage: string | null,
+    messageType: string = 'text',
   ): Promise<void> {
     const existing = await prisma.conversationMessageStats.findUnique({
       where: { conversationId },
@@ -120,8 +135,7 @@ export class ConversationMessageStatsService {
       }
     }
 
-    const hasTextContent = content && content.trim().length > 0;
-    const isTextMessage = attachmentTypes.length === 0 && hasTextContent;
+    const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
 
     const participantStats = (typeof existing.participantStats === 'string'
       ? JSON.parse(existing.participantStats)
@@ -241,6 +255,7 @@ export class ConversationMessageStatsService {
     senderId: string,
     content: string,
     attachmentTypes: string[],
+    messageType: string = 'text',
   ): Promise<void> {
     const existing = await prisma.conversationMessageStats.findUnique({
       where: { conversationId },
@@ -250,8 +265,7 @@ export class ConversationMessageStatsService {
 
     const words = countWords(content);
     const chars = countCharacters(content);
-    const hasTextContent = content && content.trim().length > 0;
-    const isTextMessage = attachmentTypes.length === 0 && hasTextContent;
+    const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
 
     const decrements: Record<string, number> = {};
     for (const t of attachmentTypes) {

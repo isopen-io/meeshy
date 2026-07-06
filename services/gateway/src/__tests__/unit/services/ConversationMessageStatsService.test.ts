@@ -400,6 +400,27 @@ describe('ConversationMessageStatsService', () => {
       expect(updateCall.data.textMessages).toEqual({ increment: 1 });
     });
 
+    it('does not increment textMessages for a non-text messageType with a caption (matches recompute)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, 'shared a place', [], 'en', 'location');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.textMessages).toBeUndefined();
+      expect(updateCall.data.totalMessages).toEqual({ increment: 1 });
+    });
+
+    it('increments textMessages when messageType is explicitly text', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, 'hello', [], 'en', 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.textMessages).toEqual({ increment: 1 });
+    });
+
     it('does not increment textMessages when message has attachments', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
@@ -719,6 +740,17 @@ describe('ConversationMessageStatsService', () => {
 
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
       expect(updateCall.data.textMessages).toEqual({ decrement: 1 });
+    });
+
+    it('does not decrement textMessages when deleted message was a non-text type (symmetry with onNewMessage)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'shared a place', [], 'location');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.textMessages).toBeUndefined();
+      expect(updateCall.data.totalMessages).toEqual({ decrement: 1 });
     });
 
     it('does not decrement textMessages when message had attachments', async () => {
