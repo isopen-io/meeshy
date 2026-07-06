@@ -34,7 +34,7 @@ final class NSEPendingPostConsumer {
             let dateStr = try container.decode(String.self)
             // Modern Date.ISO8601FormatStyle supports fractional seconds and
             // is more efficient than legacy ISO8601DateFormatter.
-            if let date = try? Date(dateStr, strategy: .iso8601.includingFractionalSeconds) {
+            if let date = try? Date(dateStr, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
                 return date
             }
             if let date = try? Date(dateStr, strategy: .iso8601) {
