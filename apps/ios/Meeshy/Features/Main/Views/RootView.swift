@@ -1385,7 +1385,7 @@ struct RootView: View {
             PendingStoryBannerInline()
             Spacer()
         }
-        .padding(.top, 50)
+        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.lg)
         .zIndex(189)
     }
 
@@ -1870,8 +1870,8 @@ private struct PendingSettingsBannerInline: View {
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, 16)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -1931,8 +1931,8 @@ private struct PendingStoryBannerInline: View {
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, 16)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
