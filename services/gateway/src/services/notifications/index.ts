@@ -4,6 +4,7 @@
  */
 
 export { NotificationService } from './NotificationService';
+export { SocketNotificationService } from './SocketNotificationService';
 export { NotificationFormatter } from './NotificationFormatter';
 
 export type {

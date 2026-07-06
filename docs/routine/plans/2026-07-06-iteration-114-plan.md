@@ -1,39 +1,47 @@
 # Iteration 114 — Plan d'implémentation (2026-07-06)
 
 ## Objectives
-Corriger F84 : la liste de conversations V2 doit afficher le nom canonique de l'autre participant
-(`displayName` > `firstName + lastName` > `username`) via le SSOT `getUserDisplayName`, au lieu d'une
-chaîne inline qui préférait `username` et ignorait `lastName`.
+Corriger **F84** : le « load more » des chats anonymes (lien partagé) recharge la page 1 en boucle
+(doublons + historique ancien inaccessible), car `getNextPageParam` renvoie un ID de message (string)
+que la branche offset anonyme retransforme en page 1.
 
 ## Affected modules
-- `apps/web/utils/v2/transform-conversation.ts` (import + 1 chaîne remplacée + commentaire).
-- `apps/web/utils/v2/__tests__/transform-conversation.test.ts` (5 tests neufs).
-- `docs/routine/analyses/2026-07-06-iteration-114-analyse.md`, ce plan.
+- `apps/web/hooks/queries/use-conversation-messages-rq.ts` — `getNextPageParam`.
+- `apps/web/__tests__/hooks/queries/use-conversation-messages-rq.test.tsx` — 1 test de régression.
+- Caller (hérité, inchangé) : `apps/web/components/common/bubble-stream-page.tsx` (surface chat anonyme).
 
 ## Implementation phases
-1. **RED** — tests de priorité (`firstName+lastName` avant `username` ; `firstName` seul) échouant sur la
-   chaîne inline.
-2. **GREEN** — `getUserDisplayNameOrNull(otherUser)` en tête de la cascade, fallbacks participant préservés.
-3. **Validation** — suite `transform-conversation.test.ts`, puis suite web, puis CI.
+1. **Fix** — brancher `getNextPageParam` sur `linkId` : mode anonyme (offset) → `allPages.length + 1` ;
+   mode authentifié (cursor) → inchangé. Commentaire du *pourquoi*. ✅
+2. **Test** — « anonymous loadMore advances the offset » : 1ᵉʳ appel `loadMessages(20,0)`, 2ᵉ appel
+   `loadMessages(20,20)` (pas `(20,0)`), 3 messages distincts sans doublon. ✅
+3. **Validation** — `npx jest use-conversation-messages-rq.test.tsx` : 19/19. ✅
 
 ## Dependencies
-`bun install` (déjà fait). Test jsdom next/jest ; `Conversation` importé en `import type` (erasé).
+Aucune. Aucun changement de signature/API.
 
 ## Estimated risks
-Très faibles : `getUserDisplayNameOrNull` renvoie `null` sur user vide → cascade de fallbacks intacte.
+Très faible. Chemin authentifié inchangé (branche `linkId` prise en premier). Mode anonyme : boucle
+cassée → offset croissant correct.
 
 ## Rollback strategy
-Revert du commit (changement isolé, sans schéma ni migration).
+Réversible en une ligne (retirer la branche `if (linkId)`). Aucun état persistant.
 
 ## Validation criteria
-- 5/5 tests neufs verts ; RED prouvé (2 échecs) sur l'ancien code.
-- CI web verte.
+- [x] 18 tests existants préservés + 1 neuf = 19/19 (jest).
+- [x] 1ᵉʳ appel offset 0, 2ᵉ appel offset = limit ; pas de doublon dans la liste finale.
 
 ## Completion status
-- [x] Fix source appliqué.
-- [x] Tests neufs écrits + RED/GREEN prouvés.
-- [ ] Push + PR.
+**COMPLET.** Fix + test + docs. Prêt à commit/push/PR.
+
+## Progress tracking
+- [x] Analyse (`2026-07-06-iteration-114-analyse.md`).
+- [x] Plan (ce fichier).
+- [x] Fix `use-conversation-messages-rq.ts`.
+- [x] Test de régression.
+- [x] `npx jest` vert (19/19).
+- [ ] Commit + push + PR.
 
 ## Future improvements
-F85 (stats incrémentales messageType), F86 (video → file), reports antérieurs.
-</content>
+- **F85** (MEDIUM, translator) : `Synthesizer._segment_text` perte de phrase courte — PR Python ciblée.
+- **F86** (LOW) : dedup traduction premium/basic ignorant le timestamp — intention produit à confirmer.

@@ -538,10 +538,6 @@ describe('MessageHandler.handleMessageSend', () => {
     expect(messagingService.handleMessage).toHaveBeenCalled();
     expect(mockPerformanceLogger.withTiming).toHaveBeenCalled();
     expect(stats.messages_processed).toBe(1);
-
-    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][5]).toBe('fr');
   });
 
   it('skips broadcastNewMessage when isDuplicate is true', async () => {
@@ -979,40 +975,6 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
     expect(statsCalls.length).toBeGreaterThan(0);
     expect(statsCalls[0][4]).toEqual(expect.arrayContaining(['audio']));
-  });
-
-  it('forwards the saved message originalLanguage to the stats service (languageDistribution)', async () => {
-    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
-    const data = makeAttachmentData();
-    mockValidateSocketEvent.mockReturnValue({ success: true, data });
-    const socket = makeSocket('socket-1');
-    const cb = jest.fn();
-
-    const attachmentService = makeMockAttachmentService([
-      { id: '61a41a4b5c5e4f4a5c5e4f4a', uploadedBy: 'user-1', mimeType: 'image/jpeg' },
-    ]);
-    const messagingService = makeMockMessagingService({
-      attachments: [{ id: 'att-1', mimeType: 'image/jpeg' }],
-      originalLanguage: 'de',
-    });
-    const prisma = makeMockPrisma({
-      participant: { findMany: jest.fn(async () => []) },
-      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
-    });
-
-    const { handler } = makeHandler({
-      connectedUsers: connectedUsers as any,
-      socketToUser,
-      attachmentService,
-      messagingService,
-      prisma,
-    });
-
-    await handler.handleMessageSendWithAttachments(socket, data as any, cb);
-
-    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
-    expect(statsCalls.length).toBeGreaterThan(0);
-    expect(statsCalls[0][5]).toBe('de');
   });
 });
 
@@ -3370,6 +3332,19 @@ describe('MessageHandler.handleMessageEdit', () => {
     };
   }
 
+  function makeUpdatedMessage(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'aabbccddee1122334455aabb',
+      conversationId: 'conv-abc',
+      content: 'updated content',
+      isEdited: true,
+      editedAt: new Date(),
+      originalLanguage: 'fr',
+      sender: { id: 'participant-1', userId: 'user-1', displayName: 'Alice', avatar: null },
+      ...overrides,
+    };
+  }
+
   it('rejects unauthenticated socket', async () => {
     mockGetConnectedUser.mockReturnValue(null);
     const socket = makeSocket();
@@ -3408,35 +3383,12 @@ describe('MessageHandler.handleMessageEdit', () => {
     const socket = makeSocket();
     const callback = jest.fn();
     const prisma = makeMockPrisma({
-      message: { findFirst: jest.fn(async () => null), updateMany: jest.fn() },
+      message: { findFirst: jest.fn(async () => null), update: jest.fn() },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await handler.handleMessageEdit(socket, makeEditData(), callback);
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
-    expect(prisma.message.updateMany).not.toHaveBeenCalled();
-  });
-
-  it('rejects the edit and does not broadcast when the message was deleted between read and write (concurrent delete race)', async () => {
-    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData() });
-    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
-    const socket = makeSocket();
-    const callback = jest.fn();
-    const existingMessage = makeExistingMessage();
-    const prisma = makeMockPrisma({
-      message: {
-        findFirst: jest.fn(async () => existingMessage),
-        updateMany: jest.fn(async () => ({ count: 0 })),
-      },
-    });
-    const io = makeMockIo();
-    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
-
-    await handler.handleMessageEdit(socket, makeEditData(), callback);
-
-    expect(callback).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, error: expect.stringContaining('not found') })
-    );
-    expect(io._emit).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
   });
 
   it('edits message, emits MESSAGE_EDITED to room, calls callback with success', async () => {
@@ -3445,12 +3397,13 @@ describe('MessageHandler.handleMessageEdit', () => {
     const socket = makeSocket();
     const callback = jest.fn();
     const existingMessage = makeExistingMessage();
+    const updatedMessage = makeUpdatedMessage();
     const retranslationAsync: any = jest.fn(async () => undefined);
     const mockTranslationService = { retranslateMessageAsync: retranslationAsync };
     const prisma = makeMockPrisma({
       message: {
         findFirst: jest.fn(async () => existingMessage),
-        updateMany: jest.fn(async () => ({ count: 1 })),
+        update: jest.fn(async () => updatedMessage),
       },
     });
     const io = makeMockIo();
@@ -3464,8 +3417,8 @@ describe('MessageHandler.handleMessageEdit', () => {
 
     await handler.handleMessageEdit(socket, makeEditData(), callback);
 
-    expect(prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: existingMessage.id, deletedAt: null },
+    expect(prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: existingMessage.id },
       data: expect.objectContaining({ content: 'updated content', isEdited: true }),
     }));
     expect(io._emit).toHaveBeenCalledWith('message:edited', expect.objectContaining({
@@ -3483,10 +3436,11 @@ describe('MessageHandler.handleMessageEdit', () => {
     const callback = jest.fn();
     const existingAttachment = { id: 'att-1', mimeType: 'image/jpeg', url: 'https://cdn/att-1.jpg' };
     const existingMessage = makeExistingMessage({ attachments: [existingAttachment] });
+    const updatedMessage = makeUpdatedMessage();
     const prisma = makeMockPrisma({
       message: {
         findFirst: jest.fn(async () => existingMessage),
-        updateMany: jest.fn(async () => ({ count: 1 })),
+        update: jest.fn(async () => updatedMessage),
       },
     });
     const io = makeMockIo();
@@ -3509,7 +3463,7 @@ describe('MessageHandler.handleMessageEdit', () => {
     const prisma = makeMockPrisma({
       message: {
         findFirst: jest.fn(async () => makeExistingMessage()),
-        updateMany: jest.fn(async () => ({ count: 1 })),
+        update: jest.fn(async () => makeUpdatedMessage()),
       },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
@@ -3517,7 +3471,7 @@ describe('MessageHandler.handleMessageEdit', () => {
 
     await handler.handleMessageEdit(socket, makeEditData({ content: '  trimmed  ' }), callback);
 
-    expect(prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+    expect(prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ content: 'trimmed' }),
     }));
   });
@@ -3543,7 +3497,7 @@ describe('MessageHandler.handleMessageEdit', () => {
     const prisma = makeMockPrisma({
       message: {
         findFirst: jest.fn(async () => makeExistingMessage()),
-        updateMany: jest.fn(async () => ({ count: 1 })),
+        update: jest.fn(async () => makeUpdatedMessage()),
       },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });

@@ -52,10 +52,12 @@ data class ApiMessage(
     val reactionSummary: Map<String, Int>? = null,
     val deliveredCount: Int = 0,
     val readCount: Int = 0,
+    val deliveredToAllAt: String? = null,
     val readByAllAt: String? = null,
     val replyTo: ApiMessageReplyPreview? = null,
     val clientMessageId: String? = null,
     val attachments: List<ApiMessageAttachment> = emptyList(),
+    val effects: MessageEffects? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,

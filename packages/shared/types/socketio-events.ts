@@ -125,6 +125,7 @@ export const SERVER_EVENTS = {
   AUTH_TOKEN_EXPIRED: 'auth:token-expired',
   AUTH_SESSION_REVOKED: 'auth:session-revoked',
   ERROR: 'error',
+  NOTIFICATION: 'notification',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',
   NOTIFICATION_DELETED: 'notification:deleted',
@@ -169,14 +170,6 @@ export const SERVER_EVENTS = {
   /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
   CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
   READ_STATUS_UPDATED: 'read-status:updated',
-  /**
-   * Same payload as `READ_STATUS_UPDATED`, correctly namespaced under the
-   * `message:` entity per the `entity:action-word` convention (the legacy
-   * name hyphenates the entity itself, `read-status`, which violates it).
-   * Emitted in parallel with `READ_STATUS_UPDATED` for ~3 months so clients
-   * can migrate independently; see tasks/socketio-events-cleanup.md #3.
-   */
-  MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   CONVERSATION_UPDATED: 'conversation:updated',
@@ -1121,47 +1114,12 @@ export interface UserPreferencesConversationUpdatedEventData {
 }
 
 /**
- * Snapshot complet des préférences user/communauté envoyé dans les
- * événements `USER_PREFERENCES_UPDATED` (scope communauté). Reflète
- * `UserCommunityPreferences` côté Prisma.
- *
- * @see schema.prisma model UserCommunityPreferences
- */
-export interface CommunityPreferencesPayload {
-  readonly isPinned: boolean;
-  readonly isMuted: boolean;
-  readonly isArchived: boolean;
-  readonly isHidden: boolean;
-  readonly notificationLevel: 'all' | 'mentions' | 'none';
-  readonly customName: string | null;
-  readonly categoryId: string | null;
-  readonly orderInCategory: number | null;
-}
-
-/**
- * Variante "préférences scope communauté" : émis par
- * `PUT/DELETE /user-preferences/communities/:id`. Sibling de
- * `UserPreferencesConversationUpdatedEventData` (pas de `version` :
- * `UserCommunityPreferences` n'a pas ce champ — le client réagit en
- * invalidant son cache plutôt qu'en réconciliant un snapshot optimiste).
- */
-export interface UserPreferencesCommunityUpdatedEventData {
-  readonly userId: string;
-  readonly communityId: string;
-  /** true si l'événement résulte d'un DELETE (reset aux defaults). */
-  readonly reset: boolean;
-  /** null si reset === true (le client applique ses defaults locaux). */
-  readonly preferences: CommunityPreferencesPayload | null;
-}
-
-/**
- * Union des trois scopes possibles. La présence de `conversationId` /
- * `communityId` discrimine côté client (sinon c'est le scope `category`).
+ * Union des deux scopes possibles. La présence de `conversationId`
+ * discrimine côté client.
  */
 export type UserPreferencesUpdatedEventData =
   | UserPreferencesCategoryUpdatedEventData
-  | UserPreferencesConversationUpdatedEventData
-  | UserPreferencesCommunityUpdatedEventData;
+  | UserPreferencesConversationUpdatedEventData;
 
 /**
  * Émis par `POST /user-preferences/conversations/reorder` après mise
@@ -1316,6 +1274,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
+  [SERVER_EVENTS.NOTIFICATION]: (data: NotificationEventData) => void;
   [SERVER_EVENTS.SYSTEM_MESSAGE]: (data: SystemMessageEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;
   [SERVER_EVENTS.CONVERSATION_ONLINE_STATS]: (data: ConversationOnlineStatsEventData) => void;
@@ -1348,7 +1307,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
-  [SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;

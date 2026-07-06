@@ -462,13 +462,6 @@ public final class StoryCanvasUIView: UIView {
     /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
     public var onBackgroundTapped: (() -> Void)?
 
-    /// Miroir du zoom viewport SwiftUI (`canvasScale != 1`). Quand `true`,
-    /// un double-tap sur le fond demande un reset du viewport — prioritaire
-    /// sur le cycle videoFitMode, qui reste le double-tap à l'échelle 1 (C4).
-    public var isViewportZoomed: Bool = false
-    /// Notifié quand un double-tap fond doit réinitialiser le zoom viewport.
-    public var onViewportZoomResetRequested: (() -> Void)?
-
     // MARK: - Active canvas registry (canvas-wide preemption)
 
     /// Faible-ref registry de toutes les instances actuellement en `.play`
@@ -649,14 +642,6 @@ public final class StoryCanvasUIView: UIView {
     /// Timestamp `CADisplayLink` du début du dernier épisode CONTINU de
     /// non-lecture. `nil` tant que la lecture est saine. Alimente le watchdog.
     var playbackStallSince: CFTimeInterval?
-
-    /// C-DIR3 — début de l'épisode continu où le player primaire est `.paused`
-    /// alors que toutes les portes disent « joue ». Alimente le self-heal
-    /// (`StoryPlaybackHealth.shouldKickPlayback`). `nil` hors épisode.
-    var playbackPausedProbeSince: CFTimeInterval?
-    /// Kicks de self-heal déjà délivrés pour la session de lecture courante
-    /// (reset par `resetPlaybackHealthState`). Borné par `maxPlaybackKicks`.
-    var playbackSelfHealKicks: Int = 0
 
     /// `true` quand la slide courante porte au moins un clip audio résolu
     /// (foreground ou background). Posé de façon SYNCHRONE par

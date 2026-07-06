@@ -46,13 +46,11 @@ doesn't produce a constraint violation.
 
 ## Scope note — follow-up
 
-`AttachmentReactionService.addAttachmentReaction` shared the same "1 emoji per
-user" application-level swap template and carried the analogous non-atomic
-window — **fixed same-day as a follow-up**, see
-`docs/analyses/2026-07-04-attachment-reaction-duplicate-race-fix.md`.
-
-`CommentReactionService` and `PostReactionService` (likely) still carry a
-related risk, but their current behavior *rejects* a second emoji (throws)
-rather than swapping, so the failure mode differs and the fix shape isn't a
-drop-in mirror of this one. Left out to keep changes scoped and testable;
-still flagged for a follow-up pass.
+`AttachmentReactionService.addAttachmentReaction` and
+`CommentReactionService` (and likely `PostReactionService`) share the same
+"1 emoji per user" application-level swap template and are believed to carry
+an analogous non-atomic window, though their current schemas already key the
+upsert including the emoji field (`attachment_participant_reaction:
+{attachmentId, participantId, emoji}`), so the fix shape differs slightly.
+Left out of this cycle to keep the change small and testable; flagged for a
+follow-up pass.

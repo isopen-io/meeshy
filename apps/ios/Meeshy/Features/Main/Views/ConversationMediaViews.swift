@@ -99,7 +99,7 @@ struct DownloadBadgeView: View {
             guard !attachment.fileUrl.hasPrefix("file://") else { return }
             let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
             while !Task.isCancelled && !downloader.isCached {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { break }
                 let cached: Bool
                 switch attachment.type {
@@ -481,7 +481,7 @@ struct CachedPlayIcon: View {
                     isCached = true
                     break
                 }
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                try? await Task.sleep(for: .seconds(1.5))
             }
         }
     }

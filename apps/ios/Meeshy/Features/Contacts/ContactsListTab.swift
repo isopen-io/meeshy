@@ -54,7 +54,7 @@ struct ContactsListTab: View {
             }
         } label: {
             Text("\(filter.rawValue)\(countSuffix)")
-                .font(.footnote.weight(.semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(isActive ? .white : MeeshyColors.indigo500)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
@@ -106,14 +106,14 @@ struct ContactsListTab: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.subheadline.weight(.medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
             TextField(String(localized: "contacts.list.search-placeholder", defaultValue: "Rechercher un contact", bundle: .main), text: Binding(
                 get: { viewModel.searchQuery },
                 set: { viewModel.search($0) }
             ))
-            .font(.subheadline)
+            .font(MeeshyFont.relative(15))
             .foregroundColor(theme.textPrimary)
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
@@ -123,7 +123,7 @@ struct ContactsListTab: View {
                     viewModel.search("")
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.subheadline)
+                        .font(MeeshyFont.relative(15))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -159,21 +159,21 @@ struct ContactsListTab: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(name)
-                        .font(.subheadline.weight(.semibold))
+                        .font(MeeshyFont.relative(15, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     Text("@\(user.username)")
-                        .font(.caption.weight(.medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
 
                     if isOnline {
                         Text(String(localized: "contacts.list.online", defaultValue: "En ligne", bundle: .main))
-                            .font(.caption2.weight(.semibold))
+                            .font(MeeshyFont.relative(11, weight: .semibold))
                             .foregroundColor(MeeshyColors.success)
                     } else if let lastActive = user.lastActiveAt {
                         Text(String(format: String(localized: "contacts.list.last-seen", defaultValue: "Vu %@", bundle: .main), lastActive.relativeTimeString.lowercased()))
-                            .font(.caption2.weight(.medium))
+                            .font(MeeshyFont.relative(11, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -181,7 +181,7 @@ struct ContactsListTab: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(theme.textMuted.opacity(0.5))
             }
             .padding(.horizontal, 20)
@@ -199,11 +199,11 @@ struct ContactsListTab: View {
         VStack(spacing: 16) {
             Spacer()
             Image(systemName: "person.2.slash")
-                .font(.system(.largeTitle).weight(.light))
+                .font(MeeshyFont.relative(34, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(viewModel.searchQuery.isEmpty ? String(localized: "contacts.list.empty", defaultValue: "Aucun contact", bundle: .main) : String(localized: "contacts.list.no-results", defaultValue: "Aucun resultat", bundle: .main))
-                .font(.callout.weight(.semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(theme.textMuted)
             Spacer()
         }

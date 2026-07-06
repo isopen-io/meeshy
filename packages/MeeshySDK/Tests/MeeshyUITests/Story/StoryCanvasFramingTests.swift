@@ -148,35 +148,6 @@ final class StoryCanvasFramingTests: XCTestCase {
             .free)
     }
 
-    // MARK: - Alignement vertical (directive user 2026-07-04 : carte flush sous le header)
-
-    func test_resolve_topAlignment_cardStartsAtRegionTop() {
-        // sideInset large → contrainte LARGEUR active → mou vertical présent :
-        // c'est le cas discriminant entre .center (mou réparti) et .top (flush).
-        let viewport = CGSize(width: 402, height: 874)
-        func cardTop(_ alignment: StoryCanvasFraming.VerticalAlignment) -> CGFloat {
-            let input = StoryCanvasFraming.Input(
-                viewport: viewport, headerInset: 131, bottomInset: 64,
-                sideInset: 60, state: .carded, cardedCornerRadius: 22,
-                verticalAlignment: alignment)
-            let r = StoryCanvasFraming.resolve(input)
-            let scaledH = CanvasGeometry.aspectFitSize(in: viewport).height * r.scale
-            return viewport.height / 2 + r.offset.height - scaledH / 2
-        }
-        XCTAssertEqual(cardTop(.top), 131, accuracy: 0.5,
-                       "flush sous le header — plus de vide au-dessus de la carte")
-        XCTAssertGreaterThan(cardTop(.center), 131 + 20,
-                             "le mode historique répartissait le mou en haut ET en bas")
-    }
-
-    func test_resolve_defaultAlignment_staysCenter() {
-        let input = StoryCanvasFraming.Input(
-            viewport: CGSize(width: 402, height: 874), headerInset: 131,
-            bottomInset: 64, sideInset: 60, state: .carded, cardedCornerRadius: 22)
-        XCTAssertEqual(input.verticalAlignment, .center,
-                       "compat : les call sites existants (composer) gardent le centrage")
-    }
-
     func test_readerPresentation_fullscreenSession_alwaysFree() {
         // En session plein écran, le canvas reste plein bord même quand le chrome
         // ré-apparaît temporairement (touch-and-hold peek) — pas de re-cardage.

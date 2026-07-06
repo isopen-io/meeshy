@@ -1,87 +1,102 @@
 # Iteration 114 — Analyse d'optimisation (2026-07-06)
 
 ## Protocole (démarrage)
-`main` @ `3bfd41d5` (post-merge #1529/#1533/#1534), working tree propre. Branche `claude/brave-archimedes-howg57`
-recréée depuis `origin/main`. Itération 112 (F83 affiliate stats) mergée dans `main` via PR #1529.
+`main` @ `2c1e37223` (post-merge PR #1528 — F82 admin rankings), working tree propre. Branche de
+travail `claude/brave-archimedes-fru31a` recréée depuis `origin/main`.
 
-**PR ouvertes au démarrage** : quasi exclusivement des bumps dependabot (#1532-#1554) + 2 PR iOS (#1555, #1527).
-La cible retenue (`apps/web/utils/v2/transform-conversation.ts`) est **strictement disjointe** de toutes.
+Note numérotation : les docs d'itération sur `main` vont jusqu'à **113** (sessions parallèles) → ce
+cycle prend **114**.
 
-### Revue d'ingénierie
-Balayage très approfondi (agent d'exploration, 104 tool-uses) des helpers purs/quasi-purs de
-`services/gateway/src/services`, `services/gateway/src/utils`, `packages/shared/utils`, `apps/web/utils`,
-`apps/web/lib`, `apps/web/hooks`, hors zones déjà traitées (itérations 100-113). Vérifiés corrects et
-écartés : `resolvePresenceVisibility`, `reelAffinity`, `formatCompactNumber`, `truncateFilename`,
-`getInitials`, `calendarDayDiff`, `mention-parser`, `groupNotificationsByDate` (Sunday-start intentionnel).
-Un défaut solide remonte : violation d'un SSOT documenté par une réimplémentation inline → **F84**.
+### Revue d'ingénierie (constat de démarrage)
+Le candidat reporté **F83** (`AffiliateTrackingService.getAffiliateStats` — filtre `tokenId` ignoré par
+le `groupBy` de ventilation) a été **vérifié déjà corrigé sur `main`** (le `groupBy` utilise désormais
+`where: whereClause`, commentaire décrivant exactement le mode de défaillance). Aucun doublon produit.
 
-## Cible : F84 — `transformToConversationItem` viole l'ordre canonique du nom (username avant le vrai nom)
+Balayage ciblé (agent d'exploration) d'une couche **peu explorée** : hooks/stores web, service
+translator Python, services posts/feed gateway. Trois candidats remontés :
+
+1. **F84 — Pagination « load more » cassée pour les chats anonymes (lien partagé)** — RETENU
+   (déterministe, classe d'utilisateurs entière, cœur produit « shared-link chat »).
+2. **F85 — `Synthesizer._segment_text` (translator) perd une phrase courte** en tête/milieu quand elle
+   précède une phrase > ~949 car. — écarté ce cycle (sous-système Python distinct ; PR ciblée séparée).
+   Reporté (§ futur).
+3. **F86 — `use-message-translations.ts` : dedup peut remplacer une traduction plus récente par une
+   « premium » plus ancienne** — écarté : heuristique, déclencheur atypique (premium plus ancien que
+   basic), intention produit à confirmer. Reporté (§ futur).
+
+## Cible : F84 — Le « load more » anonyme recharge la page 1 en boucle (doublons + historique inaccessible)
 
 ### Current state
-`apps/web/utils/v2/transform-conversation.ts` → `transformToConversationItem` (branche conversation
-**directe**, lignes ~106-116). Le nom affiché de l'autre participant était résolu par une chaîne inline :
+`apps/web/hooks/queries/use-conversation-messages-rq.ts` — `useConversationMessagesRQ` alimente la liste
+de messages via `useInfiniteQuery`. Deux stratégies de pagination cohabitent sur **un seul** canal
+`pageParam` :
+- **authentifié** (pas de `linkId`) : cursor-based — `conversationsService.getMessages(…, cursor)` et
+  `nextCursor` renvoyé ; fallback = ID du dernier message (chaîne acceptée comme paramètre `before`) ;
+- **anonyme** (`linkId` présent) : offset-based — `AnonymousChatService.loadMessages(limit, offset)`,
+  `offset = (page - 1) * limit`, **aucun `nextCursor` renvoyé**.
+
+`getNextPageParam` (avant correctif) :
 ```ts
-name =
-  otherUser?.displayName ||
-  otherUser?.username ||    // ← username préféré au vrai nom
-  otherUser?.firstName ||   // ← firstName seulement après username ; lastName jamais utilisé
-  otherMember?.displayName || (otherMember as any)?.nickname || conversation.title || 'Utilisateur';
+getNextPageParam: (lastPage) => {
+  if (!lastPage.hasMore) return undefined;
+  if (lastPage.nextCursor) return lastPage.nextCursor;       // jamais défini en anonyme
+  const lastMessage = lastPage.messages[lastPage.messages.length - 1];
+  if (lastMessage?.id) return lastMessage.id;                // ← renvoie une STRING (ObjectId)
+  return undefined;
+},
 ```
+`fetchMessagesFromService` (branche anonyme) : `const page = typeof pageParam === 'number' ? pageParam : 1;`
 
 ### Problems identified
-- **[LIVE] Nom d'utilisateur cryptique affiché à la place du vrai nom.** Le SSOT documenté
-  (`apps/web/utils/user-display-name.ts` `getUserDisplayName` + `apps/web/CLAUDE.md` §Single Source of
-  Truth) fixe l'ordre : **`displayName` > `firstName + lastName` > `username`**. La chaîne inline faisait
-  `displayName` > `username` > `firstName`, et **n'utilisait jamais `lastName`**.
-  Input : autre membre `{ displayName: null, firstName: "Alice", lastName: "Martin", username: "amartin_99" }`.
-  - SSOT → **"Alice Martin"** ; inline → **"amartin_99"** (handle cryptique).
-- **[LIVE]** Appelant : `transformConversations` → `apps/web/hooks/v2/use-conversations-v2.ts:199`
-  (hook de **liste de conversations** V2 — cœur de l'UI messagerie). Chaque conversation directe avec un
-  utilisateur sans `displayName` custom affichait son pseudo au lieu de son prénom/nom.
+- **[LIVE] Boucle sur la page 1 pour tout participant anonyme.** Trace (`limit=20`, 45 messages) :
+  1. Page 1 : `pageParam=1` → `offset=0` → messages 1–20, `hasMore=true`, **pas de `nextCursor`**.
+  2. `getNextPageParam` : pas de `nextCursor` → renvoie `lastMessage.id` (**string ObjectId**).
+  3. `loadMore()` → `fetchNextPage()` avec `pageParam="6712…"`.
+  4. Branche anonyme : `typeof "6712…" === 'number' ? … : 1` → **`page=1`** → `offset=0` → **re-charge
+     1–20**.
+  5. `messages` = `data.pages.flatMap(...)` **sans dédup** → 1–20 en **double**, 21–45 **jamais
+     atteignables**.
+- Chaque « load more » répète l'étape 4. Le chemin authentifié est intact (il renvoie `nextCursor`, et
+  son fallback string est consommé comme cursor).
 
 ### Root cause
-Réimplémentation inline de la résolution de nom au lieu d'appeler le helper SSOT dédié
-(`getUserDisplayName`/`getUserDisplayNameOrNull`), avec un ordre de priorité erroné. Violation directe du
-principe « Single Source of Truth » du CLAUDE.md web.
+Le fallback `lastMessage.id` (chaîne) n'est valide que pour la pagination **cursor** (authentifié). La
+branche **offset** (anonyme) le retransforme silencieusement en page 1. Un seul `getNextPageParam`
+servait deux stratégies incompatibles sans distinguer le mode, alors que `fetchMessagesFromService`, lui,
+branche déjà sur `linkId`.
 
 ### Business impact
-Sur l'écran le plus vu de l'app (liste des conversations), un contact qui n'a pas défini de `displayName`
-apparaît sous son **identifiant technique** (`amartin_99`) au lieu de « Alice Martin ». Dégrade la
-lisibilité et la reconnaissance des contacts — friction produit directe.
+Le **chat par lien partagé** (fonctionnalité cœur pour les invités anonymes, sans compte) est cassé au
+défilement : impossible de remonter l'historique au-delà des 20 derniers messages, et doublons visibles
+dès le 1er « load more ». Régression d'expérience directe sur une surface d'acquisition (invités).
 
 ### Technical impact
-Remplacement de la chaîne inline par `getUserDisplayNameOrNull(otherUser)` (SSOT), en **préservant** les
-fallbacks de niveau participant (member `displayName`, `nickname`, `conversation.title`, `'Utilisateur'`).
-Aucun changement de signature ni de forme de retour.
+Correctif purement local : brancher `getNextPageParam` sur `linkId` (miroir de
+`fetchMessagesFromService`). En mode anonyme, avancer par **index de page** via le 2ᵉ argument
+`allPages` : `return allPages.length + 1` → `fetchMessagesFromService` calcule `offset = page * limit`.
+Les pages deviennent disjointes (plus de doublons, historique complet accessible). Aucun changement de
+signature ni d'API.
 
 ### Risk assessment
-Très faible. `getUserDisplayNameOrNull` retourne `null` (et non un fallback) quand l'objet user est vide,
-préservant exactement la cascade de fallbacks existante. Seuls les cas où `firstName`/`lastName` existent
-sans `displayName` changent — et deviennent corrects. Fonction pure.
+Très faible. Le chemin authentifié est **inchangé** (branche `linkId` prise en premier, sans effet sur
+le cas non-anonyme). Le mode anonyme passe d'une boucle cassée à un offset croissant correct — strict
+progrès. Couvert par un test neuf ; les 18 tests existants restent verts.
 
 ### Proposed improvements (implémenté ce cycle)
-- Import `getUserDisplayNameOrNull` + remplacement de la chaîne inline + commentaire expliquant le *pourquoi*.
-
-### Expected benefits
-- Vrai nom (prénom + nom) affiché en liste de conversations, conforme au SSOT et à iOS/Android.
-- Élimination d'une réimplémentation divergente d'un helper existant (dette technique).
-
-### Implementation complexity
-Très faible (1 import + 1 chaîne remplacée ; 5 tests neufs, dont 2 RED→GREEN de régression d'ordre).
+- `getNextPageParam: (lastPage, allPages) => { … if (linkId) return allPages.length + 1; … }` +
+  commentaire du *pourquoi* (offset vs cursor, boucle page 1).
 
 ### Validation criteria
-- [x] RED prouvé : sur l'ancien code, « firstName+lastName avant username » et « firstName seul » échouent.
-- [x] GREEN : 5/5 verts après fix.
-- [ ] Suite web complète verte + CI.
+- [x] `use-conversation-messages-rq.test.tsx` **19/19** (18 existants + 1 neuf : « anonymous loadMore
+      advances the offset » — 1ᵉʳ appel `(20,0)`, 2ᵉ appel `(20,20)` et pas `(20,0)` ; 3 messages
+      distincts, sans doublon). RED implicite : avant correctif le 2ᵉ appel serait `(20,0)`.
 
-## Candidats différés ce cycle
-- **F85** (MEDIUM, gateway) : `ConversationMessageStatsService.onNewMessage` classe en `text` tout message
-  sans attachement avec contenu (ignore `messageType`), alors que `recompute()` (l'autorité) exige
-  `msgType === 'text'` — les messages `system`/`location` gonflent `contentTypes.text` en incrémental
-  jusqu'au prochain recompute. Fix : passer `messageType` dans `onNewMessage`/`onMessageDeleted`.
-- **F86** (LOW, web) : `getMessageType` mappe `video/*` sur `'file'` (pas d'entrée `'video'` dans l'union
-  `ConversationItemData`) — plutôt gap de design que défaut.
-
-## Améliorations futures (report)
-Reports antérieurs : F82b (#1528), F83b (tokens non filtrés), F51b, F56b, F60b, F67b, F68b, F69, F70, F74, F75.
-</content>
+## Backlog reporté (§ futur)
+- **F85** (MEDIUM, translator) : `Synthesizer._segment_text` (`services/translator/src/services/tts/
+  synthesizer.py`) — une phrase < `MIN_SEGMENT_CHARS` (50) suivie d'une phrase > ~949 car. est écrasée
+  (`current_segment = sentence`) sans être sauvegardée → mots absents de l'audio TTS. Non couvert.
+  PR ciblée séparée (Python + test dédié sur `_segment_text`).
+- **F86** (LOW) : `use-message-translations.ts` `processMessageWithTranslations` — la branche
+  `translationModel === 'premium' && confidence < 0.95` ignore le timestamp → une premium plus ancienne
+  peut écraser une basic plus récente. Heuristique, intention produit à confirmer.
+- Antérieurs : F69, F74, F75, F78, F80, F81, F82b toujours reportés.

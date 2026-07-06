@@ -142,8 +142,8 @@ struct ReelFeedCard: View, Equatable {
                 reelGlyph
             }
             .frame(width: width, height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2, style: .continuous))
             .onTapGesture { onTapMedia() }
         }
         .frame(height: reelCardHeight(mediaWidth: media?.width, mediaHeight: media?.height, cardWidth: cardWidthEstimate))
@@ -317,9 +317,7 @@ struct ReelFeedCard: View, Equatable {
 
     /// Compact count format (1.2k / 3.4M) — mirrors the reel viewer's badge.
     static func compactCount(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
+        MeeshyNumberFormatter.formatCompact(value)
     }
 
     private var actionsRow: some View {

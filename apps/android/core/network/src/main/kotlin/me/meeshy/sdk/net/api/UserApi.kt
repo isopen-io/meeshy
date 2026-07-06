@@ -7,7 +7,6 @@ import me.meeshy.sdk.model.ChangeEmailResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UpdateProfileResponse
 import me.meeshy.sdk.model.UserStats
@@ -97,7 +96,4 @@ interface UserApi {
 
     @GET("users/{userId}/stats")
     suspend fun getUserStats(@Path("userId") userId: String): ApiResponse<UserStats>
-
-    @GET("users/me/stats/timeline")
-    suspend fun getUserStatsTimeline(@Query("days") days: Int): ApiResponse<List<TimelinePoint>>
 }

@@ -2,7 +2,54 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+
+> On 2026-07-06 the **honest all-or-nothing delivery indicator** landed (slice `delivery-status-resolver`,
+> Chat parity — `feature-parity.md` "Delivery status checkmarks"). The sender-side 1→2→2-check indicator was
+> **lying in groups**: `BubbleContentBuilder` classified `readCount > 0 → Read` / `deliveredCount > 0 →
+> Delivered` with **no recipient denominator**, so one reader in a group of five showed "read by all". New pure
+> `:core:model` `DeliveryStatusResolver` (port of the iOS SSOT of the same name): `resolve(base, deliveredCount,
+> readCount, recipientCount, deliveredToAllAt?, readByAllAt?) → DeliveryState` applies the **WhatsApp-style
+> all-or-nothing** rule — Delivered/Read only when **every** recipient received/read; `recipientCount <= 1`
+> trusts the `> 0` threshold (1:1 / unknown denominator); the unambiguous `deliveredToAllAt`/`readByAllAt`
+> markers **win** over the counts (denominator-independent, race-free live signal, `readByAll` > `deliveredToAll`);
+> negative counts clamped; the send cycle (Pending/Failed) returned verbatim. It **never over-reports** — an
+> upstream Read is honestly downgraded to Delivered/Sent when the group counts are only partial. Wired with **no
+> DB migration** (`ApiMessage.deliveredToAllAt` rides the JSON payload, mirroring `readByAllAt`):
+> `BubbleContentBuilder` gains a `recipientCount` param (default 1 = backward-compatible 1:1) and re-resolves via
+> the SSOT (mapping `DeliveryState → DeliveryStatus`); `ChatViewModel` threads `memberCount - 1` from the
+> conversation stream into the bubble `combine` (reactive `MutableStateFlow` — the check refreshes when either the
+> counts or the member list arrives). **Also restored `isoToEpochMillisOrNull` in `:core:model` `IsoTime.kt`** —
+> the `main` force-reset (see NOTES 2026-07-06) had dropped the slice that added it, but the just-merged
+> message-effects `ChatScreen.kt` references it, so `main` was **uncompilable for Android** (the monorepo CI does
+> not build Android, so it went undetected). +24 tests (`DeliveryStatusResolverTest` 18 — every group boundary /
+> 1:1 / marker / clamp / downgrade branch; `BubbleContentBuilderTest` +4; `ChatViewModelTest` +2 group
+> threading). `assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses the previous
+> Android behaviour and matches iOS's honest indicator. Reviewer: PASS (diff `apps/android` only;
+> behaviour-through-public-API; SDK-purity/SSOT honoured — pure decision in `:core:model`, render orchestration in
+> `:sdk-ui`/`:feature:chat`).
+
+> On 2026-07-06 the **message-effects lifecycle** landed (slice `message-effects-lifecycle`, Chat
+> parity — ephemeral / blurred / view-once messages, feature-parity.md §"Rich message features"): the rich
+> `MessageEffects` model was dead code (decoded nowhere, rendered nowhere). This slice makes it live and
+> centralises — as an Android SSOT — the lifecycle logic iOS scatters across its message views. Pure `:core:model`
+> `MessageLifecyclePresentation.of(effects, createdAtMillis, nowMillis, revealed, viewCount) → MessageLifecycle`
+> is the total, side-effect-free decision over three independent axes: **ephemeral** (`Inactive` when not
+> ephemeral / no-or-non-positive duration; `Counting(remainingMillis,totalMillis)` counting down from send time,
+> clamping future/skewed send times to the full window and an unknown send time to just-started; `Expired` at or
+> past the deadline), **blur** (`None`/`Concealed`/`Revealed` — tap-to-reveal), and **view-once** (`None`/
+> `Available(remaining)`/`Consumed`, default max 1, non-positive max coerced to 1, over-consumed → `Consumed`,
+> negative view counts clamped) plus stable-bit-order `appearance`/`persistent` effect lists. Ported the 3
+> missing iOS `MessageEffects` accessors (`hasLifecycleEffect`/`hasAppearanceEffect`/`hasPersistentEffect` +
+> `isEphemeral`/`isBlurred`/`isViewOnce`/`has`). Wired end-to-end with **no DB migration** (`ApiMessage.effects`
+> rides the existing JSON `MessageEntity.payload`): `BubbleContentBuilder` carries `effects` onto `BubbleContent`
+> (dropped on a deleted message, mirroring attachments); `ChatScreen` renders a compact accent-coherent lifecycle
+> badge under the bubble — a 1 Hz clock that ticks **only while an ephemeral message is on screen**, a natural
+> tap-to-reveal for blurred/view-once (local `mutableStateList` reveal set), and EN/FR/ES/PT strings. +35 tests
+> (`MessageLifecyclePresentationTest` 25, `MessageEffectsTest` 8, `BubbleContentBuilderTest` +2 carry/deleted-drop).
+> `:app:assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses iOS, which recomputes
+> these states ad hoc per view. Reviewer: PASS (diff apps/android only; behaviour-through-public-API; SDK-purity/
+> SSOT honoured — pure decision in `:core:model`, render orchestration in `:feature:chat`).
 
 > On 2026-07-06 the **first/last-name profile-edit fields** landed (slice `edit-profile-name-fields`, §K):
 > the `firstName`/`lastName` legs of the already-name-aware `ProfileEditApply`/`UpdateProfileRequest` are now

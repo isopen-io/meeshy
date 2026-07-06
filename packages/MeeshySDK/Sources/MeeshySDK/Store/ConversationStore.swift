@@ -431,7 +431,7 @@ public actor ConversationStore {
         if lastMessageIsCurrent {
             if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
             if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
-            if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
+            if let v = event.lastMessagePreview { conv.lastMessagePreview = v; changed = true }
         }
         if let v = event.title { conv.title = v; changed = true }
         if let v = event.avatar { conv.avatar = v; changed = true }

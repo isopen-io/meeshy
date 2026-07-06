@@ -115,9 +115,9 @@ struct GlobalSearchView: View {
             // iOS 26+ : champ de recherche en Liquid Glass natif (chrome de
             // contrôle interactif). iOS < 26 : repli `.ultraThinMaterial`. Le
             // liséré dégradé de marque est conservé en overlay au-dessus du verre.
-            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20))
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl))
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                     .stroke(
                         LinearGradient(
                             colors: [MeeshyColors.error.opacity(0.4), MeeshyColors.indigo300.opacity(0.4)],

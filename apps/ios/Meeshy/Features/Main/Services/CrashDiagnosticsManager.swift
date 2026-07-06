@@ -223,11 +223,12 @@ final class CrashDiagnosticsManager: NSObject {
     // MARK: - Persistence
 
     private func loadPersisted() {
+        let isoFormatter = ISO8601DateFormatter()
         var loaded: [CrashDiagnostic] = []
         for (url, diag) in decodeAllReports() {
             loaded.append(diag)
             loadedFileURLs.insert(url)
-            let when = diag.timestamp.formatted(.iso8601)
+            let when = isoFormatter.string(from: diag.timestamp)
             Logger.crash.error("Restored \(diag.kind.rawValue, privacy: .public) @ \(when, privacy: .public): \(diag.summary, privacy: .public)")
         }
         pending = loaded
