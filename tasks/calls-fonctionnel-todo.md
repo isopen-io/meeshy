@@ -1518,6 +1518,57 @@ candidats contre le backlog avant de rapporter quoi que ce soit — web et gatew
   - `call:force-leave` ne nettoie pas non plus `ringingTimeout`/`bufferedOffer` (distinct du bug
     `broadcastCallEnded` ci-dessus) — impact borné/auto-guérissant (le timeout re-vérifie le statut avant
     d'écrire, le buffered-offer a son propre TTL de sweep), noté pour complétude, pas une priorité.
+    **CORRIGÉ vague 20 (voir ci-dessous)**.
   - `negotiate()` (`webrtc-service.ts:750-755`) : le guard `makingOffer` peut potentiellement abandonner
     silencieusement un ICE-restart en attente s'il court-circuite une renégociation A/V déjà en vol —
     spéculatif, fenêtre de course étroite, non vérifié comme atteignable en pratique.
+
+## Vague 20 — correction d'une entrée périmée du backlog (broadcastCallEnded) + fix réel du gap ringingTimeout/bufferedOffer sur `call:force-leave` (2026-07-06)
+
+Point d'entrée : routine calling-feature. Avant tout diagnostic, relecture de la vague 19 et
+vérification de chaque item "reste ouvert" contre le code réel de `HEAD` plutôt que contre le texte du
+backlog (leçon de la vague 18 : une entrée de backlog n'est une preuve de rien tant qu'elle n'est pas
+relue sur `main`/`HEAD`).
+
+- **[BACKLOG PÉRIMÉ, pas un bug]** L'item "`call:force-leave` court-circuite `broadcastCallEnded()`"
+  (vague 19) est **faux à la lecture du code actuel** (`CallEventsHandler.ts:2088-2116`) : la branche
+  `forceLeaveStatus === 'ended' || forceLeaveStatus === 'missed'` appelle bien
+  `await this.broadcastCallEnded(io, callSession.id, callSession.conversationId, endedEvent)`, exactement
+  comme ses siblings `call:leave`/`call:end`, avec un commentaire explicite ("CALL-RESILIENCE — shared
+  fanout … see broadcastCallEnded") qui documente déjà ce choix. La confusion vient probablement d'une
+  lecture partielle du handler (il est long, 178 lignes) au moment de la rédaction de la vague 19.
+  Entrée retirée du "reste ouvert" — pas de fix nécessaire ici.
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** En revanche, la boucle `for (const call of
+  activeCalls)` du même handler (`CallEventsHandler.ts:2049-2121`) était bien la SEULE des 4 routes de
+  sortie d'appel (`call:leave`, `call:end`, `call:signal` sur erreur fatale, `call:force-leave`) à ne
+  jamais appeler `this.callService.clearRingingTimeout(call.id)` + `this.clearBufferedOffer(call.id)`
+  juste après `leaveCall()` — les 3 autres sites le font tous (lignes 1863/1865, 2314/2316, 2608/2610).
+  Sibling-drift de la même famille que les leçons 65/67/68/70 (deux/trois chemins jumeaux qui divergent),
+  ici à l'intérieur d'un seul fichier entre 4 handlers de sortie d'appel. Impact réel (contrairement à
+  l'évaluation "auto-guérissant" de la vague 19, révisée à la baisse mais pas nulle) : un
+  `ringingTimeout` encore armé pour un appel forcé-quitté via ce chemin spécifique reste vivant jusqu'à
+  60s de plus que nécessaire (le timer re-vérifie le statut avant d'écrire, donc pas de corruption de
+  données, mais un timer Node fantôme + une entrée `bufferedOffers` qui ne libère sa mémoire qu'au
+  prochain sweep TTL au lieu d'immédiatement) — strictement le pattern que ce fichier corrige déjà
+  systématiquement sur ses 3 autres chemins de sortie.
+  **Fix** : ajout de `this.callService.clearRingingTimeout(call.id)` +
+  `this.clearBufferedOffer(call.id)` juste après le `leaveCall()` de la boucle, miroir exact du pattern
+  des 3 autres sites (utilise `call.id`, pas `data.callId`, car ce handler traite potentiellement
+  plusieurs appels obsolètes par itération — contrairement aux 3 autres qui n'en traitent qu'un).
+  **Tests TDD** : 2 nouveaux cas dans `CallEventsHandler-force-leave.test.ts` (assertion que
+  `clearRingingTimeout` est appelé avec le bon `callId`, et qu'il l'est pour CHAQUE appel actif quand
+  plusieurs sont force-quittés dans la même itération — mock `clearRingingTimeout` promu en variable
+  nommée `mockClearRingingTimeout5` pour pouvoir l'assert, il n'était auparavant qu'un `jest.fn()` anonyme
+  inline non observable).
+- **Vérification (gateway)** : suite gateway filtrée `*[Cc]all*` : 31/31 suites, 857/857 tests verts
+  (+5 vs vague 19). Suite gateway COMPLÈTE (`bun run test:coverage`, prisma generate + build
+  `packages/shared` réussis cette session après `bun install --ignore-scripts` — le postinstall natif de
+  `grpc-tools`, devDependency gateway sans rapport avec Socket.IO/calls, échoue dans ce sandbox faute
+  d'accès réseau au bucket S3 de binaires précompilés ; contournement sans impact sur les tests) :
+  509/509 suites, 13795/13796 tests verts (1 skip pré-existant), **0 échec**. `tsc --noEmit` gateway :
+  0 erreur (le client Prisma a été généré proprement cette session).
+- **Reste ouvert (inchangé, non traité cette session — hors de portée)** : GC tier-1 notification gap,
+  web `offersCreatedFor` jamais invalidé sur `participant-left`, web refresh TURN jamais implémenté,
+  `call:force-leave` ne nettoie pas `ringingTimeout`/`bufferedOffer` ~~(CORRIGÉ ci-dessus)~~, `negotiate()`
+  guard `makingOffer` spéculatif. Items J, C6, CALL-DIAG retagging (vagues antérieures) également
+  inchangés.

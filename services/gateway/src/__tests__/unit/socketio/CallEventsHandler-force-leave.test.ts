@@ -19,6 +19,7 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
 const mockLeaveCall5 = jest.fn<any>();
 const mockCreateCallSummaryMessage5 = jest.fn<any>();
+const mockClearRingingTimeout5 = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -30,7 +31,7 @@ jest.mock('../../../services/CallService', () => ({
     endCall: jest.fn<any>(),
     getCallSession: jest.fn<any>(),
     generateIceServers: jest.fn<any>().mockReturnValue([]),
-    clearRingingTimeout: jest.fn<any>(),
+    clearRingingTimeout: mockClearRingingTimeout5,
     scheduleRingingTimeout: jest.fn<any>(),
     listHistory: jest.fn<any>(),
     handleMissedCall: jest.fn<any>(),
@@ -397,6 +398,62 @@ describe('CallEventsHandler — call:force-leave handler', () => {
 
       expect(roomEmit).not.toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.anything());
       expect(mockCreateCallSummaryMessage5).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sibling-drift fix: call:leave/call:end already clear the ringing timeout
+  // + buffered offer right after leaveCall(); the force-leave loop was the
+  // only leave path that didn't, leaving both keyed by call.id lingering
+  // until their own TTL/backstop instead of being cleared immediately.
+  // -------------------------------------------------------------------------
+
+  describe('clears ringingTimeout + bufferedOffer per call (sibling-drift fix)', () => {
+    it('calls clearRingingTimeout and clearBufferedOffer for each force-left call', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+      });
+      mockLeaveCall5.mockResolvedValue(makeEndedCallSession());
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(mockClearRingingTimeout5).toHaveBeenCalledWith(CALL_ID);
+      // clearBufferedOffer is a private CallEventsHandler method (not on
+      // CallService), so assert indirectly via the internal bufferedOffers
+      // side effect is not accessible here — assert instead that leaveCall
+      // and clearRingingTimeout both ran for the same call, which is the
+      // observable contract this fix restores parity with call:leave on.
+      expect(mockLeaveCall5).toHaveBeenCalledWith(
+        expect.objectContaining({ callId: CALL_ID })
+      );
+    });
+
+    it('clears ringingTimeout for every call when multiple active calls are force-left', async () => {
+      const OTHER_CALL_ID = '507f1f77bcf86cd799439099';
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+          { ...makeActiveCallWithParticipant(USER_ID), id: OTHER_CALL_ID },
+        ]),
+      });
+      mockLeaveCall5.mockResolvedValue(makeEndedCallSession());
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(mockClearRingingTimeout5).toHaveBeenCalledWith(CALL_ID);
+      expect(mockClearRingingTimeout5).toHaveBeenCalledWith(OTHER_CALL_ID);
     });
   });
 

@@ -2069,6 +2069,13 @@ export class CallEventsHandler {
                 participantId: cleanupParticipantId || userId
               });
 
+              // Sibling-drift fix: call:leave/call:end/call:signal-error all
+              // clear the ringing timeout + buffered offer right after
+              // leaveCall(); this loop was the only leave path that didn't,
+              // leaving both keyed by call.id until their own TTL/backstop.
+              this.callService.clearRingingTimeout(call.id);
+              this.clearBufferedOffer(call.id);
+
               // Broadcast participant left event
               const leftEvent: CallParticipantLeftEvent = {
                 callId: callSession.id,
