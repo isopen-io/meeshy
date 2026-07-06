@@ -1512,13 +1512,17 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
+          ack?.({ success: false, error: 'User not authenticated' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
             message: 'User not authenticated'
           } as CallError);
           return;
         }
-        if (denyAnonymous()) return;
+        if (denyAnonymous()) {
+          ack?.({ success: false, error: 'Anonymous users cannot join calls' } as unknown as CallJoinAck);
+          return;
+        }
         rememberAuth(userId);
 
         // CVE-002: Rate limiting check
@@ -1529,12 +1533,16 @@ export class CallEventsHandler {
           this.rateLimiter,
           CALL_EVENTS.ERROR
         );
-        if (!rateLimitPassed) return;
+        if (!rateLimitPassed) {
+          ack?.({ success: false, error: 'Rate limit exceeded' } as unknown as CallJoinAck);
+          return;
+        }
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketJoinCallSchema, data);
         if (isValidationFailure(validation)) {
           const { error: validationError, details: validationDetails } = validation;
+          ack?.({ success: false, error: validationError } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
@@ -1558,6 +1566,7 @@ export class CallEventsHandler {
         // Resolve participantId from userId + callId
         const joinParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!joinParticipantId) {
+          ack?.({ success: false, error: 'You are not a participant in this conversation' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'
@@ -1764,6 +1773,7 @@ export class CallEventsHandler {
           ? errorMessage.split(':').slice(1).join(':').trim()
           : errorMessage;
 
+        ack?.({ success: false, error: message } as unknown as CallJoinAck);
         socket.emit(CALL_EVENTS.ERROR, {
           code: errorCode,
           message

@@ -3341,6 +3341,41 @@ describe('CallService - leaveCall idempotent paths', () => {
     expect(capturedData.status).toBe(CallStatus.missed);
     expect(capturedData.endReason).toBe(CallEndReason.missed);
   });
+
+  it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the idempotent-leave terminal write (Vague 19: sibling of the main leaveCall path\'s own P2034 fix, never applied to this branch)', async () => {
+    const directSession = createMockCallSession({
+      status: CallStatus.active,
+      endedAt: null,
+      participants: [createMockParticipant({ leftAt: null })],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'direct' })
+    });
+    const endedByRacingWriter = {
+      ...directSession,
+      status: CallStatus.ended,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ leftAt: new Date(), user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'direct' })
+    };
+    const p2034 = Object.assign(
+      new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction'),
+      { code: 'P2034' }
+    );
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(directSession)
+      .mockResolvedValueOnce(endedByRacingWriter); // getCallSession after the caught conflict
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+    mockPrisma.$transaction.mockRejectedValueOnce(p2034);
+
+    const result = await callService.leaveCall({
+      callId: 'call-123', userId: 'user-123', participantId: 'p-123'
+    });
+
+    expect(result.status).toBe(CallStatus.ended);
+  });
 });
 
 describe('CallService - markCallAsMissed non-ringing guard', () => {
@@ -4600,6 +4635,21 @@ describe('CallService - createCallSummaryMessage', () => {
 
       expect(result).toBeNull();
       expect(callParticipantUpdateMany).not.toHaveBeenCalled();
+      expect(mockPrisma.conversation.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('returns null instead of throwing a raw Prisma error when Mongo reports a P2034 write conflict (Vague 19: identical transaction shape to joinCall/endCall/leaveCall but had zero P2034 handling)', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue({ startedAt: new Date(), conversationId: 'conv-123' });
+      const p2034 = Object.assign(
+        new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction'),
+        { code: 'P2034' }
+      );
+      mockPrisma.$transaction.mockRejectedValueOnce(p2034);
+      mockPrisma.conversation.updateMany.mockClear();
+
+      const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.connectionLost);
+
+      expect(result).toBeNull();
       expect(mockPrisma.conversation.updateMany).not.toHaveBeenCalled();
     });
   });
