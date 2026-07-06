@@ -4,8 +4,19 @@ export interface MentionParticipant {
   readonly displayName: string;
 }
 
-const NAME_BOUNDARY_LEFT = '(?<![\\p{L}\\p{N}_])';
-const NAME_BOUNDARY_RIGHT = '(?![\\p{L}\\p{N}_])';
+// Classe de caractères d'un handle @username (ASCII). Source de vérité unique, alignée sur la
+// regex de validation username (`register`/`change-username` : /^[a-zA-Z0-9_-]+$/) : lettres,
+// chiffres, underscore ET tiret. `\w` seul manquait le tiret, tronquant `@marie-claire` en
+// `marie` — l'utilisateur n'était jamais résolu ni notifié.
+export const MENTION_HANDLE_CHARS = '\\w-';
+
+// Classe de caractères d'un nom : lettre/chiffre/underscore/tiret Unicode. Source de vérité unique
+// pour les frontières de mention ET pour `hasMentions` — un seul jeu de caractères, zéro drift.
+// Le tiret en fait partie : usernames ET displayNames l'autorisent (`Ann-Marie`), donc `@marie`
+// ne doit PAS matcher dans `@marie-claire` (frontière droite), et `@marie-claire` est un seul token.
+const NAME_CHAR = '[\\p{L}\\p{N}_-]';
+const NAME_BOUNDARY_LEFT = `(?<!${NAME_CHAR})`;
+const NAME_BOUNDARY_RIGHT = `(?!${NAME_CHAR})`;
 
 /**
  * Parse les mentions dans un message.
@@ -13,8 +24,10 @@ const NAME_BOUNDARY_RIGHT = '(?![\\p{L}\\p{N}_])';
  * Priorité :
  * 1. @DisplayName → résolution exacte sur les participants (insensible casse, plus long en premier).
  *    Frontières Unicode gauche+droite : `@Marie` ne matche PAS `@Marienne` ni `contact@Marie.com`.
- * 2. @username → résolution par username sur les participants (regex `\w{1,30}`, frontière gauche
- *    pour ignorer les `@` internes d'adresses e-mail).
+ * 2. @username → résolution par username sur les participants (regex `[\w-]{1,30}`, même frontière
+ *    gauche Unicode `NAME_BOUNDARY_LEFT` que le path @DisplayName pour ignorer les `@` internes
+ *    d'adresses e-mail, y compris après une lettre accentuée/non-latine ; le tiret est capturé pour
+ *    résoudre les usernames à tiret type `@marie-claire`).
  * 3. Sans participants → retourne les handles bruts ("@alice")
  */
 export function parseMentions(
@@ -43,7 +56,7 @@ export function parseMentions(
     }
   }
 
-  const handleRegex = /(?<![\w])@(\w{1,30})/g;
+  const handleRegex = new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]{1,30})`, 'gu');
   for (const match of remaining.matchAll(handleRegex)) {
     const rawHandle = match[1];
     if (rawHandle === undefined) continue;
@@ -60,10 +73,21 @@ export function parseMentions(
 }
 
 /**
- * Vérifie si un texte contient au moins une mention (@)
+ * Vérifie si un texte contient au moins une mention (@).
+ *
+ * Unicode-aware (frontière `\p{L}\p{N}_`) pour rester cohérent avec la détection de
+ * `@DisplayName` de `parseMentions` : un `@Éric` / `@André` / `@Владимир` est bien reconnu,
+ * là où l'ancien `/@\w/` ASCII les manquait. Un `@` suivi d'un espace (adresse e-mail
+ * `test@ domain`) n'est PAS une mention.
+ *
+ * `NAME_BOUNDARY_LEFT` — même frontière gauche que les DEUX chemins de
+ * `parseMentions` (@DisplayName ligne 50, @username ligne 59) : un `@` précédé
+ * d'un caractère de nom appartient à une adresse e-mail (`contact@marie.com`) et
+ * n'est PAS une mention. Sans ce lookbehind, `hasMentions` signalait une mention
+ * que `parseMentions` ne résout jamais — un drift que le docstring interdit.
  */
 export function hasMentions(content: string): boolean {
-  return /@\w/.test(content);
+  return new RegExp(`${NAME_BOUNDARY_LEFT}@${NAME_CHAR}`, 'u').test(content);
 }
 
 function escapeRegex(str: string): string {
