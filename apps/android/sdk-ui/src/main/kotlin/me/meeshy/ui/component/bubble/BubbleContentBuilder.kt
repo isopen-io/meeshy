@@ -90,6 +90,7 @@ public object BubbleContentBuilder {
             } else {
                 0
             },
+            effects = if (isDeleted) null else message.effects,
         )
     }
 

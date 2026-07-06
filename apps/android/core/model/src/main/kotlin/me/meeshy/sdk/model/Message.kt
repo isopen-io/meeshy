@@ -56,6 +56,7 @@ data class ApiMessage(
     val replyTo: ApiMessageReplyPreview? = null,
     val clientMessageId: String? = null,
     val attachments: List<ApiMessageAttachment> = emptyList(),
+    val effects: MessageEffects? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,

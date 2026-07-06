@@ -6,6 +6,8 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiTextTranslation
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
 import org.junit.Test
 
 private data class Prefs(
@@ -22,6 +24,7 @@ private fun message(
     isEdited: Boolean = false,
     deletedAt: String? = null,
     sender: ApiMessageSender? = null,
+    effects: MessageEffects? = null,
 ) = ApiMessage(
     id = id,
     conversationId = "c1",
@@ -32,6 +35,7 @@ private fun message(
     deletedAt = deletedAt,
     translations = translations,
     sender = sender,
+    effects = effects,
 )
 
 class BubbleContentBuilderTest {
@@ -417,6 +421,32 @@ class BubbleContentBuilderTest {
 
         assertThat(content.reactions.single { it.emoji == "❤️" }.includesMe).isTrue()
         assertThat(content.reactions.single { it.emoji == "🔥" }.includesMe).isFalse()
+    }
+
+    @Test
+    fun `message effects are carried onto the bubble`() {
+        val effects = MessageEffects(flags = MessageEffectFlags.EPHEMERAL, ephemeralDuration = 30)
+
+        val content = BubbleContentBuilder.build(
+            message(effects = effects),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.effects).isEqualTo(effects)
+    }
+
+    @Test
+    fun `a deleted message drops its effects`() {
+        val effects = MessageEffects(flags = MessageEffectFlags.BLURRED)
+
+        val content = BubbleContentBuilder.build(
+            message(deletedAt = "2026-07-06T00:00:00Z", effects = effects),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.effects).isNull()
     }
 
 }

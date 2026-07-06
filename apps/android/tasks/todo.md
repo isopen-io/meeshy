@@ -4,19 +4,124 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Contacts) — slice `discover-user-search` ✅
-The **Discover live user-search + inline connect** — the read-side consumer of the friendship SSOT.
-The Discover tab (was `ComingSoon()`) now runs a trim+≥2-char-gated user search and renders each result
-with an inline connect control (Connect / Pending / Accept / Contact / Blocked / hidden-for-self) whose
-state is the shared `UserRelationshipResolver`; connect/accept are optimistic and every visible row
-re-derives on any cross-screen friendship mutation via `FriendshipCache.version`. Two new pure SSOTs
-in `:core:model` (`DiscoverSearch.action`, `ConnectAction.from`), a UDF `DiscoverViewModel`, and the
-`DiscoverTab` Compose UI. +29 tests. See PROGRESS.md run log for the full record.
+## This loop (Phase: Chat — rich message features) — slice `message-effects-lifecycle` ✅
+**Message-effects lifecycle (ephemeral / blurred / view-once)** — makes the rich-but-dead `MessageEffects`
+model live and centralises, as an Android SSOT, the lifecycle logic iOS scatters across its message views.
+Pure `:core:model` `MessageLifecyclePresentation.of(effects, createdAtMillis, nowMillis, revealed, viewCount)
+→ MessageLifecycle` decides three independent axes — ephemeral (`Inactive`/`Counting(remaining,total)`/`Expired`,
+skew-clamped, unknown-send-time → just-started, non-positive duration → inactive), blur (`None`/`Concealed`/
+`Revealed`), view-once (`None`/`Available(remaining)`/`Consumed`, default max 1, coerced/clamped) — plus
+stable-order appearance/persistent effect lists; the 3 missing iOS `MessageEffects` accessors ported. Wired
+end-to-end with **no DB migration** (`ApiMessage.effects` rides the JSON payload): `BubbleContentBuilder` carries
+`effects` (dropped on delete), `ChatScreen` renders a compact accent-coherent badge — 1 Hz clock ticking only
+while an ephemeral message is visible, natural tap-to-reveal, EN/FR/ES/PT. +35 tests, `assembleDebug` +
+`testDebugUnitTest` green, diff = `apps/android` only. Next: avatar/banner upload (last §K profile-edit item,
+two-hop reuse of the story upload→publish graft) or the worker drain-list Robolectric test.
+
+## Prior loop (Phase: Settings §L) — slice `settings-regional-content-language` ✅
+**Regional (secondary content) language preference** — the last no-op Settings language row is now live. A
+Prisme *content* preference (resolved via `LanguageResolver`, stored on the backend profile
+`User.regionalLanguage`), NOT the device-local UI locale. Pure `:feature:settings`
+`RegionalLanguageSelection.build(regionalCode, systemCode, query)` SSOT (options = full
+`LanguageData.allLanguages`; primary/system language hidden unless it is the stored choice;
+trimmed/case-insensitive marking + label lookup + name/nativeName/code search; empty query → all; unknown
+code → no label, no crash). Wiring reuses `edit-profile-optimistic` — **no new store**:
+`SettingsViewModel.setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(
+UpdateProfileRequest(regionalLanguage=…))` (optimistic session repaint + durable `UPDATE_PROFILE` + wake
+worker on real `cmid`) + UI-only `setRegionalLanguageQuery`; `SettingsScreen` searchable flag+native-name
+dialog (EN/FR/ES/PT). +24 tests, `assembleDebug`+`testDebugUnitTest` green, diff = `apps/android` only.
+Next: the worker drain-list Robolectric test (PROGRESS.md "Next" #5).
+
+## Prior loop (Phase: Settings §L) — slice `settings-notification-prefs-sync` ✅
+**Offline-queued notification-preference backend sync** — wires the dead `OutboxKind.UPDATE_SETTINGS`/
+`OutboxLanes.SETTINGS` end-to-end (mirrors `edit-profile-optimistic`). Pure `:core:model`
+`NotificationPreferenceSyncBody.from(prefs)` (gateway `PATCH /me/preferences/notification` contract SSOT — all
+30 fields, drops `extras`, `dndDays` as lowercase tokens); `core/network` `PreferencesApi`; `:sdk-core`
+`NotificationPreferencesSyncRepository.enqueueSync` (session-gated, no optimistic flip — store is truth);
+`OutboxCoalescer` `UPDATE_SETTINGS` latest-snapshot rule + `OutboxFlushWorker` sender; `SettingsViewModel`
+local-first-then-sync funnel (persist → enqueue → wake worker on real `cmid`). +15 tests, `meeshy.sh check`
+green, diff = `apps/android` only.
+
+## Prior loop (Phase: Settings §L) — slice `settings-interface-language` ✅
+**Persisted interface (UI chrome) language** — mirrors the theme slice one step further. Pure `:core:model`
+`AppLanguage` SSOT (`supportedCodes` from `LanguageData.interfaceLanguages` fr/en/es/ar; `fromStorage`/
+`storageValue` codec + `resolveInterfaceLocaleTag`; `"system"`/blank/absent/unsupported → `null` = follow
+device). Durable DataStore-backed `InterfaceLanguageStore` (`:sdk-core`: `InMemoryInterfaceLanguageStore` +
+`DataStoreInterfaceLanguageStore`, hydrates on cold start via `stateIn(Eagerly)`, `@Singleton` in `SdkModule`).
+`SettingsViewModel` `setInterfaceLanguage` intent + `SettingsScreen` display-language dialog picker (System +
+flags/native names, EN/FR/ES/PT); `MainActivity` re-localises the whole Compose tree live via `LanguageViewModel`
++ a `createConfigurationContext` provider (minSdk-26 safe, no AppCompat). Regional-language row left no-op on
+purpose (Prisme content-preference, not app locale). +32 tests (`AppLanguageTest` 18, `InterfaceLanguageStoreTest`
+9, `SettingsViewModelLanguageTest` 5). Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle
+8.14.3). Diff = `apps/android` only. See PROGRESS.md run log.
 
 ### Next
-1. Discover **empty-query cache-first suggestions** (iOS `loadSuggestions`), or the **Blocked-users list**
-   (needs a `BlockRepository` to fill the resolver's `BlockStatusProvider` seam), or **send-request from
-   the Requests tab compose-new** — any completes the Contacts area.
+1. **Notification-preference toggles** (§L) — back the `settings_push_notifications` switch (today ephemeral
+   `remember` state) with the local-first user-preference store; `UserNotificationPreferences` already exists.
+   Same pure-codec + DataStore-store + ViewModel-intent shape.
+2. **Regional (content) language preference** (§L) — the still-no-op `settings_regional_language` row; wire it
+   through the Prisme *content*-preference / profile path (`LanguageResolver`, optimistic+offline), NOT the
+   interface `InterfaceLanguageStore`.
+3. Or the tracked **worker drain-list Robolectric test**, or pivot back to **Calls §H** platform-glue.
+
+## Prior loop (Phase: Contacts / outbox hardening) — slice `outbox-lane-map-ssot` ✅
+Structural close of the **lane-in-drain-list gotcha** (NOTES 2026-07-04). The `OutboxFlushWorker`
+kept a hand-maintained `listOf(...)` of shared lanes to drain, disjoint from the `buildSenders()`
+kind→sender registry — a kind could have a sender yet be stranded off the drain list (the BLOCK/FRIEND
+bug). This slice makes that impossible: a pure `OutboxLaneMap` (`:sdk-core` `outbox/OutboxModel.kt`)
+is the SSOT `OutboxKind → OutboxLaneAssignment` (`PerConversation` | `Shared(lane)`, exhaustive `when`),
+and the worker now drains the **derived** `OutboxLaneMap.sharedDrainLanes` (deduped, stable enum order).
+Also drops the always-empty `PRESENCE`/`SOCIAL` lanes (no kind maps there) — behaviour-preserving.
++9 pure tests. Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle 8.14.3). Diff =
+`apps/android` only (2 prod + 1 test). See PROGRESS.md run log.
+
+### Next
+1. **Mood-emoji presence** on friend rows — note: iOS sources it from a separate `StatusViewModel`
+   (user mood-status system), so this needs that status feature first (larger, dependency-heavy). The
+   **send compose-new UI** (dedicated user-search → connect surface) is the other Contacts gap.
+2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
+
+## Prior loop (Phase: Contacts) — slice `presence-away-indicator` ✅
+The **three-state presence dot** on the Contacts friend row (iOS parity — `UserPresence.state`).
+The `:core:model` `PresenceState`/`UserPresence` were dead code; this slice makes them live. Pure
+`UserPresence.state(nowEpochMillis)` is the SSOT: offline → no dot, online → green, online-but-idle
+> 5min (300s, iOS parity) → amber **away**; a null/blank/unparseable `lastActiveAt` stays online, an
+exactly-at-threshold or future timestamp stays online. Backed by a new nullable
+`isoToEpochMillisOrNull` (distinguishes "no reliable timestamp" from the epoch instant — `isoToEpochMillis`
+now delegates to it) and the `FriendRequestUser.presenceState(now)` adapter (nullable `isOnline` → offline).
+The friend row renders green/amber/none via a pure `presenceDotColor` mapping. +23 tests (8 IsoTime,
+10 Presence, 5 FriendPresence). Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle
+8.14.3). Diff = `apps/android` only (4 prod + 3 test). See PROGRESS.md run log.
+
+### Next
+1. **Mood-emoji presence** on friend rows (last remaining Contacts-list display gap), or the **send
+   compose-new UI** (dedicated user-search → connect surface), or the **worker drain-list test** (Robolectric).
+2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
+
+## Prior loop (Phase: Contacts) — slice `contacts-filter-counts` ✅
+The **per-filter chip counts** on the Contacts list (iOS parity — "All/online chips show counts").
+Pure `:core:model` `ContactList.counts(friends, query) → ContactFilterCounts` (all/online/offline sizes
+under the active search; online+offline partition all by construction) is the SSOT, exposed on
+`ContactsListUiState.filterCounts` and rendered as a `label  count` badge on each chip via
+`ContactFilterCounts.forFilter`. **Surpasses iOS**, whose counts ignore the search field. +7 tests
+(6 model, 1 VM). `:core:model` + `:feature:contacts` `testDebugUnitTest` + `:app:assembleDebug` green
+(system Gradle 8.14.3). Diff = `apps/android` only. See PROGRESS.md run log.
+
+## Prior loop (Phase: Contacts) — slice `contacts-friends-room-cache` ✅
+The **friends Room cache for cold-start paint** (iOS `CacheCoordinator.friends`) — the Contacts tab
+now paints the last-known friend list instantly on cold launch, surviving process death and working
+offline, instead of blocking on the received/sent fetch behind a skeleton. `:core:database`
+`FriendEntity`/`FriendDao` (DB v7→8; `sortIndex` preserves `ContactList`'s assembled order verbatim so
+the ordering SSOT stays in `:core:model`), `:sdk-core` `FriendListRepository` (`cachedSnapshot` — cold
+vs synced-empty via `sync_meta` — + `persist` write-through), and `ContactsListViewModel` rewired
+cache-first (paint-from-cache → revalidate → write-through; unfriend prunes and writes through with no
+refetch). +14 tests. Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle 8.14.3; wrapper
+8.11.1 dist is 403-blocked — see NOTES). Diff = `apps/android` only. See PROGRESS.md run log.
+
+### Next
+1. **Suggestions Room cache** for the Discover empty-query suggestions (iOS `CacheCoordinator.userSearch`)
+   — the last in-memory-only cache gap; copy the `FriendListRepository` template. Or the **send
+   compose-new UI** (dedicated user-search → connect surface).
 2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
 
 ## Prior loop (Phase: Calls) — slice `call-ended-identity-teardown` ✅
