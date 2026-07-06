@@ -1,5 +1,12 @@
 # Android — current loop
 
+> ⚠ **MERGE PENDING (2026-07-06): PR #1562** (`claude/apps/android/message-effects-lifecycle`) is OPEN and
+> must be squash-merged to `main` as **step 0** of the next run. Slice is complete: local `meeshy.sh check`
+> green; at last check CI had 7/11 jobs green, 0 failures, 4 unrelated JS/TS/Python jobs still running. The
+> GitHub MCP token expired before the final CI conclusion / merge could be confirmed. Next run: verify CI is
+> fully green, then squash-merge #1562 before starting a new slice.
+
+
 > Live state and the next slice now live in
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
