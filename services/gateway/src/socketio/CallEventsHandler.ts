@@ -576,15 +576,17 @@ export class CallEventsHandler {
 
       const dcStatus = leftSession.status as string;
       if (dcStatus === 'ended' || dcStatus === 'missed') {
-        this.clearQualityDegradedStreaks(participation.callSessionId);
         const dcEndedEvent: CallEndedEvent = {
           callId: leftSession.id,
           duration: leftSession.duration || 0,
           endedBy: userId,
           reason: (leftSession.endReason || 'completed') as CallEndReason
         };
-        io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
-        io.to(ROOMS.conversation(leftSession.conversationId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
+        // CALL-RESILIENCE — use the shared fanout (call + conversation + every
+        // active member's user room), not a narrow two-room emit: a still-ringing
+        // callee has joined neither room yet and would otherwise keep ringing
+        // until its own client-side timeout (see resolveCallEndedRooms).
+        await this.broadcastCallEnded(io, leftSession.id, leftSession.conversationId, dcEndedEvent);
         await this.postCallSummary(leftSession.id);
       }
 
@@ -641,7 +643,6 @@ export class CallEventsHandler {
           );
 
           if (forceEnded) {
-            this.clearQualityDegradedStreaks(participation.callSessionId);
             logger.info('✅ Socket: Force-ended call after disconnect error', {
               callId: participation.callSessionId,
               duration: forceEnded.duration
@@ -653,8 +654,12 @@ export class CallEventsHandler {
               endedBy: userId,
               reason: CallEndReason.connectionLost
             };
-            io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
-            io.to(ROOMS.conversation(participation.callSession.conversationId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
+            await this.broadcastCallEnded(
+              io,
+              participation.callSessionId,
+              participation.callSession.conversationId,
+              dcForceEndedEvent
+            );
             await this.postCallSummary(participation.callSessionId);
           }
         }
@@ -2085,8 +2090,9 @@ export class CallEventsHandler {
                   reason: (callSession.endReason || 'completed') as CallEndReason
                 };
 
-                io.to(ROOMS.call(call.id)).emit(CALL_EVENTS.ENDED, endedEvent);
-                io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+                // CALL-RESILIENCE — shared fanout (call + conversation + every
+                // active member's user room); see broadcastCallEnded.
+                await this.broadcastCallEnded(io, callSession.id, callSession.conversationId, endedEvent);
 
                 // P3 — post the call-summary system message (idempotent).
                 await this.postCallSummary(callSession.id);

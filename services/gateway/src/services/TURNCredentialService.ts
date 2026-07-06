@@ -64,6 +64,15 @@ export class TURNCredentialService {
       this.turnSecret = envSecret || DEFAULT_INSECURE_TURN_SECRET;
       if (this.turnSecret === DEFAULT_INSECURE_TURN_SECRET) {
         logger.warn('⚠️ [SECURITY] Using committed default TURN secret — DEV/LOCAL ONLY.');
+      } else if (this.turnSecret.length < 32) {
+        // Non-fatal here (unlike production/staging above): dev fixtures and
+        // local coturn setups routinely use short convenience secrets. Just
+        // surface the risk so a short secret is never silently carried into
+        // a shared/staging environment via copied env files.
+        logger.warn(
+          '⚠️ [SECURITY] Custom TURN_SECRET is shorter than 32 characters — fine for local ' +
+          'dev, but do not reuse it in a shared or staging environment.'
+        );
       }
     }
 

@@ -322,7 +322,10 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
         participantId: PARTICIPANT_ID,
       });
       const ended = emissions.filter(e => e.event === CALL_EVENTS.ENDED);
-      expect(ended.map(e => e.room)).toEqual([`call:${CALL_ID}`, `conversation:${CONV_ID}`]);
+      expect(ended).toHaveLength(1);
+      expect(ended[0].room).toEqual(
+        expect.arrayContaining([`call:${CALL_ID}`, `conversation:${CONV_ID}`])
+      );
     });
 
     it('does NOT end the call if the participant reconnected to the room by expiry', async () => {

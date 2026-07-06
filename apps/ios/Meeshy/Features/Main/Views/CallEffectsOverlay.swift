@@ -23,6 +23,7 @@ struct CallEffectsOverlay: View {
     @Binding var isExpanded: Bool
     let isVideoEnabled: Bool
     @State private var activePanel: EffectsPanelType?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Received from CallView, NOT instantiated here (`= CallManager.shared`
     // would re-create the @ObservedObject subscription on every parent body
     // re-evaluation — CallView re-evaluates often: pulse animation,
@@ -79,8 +80,8 @@ struct CallEffectsOverlay: View {
                 .zIndex(10)
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isExpanded)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: activePanel)
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8), value: isExpanded)
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: activePanel)
         // Pinned dark like sibling call chrome (CallWaitingBannerView,
         // FloatingCallPillView) — this overlay currently only mounts inside
         // CallView's forced-dark subtree, but pinning here keeps it correct
@@ -112,7 +113,7 @@ struct CallEffectsOverlay: View {
 
     private func toolbarButton(icon: String, label: String, isActive: Bool, panel: EffectsPanelType) -> some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                 if activePanel == panel {
                     activePanel = nil
                 } else {
@@ -154,7 +155,7 @@ struct CallEffectsOverlay: View {
     // MARK: - Dismiss
 
     private func dismiss() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
             activePanel = nil
             isExpanded = false
         }
