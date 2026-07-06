@@ -1836,7 +1836,8 @@ describe('registerMessagesAdvancedRoutes', () => {
         CONV_ID,
         '', // null?.userId ?? '' = ''
         expect.any(String),
-        []
+        [],
+        expect.anything()
       );
     });
 
@@ -1863,7 +1864,8 @@ describe('registerMessagesAdvancedRoutes', () => {
         CONV_ID,
         USER_ID,
         '', // null ?? '' = ''
-        []
+        [],
+        expect.anything()
       );
     });
 
@@ -1890,7 +1892,8 @@ describe('registerMessagesAdvancedRoutes', () => {
         CONV_ID,
         USER_ID,
         'hello',
-        [] // null ?? [] = []
+        [], // null ?? [] = []
+        expect.anything()
       );
     });
 
@@ -1914,7 +1917,8 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockOnMessageDeleted).toHaveBeenCalledWith(
         expect.anything(), CONV_ID, USER_ID, 'hello',
-        ['file'] // '' doesn't start with any prefix → 'file'
+        ['file'], // '' doesn't start with any prefix → 'file'
+        expect.anything()
       );
     });
 
@@ -1941,7 +1945,8 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockOnMessageDeleted).toHaveBeenCalledWith(
         expect.anything(), CONV_ID, USER_ID, 'hello',
-        ['video', 'file']
+        ['video', 'file'],
+        expect.anything()
       );
     });
 

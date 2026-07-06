@@ -311,7 +311,8 @@ export class MessageHandler {
         });
 
         conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], null
+          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], null,
+          message.messageType || 'text'
         ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
@@ -514,7 +515,8 @@ export class MessageHandler {
           return 'file';
         });
         conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, null
+          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, null,
+          message.messageType || 'text'
         ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 

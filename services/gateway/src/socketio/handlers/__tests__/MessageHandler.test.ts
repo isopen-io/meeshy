@@ -1087,7 +1087,7 @@ describe('MessageHandler', () => {
         conversationId: VALID_CONV_ID, content: 'img', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
       }, callback);
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['image'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['image'], null, expect.anything()
       );
     });
 
@@ -1097,7 +1097,7 @@ describe('MessageHandler', () => {
         conversationId: VALID_CONV_ID, content: 'audio', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
       }, callback);
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['audio'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['audio'], null, expect.anything()
       );
     });
 
@@ -1107,7 +1107,7 @@ describe('MessageHandler', () => {
         conversationId: VALID_CONV_ID, content: 'vid', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
       }, callback);
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['video'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['video'], null, expect.anything()
       );
     });
 
@@ -1117,7 +1117,7 @@ describe('MessageHandler', () => {
         conversationId: VALID_CONV_ID, content: 'doc', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
       }, callback);
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null, expect.anything()
       );
     });
   });
@@ -1688,7 +1688,7 @@ describe('MessageHandler', () => {
 
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
         expect.anything(), expect.anything(), 'anon-stats-0011',
-        expect.anything(), expect.anything(), null
+        expect.anything(), expect.anything(), null, expect.anything()
       );
     });
   });
@@ -1819,7 +1819,7 @@ describe('MessageHandler', () => {
       await handler.handleMessageSendWithAttachments(socket, data as any, callback);
 
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null, expect.anything()
       );
     });
   });
