@@ -87,13 +87,13 @@ let beforeUnloadHandler: (() => void) | null = null;
 
 // Buffer for `call:participant-joined` payloads that arrive while
 // `currentCall` is still null — the initiator's own `call:initiate` ack
-// sets `currentCall` asynchronously, so a fast callee can legitimately join
-// (and broadcast participant-joined) before that ack lands. Without this
-// buffer, `addParticipant` used to no-op and the join was lost forever once
-// the ack later overwrote `currentCall` with an empty participants array —
-// the initiator would never create a WebRTC offer for a callee who had, in
-// fact, already joined. Claimed and cleared by `setCurrentCall` once the
-// matching call becomes current.
+// (use-video-call.ts, P0 fix 2026-07-06) sets `currentCall` asynchronously,
+// so a fast callee can legitimately join (and broadcast participant-joined)
+// before that ack lands. Without this buffer, `addParticipant` used to no-op
+// and the join was lost forever once the ack later overwrote `currentCall`
+// with an empty participants array — the initiator would never create a
+// WebRTC offer for a callee who had, in fact, already joined. Claimed and
+// cleared by `setCurrentCall` once the matching call becomes current.
 const pendingParticipantsByCallId = new Map<string, CallParticipant[]>();
 
 const initialState: CallState = {

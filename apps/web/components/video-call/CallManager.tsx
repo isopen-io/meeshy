@@ -103,16 +103,16 @@ export function CallManager() {
   }, [clearCallTimeout, reset]);
 
   /**
-   * The initiator's own outgoing call never reaches this component via
-   * `call:initiated` — the gateway deliberately never re-emits that event
-   * back to the initiator's own socket, so `startCall`'s ack handler
-   * (use-video-call.ts) sets `currentCall` directly instead. That path has
-   * no reference to `startCallTimeout`, so the initiator's 30s no-answer
-   * auto-cleanup never armed for the caller — only the callee (via
-   * `handleIncomingCall`) had one. Arm it here, reactively, the moment the
-   * initiator's own call becomes current in `initiated` status;
-   * `handleParticipantJoined` already clears it the instant someone
-   * actually joins.
+   * Bug fix (2026-07-06, follow-up to the 682c35279 P0 fix) — the initiator's
+   * own outgoing call never reaches this component via `call:initiated`: the
+   * gateway deliberately never re-emits that event back to the initiator's
+   * own socket, so `startCall`'s ack handler (use-video-call.ts) sets
+   * `currentCall` directly instead. That path has no reference to
+   * `startCallTimeout`, so the initiator's 30s no-answer auto-cleanup never
+   * armed for the caller — only the callee (via `handleIncomingCall`) had
+   * one. Arm it here, reactively, the moment the initiator's own call
+   * becomes current in `initiated` status; `handleParticipantJoined` already
+   * clears it the instant someone actually joins.
    */
   useEffect(() => {
     if (!user || !currentCall) return;

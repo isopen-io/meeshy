@@ -6,6 +6,7 @@
 
 import type { Conversation, Message } from '@meeshy/shared/types';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { getUserDisplayNameOrNull } from '@/utils/user-display-name';
 import type { ConversationItemData, ConversationTag } from '@/components/v2';
 
 export type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
@@ -105,10 +106,13 @@ export function transformToConversationItem(
   } else {
     const otherMember = otherMembers[0];
     const otherUser = otherMember?.user as any;
+    // Canonical name resolution (displayName > firstName+lastName > username)
+    // via the SSOT `getUserDisplayName`. The prior inline chain preferred
+    // `username` over the real name and never used `lastName`, showing cryptic
+    // handles for users without a custom displayName. Participant-level
+    // fallbacks (member displayName/nickname, conversation title) are preserved.
     name =
-      otherUser?.displayName ||
-      otherUser?.username ||
-      otherUser?.firstName ||
+      getUserDisplayNameOrNull(otherUser) ||
       otherMember?.displayName ||
       (otherMember as any)?.nickname ||
       conversation.title ||
