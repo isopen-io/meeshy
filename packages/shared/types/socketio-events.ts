@@ -125,7 +125,6 @@ export const SERVER_EVENTS = {
   AUTH_TOKEN_EXPIRED: 'auth:token-expired',
   AUTH_SESSION_REVOKED: 'auth:session-revoked',
   ERROR: 'error',
-  NOTIFICATION: 'notification',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',
   NOTIFICATION_DELETED: 'notification:deleted',
@@ -1317,7 +1316,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
-  [SERVER_EVENTS.NOTIFICATION]: (data: NotificationEventData) => void;
   [SERVER_EVENTS.SYSTEM_MESSAGE]: (data: SystemMessageEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;
   [SERVER_EVENTS.CONVERSATION_ONLINE_STATS]: (data: ConversationOnlineStatsEventData) => void;

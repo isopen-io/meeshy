@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -27,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -60,6 +62,9 @@ import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.AppThemeMode
 import me.meeshy.sdk.model.DndDay
 import me.meeshy.sdk.model.DndWindow
+import me.meeshy.sdk.model.NotificationCategory
+import me.meeshy.sdk.model.NotificationType
+import me.meeshy.sdk.model.NotificationTypeCatalog
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshySpacing
@@ -179,6 +184,12 @@ fun SettingsScreen(
                     onSetStart = viewModel::setDndStart,
                     onSetEnd = viewModel::setDndEnd,
                     onToggleDay = viewModel::toggleDndDay,
+                )
+                NotificationTypesEditor(
+                    notifications = notifications,
+                    query = state.notificationTypeQuery,
+                    onQueryChange = viewModel::setNotificationTypeQuery,
+                    onToggleType = viewModel::setNotificationTypeEnabled,
                 )
             }
 
@@ -485,6 +496,93 @@ private fun dndDayLabelRes(day: DndDay): Int = when (day) {
     DndDay.FRI -> R.string.settings_dnd_day_fri
     DndDay.SAT -> R.string.settings_dnd_day_sat
     DndDay.SUN -> R.string.settings_dnd_day_sun
+}
+
+@Composable
+private fun NotificationTypesEditor(
+    notifications: UserNotificationPreferences,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onToggleType: (NotificationType, Boolean) -> Unit,
+) {
+    val labels: Map<NotificationType, String> =
+        NotificationType.entries.associateWith { stringResource(notificationTypeLabelRes(it)) }
+    val sections = NotificationTypeCatalog.sections(
+        prefs = notifications,
+        query = query,
+        label = { labels.getValue(it) },
+    )
+
+    Text(
+        text = stringResource(R.string.settings_notification_types_title),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+    )
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        placeholder = { Text(stringResource(R.string.settings_notification_types_search)) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+    )
+    if (sections.isEmpty()) {
+        Text(
+            text = stringResource(R.string.settings_notification_types_empty),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        )
+        return
+    }
+    sections.forEach { section ->
+        Text(
+            text = stringResource(notificationCategoryLabelRes(section.category)),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        )
+        section.items.forEach { item ->
+            NotificationToggleRow(
+                label = labels.getValue(item.type),
+                checked = item.enabled,
+                enabled = notifications.pushEnabled,
+                onCheckedChange = { onToggleType(item.type, it) },
+            )
+        }
+    }
+}
+
+private fun notificationCategoryLabelRes(category: NotificationCategory): Int = when (category) {
+    NotificationCategory.MESSAGES -> R.string.settings_notif_cat_messages
+    NotificationCategory.CALLS -> R.string.settings_notif_cat_calls
+    NotificationCategory.SOCIAL -> R.string.settings_notif_cat_social
+    NotificationCategory.GROUPS -> R.string.settings_notif_cat_groups
+    NotificationCategory.SYSTEM -> R.string.settings_notif_cat_system
+}
+
+private fun notificationTypeLabelRes(type: NotificationType): Int = when (type) {
+    NotificationType.REPLY -> R.string.settings_notif_type_reply
+    NotificationType.MENTION -> R.string.settings_notif_type_mention
+    NotificationType.REACTION -> R.string.settings_notif_type_reaction
+    NotificationType.CONVERSATION -> R.string.settings_notif_type_conversation
+    NotificationType.MISSED_CALL -> R.string.settings_notif_type_missed_call
+    NotificationType.VOICEMAIL -> R.string.settings_notif_type_voicemail
+    NotificationType.POST_LIKE -> R.string.settings_notif_type_post_like
+    NotificationType.POST_COMMENT -> R.string.settings_notif_type_post_comment
+    NotificationType.POST_REPOST -> R.string.settings_notif_type_post_repost
+    NotificationType.STORY_REACTION -> R.string.settings_notif_type_story_reaction
+    NotificationType.COMMENT_REPLY -> R.string.settings_notif_type_comment_reply
+    NotificationType.COMMENT_LIKE -> R.string.settings_notif_type_comment_like
+    NotificationType.CONTACT_REQUEST -> R.string.settings_notif_type_contact_request
+    NotificationType.GROUP_INVITE -> R.string.settings_notif_type_group_invite
+    NotificationType.MEMBER_JOINED -> R.string.settings_notif_type_member_joined
+    NotificationType.MEMBER_LEFT -> R.string.settings_notif_type_member_left
+    NotificationType.SYSTEM -> R.string.settings_notif_type_system
 }
 
 @Composable

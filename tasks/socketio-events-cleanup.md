@@ -72,19 +72,44 @@ Tests : `packages/shared/__tests__/types/socketio-events.test.ts` (convention),
 
 ---
 
-## 4. `NOTIFICATION` (sans suffixe) — usage flou
+## 4. `NOTIFICATION` (sans suffixe) — usage flou — ✅ Résolu (2026-07-05, retiré)
 
-**Problème** :
+**Problème (historique)** :
 ```typescript
 NOTIFICATION: 'notification',
 NOTIFICATION_NEW: 'notification:new',
 ```
-Le générique `NOTIFICATION` (sans `:action`) est inhabituel — quel sens vs `NOTIFICATION_NEW` ?
+Le générique `NOTIFICATION` (sans `:action`) était inhabituel — quel sens vs `NOTIFICATION_NEW` ?
 
-**Action proposée** :
-- Auditer `grep -rn "SERVER_EVENTS.NOTIFICATION[^_]" services/gateway` pour voir s'il est encore émis
-- Si non utilisé → deprecate puis remove
-- Si utilisé → renommer en `NOTIFICATION_GENERIC` ou `NOTIFICATION_PUSH` selon sémantique
+**Audit (2026-07-05)** : `grep -rn "SERVER_EVENTS.NOTIFICATION\b"` (hors `NOTIFICATION_*`) a trouvé
+exactement 2 émetteurs côté gateway, tous les deux morts en production :
+- `MeeshySocketIOHandler.sendNotificationToUser()` — méthode définie mais **jamais appelée** par
+  aucun caller (grep repo-wide sur `sendNotificationToUser` ne remonte que sa propre définition et
+  ses tests unitaires).
+- `SocketNotificationService.emitNotification()` — classe **jamais instanciée** en dehors de son
+  propre fichier de test (`new SocketNotificationService()` n'apparaît nulle part dans
+  `server.ts`/`NotificationService.ts`) ; la diffusion réelle des notifications passe entièrement par
+  `NotificationService` qui émet directement sur `this.io` (ex. `NOTIFICATION_NEW`,
+  `FRIEND_REQUEST_*`, `USER_UPDATED`) sans jamais passer par ce service.
+
+Côté web, `notification-socketio.singleton.ts` gardait un listener `this.socket.on(SERVER_EVENTS.NOTIFICATION, ...)` commenté "Legacy support" — mais comme rien ne l'a jamais émis en production (les deux seuls émetteurs étaient déjà morts), ce n'était pas un vrai chemin de compat, juste du code mort en miroir. Côté iOS, `MessageSocketManager.swift` documentait déjà explicitement ne PAS écouter cet event legacy — même conclusion atteinte indépendamment.
+
+**Fix appliqué** : suppression complète — constante `SERVER_EVENTS.NOTIFICATION` et son entrée dans
+`ServerToClientEvents`, méthode `sendNotificationToUser` (+ import `SERVER_EVENTS` devenu inutile) sur
+`MeeshySocketIOHandler`, classe `SocketNotificationService` entière (fichier + export
+`services/notifications/index.ts`), listener legacy web + tests associés. Tests mis à jour en
+conséquence (suppression des cas qui exerçaient exclusivement le code mort). Suites complètes vertes :
+gateway 508/508, web 434/434, shared 45/45 (1284 tests).
+
+**Bonus trouvé au passage** : `SequenceService.ts`, `consent-test-helper.ts` et
+`migrate-from-legacy.ts` importaient `PrismaClient` depuis le package `@prisma/client` par défaut au
+lieu de `@meeshy/shared/prisma/client` (seul generator configuré dans `schema.prisma`, output custom
+`./client`) — `@prisma/client` n'a jamais de client généré à cet emplacement dans ce repo, donc
+`import type { PrismaClient } from '@prisma/client'` ne résout à rien (`TS2305`). Ce bruit de compilation
+cassait 26 suites de test gateway (répertorié comme "bruit préexistant" dans plusieurs itérations
+précédentes, jamais corrigé). Corrigé en alignant les 3 imports sur la convention `@meeshy/shared/prisma/client`
+déjà utilisée partout ailleurs dans `services/gateway/src` — root-cause fix, aucune régression
+(suite complète 508/508 après correction, contre 482/508 + 26 suites en échec de compilation avant).
 
 ---
 
@@ -201,7 +226,7 @@ demande avait été acceptée/refusée, seulement au prochain refetch complet.
 | ~~P2~~ | ~~#7 FRIEND_REQUEST events~~ | ✅ Résolu 2026-07-01 (CANCELLED + NEW/ACCEPTED/REJECTED) |
 | ~~P3~~ | ~~#6 USER_UPDATED~~ | ✅ Résolu 2026-07-02 |
 | ~~P3~~ | ~~#3 READ_STATUS namespace~~ | ✅ Résolu 2026-07-05 |
-| P3 | #4 NOTIFICATION générique | À élucider d'abord |
+| ~~P3~~ | ~~#4 NOTIFICATION générique~~ | ✅ Résolu 2026-07-05 (code mort retiré, pas juste renommé) |
 
 ## Conventions à inscrire dans `socketio-events.ts`
 
