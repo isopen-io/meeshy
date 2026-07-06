@@ -15,18 +15,24 @@ import me.meeshy.sdk.model.UpdateProfileRequest
 object ProfileEditRequestBuilder {
 
     fun build(
+        firstName: String,
+        lastName: String,
         displayName: String,
         bio: String,
         systemLanguage: String?,
         regionalLanguage: String?,
         customDestinationLanguage: String?,
     ): UpdateProfileRequest = UpdateProfileRequest(
-        displayName = displayName.trim().takeIf { it.isNotEmpty() },
-        bio = bio.trim().takeIf { it.isNotEmpty() },
+        firstName = firstName.blankToNull(),
+        lastName = lastName.blankToNull(),
+        displayName = displayName.blankToNull(),
+        bio = bio.blankToNull(),
         systemLanguage = systemLanguage.normalizedCode(),
         regionalLanguage = regionalLanguage.normalizedCode(),
         customDestinationLanguage = customDestinationLanguage.normalizedCode(),
     )
+
+    private fun String.blankToNull(): String? = trim().takeIf { it.isNotEmpty() }
 
     private fun String?.normalizedCode(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 }

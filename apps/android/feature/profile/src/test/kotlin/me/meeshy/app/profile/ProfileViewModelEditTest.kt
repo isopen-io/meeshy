@@ -40,6 +40,8 @@ class ProfileViewModelEditTest {
 
     private fun user(
         id: String = "u1",
+        firstName: String? = "Alice",
+        lastName: String? = "Liddell",
         displayName: String? = "Alice",
         bio: String? = "hi",
         systemLanguage: String? = "fr",
@@ -48,6 +50,8 @@ class ProfileViewModelEditTest {
     ) = MeeshyUser(
         id = id,
         username = "alice",
+        firstName = firstName,
+        lastName = lastName,
         displayName = displayName,
         bio = bio,
         systemLanguage = systemLanguage,
@@ -99,11 +103,42 @@ class ProfileViewModelEditTest {
 
         val s = vm.state.value
         assertThat(s.isEditing).isTrue()
+        assertThat(s.firstName).isEqualTo("Alice")
+        assertThat(s.lastName).isEqualTo("Liddell")
         assertThat(s.displayName).isEqualTo("Alice")
         assertThat(s.bio).isEqualTo("hi")
         assertThat(s.systemLanguage).isEqualTo("fr")
         assertThat(s.regionalLanguage).isEqualTo("en")
         assertThat(s.customDestinationLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun startEditing_seedsBlankNameBuffers_whenTheUserHasNoNames() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        val flow = MutableStateFlow<MeeshyUser?>(user(firstName = null, lastName = null))
+        val vm = ownProfileVm(flow, userRepo)
+        advanceUntilIdle()
+
+        vm.startEditing()
+
+        val s = vm.state.value
+        assertThat(s.firstName).isEmpty()
+        assertThat(s.lastName).isEmpty()
+    }
+
+    @Test
+    fun nameIntents_updateTheEditorBuffers() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
+        advanceUntilIdle()
+        vm.startEditing()
+
+        vm.onFirstNameChange("Alicia")
+        vm.onLastNameChange("Keys")
+
+        val s = vm.state.value
+        assertThat(s.firstName).isEqualTo("Alicia")
+        assertThat(s.lastName).isEqualTo("Keys")
     }
 
     @Test
@@ -147,6 +182,8 @@ class ProfileViewModelEditTest {
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo, workManager)
         advanceUntilIdle()
         vm.startEditing()
+        vm.onFirstNameChange("  Alicia  ")
+        vm.onLastNameChange("  Keys  ")
         vm.onDisplayNameChange("  Alicia  ")
         vm.onSystemLanguageChange("de")
 
@@ -154,6 +191,8 @@ class ProfileViewModelEditTest {
         advanceUntilIdle()
 
         // The request is built from the buffers via the trimming builder.
+        assertThat(captured.captured.firstName).isEqualTo("Alicia")
+        assertThat(captured.captured.lastName).isEqualTo("Keys")
         assertThat(captured.captured.displayName).isEqualTo("Alicia")
         assertThat(captured.captured.systemLanguage).isEqualTo("de")
         coVerify(exactly = 1) { userRepo.enqueueProfileEdit(any()) }
@@ -197,6 +236,7 @@ class ProfileViewModelEditTest {
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
         advanceUntilIdle()
         vm.startEditing()
+        vm.onFirstNameChange("Abandoned")
         vm.onDisplayNameChange("Typed but abandoned")
         vm.onSystemLanguageChange("de")
 
@@ -204,6 +244,7 @@ class ProfileViewModelEditTest {
 
         val s = vm.state.value
         assertThat(s.isEditing).isFalse()
+        assertThat(s.firstName).isEqualTo("Alice")
         assertThat(s.displayName).isEqualTo("Alice")
         assertThat(s.systemLanguage).isEqualTo("fr")
     }
