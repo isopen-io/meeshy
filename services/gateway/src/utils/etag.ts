@@ -23,6 +23,17 @@ export function computeETagFromSerialized(body: string | Buffer): string {
  * RFC 7232 §3.2 — does an `If-None-Match` request header match `etag`?
  * Handles a single value, a comma-separated list, the `*` wildcard, and the
  * array form Fastify may surface for repeated headers.
+ *
+ * `If-None-Match` is compared with the WEAK comparison function (RFC 7232 §3.2):
+ * the `W/` weak-validator flag is ignored on BOTH sides — only the opaque-tag is
+ * compared. This matters in production: `computeETag` emits a STRONG tag, but any
+ * transforming intermediary (a CDN, or a gzip/br compressing proxy) is expected
+ * to weaken it to `W/"…"` on the way back. Without weak comparison the client
+ * then echoes `W/"…"`, an exact-string check fails, and every conditional GET
+ * behind such a proxy re-sends the full 200 body instead of a 304 — silently
+ * defeating the app-wide conditional-GET bandwidth optimization
+ * (`conditionalGetOnSend`). Weak comparison is always correct here because every
+ * caller uses this for `If-None-Match` on idempotent GETs.
  */
 export function ifNoneMatchMatches(
   headerValue: string | string[] | undefined,
@@ -31,7 +42,10 @@ export function ifNoneMatchMatches(
   if (headerValue === undefined) return false;
   const values = (Array.isArray(headerValue) ? headerValue : headerValue.split(','))
     .map((v) => v.trim());
-  return values.includes('*') || values.includes(etag);
+  if (values.includes('*')) return true;
+  const opaqueTag = (v: string): string => v.replace(/^W\//, '');
+  const target = opaqueTag(etag);
+  return values.some((v) => opaqueTag(v) === target);
 }
 
 /**
