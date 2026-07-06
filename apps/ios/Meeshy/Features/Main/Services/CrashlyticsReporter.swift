@@ -35,7 +35,7 @@ nonisolated struct CrashlyticsReporter: CrashReporting {
                 NSLocalizedDescriptionKey: diagnostic.summary,
                 "diagnostic_id": diagnostic.id.uuidString,
                 "diagnostic_kind": diagnostic.kind.rawValue,
-                "diagnostic_timestamp": ISO8601DateFormatter().string(from: diagnostic.timestamp),
+                "diagnostic_timestamp": diagnostic.timestamp.formatted(.iso8601),
                 "metrickit_details": truncatedDetails
             ]
         )

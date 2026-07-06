@@ -97,8 +97,8 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
 export function validateMentionCount(content: string): { valid: boolean; error?: string } {
   const MAX_MENTIONS_PER_MESSAGE = 50;
 
-  // Extraire les mentions
-  const mentionMatches = content.match(/@(\w+)/g);
+  // Extraire les mentions (tiret inclus : charset username /^[a-zA-Z0-9_-]+$/)
+  const mentionMatches = content.match(/@([\w-]+)/g);
   const mentionCount = mentionMatches ? mentionMatches.length : 0;
 
   if (mentionCount > MAX_MENTIONS_PER_MESSAGE) {

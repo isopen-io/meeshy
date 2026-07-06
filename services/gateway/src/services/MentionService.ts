@@ -8,7 +8,7 @@
 import { PrismaClient, User } from '@meeshy/shared/prisma/client';
 import { getCacheStore, type CacheStore } from './CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { parseMentions, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import { parseMentions, MENTION_HANDLE_CHARS, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import type { MentionedUser } from '@meeshy/shared/types';
 
 // Logger dédié pour MentionService
@@ -33,11 +33,14 @@ export interface MentionValidationResult {
 }
 
 export class MentionService {
-  // Regex pour détecter les mentions @username (lettres, chiffres, underscore)
-  private readonly MENTION_REGEX = /@(\w+)/g;
+  // Regex pour détecter les mentions @username (lettres, chiffres, underscore, tiret).
+  // Charset aligné sur MENTION_HANDLE_CHARS (SSOT) et la validation username /^[a-zA-Z0-9_-]+$/ :
+  // `\w` seul tronquait `@marie-claire` en `marie`.
+  private readonly MENTION_REGEX = new RegExp(`@([${MENTION_HANDLE_CHARS}]+)`, 'g');
 
-  // Regex stricte pour valider les usernames (alphanumeric + underscore, 1-30 caractères)
-  private readonly USERNAME_VALIDATION_REGEX = /^[a-z0-9_]{1,30}$/;
+  // Regex stricte pour valider les usernames (alphanumeric + underscore + tiret, 1-30 caractères),
+  // appliquée après lowercase — parité avec le charset username.
+  private readonly USERNAME_VALIDATION_REGEX = /^[a-z0-9_-]{1,30}$/;
 
   // Limite de suggestions pour l'autocomplete
   private readonly MAX_SUGGESTIONS = 10;
@@ -1039,7 +1042,9 @@ export async function resolveMentionedUsers(
   contents: readonly string[]
 ): Promise<MentionedUser[]> {
   const usernames = new Set<string>();
-  const mentionRegex = /@(\w{1,30})/g;
+  // Charset aligné sur MENTION_HANDLE_CHARS (SSOT) : inclut le tiret, sinon `@marie-claire`
+  // était résolu comme `marie` et l'utilisateur à tiret ne remontait jamais.
+  const mentionRegex = new RegExp(`@([${MENTION_HANDLE_CHARS}]{1,30})`, 'g');
 
   for (const content of contents) {
     if (!content) continue;

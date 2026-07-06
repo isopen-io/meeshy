@@ -269,12 +269,14 @@ export class AffiliateTrackingService {
           }
         }),
 
-        // Statistiques groupées par statut
+        // Statistiques groupées par statut — même filtre que la liste `referrals`
+        // pour que le décompte par statut reste cohérent avec `totalReferrals`.
+        // Sans cela, un filtre (tokenId/status/dates) réduit `totalReferrals`
+        // mais laissait la ventilation completed/pending/expired non filtrée,
+        // pouvant excéder le total et mal attribuer les compteurs par token.
         prisma.affiliateRelation.groupBy({
           by: ['status'],
-          where: {
-            affiliateUserId: userId
-          },
+          where: whereClause,
           _count: {
             status: true
           }

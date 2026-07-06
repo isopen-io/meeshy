@@ -19,7 +19,7 @@
 
 [project]
 name = "meeshy-translator"
-version = "1.3.0"
+version = "1.2.0"
 description = "Meeshy Translator - FastAPI ML Service for translation, STT, and TTS"
 readme = "README.md"
 license = { text = "Proprietary" }
@@ -68,6 +68,8 @@ dependencies = [
 
     # Détection de langue et analyse de texte
     "langdetect>=1.0.9",
+    "nltk>=3.8.0",
+    "textstat>=0.7.0",
 
     # Utilitaires système
     "psutil>=6.0.0",

@@ -62,6 +62,18 @@ describe('InterpellationDetector', () => {
     expect(result.targetUserIds).toEqual(['bot-alice']);
   });
 
+  it('detects a hyphenated bot username without truncating at the hyphen', () => {
+    const result = detectInterpellation({
+      mentionedUserIds: [],
+      replyToUserId: undefined,
+      content: 'Hey @marie-claire tu penses quoi?',
+      controlledUserIds: new Set(['bot-mc']),
+      controlledUsernames: new Map([['marie-claire', 'bot-mc']]),
+    });
+    expect(result.detected).toBe(true);
+    expect(result.targetUserIds).toEqual(['bot-mc']);
+  });
+
   it('deduplicates mention + reply to same user', () => {
     const result = detectInterpellation({
       mentionedUserIds: ['bot-alice'],

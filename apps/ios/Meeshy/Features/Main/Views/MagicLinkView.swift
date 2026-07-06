@@ -85,7 +85,7 @@ struct MagicLinkView: View {
 
             // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i/87i), masqué à VoiceOver.
             Image(systemName: "wand.and.stars")
-                .font(MeeshyFont.relative(56, weight: .light))
+                .font(.system(size: 56, weight: .light))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],
@@ -197,7 +197,7 @@ struct MagicLinkView: View {
 
                 // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i/87i), masqué à VoiceOver.
                 Image(systemName: "envelope.open.fill")
-                    .font(MeeshyFont.relative(48, weight: .light))
+                    .font(.system(size: 48, weight: .light))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],

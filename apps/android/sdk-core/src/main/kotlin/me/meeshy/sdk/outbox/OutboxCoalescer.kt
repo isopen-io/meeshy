@@ -23,7 +23,15 @@ public sealed interface CoalesceDecision {
  * - send + delete of the same unsent message cancels both;
  * - a repeated edit / read-receipt merges, keeping the latest;
  * - a delete supersedes pending edits of the same message;
- * - a reaction toggle (add then remove, or remove then add) cancels itself.
+ * - a reaction toggle (add then remove, or remove then add) cancels itself;
+ * - a block/unblock toggle of the same user cancels itself, and a repeated
+ *   block (or unblock) keeps only the latest (idempotent terminal state);
+ * - a repeated friend request to the same receiver keeps only the latest
+ *   (only one request can exist — idempotent send, latest greeting wins);
+ * - a repeated profile edit (same user id) keeps only the latest snapshot
+ *   (each carries the full PATCH body — the newest edit subsumes the pending one);
+ * - a repeated settings update (same user id) keeps only the latest snapshot
+ *   (each carries the full preference block — an offline toggle burst collapses to one PATCH).
  *
  * [pending] MUST contain only still-cancellable rows ([OutboxState.PENDING]);
  * an in-flight mutation cannot be undone.
@@ -38,8 +46,16 @@ public object OutboxCoalescer {
             OutboxKind.READ_RECEIPT -> replaceSameKind(incoming, sameTarget, OutboxKind.READ_RECEIPT)
             OutboxKind.UPDATE_CONVERSATION_PREFS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_CONVERSATION_PREFS)
+            OutboxKind.UPDATE_PROFILE ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PROFILE)
+            OutboxKind.UPDATE_SETTINGS ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_SETTINGS)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
+            OutboxKind.BLOCK_USER -> blockToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)
+            OutboxKind.UNBLOCK_USER -> blockToggle(incoming, sameTarget, OutboxKind.BLOCK_USER, OutboxKind.UNBLOCK_USER)
+            OutboxKind.SEND_FRIEND_REQUEST ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.SEND_FRIEND_REQUEST)
             else -> CoalesceDecision.Enqueue(incoming)
         }
     }
@@ -81,6 +97,29 @@ public object OutboxCoalescer {
             CoalesceDecision.Enqueue(incoming)
         } else {
             CoalesceDecision.Annihilate(cancelled)
+        }
+    }
+
+    /**
+     * Coalesces a block-state mutation. Block and unblock are opposite terminal
+     * states (not deltas), so a queued opposite for the same user annihilates —
+     * the pair returns the user to the last-synced server state, exactly like a
+     * reaction toggle. Failing that, a pending same-kind row for the user is
+     * superseded (a repeated block/unblock is idempotent). Otherwise it enqueues.
+     */
+    private fun blockToggle(
+        incoming: OutboxEntity,
+        sameTarget: List<OutboxEntity>,
+        opposite: OutboxKind,
+        same: OutboxKind,
+    ): CoalesceDecision {
+        val cancelled = sameTarget.filter { it.kindEnum == opposite }.map { it.cmid }
+        if (cancelled.isNotEmpty()) return CoalesceDecision.Annihilate(cancelled)
+        val superseded = sameTarget.filter { it.kindEnum == same }.map { it.cmid }
+        return if (superseded.isEmpty()) {
+            CoalesceDecision.Enqueue(incoming)
+        } else {
+            CoalesceDecision.Replace(superseded, incoming)
         }
     }
 }

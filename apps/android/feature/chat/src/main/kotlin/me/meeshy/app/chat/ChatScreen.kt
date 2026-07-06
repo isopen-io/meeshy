@@ -51,11 +51,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,16 +73,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
 import java.util.Locale
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
-import me.meeshy.sdk.model.BlurState
-import me.meeshy.sdk.model.EphemeralState
-import me.meeshy.sdk.model.MessageEffects
-import me.meeshy.sdk.model.MessageLifecyclePresentation
-import me.meeshy.sdk.model.ViewOnceState
-import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.MeeshySkeletonBox
@@ -126,20 +116,6 @@ fun ChatScreen(
 
     val showScrollToBottom by remember(listItems.lastIndex) {
         derivedStateOf { !listState.isNearBottom(listItems.lastIndex) }
-    }
-
-    // Tap-to-reveal state for blurred / view-once messages, and a 1 Hz clock that
-    // only ticks while an ephemeral message is on screen (no idle wake-ups).
-    val revealedIds = remember { mutableStateListOf<String>() }
-    val hasTimedEffect = remember(state.messages) {
-        state.messages.any { it.effects?.isEphemeral == true }
-    }
-    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(hasTimedEffect) {
-        while (hasTimedEffect) {
-            nowMillis = System.currentTimeMillis()
-            delay(1_000L)
-        }
     }
 
     LaunchedEffect(listState) {
@@ -260,20 +236,6 @@ fun ChatScreen(
                                             viewModel.openImageViewer(bubble.messageId, index)
                                         },
                                     )
-                                    bubble.effects?.let { effects ->
-                                        MessageLifecycleBadge(
-                                            effects = effects,
-                                            createdAtMillis = isoToEpochMillisOrNull(bubble.createdAtIso),
-                                            nowMillis = nowMillis,
-                                            revealed = bubble.messageId in revealedIds,
-                                            isOutgoing = bubble.isOutgoing,
-                                            onReveal = {
-                                                if (bubble.messageId !in revealedIds) {
-                                                    revealedIds.add(bubble.messageId)
-                                                }
-                                            },
-                                        )
-                                    }
                                     if (bubble.deliveryStatus == DeliveryStatus.Failed) {
                                         Text(
                                             text = stringResource(R.string.chat_send_failed_retry),
@@ -404,63 +366,6 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         )
     }
-}
-
-/**
- * Compact lifecycle affordance rendered under a bubble carrying [MessageEffects] —
- * an ephemeral countdown, a tap-to-reveal blur, and a view-once indicator. The render
- * decision is the pure [MessageLifecyclePresentation] SSOT; this composable only draws
- * it and forwards the natural reveal tap.
- */
-@Composable
-private fun MessageLifecycleBadge(
-    effects: MessageEffects,
-    createdAtMillis: Long?,
-    nowMillis: Long,
-    revealed: Boolean,
-    isOutgoing: Boolean,
-    onReveal: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val lifecycle = MessageLifecyclePresentation.of(
-        effects = effects,
-        createdAtMillis = createdAtMillis,
-        nowMillis = nowMillis,
-        revealed = revealed,
-        viewCount = if (revealed) 1 else 0,
-    )
-    if (!lifecycle.hasAny) return
-
-    val concealed = lifecycle.blur == BlurState.Concealed
-    val parts = buildList {
-        if (concealed) add("🔒 " + stringResource(R.string.chat_effect_reveal))
-        when (val e = lifecycle.ephemeral) {
-            is EphemeralState.Counting -> {
-                val seconds = ((e.remainingMillis + 999L) / 1_000L).toInt()
-                add("⏱ " + stringResource(R.string.chat_effect_seconds_left, seconds))
-            }
-            EphemeralState.Expired -> add("⏱ " + stringResource(R.string.chat_effect_expired))
-            EphemeralState.Inactive -> Unit
-        }
-        when (lifecycle.viewOnce) {
-            is ViewOnceState.Available -> add("👁 " + stringResource(R.string.chat_effect_view_once))
-            ViewOnceState.Consumed -> add("👁 " + stringResource(R.string.chat_effect_viewed))
-            ViewOnceState.None -> Unit
-        }
-    }
-    if (parts.isEmpty()) return
-
-    val base = Modifier
-        .fillMaxWidth()
-        .let { if (concealed) it.clickable(onClick = onReveal) else it }
-        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs)
-    Text(
-        text = parts.joinToString("   "),
-        style = MaterialTheme.typography.labelSmall,
-        color = MeeshyTheme.tokens.textSecondary,
-        textAlign = if (isOutgoing) TextAlign.End else TextAlign.Start,
-        modifier = modifier.then(base),
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

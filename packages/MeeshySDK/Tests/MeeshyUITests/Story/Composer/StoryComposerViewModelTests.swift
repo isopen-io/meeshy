@@ -457,6 +457,20 @@ final class StoryComposerViewModelTests: XCTestCase {
                        "canAddSlide must report false once the 10-slide cap is reached")
     }
 
+    // MARK: - Transitions du slide (C1/it.70 — état VM, plus @State View)
+
+    func test_reset_clearsOpeningAndClosingEffects() {
+        let vm = makeSubject()
+        vm.openingEffect = .fade
+        vm.closingEffect = .zoom
+
+        vm.reset()
+
+        XCTAssertNil(vm.openingEffect,
+                     "reset() must clear the opening effect — the old View @State survived vm.reset() and re-polluted the fresh slide through the sync chain")
+        XCTAssertNil(vm.closingEffect)
+    }
+
     // MARK: - Helpers
 
     private func makeRedSquareImage() -> UIImage {

@@ -33,7 +33,7 @@ extension FeedPostCard {
                     .accessibilityAddTraits(.isButton)
             }
             .frame(height: 180)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
         } else if count == 3 {
             // One large left, two stacked right
             HStack(spacing: spacing) {
@@ -61,7 +61,7 @@ extension FeedPostCard {
                 }
             }
             .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
         } else if count == 4 {
             // 2x2 grid
             VStack(spacing: spacing) {
@@ -95,7 +95,7 @@ extension FeedPostCard {
                 }
             }
             .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
         } else if count >= 5 {
             // First row: 2 images, Second row: 3 images with +N overlay
             VStack(spacing: spacing) {
@@ -146,7 +146,7 @@ extension FeedPostCard {
                 }
             }
             .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
         }
     }
 
@@ -214,7 +214,7 @@ extension FeedPostCard {
                             .frame(width: 30, height: 30)
                         // Glyphe dans un cercle de dimension fixe 30/36 : figé (déborderait s'il scalait, doctrine 86i)
                         Image(systemName: "play.fill")
-                            .font(MeeshyFont.relative(12, weight: .bold))
+                            .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.black.opacity(0.7))
                             .offset(x: 1)
                     }
@@ -332,7 +332,7 @@ extension FeedPostCard {
 
                 // Glyphe dans un cadre de dimension fixe 48×56 : figé (déborderait s'il scalait, doctrine 86i) ; le nom de fichier porte le sens
                 Image(systemName: "doc.fill")
-                    .font(MeeshyFont.relative(24))
+                    .font(.system(size: 24))
                     .foregroundColor(Color(hex: media.thumbnailColor))
                     .accessibilityHidden(true)
             }
@@ -391,7 +391,7 @@ extension FeedPostCard {
 
                 // Glyphe dans un cadre de dimension fixe 64×64 : figé (déborderait s'il scalait, doctrine 86i) ; le nom du lieu porte le sens
                 Image(systemName: "mappin.circle.fill")
-                    .font(MeeshyFont.relative(28))
+                    .font(.system(size: 28))
                     .foregroundColor(Color(hex: media.thumbnailColor))
                     .accessibilityHidden(true)
             }

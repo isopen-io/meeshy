@@ -39,7 +39,7 @@ struct UploadProgressBar: View {
                 Spacer()
 
                 Text("\(percentage)%")
-                    .font(.system(.caption, design: .monospaced).weight(.bold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .monospaced))
                     .foregroundColor(Color(hex: accentColor))
                     .contentTransition(.numericText())
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: percentage)
@@ -67,11 +67,11 @@ struct UploadProgressBar: View {
 
             HStack {
                 Text("\(progress.completedFiles)/\(progress.totalFiles) fichiers")
-                    .font(.caption2.weight(.medium))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                 Spacer()
                 Text(formatBytes(progress.uploadedBytes) + " / " + formatBytes(progress.totalBytes))
-                    .font(.system(.caption2, design: .monospaced).weight(.medium))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium, design: .monospaced))
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -88,6 +88,6 @@ struct UploadProgressBar: View {
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
-        AttachmentDownloader.fmt(bytes)
+        bytes.formatted(.byteCount(style: .file))
     }
 }

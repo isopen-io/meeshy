@@ -158,7 +158,7 @@ struct TrackingLinksView: View {
                     .frame(width: 40, height: 40)
                 // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
                 Image(systemName: "chart.bar.fill")
-                    .font(MeeshyFont.relative(16))
+                    .font(.system(size: 16))
                     .foregroundColor(link.isActive ? accent : MeeshyColors.neutral500)
                     .accessibilityHidden(true)
             }

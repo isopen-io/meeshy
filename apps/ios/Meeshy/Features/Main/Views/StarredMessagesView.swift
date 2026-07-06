@@ -67,7 +67,7 @@ struct StarredMessagesView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "star.circle")
-                .font(MeeshyFont.relative(56))
+                .font(.system(size: 56, weight: .regular))
                 .foregroundStyle(MeeshyColors.indigo400)
                 .accessibilityHidden(true)
             Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))

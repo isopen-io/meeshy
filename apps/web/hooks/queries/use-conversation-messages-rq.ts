@@ -145,18 +145,12 @@ export function useConversationMessagesRQ(
     queryFn: ({ pageParam = 1, signal }) =>
       fetchMessagesFromService(conversationId!, pageParam, limit, linkId, signal),
     initialPageParam: 1 as number | string,
-    getNextPageParam: (lastPage, allPages) => {
+    getNextPageParam: (lastPage) => {
       if (!lastPage.hasMore) return undefined;
-      // Chemin anonyme (lien partagé) : AnonymousChatService.loadMessages(limit, offset)
-      // pagine par offset numérique et ne renvoie jamais de cursor. On avance donc par
-      // index de page. Renvoyer un ID de message (string) ici le ferait retomber sur la
-      // page 1 (offset 0) dans fetchMessagesFromService (`typeof pageParam === 'number' ? … : 1`),
-      // re-chargeant la première page en boucle — doublons + historique ancien inaccessible.
-      if (linkId) return allPages.length + 1;
-      // Chemin authentifié : préférer le cursor renvoyé par le serveur…
+      // Préférer le cursor renvoyé par le serveur
       if (lastPage.nextCursor) return lastPage.nextCursor;
-      // …sinon dériver un cursor "before" depuis le dernier message (le plus ancien, tri DESC).
-      // Le gateway accepte un message ID comme paramètre "before".
+      // Dériver le cursor depuis le dernier message de la page (le plus ancien, tri DESC)
+      // Le gateway accepte un message ID comme paramètre "before"
       const lastMessage = lastPage.messages[lastPage.messages.length - 1];
       if (lastMessage?.id) return lastMessage.id;
       return undefined;

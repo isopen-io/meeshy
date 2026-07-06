@@ -113,7 +113,13 @@ struct ConversationListView: View {
 
     // Performance optimized scroll variables
     @State private var selectedProfileUser: ProfileSheetUser? = nil
-    @State private var headerScrollOffset: CGFloat = 0
+    /// Offset de scroll relayé au header SANS invalider ce body : `@State`
+    /// retient la référence sans s'abonner (même famille que
+    /// `sectionFrameRegistry` / `chipAutoScrollDriver`) ; seul
+    /// `ConversationListHeaderOverlay` observe le relay. L'ancien
+    /// `@State CGFloat headerScrollOffset` ré-exécutait ce body ENTIER
+    /// (~99 rows reconstruites + diff Equatable) à chaque tick de scroll.
+    @State private var scrollOffsetRelay = ScrollOffsetRelay()
     @State private var lastScrollDirectionChange: Date = .distantPast
 
     // Pull-to-refresh : delegue tout a `MeeshyRefreshableScroll` (wrapper
@@ -212,6 +218,11 @@ struct ConversationListView: View {
     /// RESTE une chip qui suit librement le doigt (y compris vers le haut,
     /// pour viser un header au-dessus) jusqu'au relâchement — drop ou dismiss.
     @State var chipModeLatched = false
+    /// Auto-scroll de bord pendant le drag de la chip (Phase 3) : stationner
+    /// près du haut/bas du viewport fait défiler la liste pour atteindre les
+    /// headers de section hors écran. Armé au verrouillage de la chip
+    /// (+Overlays), arrêté au drop et au dismiss.
+    @State var chipAutoScrollDriver = ChipAutoScrollDriver()
 
     @State var userCommunityLookup: [String: MeeshyCommunity] = [:]
 
@@ -251,6 +262,9 @@ struct ConversationListView: View {
                 sectionView(for: group)
             }
         }
+        // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
+        // bord du drag de chip (+Overlays). Aucune interaction, frame nulle.
+        .background(ChipAutoScrollGrabber(driver: chipAutoScrollDriver))
     }
 
     private var isSingleUngroupedSection: Bool {
@@ -266,7 +280,11 @@ struct ConversationListView: View {
                 section: group.section,
                 count: group.conversations.count,
                 isExpanded: expandedSections.contains(group.section.id),
-                isDropTarget: dropTargetSection == group.section.id && group.section.id != "pinned"
+                // "pinned" est désormais une cible de drop LIVE (drop =
+                // épingler) — la surbrillance suit dropTargetSection, que le
+                // chemin chip ne renseigne pour Épingles que si l'action est
+                // réelle (conversation pas déjà épinglée).
+                isDropTarget: dropTargetSection == group.section.id
             ) {
                 toggleSection(group.section.id)
             }
@@ -467,32 +485,49 @@ struct ConversationListView: View {
 
     // MARK: - Swipe Actions
 
+    /// Labels des swipe actions précalculés UNE fois par vie de process.
+    /// Les builders ci-dessous tournent pour CHAQUE conversation à CHAQUE
+    /// body pass (~99 rows × 8 labels) ; `String(localized:)` refait un
+    /// lookup de bundle à chaque appel — mesurable dans la famine du main
+    /// thread derrière les kills 0x8BADF00D (diag 2026-07-05). La langue de
+    /// l'app ne change pas à chaud (redémarrage requis), des statiques sont
+    /// donc sûres.
+    private enum SwipeLabels {
+        static let pin = String(localized: "swipe.pin")
+        static let unpin = String(localized: "swipe.unpin")
+        static let mute = String(localized: "swipe.mute")
+        static let unmute = String(localized: "swipe.unmute")
+        static let lock = String(localized: "swipe.lock")
+        static let unlock = String(localized: "swipe.unlock")
+        static let archive = String(localized: "swipe.archive")
+        static let unarchive = String(localized: "swipe.unarchive")
+        static let markRead = String(localized: "swipe.mark_read")
+        static let markUnread = String(localized: "swipe.mark_unread")
+        static let block = String(localized: "swipe.block")
+        static let unblock = String(localized: "swipe.unblock")
+        static let hide = String(localized: "swipe.hide")
+    }
+
     private func leadingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
         let isLocked = lockManager.isLocked(conversation.id)
         return [
             SwipeAction(
                 icon: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill",
-                label: conversation.userState.isPinned
-                    ? String(localized: "swipe.unpin")
-                    : String(localized: "swipe.pin"),
+                label: conversation.userState.isPinned ? SwipeLabels.unpin : SwipeLabels.pin,
                 color: MeeshyColors.pinnedBlue
             ) {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
             },
             SwipeAction(
                 icon: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill",
-                label: conversation.userState.isMuted
-                    ? String(localized: "swipe.unmute")
-                    : String(localized: "swipe.mute"),
+                label: conversation.userState.isMuted ? SwipeLabels.unmute : SwipeLabels.mute,
                 color: MeeshyColors.neutral500
             ) {
                 Task { await conversationViewModel.toggleMute(for: conversation.id) }
             },
             SwipeAction(
                 icon: isLocked ? "lock.open.fill" : "lock.fill",
-                label: isLocked
-                    ? String(localized: "swipe.unlock")
-                    : String(localized: "swipe.lock"),
+                label: isLocked ? SwipeLabels.unlock : SwipeLabels.lock,
                 color: MeeshyColors.warning
             ) {
                 if isLocked {
@@ -518,9 +553,7 @@ struct ConversationListView: View {
         var actions: [SwipeAction] = [
             SwipeAction(
                 icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
-                label: isArchived
-                    ? String(localized: "swipe.unarchive")
-                    : String(localized: "swipe.archive"),
+                label: isArchived ? SwipeLabels.unarchive : SwipeLabels.archive,
                 color: MeeshyColors.warning
             ) {
                 if isArchived {
@@ -531,9 +564,7 @@ struct ConversationListView: View {
             },
             SwipeAction(
                 icon: isRead ? "envelope.badge.fill" : "envelope.open.fill",
-                label: isRead
-                    ? String(localized: "swipe.mark_unread")
-                    : String(localized: "swipe.mark_read"),
+                label: isRead ? SwipeLabels.markUnread : SwipeLabels.markRead,
                 color: MeeshyColors.indigo400
             ) {
                 if isRead {
@@ -548,9 +579,7 @@ struct ConversationListView: View {
             let isBlocked = BlockService.shared.isBlocked(userId: userId)
             actions.append(SwipeAction(
                 icon: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
-                label: isBlocked
-                    ? String(localized: "swipe.unblock")
-                    : String(localized: "swipe.block"),
+                label: isBlocked ? SwipeLabels.unblock : SwipeLabels.block,
                 color: MeeshyColors.error
             ) {
                 if isBlocked {
@@ -567,7 +596,7 @@ struct ConversationListView: View {
 
         actions.append(SwipeAction(
             icon: "eye.slash.fill",
-            label: String(localized: "swipe.hide"),
+            label: SwipeLabels.hide,
             color: MeeshyColors.error
         ) {
             Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
@@ -784,7 +813,7 @@ struct ConversationListView: View {
                 },
                 coordinateSpaceName: "scroll",
                 onScrollOffsetChange: { offset in
-                    headerScrollOffset = offset
+                    scrollOffsetRelay.offset = offset
                     guard !isSearching, !showSearchOverlay else { return }
                     let scrollingDown = offset < -30
                     if scrollingDown != isScrollingDown {
@@ -905,18 +934,21 @@ struct ConversationListView: View {
         // scrolls up under the header.
         .overlay(alignment: .top) {
             ConversationListHeaderOverlay(
-                scrollOffset: headerScrollOffset,
+                scrollRelay: scrollOffsetRelay,
                 iPadFeedAction: iPadFeedAction,
                 iPadNotificationCount: iPadNotificationCount,
                 onNotificationsTap: onNotificationsTap,
                 onSettingsTap: onSettingsTap,
                 onNewConversation: onNewConversation,
                 showShareLinkSheet: $showShareLinkSheet,
-                accessory: {
+                // Paramétré par l'offset (fourni par le header, seul abonné
+                // au relay) — capturer le @State CGFloat d'antan depuis cette
+                // closure liait le body entier de la liste au tick de scroll.
+                accessory: { offset in
                     AnyView(
                         PinnedStoryTrailBand(
                             viewModel: storyViewModel,
-                            scrollOffset: headerScrollOffset,
+                            scrollOffset: offset,
                             onViewStory: { userId in onStoryViewRequest?(userId, true) }
                         )
                     )
