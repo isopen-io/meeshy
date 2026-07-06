@@ -1072,6 +1072,16 @@ nonisolated enum QualityThresholds {
     /// Matches the gateway's own offer-expiry window.
     static let sdpOfferTimeoutSeconds: TimeInterval = 30
 
+    /// Safety net that force-fulfills a held `CXAnswerCallAction` if the call
+    /// still hasn't connected. MUST stay strictly greater than
+    /// `sdpOfferTimeoutSeconds`: if it fired first, CallKit would be told the
+    /// call is "connected" (starting the Recents timer) only for
+    /// `scheduleSdpOfferTimeout` to fail the call moments later — Recents
+    /// would then show a call that lasted the gap between the two timeouts
+    /// but never actually connected. The 5s margin absorbs scheduling jitter
+    /// between the two independently-armed timers.
+    static let pendingAnswerActionSafetyNetSeconds: TimeInterval = sdpOfferTimeoutSeconds + 5
+
     /// Settle window after `callState` transitions to `.ended` before the
     /// call identity (callId / remoteUserId / callDuration) is cleared.
     /// Gives the UI time to read final stats before teardown completes.

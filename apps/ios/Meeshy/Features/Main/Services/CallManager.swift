@@ -302,19 +302,27 @@ final class CallManager: ObservableObject {
     /// answer action is fulfilled — fulfilling at tap time made the counter
     /// run while WebRTC was still connecting (user-reported "0:00 before the
     /// connection exists"). Held here, fulfilled in `transitionToConnected`,
-    /// failed on pre-connection teardown, force-fulfilled by a 10 s safety
-    /// net so CallKit can never time the action out.
+    /// failed on pre-connection teardown, force-fulfilled by a safety net
+    /// (`QualityThresholds.pendingAnswerActionSafetyNetSeconds`) so CallKit
+    /// can never time the action out.
     private var pendingAnswerAction: CXAnswerCallAction?
     private var pendingAnswerSafetyTask: Task<Void, Never>?
 
     /// Called synchronously (main queue) from the CXProvider delegate.
     func holdPendingAnswerAction(_ action: CXAnswerCallAction) {
+        // CallKit's contract requires every CX*Action to eventually be
+        // completed — settle any still-pending action instead of silently
+        // dropping its reference, or an uncompleted action can get the app
+        // killed by the system.
+        if pendingAnswerAction != nil {
+            settlePendingAnswerAction(fulfilled: false, reason: "superseded by a new CXAnswerCallAction")
+        }
         pendingAnswerAction = action
         pendingAnswerSafetyTask?.cancel()
         pendingAnswerSafetyTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            try? await Task.sleep(for: .seconds(QualityThresholds.pendingAnswerActionSafetyNetSeconds))
             guard !Task.isCancelled else { return }
-            self?.settlePendingAnswerAction(fulfilled: true, reason: "safety-net 10s — still not connected")
+            self?.settlePendingAnswerAction(fulfilled: true, reason: "safety-net \(Int(QualityThresholds.pendingAnswerActionSafetyNetSeconds))s — still not connected")
         }
     }
 
@@ -1135,7 +1143,7 @@ final class CallManager: ObservableObject {
             return
         }
         Logger.calls.info("call_cancel push — ending still-ringing call \(callId)")
-        if let uuid = activeCallUUID {
+        if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
         }
         endCallInternal(reason: .remote)
@@ -1156,7 +1164,7 @@ final class CallManager: ObservableObject {
             return
         }
         Logger.calls.info("call_answered_elsewhere push — dismissing ring for \(callId)")
-        if let uuid = activeCallUUID {
+        if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
         }
         endCallInternal(reason: .remote)
@@ -1610,7 +1618,7 @@ final class CallManager: ObservableObject {
             Logger.calls.warning("call:end deferred — socket down, will reconcile on reconnect (callId=\(callId))")
             return
         }
-        Task {
+        Task { [weak self] in
             let acked = await MessageSocketManager.shared.emitCallEndWithAck(callId: callId)
             if !acked {
                 MessageSocketManager.shared.emitCallEnd(callId: callId)
@@ -1620,7 +1628,7 @@ final class CallManager: ObservableObject {
                 // failed/91s via GC instead of missed). Remember it and replay
                 // on the next connect — the gateway end handler is idempotent,
                 // a duplicate is a logged no-op.
-                pendingEndReconciliationCallId = callId
+                self?.pendingEndReconciliationCallId = callId
                 Logger.calls.warning("call:end ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
             }
         }
@@ -2085,7 +2093,7 @@ final class CallManager: ObservableObject {
         // "Ended". The semantically correct CXCallEndedReason for an
         // explicit decline by the remote is .declinedElsewhere (Recents
         // shows "Declined" — better UX + analytics).
-        if let uuid = activeCallUUID {
+        if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .declinedElsewhere)
         }
         endCallInternal(reason: .rejected)
@@ -2126,7 +2134,7 @@ final class CallManager: ObservableObject {
             localReason = .remote
         }
 
-        if let uuid = activeCallUUID {
+        if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: cxReason)
         }
         endCallInternal(reason: localReason)
@@ -4307,7 +4315,7 @@ extension CallManager: WebRTCServiceDelegate {
         reconnectAttempt += 1
         analyticsTotalReconnects += 1
         guard reconnectAttempt <= QualityThresholds.maxReconnectAttempts else {
-            if let uuid = activeCallUUID {
+            if callUsesCallKit, let uuid = activeCallUUID {
                 callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
             }
             endCallInternal(reason: .connectionLost)
@@ -4328,6 +4336,11 @@ extension CallManager: WebRTCServiceDelegate {
             // allocation refreshes past the expiry embedded in the username).
             // Routed through `requestFreshTurnCredentials` so a dropped emit/reply
             // during a reconnection cycle still retries instead of going silent.
+            // Cancel the periodic 80%-TTL scheduler first (mirrors `didReconnect`
+            // below) — otherwise its deadline can fire in this same window and
+            // race a second, redundant `call:request-ice-servers` emit.
+            turnRefreshTask?.cancel()
+            turnRefreshTask = nil
             requestFreshTurnCredentials(callId: callId)
         }
 

@@ -148,23 +148,29 @@ final class MockVideoSurvivalActuator: VideoSurvivalActuating {
     private(set) var suspendCallCount = 0
     private(set) var resumeCallCount = 0
     var onTransition: (() -> Void)?
+    /// Fired right after the simulated hang's `Task.sleep` returns (cancelled or
+    /// not) — lets tests observe whether the hang was cut short by cancellation.
+    var onHangComplete: (() -> Void)?
 
     func suspendOutboundVideo() async -> Bool {
         suspendCallCount += 1
         onTransition?()
         if hangSeconds > 0 { try? await Task.sleep(nanoseconds: UInt64(hangSeconds * 1_000_000_000)) }
+        onHangComplete?()
         return suspendResult
     }
     func resumeOutboundVideo() async -> Bool {
         resumeCallCount += 1
         onTransition?()
         if hangSeconds > 0 { try? await Task.sleep(nanoseconds: UInt64(hangSeconds * 1_000_000_000)) }
+        onHangComplete?()
         return resumeResult
     }
     func reset() {
         suspendCallCount = 0
         resumeCallCount = 0
         onTransition = nil
+        onHangComplete = nil
     }
 }
 
@@ -411,6 +417,36 @@ final class VideoSurvivalControllerConcurrencyTests: XCTestCase {
         // Verify by checking that resumeCallCount is 1 (not repeated) and state is .initial.
         XCTAssertEqual(mock.resumeCallCount, 1, "actuator resume must have been called exactly once")
         XCTAssertFalse(sut.isVideoSuspended, "after reset(), suspended state must remain cleared")
+    }
+
+    // MARK: reset() cancels the in-flight transition Task
+
+    func test_resetMidTransition_cancelsInFlightTaskInsteadOfRunningOutTheTimeout() async {
+        // Regression guard: reset() must cancel the in-flight suspend/resume Task,
+        // not just ignore its eventual result. Before the fix, a call ending
+        // mid-transition left suspendOutboundVideo()/resumeOutboundVideo() running
+        // for up to `transitionTimeout` (here artificially long at 5s) after the
+        // call had already visibly ended — wasted battery/network for no purpose.
+        let (sut, mock, advance) = makeSUT(transitionTimeout: 20)
+        mock.hangSeconds = 5 // far longer than any reasonable teardown window
+
+        let startedExp = expectation(description: "suspend started")
+        mock.onTransition = { startedExp.fulfill() }
+        let hangCompleteExp = expectation(description: "hang cut short by cancellation")
+        mock.onHangComplete = { hangCompleteExp.fulfill() }
+
+        sut.handle(level: .poor, userWantsVideo: true)
+        advance(6)
+        sut.handle(level: .poor, userWantsVideo: true) // triggers suspend, actuator now "hanging"
+
+        await fulfillment(of: [startedExp], timeout: 1)
+
+        sut.reset()
+
+        // If reset() cancels the transition Task, the mock's `try? await Task.sleep`
+        // observes cancellation and returns almost immediately — well within 500ms,
+        // nowhere near the full 5s hang. Without the fix this assertion times out.
+        await fulfillment(of: [hangCompleteExp], timeout: 0.5)
     }
 
     // MARK: isTransitioning guard

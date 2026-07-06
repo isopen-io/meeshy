@@ -968,7 +968,7 @@ describe('CallEventsHandler', () => {
 
       await socket._trigger('call:force-leave', validData);
 
-      const toEmitArgs = (io.to as jest.Mock<any>).mock.calls.map((c: any[]) => c[0]);
+      const toEmitArgs = (io.to as jest.Mock<any>).mock.calls.map((c: any[]) => c[0]).flat();
       expect(toEmitArgs).toContain(`conversation:${CONV_ID}`);
     });
   });
@@ -1822,7 +1822,7 @@ describe('CallEventsHandler', () => {
       await socket._trigger('disconnect');
       await jest.advanceTimersByTimeAsync(31_000);
 
-      const toCalls = (io.to as jest.Mock<any>).mock.calls.map((c: any[]) => c[0]);
+      const toCalls = (io.to as jest.Mock<any>).mock.calls.map((c: any[]) => c[0]).flat();
       expect(toCalls).toContain(`conversation:${CONV_ID}`);
       jest.useRealTimers();
     });

@@ -84,6 +84,7 @@ jest.mock('../../../utils/logger', () => ({
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
@@ -133,6 +134,7 @@ function makeEndedCallSession() {
 
 function makePrisma(overrides: {
   participantFindFirst?: jest.MockedFunction<any>;
+  participantFindMany?: jest.MockedFunction<any>;
   callSessionFindMany?: jest.MockedFunction<any>;
   callSessionFindUnique?: jest.MockedFunction<any>;
 } = {}) {
@@ -140,6 +142,8 @@ function makePrisma(overrides: {
     participant: {
       findFirst: overrides.participantFindFirst
         ?? jest.fn<any>().mockResolvedValue({ id: MEMBERSHIP_ID }),
+      findMany: overrides.participantFindMany
+        ?? jest.fn<any>().mockResolvedValue([]),
     },
     callSession: {
       findMany: overrides.callSessionFindMany
@@ -393,6 +397,44 @@ describe('CallEventsHandler — call:force-leave handler', () => {
 
       expect(roomEmit).not.toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.anything());
       expect(mockCreateCallSummaryMessage5).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // CALL-RESILIENCE — call:force-leave (reconnect force-cleanup) must reach a
+  // still-ringing callee's own user room, not just the call/conversation rooms,
+  // via the shared broadcastCallEnded fanout.
+  // -------------------------------------------------------------------------
+
+  describe('CALL-RESILIENCE: call:ended reaches a still-ringing callee via user-room fanout', () => {
+    it('fans call:ended out to every active member\'s user room on force-leave', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: 'still-ringing-callee' }]),
+      });
+      mockLeaveCall5.mockResolvedValue({
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'missed',
+        duration: 0,
+        endReason: 'missed',
+        mode: 'p2p',
+      });
+
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      const roomsPassedToIo = (io.to as jest.MockedFunction<any>).mock.calls
+        .map(([rooms]) => rooms)
+        .flat();
+      expect(roomsPassedToIo).toContain(ROOMS.user('still-ringing-callee'));
+      expect(roomEmit).toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.objectContaining({ callId: CALL_ID }));
     });
   });
 });
