@@ -368,7 +368,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       roster from the conversation participants via `MentionRoster` and threads `mentionDisplayNames` into every
       `MessageBubble`, so `@username` resolves to the display name in-bubble. **Pending:** in-app browser / OG cards.
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
-- [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
+- [~] Delivery status checkmarks + offline-pending hourglass + failed-message retry —
+      ✓/✓✓/✓✓-read tier + Pending/Failed done ; **group all-or-nothing semantics done**
+      (`chat-delivery-status-group-semantics` 2026-07-06): pure `:core:model` `DeliveryStatusResolver`
+      (port of iOS `DeliveryStatusResolver`) — in a group the delivered/read tier lights up only once
+      EVERY recipient has received/read (never on the first peer), trusting `readByAllAt`/`deliveredToAllAt`
+      markers ahead of the counters ; `BubbleContentBuilder` consumes it with a reactive `recipientCount`
+      (distinct other members) threaded from `ChatViewModel`. **Pending:** the finer 8-state
+      send-lifecycle glyphs (clock/slow/invisible), offline hourglass, tap-checks → read-status sheet
 - [ ] Edited / pinned / forwarded indicators; edit-history viewer
 - [ ] Ephemeral (self-destruct) messages with duration picker + countdown badges
 - [ ] Blurred ("tap to reveal") + view-once messages with fog effect
