@@ -187,6 +187,15 @@ export class CallService {
   // iOS suspends the socket after ~45s in background; CallKit keeps the RTP
   // stream alive. Give backgrounded participants 5 min before timing them out.
   private readonly BACKGROUND_HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000;
+  // Phantom-cleanup staleness budgets (P0 fix 2026-07-06, see
+  // `isPhantomCallStale`) — intentionally mirror CallCleanupService's own
+  // tiers (MAX_CONNECTING_MS / HEARTBEAT_TIMEOUT_MS) so a call classified as
+  // "stale" here is stale by the exact same yardstick the periodic GC sweep
+  // already uses, just evaluated immediately instead of on the next 60s tick.
+  // Declared independently (not imported) to avoid a value-level dependency
+  // on CallCleanupService, which already type-imports CallService.
+  private readonly PHANTOM_CONNECTING_GRACE_MS = 90 * 1000;
+  private readonly PHANTOM_HEARTBEAT_GRACE_MS = 120 * 1000;
 
   constructor(private prisma: PrismaClient) {
     this.turnCredentialService = new TURNCredentialService();
@@ -399,6 +408,60 @@ export class CallService {
       }
     }
     return stale;
+  }
+
+  /**
+   * Number of participants with at least one recorded in-memory heartbeat for
+   * this call. Paired with `getStaleHeartbeats` to tell "everyone stale" (the
+   * call is truly dead) from "someone is still fresh" (the call is alive) —
+   * mirrors `CallCleanupService.hasFreshLiveness`'s `stale.length <
+   * participants.length` check without needing a DB round-trip for the
+   * participant list.
+   */
+  getHeartbeatParticipantCount(callId: string): number {
+    return this.heartbeats.get(callId)?.size ?? 0;
+  }
+
+  /**
+   * P0 fix (2026-07-06) — is an initiator-phantom candidate actually stale,
+   * or is it a genuinely live call (e.g. a second device/tab) the initiator
+   * happens to still be a live participant of? Without this gate,
+   * `initiateCall`'s phantom-cleanup force-ends ANY non-terminal call the
+   * initiator is still attached to — including a real, in-progress call in a
+   * completely unrelated conversation — the instant the same user starts a
+   * new call elsewhere. `CallService` holds no Socket.IO reference, so that
+   * force-end never broadcasts `call:ended`: the other party's client is left
+   * "connected" indefinitely, silently, until its own next action discovers
+   * the row is already terminal.
+   *
+   * Mirrors `CallCleanupService`'s tiered staleness semantics: a
+   * ringing/initiated call gets the same budget as its own scheduled ringing
+   * timeout, a connecting call gets the GC's connecting budget anchored on
+   * `answeredAt`, and an active/reconnecting call is stale only when there is
+   * no evidence — in memory or otherwise — that anyone is still beating.
+   */
+  private isPhantomCallStale(
+    session: { id: string; status?: CallStatus; startedAt: Date | null; answeredAt?: Date | null },
+    now: Date
+  ): boolean {
+    // A call record missing its own start time is anomalous — safe to treat
+    // as ancient (stale) rather than risk sparing a corrupt row forever.
+    const startedAtMs = session.startedAt ? session.startedAt.getTime() : 0;
+
+    if (session.status === CallStatus.initiated || session.status === CallStatus.ringing) {
+      return now.getTime() - startedAtMs > this.RINGING_TIMEOUT_MS;
+    }
+    if (session.status === CallStatus.connecting) {
+      const anchorMs = session.answeredAt ? session.answeredAt.getTime() : startedAtMs;
+      return now.getTime() - anchorMs > this.PHANTOM_CONNECTING_GRACE_MS;
+    }
+    // active / reconnecting (ACTIVE_STATUSES guarantees a real status here in
+    // production; the fallback below only matters for incomplete test doubles).
+    if (this.hasHeartbeatData(session.id)) {
+      const staleCount = this.getStaleHeartbeats(session.id, this.PHANTOM_HEARTBEAT_GRACE_MS).length;
+      return staleCount >= this.getHeartbeatParticipantCount(session.id);
+    }
+    return now.getTime() - startedAtMs > this.PHANTOM_HEARTBEAT_GRACE_MS;
   }
 
   /**
@@ -631,9 +694,22 @@ export class CallService {
         // whose leftAt field was never written (pre-C5 participants).
         OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
         participant: { userId: initiatorId },
-        callSession: { status: { in: ACTIVE_STATUSES } }
+        callSession: {
+          status: { in: ACTIVE_STATUSES },
+          // P0 fix (2026-07-06) — never let this cross-conversation sweep
+          // touch a call in the SAME conversation the caller is initiating
+          // into: the zombie-active-call check a few lines below is already
+          // scoped to `conversationId` and correctly handles a duplicate
+          // initiate there (CALL_ALREADY_ACTIVE vs. genuinely zombie) without
+          // this broader sweep's coarser, cross-conversation staleness gate.
+          conversationId: { not: conversationId }
+        }
       },
-      include: { callSession: { select: { id: true, startedAt: true, conversationId: true } } }
+      include: {
+        callSession: {
+          select: { id: true, startedAt: true, conversationId: true, status: true, answeredAt: true }
+        }
+      }
     });
 
     if (initiatorStaleParticipations.length > 0) {
@@ -649,6 +725,15 @@ export class CallService {
         staleCallIds: staleCalls.map(([id]) => id)
       });
       for (const [staleCallId, staleSession] of staleCalls) {
+        if (staleSession && !this.isPhantomCallStale(staleSession, now)) {
+          logger.info('🔬 [CALL-DIAG] phantom-cleanup skipped — candidate still has fresh liveness', {
+            initiatorId,
+            conversationId,
+            staleCallId,
+            staleConversationId: staleSession.conversationId
+          });
+          continue;
+        }
         const startedAt = staleSession?.startedAt ? new Date(staleSession.startedAt) : now;
         try {
           await this.prisma.$transaction(async (tx) => {
