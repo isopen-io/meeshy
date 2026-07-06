@@ -153,7 +153,11 @@ loguru==0.7.3
 prometheus-client==0.25.0
 
 # Tests
-pytest==9.0.3
+# pytest PINNED <9 — pytest-asyncio==0.25.2 requires pytest>=8.2,<9. A
+# 2026-07-06 bump to 9.0.3 broke the translator Docker build ("No solution
+# found when resolving dependencies") because pytest-asyncio wasn't bumped in
+# lockstep. Revalidate together if either pin is touched again.
+pytest==8.3.4
 pytest-asyncio==0.25.2
 pytest-cov==6.0.0
 # FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
