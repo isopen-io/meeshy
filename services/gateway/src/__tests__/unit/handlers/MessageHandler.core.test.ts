@@ -538,6 +538,10 @@ describe('MessageHandler.handleMessageSend', () => {
     expect(messagingService.handleMessage).toHaveBeenCalled();
     expect(mockPerformanceLogger.withTiming).toHaveBeenCalled();
     expect(stats.messages_processed).toBe(1);
+
+    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
+    expect(statsCalls.length).toBeGreaterThan(0);
+    expect(statsCalls[0][5]).toBe('fr');
   });
 
   it('skips broadcastNewMessage when isDuplicate is true', async () => {
@@ -975,6 +979,40 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
     expect(statsCalls.length).toBeGreaterThan(0);
     expect(statsCalls[0][4]).toEqual(expect.arrayContaining(['audio']));
+  });
+
+  it('forwards the saved message originalLanguage to the stats service (languageDistribution)', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const data = makeAttachmentData();
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+
+    const attachmentService = makeMockAttachmentService([
+      { id: '61a41a4b5c5e4f4a5c5e4f4a', uploadedBy: 'user-1', mimeType: 'image/jpeg' },
+    ]);
+    const messagingService = makeMockMessagingService({
+      attachments: [{ id: 'att-1', mimeType: 'image/jpeg' }],
+      originalLanguage: 'de',
+    });
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => []) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+
+    const { handler } = makeHandler({
+      connectedUsers: connectedUsers as any,
+      socketToUser,
+      attachmentService,
+      messagingService,
+      prisma,
+    });
+
+    await handler.handleMessageSendWithAttachments(socket, data as any, cb);
+
+    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
+    expect(statsCalls.length).toBeGreaterThan(0);
+    expect(statsCalls[0][5]).toBe('de');
   });
 });
 
