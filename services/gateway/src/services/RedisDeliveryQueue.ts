@@ -132,7 +132,9 @@ export class RedisDeliveryQueue {
     if (redis) {
       try {
         const key = queueKey(userId);
-        const end = limit ? limit - 1 : -1;
+        // `limit` is a count, not a flag: an explicit 0 must peek nothing, not
+        // the whole backlog (`limit ? …` would coerce 0 to the no-limit branch).
+        const end = limit != null ? limit - 1 : -1;
         const rawEntries = await redis.lrange(key, 0, end);
         return rawEntries.flatMap(raw => {
           try {
@@ -148,7 +150,7 @@ export class RedisDeliveryQueue {
     }
 
     const entries = this.memoryQueue.get(userId) ?? [];
-    return limit ? entries.slice(0, limit) : [...entries];
+    return limit != null ? entries.slice(0, limit) : [...entries];
   }
 
   async size(userId: string): Promise<number> {
