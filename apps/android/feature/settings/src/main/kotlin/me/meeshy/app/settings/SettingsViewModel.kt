@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.model.AppThemeMode
+import me.meeshy.sdk.model.DndDay
+import me.meeshy.sdk.model.DndWindow
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.model.next
 import me.meeshy.sdk.notification.NotificationPreferencesStore
@@ -97,6 +99,26 @@ class SettingsViewModel @Inject constructor(
     /** Toggles new-message notifications. */
     fun setNewMessageEnabled(enabled: Boolean) {
         updateNotifications { it.copy(newMessageEnabled = enabled) }
+    }
+
+    /** Toggles the Do-Not-Disturb (quiet-hours) schedule on/off. */
+    fun setDndEnabled(enabled: Boolean) {
+        updateNotifications { it.copy(dndEnabled = enabled) }
+    }
+
+    /** Sets the quiet-hours start, formatting the picked time into the stored `HH:mm`. */
+    fun setDndStart(hour: Int, minute: Int) {
+        updateNotifications { it.copy(dndStartTime = DndWindow.formatTimeOfDay(hour, minute)) }
+    }
+
+    /** Sets the quiet-hours end, formatting the picked time into the stored `HH:mm`. */
+    fun setDndEnd(hour: Int, minute: Int) {
+        updateNotifications { it.copy(dndEndTime = DndWindow.formatTimeOfDay(hour, minute)) }
+    }
+
+    /** Adds/removes a day from the quiet-hours schedule (empty ⇒ every day). */
+    fun toggleDndDay(day: DndDay) {
+        updateNotifications { it.copy(dndDays = DndWindow.toggleDay(it.dndDays, day)) }
     }
 
     private fun updateNotifications(edit: (UserNotificationPreferences) -> UserNotificationPreferences) {

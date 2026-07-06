@@ -1277,8 +1277,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`:sdk-core`, hydrates on cold start, corrupt stored value → defaults), `SettingsViewModel`
       per-toggle intents (push/new-message/sound/vibration) that persist the whole block without
       clobbering the other fields, `SettingsScreen` state-driven `Switch` rows (push is the master —
-      the three sub-toggles disable when push is off). +25 tests. **Still open:** email + the remaining
-      per-event types + DND schedule editor + offline-queued backend sync (this slice is device-local only).
+      the three sub-toggles disable when push is off). +25 tests. **DND schedule editor landed**
+      (`settings-dnd-schedule`, 2026-07-05): pure `:core:model` `DndWindow` SSOT (port of iOS
+      `isInDoNotDisturbWindow`) — `isActive(prefs, weekday, minuteOfDay)`/`isActive(prefs, LocalDateTime)`
+      (enable gate · midnight-wrap · per-day gating · corrupt-`HH:mm` → never-active),
+      `parseMinuteOfDay`/`formatTimeOfDay` (range-clamped) codec, `toggleDay` (canonical Mon→Sun,
+      dedup), `DndDay`↔ISO-`DayOfWeek` mapping; `SettingsViewModel` `setDndEnabled`/`setDndStart`/
+      `setDndEnd`/`toggleDndDay` intents persisting the whole block; `SettingsScreen` DND rows
+      (master toggle + Material3 24h `TimePicker` from/until rows + Mon→Sun `FilterChip` day selector +
+      a **live "quiet hours active now" status** computed from `DndWindow.isActive`). +32 tests
+      (EN/FR/ES/PT strings). Surpasses iOS which has no live-status readout in its editor.
+      **Still open:** email + the remaining per-event types + offline-queued backend sync (device-local only).
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync

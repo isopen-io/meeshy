@@ -3,6 +3,8 @@ package me.meeshy.app.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +22,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,7 +35,9 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,9 +54,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDateTime
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.AppThemeMode
+import me.meeshy.sdk.model.DndDay
+import me.meeshy.sdk.model.DndWindow
+import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -163,6 +172,13 @@ fun SettingsScreen(
                     checked = notifications.vibrationEnabled,
                     enabled = notifications.pushEnabled,
                     onCheckedChange = viewModel::setVibrationEnabled,
+                )
+                DndScheduleRows(
+                    notifications = notifications,
+                    onSetEnabled = viewModel::setDndEnabled,
+                    onSetStart = viewModel::setDndStart,
+                    onSetEnd = viewModel::setDndEnd,
+                    onToggleDay = viewModel::toggleDndDay,
                 )
             }
 
@@ -333,6 +349,142 @@ private fun LanguageOptionRow(
         Spacer(Modifier.width(MeeshySpacing.sm))
         Text(text = label, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+@Composable
+private fun DndScheduleRows(
+    notifications: UserNotificationPreferences,
+    onSetEnabled: (Boolean) -> Unit,
+    onSetStart: (Int, Int) -> Unit,
+    onSetEnd: (Int, Int) -> Unit,
+    onToggleDay: (DndDay) -> Unit,
+) {
+    NotificationToggleRow(
+        label = stringResource(R.string.settings_dnd),
+        checked = notifications.dndEnabled,
+        enabled = notifications.pushEnabled,
+        onCheckedChange = onSetEnabled,
+    )
+    if (notifications.pushEnabled && notifications.dndEnabled) {
+        val active = DndWindow.isActive(notifications, LocalDateTime.now())
+        Text(
+            text = stringResource(
+                if (active) R.string.settings_dnd_active else R.string.settings_dnd_inactive,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (active) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        )
+        DndTimeRow(
+            label = stringResource(R.string.settings_dnd_start),
+            timeHhmm = notifications.dndStartTime,
+            onPick = onSetStart,
+        )
+        DndTimeRow(
+            label = stringResource(R.string.settings_dnd_end),
+            timeHhmm = notifications.dndEndTime,
+            onPick = onSetEnd,
+        )
+        DndDayChips(selected = notifications.dndDays, onToggle = onToggleDay)
+    }
+}
+
+@Composable
+private fun DndTimeRow(
+    label: String,
+    timeHhmm: String,
+    onPick: (Int, Int) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    val minutes = DndWindow.parseMinuteOfDay(timeHhmm) ?: 0
+
+    SettingsRow(label = label, detail = timeHhmm, onClick = { showPicker = true })
+
+    if (showPicker) {
+        DndTimePickerDialog(
+            initialHour = minutes / 60,
+            initialMinute = minutes % 60,
+            onConfirm = { hour, minute ->
+                onPick(hour, minute)
+                showPicker = false
+            },
+            onDismiss = { showPicker = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DndTimePickerDialog(
+    initialHour: Int,
+    initialMinute: Int,
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val timeState = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute,
+        is24Hour = true,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        text = { TimePicker(state = timeState) },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(timeState.hour, timeState.minute) }) {
+                Text(stringResource(R.string.settings_dnd_time_picker_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_dnd_time_picker_dismiss))
+            }
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun DndDayChips(
+    selected: List<DndDay>,
+    onToggle: (DndDay) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+    ) {
+        Text(
+            text = stringResource(
+                if (selected.isEmpty()) R.string.settings_dnd_every_day else R.string.settings_dnd_days,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(MeeshySpacing.xs))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+            DndDay.entries.forEach { day ->
+                FilterChip(
+                    selected = day in selected,
+                    onClick = { onToggle(day) },
+                    label = { Text(stringResource(dndDayLabelRes(day))) },
+                )
+            }
+        }
+    }
+}
+
+private fun dndDayLabelRes(day: DndDay): Int = when (day) {
+    DndDay.MON -> R.string.settings_dnd_day_mon
+    DndDay.TUE -> R.string.settings_dnd_day_tue
+    DndDay.WED -> R.string.settings_dnd_day_wed
+    DndDay.THU -> R.string.settings_dnd_day_thu
+    DndDay.FRI -> R.string.settings_dnd_day_fri
+    DndDay.SAT -> R.string.settings_dnd_day_sat
+    DndDay.SUN -> R.string.settings_dnd_day_sun
 }
 
 @Composable
