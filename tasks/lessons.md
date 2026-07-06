@@ -953,3 +953,26 @@ lancé **directement** dans `packages/shared` a réussi en **643 ms**. Le blocag
 turbo, pas de Prisma. **Règle** : si le `generate` via turbo/bun postinstall traîne anormalement, le tuer et
 lancer `npx prisma generate` + `bun run build` directement dans `packages/shared` (les 2 prérequis de parité
 CI documentés dans CLAUDE.md) — beaucoup plus rapide et observable.
+
+## Leçon 71 — `notification:new` temps réel émis dans la mauvaise room (bare `userId` au lieu de `ROOMS.user(id)`) → toast silencieusement perdu (2026-07-06, itération 116)
+
+**Contexte** : `emitWithSeq` (SyncEngine A2, `socketio/utils/emitWithSeq.ts`) faisait `io.to(userId).emit(...)`
+avec l'`userId` NU. Or un socket d'utilisateur enregistré ne rejoint QUE `ROOMS.user(id)` = `user:${id}`
+(`AuthHandler._authenticateJWTUser:197`) ; la room à id nu n'est rejointe QUE par les anonymes
+(`AuthHandler:277`), qui ne sont jamais destinataires de `createNotification`. Résultat : le seul émetteur
+de `NOTIFICATION_NEW` (`NotificationService.ts:762`) poussait le toast temps réel dans une room VIDE →
+event silencieusement dropé. Le compteur d'unread (`NotificationService.ts:3241`) utilisait déjà
+`ROOMS.user(userId)` → le badge s'incrémentait mais aucun toast/entrée live n'apparaissait avant un refetch
+REST ou `/sync`. Incohérence observable pour CHAQUE destinataire enregistré. Le test existant
+(`emitWithSeq.test.ts:27`) figeait le bug : `expect(to).toHaveBeenCalledWith('u1')` alors que sa description
+disait « emits to the user room ».
+
+**Fix** : `io.to(ROOMS.user(userId)).emit(...)` — aligne `emitWithSeq` sur TOUS les autres emits user-scoped
+(`ROOMS.user(id)`) et sur le contrat documenté (`socketio/README.md:305`). Test corrigé pour asserter
+`ROOMS.user('u1')` + `not.toHaveBeenCalledWith('u1')`. RED prouvé (émettait 'u1'), GREEN : 3/3 emitWithSeq +
+306/306 suites NotificationService.
+
+**Règle réutilisable** : pour toute émission Socket.IO ciblant UN utilisateur enregistré, TOUJOURS passer par
+`ROOMS.user(id)` — jamais l'id nu (réservé aux anonymes). Un test qui assert une room à id nu pour un event
+destiné aux enregistrés encode probablement un bug ; croiser avec les `socket.join` de `AuthHandler` avant de
+faire confiance à l'assertion.
