@@ -1,17 +1,26 @@
 # Android — current loop
 
-> ⚠ **MERGE PENDING (2026-07-06): PR #1562** (`claude/apps/android/message-effects-lifecycle`) is OPEN and
-> must be squash-merged to `main` as **step 0** of the next run. Slice is complete: local `meeshy.sh check`
-> green; at last check CI had 7/11 jobs green, 0 failures, 4 unrelated JS/TS/Python jobs still running. The
-> GitHub MCP token expired before the final CI conclusion / merge could be confirmed. Next run: verify CI is
-> fully green, then squash-merge #1562 before starting a new slice.
-
+> ✅ **PR #1562 (`message-effects-lifecycle`) merged to `main`** 2026-07-06 (squash `485cc18d`) after a
+> clean rebase (doc-only conflicts resolved keeping the branch superset) + full CI green (11/11 jobs).
 
 > Live state and the next slice now live in
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Chat — rich message features) — slice `message-effects-lifecycle` ✅
+## This loop (Phase: Chat — rich message features) — slice `delivery-status-resolver` ✅
+**Honest all-or-nothing delivery indicator** — the sender-side 1→2→2-check indicator was lying in groups:
+`BubbleContentBuilder` used a naive `readCount > 0 → Read` / `deliveredCount > 0 → Delivered` threshold with
+**no recipient denominator**, so one reader in a group showed "read by all". New pure `:core:model`
+`DeliveryStatusResolver.resolve(base, deliveredCount, readCount, recipientCount, deliveredToAllAt?,
+readByAllAt?) → DeliveryState` (port of the iOS `DeliveryStatusResolver`): WhatsApp-style all-or-nothing
+(Delivered/Read only when **every** recipient received/read), `recipientCount <= 1` trusts the `> 0`
+threshold (1:1 / unknown denominator), the unambiguous "all" markers win denominator-independent, counts
+clamped, send-cycle (Pending/Failed) returned verbatim. Never over-reports. Wired with **no DB migration**
+(`ApiMessage.deliveredToAllAt` rides the JSON payload): `BubbleContentBuilder` gains a `recipientCount`
+param (default 1 = backward-compatible 1:1) and re-resolves via the SSOT; `ChatViewModel` threads
+`memberCount - 1` from the conversation stream through the bubble combine.
+
+## Prior loop (Phase: Chat — rich message features) — slice `message-effects-lifecycle` ✅
 **Message-effects lifecycle (ephemeral / blurred / view-once)** — makes the rich-but-dead `MessageEffects`
 model live and centralises, as an Android SSOT, the lifecycle logic iOS scatters across its message views.
 Pure `:core:model` `MessageLifecyclePresentation.of(effects, createdAtMillis, nowMillis, revealed, viewCount)

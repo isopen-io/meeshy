@@ -25,6 +25,10 @@ private fun message(
     deletedAt: String? = null,
     sender: ApiMessageSender? = null,
     effects: MessageEffects? = null,
+    deliveredCount: Int = 0,
+    readCount: Int = 0,
+    deliveredToAllAt: String? = null,
+    readByAllAt: String? = null,
 ) = ApiMessage(
     id = id,
     conversationId = "c1",
@@ -36,6 +40,10 @@ private fun message(
     translations = translations,
     sender = sender,
     effects = effects,
+    deliveredCount = deliveredCount,
+    readCount = readCount,
+    deliveredToAllAt = deliveredToAllAt,
+    readByAllAt = readByAllAt,
 )
 
 class BubbleContentBuilderTest {
@@ -233,6 +241,53 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Sent)
+    }
+
+    @Test
+    fun `a direct-chat read receipt shows Read (recipientCount default 1)`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredCount = 1, readCount = 1),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Read)
+    }
+
+    @Test
+    fun `a group message read by only some recipients does not show Read`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredCount = 2, readCount = 1),
+            currentUserId = "me",
+            preferences = french,
+            recipientCount = 3,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Sent)
+    }
+
+    @Test
+    fun `a group message read by all recipients shows Read`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredCount = 3, readCount = 3),
+            currentUserId = "me",
+            preferences = french,
+            recipientCount = 3,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Read)
+    }
+
+    @Test
+    fun `a delivered-to-all marker shows Delivered even without full counts`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredToAllAt = "2026-07-06T00:00:00Z"),
+            currentUserId = "me",
+            preferences = french,
+            recipientCount = 5,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Delivered)
     }
 
     @Test

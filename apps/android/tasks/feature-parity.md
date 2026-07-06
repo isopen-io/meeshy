@@ -355,7 +355,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       carousel / audio / location / contact pending
 - [ ] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight)
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
-- [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
+- [◐] Delivery status checkmarks + offline-pending hourglass + failed-message retry — 1→2→2-check
+      indicator now **honest all-or-nothing** via the pure `DeliveryStatusResolver` SSOT (`delivery-status-resolver`
+      2026-07-06: WhatsApp-style group rule, `recipientCount` threaded from the conversation, "all" markers,
+      never over-reports; pending/failed/retry already wired). Pending: the read-precision viewport gating +
+      live "all"-marker stamping in `applyReadReceipt` (race-free live groups) + the who-read detail sheet.
 - [ ] Edited / pinned / forwarded indicators; edit-history viewer
 - [◐] Ephemeral (self-destruct) messages with countdown badges ✅ (render/decision — `message-effects-lifecycle`
       2026-07-06: pure `MessageLifecyclePresentation` ephemeral countdown + `ChatScreen` badge). Pending: the
