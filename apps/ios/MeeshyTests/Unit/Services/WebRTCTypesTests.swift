@@ -594,18 +594,22 @@ final class QualityThresholdsVideoTests: XCTestCase {
         XCTAssertEqual(QualityThresholds.minVideoBitrate, 100_000)
     }
 
-    func test_turnDefaultCredentialTTLSeconds_is480() {
-        // TURN credentials issued by the Meeshy gateway default to 480 s. The 80%-TTL
-        // refresh fires at 384 s — well before Coturn's 600 s server-side eviction.
-        XCTAssertEqual(QualityThresholds.turnDefaultCredentialTTLSeconds, 480, accuracy: 0.001)
+    func test_turnDefaultCredentialTTLSeconds_matchesGatewayDefault() {
+        // Mirrors TURNCredentialService.credentialTTL's default (86400s / 24h,
+        // services/gateway/src/services/TURNCredentialService.ts) — the gateway raised
+        // it from 600s (CALL-FIX 2026-06-25) after the short value silently killed
+        // TURN-relayed calls once credentials expired mid-call. This client-side
+        // fallback (used only when a signalling path carries no explicit ttl, e.g. a
+        // VoIP push) must not drift back to a value that misrepresents the real TTL.
+        XCTAssertEqual(QualityThresholds.turnDefaultCredentialTTLSeconds, 86400, accuracy: 0.001)
     }
 
     func test_turnRefreshFires_at80PercentOfDefaultTTL() {
         // scheduleTURNCredentialRefresh applies an 80% factor: refreshDelay = ttl * 0.8.
-        // With the default TTL the refresh should fire at 384 s.
+        // With the default TTL the refresh should fire at 69120 s.
         let refreshAt = QualityThresholds.turnDefaultCredentialTTLSeconds * 0.8
-        XCTAssertEqual(refreshAt, 384.0, accuracy: 0.001,
-                       "TURN credential refresh must fire at 384 s (80% of 480 s default TTL)")
+        XCTAssertEqual(refreshAt, 69120.0, accuracy: 0.001,
+                       "TURN credential refresh must fire at 80% of the 86400 s default TTL.")
     }
 }
 

@@ -42,18 +42,32 @@ Le préfixe `post:` est incorrect — toutes les autres clés `STORY_*` utilisen
 
 ---
 
-## 3. `READ_STATUS_UPDATED` namespace hyphené hors convention
+## 3. `READ_STATUS_UPDATED` namespace hyphené hors convention — ✅ Résolu (2026-07-05)
 
-**Problème** :
+**Problème (historique)** :
 ```typescript
 READ_STATUS_UPDATED: 'read-status:updated',
 ```
 La convention partout ailleurs : `entity:action-word` avec entity en mot unique (`message`, `conversation`, `call`, etc.). Ici `read-status` introduit un hyphen dans le namespace.
 
-**Action proposée** :
-- Renommer en `'message:read-status-updated'` (sémantiquement c'est un changement sur un message)
-- Ou `'reading:status-updated'` si on veut un domaine dédié
-- Migration coordonnée
+**Fix appliqué** : `MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated'` ajouté dans
+`packages/shared/types/socketio-events.ts` (même `ReadStatusUpdatedEventData`), **dual-émis**
+en parallèle du legacy `READ_STATUS_UPDATED` (même pattern que `CONVERSATION_NEW`/
+`FRIEND_REQUEST_*` — coexistence ~3 mois) aux 5 points d'émission : `routes/messages.ts`,
+`routes/conversations/messages.ts`, `routes/message-read-status.ts`,
+`socketio/MeeshySocketIOManager.ts` (`_emitDeliveryForDrainedMessages`),
+`socketio/handlers/MessageHandler.ts` (`_autoDeliverToOnlineRecipients`). Purement additif —
+aucun consommateur (web `presence.service.ts`, iOS `MessageSocketManager`, Android
+`MessageSocketManager.kt`) n'a besoin d'être modifié dans cette passe puisque le nom legacy
+continue de fonctionner à l'identique ; migrer les clients vers le nouveau nom reste un
+suivi séparé, non bloquant.
+
+Tests : `packages/shared/__tests__/types/socketio-events.test.ts` (convention),
+`delivery-receipt.test.ts`, `MessageHandler.autoDeliver.test.ts`,
+`MeeshySocketIOManager.test.ts`, `messages-routes.test.ts`, `messages-extended.test.ts`,
+`mark-conversation-status.test.ts` (dual-emit + suppression symétrique quand
+`showReadReceipts=false`). Suite gateway ciblée (16 fichiers touchés par le changement) :
+847/847 tests verts.
 
 ---
 
@@ -185,7 +199,7 @@ demande avait été acceptée/refusée, seulement au prochain refetch complet.
 | P2 | #1 NOTIFICATION_NEW audit complet | Pattern récurrent qui pourrira chaque domaine ajouté |
 | P2 | #7 FRIEND_REQUEST events | Visibility équivalente au bug de conv créateur, juste pas remonté yet |
 | ~~P3~~ | ~~#6 USER_UPDATED~~ | ✅ Résolu 2026-07-02 |
-| P3 | #3 READ_STATUS namespace | Cosmétique, faible blast radius |
+| ~~P3~~ | ~~#3 READ_STATUS namespace~~ | ✅ Résolu 2026-07-05 |
 | P3 | #4 NOTIFICATION générique | À élucider d'abord |
 
 ## Conventions à inscrire dans `socketio-events.ts`

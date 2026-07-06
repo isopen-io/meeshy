@@ -220,9 +220,9 @@ extension BubbleStandardLayout {
                 }
         }
         .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+            RoundedRectangle(cornerRadius: 16)
                 .stroke(strokeColor, lineWidth: 0.5)
         )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -374,7 +374,7 @@ fileprivate struct BubbleGridCell: View {
                     onDismiss: { withAnimation { showReactionPicker = false } }
                 )
                 .padding(8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 .padding(.horizontal, 6)
             }
             .transition(.opacity)

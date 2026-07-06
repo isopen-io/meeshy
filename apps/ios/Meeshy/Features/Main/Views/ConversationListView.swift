@@ -212,6 +212,11 @@ struct ConversationListView: View {
     /// RESTE une chip qui suit librement le doigt (y compris vers le haut,
     /// pour viser un header au-dessus) jusqu'au relâchement — drop ou dismiss.
     @State var chipModeLatched = false
+    /// Auto-scroll de bord pendant le drag de la chip (Phase 3) : stationner
+    /// près du haut/bas du viewport fait défiler la liste pour atteindre les
+    /// headers de section hors écran. Armé au verrouillage de la chip
+    /// (+Overlays), arrêté au drop et au dismiss.
+    @State var chipAutoScrollDriver = ChipAutoScrollDriver()
 
     @State var userCommunityLookup: [String: MeeshyCommunity] = [:]
 
@@ -251,6 +256,9 @@ struct ConversationListView: View {
                 sectionView(for: group)
             }
         }
+        // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
+        // bord du drag de chip (+Overlays). Aucune interaction, frame nulle.
+        .background(ChipAutoScrollGrabber(driver: chipAutoScrollDriver))
     }
 
     private var isSingleUngroupedSection: Bool {
@@ -266,7 +274,11 @@ struct ConversationListView: View {
                 section: group.section,
                 count: group.conversations.count,
                 isExpanded: expandedSections.contains(group.section.id),
-                isDropTarget: dropTargetSection == group.section.id && group.section.id != "pinned"
+                // "pinned" est désormais une cible de drop LIVE (drop =
+                // épingler) — la surbrillance suit dropTargetSection, que le
+                // chemin chip ne renseigne pour Épingles que si l'action est
+                // réelle (conversation pas déjà épinglée).
+                isDropTarget: dropTargetSection == group.section.id
             ) {
                 toggleSection(group.section.id)
             }

@@ -240,14 +240,29 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Message content cannot be empty (unless attachments are included)');
       }
 
-      // Mettre à jour le message
-      const updatedMessage = await prisma.message.update({
-        where: { id: messageId },
+      // Mettre à jour le message — garde de concurrence optimiste : n'écrire
+      // que si le message est toujours non supprimé. Un `DELETE` concurrent
+      // entre la lecture ci-dessus et cette écriture ferait sinon ressusciter
+      // la ligne avec le contenu édité (un `update` par id réussit quel que
+      // soit `deletedAt`), et l'API répondrait succès pour un message que le
+      // client a déjà retiré. Miroir du garde `updateMany` du handler socket
+      // `handleMessageEdit`.
+      const editedAt = new Date();
+      const editResult = await prisma.message.updateMany({
+        where: { id: messageId, deletedAt: null },
         data: {
           content: content.trim(),
           isEdited: true,
-          editedAt: new Date()
-        },
+          editedAt
+        }
+      });
+
+      if (editResult.count === 0) {
+        return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
+      }
+
+      const updatedMessage = await prisma.message.findUniqueOrThrow({
+        where: { id: messageId },
         include: {
           sender: {
             select: {
@@ -565,6 +580,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               emitter = emitter.to(userRoom);
             }
             emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+            emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
           }
         } catch (socketError) {
           logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);

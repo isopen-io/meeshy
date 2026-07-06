@@ -71,7 +71,7 @@ final class StoryComposerView_ResetStateTests: XCTestCase {
     // MARK: - View-level resetLocalState() — not unit-testable
 
     /// SwiftUI does not expose `@State` storage to XCTest, so we cannot
-    /// directly assert that `resetLocalState()` cleared `stickerObjects`
+    /// directly assert that `resetLocalState()` cleared the canvas-local fields
     /// inside the View struct. The behavioural guarantee is enforced at the
     /// call site (line 573): `viewModel.reset()` is ALWAYS followed by
     /// `resetLocalState()`. If a future refactor introduces a second call

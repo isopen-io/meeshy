@@ -1015,6 +1015,36 @@ describe('CallService', () => {
       expect(result.status).toBe(CallStatus.ended);
     });
 
+    it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the terminal write (sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call)', async () => {
+      const participant = createMockParticipant();
+      const callWithParticipant = createMockCallSession({
+        status: CallStatus.active,
+        answeredAt: new Date(Date.now() - 30_000),
+        participants: [participant]
+      });
+      const currentCall = {
+        ...callWithParticipant,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [{ ...participant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+      const p2034 = Object.assign(
+        new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction'),
+        { code: 'P2034' }
+      );
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithParticipant);
+      mockPrisma.$transaction.mockRejectedValueOnce(p2034);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(currentCall);
+
+      const result = await callService.leaveCall(validLeaveData);
+
+      expect(result.status).toBe(CallStatus.ended);
+    });
+
     it('should not end call when other participants remain', async () => {
       const participant = createMockParticipant();
       const otherParticipant = createMockParticipant({
@@ -1321,6 +1351,36 @@ describe('CallService', () => {
       await expect(callService.endCall('call-123', 'user-123', 'participant-123')).rejects.toThrow(
         'NOT_A_PARTICIPANT: You are not in this call'
       );
+    });
+
+    it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the terminal write (sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call)', async () => {
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.active,
+        participants: [initiatorParticipant]
+      });
+      const currentCall = {
+        ...mockCall,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+      const p2034 = Object.assign(
+        new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction'),
+        { code: 'P2034' }
+      );
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockRejectedValueOnce(p2034);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(currentCall);
+
+      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      expect(result.status).toBe(CallStatus.ended);
     });
 
     it('should allow any active participant to end a P2P call (spec C4)', async () => {
@@ -1686,6 +1746,42 @@ describe('CallService', () => {
           endReason: 'missed'
         })
       });
+    });
+
+    it('bumps CallSession.version on the terminal write so a version-guarded writer that already read the row no-ops afterward', async () => {
+      // Every other terminal writer (endCall, leaveCall, updateCallStatus, the
+      // ringing-timeout handler) bumps `version` on its terminal write — this
+      // is the invariant version-guarded writers (`where: { version: call.version }`)
+      // rely on to detect a concurrent transition. markCallAsMissed's
+      // status-scoped updateMany protects itself from double-writing, but
+      // without bumping `version` too, a concurrent endCall()/leaveCall() that
+      // read the row a moment earlier still matches its stale `version` guard
+      // and clobbers this write's endedAt/duration/endReason right after.
+      const callSession = createMockCallSession({
+        status: CallStatus.ringing,
+        version: 3,
+        participants: [createMockParticipant()]
+      });
+      const missedCall = {
+        ...callSession,
+        status: CallStatus.missed,
+        endedAt: new Date(),
+        participants: [createMockParticipant({ user: createMockUser() })],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callSession);
+      mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(missedCall);
+
+      await callService.markCallAsMissed('call-123');
+
+      expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ version: { increment: 1 } })
+        })
+      );
     });
 
     it('returns current state without releasing claims when it loses the race to a concurrent terminal write', async () => {
@@ -4284,5 +4380,65 @@ describe('CallService - createCallSummaryMessage', () => {
     mockPrisma.message.create.mockRejectedValue(new Error('DB connection lost'));
 
     await expect(callService.createCallSummaryMessage('call-123')).rejects.toThrow('DB connection lost');
+  });
+
+  describe('forceEndOrphanedCallSession', () => {
+    it('returns null without starting a transaction when the call session no longer exists', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue(null);
+
+      const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.connectionLost);
+
+      expect(result).toBeNull();
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('force-ends an active session: bumps version, tags endReason, marks remaining participants left, releases the claim', async () => {
+      const startedAt = new Date(Date.now() - 42_000);
+      mockPrisma.callSession.findUnique.mockResolvedValue({ startedAt, conversationId: 'conv-123' });
+
+      const callSessionUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+      const callParticipantUpdateMany = jest.fn().mockResolvedValue({ count: 2 });
+      mockPrisma.$transaction.mockImplementation(async (cb: any) => cb({
+        callSession: { updateMany: callSessionUpdateMany },
+        callParticipant: { updateMany: callParticipantUpdateMany }
+      }));
+
+      const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.connectionLost);
+
+      expect(result?.conversationId).toBe('conv-123');
+      expect(result?.duration).toBeGreaterThanOrEqual(42);
+      expect(callSessionUpdateMany).toHaveBeenCalledWith({
+        where: { id: 'call-123', status: { in: expect.any(Array) } },
+        data: expect.objectContaining({
+          status: CallStatus.ended,
+          endReason: CallEndReason.connectionLost,
+          version: { increment: 1 }
+        })
+      });
+      expect(callParticipantUpdateMany).toHaveBeenCalledWith({
+        where: { callSessionId: 'call-123', OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
+        data: { leftAt: expect.any(Date) }
+      });
+      expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
+        where: { id: 'conv-123', activeCallId: 'call-123' },
+        data: { activeCallId: null }
+      });
+    });
+
+    it('no-ops without touching participants or the active-call claim when another path already resolved the call', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue({ startedAt: new Date(), conversationId: 'conv-123' });
+      const callParticipantUpdateMany = jest.fn();
+      mockPrisma.$transaction.mockImplementation(async (cb: any) => cb({
+        callSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        callParticipant: { updateMany: callParticipantUpdateMany }
+      }));
+      mockPrisma.conversation.updateMany.mockClear();
+
+      const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.connectionLost);
+
+      expect(result).toBeNull();
+      expect(callParticipantUpdateMany).not.toHaveBeenCalled();
+      expect(mockPrisma.conversation.updateMany).not.toHaveBeenCalled();
+    });
   });
 });

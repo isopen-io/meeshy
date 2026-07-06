@@ -88,6 +88,8 @@ struct UploadProgressBar: View {
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
-        AttachmentDownloader.fmt(bytes)
+        if bytes < 1024 { return "\(bytes) B" }
+        if bytes < 1024 * 1024 { return String(format: "%.0f KB", Double(bytes) / 1024) }
+        return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
     }
 }

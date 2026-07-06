@@ -138,4 +138,54 @@ final class StoryPlaybackHealthTests: XCTestCase {
             isAudioPending: false, isPrimaryMediaPending: true),
             "Media pending alone still freezes")
     }
+
+    // MARK: - shouldKickPlayback (C-DIR3 — self-heal du playback device)
+
+    func test_shouldKickPlayback_pausedPastGrace_kicks() {
+        XCTAssertTrue(StoryPlaybackHealth.shouldKickPlayback(
+            status: .paused, isUserPaused: false, isFailed: false,
+            pausedSinceSeconds: 1.0, kicksDelivered: 0),
+            "A player stuck .paused while every gate says play must be re-kicked")
+    }
+
+    func test_shouldKickPlayback_withinGrace_waits() {
+        XCTAssertFalse(StoryPlaybackHealth.shouldKickPlayback(
+            status: .paused, isUserPaused: false, isFailed: false,
+            pausedSinceSeconds: 0.3, kicksDelivered: 0),
+            "The grace window absorbs the normal attach→play latency")
+    }
+
+    func test_shouldKickPlayback_userPaused_neverKicks() {
+        XCTAssertFalse(StoryPlaybackHealth.shouldKickPlayback(
+            status: .paused, isUserPaused: true, isFailed: false,
+            pausedSinceSeconds: 10, kicksDelivered: 0),
+            "A legitimate long-press pause must never be fought by the self-heal")
+    }
+
+    func test_shouldKickPlayback_buffering_isStallGateTerritory() {
+        XCTAssertFalse(StoryPlaybackHealth.shouldKickPlayback(
+            status: .waitingToPlayAtSpecifiedRate, isUserPaused: false, isFailed: false,
+            pausedSinceSeconds: 10, kicksDelivered: 0),
+            ".waiting is buffering — the stall gate owns it, a kick would not help")
+    }
+
+    func test_shouldKickPlayback_noVideo_neverKicks() {
+        XCTAssertFalse(StoryPlaybackHealth.shouldKickPlayback(
+            status: nil, isUserPaused: false, isFailed: false,
+            pausedSinceSeconds: 10, kicksDelivered: 0))
+    }
+
+    func test_shouldKickPlayback_failed_neverKicks() {
+        XCTAssertFalse(StoryPlaybackHealth.shouldKickPlayback(
+            status: .paused, isUserPaused: false, isFailed: true,
+            pausedSinceSeconds: 10, kicksDelivered: 0),
+            "A dead asset cannot be revived by play() — wall clock owns it")
+    }
+
+    func test_shouldKickPlayback_kickBudgetExhausted_stops() {
+        XCTAssertFalse(StoryPlaybackHealth.shouldKickPlayback(
+            status: .paused, isUserPaused: false, isFailed: false,
+            pausedSinceSeconds: 10, kicksDelivered: StoryPlaybackHealth.maxPlaybackKicks),
+            "Bounded retries — an external force pausing us repeatedly must win")
+    }
 }

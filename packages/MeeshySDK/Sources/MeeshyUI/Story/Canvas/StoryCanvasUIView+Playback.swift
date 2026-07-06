@@ -335,9 +335,47 @@ extension StoryCanvasUIView {
             isPrimaryMediaPending: mediaPending
         )
         isPlaybackStalled = !progressing
+
+        // C-DIR3 — self-heal : un player `.paused` alors que rien ne le pause
+        // (ni user, ni échec) ne se relancera JAMAIS seul — les didSet
+        // `isPlaybackActive` ne rejouent que sur changement de valeur. Vécu
+        // device (iPhone 16 Pro Max) : story figée au boot jusqu'à un
+        // long-press/relâcher manuel. La sonde re-drive le chemin canonique
+        // du resume, avec grâce et budget bornés (règle pure testée).
+        if status == .paused, !isPlaybackPaused, !failed {
+            if playbackPausedProbeSince == nil { playbackPausedProbeSince = now }
+        } else {
+            playbackPausedProbeSince = nil
+        }
+        if StoryPlaybackHealth.shouldKickPlayback(
+            status: status,
+            isUserPaused: isPlaybackPaused,
+            isFailed: failed,
+            pausedSinceSeconds: playbackPausedProbeSince.map { now - $0 } ?? 0,
+            kicksDelivered: playbackSelfHealKicks
+        ) {
+            playbackSelfHealKicks += 1
+            playbackPausedProbeSince = nil
+            kickPlayback()
+        }
+
         guard progressing != lastProgressingEmitted else { return }
         lastProgressingEmitted = progressing
         onPlaybackProgressing?(progressing)
+    }
+
+    /// C-DIR3 — re-drive la lecture par le chemin canonique du resume en
+    /// FORÇANT les didSet (flip false→true) : exactement ce que le cycle
+    /// long-press/relâcher réparait à la main sur device. Loggé pour le
+    /// diagnostic terrain (Console.app, catégorie story-media).
+    func kickPlayback() {
+        storyMediaLog.info("playback self-heal kick #\(self.playbackSelfHealKicks, privacy: .public) — primary player stuck .paused while gates say play")
+        pushSlidePlayheadToLayers()
+        backgroundLayer.isPlaybackActive = false
+        backgroundLayer.isPlaybackActive = true
+        foregroundVideosPlaybackActive = false
+        foregroundVideosPlaybackActive = true
+        forEachMediaLayer { $0.startAlignedIfActive() }
     }
 
     /// Remet l'état de santé à « progressant » au démarrage d'une session de
@@ -347,6 +385,8 @@ extension StoryCanvasUIView {
         isPlaybackStalled = false
         lastProgressingEmitted = true
         playbackStallSince = nil
+        playbackPausedProbeSince = nil
+        playbackSelfHealKicks = 0
     }
 
     /// Test-only seam : drive the health core with an injected `timeControlStatus`

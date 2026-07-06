@@ -52,6 +52,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// caméra allumée sans aucun chemin d'extinction. Un simple booléen ne
     /// suffit pas : un raccrocher→recomposer rapide le remettait à false
     /// avant la reprise de l'await (capture orpheline ressuscitée).
+    ///
+    /// The post-await re-comparison itself must run on MainActor: `startCapture`/
+    /// `stopCapture` resume on whatever queue AVCaptureSession's ObjC completion
+    /// fired on (not guaranteed MainActor), while `disconnect()` — always
+    /// MainActor-isolated, since callers are @MainActor — mutates this same var
+    /// synchronously. Every call site wraps its generation check in
+    /// `await MainActor.run { ... }` so the two never interleave.
     private var sessionGeneration = 0
     private var remoteVideoTrack_: RTCVideoTrack?
     private var remoteAudioTrack_: RTCAudioTrack?
@@ -313,18 +320,26 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let generation = sessionGeneration
         Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
         try await capturer.startCapture(with: camera, format: format, fps: fps)
-        if generation != sessionGeneration {
+        // See `sessionGeneration` doc: this check-and-clear must be serialized
+        // against disconnect() on MainActor, not run on whatever thread the
+        // capture-session completion resumed us on.
+        let isStale = await MainActor.run { () -> Bool in
+            guard generation != sessionGeneration else { return false }
             // L'appel s'est terminé (ou un nouvel appel a été configuré)
-            // pendant le warm-up : on éteint la caméra via la référence
-            // LOCALE et on ne nil-e les propriétés que si elles pointent
-            // encore notre capturer — un nouvel appel a pu poser les siennes.
-            Logger.webrtc.warning("[WEBRTC] session changed during camera warm-up — stopping orphan capture")
-            await capturer.stopCapture()
+            // pendant le warm-up : on ne nil-e les propriétés que si elles
+            // pointent encore notre capturer — un nouvel appel a pu poser les siennes.
             if videoCapturer === capturer {
                 localVideoTrack_ = nil
                 videoCapturer = nil
                 videoFilterDelegate = nil
             }
+            return true
+        }
+        if isStale {
+            // On éteint la caméra via la référence LOCALE (déjà détachée des
+            // propriétés partagées ci-dessus si elle leur appartenait encore).
+            Logger.webrtc.warning("[WEBRTC] session changed during camera warm-up — stopping orphan capture")
+            await capturer.stopCapture()
             throw CancellationError()
         }
         // applyVideoEncoding() is deferred — it runs once the video track is
@@ -958,7 +973,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let generation = sessionGeneration
         do {
             try await capturer.startCapture(with: camera, format: format, fps: fps)
-            if generation != sessionGeneration {
+            let isStale = await MainActor.run { generation != sessionGeneration }
+            if isStale {
                 Logger.webrtc.warning("[WEBRTC] session changed during capturer restart — stopping orphan capture")
                 await capturer.stopCapture()
                 return
@@ -997,7 +1013,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
-        if generation != sessionGeneration {
+        let isStale = await MainActor.run { generation != sessionGeneration }
+        if isStale {
             Logger.webrtc.warning("[WEBRTC] session changed during camera switch — stopping orphan capture")
             await capturer.stopCapture()
             return
@@ -1051,7 +1068,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
-        if generation != sessionGeneration {
+        let isStale = await MainActor.run { generation != sessionGeneration }
+        if isStale {
             Logger.webrtc.warning("[WEBRTC] session changed during camera switch (by ID) — stopping orphan capture")
             await capturer.stopCapture()
             return
@@ -1105,6 +1123,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // MARK: - DataChannel
 
     func createDataChannel(label: String) -> Bool {
+        // Idempotent : les re-négociations (ICE restart, escalade vidéo)
+        // repassent par createOffer — ne jamais empiler un second channel
+        // sur la même peer connection.
+        if transcriptionDataChannel != nil { return true }
         guard let pc = peerConnection else { return false }
         let config = RTCDataChannelConfiguration()
         config.isOrdered = true
@@ -1196,6 +1218,29 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         videoCapturer = nil
         pendingIceRestart = false
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
+    }
+
+    func disconnectAfterFlushingPendingSend() {
+        guard let channel = transcriptionDataChannel, channel.bufferedAmount > 0 else {
+            disconnect()
+            return
+        }
+        // Captured before the wait: `configure()` and `disconnect()` both bump
+        // `sessionGeneration`, so if a fresh call reuses this same client
+        // instance while we're waiting, the mismatch below stops this stale
+        // flush from tearing down the NEW call's peer connection.
+        let generation = sessionGeneration
+        let pollInterval = Duration.milliseconds(QualityThresholds.dataChannelFlushPollIntervalMilliseconds)
+        let deadline = ContinuousClock.now + .milliseconds(QualityThresholds.dataChannelFlushTimeoutMilliseconds)
+        Task { [weak self] in
+            while ContinuousClock.now < deadline {
+                guard let self, self.sessionGeneration == generation else { return }
+                guard (self.transcriptionDataChannel?.bufferedAmount ?? 0) > 0 else { break }
+                try? await Task.sleep(for: pollInterval)
+            }
+            guard let self, self.sessionGeneration == generation else { return }
+            self.disconnect()
+        }
     }
 
     deinit {
@@ -1634,6 +1679,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func sendDataChannelMessage(_ data: Data) {}
     func sendDTMF(digits: String) {}
     func disconnect() {}
+    func disconnectAfterFlushingPendingSend() {}
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { nil }
     var videoFilterPipeline = VideoFilterPipeline()

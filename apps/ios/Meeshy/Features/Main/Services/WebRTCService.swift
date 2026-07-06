@@ -109,7 +109,14 @@ final class WebRTCService {
 
     func configure(isVideo: Bool, iceServers: [IceServer]? = nil) {
         do {
-            let servers = iceServers ?? IceServer.defaultServers
+            // Treat an empty array the same as nil: a VoIP push whose
+            // `iceServers` field decodes to zero usable servers (all entries
+            // dropped by the credential-length guard, or an explicit `[]`)
+            // must still fall back to STUN — passing `[]` through to libwebrtc
+            // means no candidate gathering at all beyond host candidates,
+            // which fails behind virtually any NAT.
+            let resolved = iceServers ?? []
+            let servers = resolved.isEmpty ? IceServer.defaultServers : resolved
             try client.configure(iceServers: servers)
             Logger.webrtc.info("WebRTC configured - video: \(isVideo), ICE servers: \(servers.count)")
         } catch {
@@ -127,6 +134,13 @@ final class WebRTCService {
     }
 
     func createOffer() async -> SessionDescription? {
+        // Le data channel doit exister AVANT l'offre pour être négocié dans le
+        // SDP (m=application). Côté offreur uniquement — l'answerer le reçoit
+        // via `didOpen`. Idempotent : les offres de re-négociation (ICE
+        // restart, escalade vidéo) ne créent pas de second channel. Il porte
+        // les segments de transcription ET les messages de contrôle in-band
+        // (`bye` = raccroché instantané sans aller-retour serveur).
+        _ = client.createDataChannel(label: "transcription")
         do {
             let offer = try await client.createOffer()
             Logger.webrtc.info("Created SDP offer")
@@ -447,6 +461,16 @@ final class WebRTCService {
         client.sendDataChannelMessage(data)
     }
 
+    /// Raccroché in-band : pousse `{type: "bye"}` au pair en P2P direct pour
+    /// une coupure instantanée, AVANT que le fanout serveur `call:ended`
+    /// n'arrive (multi-requêtes DB côté gateway). No-op si le channel n'est
+    /// pas ouvert (appel jamais connecté) — le chemin socket reste autoritatif.
+    func sendHangupBye(reason: String = "completed") {
+        let message = DataChannelControlMessage(type: "bye", reason: reason)
+        guard let data = try? JSONEncoder().encode(message) else { return }
+        client.sendDataChannelMessage(data)
+    }
+
     func sendDTMF(digits: String) {
         client.sendDTMF(digits: digits)
     }
@@ -494,7 +518,13 @@ final class WebRTCService {
         pendingCandidateTask = nil
         switchCameraTask?.cancel()
         switchCameraTask = nil
-        client.disconnect()
+        // Uses the flush-aware teardown variant, not a bare disconnect() call:
+        // `endCall()` sends the P2P hangup `bye` on the data channel right
+        // before this runs (CallManager.swift), and closing the peer
+        // connection synchronously after an enqueued-but-unflushed send can
+        // silently drop it — degrading the "instant hangup" fast path back
+        // to the slower socket `call:end` fanout it was built to bypass.
+        client.disconnectAfterFlushingPendingSend()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
         connectionState = .closed

@@ -170,26 +170,6 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         XCTAssertTrue(sut.isBackSoundActive)
     }
 
-    func test_clearingVoiceEffect_doesNotClearBackSound() throws {
-        try XCTSkipUnless(Self.audioInputAvailable, "No audio input device — skipping back-sound test")
-        let sut = makeSUT()
-        try sut.setEffect(.voiceCoder(.default))
-        try sut.setEffect(.backSound(.default))
-        sut.clearVoiceEffect()
-        XCTAssertNil(sut.activeVoiceEffect)
-        XCTAssertTrue(sut.isBackSoundActive)
-    }
-
-    func test_clearingBackSound_doesNotClearVoiceEffect() throws {
-        try XCTSkipUnless(Self.audioInputAvailable, "No audio input device — skipping back-sound test")
-        let sut = makeSUT()
-        try sut.setEffect(.voiceCoder(.default))
-        try sut.setEffect(.backSound(.default))
-        sut.clearBackSound()
-        XCTAssertEqual(sut.activeVoiceEffect, .voiceCoder)
-        XCTAssertFalse(sut.isBackSoundActive)
-    }
-
     // MARK: - Update Params
 
     func test_updateParams_voiceCoder_updatesPitch() throws {

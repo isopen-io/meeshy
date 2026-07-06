@@ -2291,10 +2291,7 @@ describe('MessageHandler', () => {
   describe('invalidateParticipantCache', () => {
     it('removes specific conversation entry', () => {
       // Prime the cache via a successful send
-      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, {
-        participantId: PARTICIPANT_ID,
-        expiresAt: Date.now() + 300_000,
-      });
+      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, PARTICIPANT_ID);
 
       handler.invalidateParticipantCache(USER_ID, VALID_CONV_ID);
 
@@ -2303,14 +2300,8 @@ describe('MessageHandler', () => {
 
     it('removes all entries for user when conversationId omitted', () => {
       const conv2 = 'b2c3d4e5f6a1b2c3d4e5f6a1';
-      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, {
-        participantId: PARTICIPANT_ID,
-        expiresAt: Date.now() + 300_000,
-      });
-      (handler as any).participantIdCache.set(`${USER_ID}:${conv2}`, {
-        participantId: PARTICIPANT_ID,
-        expiresAt: Date.now() + 300_000,
-      });
+      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, PARTICIPANT_ID);
+      (handler as any).participantIdCache.set(`${USER_ID}:${conv2}`, PARTICIPANT_ID);
 
       handler.invalidateParticipantCache(USER_ID);
 
@@ -2319,18 +2310,21 @@ describe('MessageHandler', () => {
 
     it('leaves other users unaffected', () => {
       const OTHER_USER = 'other0011223344556677889900';
-      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, {
-        participantId: PARTICIPANT_ID,
-        expiresAt: Date.now() + 300_000,
-      });
-      (handler as any).participantIdCache.set(`${OTHER_USER}:${VALID_CONV_ID}`, {
-        participantId: 'other-participant',
-        expiresAt: Date.now() + 300_000,
-      });
+      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, PARTICIPANT_ID);
+      (handler as any).participantIdCache.set(`${OTHER_USER}:${VALID_CONV_ID}`, 'other-participant');
 
       handler.invalidateParticipantCache(USER_ID);
 
       expect((handler as any).participantIdCache.has(`${OTHER_USER}:${VALID_CONV_ID}`)).toBe(true);
+    });
+
+    it('never grows past its size bound, even for callers that never leave a conversation', () => {
+      const cache = (handler as any).participantIdCache;
+      for (let i = 0; i < 10_050; i++) {
+        cache.set(`user-${i}:${VALID_CONV_ID}`, `participant-${i}`);
+      }
+
+      expect(cache.size).toBeLessThanOrEqual(10_000);
     });
   });
 });

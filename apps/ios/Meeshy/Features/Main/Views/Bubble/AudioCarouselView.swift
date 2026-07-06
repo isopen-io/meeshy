@@ -151,7 +151,7 @@ struct AudioCarouselView: View {
             // intermediate track.
             pendingPlayTask?.cancel()
             pendingPlayTask = Task {
-                try? await Task.sleep(for: .seconds(0.22))
+                try? await Task.sleep(nanoseconds: 220_000_000)
                 guard !Task.isCancelled, currentPageID == newID else { return }
                 onPlayAudio?(newID)
             }
@@ -259,7 +259,7 @@ struct AudioCarouselView: View {
             )
         } else {
             Text("\(currentIndex + 1) / \(items.count)")
-                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)

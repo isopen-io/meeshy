@@ -294,7 +294,7 @@ struct ReelsPlayerView: View {
             VStack(spacing: 14) {
                 // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver (le texte porte le sens)
                 Image(systemName: "play.rectangle.on.rectangle")
-                    .font(MeeshyFont.relative(44))
+                    .font(.system(size: 44))
                     .foregroundColor(.white.opacity(0.7))
                     .accessibilityHidden(true)
                 Text(String(localized: "reels.empty", defaultValue: "Aucun réel pour le moment", bundle: .main))
@@ -335,7 +335,7 @@ struct ReelsPlayerView: View {
             Button(action: onClose) {
                 // Glyphe chrome dans un cadre de tap fixe 40×40 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(18, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 40, height: 40)
                     .adaptiveGlass(in: Circle(), tint: .black.opacity(0.35))
@@ -895,11 +895,11 @@ private struct ReelActionButton: View {
                     // Glyphes du rail d'actions (like/comment/bookmark/share) : taille figée pour
                     // la cohérence de la colonne fixe width:48 (doctrine 86i) ; le bouton porte le libellé
                     Image(systemName: systemName)
-                        .font(MeeshyFont.relative(26, weight: .semibold))
+                        .font(.system(size: 26, weight: .semibold))
                         .foregroundColor(tint)
                     if participated, let outline {
                         Image(systemName: outline)
-                            .font(MeeshyFont.relative(26, weight: .semibold))
+                            .font(.system(size: 26, weight: .semibold))
                             .foregroundColor(Color(hex: accentHex))
                     }
                 }
@@ -928,7 +928,9 @@ private struct ReelActionButton: View {
     }
 
     fileprivate static func compact(_ value: Int) -> String {
-        MeeshyNumberFormatter.formatCompact(value)
+        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
+        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
+        return "\(value)"
     }
 }
 
@@ -1526,7 +1528,7 @@ private struct ReelAudioView: View {
             // Subtle large waveform watermark behind the transcript.
             // Glyphe décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver
             Image(systemName: "waveform")
-                .font(MeeshyFont.relative(220, weight: .semibold))
+                .font(.system(size: 220, weight: .semibold))
                 .foregroundColor(.white.opacity(0.05))
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -1542,7 +1544,7 @@ private struct ReelAudioView: View {
             // the screen never reads as empty.
             // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver
             Image(systemName: "waveform")
-                .font(MeeshyFont.relative(84, weight: .semibold))
+                .font(.system(size: 84, weight: .semibold))
                 .foregroundColor(.white.opacity(0.92))
                 .shadow(color: .black.opacity(0.35), radius: 10)
                 .accessibilityHidden(true)

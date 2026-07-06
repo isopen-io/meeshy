@@ -243,7 +243,7 @@ export class CallService {
   /**
    * Generate ICE servers with per-user TURN credentials
    */
-  generateIceServers(userId: string): any[] {
+  generateIceServers(userId: string): RTCIceServer[] {
     return this.turnCredentialService.generateCredentials(userId);
   }
 
@@ -303,6 +303,59 @@ export class CallService {
         this.heartbeatDbWriteTimers.delete(key);
       }
     }
+  }
+
+  /**
+   * Force-terminates a CallSession that a normal endCall/leaveCall path could
+   * not cleanly resolve — e.g. the ending participant no longer resolves, or
+   * the authoritative write itself failed — after the caller has already told
+   * the call room the call ended (CallEventsHandler's disconnect force-cleanup
+   * fallback and call:end optimistic-broadcast recovery paths). Mirrors
+   * CallCleanupService.forceEndCall's terminal-write protocol: scoped to
+   * ACTIVE_STATUSES (a no-op, returning null, if another path already resolved
+   * the call) and bumps `version` so a version-guarded writer that read the
+   * row moments earlier can't silently clobber this terminal state.
+   */
+  async forceEndOrphanedCallSession(
+    callId: string,
+    endReason: CallEndReason
+  ): Promise<{ duration: number; conversationId: string } | null> {
+    const session = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      select: { startedAt: true, conversationId: true }
+    });
+    if (!session) return null;
+
+    const now = new Date();
+    const duration = Math.max(0, Math.floor((now.getTime() - session.startedAt.getTime()) / 1000));
+
+    const ended = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.callSession.updateMany({
+        where: { id: callId, status: { in: ACTIVE_STATUSES } },
+        data: {
+          status: CallStatus.ended,
+          endedAt: now,
+          duration,
+          endReason,
+          version: { increment: 1 }
+        }
+      });
+      if (updated.count === 0) return false;
+
+      await tx.callParticipant.updateMany({
+        where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
+        data: { leftAt: now }
+      });
+      return true;
+    });
+
+    if (!ended) return null;
+
+    this.clearHeartbeats(callId);
+    this.clearRingingTimeout(callId);
+    await this.releaseActiveCallClaim(session.conversationId, callId);
+
+    return { duration, conversationId: session.conversationId };
   }
 
   /**
@@ -781,6 +834,21 @@ export class CallService {
   }
 
   /**
+   * MongoDB can detect two transactions racing on the same CallSession
+   * document BEFORE either side's app-level `version` guard returns
+   * `count: 0` — Prisma surfaces that as P2034 ("write conflict or
+   * deadlock, please retry") instead of letting our own conditional
+   * `updateMany` resolve the race. Every version-guarded terminal write
+   * (join/end/leave) must treat P2034 the same as its own local
+   * version-conflict signal — fall back to the fresh-state path instead of
+   * throwing a raw Prisma error at the client (prod 2026-07-04, callId
+   * observed on `call:join`: two `call:join` 3-11ms apart).
+   */
+  private isTransientWriteConflict(error: unknown): boolean {
+    return (error as { code?: string } | null)?.code === 'P2034';
+  }
+
+  /**
    * TOCTOU close (audit 2026-07-02): `activeParticipants.length >= 2` below
    * reads a snapshot fetched before this method's own write, so two callers
    * racing to join the same call (a third party racing the intended callee,
@@ -925,17 +993,7 @@ export class CallService {
     }).then(
       () => 'joined' as const,
       (error) => {
-        if (error === versionConflict) {
-          return 'conflict' as const;
-        }
-        // MongoDB can also detect the two racing transactions at the
-        // document level BEFORE our version guard returns count=0 — Prisma
-        // surfaces that as P2034 ("write conflict or deadlock, please
-        // retry"). Same semantics as versionConflict: retry against fresh
-        // state, where the already-joined check resolves a same-user
-        // double-join idempotently (observed in prod 2026-07-04: two
-        // call:join within ms → one joined, one errored to the client).
-        if ((error as { code?: string })?.code === 'P2034') {
+        if (error === versionConflict || this.isTransientWriteConflict(error)) {
           return 'conflict' as const;
         }
         throw error;
@@ -1214,7 +1272,7 @@ export class CallService {
     }).then(
       () => 'left' as const,
       (error) => {
-        if (error === leaveVersionConflict) {
+        if (error === leaveVersionConflict || this.isTransientWriteConflict(error)) {
           return 'conflict' as const;
         }
         throw error;
@@ -1423,7 +1481,7 @@ export class CallService {
     }).then(
       () => 'ended' as const,
       (error) => {
-        if (error === versionConflict) {
+        if (error === versionConflict || this.isTransientWriteConflict(error)) {
           return 'conflict' as const;
         }
         throw error;
@@ -1695,7 +1753,13 @@ export class CallService {
         status: CallStatus.missed,
         endedAt: now,
         duration,
-        endReason: CallEndReason.missed
+        endReason: CallEndReason.missed,
+        // Terminal write protocol: every terminal writer MUST bump `version`,
+        // even one guarded by status rather than by version — otherwise a
+        // version-guarded writer (endCall/leaveCall/updateCallStatus) that
+        // read the row a moment before this write still matches its stale
+        // `version` and clobbers this terminal state right after.
+        version: { increment: 1 }
       }
     });
 

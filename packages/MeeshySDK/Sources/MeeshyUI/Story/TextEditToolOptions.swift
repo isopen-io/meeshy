@@ -234,9 +234,11 @@ struct TextEditToolOptions: View {
     }
 
     /// Corner radius of the chip itself, previewing the shape it selects.
+    /// Les formes path-based (losange / nuage / bulle BD) gardent un chip
+    /// arrondi standard — leur libellé porte l'information.
     private func frameChipRadius(_ shape: StoryTextFrameShape) -> CGFloat {
         switch shape {
-        case .rounded:   return 10
+        case .rounded, .diamond, .cloud, .speech: return 10
         case .pill:      return 19
         case .rectangle: return 2
         }

@@ -9,6 +9,8 @@ import {
   SignalValidation,
   UserSchemas,
   updateBannerSchema,
+  updateUserProfileSchema,
+  AuthSchemas,
   SignalProtocolLimits,
 } from '../utils/validation.js';
 import { z } from 'zod';
@@ -159,6 +161,45 @@ describe('UserSchemas', () => {
   it('should validate minimal user', () => {
     const user = { id: '1', username: 'u', displayName: 'd' };
     expect(UserSchemas.minimal.safeParse(user).success).toBe(true);
+  });
+});
+
+describe('language-code normalization at the write boundary', () => {
+  it('updateUserProfileSchema lowercases in-app language prefs', () => {
+    const parsed = updateUserProfileSchema.parse({
+      systemLanguage: 'EN',
+      regionalLanguage: 'Fr',
+      customDestinationLanguage: 'DE',
+    });
+    expect(parsed.systemLanguage).toBe('en');
+    expect(parsed.regionalLanguage).toBe('fr');
+    expect(parsed.customDestinationLanguage).toBe('de');
+  });
+
+  it('AuthSchemas.register lowercases system/regional language', () => {
+    const parsed = AuthSchemas.register.parse({
+      username: 'alice',
+      password: 'password123',
+      firstName: 'Alice',
+      lastName: 'Smith',
+      email: 'alice@example.com',
+      systemLanguage: 'EN',
+      regionalLanguage: 'ES',
+    });
+    expect(parsed.systemLanguage).toBe('en');
+    expect(parsed.regionalLanguage).toBe('es');
+  });
+
+  it('AuthSchemas.register still rejects unsupported codes', () => {
+    const result = AuthSchemas.register.safeParse({
+      username: 'alice',
+      password: 'password123',
+      firstName: 'Alice',
+      lastName: 'Smith',
+      email: 'alice@example.com',
+      systemLanguage: 'zz',
+    });
+    expect(result.success).toBe(false);
   });
 });
 

@@ -1046,10 +1046,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (slice `contacts-blocked-list`, 2026-07-04). **Pending:** per-tab count badges beyond
       Requests (Blocked/Discover counts).
 - [~] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
-      **filters + search + presence shipped** (slice `contacts-list-friends`): the Contacts tab now
-      renders the online-first friend list with an All/Online/Offline `FilterChip` row, a search field
-      (matches username or resolved name), and a per-row online presence dot. **Pending:** per-filter
-      counts and mood-emoji presence.
+      **filters + search + presence + per-filter counts shipped**. Filters/search/presence landed in
+      `contacts-list-friends`: the Contacts tab renders the online-first friend list with an
+      All/Online/Offline `FilterChip` row, a search field (matches username or resolved name), and a
+      per-row presence dot. **Per-filter counts shipped** (slice `contacts-filter-counts`,
+      2026-07-04): the pure `:core:model` `ContactList.counts(friends, query) → ContactFilterCounts`
+      (all/online/offline sizes under the active search; online+offline partition all by construction)
+      is the SSOT, exposed on `ContactsListUiState.filterCounts` and rendered as a count badge on each
+      chip. Surpasses iOS, whose counts ignore the search field. **Three-state presence dot shipped**
+      (slice `presence-away-indicator`, 2026-07-04): the previously-dead `:core:model` `UserPresence.state(now)`
+      is now the pure SSOT (port of iOS `UserPresence.state` — offline → no dot, online → green,
+      online-but-idle > 5min → amber away), reached via the `FriendRequestUser.presenceState(now)` adapter,
+      and the friend row renders green/amber/none accordingly. **Pending:** mood-emoji presence.
 - [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
       **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
       landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the
@@ -1060,9 +1068,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (removals apply locally via `ContactList.reconcile`, additions trigger a single silent refetch —
       port of iOS `reconcileWithCache`), and `ContactList.visible` is the pure filter+search SSOT.
       `FriendshipCache.currentFriendIds` exposes the defensive friend-id snapshot the reconcile reads.
-      **Pending:** a persistent GRDB/Room friends cache (iOS `CacheCoordinator.friends`) for cold-start
-      paint — today the list is network-first + in-memory-cache reconciled. +38 tests
-      (25 `ContactList`, +2 `FriendshipCache`, 11 `ContactsListViewModel`).
+      **Cold-start paint shipped** (slice `contacts-friends-room-cache`, 2026-07-04): a persistent Room
+      `friends` cache (iOS `CacheCoordinator.friends`) — `:core:database` `FriendEntity`/`FriendDao`
+      (DB v7→8; `sortIndex` preserves `ContactList`'s assembled order verbatim, so the ordering SSOT
+      stays in `ContactList`), `:sdk-core` `FriendListRepository` (`cachedSnapshot` distinguishing cold
+      from synced-empty via `sync_meta`, `persist` write-through), and `ContactsListViewModel` rewired
+      cache-first: it paints the last-persisted roster instantly (skeleton only on a cold cache), writes
+      the assembled roster back through on every load, and prune-writes-through on a cross-screen
+      unfriend (no refetch). +14 tests. +52 tests total for the Contacts list
+      (25 `ContactList`, +2 `FriendshipCache`, 17 `ContactsListViewModel`, 8 `FriendListRepository`).
 - [x] Friendship status resolution (friend / pending sent / pending received / blocked) —
       **shipped** (slice `friendship-relationship-resolver`): the pure `:core:model`
       `UserRelationshipRules.resolve(target, currentUserId, isBlocked, friendship)` is the total
@@ -1074,13 +1088,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `@Singleton BlockCache` (blocklist SSOT, hydrated by `BlockRepository`) backs the
       `BlockStatusProvider` in `DiscoverViewModel`, so a blocked user resolves live to `Blocked`
       everywhere. +31 behavioural tests (10 rules, 13 cache, 8 resolver).
-- [~] Send / accept / decline / cancel friend request — **Requests tab** lists received +
+- [x] Send / accept / decline / cancel friend request — **Requests tab** lists received +
       sent requests (avatars tinted by deterministic `DynamicColorGenerator.colorForName`),
       with optimistic accept / decline (`respond`) + cancel (`deleteRequest`), in-flight
-      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT) ;
-      send (compose-new) + offline-queue + idempotency pending
+      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT).
+      **Durable send now shipped** (slice `friend-request-outbox-idempotency`, 2026-07-04): the
+      Discover connect flips the shared `FriendshipCache` optimistically + instantly (even offline),
+      keyed by the outbox `cmid` as a placeholder request id, and queues a `SEND_FRIEND_REQUEST`
+      row on the new `OutboxLanes.FRIEND` lane. The `OutboxCoalescer` dedups a repeated send to the
+      same receiver (idempotent — only one request can exist, latest greeting wins); the
+      `OutboxFlushWorker` sender delivers via `FriendRepository.sendFriendRequest`, classifies the
+      outcome through the pure `FriendRequestSend.classify` (409/blank-id → idempotent already-exists,
+      other 4xx → permanent reject + rollback, 5xx/offline → retry), and grafts the real request id
+      back over the placeholder on delivery; a hard exhaust rolls the pending back. **Also fixed a
+      latent bug**: `OutboxLanes.BLOCK` (and now `FRIEND`) were never in the worker's drain list, so
+      block/unblock rows never delivered — both lanes are now drained. *(Hardened structurally
+      2026-07-05 `outbox-lane-map-ssot`: the worker now derives its drain list from the
+      `OutboxLaneMap` kind→lane SSOT, so a sender can never again be stranded off an undrained lane.)*
+      Surpasses iOS (online-only
+      send). +26 tests (9 `FriendRequestSend`, 3 `OutboxCoalescer`, 5 `FriendRepository`, 4 net
+      `DiscoverViewModel`). Remaining: send **compose-new** UI (user-search entry point → connect)
 - [ ] Invite by email; invite by SMS; import phone contacts
-- [~] Discover suggestions (cache-first) + live user search with inline connect —
+- [x] Discover suggestions (cache-first) + live user search with inline connect —
       **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab
       (was `ComingSoon()`) now runs a debounced-by-threshold user search (pure `:core:model`
       `DiscoverSearch.action` — trim + ≥2-char gate, port of iOS `performSearch` guard) via
@@ -1090,8 +1119,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `connect` sends a request (row flips to Pending once the gateway mints the id), `acceptReceived`
       accepts an inbound one optimistically with rollback; a cross-screen friendship change re-derives
       every visible row via the `FriendshipCache.version` stream, so Discover stays in lock-step with
-      the Requests tab. +29 tests (13 `DiscoverSearch`, 16 `DiscoverViewModel`). **Pending:** the
-      empty-query cache-first suggestions list (iOS `loadSuggestions` via `CacheCoordinator.userSearch`).
+      the Requests tab. **The empty-query cache-first suggestions list now landed too** (slice
+      `discover-suggestions-cache-first`, 2026-07-04): a `:sdk-core` `@Singleton SuggestionsRepository`
+      (in-memory `SwrCacheSource` over `searchUsers("")`, reusing the shared `cacheFirstFlow` +
+      `CachePolicy.Suggestions`) feeds a pure `DiscoverSuggestions.snapshot(CacheResult) →
+      SuggestionsSnapshot` projection (skeleton only on cold empty; any cached data paints without a
+      spinner; a revalidated-empty list is a quiet empty state). `DiscoverViewModel.loadSuggestions()`
+      (called on tab appear, iOS `.task`) streams it into the same `rows`/connect-control surface, so
+      suggestions get live relationship badges and cross-screen re-derivation for free; a search cancels
+      it and switches surfaces, `retry` re-runs it. Surpasses iOS's `.task`-reload with an in-memory
+      singleton cache that paints instantly on a return visit. +23 tests (6 `DiscoverSuggestions`, 5
+      `SuggestionsRepository`, 12 `DiscoverViewModel`). **The suggestions cache is now durable too**
+      (slice `discover-suggestions-room-cache`, 2026-07-04): the in-memory `SwrCacheSource` was replaced
+      by a Room-backed `RoomSuggestionsSource` — `:core:database` `SuggestionEntity`/`SuggestionDao`
+      (DB v8→9, `discover_suggestions` table, `sortIndex` preserves the gateway ranking), persisting the
+      last empty-query fetch so the Discover tab paints suggestions **on a cold launch**, before any
+      network call, surviving process death (iOS `CacheCoordinator.userSearch` parity). Cold (`null`) vs
+      synced-empty is distinguished via `sync_meta`; a failed revalidation keeps the last good list. The
+      `SuggestionsRepository`/`DiscoverViewModel` public surface is unchanged, so no consumer moved. This
+      closes the **last in-memory-only cache gap** (mirroring `FriendEntity`/`CallHistoryEntity`). 11
+      tests (Robolectric + in-memory Room; replaced the 5 in-memory-source tests).
 - [x] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback —
       **shipped** (slice `contacts-blocked-list`, 2026-07-04): the Blocked tab (was placeholder)
       renders the blocklist from `BlockRepository.listBlocked()` (which hydrates the shared
@@ -1101,15 +1148,62 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `pendingIds`. Pure `:core:model` `BlockedUser` + `resolvedName`; `:core:network` `BlockApi`
       (`GET users/me/blocked-users`, `POST/DELETE users/{id}/block`, iOS `BlockService` parity).
       +29 tests (4 `BlockedUser`, 9 `BlockCache`, 6 `BlockRepository`, 9 `BlockedListViewModel`,
-      +1 `DiscoverViewModel` seam). **Pending:** durable offline-queued unblock (iOS routes it via
-      `OfflineQueue`) — today it's an online-first optimistic REST call with snapshot rollback.
+      +1 `DiscoverViewModel` seam). **Durable offline unblock now shipped** (slice
+      `block-outbox-durable`, 2026-07-04): the write path moved off online-first REST onto the
+      shared durable outbox. Two new `OutboxKind`s (`BLOCK_USER`/`UNBLOCK_USER`) on a dedicated
+      `OutboxLanes.BLOCK` lane, an `OutboxCoalescer.blockToggle` rule (block+unblock of the same
+      user annihilate — the toggle returns to the last-synced server state, exactly like a reaction
+      toggle; a repeated block/unblock is superseded — idempotent terminal state), two
+      `OutboxFlushWorker` senders (`blockApi.block`/`unblock` → Success/TransientFailure) and an
+      `onExhausted` rollback that flips the `BlockCache` SSOT back so the next `listBlocked` re-hydrates
+      truthfully. `BlockRepository.setBlockedDurably(userId, blocked)` flips the cache optimistically +
+      enqueues (blank id inert; returns the cmid, or `null` when the enqueue annihilated a pending
+      opposite); `BlockedListViewModel.unblock` calls it, wakes the flush worker only on a real cmid,
+      and rolls the row back in place on a local enqueue failure. Survives offline + process death,
+      surpassing iOS's online-only block/unblock. +12 tests (6 coalescer, +4 net `BlockRepository`,
+      +2 net `BlockedListViewModel`). **Pending:** durable offline-queued *block* from a future
+      profile/report surface (the `setBlockedDurably(.., true)` half is ready, awaiting its UI).
 
 ## K. Profile & Account
-- [ ] View profile (by id / username / public handle / email / phone)
-- [ ] Full profile sheet: banner, identity, Profile / Conversations / Stats tabs, achievements
+- [~] View profile (by id / username / public handle / email / phone) — `:feature:profile`
+      `ProfileScreen`/`ProfileViewModel` load own (session) or other (`getProfile(id)`) profiles.
+      **Header enrichment shipped** (slice `profile-header-presentation`, 2026-07-05): the pure
+      `ProfileHeaderBuilder.build(user, now) → ProfileHeaderPresentation` (`:feature:profile`, precedent
+      `FeedPostBuilder`) is the tested SSOT for the read-only header — display-name ladder (reuses
+      `MeeshyUser.effectiveDisplayName`), `@handle`, blank→null optional fields, presence (reuses
+      `UserPresence.state`), completion % clamped `0..100`, E2EE flag (`signalIdentityKeyPublic`
+      present), and member-since epoch (reuses `isoToEpochMillisOrNull`). **Pending:** resolve by
+      public handle / email / phone; banner.
+- [~] Full profile sheet: banner, identity, Profile / Conversations / Stats tabs, achievements —
+      **identity block advanced** (slice `profile-header-presentation`): the read-only `ProfileScreen`
+      now renders the presence dot (green/amber, semantic, bordered) overlaid on the avatar, the
+      accent-coloured completion ring around it, an E2EE lock badge, and a localized "member since"
+      line (EN/FR/ES/PT). **Secondary identity rows shipped** (slice `profile-details-rows`, 2026-07-05):
+      the pure `ProfileDetailRows.build(header) → List<ProfileDetailRow>` projects the primary/secondary
+      language (flag + name via the `LanguageData` SSOT, unknown code → uppercased raw), the country
+      (ISO alpha-2 → regional-indicator flag + uppercased code, non-code → plain text), and the timezone
+      into an ordered, tested list the sheet renders as label↔flag+value rows; a regional language equal
+      to the system one (case-insensitively) is collapsed. `timezone` added to the header presentation.
+      +14 `ProfileDetailRowsTest` cases. **Pending:** banner, tabs (Profile/Conversations/Stats), achievements.
 - [ ] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
-- [ ] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges
-- [ ] Profile completion ring
+- [~] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges —
+      **stats projection SSOT + read-only dashboard shipped** (slice `profile-stats-presentation`,
+      2026-07-05): the pure `UserStatsBuilder.build(stats) → UserStatsPresentation` (`:feature:profile`,
+      precedent `ProfileHeaderBuilder`) projects the six counter tiles (fixed order, negative counts
+      floored, compact boundary-safe `formatCompactCount` K/M/B labels that never render `1000.0K`) and
+      the achievement badges — every server value reconciled defensively (progress clamped `0..100`,
+      `isUnlocked` recomputed from `current >= threshold`, negative current/threshold floored) then ranked
+      unlocked-first → progress desc → current desc → id. `ProfileViewModel` fetches
+      `getUserStats(id)` once per resolved user (own = session id, other = `getProfile` id) and projects
+      into `ProfileUiState.stats`; a stats failure/throw never clobbers the profile or surfaces an error.
+      `ProfileScreen` renders a counter-tile grid + an "N of M unlocked" achievements list (EN/FR/ES/PT).
+      +35 tests (`UserStatsBuilderTest` 24, `ProfileViewModelStatsTest` 5, +existing). **Pending:** the
+      30-day activity timeline chart (`/users/me/stats/timeline`), a durable Room stats cache
+      (cache-first cold paint, iOS `CacheCoordinator.stats`), and the dedicated full-screen dashboard.
+- [x] Profile completion ring — **shipped** (slice `profile-header-presentation`, 2026-07-05): the
+      accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
+      `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
+      over/under-fills the ring), plus a "Profile N% complete" label. 22 `ProfileHeaderBuilderTest` cases.
 - [ ] Profile QR code display + save/share; share profile via message/email/copy link
 - [ ] Block / unblock users; report a user (reason + details)
 - [ ] Change email / phone (two-step verification)

@@ -30,6 +30,7 @@ const mockCallServiceRecordParticipantBackgrounded = jest.fn() as jest.Mock<any>
 const mockCallServiceClearParticipantBackgrounded = jest.fn() as jest.Mock<any>;
 const mockCallServiceCreateCallSummaryMessage = jest.fn() as jest.Mock<any>;
 const mockCallServiceReleaseActiveCallClaim = jest.fn() as jest.Mock<any>;
+const mockCallServiceForceEndOrphanedCallSession = jest.fn() as jest.Mock<any>;
 
 jest.mock('../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -52,6 +53,7 @@ jest.mock('../../services/CallService', () => ({
     recordParticipantBackgrounded: (...a: unknown[]) => mockCallServiceRecordParticipantBackgrounded(...a),
     clearParticipantBackgrounded: (...a: unknown[]) => mockCallServiceClearParticipantBackgrounded(...a),
     releaseActiveCallClaim: (...a: unknown[]) => mockCallServiceReleaseActiveCallClaim(...a),
+    forceEndOrphanedCallSession: (...a: unknown[]) => mockCallServiceForceEndOrphanedCallSession(...a),
   })),
 }));
 
@@ -73,6 +75,8 @@ jest.mock('../../utils/socket-rate-limiter', () => ({
     CALL_LEAVE: { max: 20, window: 60 },
     CALL_SIGNAL: { max: 100, window: 10 },
     MEDIA_TOGGLE: { max: 50, window: 60 },
+    CALL_BACKGROUNDED: { max: 20, window: 60 },
+    CALL_FOREGROUNDED: { max: 20, window: 60 },
   },
 }));
 
@@ -165,6 +169,7 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
     declined: 'declined',
     cancelled: 'cancelled',
     network_error: 'network_error',
+    connectionLost: 'connectionLost',
   },
 }));
 
@@ -193,6 +198,7 @@ function makeSocket(overrides: Record<string, any> = {}) {
   const socket = {
     id: SOCKET_ID,
     data: {} as Record<string, unknown>,
+    rooms: new Set<string>([SOCKET_ID]),
     on: (event: string, handler: Function) => { listeners[event] = handler; },
     emit: jest.fn<any>(),
     join: jest.fn<any>(),
@@ -1248,6 +1254,14 @@ describe('CallEventsHandler', () => {
       expect(ack).toHaveBeenCalledWith({ success: false });
     });
 
+    it('force-ends the orphaned session when the ender cannot be resolved to a participant (the fast-path optimistic broadcast already told the room the call ended)', async () => {
+      const { socket } = setupWithSocket({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+      await socket._trigger('call:end', validData, jest.fn());
+      expect(mockCallServiceForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
+    });
+
     it('ends call, broadcasts ended to call+conversation rooms in ONE deduplicated emit, removes all sockets, ack(true)', async () => {
       const endedSession = makeCallSession({ status: 'ended', duration: 90 });
       mockCallServiceEndCall.mockResolvedValue(endedSession);
@@ -1311,6 +1325,22 @@ describe('CallEventsHandler', () => {
       await socket._trigger('call:end', validData, ack);
       expect(ack).toHaveBeenCalledWith({ success: false });
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.any(Object));
+    });
+
+    it('force-ends the orphaned session when endCall throws after the fast-path optimistic broadcast', async () => {
+      mockCallServiceEndCall.mockRejectedValue(new Error('END_CALL_FAIL: permission denied'));
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:end', validData, jest.fn());
+      expect(mockCallServiceForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
+    });
+
+    it('does not force-end an already-terminated session when call:end succeeds', async () => {
+      const endedSession = makeCallSession({ status: 'ended', duration: 90 });
+      mockCallServiceEndCall.mockResolvedValue(endedSession);
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+      await socket._trigger('call:end', validData, jest.fn());
+      expect(mockCallServiceForceEndOrphanedCallSession).not.toHaveBeenCalled();
     });
 
     // Durcissement sonnerie fantôme (app suspendue) : quand un appel se
@@ -1535,6 +1565,39 @@ describe('CallEventsHandler', () => {
       expect(mockCallServicePersistCallStats).not.toHaveBeenCalled();
       const ioCalls = (io.to as jest.Mock<any>).mock.calls;
       expect(ioCalls.length).toBe(0);
+    });
+
+    it('resets the degraded streak once the call ends, so a later call reusing the id starts clean', async () => {
+      // Leak guard regression: qualityDegradedStreaks is keyed
+      // `${callId}:${participantId}` and previously was only ever swept once
+      // the whole map exceeded 5000 entries. Without an explicit clear on
+      // termination, a single post-end degraded report would inherit the
+      // dead call's streak count and fire a false "sustained" alert on its
+      // very first report.
+      mockCallServicePersistCallStats.mockResolvedValue(undefined);
+      const endedSession = makeCallSession({ status: 'ended', duration: 90 });
+      mockCallServiceEndCall.mockResolvedValue(endedSession);
+
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      const degraded = {
+        callId: CALL_ID,
+        stats: { rtt: 500, packetLoss: 1, bytesSent: 0, bytesReceived: 0, level: 'good' },
+      };
+
+      // One degraded report — streak = 1, below the sustained-alert threshold.
+      await socket._trigger('call:quality-report', degraded);
+
+      await socket._trigger('call:end', { callId: CALL_ID }, jest.fn());
+
+      // A single degraded report after the call ended must start a FRESH
+      // streak, not silently continue the old call's streak=1 into streak=2.
+      (socket.to as jest.Mock<any>).mockClear();
+      await socket._trigger('call:quality-report', degraded);
+
+      const socketToCalls = (socket.to as jest.Mock<any>).mock.calls;
+      expect(socketToCalls.some((c: any[]) => c[0] === `call:${CALL_ID}`)).toBe(false);
     });
   });
 
@@ -3391,20 +3454,21 @@ describe('CallEventsHandler', () => {
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
     });
 
-    it('broadcasts call:ended in force cleanup when $transaction marks call as ended', async () => {
+    it('broadcasts call:ended in force cleanup when the last participant leaves and forceEndOrphanedCallSession resolves', async () => {
+      // The raw $transaction here only marks THIS participant's leftAt and
+      // counts remaining participants — the terminal CallSession write (with
+      // its version bump / status guard / endReason) now goes through
+      // CallService.forceEndOrphanedCallSession (see terminal-write protocol
+      // regression tests on that method in CallService.test.ts).
       mockCallServiceLeaveCall.mockRejectedValue(new Error('DB error'));
-      const startedAt = new Date(Date.now() - 10000);
+      mockCallServiceForceEndOrphanedCallSession.mockResolvedValue({ duration: 10, conversationId: CONV_ID });
 
       const { socket, io } = setupWithSocket({
         callParticipant: { findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]), ...graceReCheck() },
         $transaction: jest.fn<any>().mockImplementation(async (fn: Function) => fn({
           callParticipant: {
             update: jest.fn<any>().mockResolvedValue({}),
-            count: jest.fn<any>().mockResolvedValue(0), // last participant → end call
-          },
-          callSession: {
-            findUnique: jest.fn<any>().mockResolvedValue({ id: CALL_ID, startedAt }),
-            update: jest.fn<any>().mockResolvedValue({}),
+            count: jest.fn<any>().mockResolvedValue(0), // last participant → force-end
           },
         })),
       });
@@ -3415,6 +3479,46 @@ describe('CallEventsHandler', () => {
       // both participant-left and call:ended should be emitted
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:ended')).toBe(true);
+      expect(mockCallServiceForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'connectionLost');
+    });
+
+    it('does not force-end the call when other participants remain after this one leaves', async () => {
+      mockCallServiceLeaveCall.mockRejectedValue(new Error('DB error'));
+
+      const { socket } = setupWithSocket({
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]), ...graceReCheck() },
+        $transaction: jest.fn<any>().mockImplementation(async (fn: Function) => fn({
+          callParticipant: {
+            update: jest.fn<any>().mockResolvedValue({}),
+            count: jest.fn<any>().mockResolvedValue(1), // another participant is still in the call
+          },
+        })),
+      });
+
+      await socket._trigger('disconnect');
+      await jest.advanceTimersByTimeAsync(31_000);
+      expect(mockCallServiceForceEndOrphanedCallSession).not.toHaveBeenCalled();
+    });
+
+    it('does not broadcast call:ended when forceEndOrphanedCallSession finds the call already resolved by another path', async () => {
+      mockCallServiceLeaveCall.mockRejectedValue(new Error('DB error'));
+      mockCallServiceForceEndOrphanedCallSession.mockResolvedValue(null);
+
+      const { socket, io } = setupWithSocket({
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]), ...graceReCheck() },
+        $transaction: jest.fn<any>().mockImplementation(async (fn: Function) => fn({
+          callParticipant: {
+            update: jest.fn<any>().mockResolvedValue({}),
+            count: jest.fn<any>().mockResolvedValue(0),
+          },
+        })),
+      });
+
+      await socket._trigger('disconnect');
+      await jest.advanceTimersByTimeAsync(31_000);
+      const roomEmitCalls = (io._roomEmit as jest.Mock<any>).mock.calls;
+      expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
+      expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:ended')).toBe(false);
     });
   });
 
@@ -3503,6 +3607,13 @@ describe('CallEventsHandler', () => {
       expect(mockCallServiceRecordParticipantBackgrounded).not.toHaveBeenCalled();
     });
 
+    it('returns early when rate limit exceeded', async () => {
+      const { socket } = setupWithSocket();
+      mockCheckSocketRateLimit.mockResolvedValue(false);
+      await socket._trigger('call:backgrounded', validData);
+      expect(mockCallServiceRecordParticipantBackgrounded).not.toHaveBeenCalled();
+    });
+
     it('sets socket.data.appForeground to false and records background state', async () => {
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket();
@@ -3550,6 +3661,13 @@ describe('CallEventsHandler', () => {
     it('returns early when validation fails', async () => {
       const { socket } = setupWithSocket();
       mockValidateSocketEvent.mockReturnValue({ success: false });
+      await socket._trigger('call:foregrounded', validData);
+      expect(mockCallServiceClearParticipantBackgrounded).not.toHaveBeenCalled();
+    });
+
+    it('returns early when rate limit exceeded', async () => {
+      const { socket } = setupWithSocket();
+      mockCheckSocketRateLimit.mockResolvedValue(false);
       await socket._trigger('call:foregrounded', validData);
       expect(mockCallServiceClearParticipantBackgrounded).not.toHaveBeenCalled();
     });

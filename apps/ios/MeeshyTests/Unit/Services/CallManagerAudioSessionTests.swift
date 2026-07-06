@@ -1734,8 +1734,8 @@ final class CallManagerDurationReconnectTests: XCTestCase {
 ///    reconnect with stale candidates that belong to a superseded ICE generation.
 ///
 /// 2. **TURN refresh on socket reconnect** — the periodic scheduler fires at
-///    80% of the 480 s TTL (384 s).  If the socket was down for the remaining
-///    20% (96 s), TURN credentials approach expiry before a refresh can fire.
+///    80% of the TTL. If the socket was down for the remaining 20% of the
+///    window, TURN credentials approach expiry before a refresh can fire.
 ///    After reconnect, proactively requesting fresh credentials ensures the
 ///    next ICE restart uses valid relay paths.
 @MainActor
@@ -1793,9 +1793,8 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             afterReconnect.contains("emitRequestIceServers"),
             "socket.didReconnect sink must call emitRequestIceServers after rejoining " +
             "the call room — the socket may have been down long enough for TURN " +
-            "credentials to approach expiry (TTL=480s, refresh fires at 384s, " +
-            "leaving a 96s vulnerability window). Proactive refresh keeps relay " +
-            "paths valid for the next ICE restart.")
+            "credentials to approach expiry before the periodic 80%-of-TTL refresh " +
+            "fires. Proactive refresh keeps relay paths valid for the next ICE restart.")
     }
 }
 
@@ -2293,6 +2292,66 @@ final class CallManagerHardeningTests: XCTestCase {
             "P2PWebRTCClient.disconnect() must reset pendingIceRestart — without this " +
             "a stale flag from a prior ICE restart persists into the next call and " +
             "causes the first offer to unnecessarily request an ICE restart")
+    }
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `WebRTCService.close()` must tear down via `disconnectAfterFlushingPendingSend()`,
+    /// not `client.disconnect()` directly. `CallManager.endCall()` sends the P2P
+    /// hangup `bye` on the DataChannel immediately before this runs; `sendData`
+    /// only enqueues onto libwebrtc's SCTP thread, so closing the peer connection
+    /// synchronously right after can silently drop the just-enqueued `bye` —
+    /// degrading the "instant hangup" fast path back to the slower socket
+    /// `call:end` fanout it exists to bypass.
+    func test_webRTCService_close_usesFlushAwareDisconnect() throws {
+        let source = try webRTCServiceSource()
+        guard let closeRange = source.range(of: "func close()") else {
+            XCTFail("close() not found in WebRTCService"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: closeRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate close() body"); return
+        }
+        let body = String(source[closeRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("client.disconnectAfterFlushingPendingSend()"),
+            "close() must call client.disconnectAfterFlushingPendingSend() so a just-sent " +
+            "hangup `bye` gets a chance to flush before the transport is torn down")
+        XCTAssertFalse(
+            body.contains("client.disconnect()"),
+            "close() must not call client.disconnect() directly — that races the hangup " +
+            "`bye` send against the peer connection teardown")
+    }
+
+    /// `disconnectAfterFlushingPendingSend()` must be a no-op difference from
+    /// `disconnect()` when nothing is buffered on the DataChannel — it should not
+    /// add latency to the overwhelming majority of hangups (remote hangup, error
+    /// paths, or a `bye` that already flushed before this runs).
+    func test_p2pWebRTCClient_disconnectAfterFlushingPendingSend_earlyReturnsWhenNothingBuffered() throws {
+        let source = try p2pClientSource()
+        guard let methodRange = source.range(of: "func disconnectAfterFlushingPendingSend()") else {
+            XCTFail("disconnectAfterFlushingPendingSend() not found in P2PWebRTCClient"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate disconnectAfterFlushingPendingSend() body"); return
+        }
+        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("bufferedAmount > 0"),
+            "disconnectAfterFlushingPendingSend() must guard on bufferedAmount > 0 and fall " +
+            "through to an immediate disconnect() otherwise")
+        XCTAssertTrue(
+            body.contains("sessionGeneration"),
+            "disconnectAfterFlushingPendingSend() must capture sessionGeneration before " +
+            "waiting so a fresh call reconfiguring this same client instance during the " +
+            "flush window isn't torn down by this stale wait")
     }
 
     /// scheduleTURNCredentialRefresh must clamp TTL to at least
@@ -3801,6 +3860,48 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
             fnBody.contains("notification.object"),
             "startScreenCaptureMonitoring() must not reference notification.object inside the " +
             "Task { @MainActor } closure — Notification is not Sendable in Swift 6."
+        )
+    }
+
+    // MARK: - Regression 2026-07-05: AVAudioSession mode must track isVideoEnabled mid-call
+
+    /// `configureAudioSession()` only runs once at call setup and picks
+    /// `.videoChat`/`.voiceChat` from `isVideoEnabled` at that moment. A manual
+    /// `toggleVideo()` mid-call flips the WebRTC transceiver/track but must also
+    /// re-apply the AVAudioSession mode — otherwise the session stays tuned for
+    /// the acoustic path (loudspeaker + camera framing vs. near-field/earpiece
+    /// AEC) of whichever A/V type the call STARTED as, not what it is now.
+    func test_toggleVideo_reappliesAudioSessionMode() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "func toggleVideo() {") else {
+            XCTFail("toggleVideo() not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("updateAudioSessionModeForCurrentVideoState()"),
+            "toggleVideo() must re-apply the AVAudioSession mode after the media switch " +
+            "succeeds — otherwise a mid-call A/V switch leaves the session tuned for the " +
+            "wrong acoustic path (.videoChat vs .voiceChat) for the rest of the call."
+        )
+    }
+
+    /// The thermal-critical branch forces a one-way video→audio-only downgrade
+    /// (distinct from the user-initiated, bidirectional `toggleVideo()`), and
+    /// flips `isVideoEnabled` itself — so it needs the same mode re-application.
+    func test_thermalCriticalVideoDowngrade_reappliesAudioSessionMode() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {") else {
+            XCTFail("thermalStateDidChange(to:) not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("updateAudioSessionModeForCurrentVideoState()"),
+            "thermalStateDidChange's critical-state video downgrade must re-apply the " +
+            "AVAudioSession mode after flipping isVideoEnabled to false, mirroring toggleVideo()."
         )
     }
 }

@@ -10,4 +10,22 @@
     <string name="profile_save">Guardar</string>
     <string name="profile_unknown">Desconocido</string>
     <string name="profile_avatar">Avatar</string>
+    <string name="profile_e2ee">Cifrado de extremo a extremo</string>
+    <string name="profile_member_since">Miembro desde %1$s</string>
+    <string name="profile_completion">Perfil %1$d%% completo</string>
+    <string name="profile_presence_online">En línea</string>
+    <string name="profile_presence_away">Ausente</string>
+    <string name="profile_detail_system_language">Idioma principal</string>
+    <string name="profile_detail_regional_language">Idioma secundario</string>
+    <string name="profile_detail_country">País</string>
+    <string name="profile_detail_timezone">Zona horaria</string>
+    <string name="profile_stats_title">Estadísticas</string>
+    <string name="profile_stat_messages">Mensajes</string>
+    <string name="profile_stat_conversations">Conversaciones</string>
+    <string name="profile_stat_translations">Traducciones</string>
+    <string name="profile_stat_friend_requests">Solicitudes de amistad</string>
+    <string name="profile_stat_languages">Idiomas</string>
+    <string name="profile_stat_member_days">Días como miembro</string>
+    <string name="profile_achievements_title">Logros</string>
+    <string name="profile_achievements_unlocked">%1$d de %2$d desbloqueados</string>
 </resources>

@@ -2,7 +2,31 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → **Calls (started)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard)** → rest`
+
+> On 2026-07-05 the **stats projection SSOT** landed (slice `profile-stats-presentation`, §K): the pure
+> `:feature:profile` `UserStatsBuilder.build(stats) → UserStatsPresentation` (precedent `ProfileHeaderBuilder`)
+> projects `UserStats` into six ranked/compact-formatted counter tiles + defensively-reconciled achievement
+> badges (progress clamped `0..100`, `isUnlocked` recomputed from `current >= threshold`, negatives floored,
+> ranked unlocked→progress→current→id) + an unlocked summary, plus a boundary-safe `formatCompactCount`
+> (K/M/B, no `1000.0K` artifact). `ProfileViewModel` fetches `getUserStats` once per resolved user and is
+> failure-inert (a stats error never clobbers the profile); `ProfileScreen` renders the read-only tile grid +
+> "N of M unlocked" achievements list (EN/FR/ES/PT). +35 tests. `assembleDebug`+`testDebugUnitTest` green.
+
+> On 2026-07-05 the **profile-header enrichment** landed (slice `profile-header-presentation`,
+> §K): the pure `:feature:profile` `ProfileHeaderBuilder.build(user, now) → ProfileHeaderPresentation`
+> (precedent `FeedPostBuilder`) is the tested SSOT projecting a `MeeshyUser` into the read-only header —
+> the display-name ladder (reuses `MeeshyUser.effectiveDisplayName`), the `@handle` (null on a blank
+> username), blank→null degradation of every optional text field (bio/avatar/languages/country), the
+> three-state presence (reuses the `UserPresence.state` SSOT — offline/unknown → no dot, online → green,
+> idle > 5min → amber), the completion % clamped into `0..100` (a malformed server value can never
+> over/under-fill the ring), the E2EE flag (`signalIdentityKeyPublic` present & non-blank), and the
+> member-since epoch (reuses `isoToEpochMillisOrNull`, null on absent/garbage `createdAt`). The existing
+> `ProfileScreen` read-only view now consumes it: an accent-coloured `ProfileCompletionRing` Canvas arc
+> around the avatar, a bordered green/amber presence dot overlaid bottom-right, an E2EE lock badge, a
+> "Profile N% complete" label and a localized "member since" line (EN/FR/ES/PT). No orphan code — every
+> derived field has a live consumer in the header. +22 behavioural tests. `assembleDebug` +
+> `testDebugUnitTest` (full) green. This opens the §K Profile area (all pure, richly branch-covered).
 
 > Calls kicked off 2026-06-30 with the pure call-lifecycle FSM (`core:model`
 > `me.meeshy.sdk.model.call` — `CallState`/`CallEndReason`/`CallEvent`/`CallStateMachine`). On
@@ -304,6 +328,38 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
+**Pivoted to Profile/Account (`feature-parity.md §K`) 2026-07-05.** Contacts (§J) is now
+cache-complete + mutation-complete + list-display-complete (only mood-emoji presence remains, which
+needs a `moodEmoji` field the roster record doesn't carry yet — deferred until a mood/status model
+lands). The routine advanced to the next-richest area with untapped pure cores. The **profile-header
+enrichment** landed first (`profile-header-presentation`): pure `ProfileHeaderBuilder` →
+`ProfileHeaderPresentation` (presence · completion-ring % · E2EE · member-since), then the **secondary
+identity rows** landed (`profile-details-rows`, 2026-07-05): pure `ProfileDetailRows.build(header)`
+projecting language (flag+name via `LanguageData`) · country (ISO→regional-indicator flag) · timezone
+into a tested list, with case-insensitive dup-language collapse; consumed by the read-only `ProfileScreen`.
+**Next highest-value §K slices (all pure-core-rich):**
+1. ~~**`profile-details-rows`**~~ ✅ shipped 2026-07-05 — see run log. `timezone` added to the header
+   presentation. +14 tests.
+2. ~~**`profile-stats-model`**~~ ✅ shipped as `profile-stats-presentation` (2026-07-05) — the raw
+   `UserStats`/`Achievement` models + `UserApi.getUserStats` + `UserRepository.getUserStats` already
+   existed (online-only, untested), so the slice delivered the genuinely additive part: the pure
+   `UserStatsBuilder → UserStatsPresentation` projection SSOT (six ranked/formatted counter tiles +
+   defensively-reconciled achievement badges + boundary-safe `formatCompactCount`), wired into
+   `ProfileViewModel` (fetch-once per resolved user, failure-inert) and rendered as a read-only
+   dashboard section in `ProfileScreen`. +35 tests. See run log.
+3. **`profile-stats-timeline`** (next §K pure core) — the 30-day activity timeline: `TimelinePoint`
+   model already exists; add `getUserStatsTimeline(days)` to `UserApi`/`UserRepository` + a pure
+   `StatsTimeline` reducer (bucket/normalize/max-scale for a sparkline) the dashboard chart renders.
+   Consider a durable **Room stats cache** (cache-first cold paint, iOS `CacheCoordinator.stats`) as a
+   sibling follow-up so the dashboard paints instantly.
+4. **`edit-profile-optimistic`** — richer `ProfileViewModel` edit path (content-language selection,
+   optimistic + offline-queued save via the outbox), building on the existing display-name/bio edit.
+5. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
+   remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
+
+---
+_Historical Contacts/Calls backlog below._
+
 **Pivoted to Contacts (`feature-parity.md §J`) 2026-07-04.** The Calls area's remaining work is
 WebRTC/Telecom/FCM platform glue with no more pure testable cores, so the routine advanced to the
 next-richest area already in progress. The **friendship/relationship SSOT** landed
@@ -316,25 +372,68 @@ Contacts slices:**
 1. ~~**Contacts list data slice**~~ ✅ shipped as `contacts-list-friends` (2026-07-04) — pure
    `:core:model` `ContactList` (assemble from accepted requests, online-first sort, filter+search,
    cache reconcile), `ContactsListViewModel` over `FriendRepository` + `FriendshipCache`, and the
-   `ContactsListTab` Compose UI. **Follow-up:** a persistent Room `friends` cache for cold-start paint
-   (iOS `CacheCoordinator.friends`) — today it's network-first + in-memory reconciled; and per-filter
-   counts + mood-emoji presence.
-2. **Send friend request (compose-new)** — user search + inline connect, optimistic `didSendRequest`
-   + offline-queue + `cmid` idempotency (the "send" half the Requests tab still lacks). Note: live
-   search + inline connect already shipped (`discover-user-search`); the gap is the durable
-   **offline-queue + idempotency** for the send.
+   `ContactsListTab` Compose UI. **Follow-up:** ~~a persistent Room `friends` cache for cold-start
+   paint (iOS `CacheCoordinator.friends`)~~ ✅ shipped as `contacts-friends-room-cache` (2026-07-04) —
+   `:core:database` `FriendEntity`/`FriendDao` (DB v7→8, `sortIndex` preserves `ContactList`'s order),
+   `:sdk-core` `FriendListRepository` (`cachedSnapshot`/`persist`, cold vs synced-empty via
+   `sync_meta`), `ContactsListViewModel` rewired cache-first (instant cold paint + write-through +
+   prune-through on unfriend). +14 tests. See run log. **Still open:** per-filter counts + mood-emoji
+   presence.
+2. ~~**Send friend request offline-queue + `cmid` idempotency**~~ ✅ shipped as
+   `friend-request-outbox-idempotency` (2026-07-04) — new `OutboxKind.SEND_FRIEND_REQUEST` on the
+   new `OutboxLanes.FRIEND` lane, a `FriendRequestPayload` (optional greeting; receiver is the
+   `targetId`), an `OutboxCoalescer` dedup (repeated send to the same receiver superseded — latest
+   wins), the pure `FriendRequestSend.classify` delivery-outcome classifier (409/blank-id →
+   idempotent AlreadyExists, other 4xx → permanent Rejected + rollback, 5xx/offline → Retry),
+   `FriendRepository.enqueueSendFriendRequest` (durable enqueue), an `OutboxFlushWorker` sender that
+   grafts the real request id over the placeholder on delivery + `onExhausted` `FriendshipCache`
+   rollback, and `DiscoverViewModel.connect` rewired to the durable optimistic path (instant Pending
+   flip even offline, keyed by the outbox cmid). **Also fixed a latent bug:** `OutboxLanes.BLOCK`
+   (and now `FRIEND`) were absent from the worker's shared-lane drain list, so block/unblock rows
+   never delivered — both lanes now drained. +26 tests. See run log. **Follow-up:** the send
+   **compose-new** UI (a dedicated user-search → connect entry point beyond the Discover tab).
 3. ~~**BlockRepository + `BlockStatusProvider` binding**~~ ✅ shipped as `contacts-blocked-list`
    (2026-07-04) — pure `:core:model` `BlockedUser` + `resolvedName`; `:core:network` `BlockApi`;
    `:sdk-core` `@Singleton BlockCache` (blocklist SSOT) + `BlockRepository`; `:feature:contacts`
    `BlockedListViewModel` + `BlockedTab` (confirm-to-unblock + optimistic rollback). The block seam
    is now bound — `DiscoverViewModel`'s `BlockStatusProvider` reads the live `BlockCache`. +29 tests.
    See run log. **Next Contacts pure cores:**
-   - **Durable offline unblock/block** — route the mutation through the outbox (iOS `OfflineQueue`),
-     surviving offline + process death (today it's online-first optimistic REST + snapshot rollback).
+   - ~~**Durable offline unblock/block**~~ ✅ shipped as `block-outbox-durable` (2026-07-04) — new
+     `OutboxKind.BLOCK_USER`/`UNBLOCK_USER` on a `OutboxLanes.BLOCK` lane, an `OutboxCoalescer.blockToggle`
+     rule (block+unblock annihilate; repeat superseded), two `OutboxFlushWorker` senders + `onExhausted`
+     `BlockCache` rollback, `BlockRepository.setBlockedDurably` (optimistic flip + enqueue), and
+     `BlockedListViewModel.unblock` rewired to the durable path. +12 tests. See run log. **Follow-up:**
+     wire the ready `setBlockedDurably(.., true)` half into a future profile/report block surface.
    - **Send friend request offline-queue + `cmid` idempotency** (#2 above).
-   - **Discover cache-first suggestions** — the empty-query suggestions list (iOS `loadSuggestions`).
-4. ~~**Discover suggestions + live user search**~~ live search + inline connect ✅ (`discover-user-search`);
-   the empty-query **cache-first suggestions** list remains (folded into #3's "Next" above).
+4. ~~**Discover suggestions + live user search**~~ ✅ fully shipped — live search + inline connect
+   (`discover-user-search`) **and** the empty-query cache-first suggestions
+   (`discover-suggestions-cache-first`, 2026-07-04: pure `DiscoverSuggestions.snapshot` +
+   `@Singleton SuggestionsRepository` in-memory SWR + `DiscoverViewModel.loadSuggestions()` on appear).
+   +23 tests. See run log. **Follow-up:** ~~a persistent Room suggestions cache for cross-launch
+   cold-start paint (iOS `CacheCoordinator.userSearch`)~~ ✅ shipped as `discover-suggestions-room-cache`
+   (2026-07-04) — `:core:database` `SuggestionEntity`/`SuggestionDao` (DB v8→9), a Room-backed
+   `RoomSuggestionsSource` (`SwrCacheSource`) replacing the in-memory one; the Discover tab now paints
+   suggestions cold, before any network call. 11 tests. See run log.
+
+**Three-state presence dot shipped** (`presence-away-indicator`, 2026-07-04): the previously-dead
+`:core:model` `PresenceState`/`UserPresence` are now live — pure `UserPresence.state(now)` (offline → no
+dot, online → green, online-but-idle > 5min → amber away, iOS `UserPresence.state` parity) reached via a
+new `FriendRequestUser.presenceState(now)` adapter and a new nullable `isoToEpochMillisOrNull` helper
+(so an absent timestamp stays online but an ancient one goes away); the friend row renders green/amber/none.
++23 tests. See run log. The **last Contacts-list display gap is mood-emoji presence**.
+
+**Recommended next (highest value):** the **send compose-new UI** — a dedicated user-search → connect
+surface (a "+ add friend" entry point beyond the Discover tab), now that the durable send half is done
+(`friend-request-outbox-idempotency`) and every Contacts **cache** is durable (friends + suggestions
+cold-paint), every Contacts **durable-mutation** gap is closed (block/unblock + friend-request send), and
+the Contacts list is now filter/search/presence(**3-state**)/**counts** complete
+(`presence-away-indicator` + `contacts-filter-counts`, 2026-07-04).
+It is more Compose-glue-heavy with less new pure core, so a smaller alternative TDD slice is the tracked
+**worker drain-list test** (a Robolectric test asserting every `OutboxLanes.*` with a registered sender
+is drained — would have caught the BLOCK/FRIEND lane-omission bug; see NOTES 2026-07-04). With Contacts
+(`§J`) now cache-complete + mutation-complete + list-display-complete (only mood-emoji presence remains),
+the routine may also **pivot to the next parity area** — revisit the Calls platform-glue slices (`§H`:
+`ConnectionService`/Telecom + WebRTC media transport) or advance Settings/Profile (`§K`).
 
 ---
 _Historical Calls backlog below (revisit only for the platform-glue slices)._
@@ -648,6 +747,441 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-05 — slice `profile-stats-presentation` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The two open PRs (#1488 gateway/iOS
+  calls, #1487 web utils) are unrelated work by another author — left untouched. Branched
+  `claude/apps/android/profile-stats-presentation` off latest `origin/main`; the designated
+  `claude/fervent-darwin-ceep4x` was exactly at main.
+- **Why this slice:** the §K "Next #2" (`profile-stats-model`). The raw `UserStats`/`Achievement` models,
+  `UserApi.getUserStats` and `UserRepository.getUserStats` already existed (online-only, untested), so the
+  genuinely additive, pure, richly-coverable work was the **stats projection SSOT** + a real consumer.
+- **Added / changed (production, `:feature:profile` only):**
+  - `UserStatsPresentation.kt` (new) — pure `UserStatsBuilder.build(stats) → UserStatsPresentation`
+    (precedent `ProfileHeaderBuilder`): six `StatTile`s in fixed dashboard order (negative counts floored);
+    `AchievementBadge`s with every server value reconciled defensively — `progressPercent` clamped `0..100`,
+    negative `current`/`threshold` floored, `isUnlocked` recomputed from `current >= threshold` when a
+    threshold exists (else the server flag is trusted) — then ranked unlocked-first → progressPercent desc →
+    current desc → id asc; `unlockedCount`/`totalCount` summary. Plus a pure boundary-safe
+    `formatCompactCount(Int)` (`0..999` verbatim, then K/M/B with a dropped `.0`; tier thresholds are the
+    pre-rounding magnitudes `999_950`/`999_950_000` so a value just under a tier rolls to `1M`/`1B`, never
+    `1000.0K` — the same class of bug web PR #1487 F66 fixed).
+  - `ProfileViewModel.kt` — `ProfileUiState.stats: UserStatsPresentation?`; `loadStatsOnce(id)` fetches
+    `getUserStats` once per resolved user (own = session id when non-blank; other = `getProfile` result id,
+    fallback to the requested id) and projects into state. Stats are a secondary surface: a `Failure` or a
+    thrown exception is swallowed (Cancellation rethrown) — it never surfaces an error or clobbers the
+    loaded profile.
+  - `ProfileScreen.kt` — read-only view renders a 2-wide counter-tile grid (`surfaceVariant` cards, compact
+    value + localized metric label) and, when badges exist, an "N of M unlocked" achievements list
+    (unlocked names emphasised). 9 new strings × 4 locales (EN/FR/ES/PT). Compose glue only (coverage-exempt).
+- **Tests (red → green):** +24 `UserStatsBuilderTest` (tile order/values, negative floor, empty stats,
+  progress clamp over/under/mid, current+threshold floor, isUnlocked recompute both directions, no-threshold
+  flag trust, unlocked-vs-locked ranking, progress-desc ordering, progress-tie → current → id tiebreak,
+  unlocked/total counts, and the full `formatCompactCount` boundary sweep incl. 999/1000, 999_949/999_950,
+  999_949_999/999_950_000, 2.1B, negative) + 5 `ProfileViewModelStatsTest` (success projection, Failure keeps
+  stats null + profile intact + no error, throw swallowed, own-profile loads exactly once across repeated
+  same-id session emissions, no load while session user absent). Behavioural through the public API; every
+  `when`/`if` arm exercised.
+- **Verification:** full `gradle assembleDebug testDebugUnitTest` (`meeshy.sh check`) **green** in ~3m12s
+  (system Gradle 8.14.3; wrapper dist still 403-blocked — see NOTES). Diff = `apps/android` only (2 prod +
+  1 new prod + 4 res + 2 test).
+- **Reviewer verdict:** **PASS** — pure projector in `:feature:profile` (product-side, consumes existing
+  model SSOT, no re-implementation), UDF VM + immutable `StateFlow`, cancellation-safe, defensive clamps
+  mirror `ProfileHeaderBuilder`, near-total branch coverage incl. tier boundaries + tie-breaks + failure
+  paths, UI kept dumb, colour via `MaterialTheme` tokens. No prod logic outside android.
+
+### 2026-07-05 — slice `profile-details-rows` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1484/#1483/#1481/
+  #1480/#1479/#1477/#1476/#1475/#1473) are all unrelated gateway/iOS/web work by another author — left
+  untouched. Branched `claude/apps/android/profile-details-rows` off latest `origin/main` (`048e40b`, the
+  merged `profile-header-presentation` #1482); the designated `claude/fervent-darwin-n7rvr5` was exactly
+  at main.
+- **Why this slice:** the #1 recommended §K follow-up — extend the just-landed profile header with its
+  **secondary identity rows** (languages · country · timezone). Pure, richly branch-covered, no network.
+- **Added / changed (production):**
+  - `:feature:profile` `ProfileDetailRows.kt` (new) — pure `ProfileDetailRows.build(header) →
+    List<ProfileDetailRow>` + `ProfileDetailKind` enum + `@Immutable ProfileDetailRow(kind, flag?, value)`.
+    Rules: languages resolve flag+name from the `LanguageData` SSOT (`info(code.lowercase())`), unknown
+    code → `flag=null`, `value=code.uppercase()`; a regional language equal to the system one
+    (case-insensitively) is **collapsed**; country → regional-indicator flag iff exactly two ASCII letters
+    (else `flag=null`, plain text kept); timezone → flagless raw row. Order: system · regional · country ·
+    timezone.
+  - `:feature:profile` `ProfileHeaderPresentation.kt` — added `timezone: String?` (blank→null degraded in
+    `ProfileHeaderBuilder`, consistent with country).
+  - `:feature:profile` `ProfileScreen.kt` — read-only view renders the rows below "member since" via
+    `ProfileDetailsSection`/`ProfileDetailRowView` (label↔flag+value, `onSurfaceVariant`); empty list →
+    nothing. 4 new label strings × 4 locales (EN/FR/ES/PT).
+- **Tests (red → green):** +14 `ProfileDetailRowsTest` (empty, known/uppercase/unknown language, distinct
+  vs collapsed-equal regional, regional-without-system, 2-letter country flag, uppercase country, full-name
+  country, non-letter 2-char, timezone, full composition order) + 2 extended `ProfileHeaderBuilderTest`
+  (timezone blank→null + pass-through, now 22). Test authored first against a non-existent `ProfileDetailRows`
+  (compile-RED). Behavioural through the public API; every `when`/branch arm exercised.
+- **Verification:** full `gradle assembleDebug testDebugUnitTest` (`meeshy.sh check`) **green** in 3m01s
+  (system Gradle 8.14.3; wrapper dist 403-blocked — see NOTES). Diff = `apps/android` only (3 prod + 4 res
+  + 2 test + docs).
+- **Reviewer verdict:** **PASS** — pure projector in `:feature:profile` (product-side, consuming the header
+  SSOT), `LanguageData` reused (no flag/name re-implementation), no prod logic outside android, near-total
+  branch coverage incl. unknown-code / case-collapse / non-code-country / empty edges, UI kept dumb.
+
+### 2026-07-05 — slice `outbox-lane-map-ssot` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The four open PRs (#1477/#1476/
+  #1475/#1473) are all unrelated gateway/iOS work by another author — left untouched. Branched
+  `claude/apps/android/outbox-lane-map-ssot` off latest `origin/main` (`b3c9675`, the merged
+  `presence-away-indicator` #1474); the designated `claude/fervent-darwin-izcrp5` was exactly at main.
+- **Why this slice:** structural close of the **lane-in-drain-list gotcha** flagged in NOTES 2026-07-04
+  (the tracked "worker drain-list test" follow-up). `OutboxFlushWorker` kept a hand-maintained
+  `listOf(...)` of shared lanes to drain, **disjoint** from the `buildSenders()` kind→sender registry —
+  a kind could have a sender yet be stranded off the drain list (exactly the BLOCK/FRIEND omission that
+  silently killed block/unblock + friend-request delivery). Rather than guard the drift with a
+  Robolectric test, remove the drift: derive the drain list from a kind→lane SSOT.
+- **Added / changed (production):**
+  - `:sdk-core` `outbox/OutboxModel.kt` — new pure `OutboxLaneAssignment` (`PerConversation` |
+    `Shared(lane)`) + `OutboxLaneMap.assignmentFor(kind)` (SSOT, **exhaustive `when`** over `OutboxKind`
+    → a new kind cannot compile without a lane assignment) + derived `sharedDrainLanes` (every distinct
+    `Shared` lane, stable enum order, deduped).
+  - `:sdk-core` `outbox/OutboxFlushWorker.kt` — replaced the literal `lanes = listOf(...)` with
+    `lanes = OutboxLaneMap.sharedDrainLanes`. Behaviour-preserving except it drops the always-empty
+    `PRESENCE`/`SOCIAL` lanes (no kind maps there, no enqueue site → draining them was a no-op).
+- **Tests (red → green):** +9 `OutboxLaneMapTest` — per-arm mapping (message→PerConversation;
+  reaction/block collapse to their shared lane; each remaining kind → its dedicated lane), the
+  `entries`-wide non-blank invariant, `sharedDrainLanes` covers every `Shared` kind, the BLOCK/FRIEND
+  regression (both present), dedup (BLOCK/REACTION appear once), and per-conversation lanes never leak
+  into the shared list. Behavioural through the public API; every `when` arm exercised.
+- **Verification:** `assembleDebug` + all `testDebugUnitTest` **green** (system Gradle 8.14.3; wrapper
+  dist 403-blocked — see NOTES). Diff = `apps/android` only (2 prod + 1 test + docs).
+- **Reviewer verdict:** **PASS** — pure stateless SSOT in `:sdk-core`, worker derives from it (no
+  re-implementation), no prod logic outside android, every kind-arm + dedup + regression edge covered,
+  a drift-class bug made structurally impossible rather than merely tested.
+
+### 2026-07-04 — slice `presence-away-indicator` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. One open PR (#1473) is unrelated
+  iOS story-text work by another author (`claude/text-editor-enhancements`); left untouched. Branched
+  `claude/apps/android/presence-away-indicator` off latest `origin/main` (`d40529c`); the designated
+  `claude/fervent-darwin-g3xfvo` was exactly at main (0 ahead / 0 behind).
+- **Why this slice:** the last Contacts-list display gap that had a genuine **pure testable core**. The
+  `:core:model` `PresenceState` (ONLINE/AWAY/OFFLINE) + `UserPresence` were fully **dead code** (no
+  non-test caller, no test), while the friend row only rendered a binary green dot from `isOnline` —
+  never the iOS three-state green/**amber-away**/none (`PresenceModels.swift` `UserPresence.state`,
+  away at lastActive > 5min). Bring the dead SSOT to life and wire it.
+- **Added / changed (production):**
+  - `:core:model` `IsoTime.kt` — new `isoToEpochMillisOrNull(value): Long?` (null for absent/blank/
+    unparseable, the parsed epoch otherwise — the epoch instant `0L` is a **valid** result, not "absent");
+    `isoToEpochMillis` now delegates (`?: 0L`), one parse path preserved.
+  - `:core:model` `Presence.kt` — pure `UserPresence.state(nowEpochMillis): PresenceState` (offline →
+    OFFLINE; online + no reliable `lastActiveAt` → ONLINE; else AWAY iff `now - last > 300_000ms`,
+    boundary/future → ONLINE) + `AWAY_THRESHOLD_MS = 300_000L` (iOS 300s parity, clock injected for purity).
+  - `:core:model` `friend/ContactList.kt` — `FriendRequestUser.presenceState(now)` adapter (nullable
+    `isOnline` → offline, bridges the roster record to the `UserPresence.state` SSOT).
+  - `:feature:contacts` `ContactsListTab.kt` — friend row renders green(ONLINE)/amber(AWAY)/none(OFFLINE)
+    via a pure `presenceDotColor(state): Color?` mapping + new static `AwayIndicator` (0xFFFBBF24), reading
+    `friend.presenceState(System.currentTimeMillis())`. Semantic dot colours kept static per the design system.
+- **Tests (red → green):** +23 — `IsoTimeTest` (8: null/blank/unparseable → null, UTC + offset parse,
+  epoch-as-zero-not-absent, `isoToEpochMillis` 0L default), `PresenceTest` (10: offline regardless of
+  timestamp, online on null/blank/unparseable, recent → online, 300s boundary → online, 300s+1ms → away,
+  1h → away, future → online), `FriendPresenceTest` (5: null/false `isOnline` → offline, recent → online,
+  stale → away, no-timestamp → online). Behavioural through the public API; boundary + null edges covered.
+- **Verification:** `assembleDebug` + all `testDebugUnitTest` **green** (system Gradle 8.14.3; wrapper
+  dist 403-blocked — see NOTES). Diff = `apps/android` only (4 prod + 3 test + docs).
+- **Reviewer verdict:** **PASS** — pure SSOT in `:core:model`, UI glue in `:feature:contacts`, no prod
+  logic outside android, near-total branch coverage on the resolver, boundary/null/future edges tested,
+  dead code brought to parity rather than re-implemented.
+
+### 2026-07-04 — slice `contacts-filter-counts` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The five open PRs (#1463–1469)
+  are all unrelated non-Android work by others (gateway/iOS/shared). Branched
+  `claude/apps/android/contacts-filter-counts` off latest `origin/main` (`65e856d`); the designated
+  `claude/fervent-darwin-j6y6z9` was exactly at main (0 ahead/0 behind).
+- **Why this slice:** parity `§J` gap — the Contacts filter chips (All/Online/Offline) showed **no
+  counts**, but the iOS `ContactFilter` chips do (audit part-01.md:301,310 "All/online chips show
+  counts"). A small, pure-core-heavy slice closing a tracked Contacts follow-up ("per-filter counts")
+  with a strong testable invariant.
+- **Added / changed (production):**
+  - `:core:model` `friend/ContactList.kt` — new immutable `ContactFilterCounts(all, online, offline)`
+    with `forFilter(filter)` (pass-through filters mirror `All`) + `Zero`; new pure
+    `ContactList.counts(friends, query) → ContactFilterCounts` — sizes each chip under the **active
+    search query** (`counts(..).online == visible(.., Online, query).size`), with online+offline
+    partitioning all by construction (offline = matching − online). **Surpasses iOS**, whose chip
+    counts ignore the search field.
+  - `:feature:contacts` `ContactsListViewModel.kt` — `ContactsListUiState.filterCounts` derives the
+    counts from the roster + query (pure, no new state).
+  - `:feature:contacts` `ContactsListTab.kt` — the `FilterRow` chips render `label  count` via
+    `counts.forFilter(filter)` (the `when` stays in the pure accessor, composable is thin glue).
+- **Tests (TDD red→green, +7):**
+  - `ContactListTest` (+6): counts report all/online/offline of the roster; **online+offline partition
+    all under any query** (invariant); counts respect the search query (only bob → all 1 / online 0 /
+    offline 1); empty roster → all zero; `forFilter` maps each selectable filter; pass-through filters
+    (Phonebook/Affiliates) mirror the whole roster.
+  - `ContactsListViewModelTest` (+1): `filterCounts` reflects the loaded roster (all 2 / online 1 /
+    offline 1) then shrinks correctly when a search query is applied.
+- **Edge cases covered:** empty collection (all zero); search-narrowed roster; the partition invariant;
+  the two pass-through filters; blank vs non-blank query.
+- **Verification:** `gradle :core:model:testDebugUnitTest :feature:contacts:testDebugUnitTest` —
+  **BUILD SUCCESSFUL** (both green); `gradle :app:assembleDebug` — **BUILD SUCCESSFUL** (the Compose
+  chip change compiles into the APK). Per NOTES, the wrapper's pinned dist is egress-blocked, so used
+  system Gradle 8.14.3.
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (5 files: 2 prod + 2 test + 1 Compose glue,
+  plus tracking docs); TDD behavioural through the public API, no tautologies (the partition test
+  asserts a derived invariant, not a set constant), no floor lowered; SDK purity held (the counting
+  SSOT is a pure `:core:model` function, the `when` lives in `forFilter` not the composable);
+  single-source-of-truth (`counts` reuses `visible`, no re-implemented filter); instant-app + UDF
+  preserved (pure derived state, no new mutable field); colour/nav untouched.
+- **Follow-up:** mood-emoji presence on rows; the send **compose-new** UI; a worker drain-list test.
+
+### 2026-07-04 — slice `discover-suggestions-room-cache` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (the two open PRs, #1463 iOS
+  calls + #1464 shared mentions, are unrelated non-Android work by others). Branched
+  `claude/apps/android/discover-suggestions-room-cache` off latest `origin/main` (`b532c2c`).
+- **Why this slice:** PROGRESS "Recommended next" — the **suggestions Room cache for cold-start paint**,
+  the **last in-memory-only cache gap**. `SuggestionsRepository` held its empty-query discover list in a
+  `MutableStateFlow` `InMemorySuggestionsSource`, so a cold launch (process death) lost it and showed a
+  skeleton until the network answered. This makes it durable (iOS `CacheCoordinator.userSearch` parity),
+  mirroring the `FriendEntity`/`CallHistoryEntity` precedents — a pure-core-heavy SWR slice.
+- **Added / changed (production):**
+  - `:core:database` `entity/SuggestionEntity.kt` (NEW) — `discover_suggestions` table: `userId` PK,
+    serialized `UserSearchResult` `payload`, `sortIndex` (preserves the gateway ranking order verbatim —
+    never re-derived in SQL), `cachedAt`.
+  - `:core:database` `dao/SuggestionDao.kt` (NEW) — `observeAll()` `ORDER BY sortIndex ASC`, `upsertAll`,
+    `deleteNotIn`, `clear`.
+  - `:core:database` `MeeshyDatabase.kt` — register `SuggestionEntity` + `suggestionDao()`, **version
+    8→9**; `DatabaseModule.kt` — Hilt `providesSuggestionDao` (destructive migration, the module's
+    standing `fallbackToDestructiveMigration`).
+  - `:sdk-core` `friend/SuggestionsRepository.kt` — replaced `InMemorySuggestionsSource` with a
+    Room-backed `RoomSuggestionsSource` (`SwrCacheSource`, port of `CallHistoryCacheSource`): `observe()`
+    combines `suggestionDao.observeAll()` + `sync_meta` (cold `null` vs synced-empty), `revalidate()`
+    fetches `searchUsers("")` and persists (upsert + `deleteNotIn`, or `clear` for empty) stamping
+    `sync_meta`; `SuggestionsRepository` gained the DB/DAO deps and constructs the Room source. The
+    `suggestionsStream(onSyncError)` public API is byte-identical, so `DiscoverViewModel` is untouched.
+- **Tests (TDD red→green, 11 replacing the old 5 in-memory-source tests):**
+  - `SuggestionsRepositoryTest` (rewritten, Robolectric + real in-memory Room): revalidate fetches +
+    stamps sync time; **`sortIndex` preserves a deliberately non-alphabetical gateway order** over any
+    SQL re-sort; cold cache observes `null`; a synced-but-empty list reads back as empty content (not
+    cold); `deleteNotIn` drops absentees; a later empty sync clears a populated cache; a cold failure
+    throws `SuggestionsSyncException` and leaves the cache cold; a failed revalidation keeps the last
+    good list + sync time; `suggestionsStream` emits `Empty` then paints the fetched list (drains the
+    transient Room-settle frame); **a pre-seeded cache paints instantly with no cold `Empty`** (the
+    cold-start-paint behaviour); a cold failure surfaces via `onSyncError`.
+- **Edge cases covered:** empty / populated / synced-empty vs cold `null`; non-alphabetical order
+  round-trip; row removal; cold vs warm revalidation failure (throws vs keeps stale); process-death
+  cold paint; the transient two-Room-flow settle frame (benign, drained in the assertion).
+- **Verification:** `gradle assembleDebug testDebugUnitTest` — **BUILD SUCCESSFUL** (full project, all
+  modules' unit tests green; whole-app compile exercises the DB v9 schema + Hilt wiring). Per NOTES, the
+  wrapper's pinned Gradle 8.11.1 dist is egress-blocked (github redirect 403) in this container, so
+  verification used the preinstalled system Gradle 8.14.3 (forward-compatible).
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (6 code files + 3 tracking docs); TDD behavioural through the public
+  API, no tautologies, no floor lowered (the 5 removed tests are superseded by 11 stronger Room-backed
+  ones); SDK purity held (entity/DAO in `:core:database`, the stateless `SwrCacheSource` in `:sdk-core`,
+  orchestration untouched in `:feature:contacts`); single source of truth (ranking SSOT stays
+  server-side via `sortIndex`; `CachePolicy.Suggestions` unchanged); instant-app cache-first (cold paint,
+  skeleton only on cold empty) + UDF preserved; colour/nav untouched.
+- **Follow-up:** the send **compose-new** UI (dedicated user-search → connect surface) — now the main
+  remaining Contacts gap; and a worker drain-list test (tracked from the prior slice).
+
+### 2026-07-04 — slice `contacts-friends-room-cache` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (only an unrelated iOS PR
+  #1459 was open). Branched `claude/apps/android/contacts-friends-room-cache` off latest
+  `origin/main` (`5a7008d8`).
+- **Why this slice:** PROGRESS "Recommended next" / parity `§J` follow-up #1 — a **persistent Room
+  `friends` cache for cold-start paint** (iOS `CacheCoordinator.friends`). The Contacts tab was
+  network-first + in-memory reconciled only: a cold launch showed a skeleton and blocked on the
+  received/sent fetch before any friend appeared. This adds a durable cache so the last-known roster
+  paints instantly (cache-first, ARCHITECTURE.md §4), surviving process death and working offline.
+  Pure-core-heavy SWR slice with a clear iOS precedent; destructive DB migration (v7→8, the module's
+  standing `fallbackToDestructiveMigration`).
+- **Added / changed (production):**
+  - `:core:database` `entity/FriendEntity.kt` (NEW) — `friends` table: `userId` PK, serialized
+    `FriendRequestUser` `payload`, `sortIndex` (preserves `ContactList`'s assembled order verbatim —
+    ordering SSOT stays in `ContactList`, never re-derived in SQL), `cachedAt`.
+  - `:core:database` `dao/FriendDao.kt` (NEW) — `observeAll()` `ORDER BY sortIndex ASC`, `upsertAll`,
+    `deleteNotIn`, `clear`.
+  - `:core:database` `MeeshyDatabase.kt` — register `FriendEntity` + `friendDao()`, **version 7→8**;
+    `DatabaseModule.kt` — Hilt `providesFriendDao`.
+  - `:sdk-core` `friend/FriendListRepository.kt` (NEW, `@Singleton`) — a focused, network-free
+    persistence brick: `cachedSnapshot()` (null = cold/never-synced, distinguished from a
+    synced-but-empty roster via `sync_meta`; else decoded rows in persisted order) + `persist(friends)`
+    (write-through: upsert + `deleteNotIn`, or `clear()` for an empty roster, and stamp `sync_meta`).
+  - `:feature:contacts` `ContactsListViewModel.kt` — cache-first: `load()` now `paintFromCache()`
+    first (instant cold paint; skeleton only on a cold `null` snapshot), then `revalidate()` (the
+    existing received/sent fetch → `ContactList` assemble → `FriendshipCache` hydrate) writes the
+    roster back through `persist`. A cross-screen unfriend prunes locally **and** writes the pruned
+    roster through (no refetch); an addition still triggers one silent refetch.
+- **Tests (TDD red→green, +14 net):**
+  - `FriendListRepositoryTest` (NEW, Robolectric + real in-memory Room) +8 — cold snapshot is `null`;
+    persist→snapshot round-trips order + full payload; **`sortIndex` honoured over any SQL re-sort**
+    (an offline contact deliberately ahead of an online one survives); `deleteNotIn` drops absentees;
+    an empty persist is synced-empty (not cold); newest write wins; rows observable via the DAO.
+  - `ContactsListViewModelTest` +6 — paints the cached roster instantly while the network fetch is
+    suspended; keeps the cache and shows no error when the refresh fails; a cold-empty cache shows the
+    skeleton until the network answers; persists the assembled roster after a load; a cross-screen
+    unfriend writes the pruned roster through **without** a refetch. Existing 13 tests preserved
+    (constructor gained the new dep; no assertion weakened).
+- **Verification:** `gradle assembleDebug testDebugUnitTest` — **BUILD SUCCESSFUL** (full project, all
+  modules' unit tests green; whole-app compile exercises the DB v8 schema + DI wiring). The wrapper's
+  pinned Gradle 8.11.1 distribution is egress-blocked (github redirect 403) in this container, so
+  verification used the system Gradle 8.14.3 (forward-compatible superset), same as prior slices.
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (8 files); TDD behavioural through the
+  public API, no tautologies, no floor lowered; edge cases (cold vs synced-empty vs populated; empty
+  persist; order preservation; refresh-failure keeps cache; unfriend prune-through) covered; SDK
+  purity held (`FriendListRepository` = stateless persistence brick in `:sdk-core`, entity/DAO in
+  `:core:database`, orchestration in `:feature:contacts`); ordering SSOT stays in `ContactList`;
+  instant-app cache-first (skeleton only on cold empty) + UDF preserved; colour/nav untouched.
+- **Follow-up:** the send **compose-new** UI (dedicated user-search → connect surface); a persistent
+  Room suggestions cache (iOS `CacheCoordinator.userSearch`) — the last in-memory-only cache gap.
+
+### 2026-07-04 — slice `friend-request-outbox-idempotency` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration; no open PRs at all. Branched
+  `claude/apps/android/friend-request-outbox-idempotency` off latest `origin/main` (`fe8c9c6f`).
+- **Why this slice:** PROGRESS "Next" #2 / parity `§J` — the **durable friend-request send** was the
+  sole remaining Contacts durable-mutation gap. `DiscoverViewModel.connect` was online-first REST
+  (`friendRepository.sendFriendRequest`), minting the pending entry only on the gateway's success — a
+  dropped connection silently lost the send and left no pending state. This routes it through the
+  shared durable outbox so it survives offline + process death, with an idempotent-send dedup and a
+  delivery-outcome classifier faithful to the gateway's 409-conflict contract. Pure-core-heavy, **no
+  DB migration** (reuses the outbox schema). Surpasses iOS (online-only send).
+- **Added / changed (production):**
+  - `:sdk-core` `outbox/OutboxModel.kt` — new `OutboxKind.SEND_FRIEND_REQUEST` + `OutboxLanes.FRIEND`
+    lane + `@Serializable FriendRequestPayload(message: String?)` (receiver = the row `targetId`).
+  - `:sdk-core` `outbox/OutboxCoalescer.kt` — `SEND_FRIEND_REQUEST → replaceSameKind`: a repeated send
+    to the same receiver supersedes the pending one (only one request can exist — idempotent, latest
+    greeting wins).
+  - `:sdk-core` `friend/FriendRequestSend.kt` (NEW) — pure total `classify(NetworkResult<FriendRequest>)
+    → FriendRequestDelivery` (`Delivered(id)` / `AlreadyExists` / `Retry` / `Rejected(reason)`): success
+    with a real id grafts it back; a 409 or blank-id success is an idempotent already-exists (never
+    retried, never rolled back); other 4xx (400/403/404/422) are permanent rejects; 5xx/offline retry.
+  - `:sdk-core` `friend/FriendRepository.kt` — `enqueueSendFriendRequest(receiverId, cmid?, message?)`:
+    durable enqueue on the FRIEND lane; blank receiver inert (`null`); accepts a caller-supplied `cmid`
+    so the row and the optimistic placeholder request id share one key. Injects `OutboxRepository`.
+    The online `sendFriendRequest` stays as the building block the worker sender calls.
+  - `:sdk-core` `outbox/OutboxFlushWorker.kt` — `SEND_FRIEND_REQUEST` sender (decode payload →
+    `friendRepository.sendFriendRequest` → `FriendRequestSend.classify` → graft real id via
+    `friendshipCache.didSendRequest` on `Delivered`, `Success` on `AlreadyExists`, `TransientFailure`
+    on `Retry`, `PermanentFailure` on `Rejected`) + `onExhausted` `friendshipCache.rollbackSendRequest`.
+    Injects `FriendRepository` + `FriendshipCache`.
+  - **Latent-bug fix:** `OutboxLanes.BLOCK` (shipped last slice) and the new `FRIEND` were **absent from
+    the worker's shared-lane drain list**, so block/unblock rows never delivered. Added both — closes the
+    silent gap in `block-outbox-durable` and makes this slice's delivery actually run.
+  - `:feature:contacts` `DiscoverViewModel.kt` — `connect` rewired to the durable optimistic path: flips
+    `FriendshipCache` (Pending, instant even offline) keyed by the outbox `cmid` placeholder, queues via
+    `enqueueSendFriendRequest`, wakes the flush worker only on a real cmid, and rolls the optimistic flip
+    back on a **local enqueue failure** (`CancellationException` rethrown). Injects `WorkManager`.
+- **Tests (TDD red→green, +26 net):**
+  - `FriendRequestSendTest` +9 — full branch sweep: delivered-real-id, blank-id→already-exists,
+    409→already-exists, 400/403/404/422→rejected(reason), 5xx→retry, offline(null status)→retry.
+  - `OutboxCoalescerTest` +3 — first friend request enqueues, repeated send to same receiver supersedes,
+    different receiver not coalesced.
+  - `FriendRepositoryTest` (NEW, Robolectric + real in-memory outbox) +5 — durable send queues a
+    SEND_FRIEND_REQUEST row on the FRIEND lane keyed by the returned cmid; payload carries the greeting;
+    blank receiver inert; a supplied cmid keys the row; a repeated send supersedes (latest payload).
+  - `DiscoverViewModelTest` +4 net — connect queues durably + flips Pending optimistically + wakes the
+    flusher; a coalesced (`null` cmid) send flips Pending but skips the flush; a **local enqueue throw**
+    rolls the optimistic Pending back to Connect + surfaces the error + queues nothing; own-row and
+    non-connectable-row inert (assert `enqueueSendFriendRequest` never called).
+- **Verification:** `gradle :app:assembleDebug testDebugUnitTest` — **BUILD SUCCESSFUL** (full project,
+  all modules' unit tests green). The wrapper's pinned 8.11.1 distribution download is egress-blocked
+  (github redirect 403) in this container, so verification used the system Gradle 8.14.3 (forward-
+  compatible superset), same as the prior slice.
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (10 files); TDD behavioural, no tautologies,
+  no floor lowered; edge cases (blank/unknown/own id, coalesce, enqueue-failure rollback, in-flight
+  guard, `CancellationException` rethrown, idempotent 409, permanent-vs-transient split) covered; SDK
+  purity held (classifier/coalescer/repo = stateless rule + durable enqueue in `:sdk-core`, optimistic
+  orchestration in `:feature:contacts`); SSOT = `FriendshipCache`; UDF + instant-app (offline-first
+  optimistic flip) preserved; colour/nav untouched.
+- **Follow-up:** the send **compose-new** UI (dedicated user-search → connect surface); a persistent
+  Room `friends` cache for cold-start paint (iOS `CacheCoordinator.friends`) — the recommended next.
+
+### 2026-07-04 — slice `block-outbox-durable` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The one open PR (#1453) is
+  web/gateway work from another session (production logic in `apps/web` + `services/gateway`), left
+  untouched. Branched `claude/apps/android/block-outbox-durable` off latest `origin/main` (`6cd1a3c4`).
+- **Why this slice:** parity `§J` / PROGRESS "Next Contacts pure cores" — **durable offline
+  unblock/block**, the one remaining Contacts durable-mutation gap after Discover closed. The Blocked
+  tab's unblock was online-first optimistic REST (a dropped connection silently lost it); this routes
+  it through the shared durable outbox so it survives offline + process death (iOS is online-only).
+  A pure-core-heavy vertical slice with **no DB migration** (block/unblock carry no payload and reuse
+  the existing outbox schema).
+- **Added / changed (production):**
+  - `:sdk-core` `outbox/OutboxModel.kt` — two new `OutboxKind`s (`BLOCK_USER`, `UNBLOCK_USER`) + a
+    dedicated `OutboxLanes.BLOCK` lane (so block mutations coalesce per-target without colliding with
+    other social rows sharing a target id).
+  - `:sdk-core` `outbox/OutboxCoalescer.kt` — new `blockToggle` branch: a queued **opposite** for the
+    same user **annihilates** (block+unblock returns to the last-synced server state, exactly like the
+    reaction toggle); else a pending **same-kind** row is **superseded** (a repeated block/unblock is
+    idempotent — one terminal state); else enqueue.
+  - `:sdk-core` `outbox/OutboxFlushWorker.kt` — two senders (`blockApi.block`/`unblock` →
+    `Success`/`TransientFailure`) + an `onExhausted` rollback that flips the `BlockCache` SSOT back
+    (a hard-exhausted block/unblock un-does its optimistic flip, so the next `listBlocked` re-hydrates
+    truthfully). Injects `BlockApi` + `BlockCache`.
+  - `:sdk-core` `friend/BlockRepository.kt` — replaced the online-first `block`/`unblock` with
+    `setBlockedDurably(userId, blocked)`: flips `BlockCache` optimistically + enqueues the durable
+    mutation. Blank id inert (`null`); returns the cmid, or `null` when the enqueue annihilated a
+    pending opposite. `listBlocked` (hydration) unchanged.
+  - `:feature:contacts` `BlockedListViewModel.kt` — `unblock` now calls `setBlockedDurably(.., false)`,
+    wakes the flush worker **only** on a real cmid (a coalesced-away enqueue schedules nothing), and
+    rolls the row back in place on a **local enqueue failure** (cancellation-safe). Injects `WorkManager`.
+  - `:feature:contacts/build.gradle.kts` — `implementation(libs.work.runtime)` for the VM's scheduler.
+- **Tests (TDD red→green, +12 net):**
+  - `OutboxCoalescerTest` +6 — block↔unblock annihilation (both directions), repeated block/unblock
+    supersede, first-block enqueue, different-user not coalesced.
+  - `BlockRepositoryTest` +4 net (converted to Robolectric for the real in-memory outbox, the
+    established enqueue-repo pattern) — durable block/unblock flip+queue the right kind on the BLOCK
+    lane, blank id inert (no flip, nothing queued), block-then-unblock cancels out (empty queue, cache
+    reflects the net terminal state).
+  - `BlockedListViewModelTest` +2 net — durable unblock removes-optimistically + wakes the worker;
+    a coalesced-away (`null` cmid) unblock **skips** the flush; a **local enqueue throw** restores the
+    row + surfaces the error and queues nothing; unknown-id inert; in-flight double-tap guarded.
+- **Verification:** `gradle assembleDebug testDebugUnitTest` — **BUILD SUCCESSFUL** (full project; the
+  wrapper's pinned 8.11.1 distribution download is egress-blocked in this container, so verification
+  used the system Gradle 8.14.3, a forward-compatible superset — build + all unit tests green).
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (9 files); TDD behavioural, no tautologies,
+  no floor lowered; edge cases (blank/unknown id, annihilation, enqueue-failure restore, in-flight
+  guard, `CancellationException` rethrown) covered; SDK purity held (coalescer/repo = stateless rule +
+  SSOT keeper in `:sdk-core`, orchestration in `:feature`); SSOT = `BlockCache`; UDF preserved.
+- **Follow-up:** the ready `setBlockedDurably(.., true)` block half awaits a profile/report block
+  surface; a persistent Room blocklist cache for cold-start paint (iOS `CacheCoordinator`) still open.
+
+### 2026-07-04 — slice `discover-suggestions-cache-first` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration — the two open PRs (#1450, #1448)
+  are iOS work from other sessions (production logic, not Android), left untouched. Branched
+  `claude/apps/android/discover-suggestions-cache-first` off latest `origin/main` (`cdda4598`).
+- **Why this slice:** parity `§J` "Next" — the last pending Discover item (`loadSuggestions`, cache-first
+  empty-query suggestions). Live search + inline connect already shipped; this closes the empty-query
+  surface. A clean pure-core-heavy vertical slice with no DB migration (in-memory cache, consistent with
+  the friends-list in-memory precedent; persistent Room deferred as a tracked follow-up).
+- **Added (production):**
+  - `:sdk-core` `friend/DiscoverSuggestions.kt` — pure `SuggestionsSnapshot` + total
+    `DiscoverSuggestions.snapshot(CacheResult<List<UserSearchResult>>) → SuggestionsSnapshot`: cold
+    `Empty`/`Syncing(null)` → skeleton (the ONLY loading state); any cached data (`Fresh`/`Stale`/
+    `Syncing(data)`) paints without a spinner; a revalidated-empty list is content, not a spinner. Port
+    of iOS `loadSuggestions` loadState/searchResults handling.
+  - `:sdk-core` `friend/SuggestionsRepository.kt` — `@Singleton SuggestionsRepository` exposing
+    `suggestionsStream(onSyncError)` = the shared `cacheFirstFlow(CachePolicy.Suggestions, source)` over
+    an internal in-memory `SwrCacheSource` (`InMemorySuggestionsSource`): `revalidate()` hits
+    `UserRepository.searchUsers("", 20, 0)` (iOS empty-query = gateway "discover" list), stores the last
+    good fetch + sync time, throws `SuggestionsSyncException` on failure (surfaced via `onSyncError`),
+    and keeps prior data on a failed revalidation.
+  - `:sdk-core` `cache/CachePolicy.kt` — new `Suggestions` policy (fresh 1 min, kept 6 h).
+  - `:feature:contacts` `DiscoverViewModel` — `loadSuggestions()` (idempotent while streaming; called on
+    tab appear) folds the stream through `DiscoverSuggestions.snapshot` into the existing `rows`/connect-
+    control surface, so suggestions get live relationship badges + cross-screen re-derivation for free;
+    a search cancels the suggestions job and switches surfaces; `retry` re-runs it. `DiscoverUiState`
+    gains `isShowingSuggestions` + derived `isSuggestionsEmpty`; `showEmptyPrompt` now also gates on the
+    suggestions surface. `DiscoverTab` loads on appear (`LaunchedEffect`), shows a "Suggestions" list
+    header, and a quiet empty state (strings ×4 locales).
+- **Tests (+23):** `DiscoverSuggestionsTest` (6 — every `CacheResult` arm incl. empty-list content),
+  `SuggestionsRepositoryTest` (5 — revalidate success/cold-failure/failure-keeps-prior; SWR stream
+  Empty→Fresh; cold failure via `onSyncError`), `DiscoverViewModelTest` (+12 — paint, cold skeleton,
+  revalidated-empty quiet state, failed revalidation surfaces error, connect on a suggestion row,
+  cross-screen re-derive, idempotent-while-streaming guard, search cancels+switches, retry re-runs).
+- **Edge cases covered:** cold empty (skeleton), stale/expired paint-without-spinner, revalidated-empty
+  (content not spinner), network failure (message surfaced, last data kept), idempotent load guard,
+  surface switch (suggestions↔search), retry restart, single/empty collections.
+- **Verify:** full `assembleDebug` + all module `testDebugUnitTest` → **BUILD SUCCESSFUL** (run with the
+  system Gradle 8.14.3 — the wrapper's 8.11.1 distribution download is egress-policy-blocked in this
+  container; AGP 8.7.3 runs clean on 8.14.3. CI uses the wrapper's 8.11.1). See NOTES.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests, no tautologies; SDK purity (the
+  cache source + repository + pure projection are stateless building blocks in `:sdk-core`; the "when to
+  load / which surface" product rule lives in the `:feature:contacts` ViewModel); single source of truth
+  (reuses `cacheFirstFlow`/`CacheResult`/`CachePolicy`, `ConnectAction`, the shared resolver); Instant-App
+  (cache-first, skeleton only on cold empty); UDF + immutable `UiState`; accent-coherent rows, no dead end.
 
 ### 2026-07-04 — slice `contacts-blocked-list` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration — the one open PR (#1444,

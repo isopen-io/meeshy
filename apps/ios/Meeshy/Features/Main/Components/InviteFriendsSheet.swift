@@ -224,10 +224,10 @@ struct InviteFriendsSheet: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+            RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                    RoundedRectangle(cornerRadius: 20)
                         .stroke(Color(hex: conversation.accentColor).opacity(0.2), lineWidth: 1)
                 )
         )
@@ -293,7 +293,7 @@ struct InviteFriendsSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(
                             LinearGradient(
                                 colors: [

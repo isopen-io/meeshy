@@ -822,3 +822,81 @@ persistance).
   /calls/active` (schemas de réponse stricts, `analytics` jamais sélectionné côté `listHistory`) ;
   modèles iOS (`CallModels.swift`/`CallSummaryMetadata.swift`) ne décodent aucun tableau
   `participants`, non concernés.
+
+## Vague 13 — P2034 (write-conflict Mongo) non traité sur `endCall()`/`leaveCall()`, seulement sur `joinCall()` (2026-07-05)
+
+Point d'entrée : routine calling-feature. Lecture complète du backlog (825 lignes) + lessons.md avant
+tout diagnostic. `git log` a montré 4 commits gateway/iOS non encore documentés ici, postérieurs à la
+Vague 12 (2026-07-04) : `6908bcc` (version-bump GC/missed), `fb2bafa` (fix P2034 sur `joinCall`),
+`560926b` (durcissement types, cosmétique), `0f5eefe` (fast-path `call:ended` + UI iOS). Audit ciblé sur
+ces 4 diffs plutôt qu'un balayage général — la routine ayant déjà 12 vagues très denses sur le code
+inchangé, la zone la plus probable pour un bug réel et neuf est le code touché depuis la dernière
+session documentée.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `fb2bafa` (2026-07-04) a corrigé un incident prod réel
+  sur `CallService.joinCallAttempt` : deux `call:join` quasi simultanés (3-11 ms d'écart, même appel) font
+  détecter par MongoDB un conflit d'écriture AU NIVEAU DOCUMENT, à l'intérieur du `$transaction`, AVANT
+  que le garde applicatif (`updateMany` scopé sur `version` + `count === 0`) ne puisse résoudre la course
+  lui-même — Prisma remonte ça en `PrismaClientKnownRequestError` code `P2034` ("write conflict or
+  deadlock, please retry"), qui partait BRUT au client au lieu d'emprunter le chemin `versionConflict`
+  déjà prévu pour cette même course. Le fix a bien été appliqué à `joinCallAttempt` — mais **`endCall()`
+  (`CallService.ts:1395-1431`) et `leaveCall()` (`CallService.ts:1158-1222`) utilisent EXACTEMENT le même
+  patron** (transaction avec `updateMany` scopé `version` + throw d'un Symbol local `versionConflict`/
+  `leaveVersionConflict` + `.then(() => ok, (error) => error === conflictSymbol ? 'conflict' : throw)`)
+  et n'avaient reçu AUCUN des deux traitements P2034 — sibling-drift classique de ce backlog (même famille
+  que lessons.md #40/#42/#45/#58, et le commentaire de `joinCallAttempt` ne référence même pas ces deux
+  autres sites). Impact concret : `call:end`/`call:leave` sont déclenchés par une action utilisateur
+  (bouton raccrocher) qui peut légitimement raconter à peu près N'IMPORTE QUEL scénario de course avec un
+  autre writer terminal touchant le MÊME document `CallSession` — l'autre participant qui raccroche
+  presque au même instant (cas *extrêmement* courant, pas un edge-case exotique), ou une course avec
+  `CallCleanupService.forceEndCall`/le ringing-timeout. Avant ce fix, un utilisateur qui "perdait" cette
+  course recevait une erreur Prisma brute (`Transaction failed due to a write conflict or a deadlock...`)
+  via `CALL_EVENTS.ERROR` au lieu de la résolution idempotente attendue ("l'appel est déjà terminé, voici
+  son état actuel") — alors même que l'appel s'était terminé PROPREMENT côté serveur (l'autre transaction
+  a gagné). Confirmé par lecture complète des deux méthodes + de leurs tests existants : **aucun test
+  n'exerçait le chemin `versionConflict`/`leaveVersionConflict` pour `endCall`/`leaveCall`** avant cette
+  session (seul `joinCall` avait une couverture de course, ajoutée par `fb2bafa`).
+- **Fix** : nouvelle méthode privée partagée `CallService.isTransientWriteConflict(error)` (juste avant
+  `joinCall()`, `CallService.ts`) qui isole le check `(error as { code?: string })?.code === 'P2034'` —
+  remplace le bloc dupliqué inline de `joinCallAttempt` (même comportement, code partagé au lieu de
+  copier-coller pour les 2 nouveaux sites) et est réutilisée par les `.then` de `endCall()` et
+  `leaveCall()` : `error === versionConflict || this.isTransientWriteConflict(error)` /
+  `error === leaveVersionConflict || this.isTransientWriteConflict(error)`. Aucune signature changée,
+  diff minimal (le comportement "retour à l'état frais" existait déjà pour le Symbol local — seule
+  l'ORIGINE de l'erreur reconnue comme conflit transitoire est élargie).
+- **Tests TDD** : 2 nouveaux cas dans `CallService.test.ts` (un par méthode), miroir exact du test
+  `fb2bafa` pour `joinCall` — `$transaction` rejette une erreur `{ code: 'P2034' }` au 1er essai, assertion
+  que `endCall`/`leaveCall` résolvent quand même vers l'état DB frais (`status: ended`) au lieu de rejeter.
+  RED confirmé manuellement (`git stash` du seul fix `CallService.ts`, tests re-exécutés → 2 échecs avec
+  l'erreur Prisma brute remontée telle quelle) puis GREEN restauré. Suite `CallService.test.ts` complète :
+  169/169. Suite gateway filtrée `*[Cc]all*` : 28/28 suites, 814/814 tests verts. Suite gateway complète
+  (`bun run test:coverage`, prisma generate + `packages/shared` build réussis cette session — network OK
+  cette fois) : 480/506 suites vertes, 13234/13235 tests verts, 1 skip pré-existant ; les 26 suites en
+  échec le sont TOUTES sur la même erreur pré-existante et non liée (`SequenceService.ts` important
+  `PrismaClient` depuis `@prisma/client` racine, jamais généré dans ce sandbox — déjà documentée Vague 11,
+  confirmée absente de tout fichier touché par ce diff). `tsc --noEmit` gateway : une seule erreur, la
+  même `SequenceService.ts` pré-existante ; zéro erreur nouvelle sur `CallService.ts`.
+- **Web + iOS (lecture seule, aucun changement)** : aucun commit web sur les fichiers d'appel depuis la
+  Vague 12 (`git log --since 2026-07-03` sur `webrtc-service.ts`/`use-webrtc-p2p.ts`/`components/
+  video-call/` ne remonte qu'un merge sans rapport) — pas de nouvelle zone à auditer côté web cette
+  session. Les 4 commits iOS/gateway du 2026-07-04 examinés (`0f5eefe` fast-path `call:end`, glyphes
+  qualité transitoires, bye in-band P2P ; `560926b` durcissement types + suppression d'un force-unwrap)
+  ont été lus en entier : le fast-path `call:end` (émission `call:ended` à la room dès que
+  `socket.rooms.has(ROOMS.call(...))`, AVANT la résolution d'autorisation) a été vérifié en détail —
+  l'appartenance à la room est bien acquise uniquement après un `joinCall()`/`initiateCall()` validé en
+  DB (`socket.join` n'intervient qu'APRÈS l'écriture Prisma réussie), et tous les chemins qui posent
+  `leftAt` sur un `CallParticipant` (call:leave, call:end, call:force-leave) font aussi sortir le socket
+  de la room dans le même handler — la seule exception est `CallCleanupService.forceEndCall` (GC
+  heartbeat/boot) qui ne fait JAMAIS `socket.leave` ; risque résiduel jugé faible (nécessite un socket
+  vivant mais un appel GC-terminé + un `call:end` rejoué sur un callId périmé pour produire un
+  `call:ended` fantôme redondant, déjà couvert par le dédup client documenté ligne 2098 de
+  `CallManager.swift` et `handleCallEnded`/`reset()` côté web) — noté ici comme piste basse-priorité,
+  non traitée cette session (pas de scénario d'exploitation concret trouvé, contrairement au P2034
+  ci-dessus qui a un incident prod daté). `duration: 0` du fast-path est bien inerte côté client (iOS ne
+  lit jamais `event.duration`, calcule sa propre durée locale ; web `handleCallEnded` logge la valeur
+  sans l'utiliser) — la durée persistée vient uniquement de `postCallSummary` (lecture DB fraîche côté
+  serveur), donc pas de bug d'affichage de durée malgré le double-broadcast.
+- **Reste ouvert** (inchangé) : items J (validation device réel restante), C6 (court-circuit dédup
+  cosmétique), CALL-DIAG retagging (12 sites, cosmétique) ; nouvelle piste basse-priorité notée ci-dessus
+  (`forceEndCall` ne vide pas la room Socket.IO) pour une session future si un scénario d'exploitation
+  concret émerge.

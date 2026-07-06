@@ -25,6 +25,7 @@ data class ProfileUiState(
     val bio: String = "",
     val errorMessage: String? = null,
     val isSaving: Boolean = false,
+    val stats: UserStatsPresentation? = null,
 )
 
 @HiltViewModel
@@ -39,12 +40,15 @@ class ProfileViewModel @Inject constructor(
     private val _state = MutableStateFlow(ProfileUiState())
     val state: StateFlow<ProfileUiState> = _state.asStateFlow()
 
+    private var statsLoadedForId: String? = null
+
     init {
         if (userId == null) {
             // Own profile — observe session
             viewModelScope.launch {
                 sessionRepository.currentUser.collect { user ->
                     _state.update { it.copy(user = user, displayName = user?.displayName ?: "", bio = user?.bio ?: "") }
+                    user?.id?.takeIf { it.isNotBlank() }?.let(::loadStatsOnce)
                 }
             }
         } else {
@@ -90,6 +94,7 @@ class ProfileViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         val user = result.data
                         _state.update { it.copy(user = user, isLoading = false, displayName = user.displayName ?: "", bio = user.bio ?: "") }
+                        loadStatsOnce(user.id.takeIf { it.isNotBlank() } ?: id)
                     }
                     is NetworkResult.Failure ->
                         _state.update { it.copy(isLoading = false, errorMessage = result.error.message) }
@@ -98,6 +103,30 @@ class ProfileViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(isLoading = false, errorMessage = e.message) }
+            }
+        }
+    }
+
+    /**
+     * Fetches and projects the activity stats for [id] exactly once per resolved
+     * user. Stats are a secondary surface: a failure must never surface an error
+     * or clobber the profile view — the dashboard simply stays empty and the next
+     * resolved id can retry. Cancellation is propagated so `viewModelScope`
+     * teardown stays clean.
+     */
+    private fun loadStatsOnce(id: String) {
+        if (id == statsLoadedForId) return
+        statsLoadedForId = id
+        viewModelScope.launch {
+            try {
+                val result = userRepository.getUserStats(id)
+                if (result is NetworkResult.Success) {
+                    _state.update { it.copy(stats = UserStatsBuilder.build(result.data)) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Stats are non-critical — swallow so the profile view is never broken by them.
             }
         }
     }

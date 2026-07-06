@@ -4,19 +4,64 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Contacts) — slice `discover-user-search` ✅
-The **Discover live user-search + inline connect** — the read-side consumer of the friendship SSOT.
-The Discover tab (was `ComingSoon()`) now runs a trim+≥2-char-gated user search and renders each result
-with an inline connect control (Connect / Pending / Accept / Contact / Blocked / hidden-for-self) whose
-state is the shared `UserRelationshipResolver`; connect/accept are optimistic and every visible row
-re-derives on any cross-screen friendship mutation via `FriendshipCache.version`. Two new pure SSOTs
-in `:core:model` (`DiscoverSearch.action`, `ConnectAction.from`), a UDF `DiscoverViewModel`, and the
-`DiscoverTab` Compose UI. +29 tests. See PROGRESS.md run log for the full record.
+## This loop (Phase: Contacts / outbox hardening) — slice `outbox-lane-map-ssot` ✅
+Structural close of the **lane-in-drain-list gotcha** (NOTES 2026-07-04). The `OutboxFlushWorker`
+kept a hand-maintained `listOf(...)` of shared lanes to drain, disjoint from the `buildSenders()`
+kind→sender registry — a kind could have a sender yet be stranded off the drain list (the BLOCK/FRIEND
+bug). This slice makes that impossible: a pure `OutboxLaneMap` (`:sdk-core` `outbox/OutboxModel.kt`)
+is the SSOT `OutboxKind → OutboxLaneAssignment` (`PerConversation` | `Shared(lane)`, exhaustive `when`),
+and the worker now drains the **derived** `OutboxLaneMap.sharedDrainLanes` (deduped, stable enum order).
+Also drops the always-empty `PRESENCE`/`SOCIAL` lanes (no kind maps there) — behaviour-preserving.
++9 pure tests. Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle 8.14.3). Diff =
+`apps/android` only (2 prod + 1 test). See PROGRESS.md run log.
 
 ### Next
-1. Discover **empty-query cache-first suggestions** (iOS `loadSuggestions`), or the **Blocked-users list**
-   (needs a `BlockRepository` to fill the resolver's `BlockStatusProvider` seam), or **send-request from
-   the Requests tab compose-new** — any completes the Contacts area.
+1. **Mood-emoji presence** on friend rows — note: iOS sources it from a separate `StatusViewModel`
+   (user mood-status system), so this needs that status feature first (larger, dependency-heavy). The
+   **send compose-new UI** (dedicated user-search → connect surface) is the other Contacts gap.
+2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
+
+## Prior loop (Phase: Contacts) — slice `presence-away-indicator` ✅
+The **three-state presence dot** on the Contacts friend row (iOS parity — `UserPresence.state`).
+The `:core:model` `PresenceState`/`UserPresence` were dead code; this slice makes them live. Pure
+`UserPresence.state(nowEpochMillis)` is the SSOT: offline → no dot, online → green, online-but-idle
+> 5min (300s, iOS parity) → amber **away**; a null/blank/unparseable `lastActiveAt` stays online, an
+exactly-at-threshold or future timestamp stays online. Backed by a new nullable
+`isoToEpochMillisOrNull` (distinguishes "no reliable timestamp" from the epoch instant — `isoToEpochMillis`
+now delegates to it) and the `FriendRequestUser.presenceState(now)` adapter (nullable `isOnline` → offline).
+The friend row renders green/amber/none via a pure `presenceDotColor` mapping. +23 tests (8 IsoTime,
+10 Presence, 5 FriendPresence). Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle
+8.14.3). Diff = `apps/android` only (4 prod + 3 test). See PROGRESS.md run log.
+
+### Next
+1. **Mood-emoji presence** on friend rows (last remaining Contacts-list display gap), or the **send
+   compose-new UI** (dedicated user-search → connect surface), or the **worker drain-list test** (Robolectric).
+2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
+
+## Prior loop (Phase: Contacts) — slice `contacts-filter-counts` ✅
+The **per-filter chip counts** on the Contacts list (iOS parity — "All/online chips show counts").
+Pure `:core:model` `ContactList.counts(friends, query) → ContactFilterCounts` (all/online/offline sizes
+under the active search; online+offline partition all by construction) is the SSOT, exposed on
+`ContactsListUiState.filterCounts` and rendered as a `label  count` badge on each chip via
+`ContactFilterCounts.forFilter`. **Surpasses iOS**, whose counts ignore the search field. +7 tests
+(6 model, 1 VM). `:core:model` + `:feature:contacts` `testDebugUnitTest` + `:app:assembleDebug` green
+(system Gradle 8.14.3). Diff = `apps/android` only. See PROGRESS.md run log.
+
+## Prior loop (Phase: Contacts) — slice `contacts-friends-room-cache` ✅
+The **friends Room cache for cold-start paint** (iOS `CacheCoordinator.friends`) — the Contacts tab
+now paints the last-known friend list instantly on cold launch, surviving process death and working
+offline, instead of blocking on the received/sent fetch behind a skeleton. `:core:database`
+`FriendEntity`/`FriendDao` (DB v7→8; `sortIndex` preserves `ContactList`'s assembled order verbatim so
+the ordering SSOT stays in `:core:model`), `:sdk-core` `FriendListRepository` (`cachedSnapshot` — cold
+vs synced-empty via `sync_meta` — + `persist` write-through), and `ContactsListViewModel` rewired
+cache-first (paint-from-cache → revalidate → write-through; unfriend prunes and writes through with no
+refetch). +14 tests. Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle 8.14.3; wrapper
+8.11.1 dist is 403-blocked — see NOTES). Diff = `apps/android` only. See PROGRESS.md run log.
+
+### Next
+1. **Suggestions Room cache** for the Discover empty-query suggestions (iOS `CacheCoordinator.userSearch`)
+   — the last in-memory-only cache gap; copy the `FriendListRepository` template. Or the **send
+   compose-new UI** (dedicated user-search → connect surface).
 2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
 
 ## Prior loop (Phase: Calls) — slice `call-ended-identity-teardown` ✅

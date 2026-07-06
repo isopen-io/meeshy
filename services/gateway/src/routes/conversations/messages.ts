@@ -376,6 +376,7 @@ export function registerMessagesRoutes(
         emitter = emitter.to(userRoom);
       }
       emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+      emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
 
       io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
         conversationId,

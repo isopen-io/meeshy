@@ -76,7 +76,6 @@ final class ComposerControlsLayerTests: XCTestCase {
             resizableBandHeight: .constant(300),
             bandMinHeight: 160,
             bandMaxHeight: 540,
-            bandDrawerCollapsed: .constant(false),
             onOpenMediaCrop: { _ in }
         )
     }

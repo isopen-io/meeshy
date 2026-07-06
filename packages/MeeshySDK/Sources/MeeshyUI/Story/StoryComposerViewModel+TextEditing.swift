@@ -77,6 +77,17 @@ extension StoryComposerViewModel {
 
     /// Sort du mode édition. Rien à restaurer (la géométrie n'a jamais bougé).
     func exitTextEditingMode() {
+        // Audit it.90 : un texte resté VIDE à la fermeture de l'éditeur est un
+        // fantôme — invisible au canvas, compté par le badge du FAB, sérialisé
+        // au publish (et traduit côté gateway pour rien). On le retire au seul
+        // point de sortie COMMUN (X du toolbar, tap ailleurs, changement de
+        // slide, row « éditer » refermée). `deleteElement` garde déjà les
+        // textes verrouillés (badge repost) et route le staging C9.
+        if case .active(let id, _) = textEditingMode,
+           let obj = currentEffects.textObjects.first(where: { $0.id == id }),
+           obj.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            deleteElement(id: id)
+        }
         textEditingMode = .inactive
     }
 

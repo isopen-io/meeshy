@@ -165,6 +165,23 @@ describe('getUserLanguageChoices', () => {
       expect(choices[1].code).toBe('es');
     });
   });
+
+  describe('case-insensitive catalog lookup', () => {
+    it('resolves an uppercase stored code identically to its lowercase form (emits lowercase)', () => {
+      const upper = getUserLanguageChoices(makeUser({ systemLanguage: 'EN' }))[0];
+      const lower = getUserLanguageChoices(makeUser({ systemLanguage: 'en' }))[0];
+
+      // 'EN' must resolve the same catalog entry as 'en' (no 🇫🇷 fallback) and emit lowercase.
+      expect(upper.code).toBe('en');
+      expect(upper.description).toBe(lower.description);
+      expect(upper.flag).toBe(lower.flag);
+    });
+
+    it('collapses a regional entry that differs from system only by case', () => {
+      const user = makeUser({ systemLanguage: 'en', regionalLanguage: 'EN' });
+      expect(getUserLanguageChoices(user)).toHaveLength(1);
+    });
+  });
 });
 
 describe('resolveUserPreferredLanguage', () => {
@@ -293,6 +310,11 @@ describe('getUserLanguagePreferences', () => {
       customDestinationLanguage: '',
     });
     expect(getUserLanguagePreferences(user)).toEqual(['fr', 'en']);
+  });
+
+  it('lowercases and deduplicates codes that differ only by case', () => {
+    const user = makeUser({ systemLanguage: 'EN', regionalLanguage: 'en' });
+    expect(getUserLanguagePreferences(user)).toEqual(['en']);
   });
 });
 

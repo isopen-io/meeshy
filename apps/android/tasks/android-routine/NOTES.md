@@ -2,7 +2,45 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Environment
+- **The Gradle wrapper's 8.11.1 distribution zip is blocked in the web container (403 from
+  github.com/gradle releases via the agent proxy).** `./gradlew` / `./apps/android/meeshy.sh check`
+  therefore fail to *bootstrap*. A system Gradle **8.14.3** is preinstalled at `/opt/gradle/bin/gradle`
+  and drives the same build fine — run the gate as `cd apps/android && /opt/gradle/bin/gradle
+  assembleDebug testDebugUnitTest` (online; Google/Maven artifacts *do* resolve through the proxy, only
+  the wrapper's github-hosted distribution zip is blocked). Do **not** edit `gradle-wrapper.properties`
+  to work around this — CI/other envs rely on 8.11.1; keep the wrapper untouched and just use the
+  system binary for local verification. `--offline` fails on a cold cache (AGP 8.7.3 not pre-seeded);
+  run online the first time so Gradle can fetch AGP + deps. (2026-07-05, slice `profile-header-presentation`.)
+
+## CI / merge
+- **The monorepo `CI` workflow can run 40+ min (or sit queued behind the runner pool) on an
+  `apps/android`-only PR — `updated_at` on the run object freezes while it waits.** (2026-07-05, slice
+  `profile-details-rows`.) Only the `CI` workflow triggers for an android-only diff (iOS Tests / SDK
+  Tests are path-filtered out — good). Do **not** busy-poll `actions_list`/`actions_get`: each response
+  embeds the full ~5-6k-token repository object even with `minimal_output`/`perPage=1`, and
+  `get_status` returns `total_count:0` (CI is a check-run, not a legacy commit status). When CI is slow,
+  hand off to a recurring `CronCreate` (`*/8 * * * *`) that re-checks the run and squash-merges the
+  moment `status==completed && conclusion==success`, then `CronDelete`s itself — instead of blocking the
+  turn on `sleep`. A CI *failure* also arrives via the PR-activity webhook subscription.
+
 ## Design lessons
+- **Reuse the existing pure SSOTs when building a projection — don't re-derive.** (2026-07-05, slice
+  `profile-header-presentation`.) `ProfileHeaderBuilder` composes three already-tested SSOTs rather than
+  re-implementing them: the display-name ladder is `MeeshyUser.effectiveDisplayName`, presence is
+  `UserPresence(isOnline, lastActiveAt).state(now)`, and member-since is `isoToEpochMillisOrNull`. The
+  builder's own new logic (blank→null degradation, `coerceIn(0,100)` on the completion %, `@handle`
+  formatting, E2EE = key-present) is what the 22 tests target — no test re-asserts a borrowed SSOT's
+  behaviour. Keeps the builder thin and the branch-coverage honest.
+- **"Absent" ≠ "epoch 0" — a 0L-defaulting parse silently poisons time-delta logic.**
+  (2026-07-04, slice `presence-away-indicator`.) `isoToEpochMillis` returns `0L` for both an absent/
+  unparseable string **and** the legitimate `1970-01-01T00:00:00Z`. Reusing it for presence
+  (`now - last > 5min → away`) would classify a friend with **no** `lastActiveAt` as "last active in
+  1970" → always away — the opposite of the iOS `UserPresence.state` rule (no timestamp ⇒ *online*).
+  Fix: a nullable `isoToEpochMillisOrNull` (null = no reliable time, `0L` = the real epoch instant),
+  with `isoToEpochMillis` delegating (`?: 0L`) so the single parse path stays the SSOT. Lesson: when a
+  helper collapses "missing" and "zero" into one sentinel, add a nullable sibling before building
+  time-arithmetic on top of it — and unit-test the epoch-0 case explicitly.
 - **A functional seam pays off when the real collaborator lands — zero churn to bind it.**
   (2026-07-04, slice `contacts-blocked-list`.) `UserRelationshipResolver` shipped taking a
   `BlockStatusProvider` `fun interface` seam (`{ false }` default). Binding the real block data was a
@@ -168,6 +206,27 @@ Append-only log of gotchas and decisions that save time next run.
 - ViewModel tests: `UnconfinedTestDispatcher` + `Dispatchers.setMain/resetMain`
   in `@Before/@After`; Truth `assertThat`; MockK (`relaxed = true`); Turbine
   `state.test {}` for flow assertions.
+- **Observe an intermediate cache-first state before the network resolves** (e.g.
+  "cached roster painted while the fetch is in flight"): under `UnconfinedTestDispatcher`
+  the whole `init` runs to completion synchronously, so hold the network stub open with a
+  `CompletableDeferred` and `coEvery { api.call(...) } coAnswers { gate.await() }`. Assert the
+  cached state, then `gate.complete(result)` and assert the network overwrite. NB: `coAnswers`
+  is an **infix member of `MockKStubScope`** (the receiver `coEvery {…}` returns) — do **not**
+  `import io.mockk.coAnswers` (there is no such top-level symbol; it fails to resolve). Used in
+  `contacts-friends-room-cache`.
+- **Dagger `@Inject constructor` ignores Kotlin default args:** a param like
+  `clock: CacheClock = SystemCacheClock` still demands a binding and there is none for
+  `CacheClock`. For `@Singleton` repos that need `now`, call `SystemCacheClock.nowMillis()`
+  inline rather than injecting it (test time isn't asserted). Cf. `FriendListRepository`,
+  `CallHistoryRepository`, `SuggestionsRepository`.
+- **Cache-first cold-paint slice recipe** (`FriendListRepository`, the template to copy for the
+  suggestions cache): a `*Entity` with a serialized-payload column + a `sortIndex` so the DAO
+  (`ORDER BY sortIndex`) replays the pure builder's order verbatim (ordering SSOT stays in the
+  `:core:model` builder, never re-derived in SQL); a focused `@Singleton` repo with
+  `cachedSnapshot()` (null = cold, distinguished from a synced-but-empty roster via `sync_meta`)
+  + `persist()` (write-through; guard the empty case with `dao.clear()`, since Room `deleteNotIn`
+  on an empty list generates invalid `NOT IN ()` SQL); the ViewModel paints from the snapshot
+  first, then revalidates and writes the fresh roster back through.
 - `MeeshyConfig` is a plain `data class` with defaults — instantiate it real,
   do not mock.
 - `SessionRepository` is a concrete class — mock with `mockk(relaxed=true)` and
@@ -925,3 +984,85 @@ Append-only log of gotchas and decisions that save time next run.
   ends it. The `endedCalls` banner-dismiss is correct and self-contained, but the full fix is an
   **identity-aware active-call teardown**: gate the FSM teardown so only a teardown whose `callId`
   matches the active call reduces it. Deferred to keep this slice thin and non-test-breaking.
+
+## 2026-07-04 — pattern: durable absolute-state mutations (block/unblock) via the outbox
+- Block/unblock are **opposite terminal states**, not deltas — but they coalesce **exactly**
+  like the reaction add/remove toggle: a queued opposite for the same target **annihilates**
+  (the pair returns the user to the last-synced server state; the optimistic `BlockCache` flip
+  the second call made is the correct net state), and a repeated same-kind row is **superseded**
+  (idempotent). So reuse the reaction-toggle shape in `OutboxCoalescer`, don't invent a new one.
+- **No payload needed**: like `DELETE_MESSAGE`, the kind (`BLOCK_USER`/`UNBLOCK_USER`) + `targetId`
+  carry everything; `payload = ""`. That means **no DB migration** — a cheap durable slice.
+- **Delivery-exhaust rollback is the worker's job, not the VM's** (precedent: `markReadOptimistic`).
+  The VM writes optimistically + enqueues + wakes `OutboxFlushWorker`; it only rolls back on a
+  **local enqueue failure**. A *delivery* hard-exhaust rolls the **SSOT** (`BlockCache`) back in the
+  worker's `onExhausted`, and the list re-hydrates truthfully on next `load()`. Do **not** wire the
+  VM to `OutboxRepository.outcomes` for per-cmid list restoration — no existing durable mutation does,
+  and it adds a stateful cmid→row map for a rare tail case the SSOT already corrects.
+- **Wake the worker only on a real cmid**: `OutboxRepository.enqueue` returns `null` when the incoming
+  mutation annihilated a pending opposite — nothing to deliver, so schedule no `WorkManager` request
+  (mirrors `ConversationListViewModel.runPrefMutation` gating on the "something was queued" boolean).
+- **Enqueue-repo tests go Robolectric**: a repository that calls `OutboxRepository.enqueue` needs a
+  real in-memory `MeeshyDatabase` (`Room.inMemoryDatabaseBuilder` + `RobolectricTestRunner`) — the
+  established `StoryRepositoryTest`/`MediaUploadQueueTest` pattern. Assert the queued row via
+  `outbox.deliverable(lane)`; don't mock the final `OutboxRepository`.
+
+## 2026-07-05 — resolved: the lane-in-drain-list gotcha, structurally (outbox-lane-map-ssot)
+- The 2026-07-04 follow-up ("a worker drain-list test that asserts every lane with a registered
+  sender is drained") is **closed — one better than a test**. Instead of a Robolectric worker test
+  guarding the hand-maintained `lanes` list, the list is **gone**: a new pure `OutboxLaneMap`
+  (`sdk-core/.../outbox/OutboxModel.kt`) is the SSOT `OutboxKind → OutboxLaneAssignment`
+  (`PerConversation` | `Shared(lane)`, exhaustive `when` → every kind must have an assignment or it
+  won't compile), and `OutboxFlushWorker` now drains `OutboxLaneMap.sharedDrainLanes` (derived,
+  deduped, stable enum order) instead of a literal `listOf(...)`. A kind with a registered sender can
+  no longer be stranded on an undrained lane — the BLOCK/FRIEND omission class is now impossible, not
+  merely tested for. Bonus: the derivation drops the always-empty `PRESENCE`/`SOCIAL` lanes (no kind
+  maps there, no enqueue site) from the sweep — a behaviour-preserving no-op (draining an empty lane
+  did nothing). +9 pure tests over `assignmentFor`/`sharedDrainLanes` (per-arm mapping, dedup,
+  per-conversation exclusion, non-blank invariant, BLOCK/FRIEND regression). **Lesson generalised:**
+  when two lists must stay in lockstep (senders keyed by kind ↔ lanes drained), don't guard the drift
+  with a test — **derive one from the other** so the drift can't exist.
+
+## 2026-07-04 — pattern: durable friend-request send + the lane-in-drain-list gotcha
+- **Adding an `OutboxKind` + `OutboxLanes.X` is NOT enough — you MUST also add lane `X` to the
+  `OutboxFlushWorker` shared-lane drain list.** The prior `block-outbox-durable` slice added
+  `OutboxLanes.BLOCK` + senders but forgot the drain list, so block/unblock rows never delivered (a
+  silent no-op, invisible to the JVM tests because there is no worker integration test). This slice
+  added both `BLOCK` and `FRIEND` to the list. **Follow-up: a worker drain-list test** (Robolectric)
+  that asserts every lane with a registered sender is drained would have caught it — worth wiring.
+  ✅ **RESOLVED 2026-07-05 (`outbox-lane-map-ssot`)** — went one better: derived the drain list from a
+  kind→lane SSOT (`OutboxLaneMap`) so the drift is structurally impossible. See the 2026-07-05 entry above.
+- **Optimistic flip of a shared singleton cache must come AFTER the durable enqueue commits, not
+  before.** `DiscoverViewModel.connect` first flipped `FriendshipCache` (an app-wide `@Singleton`)
+  then enqueued in a `viewModelScope` coroutine — a cancellation between the two (VM cleared on
+  nav-away) left a **phantom `PendingSent`** in the cache with no queued row and no rollback, wrong on
+  every screen until a hydrate. Fix: enqueue first, flip only on a non-`null` cmid (the local Room
+  write is sub-ms, so it is still effectively instant). This differs from `BlockedListViewModel`,
+  which flips its **own** `_state` list (dies with the VM) — a cache-derived VM has no such safety, so
+  order matters. Deleted the local-enqueue-failure rollback path entirely (nothing to undo).
+- **A `SEND` overrides the drainer's "404-as-success" default** (ARCHITECTURE.md §5). That rule is for
+  idempotent deletes (404 = already gone). `FriendRequestSend.classify` maps 404 → permanent reject +
+  rollback (404 = receiver not found), never success — else a pending would strand toward a
+  non-existent user. Documented inline so the divergence reads as intentional.
+- **Known optimistic-drift edges (reconciled by a later hydrate, deferred):**
+  1. The gateway returns **409 for a friendRequest in EITHER direction and any status** (already
+     friends / inbound-pending / previously-rejected), so `409 → AlreadyExists` can leave the button
+     showing "Pending sent" when the truth is "Friends"/"Accept". A proper fix triggers a
+     friendship re-hydrate on 409 rather than trusting the optimistic placeholder.
+  2. **Cancel-while-queued**: cancelling a still-queued (placeholder) send does not annihilate the
+     outbox row (no cancel-via-outbox path yet), so on delivery `Delivered → didSendRequest` can
+     resurrect it. When the "cancel a pending sent request" flow lands, route it through a
+     `CANCEL_FRIEND_REQUEST` coalescer rule that **annihilates** a pending `SEND_FRIEND_REQUEST` to
+     the same receiver (mirror the send+delete message annihilation).
+
+## 2026-07-04 — env gotcha: the Gradle wrapper distribution is 403-blocked; use system gradle
+- **`./gradlew` cannot bootstrap in this container.** The wrapper downloads
+  `services.gradle.org/distributions/gradle-8.11.1-bin.zip`, which 302-redirects to
+  `github.com/gradle/gradle-distributions/releases/...` — a host the egress policy **blocks (403)**.
+  The cached dist under `~/.gradle/wrapper/dists/gradle-8.11.1-bin/` is a **partial** (`.part`+`.lck`
+  only), so the wrapper never completes.
+- **Fix:** a system Gradle is preinstalled at `/opt/gradle/bin/gradle` (8.14.3). Run the build with
+  `gradle <tasks>` instead of `./gradlew`. AGP 8.7.3 runs fine under it. Maven Central + Google Maven
+  are allowed, so **do NOT pass `--offline`** (the AGP plugin marker isn't pre-cached → resolution
+  fails). `meeshy.sh` calls `./gradlew`, so invoke `gradle` directly for `assembleDebug`/
+  `testDebugUnitTest` until a full wrapper dist can be primed.

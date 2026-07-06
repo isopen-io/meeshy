@@ -13,12 +13,18 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.FriendRepository
+import me.meeshy.sdk.friend.FriendRequestDelivery
+import me.meeshy.sdk.friend.FriendRequestSend
+import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
+import me.meeshy.sdk.net.api.BlockApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
 import me.meeshy.sdk.net.api.CreateStoryRequest
@@ -50,6 +56,10 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val postApi: PostApi,
     private val mediaRepository: MediaRepository,
     private val mediaBlobStore: MediaBlobStore,
+    private val blockApi: BlockApi,
+    private val blockCache: BlockCache,
+    private val friendRepository: FriendRepository,
+    private val friendshipCache: FriendshipCache,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
 
@@ -64,23 +74,22 @@ class OutboxFlushWorker @AssistedInject constructor(
                 when (row.kindEnum) {
                     OutboxKind.SEND_MESSAGE -> messageRepository.markSendFailed(row.cmid)
                     OutboxKind.UPLOAD_MEDIA -> mediaBlobStore.remove(row.cmid)
+                    // A hard-exhausted block/unblock rolls the optimistic SSOT flip
+                    // back so the blocklist re-hydrates truthfully on next load.
+                    OutboxKind.BLOCK_USER -> blockCache.setBlocked(row.targetId, blocked = false)
+                    OutboxKind.UNBLOCK_USER -> blockCache.setBlocked(row.targetId, blocked = true)
+                    // A hard-exhausted friend request rolls the optimistic pending
+                    // entry back so the connect button re-offers on next resolve.
+                    OutboxKind.SEND_FRIEND_REQUEST -> friendshipCache.rollbackSendRequest(row.targetId)
                     else -> Unit
                 }
             },
             graftProducedId = PublishMediaWriteBack::graft,
         )
 
-        val lanes = listOf(
-            OutboxLanes.REACTION,
-            OutboxLanes.READ_RECEIPT,
-            OutboxLanes.CONVERSATION_PREFS,
-            OutboxLanes.PRESENCE,
-            OutboxLanes.SOCIAL,
-            OutboxLanes.MEDIA,
-            OutboxLanes.STORY,
-            OutboxLanes.PROFILE,
-            OutboxLanes.SETTINGS,
-        )
+        // Derived from the kind→lane SSOT so a registered sender can never be
+        // stranded on an undrained lane (see OutboxLaneMap).
+        val lanes = OutboxLaneMap.sharedDrainLanes
 
         val reports = mutableListOf<DrainReport>()
 
@@ -185,6 +194,34 @@ class OutboxFlushWorker @AssistedInject constructor(
                 mediaBlobStore.remove(row.cmid)
             }
             result
+        },
+        OutboxKind.BLOCK_USER to MutationSender { row ->
+            when (apiCall { blockApi.block(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UNBLOCK_USER to MutationSender { row ->
+            when (apiCall { blockApi.unblock(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.SEND_FRIEND_REQUEST to MutationSender { row ->
+            val payload = runCatching { json.decodeFromString<FriendRequestPayload>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            val result = friendRepository.sendFriendRequest(row.targetId, payload.message)
+            when (val delivery = FriendRequestSend.classify(result)) {
+                is FriendRequestDelivery.Delivered -> {
+                    // Graft the real request id over the optimistic placeholder so
+                    // a later cancel/accept targets the true request.
+                    friendshipCache.didSendRequest(row.targetId, delivery.requestId)
+                    SendResult.Success
+                }
+                FriendRequestDelivery.AlreadyExists -> SendResult.Success
+                FriendRequestDelivery.Retry -> SendResult.TransientFailure
+                is FriendRequestDelivery.Rejected -> SendResult.PermanentFailure(delivery.reason)
+            }
         },
     )
 

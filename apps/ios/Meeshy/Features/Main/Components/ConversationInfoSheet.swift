@@ -260,7 +260,7 @@ struct ConversationInfoSheet: View {
             // Banner
             heroBannerImage
                 .frame(height: 140)
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
+                .clipShape(RoundedRectangle(cornerRadius: 20))
                 .padding(.horizontal, 16)
 
             // Avatar overlapping banner

@@ -113,10 +113,10 @@ struct ChangePasswordView: View {
                 )
             }
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(theme.surfaceGradient(tint: MeeshyColors.indigo600Hex))
                     .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(theme.border(tint: MeeshyColors.indigo600Hex), lineWidth: 1)
                     )
             )
@@ -158,10 +158,10 @@ struct ChangePasswordView: View {
                 )
             }
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(theme.surfaceGradient(tint: accentColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(theme.border(tint: accentColor), lineWidth: 1)
                     )
             )
@@ -227,7 +227,7 @@ struct ChangePasswordView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(
                             isValid && !isSaving
                                 ? Color(hex: accentColor)
@@ -244,7 +244,7 @@ struct ChangePasswordView: View {
     private var successOverlay: some View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.shield.fill")
-                .font(MeeshyFont.relative(48))
+                .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifie", bundle: .main))
@@ -253,10 +253,10 @@ struct ChangePasswordView: View {
         }
         .padding(32)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+            RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                    RoundedRectangle(cornerRadius: 20)
                         .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1)
                 )
         )
@@ -334,7 +334,7 @@ struct ChangePasswordView: View {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     showSuccess = true
                 }
-                try? await Task.sleep(for: .seconds(1.5))
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
                 dismiss()
             } catch let error as APIError {
                 HapticFeedback.error()

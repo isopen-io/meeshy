@@ -326,6 +326,43 @@ describe('CallCleanupService', () => {
       });
     });
 
+    it('forceEndCall bumps CallSession.version on the terminal write (so a concurrent version-guarded writer no-ops)', async () => {
+      // endCall()/leaveCall()/updateCallStatus() all guard their terminal
+      // write with `where: { version: call.version }` and bump `version` on
+      // success — the invariant that makes a losing writer's update a no-op
+      // instead of clobbering the winner's endedAt/duration/endReason.
+      // forceEndCall's own guard is status-scoped (it reaps rows the client
+      // may have already resolved moments ago), but it must ALSO bump
+      // version: otherwise a version-guarded writer that read the row just
+      // before this GC write still matches its stale `version` and overwrites
+      // the GC-assigned terminal state right after.
+      const service = new CallCleanupService(prisma as any);
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000);
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+
+      const txCallSessionUpdateMany = jest.fn().mockResolvedValue({ count: 1 }) as MockFn;
+      prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: txCallSessionUpdateMany }
+        };
+        return cb(tx);
+      });
+
+      await service.runCleanup();
+
+      expect(txCallSessionUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ version: { increment: 1 } })
+        })
+      );
+    });
+
     it('force-MISSED a stale initiated call (>120s) → cleaned:1', async () => {
       const service = new CallCleanupService(prisma as any);
       const staleCall = makeStaleCall(CallStatus.initiated, 90_000);

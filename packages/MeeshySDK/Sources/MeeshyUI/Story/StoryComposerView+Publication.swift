@@ -10,9 +10,41 @@ import MeeshySDK
 
 extension StoryComposerView {
     // MARK: - Pickers
+
+    /// C7 — la sheet Transitions était un stub (`Text("Transitions")`).
+    /// Elle pilote désormais le SEUL volet fonctionnel bout-en-bout :
+    /// l'animation d'OUVERTURE du slide courant (`effects.opening`, rendue par
+    /// `StoryRenderer.applyOpening` au passage edit→play et par l'export
+    /// AVCompositor). `closing` est sérialisé mais rendu NULLE PART — pas d'UI
+    /// tant qu'un `applyClosing` n'existe pas (une UI sans effet mentirait).
+    /// Les transitions ENTRE clips vivent dans la timeline (TransitionInspector).
     var transitionPicker: some View {
-        Text(String(localized: "story.composer.transitions", defaultValue: "Transitions", bundle: .module))
-            .foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(
+                    localized: "story.composer.openingTitle",
+                    defaultValue: "Ouverture du slide",
+                    bundle: .module
+                ))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                Text(String(
+                    localized: "story.composer.openingHint",
+                    defaultValue: "Animation d'entrée du slide courant, visible en aperçu et en lecture.",
+                    bundle: .module
+                ))
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.55))
+            }
+            // Persistance via granularCanvasSync (openingEffect tracké) —
+            // même chemin que le panneau Fond du band (C1, source unique VM).
+            OpeningEffectChips(selection: viewModel.openingEffect) { effect in
+                viewModel.openingEffect = effect
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     func publishAllSlides() {
@@ -148,7 +180,7 @@ extension StoryComposerView {
         Self.composerHasContent(
             slides: viewModel.slides,
             slideImageIds: Set(viewModel.slideImages.keys),
-            hasStickerObjects: !stickerObjects.isEmpty,
+            hasStickerObjects: !(viewModel.currentEffects.stickerObjects ?? []).isEmpty,
             hasDrawingData: viewModel.drawingData != nil,
             hasDrawingStrokes: !viewModel.drawingStrokes.isEmpty
         )

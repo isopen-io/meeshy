@@ -15,7 +15,7 @@ struct VideoFilterControlView: View {
         }
         .padding(16)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 16)
     }
 

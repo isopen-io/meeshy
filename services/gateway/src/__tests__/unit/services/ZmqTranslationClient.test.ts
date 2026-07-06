@@ -197,6 +197,45 @@ describe('ZmqTranslationClient', () => {
       // The receive should be called as part of polling
       expect(mockSubSocket.receive).toHaveBeenCalled();
     });
+
+    it('keeps a single receive() in flight while one is pending (zeromq allows only one read at a time)', async () => {
+      // A receive that never settles — the socket is waiting for a message.
+      (mockSubSocket.receive as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+      client = new ZmqTranslationClient();
+      await client.initialize();
+
+      jest.advanceTimersByTime(100);
+      await Promise.resolve();
+      jest.advanceTimersByTime(1000);
+      await Promise.resolve();
+
+      // Prod 2026-07-04: the old 100ms tick stacked receive() calls on top
+      // of the pending one — every extra call threw "Socket is busy
+      // reading" into a silent catch, 10×/s for hours.
+      expect(mockSubSocket.receive).toHaveBeenCalledTimes(1);
+    });
+
+    it('recreates the SUB socket after prolonged silence (zombie watchdog, prod 2026-07-04)', async () => {
+      (mockSubSocket.receive as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+      client = new ZmqTranslationClient();
+      await client.initialize();
+      const subscriberCallsAfterInit = (require('zeromq').Subscriber as jest.Mock).mock.calls.length;
+
+      // Cross the 120s silence threshold tick by tick.
+      for (let elapsed = 0; elapsed <= 121_000; elapsed += 1_000) {
+        jest.advanceTimersByTime(1_000);
+        await Promise.resolve();
+      }
+
+      // The watchdog must have closed the zombie and built a fresh Subscriber
+      // (new connection ⇒ the subscription frame is re-emitted to the PUB).
+      expect(mockSubSocket.close).toHaveBeenCalled();
+      expect((require('zeromq').Subscriber as jest.Mock).mock.calls.length)
+        .toBeGreaterThan(subscriberCallsAfterInit);
+      expect(mockSubSocket.subscribe).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('sendTranslationRequest()', () => {
@@ -1387,6 +1426,11 @@ describe('ZmqTranslationClient', () => {
     let connectionManager: any;
 
     beforeEach(async () => {
+      // Purge stray mockResolvedValueOnce queued by earlier tests: with the
+      // single-flight listener they are no longer greedily consumed by the
+      // polling loop and would leak into these isolated tests.
+      (mockSubSocket.receive as jest.Mock).mockReset();
+      (mockSubSocket.receive as jest.Mock).mockRejectedValue(new Error('No message'));
       const { ZmqConnectionManager } = await import('../../../services/zmq-translation/ZmqConnectionManager');
       connectionManager = new ZmqConnectionManager({ host: '0.0.0.0', pushPort: 5555, subPort: 5558 });
     });

@@ -78,6 +78,29 @@ export const conversationListParticipantSelect = {
 } as const;
 
 /**
+ * Sélection des préférences utilisateur jointes à une conversation (liste ET
+ * détail). `customName` DOIT y figurer : c'est lui qui pilote le nom affiché
+ * d'un DM côté client (`displayName = customName ?? title ?? …`). Son absence
+ * historique créait un flip-flop de titre — la liste froide montrait le nom
+ * du participant, puis le premier pin/mute rapportait `customName` via la
+ * réponse du PATCH préférences et le titre basculait (vu « sandra raveloson »
+ * → « Sany » 2026-07-04). Le champ doit AUSSI être déclaré dans le schema
+ * wire (`userPreferences` de la conversation, api-schemas.ts), sinon
+ * fast-json-stringify le strippe silencieusement — même piège que `reaction`,
+ * sélectionné ici mais absent du wire jusqu'à ce même fix.
+ */
+export const conversationUserPreferencesSelect = {
+  isPinned: true,
+  isMuted: true,
+  isArchived: true,
+  deletedForUserAt: true,
+  tags: true,
+  categoryId: true,
+  reaction: true,
+  customName: true
+} as const;
+
+/**
  * Iter 33 (F1) — GET /conversations/:id DETAIL include. Participants are
  * capped: a 500-member group used to ship ~500 KB of hydrated participants on
  * every conversation open. Clients tolerate a partial list (web renders the
@@ -347,19 +370,11 @@ export function registerCoreRoutes(
             },
             select: conversationListParticipantSelect
           },
-          // User preferences (isPinned, isMuted, isArchived, tags, categoryId)
+          // User preferences (pin/mute/archive/tags/catégorie/customName/reaction)
           userPreferences: {
             where: { userId: userId },
             take: 1,
-            select: {
-              isPinned: true,
-              isMuted: true,
-              isArchived: true,
-              deletedForUserAt: true,
-              tags: true,
-              categoryId: true,
-              reaction: true
-            }
+            select: conversationUserPreferencesSelect
           },
           messages: {
             where: {
@@ -666,15 +681,7 @@ export function registerCoreRoutes(
           userPreferences: {
             where: { userId: authRequest.authContext.userId },
             take: 1,
-            select: {
-              isPinned: true,
-              isMuted: true,
-              isArchived: true,
-              deletedForUserAt: true,
-              tags: true,
-              categoryId: true,
-              reaction: true
-            }
+            select: conversationUserPreferencesSelect
           }
         }
       });

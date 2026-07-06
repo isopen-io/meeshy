@@ -29,6 +29,32 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(sut.currentQualityLevel, .excellent)
     }
 
+    // MARK: - Configure / ICE Server Fallback
+
+    func test_configure_nilIceServers_fallsBackToDefaultServers() {
+        let (sut, client) = makeSUT()
+        sut.configure(isVideo: false, iceServers: nil)
+        XCTAssertEqual(client.lastConfiguredIceServers.count, IceServer.defaultServers.count)
+    }
+
+    func test_configure_emptyIceServers_fallsBackToDefaultServers() {
+        // A VoIP push whose `iceServers` field decodes to zero usable servers (all
+        // entries dropped by the credential-length guard, or an explicit `[]`) must
+        // still fall back to STUN — passing `[]` straight through would configure
+        // the peer connection with no servers at all, which fails behind any NAT.
+        let (sut, client) = makeSUT()
+        sut.configure(isVideo: false, iceServers: [])
+        XCTAssertEqual(client.lastConfiguredIceServers.count, IceServer.defaultServers.count)
+    }
+
+    func test_configure_nonEmptyIceServers_passesThroughUnchanged() {
+        let (sut, client) = makeSUT()
+        let servers = [IceServer(urls: ["turn:turn.meeshy.me:3478"], username: "u", credential: "c")]
+        sut.configure(isVideo: false, iceServers: servers)
+        XCTAssertEqual(client.lastConfiguredIceServers.count, 1)
+        XCTAssertEqual(client.lastConfiguredIceServers.first?.urls.first, "turn:turn.meeshy.me:3478")
+    }
+
     // MARK: - ICE Candidate Buffering
 
     func test_addICECandidate_beforeRemoteDescription_buffersCandidate() {
@@ -833,6 +859,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     var remoteVideoTrack: Any? = nil
 
     var configureCallCount = 0
+    private(set) var lastConfiguredIceServers: [IceServer] = []
     var createOfferResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .offer, sdp: "mock"))
     var createAnswerResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .answer, sdp: "mock"))
     var addIceCandidateCallCount = 0
@@ -847,7 +874,10 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     var audioEffectsService: CallAudioEffectsServiceProviding? = nil
     let videoFilterPipeline = VideoFilterPipeline()
 
-    func configure(iceServers: [IceServer]) throws { configureCallCount += 1 }
+    func configure(iceServers: [IceServer]) throws {
+        configureCallCount += 1
+        lastConfiguredIceServers = iceServers
+    }
     func updateIceServers(_ iceServers: [IceServer]) {}
     private(set) var lastNegotiationIsPolite: Bool?
     func setNegotiationRole(isPolite: Bool) { lastNegotiationIsPolite = isPolite }
@@ -901,6 +931,11 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     }
     func sendDataChannelMessage(_ data: Data) { lastSentData = data }
     func disconnect() { disconnectCallCount += 1; isConnected = false }
+    private(set) var disconnectAfterFlushingPendingSendCallCount = 0
+    func disconnectAfterFlushingPendingSend() {
+        disconnectAfterFlushingPendingSendCallCount += 1
+        disconnect()
+    }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
     func sendDTMF(digits: String) {}

@@ -53,11 +53,9 @@ extension StoryComposerView {
         // Canvas-local state (read by buildEffects via canvasSyncFingerprint)
         selectedFilter = nil
         selectedImage = nil
-        stickerObjects = []
 
-        // Transitions (read by buildEffects)
-        openingEffect = nil
-        closingEffect = nil
+        // Transitions : état VM depuis it.70 — couvert par viewModel.reset(),
+        // plus rien à nettoyer côté View.
 
         // Background audio panel (read by buildEffects)
         selectedAudioId = nil
@@ -78,14 +76,16 @@ extension StoryComposerView {
 
     func restoreCanvas(from slide: StorySlide) {
         let e = slide.effects
-        if let bgHex = e.background { viewModel.backgroundColor = "#\(bgHex)" }
-        else { viewModel.backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())" }
+        if let bg = e.background {
+            // Gradient (C11) : pas de préfixe « # » — la valeur sérialisée
+            // voyage telle quelle dans backgroundColor.
+            viewModel.backgroundColor = bg.hasPrefix("gradient:") ? bg : "#\(bg)"
+        } else { viewModel.backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())" }
         selectedImage = viewModel.slideImages[slide.id]
         viewModel.hasBackgroundImage = selectedImage != nil
-        stickerObjects = e.stickerObjects ?? []
         selectedFilter = e.filter.flatMap { StoryFilter(rawValue: $0) }
-        openingEffect = e.opening
-        closingEffect = e.closing
+        viewModel.openingEffect = e.opening
+        viewModel.closingEffect = e.closing
         selectedAudioId = e.backgroundAudioId
         selectedAudioTitle = selectedAudioId != nil ? "Audio" : nil
         audioVolume = e.backgroundAudioVolume ?? 0.7
@@ -116,7 +116,6 @@ extension StoryComposerView {
     /// E2 2026-07-03).
     struct CanvasAuthoredState {
         var backgroundHex: String?
-        var stickerObjects: [StorySticker] = []
         var drawingData: Data?
         var drawingStrokes: [StoryDrawingStroke] = []
         var backgroundAudioId: String?
@@ -137,8 +136,15 @@ extension StoryComposerView {
     static func mergeEffects(current: StoryEffects, canvas: CanvasAuthoredState) -> StoryEffects {
         var effects = current
         effects.background = canvas.backgroundHex
-        effects.stickers = canvas.stickerObjects.isEmpty ? nil : canvas.stickerObjects.map(\.emoji)
-        effects.stickerObjects = canvas.stickerObjects.isEmpty ? nil : canvas.stickerObjects
+        // C13 — stickers PASSTHROUGH : `currentEffects` est la source unique
+        // (addSticker VM, deleteElement, duplicate, zOrder, gestes canvas via
+        // le binding $viewModel.currentSlide). Le canvas n'authore plus ce
+        // champ — l'ancien écrasement depuis un @State View rafraîchi
+        // seulement au slide-switch REVERTAIT ces mutations au sync suivant.
+        // Seule la projection legacy `stickers` (emojis, rétro-compat reader)
+        // est dérivée ici, au choke point unique du sync.
+        effects.stickers = (current.stickerObjects?.isEmpty == false)
+            ? current.stickerObjects?.map(\.emoji) : nil
         effects.drawingData = canvas.drawingData
         effects.drawingStrokes = canvas.drawingStrokes.isEmpty ? nil : canvas.drawingStrokes
         effects.backgroundAudioId = canvas.backgroundAudioId
@@ -171,15 +177,14 @@ extension StoryComposerView {
             current: viewModel.currentEffects,
             canvas: CanvasAuthoredState(
                 backgroundHex: bgHex,
-                stickerObjects: stickerObjects,
                 drawingData: viewModel.drawingData,
                 drawingStrokes: viewModel.drawingStrokes,
                 backgroundAudioId: selectedAudioId,
                 audioVolume: audioVolume,
                 audioTrimStart: audioTrimStart,
                 audioTrimEnd: audioTrimEnd,
-                opening: openingEffect,
-                closing: closingEffect,
+                opening: viewModel.openingEffect,
+                closing: viewModel.closingEffect,
                 backgroundTransform: bgTransform
             )
         )
@@ -232,6 +237,10 @@ extension StoryComposerView {
     /// JAMAIS sur onDisappear : le discard fire onDisappear et
     /// re-persisterait le draft que l'utilisateur vient de jeter.
     func autoSaveDraftForBackground() {
+        // Même garde que l'autosave débouncé (BUG-3) : backgrounder l'app
+        // pendant que la carte de reprise est affichée ne doit pas écraser
+        // le draft avec le composer vierge.
+        guard !showRestoreDraftAlert else { return }
         guard composerHasContent, publishTask == nil else { return }
         persistDraft()
     }
@@ -254,6 +263,11 @@ extension StoryComposerView {
     /// background + `draftAutosaveSuspended` (un debounce en vol ne doit pas
     /// re-persister un brouillon explicitement jeté/publié).
     func autosaveDraftAfterMutation() {
+        // BUG-3 (user 2026-07-04) : tant que la carte de reprise est affichée,
+        // le composer VIERGE dessous (dont l'onAppear pose déjà le fond pastel
+        // = mutation → debounce) ne doit JAMAIS écraser le draft qu'on propose
+        // justement de reprendre — sinon « Reprendre » restaure du vide.
+        guard !showRestoreDraftAlert else { return }
         guard !draftAutosaveSuspended, composerHasContent, publishTask == nil else { return }
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
@@ -325,6 +339,10 @@ extension StoryComposerView {
         if let first = viewModel.slides.first {
             restoreCanvas(from: first)
         }
+        // C9 — l'undo ne traverse pas la frontière de reprise : la
+        // trajectoire repart de l'état restauré (revenir « avant » le
+        // brouillon n'a pas de sens et exposerait le composer vierge).
+        viewModel.seedHistory()
     }
 
     func clearAllDrafts() {

@@ -329,6 +329,11 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
     func disconnect() { disconnectCallCount += 1; isConnected = false }
+    private(set) var disconnectAfterFlushingPendingSendCallCount = 0
+    func disconnectAfterFlushingPendingSend() {
+        disconnectAfterFlushingPendingSendCallCount += 1
+        disconnect()
+    }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
     func applyAudioEncoding(maxBitrateBps: Int) {}
@@ -641,10 +646,10 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             return
         }
         guard let endedAtRange = body.range(
-            of: "reportCall(with: uuid, endedAt: nil, reason: .unanswered)",
+            of: "reportCall(with: uuid, endedAt: Date(), reason: .unanswered)",
             range: reportRange.upperBound..<body.endIndex
         ) else {
-            XCTFail("Expected reportCall(...endedAt: nil...) after the busy-path report closure")
+            XCTFail("Expected reportCall(...endedAt: Date()...) after the busy-path report closure")
             return
         }
         let closureBody = String(body[reportRange.upperBound..<endedAtRange.lowerBound])
@@ -3047,6 +3052,64 @@ final class CallManagerDTMFTests: XCTestCase {
     }
 }
 
+// MARK: - Audio Effects Guard (2026-07-05 audit)
+//
+// `CallAudioEffectsService` builds an independent `AVAudioEngine` tapping the
+// live mic input node. `CallEffectsOverlay` removed its UI entry point on
+// 2026-07-02 because no production capture hook feeds it, but `setAudioEffect`
+// stayed reachable — engaging it during a live call would start a second
+// AVAudioEngine contending with WebRTC's own `RTCAudioSession` for the same
+// hardware input. These tests lock in the guard that keeps it a documented
+// no-op until a real capture hook exists.
+
+@MainActor
+final class CallManagerAudioEffectGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func funcBody(named signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let blockEnd = source.range(of: "}", range: range.upperBound..<source.endIndex)?.upperBound
+            ?? source.endIndex
+        return String(source[range.lowerBound..<blockEnd])
+    }
+
+    func test_setAudioEffect_guardsNonNilEffect_inSourceCode() throws {
+        let source = try callManagerSource()
+        guard let body = funcBody(named: "func setAudioEffect(_ effect: AudioEffectConfig?)", in: source) else {
+            XCTFail("setAudioEffect not found in CallManager.swift"); return
+        }
+
+        XCTAssertTrue(
+            body.contains("guard effect == nil"),
+            "setAudioEffect must refuse a non-nil effect — CallAudioEffectsService's " +
+            "AVAudioEngine has no production capture hook and would collide with the " +
+            "live call's RTCAudioSession if engaged"
+        )
+    }
+
+    func test_updateAudioEffectParams_guardsNoActiveEffect_inSourceCode() throws {
+        let source = try callManagerSource()
+        guard let body = funcBody(named: "func updateAudioEffectParams(_ config: AudioEffectConfig)", in: source) else {
+            XCTFail("updateAudioEffectParams not found in CallManager.swift"); return
+        }
+
+        XCTAssertTrue(
+            body.contains("guard activeAudioEffect != nil"),
+            "updateAudioEffectParams must refuse to forward when no effect is active " +
+            "(setAudioEffect is a no-op for non-nil effects, so this should never fire in production)"
+        )
+    }
+}
+
 // MARK: - call:force-leave Server→Client Handler
 
 @MainActor
@@ -3595,6 +3658,86 @@ final class CallManagerTURNRefreshGuardTests: XCTestCase {
     }
 }
 
+// MARK: - Immediate TURN Request on STUN-Only Fallback (§armTurnCredentialsAfterConfigure)
+
+/// Source-level guards verifying that when an incoming call's VoIP push/notification
+/// payload carries no usable ICE servers (missing/malformed/all dropped by the
+/// credential-length guard in `VoIPPushManager.parseIceServers`), CallManager requests
+/// real per-user TURN credentials immediately instead of waiting for the periodic
+/// scheduler — a STUN-only peer connection reliably fails to connect behind
+/// symmetric/CGNAT (common on cellular carriers).
+@MainActor
+final class CallManagerArmTurnCredentialsAfterConfigureTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(_ source: String, signature: String) -> String? {
+        guard let start = source.range(of: signature) else { return nil }
+        let end = source.range(of: "\n    private func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.range(of: "\n    func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_armTurnCredentialsAfterConfigure_requestsImmediately_whenNoIceServers() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func armTurnCredentialsAfterConfigure(callId: String, iceServers: [IceServer]?)") else {
+            XCTFail("armTurnCredentialsAfterConfigure not found in CallManager.swift"); return
+        }
+        guard let guardRange = body.range(of: "guard let iceServers, !iceServers.isEmpty else {") else {
+            XCTFail("armTurnCredentialsAfterConfigure must guard on a nil-or-empty iceServers array"); return
+        }
+        let guardBody = String(body[guardRange.upperBound...])
+        XCTAssertTrue(
+            guardBody.contains("requestFreshTurnCredentials(callId: callId)"),
+            "When the call has no usable ICE servers, armTurnCredentialsAfterConfigure must " +
+            "request fresh TURN credentials immediately rather than waiting for the periodic " +
+            "scheduler — a STUN-only connection reliably fails behind symmetric/CGNAT."
+        )
+    }
+
+    func test_armTurnCredentialsAfterConfigure_schedulesPeriodicRefresh_whenIceServersPresent() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func armTurnCredentialsAfterConfigure(callId: String, iceServers: [IceServer]?)") else {
+            XCTFail("armTurnCredentialsAfterConfigure not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnDefaultCredentialTTLSeconds)"),
+            "When the push already carries usable ICE servers, armTurnCredentialsAfterConfigure " +
+            "must fall back to the periodic scheduler — no immediate re-request is needed."
+        )
+    }
+
+    func test_incomingCallPaths_routeThroughArmTurnCredentialsAfterConfigure() throws {
+        let source = try callManagerSource()
+        // Both incoming-call entry points (VoIP push and socket/notification-only)
+        // must decide via armTurnCredentialsAfterConfigure right after configuring
+        // WebRTC — neither should call scheduleTURNCredentialRefresh directly, which
+        // would always wait for the periodic cadence even with a STUN-only fallback.
+        let signatures = [
+            "func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil)",
+            "func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil)"
+        ]
+        for signature in signatures {
+            guard let body = functionBody(source, signature: signature) else {
+                XCTFail("\(signature) not found in CallManager.swift"); continue
+            }
+            XCTAssertTrue(
+                body.contains("armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)"),
+                "\(signature) must call armTurnCredentialsAfterConfigure after webRTCService.configure."
+            )
+        }
+    }
+}
+
 // MARK: - TURN Refresh Retry Watchdog (§requestFreshTurnCredentials)
 
 /// Source-level guards verifying every `call:request-ice-servers` requester
@@ -4037,6 +4180,94 @@ final class CallManagerAnalyticsTests: XCTestCase {
             "so the gateway can recognize and route iOS analytics payloads."
         )
     }
+
+    // MARK: - Regression 2026-07-05: reconnectionCount must reflect the WHOLE
+    // call's reconnection history, not just the live FSM retry budget.
+
+    private func attemptReconnectionBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "private func attemptReconnection(escalate:") else { return nil }
+        let bodyEnd = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    private func transitionToConnectedBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "private func transitionToConnected() {") else { return nil }
+        let bodyEnd = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    /// `reconnectAttempt` is the live FSM retry budget (capped at
+    /// `maxReconnectAttempts`, zeroed on every reconnect success) — using it
+    /// directly for the "reconnectionCount" analytics field means a call that
+    /// recovered from several network blips and then ended normally reports 0,
+    /// identical to a trouble-free call. A separate cumulative counter must be
+    /// incremented alongside it and used for the analytics field instead.
+    func test_attemptReconnection_incrementsAnalyticsTotalReconnects() throws {
+        let source = try callManagerSource()
+        guard let body = attemptReconnectionBody(in: source) else {
+            XCTFail("attemptReconnection not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("analyticsTotalReconnects += 1"),
+            "attemptReconnection must increment analyticsTotalReconnects alongside " +
+            "reconnectAttempt, so the cumulative count survives across reconnect cycles."
+        )
+    }
+
+    /// `transitionToConnected` zeroes the live `reconnectAttempt` budget on
+    /// EVERY successful (re)connect — including a mid-call ICE-restart recovery,
+    /// not just call start. `analyticsTotalReconnects` must NOT be reset here,
+    /// or a call with multiple recoveries would only ever report its last
+    /// recovery cycle's count.
+    func test_transitionToConnected_doesNotResetAnalyticsTotalReconnects() throws {
+        let source = try callManagerSource()
+        guard let body = transitionToConnectedBody(in: source) else {
+            XCTFail("transitionToConnected not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("reconnectAttempt = 0"),
+            "transitionToConnected must still reset the live reconnectAttempt budget."
+        )
+        XCTAssertFalse(
+            body.contains("analyticsTotalReconnects"),
+            "transitionToConnected must NOT reset analyticsTotalReconnects — it accumulates " +
+            "across the whole call and is only cleared in endCallInternal."
+        )
+    }
+
+    /// `analyticsTotalReconnects` must be reset only once the call has fully
+    /// ended, mirroring `reconnectAttempt`'s reset in the same method.
+    func test_endCallInternal_resetsAnalyticsTotalReconnects() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("analyticsTotalReconnects = 0"),
+            "endCallInternal must reset analyticsTotalReconnects so the next call starts clean."
+        )
+    }
+
+    /// The analytics payload's "reconnectionCount" must read the cumulative
+    /// counter, not the live per-cycle FSM budget. The payload dict itself is
+    /// built in `emitCallAnalyticsSnapshot` (shared by periodic in-progress
+    /// snapshots and the final teardown emit — see
+    /// test_emitCallAnalyticsIfNeeded_passesCallIdToSocket above), not in
+    /// `emitCallAnalyticsIfNeeded` itself.
+    func test_emitCallAnalyticsSnapshot_usesTotalReconnectsForReconnectionCount() throws {
+        let source = try callManagerSource()
+        guard let snapshotRange = source.range(of: "private func emitCallAnalyticsSnapshot(") else {
+            XCTFail("emitCallAnalyticsSnapshot not found in CallManager.swift"); return
+        }
+        let snapshotBody = String(source[snapshotRange.lowerBound...].prefix(2600))
+        XCTAssertTrue(
+            snapshotBody.contains("\"reconnectionCount\":   analyticsTotalReconnects"),
+            "The analytics payload must report analyticsTotalReconnects (cumulative), not " +
+            "reconnectAttempt (the live, per-cycle FSM retry budget zeroed on every reconnect)."
+        )
+    }
 }
 
 // MARK: - CXCallUpdate hasVideo on A/V toggle (audit Phase 3)
@@ -4084,6 +4315,95 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
             toggleBody.contains("callUsesCallKit"),
             "toggleVideo must guard CXCallUpdate reporting behind callUsesCallKit to avoid " +
             "calling CXProvider methods when CallKit is not active (Mac / foreground in-app calls)."
+        )
+    }
+
+    /// `answerCall()` is the in-app (non-CallKit) answer path fired from
+    /// `IncomingCallView` — reached precisely when `handleIncomingCallNotification` set
+    /// `callUsesCallKit = false` (foreground call / iOS-app-on-Mac never calls
+    /// `reportNewIncomingCall`). Without this guard, `CXAnswerCallAction` is requested
+    /// against a UUID CallKit was never told about — a guaranteed-to-fail transaction
+    /// on every single foreground/Mac call answer.
+    func test_answerCall_guardsCXAnswerCallActionBehindCallUsesCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func answerCall()") else {
+            XCTFail("answerCall() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "private func scheduleSdpOfferTimeout",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            body.contains("if let uuid = activeCallUUID, callUsesCallKit {"),
+            "answerCall() must guard CXAnswerCallAction behind callUsesCallKit — a foreground " +
+            "in-app call (or iOS-app-on-Mac) never calls reportNewIncomingCall, so requesting " +
+            "CXAnswerCallAction for its UUID is guaranteed to fail and only adds log noise."
+        )
+    }
+
+    /// Same rationale as `answerCall()`: `rejectCall()` must not fire `CXEndCallAction`
+    /// for a UUID CallKit never heard about.
+    func test_rejectCall_guardsCXEndCallActionBehindCallUsesCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func rejectCall()") else {
+            XCTFail("rejectCall() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "// MARK: - End Call",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            body.contains("if let uuid = activeCallUUID, callUsesCallKit {"),
+            "rejectCall() must guard CXEndCallAction behind callUsesCallKit — same rationale " +
+            "as answerCall(): the UUID was never reported to CallKit for foreground/Mac calls."
+        )
+    }
+
+    /// Same rationale as `answerCall()`/`rejectCall()`: `endCall()` must not fire
+    /// `CXEndCallAction` for a UUID CallKit never heard about. `callUsesCallKit` is
+    /// captured BEFORE `endCallInternal()` — mirroring the existing `endUUID` local
+    /// capture — since `endCallInternal` may reset call-scoped state.
+    func test_endCall_guardsCXEndCallActionBehindCallUsesCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func endCall()") else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "// MARK: - System Picture-in-Picture",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            body.contains("if let endUUID, endUsedCallKit {"),
+            "endCall() must guard CXEndCallAction behind callUsesCallKit — same rationale as " +
+            "answerCall()/rejectCall()."
+        )
+    }
+
+    /// `reportIncomingVoIPCall`'s busy path (VoIP push arrives while already on a call)
+    /// synthesizes an immediate reportCall — `endedAt` must be `Date()`, not `nil`.
+    /// `nil` means "unknown" to CallKit and produces an inaccurate/missing Recents
+    /// timestamp; every other reportCall site in the file passes `Date()`.
+    func test_reportIncomingVoIPCall_busyPath_reportsCallEndedNowNotUnknown() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func reportIncomingVoIPCall(") else {
+            XCTFail("reportIncomingVoIPCall not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "private func checkVoIPCallFreshness",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertFalse(
+            body.contains("endedAt: nil"),
+            "reportIncomingVoIPCall must never pass endedAt: nil to reportCall — nil means " +
+            "'unknown' to CallKit, producing an inaccurate/missing Recents timestamp."
         )
     }
 

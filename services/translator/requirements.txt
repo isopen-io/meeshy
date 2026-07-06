@@ -1,5 +1,5 @@
 # Configuration d'environnement
-python-dotenv==1.2.2
+python-dotenv==1.1.1
 
 # Framework web
 fastapi==0.131.0
@@ -11,7 +11,7 @@ pydantic==2.13.4
 grpcio==1.69.0
 grpcio-tools==1.69.0
 grpcio-reflection==1.69.0
-protobuf==5.29.6
+protobuf==5.29.3
 pyzmq==26.2.0
 
 # Machine Learning et NLP
@@ -46,14 +46,16 @@ dnspython==2.7.0
 
 # Détection de langue et analyse de texte
 langdetect==1.0.9
+nltk==3.9.4
+textstat==0.7.13
 
 # Utilitaires système
 psutil==6.1.1
 # numpy version managed by dependencies (chatterbox-tts requires numpy<1.26.0)
 # pandas 2.0.x works with numpy<1.26.0 on Python 3.12
 pandas>=2.0.0,<2.1.0
-aiohttp==3.14.1
-python-multipart==0.0.31
+aiohttp==3.11.11
+python-multipart==0.0.22
 aiofiles==24.1.0
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -89,7 +91,7 @@ faster-whisper==1.2.1
 # Dépendances manuelles de chatterbox-tts (pour installation --no-deps):
 resampy==0.4.3
 s3tokenizer==0.3.0
-diffusers==0.38.0
+diffusers==0.29.0
 resemble-perth==1.0.1
 omegaconf==2.3.0
 conformer==0.3.2
@@ -153,10 +155,6 @@ loguru==0.7.3
 prometheus-client==0.25.0
 
 # Tests
-# pytest PINNED <9 — pytest-asyncio==0.25.2 requires pytest>=8.2,<9. A
-# 2026-07-06 bump to 9.0.3 broke the translator Docker build ("No solution
-# found when resolving dependencies") because pytest-asyncio wasn't bumped in
-# lockstep. Revalidate together if either pin is touched again.
 pytest==8.3.4
 pytest-asyncio==0.25.2
 pytest-cov==6.0.0

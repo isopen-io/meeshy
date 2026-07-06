@@ -596,7 +596,7 @@ struct ThemedFeedOverlay: View {
                                 .font(MeeshyFont.relative(16))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
-                        .padding(12)
+                        .padding(MeeshySpacing.md)
                         .background(
                             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .fill(theme.inputBackground)
