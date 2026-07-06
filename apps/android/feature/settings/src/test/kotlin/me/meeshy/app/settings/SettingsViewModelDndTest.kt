@@ -56,6 +56,8 @@ class SettingsViewModelDndTest {
             themeStore = InMemoryThemeStore(),
             interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
             notificationPreferencesStore = notificationStore,
+            notificationPreferencesSyncRepository = mockk(relaxed = true),
+            workManager = mockk(relaxed = true),
         )
     }
 

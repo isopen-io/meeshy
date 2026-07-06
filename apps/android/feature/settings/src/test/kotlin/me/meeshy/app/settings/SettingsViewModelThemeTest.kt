@@ -56,6 +56,8 @@ class SettingsViewModelThemeTest {
             themeStore = themeStore,
             interfaceLanguageStore = InMemoryInterfaceLanguageStore(),
             notificationPreferencesStore = InMemoryNotificationPreferencesStore(),
+            notificationPreferencesSyncRepository = mockk(relaxed = true),
+            workManager = mockk(relaxed = true),
         )
     }
 

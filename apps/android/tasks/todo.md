@@ -4,7 +4,17 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-interface-language` ✅
+## This loop (Phase: Settings §L) — slice `settings-notification-prefs-sync` ✅
+**Offline-queued notification-preference backend sync** — wires the dead `OutboxKind.UPDATE_SETTINGS`/
+`OutboxLanes.SETTINGS` end-to-end (mirrors `edit-profile-optimistic`). Pure `:core:model`
+`NotificationPreferenceSyncBody.from(prefs)` (gateway `PATCH /me/preferences/notification` contract SSOT — all
+30 fields, drops `extras`, `dndDays` as lowercase tokens); `core/network` `PreferencesApi`; `:sdk-core`
+`NotificationPreferencesSyncRepository.enqueueSync` (session-gated, no optimistic flip — store is truth);
+`OutboxCoalescer` `UPDATE_SETTINGS` latest-snapshot rule + `OutboxFlushWorker` sender; `SettingsViewModel`
+local-first-then-sync funnel (persist → enqueue → wake worker on real `cmid`). +15 tests, `meeshy.sh check`
+green, diff = `apps/android` only. Next: regional (content) language preference (PROGRESS.md "Next" #4).
+
+## Prior loop (Phase: Settings §L) — slice `settings-interface-language` ✅
 **Persisted interface (UI chrome) language** — mirrors the theme slice one step further. Pure `:core:model`
 `AppLanguage` SSOT (`supportedCodes` from `LanguageData.interfaceLanguages` fr/en/es/ar; `fromStorage`/
 `storageValue` codec + `resolveInterfaceLocaleTag`; `"system"`/blank/absent/unsupported → `null` = follow

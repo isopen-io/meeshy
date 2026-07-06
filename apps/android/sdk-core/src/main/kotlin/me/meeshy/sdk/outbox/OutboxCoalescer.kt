@@ -29,7 +29,9 @@ public sealed interface CoalesceDecision {
  * - a repeated friend request to the same receiver keeps only the latest
  *   (only one request can exist — idempotent send, latest greeting wins);
  * - a repeated profile edit (same user id) keeps only the latest snapshot
- *   (each carries the full PATCH body — the newest edit subsumes the pending one).
+ *   (each carries the full PATCH body — the newest edit subsumes the pending one);
+ * - a repeated settings update (same user id) keeps only the latest snapshot
+ *   (each carries the full preference block — an offline toggle burst collapses to one PATCH).
  *
  * [pending] MUST contain only still-cancellable rows ([OutboxState.PENDING]);
  * an in-flight mutation cannot be undone.
@@ -46,6 +48,8 @@ public object OutboxCoalescer {
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_CONVERSATION_PREFS)
             OutboxKind.UPDATE_PROFILE ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PROFILE)
+            OutboxKind.UPDATE_SETTINGS ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_SETTINGS)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
             OutboxKind.BLOCK_USER -> blockToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)

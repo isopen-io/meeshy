@@ -21,6 +21,7 @@ import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadSender
+import me.meeshy.sdk.model.NotificationPreferenceSyncBody
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.NetworkResult
@@ -32,6 +33,7 @@ import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.session.SessionRepository
@@ -60,6 +62,7 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val mediaRepository: MediaRepository,
     private val mediaBlobStore: MediaBlobStore,
     private val blockApi: BlockApi,
+    private val preferencesApi: PreferencesApi,
     private val blockCache: BlockCache,
     private val friendRepository: FriendRepository,
     private val friendshipCache: FriendshipCache,
@@ -225,6 +228,14 @@ class OutboxFlushWorker @AssistedInject constructor(
                     sessionRepository.adopt(result.data)
                     SendResult.Success
                 }
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UPDATE_SETTINGS to MutationSender { row ->
+            val body = runCatching { json.decodeFromString<NotificationPreferenceSyncBody>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            when (apiCall { preferencesApi.updateNotification(body) }) {
+                is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
         },

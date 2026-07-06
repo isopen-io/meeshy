@@ -1295,7 +1295,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       that omits empty categories; `SettingsViewModel` `setNotificationTypeEnabled`/`setNotificationTypeQuery`;
       `SettingsScreen` search field + accent category headers + push-gated per-type switches + empty-state.
       +14 tests (22 new strings ×EN/FR/ES/PT). Surpasses iOS which lists the same toggles without an in-section
-      search filter. **Still open:** email + offline-queued backend sync of the block (still device-local only).
+      search filter. **Offline-queued backend sync landed** (`settings-notification-prefs-sync`, 2026-07-06):
+      the previously-dead `OutboxKind.UPDATE_SETTINGS`/`OutboxLanes.SETTINGS` declarations are now wired
+      end-to-end — pure `:core:model` `NotificationPreferenceSyncBody.from(prefs)` projects the block into the
+      gateway `PATCH /me/preferences/notification` wire contract (all 30 fields, `extras` dropped, `dndDays` as
+      lowercase tokens); `core/network` `PreferencesApi`; `:sdk-core` `NotificationPreferencesSyncRepository`
+      (session-gated durable enqueue keyed by own user id; inert with no session) + an `OutboxCoalescer`
+      latest-snapshot rule (an offline toggle burst collapses to one PATCH) + an `OutboxFlushWorker`
+      `UPDATE_SETTINGS` sender. `SettingsViewModel.updateNotifications` now persists to the device-local store
+      instantly (UI SSOT) **then** enqueues the sync + wakes the worker on a real `cmid`. The PATCH is idempotent,
+      so a delivery retry is harmless (no rollback needed). +15 tests. Surpasses iOS, whose preference write is
+      online-only. **Still open:** the email channel toggle wiring (the field syncs, the UI row is pending).
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync

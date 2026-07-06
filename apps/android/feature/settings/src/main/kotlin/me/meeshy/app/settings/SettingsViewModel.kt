@@ -2,6 +2,7 @@ package me.meeshy.app.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +18,8 @@ import me.meeshy.sdk.model.NotificationTypeCatalog
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.model.next
 import me.meeshy.sdk.notification.NotificationPreferencesStore
+import me.meeshy.sdk.notification.NotificationPreferencesSyncRepository
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.theme.ThemeStore
 import me.meeshy.sdk.user.UserRepository
@@ -41,6 +44,8 @@ class SettingsViewModel @Inject constructor(
     private val themeStore: ThemeStore,
     private val interfaceLanguageStore: InterfaceLanguageStore,
     private val notificationPreferencesStore: NotificationPreferencesStore,
+    private val notificationPreferencesSyncRepository: NotificationPreferencesSyncRepository,
+    private val workManager: WorkManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -134,9 +139,20 @@ class SettingsViewModel @Inject constructor(
         _state.update { it.copy(notificationTypeQuery = query) }
     }
 
+    /**
+     * The single funnel every persisted notification toggle flows through: it paints the
+     * device-local store instantly (UI source of truth) and then queues a durable
+     * `UPDATE_SETTINGS` sync so the choice reaches the gateway offline-safely, waking the
+     * flush worker only when a real row was enqueued (a superseded/sessionless enqueue
+     * returns `null` and there is nothing to flush). The UI-only search query does NOT go
+     * through here, so it never triggers a backend write.
+     */
     private fun updateNotifications(edit: (UserNotificationPreferences) -> UserNotificationPreferences) {
         viewModelScope.launch {
-            notificationPreferencesStore.setPreferences(edit(notificationPreferencesStore.preferences.value))
+            val updated = edit(notificationPreferencesStore.preferences.value)
+            notificationPreferencesStore.setPreferences(updated)
+            val cmid = notificationPreferencesSyncRepository.enqueueSync(updated)
+            if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
         }
     }
 }
