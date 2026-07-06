@@ -125,10 +125,10 @@ struct LicensesView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(theme.surfaceGradient(tint: accentColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(theme.border(tint: accentColor), lineWidth: 1)
                     )
             )

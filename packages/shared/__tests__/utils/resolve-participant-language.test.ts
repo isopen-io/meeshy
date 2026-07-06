@@ -154,4 +154,15 @@ describe('resolveParticipantLanguage', () => {
     const participant = { type: 'unknown' as string, language: 'sv' }
     expect(resolveParticipantLanguage(participant)).toBe('sv')
   })
+
+  // F62 — case parity with resolveUserLanguagesOrdered: an in-app pref stored
+  // 'EN' must resolve to 'en' so it matches the lowercase-keyed translations.
+  it('should lowercase an uppercase in-app pref', () => {
+    const participant = {
+      type: 'user' as const,
+      language: 'fr',
+      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: 'EN' },
+    }
+    expect(resolveParticipantLanguage(participant)).toBe('en')
+  })
 })

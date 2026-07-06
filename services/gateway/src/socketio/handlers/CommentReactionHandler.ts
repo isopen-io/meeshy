@@ -220,11 +220,12 @@ export class CommentReactionHandler {
       });
 
       if (!removed) {
-        const errorResponse: SocketIOResponse<unknown> = {
-          success: false,
-          error: 'Reaction not found',
-        };
-        if (callback) callback(errorResponse);
+        // Idempotent: the reaction is already absent — the caller's desired
+        // end-state is achieved. Reply success (no broadcast, nothing changed)
+        // instead of an error, which the client would treat as a failed un-react
+        // and roll the optimistic removal back, re-showing a reaction that is
+        // gone. Mirrors ReactionHandler.handleReactionRemove (message reactions).
+        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
         return;
       }
 
@@ -335,7 +336,6 @@ export class CommentReactionHandler {
     const postAuthorName = post?.author?.displayName?.trim()
       || post?.author?.username?.trim()
       || '';
-    const isStory = post?.type === 'STORY';
 
     this.notificationService
       .createCommentReactionNotification({
@@ -346,7 +346,9 @@ export class CommentReactionHandler {
         reactionEmoji: emoji,
         commentPreview: comment.content?.slice(0, 80) ?? '',
         postAuthorName,
-        isStory,
+        // Forward the real post type (mirror PostReactionHandler) so a reaction on a
+        // comment under a REEL/STATUS keeps its entity typing instead of collapsing to POST.
+        postType: post?.type,
       })
       .catch((error) => {
         this.logger.error('[CommentReactionHandler] Failed to create comment reaction notification', error, { reactorUserId, commentId, postId, emoji });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { messageSchema } from '../../types/api-schemas'
+import { messageSchema, conversationMinimalSchema } from '../../types/api-schemas'
 
 /**
  * `clientMessageId` is the optimistic-send reconciliation key. The iOS
@@ -38,5 +38,19 @@ describe('messageSchema — postReplyTo cited-post snapshot', () => {
     ]) {
       expect(prop.properties).toHaveProperty(field)
     }
+  })
+})
+
+describe('conversationMinimalSchema — contrat wire des userPreferences (liste)', () => {
+  const prefProperties = (conversationMinimalSchema.properties.userPreferences as {
+    items: { properties: Record<string, unknown> }
+  }).items.properties
+
+  it('déclare customName — il pilote le nom affiché des DM ; strippé par fast-json-stringify, la liste froide perdait le surnom et le titre flip-floppait au premier pin/mute', () => {
+    expect(prefProperties.customName).toBeDefined()
+  })
+
+  it('déclare reaction — sélectionné par le gateway depuis toujours mais silencieusement strippé du wire jusqu’à ce fix', () => {
+    expect(prefProperties.reaction).toBeDefined()
   })
 })

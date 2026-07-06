@@ -10,6 +10,13 @@ public nonisolated enum StoryCanvasFraming {
 
     public enum Presentation: Equatable, Sendable { case free, carded, immersive }
 
+    /// Alignement vertical de la carte DANS la région libre quand elle ne la
+    /// remplit pas (contrainte largeur active). `.center` = historique ;
+    /// `.top` = flush sous le header, le mou entier en bas (directive user
+    /// 2026-07-04 : « la story se place directement en bas de la date
+    /// d'expiration — l'espace entre les deux est trop grand »).
+    public enum VerticalAlignment: Equatable, Sendable { case center, top }
+
     public struct Input: Equatable, Sendable {
         public let viewport: CGSize
         public let headerInset: CGFloat
@@ -19,12 +26,15 @@ public nonisolated enum StoryCanvasFraming {
         public let sideInset: CGFloat
         public let state: Presentation
         public let cardedCornerRadius: CGFloat
+        public let verticalAlignment: VerticalAlignment
         public init(viewport: CGSize, headerInset: CGFloat, bottomInset: CGFloat,
                     sideInset: CGFloat = 0,
-                    state: Presentation, cardedCornerRadius: CGFloat) {
+                    state: Presentation, cardedCornerRadius: CGFloat,
+                    verticalAlignment: VerticalAlignment = .center) {
             self.viewport = viewport; self.headerInset = headerInset
             self.bottomInset = bottomInset; self.sideInset = sideInset; self.state = state
             self.cardedCornerRadius = cardedCornerRadius
+            self.verticalAlignment = verticalAlignment
         }
     }
 
@@ -76,8 +86,17 @@ public nonisolated enum StoryCanvasFraming {
         let scaleW = regionWidth / intrinsic.width
         let scale = min(1, max(0, min(scaleH, scaleW)))
 
-        let regionCenterY = regionTop + regionHeight / 2
-        let offsetY = regionCenterY - input.viewport.height / 2
+        // `.top` : la carte colle au bord SUPÉRIEUR de la région (flush sous
+        // le header) — le mou vertical éventuel (contrainte largeur active)
+        // reste entièrement en bas. `.center` : répartition historique.
+        let scaledHeight = intrinsic.height * scale
+        let cardCenterY: CGFloat = {
+            switch input.verticalAlignment {
+            case .center: return regionTop + regionHeight / 2
+            case .top:    return regionTop + scaledHeight / 2
+            }
+        }()
+        let offsetY = cardCenterY - input.viewport.height / 2
         // Rounded whenever carded — even near full size (e.g. drawer collapsed). A carded
         // canvas is always a rounded card ("rounded card, always", user 2026-06-02) ; the
         // `.free`/`.immersive` states short-circuit to `.identity` (no rounding) above.

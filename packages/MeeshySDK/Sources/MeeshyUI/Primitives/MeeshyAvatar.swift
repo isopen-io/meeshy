@@ -451,7 +451,15 @@ public struct MeeshyAvatar: View {
                     onMoodTap?(CGPoint(x: f.midX, y: f.midY))
                 }
                 .onAppear {
-                    guard context.animatesMoodBadge else { return }
+                    // `moodScale == 1.0` = pas de pulse en vol pour cette
+                    // identité de vue. Un `.onAppear` peut re-fire sans
+                    // `.onDisappear` intermédiaire (ScrollView, re-parenting) ;
+                    // relancer un `repeatForever` par-dessus un autre les fait
+                    // COMBINER par le moteur (aucun des deux ne se termine
+                    // jamais) et chaque frame les évalue tous, pour toujours
+                    // (hog device 2026-07-03 : `DefaultCombiningAnimation` à
+                    // ~90 % du thread ViewGraphDisplayLink).
+                    guard context.animatesMoodBadge, moodScale == 1.0 else { return }
                     withAnimation(
                         .spring(response: 0.5, dampingFraction: 0.4)
                         .repeatForever(autoreverses: true)

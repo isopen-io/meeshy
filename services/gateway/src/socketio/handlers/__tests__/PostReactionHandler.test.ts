@@ -411,7 +411,9 @@ describe('PostReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Only registered users can react' }));
     });
 
-    it('returns error when removeReaction returns false (reaction not found)', async () => {
+    it('is idempotent when removeReaction returns false (reaction already absent)', async () => {
+      // Already gone (concurrent removal / retry / double-tap un-like) — reply
+      // success so the client doesn't roll its optimistic un-like back.
       const { handler } = buildHandler({
         postReactionService: {
           removeReaction: jest.fn<any>().mockResolvedValue(false),
@@ -422,7 +424,7 @@ describe('PostReactionHandler', () => {
 
       await handler.handleRemoveReaction(makeSocket(), { postId: POST_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Reaction not found' }));
+      expect(callback).toHaveBeenCalledWith({ success: true, data: { message: 'Reaction already absent' } });
     });
 
     it('broadcasts removal via SocialEventsHandler for ❤️ on POST type', async () => {

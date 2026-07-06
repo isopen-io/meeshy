@@ -86,7 +86,7 @@ final class KeypadViewModel: ObservableObject {
     func scheduleSearch() {
         searchTask?.cancel()
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(0.3))
+            try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             await self?.search()
         }

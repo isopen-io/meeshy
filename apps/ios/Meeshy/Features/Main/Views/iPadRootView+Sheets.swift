@@ -142,7 +142,7 @@ extension iPadRootView {
                 },
                 set: { if !$0 { callManager.displayMode = .pip } }
             )) {
-                CallView()
+                CallView(callManager: callManager)
             }
             .overlay(alignment: .top) {
                 FloatingCallPillView()

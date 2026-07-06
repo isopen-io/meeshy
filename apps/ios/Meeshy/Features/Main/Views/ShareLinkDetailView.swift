@@ -65,9 +65,9 @@ struct ShareLinkDetailView: View {
         .padding(20)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+            RoundedRectangle(cornerRadius: 20)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
-                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                .overlay(RoundedRectangle(cornerRadius: 20)
                     .stroke(MeeshyColors.shareAccent.opacity(0.2), lineWidth: 1))
         )
     }

@@ -167,10 +167,10 @@ struct TermsOfServiceView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )

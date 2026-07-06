@@ -51,22 +51,12 @@ async function withRetry<T>(
 }
 
 // MongoDB ObjectId hex strings are chronologically sortable (leading 4 bytes
-// = creation timestamp), so lexicographic comparison approximates message
-// recency without an extra query. Only applied when both ids look like real
-// ObjectIds — non-conforming ids (tests, legacy data) always compare as
-// "not stale" so behavior is unchanged for callers that don't use ObjectIds.
+// = creation timestamp), so a `lt` filter in the cursor-advance guard
+// approximates message recency without an extra query. Only applied when the
+// candidate id looks like a real ObjectId — non-conforming ids (tests, legacy
+// data) skip the guard so behavior is unchanged for callers that don't use
+// ObjectIds (matches the field's pre-atomic-guard behavior).
 const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
-
-function isStaleCursorMessageId(
-  candidateMessageId: string,
-  currentCursorMessageId: string | null | undefined
-): boolean {
-  if (!currentCursorMessageId) return false;
-  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(currentCursorMessageId)) {
-    return false;
-  }
-  return candidateMessageId.toLowerCase() < currentCursorMessageId.toLowerCase();
-}
 
 export class MessageReadStatusService {
   /**
@@ -377,6 +367,83 @@ export class MessageReadStatusService {
   }
 
   /**
+   * Avance atomiquement `lastDeliveredMessageId`/`lastReadMessageId` sur
+   * `ConversationReadCursor`. Un `upsert` ne peut pas porter de condition de
+   * garde au-delà de la clé unique — la décision "stale ou non" ne peut donc
+   * pas être évaluée sur un snapshot lu avant l'écriture (TOCTOU : deux appels
+   * concurrents pour des messages différents liraient tous deux le même
+   * curseur "pas encore avancé", et celui qui écrit en dernier gagnerait même
+   * si son message est plus ancien). Ici la garde de fraîcheur fait partie du
+   * WHERE de l'`updateMany`, évaluée atomiquement par MongoDB au moment de
+   * l'écriture — même schéma que la garde `lastMessageAt` de
+   * `MessageHandler.handleMessageDelete`. Retourne `true` si le curseur a été
+   * créé ou avancé, `false` si l'appel était stale (message déjà dépassé).
+   */
+  private async _advanceCursor(params: {
+    participantId: string;
+    conversationId: string;
+    messageId: string;
+    now: Date;
+    idField: "lastDeliveredMessageId" | "lastReadMessageId";
+    atField: "lastDeliveredAt" | "lastReadAt";
+    resetUnreadCount: boolean;
+    // Whether a cursor row was seen on the best-effort read the caller already
+    // did (for the freeze-window bound). Existence rarely changes between
+    // that read and this write — once created, a cursor row is only ever
+    // removed by cleanup jobs — so it's safe to use as a hint for whether a
+    // updateMany miss means "stale" vs. "needs create", without an extra query.
+    cursorExists: boolean;
+  }): Promise<boolean> {
+    const { participantId, conversationId, messageId, now, idField, atField, resetUnreadCount, cursorExists } = params;
+
+    const guardWhere = {
+      participantId,
+      conversationId,
+      ...(OBJECT_ID_RE.test(messageId)
+        ? { OR: [{ [idField]: null }, { [idField]: { lt: messageId } }] }
+        : {}),
+    };
+    const advanceData = {
+      [idField]: messageId,
+      [atField]: now,
+      ...(resetUnreadCount ? { unreadCount: 0 } : {}),
+      version: { increment: 1 },
+    };
+
+    const advanced = await this.prisma.conversationReadCursor.updateMany({
+      where: guardWhere,
+      data: advanceData,
+    });
+    if (advanced.count > 0) return true;
+    if (cursorExists) return false; // Genuinely stale: existing row is already at/past this message.
+
+    try {
+      await this.prisma.conversationReadCursor.create({
+        data: {
+          participantId,
+          conversationId,
+          [idField]: messageId,
+          [atField]: now,
+          unreadCount: 0,
+          version: 0,
+        },
+      });
+      return true;
+    } catch (error: any) {
+      // Unique constraint: a concurrent call created the row between our
+      // best-effort read and this create — retry the guarded update once.
+      if (error?.code === "P2002") {
+        const retried = await this.prisma.conversationReadCursor.updateMany({
+          where: guardWhere,
+          data: advanceData,
+        });
+        return retried.count > 0;
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Marque les messages comme reçus pour un utilisateur connecté
    * Simplifié: Met à jour le curseur `lastDeliveredAt` UNIQUEMENT.
    */
@@ -418,49 +485,43 @@ export class MessageReadStatusService {
 
       const now = new Date();
 
-      // Best-effort (cf. markMessagesAsRead) : borne la fenêtre du gel sans
-      // jamais faire échouer le marquage du curseur.
+      // Best-effort: only bounds the freeze window, never fails the cursor
+      // advance below (which is now the sole source of truth for staleness).
       let prevDeliveredAt: Date | null = null;
+      let cursorExists = false;
       try {
         const prevCursor = await this.prisma.conversationReadCursor.findUnique({
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastDeliveredAt: true, lastDeliveredMessageId: true },
+          select: { lastDeliveredAt: true },
         });
         prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
-
-        // Out-of-order delivery receipt (e.g. two devices/retries racing):
-        // never roll the cursor back to an older message than what's already
-        // recorded — that would resurrect messages as "undelivered".
-        if (isStaleCursorMessageId(messageId, prevCursor?.lastDeliveredMessageId)) {
-          logger.info(
-            `[MessageReadStatus] Ignoring stale received receipt for participant ${participantId} in conversation ${conversationId}`
-          );
-          return;
-        }
+        cursorExists = prevCursor != null;
       } catch {
         prevDeliveredAt = null;
       }
 
-      await this.prisma.conversationReadCursor.upsert({
-        where: {
-          conversation_participant_cursor: { participantId, conversationId },
-        },
-        create: {
-          participantId,
-          conversationId,
-          lastDeliveredMessageId: messageId,
-          lastDeliveredAt: now,
-          unreadCount: 0,
-          version: 0,
-        },
-        update: {
-          lastDeliveredMessageId: messageId,
-          lastDeliveredAt: now,
-          version: { increment: 1 },
-        },
+      // Out-of-order delivery receipt (e.g. two devices/retries racing): the
+      // guard is evaluated atomically inside the write, never on a snapshot
+      // read earlier — see _advanceCursor. Never rolls the cursor back to an
+      // older message than what's already recorded.
+      const advanced = await this._advanceCursor({
+        participantId,
+        conversationId,
+        messageId,
+        now,
+        idField: "lastDeliveredMessageId",
+        atField: "lastDeliveredAt",
+        resetUnreadCount: false,
+        cursorExists,
       });
+      if (!advanced) {
+        logger.info(
+          `[MessageReadStatus] Ignoring stale received receipt for participant ${participantId} in conversation ${conversationId}`
+        );
+        return;
+      }
 
       // Précision absolue : fige `deliveredAt`/`receivedAt` par message
       // nouvellement livré (write-once), pour persister la date de réception
@@ -526,48 +587,41 @@ export class MessageReadStatusService {
       // fenêtre du gel. Une erreur ici ne doit pas faire échouer le marquage
       // (on retombe sur `null` = gel depuis l'origine, lui-même résilient).
       let prevReadAt: Date | null = null;
+      let cursorExists = false;
       try {
         const prevCursor = await this.prisma.conversationReadCursor.findUnique({
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastReadAt: true, lastReadMessageId: true },
+          select: { lastReadAt: true },
         });
         prevReadAt = prevCursor?.lastReadAt ?? null;
-
-        // Out-of-order read receipt (e.g. a second, staler device catching up
-        // after a fresher one already advanced the cursor): never roll the
-        // read cursor back to an older message — that would resurrect
-        // already-read messages as unread.
-        if (isStaleCursorMessageId(messageId, prevCursor?.lastReadMessageId)) {
-          logger.info(
-            `[MessageReadStatus] Ignoring stale read receipt for participant ${participantId} in conversation ${conversationId}`
-          );
-          return;
-        }
+        cursorExists = prevCursor != null;
       } catch {
         prevReadAt = null;
       }
 
-      await this.prisma.conversationReadCursor.upsert({
-        where: {
-          conversation_participant_cursor: { participantId, conversationId },
-        },
-        create: {
-          participantId,
-          conversationId,
-          lastReadMessageId: messageId,
-          lastReadAt: now,
-          unreadCount: 0,
-          version: 0,
-        },
-        update: {
-          lastReadMessageId: messageId,
-          lastReadAt: now,
-          unreadCount: 0,
-          version: { increment: 1 },
-        },
+      // Out-of-order read receipt (e.g. a second, staler device catching up
+      // after a fresher one already advanced the cursor): the guard is
+      // evaluated atomically inside the write, never on a snapshot read
+      // earlier — see _advanceCursor. Never rolls the read cursor back to an
+      // older message — that would resurrect already-read messages as unread.
+      const advanced = await this._advanceCursor({
+        participantId,
+        conversationId,
+        messageId,
+        now,
+        cursorExists,
+        idField: "lastReadMessageId",
+        atField: "lastReadAt",
+        resetUnreadCount: true,
       });
+      if (!advanced) {
+        logger.info(
+          `[MessageReadStatus] Ignoring stale read receipt for participant ${participantId} in conversation ${conversationId}`
+        );
+        return;
+      }
 
       // Précision absolue : fige un `MessageStatusEntry.readAt` par message
       // nouvellement franchi (write-once). Sans cela, le statut "lu" de chaque

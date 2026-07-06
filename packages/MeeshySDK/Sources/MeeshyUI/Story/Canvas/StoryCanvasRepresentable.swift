@@ -52,6 +52,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// via `onItemModified` → `@Binding`, ce callback est complémentaire et
     /// fournit la valeur structurée sans avoir à re-parser le slide.
     public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
+    /// Miroir de `viewModel.isCanvasZoomed` du composer. Route le double-tap
+    /// fond vers le reset viewport quand le canvas est zoomé (C4).
+    public var isViewportZoomed: Bool = false
+    /// Demande de reset du zoom viewport (double-tap fond en état zoomé).
+    public var onViewportZoomResetRequested: (() -> Void)?
     /// Miroir de `viewModel.isDrawingActive` du composer. Quand `true`, le
     /// canvas supprime son drawingLayer persisté pour éviter le double rendu
     /// avec le PKCanvasView SwiftUI overlay (bug "écrit en double", 2026-05-27).
@@ -85,6 +90,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
                 onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
+                isViewportZoomed: Bool = false,
+                onViewportZoomResetRequested: (() -> Void)? = nil,
                 isDrawingOverlayActive: Bool = false,
                 loadedImages: [String: UIImage] = [:],
                 loadedImagesVersion: UInt64 = 0,
@@ -100,6 +107,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
+        self.isViewportZoomed = isViewportZoomed
+        self.onViewportZoomResetRequested = onViewportZoomResetRequested
         self.isDrawingOverlayActive = isDrawingOverlayActive
         self.loadedImages = loadedImages
         self.loadedImagesVersion = loadedImagesVersion
@@ -131,6 +140,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
+        view.isViewportZoomed = isViewportZoomed
+        view.onViewportZoomResetRequested = onViewportZoomResetRequested
         view.isDrawingOverlayActive = isDrawingOverlayActive
         view.canvasCornerRadius = canvasCornerRadius
         // Wire le pont ImageCacheReader dès la première frame pour que le
@@ -161,6 +172,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         uiView.onBackgroundTapped = onBackgroundTapped
         uiView.onBackgroundTransformChanged = onBackgroundTransformChanged
+        uiView.isViewportZoomed = isViewportZoomed
+        uiView.onViewportZoomResetRequested = onViewportZoomResetRequested
         uiView.isDrawingOverlayActive = isDrawingOverlayActive
         uiView.canvasCornerRadius = canvasCornerRadius
 

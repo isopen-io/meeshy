@@ -68,6 +68,8 @@ dependencies = [
 
     # Détection de langue et analyse de texte
     "langdetect>=1.0.9",
+    "nltk>=3.8.0",
+    "textstat>=0.7.0",
 
     # Utilitaires système
     "psutil>=6.0.0",

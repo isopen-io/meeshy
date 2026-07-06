@@ -616,6 +616,7 @@ chemin voisin ne doit réimplémenter la même frontière à la main — auditer
 (F57 avait unifié `hasMentions` + `@DisplayName` mais oublié le fallback `@username` : un seul path
 oublié réintroduit la dérive ASCII↔Unicode).**
 
+
                                                
 ## Leçon 65 — Un nouveau `NotificationType` non câblé dans `isTypeEnabled` contourne la préférence via `default:true` (F59, it.97)
 `isTypeEnabled(prefs, type)` mappe chaque `NotificationType` → son champ booléen de préférence. Son
@@ -633,6 +634,7 @@ sauf s'il est intentionnellement toujours-actif (sécurité/système). Audit rap
 `NotificationType` et cross-check vs les `case` — les types tombant sur `default` doivent être
 soit système, soit sans champ de préférence à créer (décision produit), jamais un type qui a déjà un
 toggle câblé pour son sibling.
+
 
                                                
 
@@ -789,6 +791,8 @@ ajouté à UNE route factory, grep immédiatement les routes SŒURS qui partagen
 même gabarit — ici `*-preferences.ts`) — une copie de code initiale figée avant le fix ne le reçoit
 jamais automatiquement, et rien ne le signale (pas d'erreur, pas de test qui casse, juste un
 comportement silencieusement différent entre deux entités qui devraient se comporter pareil).
+
+
                                                
                                                
 ## Leçon 69 — Une liste blanche de langues codée en dur diverge de la source de vérité des bundles (2026-07-05, itération 108)

@@ -6,7 +6,21 @@
 
 - Changements automatiques détectés :
 
+  - improve iOS quality, accessibility and fix CI flakiness
+  - rich-text rendering (markdown/mentions/m+/URL/highlight) (#1571)
+  - restore ~450 lines of call-safety fixes silently reverted by 8ebd497b
+  - honest all-or-nothing delivery indicator (DeliveryStatusResolver) (#1568)
+  - serialize per-user \_seq emission to guarantee ordering
+  - message-effects lifecycle (ephemeral/blurred/view-once) (#1562)
+  - authoritative groupBy recompute for post/comment reactionSummary (F84c)
+  - improve iOS app quality, accessibility, and reliability
   - remove 7 dead Localizable.xcstrings keys surfaced by the merge
+  - clear typing throttle on typing:stop so the next start re-emits
+  - hasMentions no longer flags email addresses as mentions
+  - harden message reaction summary (tx + authoritative count + P2002 idempotency)
+  - use canonical display-name SSOT in V2 conversation-list transform (F84)
+  - load-more advances offset instead of refetching page 1 forever (F84)
+  - boot-floor gap in phantom-cleanup + web initiator race/dead-timeout regressions
   - first/last-name fields in the profile editor (§K) (#1556)
   - stop scroll ticks re-rendering the whole list body
   - cap list previews at 300 graphemes, add ScrollOffsetRelay, make mood-badge pulse idempotent
@@ -653,6 +667,7 @@
   - collapse per-message unread counts to a single query (iter 45 / F23) (#1134)
   - calibrate coverageThreshold to CI-bun baseline (~9.5pp below local-node)
   - batch unread counts in one read (F23, iter 45)
+  - pin pytest back to 8.3.4 — pytest-asyncio 0.25.2 requires pytest<9
   - deduplicate in-flight tasks — gateway retries no longer self-strangle long texts
   - repair stale outer-exception test in translation_processor
   - stop dividing torch threads by async worker count — inference ran 2× slow

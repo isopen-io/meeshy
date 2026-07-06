@@ -198,10 +198,10 @@ private struct MoodReplyConfirmationOverlay: View {
             .padding(20)
             .frame(maxWidth: 320)
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(theme.border(tint: "6366F1", intensity: 0.3), lineWidth: 1)
                     )
                     .shadow(color: Color.black.opacity(0.18), radius: 24, y: 8)

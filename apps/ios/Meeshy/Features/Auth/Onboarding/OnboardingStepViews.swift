@@ -1106,8 +1106,8 @@ struct StepProfileView: View {
             .padding(.top, 16)
             .padding(.bottom, 12)
         }
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg).fill(Color(.systemBackground)))
-        .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg).stroke(Color(.systemGray4).opacity(0.3), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.systemBackground)))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(.systemGray4).opacity(0.3), lineWidth: 1))
     }
 
     private var summaryCard: some View {
@@ -1200,9 +1200,9 @@ struct StepRecapView: View {
             }
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(Color(.systemBackground).opacity(0.9))
-                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg).stroke(viewModel.currentStep.accentColor.opacity(0.3), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(viewModel.currentStep.accentColor.opacity(0.3), lineWidth: 1))
             )
 
             termsCheckbox

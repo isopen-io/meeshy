@@ -122,7 +122,7 @@ struct EditProfileView: View {
                 ) {
                     // Fixed glyph: decorative badge inside a fixed 30×30 circle overlay — scaling would overflow the badge.
                     Image(systemName: "camera.fill")
-                        .font(MeeshyFont.relative(12, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 30, height: 30)
                         .background(Circle().fill(MeeshyColors.indigo400))
@@ -164,10 +164,10 @@ struct EditProfileView: View {
                 bioField
             }
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(theme.surfaceGradient(tint: accentColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(theme.border(tint: accentColor), lineWidth: 1)
                     )
             )
@@ -257,10 +257,10 @@ struct EditProfileView: View {
                 )
             }
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(theme.surfaceGradient(tint: "4338CA"))
                     .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(theme.border(tint: "4338CA"), lineWidth: 1)
                     )
             )
@@ -298,7 +298,7 @@ struct EditProfileView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(
                             viewModel.hasChanges && !viewModel.isSaving
                                 ? MeeshyColors.indigo400
@@ -316,7 +316,7 @@ struct EditProfileView: View {
         VStack(spacing: 12) {
             // Fixed glyph: 48pt hero confirmation icon — kept fixed to preserve visual hierarchy of the success overlay.
             Image(systemName: "checkmark.circle.fill")
-                .font(MeeshyFont.relative(48))
+                .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "profile.edit.success", defaultValue: "Profil mis a jour", bundle: .main))
@@ -325,10 +325,10 @@ struct EditProfileView: View {
         }
         .padding(32)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+            RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                    RoundedRectangle(cornerRadius: 20)
                         .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1)
                 )
         )

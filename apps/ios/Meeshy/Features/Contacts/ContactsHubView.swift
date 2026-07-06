@@ -74,15 +74,15 @@ struct ContactsHubView: View {
             VStack(spacing: 6) {
                 HStack(spacing: 4) {
                     Image(systemName: tab.icon)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(.footnote.weight(.medium))
 
                     Text(tab.rawValue)
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .lineLimit(1)
 
                     if badge > 0 {
                         Text("\(badge)")
-                            .font(MeeshyFont.relative(11, weight: .bold))
+                            .font(.caption2.weight(.bold))
                             .foregroundColor(.white)
                             .frame(minWidth: 16, minHeight: 16)
                             .background(Circle().fill(MeeshyColors.indigo500))
