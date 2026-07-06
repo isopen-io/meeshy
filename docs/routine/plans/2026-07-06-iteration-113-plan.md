@@ -33,21 +33,22 @@ signature, de forme de réponse, ni de schéma. Le garde `if (originalLanguage)`
 Restaurer `null` aux 2 sites d'appel (trivialement réversible).
 
 ## Critères de validation
-- [x] RED prouvé (assertion `[5]` = `null` sur code pré-fix).
+- [x] RED prouvé (chemin texte : test « increments stats » RED quand le 1er site rend `null`).
 - [x] GREEN source (2 lignes).
-- [ ] jest gateway `MessageHandler.core.test.ts` vert (existants + 1 augmenté + 1 neuf).
-- [ ] jest gateway `ConversationMessageStatsService.test.ts` vert (inchangé).
-- [ ] Suite gateway complète sans nouvelle régression.
-- [ ] CI verte après push.
+- [x] jest gateway `MessageHandler.core.test.ts` vert (136/136, dont +1 augmenté + 1 neuf).
+- [x] jest gateway `ConversationMessageStatsService.test.ts` vert (inchangé) — 197/197 combiné.
+- [x] Suite adjacente `stats.test.ts` + `MessageHandler.autoDeliver.test.ts` verte (11/11).
+- [ ] CI verte après push (PR #1531).
 
 ## Statut de complétion
-- Source : **fait**. Tests : **fait**. Validation locale : **en cours** (install bun).
+- Source : **fait**. Tests : **fait**. Validation locale : **fait** (jest vert). CI : **en attente** (#1531).
 
 ## Progress tracking
 - [x] Analyse écrite (`docs/routine/analyses/2026-07-06-iteration-113-analyse.md`).
 - [x] Plan écrit (ce fichier).
 - [x] Fix source + tests.
-- [ ] Validation locale + push + PR.
+- [x] Validation locale (jest vert) + push + PR #1531.
+- [ ] CI verte + merge main + suppression branche.
 
 ## Améliorations futures
 - **F84b** : `locationCount` incrémental (nécessite de faire remonter `messageType` au handler).
