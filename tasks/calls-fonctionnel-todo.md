@@ -1015,3 +1015,53 @@ sessions gateway-only précédentes). Gateway et web audités en profondeur.
   socket, seuls les numéros de ligne décalent — confirmé par diff textuel, aucune nouvelle erreur).
 - **Reste ouvert** (inchangé) : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non
   vidée (piste basse-priorité, toujours pas de scénario d'exploitation concret).
+
+## Note d'audit — couverture de test illusoire sur `CallManager.swift` (2026-07-06)
+
+Point d'entrée : routine calling-feature, audit dédié (agent d'exploration, lecture seule, environnement
+Linux sans toolchain Swift/Xcode). Pendant que cette session auditait le voisinage du P0 fix `682c35279`,
+une PR concurrente (`#1558`, session parallèle) avait déjà couvert et corrigé les deux régressions
+réelles introduites par ce fix (gateway boot-floor + course d'initiateur web) — voir sa description pour
+le détail, pas dupliqué ici pour éviter un conflit de merge sur ce même fichier. Cette note documente
+la seule piste NON couverte par `#1558` trouvée cette session : un problème de qualité de test, pas un
+bug runtime.
+
+- **[QUALITÉ TEST, iOS, CONFIRMÉ, NON CORRIGÉ — nécessite Xcode]** `apps/ios/MeeshyTests/Unit/Services/
+  CallManagerTests.swift` (~5250 lignes) et `CallManagerAudioSessionTests.swift` (~4000 lignes) —
+  ensemble le plus volumineux de tests sur le fichier le plus critique du système d'appel (`CallManager.swift`,
+  ~4783 lignes, `CXProvider`/`CXCallController`) — ne contiennent **aucune instanciation de `CallManager`**.
+  Les centaines d'assertions (~400/fichier) sont des checks regex/substring sur le **texte source** du
+  fichier via un helper `callManagerSource()` (`CallManagerAudioSessionTests.swift:7-15`), par exemple
+  `XCTAssertFalse(source.contains("audioSession.setActive(true, options:")...)` ou une extraction regex du
+  corps de `providerDidReset` vérifiant qu'il contient certains tokens. Même chose dans
+  `P2PWebRTCClientConcurrencySourceTests.swift` (le nom du fichier le dit explicitement : "SourceTests").
+  Par contraste, `CallReconnectPolicyTests.swift`/`CallQualityIndicatorPolicyTests.swift` (les parties
+  extraites en fonctions pures) ont une vraie couverture comportementale — l'écart concerne spécifiquement
+  le câblage CallKit/AVAudioSession à l'intérieur du singleton et son proxy `CXProviderDelegate`
+  (`CallManager.swift:4460-4669`) : aucun test n'exerce réellement `providerDidReset`,
+  `provider(_:perform: CXAnswerCallAction)`, `provider(_:didActivate:)` ou `provider(_:didDeactivate:)`
+  contre un vrai double de test. Conséquence concrète : un futur changement qui inverserait l'ordre
+  `rtc.isAudioEnabled = false` vs. `audioSessionDidActivate`, ou qui casserait le séquencement réel
+  `didActivate`/`didDeactivate` sous le timing CallKit, laisserait la suite complètement verte — elle ne
+  vérifie que la présence de tokens dans le fichier, jamais le comportement réel à l'exécution.
+- **Pourquoi non corrigé cette session** : le fix correct (rendre `CallManager` testable — abstraire
+  `CXProvider`/`CXCallController` derrière un protocole injectable, à l'image du pattern
+  `{ServiceName}Providing` déjà utilisé ailleurs dans la codebase, cf. CLAUDE.md "iOS TDD Requirements")
+  est un changement architectural sur le fichier le plus sensible du système d'appel — risqué à tenter en
+  aveugle sans compilateur Swift local pour vérifier chaque étape (cet environnement reste Linux, sans
+  Xcode). Cohérent avec la discipline déjà établie dans ce backlog (vagues 11/15 : "God object refactor,
+  hors de portée sans compilateur local").
+- **Piste pour une session future avec accès macOS/Xcode** : extraire un protocole
+  `CXCallProviding`/`CXCallControlling` (ou équivalent) derrière lequel `CallManager` pilote CallKit,
+  permettant un double de test qui simule réellement `providerDidReset`/`didActivate`/`didDeactivate` et
+  vérifie l'ordonnancement effectif (pas juste la présence de code), puis remplacer progressivement les
+  ~800 assertions source-grep des deux fichiers ci-dessus par des tests comportementaux équivalents.
+- **Vérification effectuée cette session (SAFE, aucun changement)** : lecture complète de `CallManager.swift`,
+  `WebRTCService.swift`, `P2PWebRTCClient.swift`, `VoIPPushManager.swift`, `PiPCallController.swift` —
+  tous les closures/`Task` échantillonnés utilisent correctement `[weak self]`, aucune mutation `@Published`
+  hors main thread trouvée, les bascules `@MainActor`/`nonisolated` autour du `CXProviderDelegate` (qui
+  s'exécute sur la queue privée de CallKit, pas main — commenté explicitement `CallManager.swift:4488-4498`)
+  sont gérées correctement via des hops `Task { @MainActor [weak self] in ... }`. Gateway
+  (`CallEventsHandler.ts`/`CallService.ts`/`CallCleanupService.ts`) : aucune Map non bornée, aucun
+  `clearTimeout` manquant, aucun chemin de signalisation non authentifié trouvé au-delà de ce qui est déjà
+  documenté dans les vagues précédentes.
