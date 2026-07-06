@@ -64,6 +64,9 @@ public fun MessageBubble(
     onLongPress: (() -> Unit)? = null,
     onReactionClick: ((String) -> Unit)? = null,
     onImageClick: ((Int) -> Unit)? = null,
+    mentionDisplayNames: Map<String, String>? = null,
+    highlightTerm: String? = null,
+    trackedLinks: Map<String, String>? = null,
 ) {
     Row(
         modifier = modifier
@@ -152,10 +155,14 @@ public fun MessageBubble(
                         },
                     )
                 } else {
-                    Text(
+                    RichMessageText(
                         text = content.text,
-                        style = MaterialTheme.typography.bodyMedium,
                         color = onColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                        highlightColor = MeeshyPalette.Warning.copy(alpha = 0.45f),
+                        mentionDisplayNames = mentionDisplayNames,
+                        highlightTerm = highlightTerm,
+                        trackedLinks = trackedLinks,
                     )
                 }
             }
