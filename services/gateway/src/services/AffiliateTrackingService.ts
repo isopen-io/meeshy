@@ -153,17 +153,41 @@ export class AffiliateTrackingService {
         }
       });
 
-      // Créer automatiquement une demande d'amitié entre les utilisateurs
+      // Créer automatiquement une demande d'amitié entre les utilisateurs (ou
+      // accepter une demande préexistante dans un autre statut) — FriendRequest
+      // n'a pas d'index unique, donc un simple create() peut créer un doublon
+      // désynchronisé plutôt qu'échouer ; on vérifie d'abord les deux sens.
       try {
-        await prisma.friendRequest.create({
-          data: {
-            senderId: affiliateToken.createdBy,
-            receiverId: userId,
-            status: 'accepted' // Accepter automatiquement pour les affiliations
-          }
+        const existingFriendRequest = await prisma.friendRequest.findFirst({
+          where: {
+            OR: [
+              { senderId: affiliateToken.createdBy, receiverId: userId },
+              { senderId: userId, receiverId: affiliateToken.createdBy },
+            ],
+          },
         });
+
+        if (existingFriendRequest) {
+          if (existingFriendRequest.status !== 'accepted') {
+            await prisma.friendRequest.update({
+              where: { id: existingFriendRequest.id },
+              data: { status: 'accepted', respondedAt: new Date() },
+            });
+          }
+        } else {
+          await prisma.friendRequest.create({
+            data: {
+              senderId: affiliateToken.createdBy,
+              receiverId: userId,
+              status: 'accepted' // Accepter automatiquement pour les affiliations
+            }
+          });
+        }
       } catch (friendRequestError) {
-        // Ignorer l'erreur si la demande d'amitié existe déjà
+        logger.error(
+          'Erreur synchronisation friend request affiliation',
+          friendRequestError instanceof Error ? friendRequestError : new Error(String(friendRequestError))
+        );
       }
 
       // Marquer la session comme convertie si elle existe

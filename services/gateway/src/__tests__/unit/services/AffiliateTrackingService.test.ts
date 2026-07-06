@@ -4,7 +4,9 @@
  * Covers:
  * - trackAffiliateVisit(): invalid/inactive token, expired token, max-uses limit, session creation
  * - convertAffiliateVisit(): invalid/inactive token, expired/max-uses, existing relation (idempotent),
- *   creates relation + increments counter + friend request + session update + sessionError logged
+ *   creates relation + increments counter + friend request (create when none exists, accept a
+ *   pre-existing non-accepted one instead of duplicating, leave an already-accepted one untouched,
+ *   log without failing the conversion on error) + session update + sessionError logged
  * - getAffiliateStats(): all filters, no filters, maps results correctly
  * - cleanupExpiredSessions(): deleted count returned, error path
  *
@@ -65,7 +67,9 @@ function makePrisma(overrides?: {
       ...overrides?.userPreference,
     },
     friendRequest: {
+      findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({ id: 'freq_001' }),
+      update: jest.fn().mockResolvedValue({ id: 'freq_001', status: 'accepted' }),
       ...overrides?.friendRequest,
     },
   } as any;
@@ -318,10 +322,41 @@ describe('AffiliateTrackingService.convertAffiliateVisit', () => {
     expect(prisma.affiliateToken.updateMany).not.toHaveBeenCalled();
   });
 
-  it('ignores friendRequest creation errors (already exists)', async () => {
+  it('reuses and accepts a pre-existing friend request instead of creating a duplicate', async () => {
     const prisma = makePrisma({
       affiliateToken: { findUnique: jest.fn().mockResolvedValue(makeToken()) },
-      friendRequest: { create: jest.fn().mockRejectedValue(new Error('Unique constraint')) },
+      friendRequest: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'freq_existing', status: 'rejected' }),
+      },
+    });
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
+
+    expect(result.success).toBe(true);
+    expect(prisma.friendRequest.update).toHaveBeenCalledWith({
+      where: { id: 'freq_existing' },
+      data: { status: 'accepted', respondedAt: expect.any(Date) },
+    });
+    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
+  });
+
+  it('does not touch an already-accepted pre-existing friend request', async () => {
+    const prisma = makePrisma({
+      affiliateToken: { findUnique: jest.fn().mockResolvedValue(makeToken()) },
+      friendRequest: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'freq_existing', status: 'accepted' }),
+      },
+    });
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
+
+    expect(result.success).toBe(true);
+    expect(prisma.friendRequest.update).not.toHaveBeenCalled();
+    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
+  });
+
+  it('logs but does not fail the conversion when the friend-request sync throws', async () => {
+    const prisma = makePrisma({
+      affiliateToken: { findUnique: jest.fn().mockResolvedValue(makeToken()) },
+      friendRequest: { findFirst: jest.fn().mockRejectedValue(new Error('DB error')) },
     });
     const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
 
