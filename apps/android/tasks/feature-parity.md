@@ -357,10 +357,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
 - [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
 - [ ] Edited / pinned / forwarded indicators; edit-history viewer
-- [ ] Ephemeral (self-destruct) messages with duration picker + countdown badges
-- [ ] Blurred ("tap to reveal") + view-once messages with fog effect
-- [ ] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
-      — picker sheet + cross-platform bitfield encoding
+- [◐] Ephemeral (self-destruct) messages with countdown badges ✅ (render/decision — `message-effects-lifecycle`
+      2026-07-06: pure `MessageLifecyclePresentation` ephemeral countdown + `ChatScreen` badge). Pending: the
+      **send-side duration picker** in the composer.
+- [◐] Blurred ("tap to reveal") + view-once messages ✅ (render/decision — `message-effects-lifecycle`: blur
+      `Concealed`/`Revealed` tap-to-reveal + view-once `Available`/`Consumed` badge). Pending: the fog/blur visual
+      overlay over the bubble text + the send-side effect picker.
+- [◐] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
+      — `MessageLifecyclePresentation` already extracts the appearance/persistent flag sets (stable bit order) from
+      the cross-platform bitfield. Pending: the animation renderers + the composer picker sheet.
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera

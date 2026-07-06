@@ -54,4 +54,23 @@ data class MessageEffects(
     val sparkleIntensity: Double? = null,
 ) {
     val hasAnyEffect: Boolean get() = flags != 0L
+
+    /** True when [flag] (a `MessageEffectFlags` bit) is set. */
+    fun has(flag: Long): Boolean = (flags and flag) != 0L
+
+    val isEphemeral: Boolean get() = has(MessageEffectFlags.EPHEMERAL)
+    val isBlurred: Boolean get() = has(MessageEffectFlags.BLURRED)
+    val isViewOnce: Boolean get() = has(MessageEffectFlags.VIEW_ONCE)
+
+    /** Any of ephemeral / blurred / view-once — a self-managing lifecycle. */
+    val hasLifecycleEffect: Boolean
+        get() = (flags and MessageEffectFlags.LIFECYCLE_MASK) != 0L
+
+    /** Any one-shot appearance animation (shake / zoom / explode / …). */
+    val hasAppearanceEffect: Boolean
+        get() = (flags and MessageEffectFlags.APPEARANCE_MASK) != 0L
+
+    /** Any persistent visual style (glow / pulse / rainbow / sparkle). */
+    val hasPersistentEffect: Boolean
+        get() = (flags and MessageEffectFlags.PERSISTENT_MASK) != 0L
 }
