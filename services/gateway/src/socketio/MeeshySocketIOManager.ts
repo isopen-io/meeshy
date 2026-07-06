@@ -1046,9 +1046,44 @@ export class MeeshySocketIOManager {
       }
       
       
+      // Charger le message pour connaître sa conversation, PUIS vérifier
+      // l'appartenance AVANT de servir toute traduction (cache OU on-demand).
+      // Sans cette garde en amont, la branche cache divulguait le contenu
+      // traduit à un non-participant : le contrôle n'existait que côté on-demand,
+      // donc un message déjà mis en cache fuitait vers n'importe quel socket
+      // connaissant son id (IDOR / message-content disclosure).
+      const message = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
+      });
+
+      if (!message || !message.content) {
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: 'Message not found or empty'
+        });
+        return;
+      }
+
+      // Verify requesting user is a participant of the message's conversation
+      const connectedUser = this.connectedUsers.get(userId);
+      const membershipCheck = connectedUser?.isAnonymous
+        ? await this.prisma.participant.findFirst({
+            where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
+            select: { id: true },
+          })
+        : await this.prisma.participant.findFirst({
+            where: { userId, conversationId: message.conversationId, isActive: true },
+            select: { id: true },
+          });
+
+      if (!membershipCheck) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
+        return;
+      }
+
       // Récupérer la traduction (depuis le cache ou la base de données)
       const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
-      
+
       if (translation) {
         socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, {
           messageId: data.messageId,
@@ -1062,35 +1097,6 @@ export class MeeshySocketIOManager {
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
         try {
-          const message = await this.prisma.message.findUnique({
-            where: { id: data.messageId },
-            select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
-          });
-
-          if (!message || !message.content) {
-            socket.emit(SERVER_EVENTS.ERROR, {
-              message: 'Message not found or empty'
-            });
-            return;
-          }
-
-          // Verify requesting user is a participant of the message's conversation
-          const connectedUser = this.connectedUsers.get(userId);
-          const membershipCheck = connectedUser?.isAnonymous
-            ? await this.prisma.participant.findFirst({
-                where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
-                select: { id: true },
-              })
-            : await this.prisma.participant.findFirst({
-                where: { userId, conversationId: message.conversationId, isActive: true },
-                select: { id: true },
-              });
-
-          if (!membershipCheck) {
-            socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
-            return;
-          }
-
           await this.translationService.handleNewMessage({
             id: message.id,
             conversationId: message.conversationId,
