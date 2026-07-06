@@ -85,6 +85,17 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 let beforeUnloadHandler: (() => void) | null = null;
 
+// Buffer for `call:participant-joined` payloads that arrive while
+// `currentCall` is still null — the initiator's own `call:initiate` ack
+// (use-video-call.ts, P0 fix 2026-07-06) sets `currentCall` asynchronously,
+// so a fast callee can legitimately join (and broadcast participant-joined)
+// before that ack lands. Without this buffer, `addParticipant` used to no-op
+// and the join was lost forever once the ack later overwrote `currentCall`
+// with an empty participants array — the initiator would never create a
+// WebRTC offer for a callee who had, in fact, already joined. Claimed and
+// cleared by `setCurrentCall` once the matching call becomes current.
+const pendingParticipantsByCallId = new Map<string, CallParticipant[]>();
+
 const initialState: CallState = {
   // Current call
   currentCall: null,
@@ -133,8 +144,25 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   setIceServers: (iceServers) => set({ iceServers }),
 
   setCurrentCall: (call) => {
-    set({ currentCall: call });
+    let nextCall = call;
     if (call) {
+      const pending = pendingParticipantsByCallId.get(call.id);
+      if (pending?.length) {
+        pendingParticipantsByCallId.delete(call.id);
+        const participants = [...call.participants];
+        for (const participant of pending) {
+          const existingIndex = participants.findIndex((p) => p.id === participant.id);
+          if (existingIndex >= 0) {
+            participants[existingIndex] = participant;
+          } else {
+            participants.push(participant);
+          }
+        }
+        nextCall = { ...call, participants };
+      }
+    }
+    set({ currentCall: nextCall });
+    if (nextCall) {
       set({ isInCall: true, error: null });
     }
   },
@@ -153,23 +181,36 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   addParticipant: (participant) => {
     const { currentCall } = get();
-    if (currentCall) {
-      const participants = [...currentCall.participants];
-      const existingIndex = participants.findIndex((p) => p.id === participant.id);
-
+    if (!currentCall) {
+      // Buffer instead of dropping — see `pendingParticipantsByCallId` above.
+      // `setCurrentCall` claims this entry once `call.id` matches.
+      if (!participant.callSessionId) return;
+      const pending = pendingParticipantsByCallId.get(participant.callSessionId) ?? [];
+      const existingIndex = pending.findIndex((p) => p.id === participant.id);
       if (existingIndex >= 0) {
-        participants[existingIndex] = participant;
+        pending[existingIndex] = participant;
       } else {
-        participants.push(participant);
+        pending.push(participant);
       }
-
-      set({
-        currentCall: {
-          ...currentCall,
-          participants,
-        },
-      });
+      pendingParticipantsByCallId.set(participant.callSessionId, pending);
+      return;
     }
+
+    const participants = [...currentCall.participants];
+    const existingIndex = participants.findIndex((p) => p.id === participant.id);
+
+    if (existingIndex >= 0) {
+      participants[existingIndex] = participant;
+    } else {
+      participants.push(participant);
+    }
+
+    set({
+      currentCall: {
+        ...currentCall,
+        participants,
+      },
+    });
   },
 
   removeParticipant: (participantId) => {
@@ -440,6 +481,10 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     state.peerConnections.forEach((connection) => {
       connection.close();
     });
+
+    // Drop any unclaimed buffered participant-joined events (e.g. a call
+    // that was cancelled/rejected before its initiate ack ever landed).
+    pendingParticipantsByCallId.clear();
 
     // Reset to initial state
     set({
