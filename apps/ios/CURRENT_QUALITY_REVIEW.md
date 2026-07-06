@@ -41,6 +41,10 @@ This audit follows the previous review with a deeper focus on code-level consist
 *   **Status:** Partially Fixed. Critical DB file removal in `DependencyContainer.swift` now uses `do-catch` with logging.
 *   **Recommendation:** Audit remaining 700+ `try?` occurrences.
 
+### 5. Severity: Medium | Category: Security
+*   **Description:** Multiple vulnerabilities (CVEs) detected in translator service dependencies.
+*   **Status:** Fixed. Updated `protobuf`, `aiohttp`, `diffusers`, `python-multipart`, `python-dotenv`, and `pytest`. Removed unused vulnerable package `nltk`.
+
 ### 5. Severity: Critical | Category: App Store Readiness
 *   **Description:** The `MessageRESTSender` is a stub, and `LiveActivityBridge` is non-functional.
 *   **Impact:** Core app functionality (sending messages) is not wired to real APIs in the current build.
