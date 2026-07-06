@@ -95,11 +95,44 @@ l'état local final s'inverse jusqu'à la prochaine réconciliation REST.
 le timestamp est plus ancien que le dernier appliqué pour ce tuple
 `(messageId, emoji, participantId)`.
 
+## 5. Dedup read/delivery receipt : clé sur la constante `"latest"` avale un message plus récent — ✅ Corrigé 2026-07-06
+
+`services/gateway/src/services/MessageReadStatusService.ts` — `markMessagesAsRead`
+et `markMessagesAsReceived`
+
+Le garde de déduplication à 2 s construisait sa clé sur `latestMessageId ?? "latest"`
+ET faisait son early-return AVANT de résoudre le message réel en base. Pour les
+nombreux appelants sans `latestMessageId` (`routes/conversations/messages.ts`,
+`routes/message-read-status.ts`), deux appels rapprochés qui résolvent des
+messages *différents* entraient donc en collision sur la clé constante `"latest"`
+— le second était silencieusement ignoré. Le commentaire inline (« keyed by
+messageId … so a genuinely newer message is never dropped ») était donc faux pour
+ce chemin.
+
+**Scénario de défaillance** : participant P lit la conversation C → `markMessagesAsRead(P, C)`
+(sans id) résout M5, avance le curseur, pose la clé `P:C:read:latest`. 500 ms plus
+tard M6 arrive. 800 ms : `markMessagesAsRead(P, C)` (sans id) → clé `P:C:read:latest`
+présente et < 2000 ms → return anticipé sans requête. Le curseur reste à M5 ;
+`getUnreadCount` renvoie 1 et le tick « lu » de l'expéditeur n'avance pas vers M6
+jusqu'à expiration de la fenêtre.
+
+**Fix** : résoudre le message le plus récent AVANT le garde de dédup et construire
+la clé sur le `messageId` **résolu** (`…:read:${messageId}` / `…:received:${messageId}`).
+Un message réellement plus récent produit désormais une clé distincte et n'est
+jamais avalé ; seuls les vrais doublons (même message dans la fenêtre) sont
+dédupliqués. Tests de régression :
+`MessageReadStatusService.test.ts` → describe « dedup key reflects the resolved
+latest message (regression) » (3 tests : avance vers un message plus récent
+après un mark sans id, pour read ET received ; conservation du dédup sur le même
+message). Vérifié : suite gateway complète 508/508 suites, 13767 tests verts,
+`tsc --noEmit` OK.
+
 ## Priorisation suggérée pour le suivi
 
 | Priorité | Item | Raison |
 |---|------|--------|
 | ~~P1~~ | ~~#1 deinit typing leak~~ | ✅ Corrigé 2026-07-05 (à vérifier en CI macOS) |
+| ~~P1~~ | ~~#5 dedup read/delivery sur clé constante~~ | ✅ Corrigé 2026-07-06 (gateway, vérifié 13767 tests verts) |
 | P2 | #2 double boucle reconnexion | Peut prolonger une coupure déjà en cours, pas de perte de données mais UX dégradée |
 | P2 | #3 pas de gap detection message/reaction | Silencieux — aucune donnée perdue de façon visible pour l'utilisateur avant refetch, mais viole "eventual consistency garantie" |
 | P3 | #4 reaction reorder | Fenêtre étroite (dépend de #3 pour se manifester), corrigible avec le timestamp déjà présent au payload |

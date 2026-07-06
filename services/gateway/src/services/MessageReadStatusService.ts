@@ -453,9 +453,28 @@ export class MessageReadStatusService {
     latestMessageId?: string
   ): Promise<void> {
     try {
-      // Keyed by messageId (or "latest" when unspecified) so a genuinely newer
-      // message is never dropped by the TTL gate — only identical repeats are.
-      const dedupKey = `${participantId}:${conversationId}:received:${latestMessageId ?? "latest"}`;
+      // Resolve the effective target message id BEFORE the dedup gate. When the
+      // caller omits latestMessageId, the dedup key must reflect the ACTUAL
+      // newest message — not the constant "latest" — otherwise two argument-less
+      // calls that resolve to DIFFERENT newest messages collide on one key and
+      // the second is silently dropped by the TTL gate, stalling the delivery
+      // advance for up to the full window even though a newer message arrived.
+      let messageId = latestMessageId;
+      if (!messageId) {
+        const latestMessage = await this.prisma.message.findFirst({
+          where: { conversationId, deletedAt: null },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        });
+
+        if (!latestMessage) return;
+        messageId = latestMessage.id;
+      }
+
+      // Keyed by the RESOLVED messageId so a genuinely newer message always
+      // produces a distinct key and is never swallowed by the TTL gate — only
+      // identical repeats (same message within the TTL) are deduped.
+      const dedupKey = `${participantId}:${conversationId}:received:${messageId}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -469,18 +488,6 @@ export class MessageReadStatusService {
       MessageReadStatusService.recentActionCache.set(dedupKey, dedupNow);
       if (MessageReadStatusService.recentActionCache.size > 100) {
         MessageReadStatusService.cleanupDedupCache();
-      }
-
-      let messageId = latestMessageId;
-      if (!messageId) {
-        const latestMessage = await this.prisma.message.findFirst({
-          where: { conversationId, deletedAt: null },
-          orderBy: { createdAt: "desc" },
-          select: { id: true },
-        });
-
-        if (!latestMessage) return;
-        messageId = latestMessage.id;
       }
 
       const now = new Date();
@@ -556,9 +563,27 @@ export class MessageReadStatusService {
     latestMessageId?: string
   ): Promise<void> {
     try {
-      // Keyed by messageId (or "latest" when unspecified) so a genuinely newer
-      // message is never dropped by the TTL gate — only identical repeats are.
-      const dedupKey = `${participantId}:${conversationId}:read:${latestMessageId ?? "latest"}`;
+      // Resolve the effective target message id BEFORE the dedup gate. When the
+      // caller omits latestMessageId, the dedup key must reflect the ACTUAL
+      // newest message — not the constant "latest" — otherwise two argument-less
+      // calls that resolve to DIFFERENT newest messages collide on one key and
+      // the second is silently dropped by the TTL gate, so the read cursor never
+      // advances to the newer message until the window expires.
+      let messageId = latestMessageId;
+      if (!messageId) {
+        const latestMessage = await this.prisma.message.findFirst({
+          where: { conversationId, deletedAt: null },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        });
+        if (!latestMessage) return;
+        messageId = latestMessage.id;
+      }
+
+      // Keyed by the RESOLVED messageId so a genuinely newer message always
+      // produces a distinct key and is never swallowed by the TTL gate — only
+      // identical repeats (same message within the TTL) are deduped.
+      const dedupKey = `${participantId}:${conversationId}:read:${messageId}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -571,17 +596,6 @@ export class MessageReadStatusService {
       MessageReadStatusService.recentActionCache.set(dedupKey, dedupNow);
 
       const now = new Date();
-      let messageId = latestMessageId;
-
-      if (!messageId) {
-        const latestMessage = await this.prisma.message.findFirst({
-          where: { conversationId, deletedAt: null },
-          orderBy: { createdAt: "desc" },
-          select: { id: true },
-        });
-        if (!latestMessage) return;
-        messageId = latestMessage.id;
-      }
 
       // Lecture best-effort du front précédent : sert uniquement à borner la
       // fenêtre du gel. Une erreur ici ne doit pas faire échouer le marquage
