@@ -70,18 +70,6 @@ extension StoryCanvasUIView {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
 
-        // Sortie GESTUELLE du zoom viewport (C4) : zoomé + double-tap sur une
-        // zone sans item foreground → reset (convention photo-viewer). Le
-        // cycle videoFitMode ci-dessous reste le double-tap fond à l'échelle 1 ;
-        // un double-tap sur un ITEM garde son édition dédiée même zoomé.
-        if CanvasViewportZoomPolicy.doubleTapResetsViewport(
-            isViewportZoomed: isViewportZoomed,
-            hitItemId: hitTestItem(at: location)
-        ) {
-            onViewportZoomResetRequested?()
-            return
-        }
-
         // Background double-tap → cycle videoFitMode (auto → fit → fill → auto).
         // Use `resolveManipulationTarget` to honour the active manipulation
         // layer (so a tap on the bg in `.background` layer triggers the cycle

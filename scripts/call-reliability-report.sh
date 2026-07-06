@@ -56,17 +56,6 @@ db.CallSession.find(
 ).forEach(s => print(\"  \", s.status, s._id.toString(), s.startedAt.toISOString()));
 print(\"  total:\", db.CallSession.countDocuments({ status: { \$in: [\"initiated\", \"ringing\", \"connecting\", \"active\", \"reconnecting\"] } }));
 
-print(\"\n── Participants accrochés (leftAt null sur session terminée — baseline 0 depuis backfill 2026-07-04) ──\");
-var hung = db.CallParticipant.aggregate([
-  { \$match: { leftAt: null } },
-  { \$lookup: { from: \"CallSession\", localField: \"callSessionId\", foreignField: \"_id\", as: \"s\" } },
-  { \$unwind: \"\$s\" },
-  { \$match: { \"s.status\": { \$in: [\"ended\", \"missed\"] } } },
-  { \$project: { callSessionId: 1, endedAt: \"\$s.endedAt\" } }
-]).toArray();
-if (hung.length > 0) hung.forEach(h => print(\"⚠️  participant\", h._id.toString(), \"call\", h.callSessionId.toString(), \"endedAt\", h.endedAt ? h.endedAt.toISOString() : \"?\"));
-print(hung.length > 0 ? \"⚠️  total: \" + hung.length : \"  total: 0\");
-
 print(\"\n── Télémétrie client (CallParticipant.analytics) ──\");
 var rows = db.CallParticipant.aggregate([
   { \$match: { analytics: { \$ne: null }, joinedAt: { \$gte: since } } },

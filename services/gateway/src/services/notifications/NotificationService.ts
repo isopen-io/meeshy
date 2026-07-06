@@ -527,8 +527,7 @@ export class NotificationService {
       case 'post_repost':       return prefs.postRepostEnabled ?? true;
       case 'story_reaction':    return prefs.storyReactionEnabled ?? true;
       case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
-      case 'comment_like':
-      case 'comment_reaction':  return prefs.commentLikeEnabled ?? true;
+      case 'comment_like':      return prefs.commentLikeEnabled ?? true;
       case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
       case 'story_new_comment':
       case 'friend_story_comment':
@@ -1365,12 +1364,8 @@ export class NotificationService {
     commentPreview?: string;
     /** Display name (fallback: username) of the post/story author. */
     postAuthorName?: string;
-    /**
-     * Type d'entité portant le commentaire réagi. Mirror du sibling
-     * `createPostLikeNotification` : un REEL/STATUS ne s'effondre plus vers 'POST'
-     * dans la métadonnée ni dans le corps localisé.
-     */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+    /** True when the parent post is a story (vs a regular feed post). */
+    isStory?: boolean;
   }): Promise<void> {
     if (params.commentAuthorId === params.reactorUserId) return;
 
@@ -1399,7 +1394,7 @@ export class NotificationService {
       actor: reactorName,
       emoji: params.reactionEmoji,
       author: params.postAuthorName,
-      postType: params.postType,
+      isStory: params.isStory,
     });
 
     // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
@@ -1436,10 +1431,9 @@ export class NotificationService {
       metadata: {
         action: 'view_post',
         reactionEmoji: params.reactionEmoji,
-        // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
-        // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
-        // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
-        postType: params.postType ?? 'POST',
+        // Entité portant le commentaire → le client affiche « Story »/« Publication »
+        // (et non un libellé générique) quand aucun aperçu de commentaire n'est dispo.
+        postType: params.isStory ? 'STORY' : 'POST',
       },
     });
   }

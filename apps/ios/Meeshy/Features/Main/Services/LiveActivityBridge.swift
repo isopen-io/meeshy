@@ -24,9 +24,6 @@ private let logger = Logger(subsystem: "me.meeshy.app", category: "live-activity
 ///
 /// Until then, this bridge silently logs the intended actions so CallManager
 /// wiring can be reviewed and merged in isolation.
-///
-/// TODO: Follow up on macOS/Xcode to unify models in MeeshySDK and wire calls.
-/// See CODE_REVIEW_FINDINGS.md / Passe P4 for context.
 @MainActor
 final class LiveActivityBridge {
     static let shared = LiveActivityBridge()

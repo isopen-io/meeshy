@@ -23,7 +23,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,9 +50,6 @@ fun DiscoverTab(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Cache-first suggestions paint on appear (iOS `.task { loadSuggestions() }`).
-    LaunchedEffect(Unit) { viewModel.loadSuggestions() }
-
     Column(modifier = Modifier.fillMaxSize()) {
         OutlinedTextField(
             value = state.query,
@@ -69,12 +65,9 @@ fun DiscoverTab(
         when {
             state.isLoading -> Centered { CircularProgressIndicator() }
             state.errorMessage != null -> ErrorState(onRetry = viewModel::retry)
-            state.isSuggestionsEmpty -> EmptyMessage(stringResource(R.string.contacts_discover_suggestions_empty))
             state.showEmptyPrompt -> EmptyMessage(stringResource(R.string.contacts_discover_prompt))
             state.isNoResults -> EmptyMessage(stringResource(R.string.contacts_discover_no_results))
             else -> ResultList(
-                header = stringResource(R.string.contacts_discover_suggestions_title)
-                    .takeIf { state.isShowingSuggestions },
                 rows = state.rows,
                 pendingIds = state.pendingActionIds,
                 onConnect = viewModel::connect,
@@ -86,7 +79,6 @@ fun DiscoverTab(
 
 @Composable
 private fun ResultList(
-    header: String?,
     rows: List<DiscoverRow>,
     pendingIds: Set<String>,
     onConnect: (String) -> Unit,
@@ -96,16 +88,6 @@ private fun ResultList(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
-        header?.let {
-            item(key = "__header__") {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
-        }
         items(rows, key = { it.user.id }) { row ->
             ResultRow(
                 row = row,

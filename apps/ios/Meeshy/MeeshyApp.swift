@@ -396,10 +396,8 @@ struct MeeshyApp: App {
                         // après que la vue principale soit affichée.
                         Task { [authManager] in
                             _ = authManager  // capture explicite (lint)
-                            await Self.runPushBootstrapSequence(
-                                voipRegister: { VoIPPushManager.shared.register() },
-                                requestPushPermission: requestPushPermissionIfNeeded
-                            )
+                            await requestPushPermissionIfNeeded()
+                            VoIPPushManager.shared.register()
                             await NotificationToastManager.shared.refreshUnreadCount()
                             await NotificationCoordinator.shared.syncNow()
                         }
@@ -673,22 +671,6 @@ struct MeeshyApp: App {
         } else {
             UIApplication.shared.registerForRemoteNotifications()
         }
-    }
-
-    /// VoIP registration must run unconditionally, before the notification-
-    /// permission request. PushKit needs no user permission at all, but
-    /// `requestPushPermission` awaits the system permission alert, which can
-    /// stay on screen indefinitely if the user backgrounds the app instead
-    /// of dismissing it. Sequencing it first previously left `PKPushRegistry`
-    /// uncreated — and no VoIP token registered with the backend — for as
-    /// long as that alert was pending, silently dropping any call placed to
-    /// the device in that window (most commonly right after a fresh install).
-    static func runPushBootstrapSequence(
-        voipRegister: () -> Void,
-        requestPushPermission: () async -> Void
-    ) async {
-        voipRegister()
-        await requestPushPermission()
     }
 
     // MARK: - Crash Diagnostics Surfacing

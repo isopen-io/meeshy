@@ -159,33 +159,27 @@ export function normalizeUsername(username: string): string {
 }
 
 /**
- * Capitalise un nom : première lettre de CHAQUE segment en majuscule, reste en
- * minuscules. Un segment démarre au début de la chaîne ou après un séparateur
- * de nom — espace, tiret ou apostrophe/point (`[\s'.-]`, l'ensemble des
- * caractères non-lettres autorisés par `AuthSchemas.register`).
- *
- * Corrige le mauvais casse-mixte des noms composés fréquents dans un produit
- * francophone : `"Jean-Pierre"` reste `"Jean-Pierre"` (et non `"Jean-pierre"`),
- * `"O'Brien"` reste `"O'Brien"`. Les segments multi-espaces et les préfixes
- * non-alphabétiques (`"3john"`) sont préservés à l'identique.
+ * Capitalise un nom (première lettre en majuscule, reste en minuscules)
+ * Gère les noms composés avec espaces
  */
 export function capitalizeName(name: string): string {
   return name
     .trim()
-    .toLowerCase()
-    .replace(/(^|[\s'.-])(\p{L})/gu, (_match, separator, letter) => separator + letter.toUpperCase());
+    .split(' ')
+    .map(word => {
+      if (word.length === 0) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
 }
 
 /**
  * Normalise un displayName
  * Préserve la capitalisation, émojis et caractères spéciaux
- * Enlève uniquement les espaces avant/après et les retours à la ligne
- * (`\r`, `\n`) et tabulations (`\t`) — garantit un affichage sur une seule
- * ligne, y compris pour les fins de ligne Windows (`\r\n`) et Mac historiques
- * (`\r` seul).
+ * Enlève uniquement les espaces avant/après et les retours à la ligne/tabulations
  */
 export function normalizeDisplayName(displayName: string): string {
-  return displayName.trim().replace(/[\r\n\t]/g, '');
+  return displayName.trim().replace(/[\n\t]/g, '');
 }
 
 /**

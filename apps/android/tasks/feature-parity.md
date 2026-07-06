@@ -1046,18 +1046,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (slice `contacts-blocked-list`, 2026-07-04). **Pending:** per-tab count badges beyond
       Requests (Blocked/Discover counts).
 - [~] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
-      **filters + search + presence + per-filter counts shipped**. Filters/search/presence landed in
-      `contacts-list-friends`: the Contacts tab renders the online-first friend list with an
-      All/Online/Offline `FilterChip` row, a search field (matches username or resolved name), and a
-      per-row presence dot. **Per-filter counts shipped** (slice `contacts-filter-counts`,
-      2026-07-04): the pure `:core:model` `ContactList.counts(friends, query) → ContactFilterCounts`
-      (all/online/offline sizes under the active search; online+offline partition all by construction)
-      is the SSOT, exposed on `ContactsListUiState.filterCounts` and rendered as a count badge on each
-      chip. Surpasses iOS, whose counts ignore the search field. **Three-state presence dot shipped**
-      (slice `presence-away-indicator`, 2026-07-04): the previously-dead `:core:model` `UserPresence.state(now)`
-      is now the pure SSOT (port of iOS `UserPresence.state` — offline → no dot, online → green,
-      online-but-idle > 5min → amber away), reached via the `FriendRequestUser.presenceState(now)` adapter,
-      and the friend row renders green/amber/none accordingly. **Pending:** mood-emoji presence.
+      **filters + search + presence shipped** (slice `contacts-list-friends`): the Contacts tab now
+      renders the online-first friend list with an All/Online/Offline `FilterChip` row, a search field
+      (matches username or resolved name), and a per-row online presence dot. **Pending:** per-filter
+      counts and mood-emoji presence.
 - [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
       **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
       landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the
@@ -1068,15 +1060,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (removals apply locally via `ContactList.reconcile`, additions trigger a single silent refetch —
       port of iOS `reconcileWithCache`), and `ContactList.visible` is the pure filter+search SSOT.
       `FriendshipCache.currentFriendIds` exposes the defensive friend-id snapshot the reconcile reads.
-      **Cold-start paint shipped** (slice `contacts-friends-room-cache`, 2026-07-04): a persistent Room
-      `friends` cache (iOS `CacheCoordinator.friends`) — `:core:database` `FriendEntity`/`FriendDao`
-      (DB v7→8; `sortIndex` preserves `ContactList`'s assembled order verbatim, so the ordering SSOT
-      stays in `ContactList`), `:sdk-core` `FriendListRepository` (`cachedSnapshot` distinguishing cold
-      from synced-empty via `sync_meta`, `persist` write-through), and `ContactsListViewModel` rewired
-      cache-first: it paints the last-persisted roster instantly (skeleton only on a cold cache), writes
-      the assembled roster back through on every load, and prune-writes-through on a cross-screen
-      unfriend (no refetch). +14 tests. +52 tests total for the Contacts list
-      (25 `ContactList`, +2 `FriendshipCache`, 17 `ContactsListViewModel`, 8 `FriendListRepository`).
+      **Pending:** a persistent GRDB/Room friends cache (iOS `CacheCoordinator.friends`) for cold-start
+      paint — today the list is network-first + in-memory-cache reconciled. +38 tests
+      (25 `ContactList`, +2 `FriendshipCache`, 11 `ContactsListViewModel`).
 - [x] Friendship status resolution (friend / pending sent / pending received / blocked) —
       **shipped** (slice `friendship-relationship-resolver`): the pure `:core:model`
       `UserRelationshipRules.resolve(target, currentUserId, isBlocked, friendship)` is the total
@@ -1088,28 +1074,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `@Singleton BlockCache` (blocklist SSOT, hydrated by `BlockRepository`) backs the
       `BlockStatusProvider` in `DiscoverViewModel`, so a blocked user resolves live to `Blocked`
       everywhere. +31 behavioural tests (10 rules, 13 cache, 8 resolver).
-- [x] Send / accept / decline / cancel friend request — **Requests tab** lists received +
+- [~] Send / accept / decline / cancel friend request — **Requests tab** lists received +
       sent requests (avatars tinted by deterministic `DynamicColorGenerator.colorForName`),
       with optimistic accept / decline (`respond`) + cancel (`deleteRequest`), in-flight
-      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT).
-      **Durable send now shipped** (slice `friend-request-outbox-idempotency`, 2026-07-04): the
-      Discover connect flips the shared `FriendshipCache` optimistically + instantly (even offline),
-      keyed by the outbox `cmid` as a placeholder request id, and queues a `SEND_FRIEND_REQUEST`
-      row on the new `OutboxLanes.FRIEND` lane. The `OutboxCoalescer` dedups a repeated send to the
-      same receiver (idempotent — only one request can exist, latest greeting wins); the
-      `OutboxFlushWorker` sender delivers via `FriendRepository.sendFriendRequest`, classifies the
-      outcome through the pure `FriendRequestSend.classify` (409/blank-id → idempotent already-exists,
-      other 4xx → permanent reject + rollback, 5xx/offline → retry), and grafts the real request id
-      back over the placeholder on delivery; a hard exhaust rolls the pending back. **Also fixed a
-      latent bug**: `OutboxLanes.BLOCK` (and now `FRIEND`) were never in the worker's drain list, so
-      block/unblock rows never delivered — both lanes are now drained. *(Hardened structurally
-      2026-07-05 `outbox-lane-map-ssot`: the worker now derives its drain list from the
-      `OutboxLaneMap` kind→lane SSOT, so a sender can never again be stranded off an undrained lane.)*
-      Surpasses iOS (online-only
-      send). +26 tests (9 `FriendRequestSend`, 3 `OutboxCoalescer`, 5 `FriendRepository`, 4 net
-      `DiscoverViewModel`). Remaining: send **compose-new** UI (user-search entry point → connect)
+      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT) ;
+      send (compose-new) + offline-queue + idempotency pending
 - [ ] Invite by email; invite by SMS; import phone contacts
-- [x] Discover suggestions (cache-first) + live user search with inline connect —
+- [~] Discover suggestions (cache-first) + live user search with inline connect —
       **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab
       (was `ComingSoon()`) now runs a debounced-by-threshold user search (pure `:core:model`
       `DiscoverSearch.action` — trim + ≥2-char gate, port of iOS `performSearch` guard) via
@@ -1119,26 +1090,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `connect` sends a request (row flips to Pending once the gateway mints the id), `acceptReceived`
       accepts an inbound one optimistically with rollback; a cross-screen friendship change re-derives
       every visible row via the `FriendshipCache.version` stream, so Discover stays in lock-step with
-      the Requests tab. **The empty-query cache-first suggestions list now landed too** (slice
-      `discover-suggestions-cache-first`, 2026-07-04): a `:sdk-core` `@Singleton SuggestionsRepository`
-      (in-memory `SwrCacheSource` over `searchUsers("")`, reusing the shared `cacheFirstFlow` +
-      `CachePolicy.Suggestions`) feeds a pure `DiscoverSuggestions.snapshot(CacheResult) →
-      SuggestionsSnapshot` projection (skeleton only on cold empty; any cached data paints without a
-      spinner; a revalidated-empty list is a quiet empty state). `DiscoverViewModel.loadSuggestions()`
-      (called on tab appear, iOS `.task`) streams it into the same `rows`/connect-control surface, so
-      suggestions get live relationship badges and cross-screen re-derivation for free; a search cancels
-      it and switches surfaces, `retry` re-runs it. Surpasses iOS's `.task`-reload with an in-memory
-      singleton cache that paints instantly on a return visit. +23 tests (6 `DiscoverSuggestions`, 5
-      `SuggestionsRepository`, 12 `DiscoverViewModel`). **The suggestions cache is now durable too**
-      (slice `discover-suggestions-room-cache`, 2026-07-04): the in-memory `SwrCacheSource` was replaced
-      by a Room-backed `RoomSuggestionsSource` — `:core:database` `SuggestionEntity`/`SuggestionDao`
-      (DB v8→9, `discover_suggestions` table, `sortIndex` preserves the gateway ranking), persisting the
-      last empty-query fetch so the Discover tab paints suggestions **on a cold launch**, before any
-      network call, surviving process death (iOS `CacheCoordinator.userSearch` parity). Cold (`null`) vs
-      synced-empty is distinguished via `sync_meta`; a failed revalidation keeps the last good list. The
-      `SuggestionsRepository`/`DiscoverViewModel` public surface is unchanged, so no consumer moved. This
-      closes the **last in-memory-only cache gap** (mirroring `FriendEntity`/`CallHistoryEntity`). 11
-      tests (Robolectric + in-memory Room; replaced the 5 in-memory-source tests).
+      the Requests tab. +29 tests (13 `DiscoverSearch`, 16 `DiscoverViewModel`). **Pending:** the
+      empty-query cache-first suggestions list (iOS `loadSuggestions` via `CacheCoordinator.userSearch`).
 - [x] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback —
       **shipped** (slice `contacts-blocked-list`, 2026-07-04): the Blocked tab (was placeholder)
       renders the blocklist from `BlockRepository.listBlocked()` (which hydrates the shared
@@ -1148,108 +1101,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `pendingIds`. Pure `:core:model` `BlockedUser` + `resolvedName`; `:core:network` `BlockApi`
       (`GET users/me/blocked-users`, `POST/DELETE users/{id}/block`, iOS `BlockService` parity).
       +29 tests (4 `BlockedUser`, 9 `BlockCache`, 6 `BlockRepository`, 9 `BlockedListViewModel`,
-      +1 `DiscoverViewModel` seam). **Durable offline unblock now shipped** (slice
-      `block-outbox-durable`, 2026-07-04): the write path moved off online-first REST onto the
-      shared durable outbox. Two new `OutboxKind`s (`BLOCK_USER`/`UNBLOCK_USER`) on a dedicated
-      `OutboxLanes.BLOCK` lane, an `OutboxCoalescer.blockToggle` rule (block+unblock of the same
-      user annihilate — the toggle returns to the last-synced server state, exactly like a reaction
-      toggle; a repeated block/unblock is superseded — idempotent terminal state), two
-      `OutboxFlushWorker` senders (`blockApi.block`/`unblock` → Success/TransientFailure) and an
-      `onExhausted` rollback that flips the `BlockCache` SSOT back so the next `listBlocked` re-hydrates
-      truthfully. `BlockRepository.setBlockedDurably(userId, blocked)` flips the cache optimistically +
-      enqueues (blank id inert; returns the cmid, or `null` when the enqueue annihilated a pending
-      opposite); `BlockedListViewModel.unblock` calls it, wakes the flush worker only on a real cmid,
-      and rolls the row back in place on a local enqueue failure. Survives offline + process death,
-      surpassing iOS's online-only block/unblock. +12 tests (6 coalescer, +4 net `BlockRepository`,
-      +2 net `BlockedListViewModel`). **Pending:** durable offline-queued *block* from a future
-      profile/report surface (the `setBlockedDurably(.., true)` half is ready, awaiting its UI).
+      +1 `DiscoverViewModel` seam). **Pending:** durable offline-queued unblock (iOS routes it via
+      `OfflineQueue`) — today it's an online-first optimistic REST call with snapshot rollback.
 
 ## K. Profile & Account
-- [~] View profile (by id / username / public handle / email / phone) — `:feature:profile`
-      `ProfileScreen`/`ProfileViewModel` load own (session) or other (`getProfile(id)`) profiles.
-      **Header enrichment shipped** (slice `profile-header-presentation`, 2026-07-05): the pure
-      `ProfileHeaderBuilder.build(user, now) → ProfileHeaderPresentation` (`:feature:profile`, precedent
-      `FeedPostBuilder`) is the tested SSOT for the read-only header — display-name ladder (reuses
-      `MeeshyUser.effectiveDisplayName`), `@handle`, blank→null optional fields, presence (reuses
-      `UserPresence.state`), completion % clamped `0..100`, E2EE flag (`signalIdentityKeyPublic`
-      present), and member-since epoch (reuses `isoToEpochMillisOrNull`). **Pending:** resolve by
-      public handle / email / phone; banner.
-- [~] Full profile sheet: banner, identity, Profile / Conversations / Stats tabs, achievements —
-      **identity block advanced** (slice `profile-header-presentation`): the read-only `ProfileScreen`
-      now renders the presence dot (green/amber, semantic, bordered) overlaid on the avatar, the
-      accent-coloured completion ring around it, an E2EE lock badge, and a localized "member since"
-      line (EN/FR/ES/PT). **Secondary identity rows shipped** (slice `profile-details-rows`, 2026-07-05):
-      the pure `ProfileDetailRows.build(header) → List<ProfileDetailRow>` projects the primary/secondary
-      language (flag + name via the `LanguageData` SSOT, unknown code → uppercased raw), the country
-      (ISO alpha-2 → regional-indicator flag + uppercased code, non-code → plain text), and the timezone
-      into an ordered, tested list the sheet renders as label↔flag+value rows; a regional language equal
-      to the system one (case-insensitively) is collapsed. `timezone` added to the header presentation.
-      +14 `ProfileDetailRowsTest` cases. **Pending:** banner, tabs (Profile/Conversations/Stats), achievements.
-- [~] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
-      **Text + content-language editing shipped optimistic + offline** (slice `edit-profile-optimistic`,
-      2026-07-05): the already-declared `OutboxKind.UPDATE_PROFILE` (lane `PROFILE`, drained but senderless)
-      is now wired end-to-end. Pure cores: `:core:model` `ProfileEditApply.apply(user, request)` — the
-      edit-merge SSOT with `PATCH /users/me` omit-null parity (a null field is absent → unchanged, non-null
-      overwrites) so the optimistic paint matches the server exactly; `:feature:profile`
-      `ProfileEditRequestBuilder.build(...)` — trims the editor buffers and degrades blank→null (a blank edit
-      is a server-side no-op, never an accidental clear); and the `OutboxCoalescer` `UPDATE_PROFILE` rule
-      (latest full-snapshot wins, keyed by the own user id). Wiring: `SessionRepository.applyProfileEdit`
-      (optimistic republish of the merged identity, inert with no session), `UserRepository.enqueueProfileEdit`
-      (optimistic flip + durable enqueue on the profile lane, `null`/blank session inert — mirrors
-      `setBlockedDurably`), an `OutboxFlushWorker` `UPDATE_PROFILE` sender (decode → `updateProfile` →
-      `adopt(server user)`) with an `onExhausted` `refresh()` rollback to server truth. `ProfileViewModel`
-      now carries the three content-language buffers, saves through the optimistic/offline path (editor
-      closes instantly, worker woken only on a real `cmid`, local-enqueue failure reopens the editor), and
-      guards the editor buffers from being clobbered by a background session emission mid-edit. `ProfileScreen`
-      renders three `LanguageData`-backed content-language dropdowns (flag + name) in the edit form (EN/FR/ES/PT).
-      +31 tests (ProfileEditApply 7, ProfileEditRequestBuilder 6, OutboxCoalescer +3, SessionRepository +2,
-      UserRepository 4, ProfileViewModelEdit 9). Surpasses iOS, whose profile edit is online-only.
-      **First/last-name fields shipped** (slice `edit-profile-name-fields`, 2026-07-06): the `firstName`/
-      `lastName` legs of the already-name-aware `ProfileEditApply`/`UpdateProfileRequest` are now reachable
-      from the editor. `ProfileEditRequestBuilder.build` gained `firstName`/`lastName` buffers (same trim +
-      blank→null degrade — a blank name is a server no-op, never an accidental clear); `ProfileViewModel`
-      seeds/reads them via two new `StateFlow` buffers + `onFirstNameChange`/`onLastNameChange` intents and
-      `withBuffersFrom` (a user with no names → blank buffers, not "null"); `ProfileScreen` renders First name /
-      Last name `OutlinedTextField`s above Display name (Words capitalization, EN/FR/ES/PT). +6 tests
-      (ProfileEditRequestBuilder +3, ProfileViewModelEdit +3; existing save/cancel cases hardened to assert the
-      name legs too). Reuses the whole optimistic/offline machinery — no new store, no new outbox kind.
-      **Pending:** avatar + banner upload (media pipeline).
-- [~] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges —
-      **stats projection SSOT + read-only dashboard shipped** (slice `profile-stats-presentation`,
-      2026-07-05): the pure `UserStatsBuilder.build(stats) → UserStatsPresentation` (`:feature:profile`,
-      precedent `ProfileHeaderBuilder`) projects the six counter tiles (fixed order, negative counts
-      floored, compact boundary-safe `formatCompactCount` K/M/B labels that never render `1000.0K`) and
-      the achievement badges — every server value reconciled defensively (progress clamped `0..100`,
-      `isUnlocked` recomputed from `current >= threshold`, negative current/threshold floored) then ranked
-      unlocked-first → progress desc → current desc → id. `ProfileViewModel` fetches
-      `getUserStats(id)` once per resolved user (own = session id, other = `getProfile` id) and projects
-      into `ProfileUiState.stats`; a stats failure/throw never clobbers the profile or surfaces an error.
-      `ProfileScreen` renders a counter-tile grid + an "N of M unlocked" achievements list (EN/FR/ES/PT).
-      +35 tests (`UserStatsBuilderTest` 24, `ProfileViewModelStatsTest` 5, +existing). **30-day activity
-      timeline shipped** (slice `profile-stats-timeline`, 2026-07-05): `UserApi.getUserStatsTimeline(days)`
-      + `UserRepository.getUserStatsTimeline(days=30)` (me-only `/users/me/stats/timeline`, `days` clamped
-      to the gateway `7..90` window) feed the pure `StatsTimelineBuilder.build(points) →
-      StatsTimelinePresentation?` (`:feature:profile`, precedent `UserStatsBuilder`): empty → `null`
-      (nothing to chart), non-empty all-zero → a flat presentation with `hasActivity=false`, negative
-      counts floored, each bar peak-normalized `0f..1f` (no divide-by-zero), input order preserved
-      (oldest→newest), `DD/MM` axis labels ported from iOS `shortDate` (malformed date → raw), plus
-      total / rounded per-day average / active-day count. `ProfileViewModel` fetches it once for the
-      **own** profile only (me-only endpoint — never for a viewed id), failure-inert like stats;
-      `ProfileScreen` renders an accent-coherent line+area sparkline (Canvas) with an empty-state label
-      (EN/FR/ES/PT). +17 tests (`StatsTimelineBuilderTest` 11, `ProfileViewModelTimelineTest` 6).
-      **Durable Room cache shipped** (slice `profile-stats-room-cache`, 2026-07-05): `:core:database`
-      `ProfileStatsCacheEntity`/`ProfileStatsCacheDao` (`profile_stats_cache` keyed JSON store, DB v9→v10) +
-      `:sdk-core` `ProfileStatsCacheRepository` (per-user stats key + me-only timeline key; cold-vs-synced-empty
-      by row presence — absent → `null`, present `[]` → `emptyList`; undecodable payload → cache miss).
-      `ProfileViewModel` rewired cache-first for both surfaces (paint cached projection → revalidate →
-      write-through on success; network overwrites cache, a failed fetch keeps the cached paint). This is the
-      Android analogue of iOS `CacheCoordinator.stats`/`.timeline` and closes the §K cache gap. +20 tests
-      (`ProfileStatsCacheRepositoryTest` 11 Robolectric, `ProfileViewModelCacheTest` 6, +3 existing hardened).
-      **Pending:** the dedicated full-screen dashboard.
-- [x] Profile completion ring — **shipped** (slice `profile-header-presentation`, 2026-07-05): the
-      accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
-      `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
-      over/under-fills the ring), plus a "Profile N% complete" label. 22 `ProfileHeaderBuilderTest` cases.
+- [ ] View profile (by id / username / public handle / email / phone)
+- [ ] Full profile sheet: banner, identity, Profile / Conversations / Stats tabs, achievements
+- [ ] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
+- [ ] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges
+- [ ] Profile completion ring
 - [ ] Profile QR code display + save/share; share profile via message/email/copy link
 - [ ] Block / unblock users; report a user (reason + details)
 - [ ] Change email / phone (two-step verification)
@@ -1261,76 +1121,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## L. Settings & Privacy
 - [ ] Settings hub: profile card, appearance/theme + interface language, notifications,
       transcription, voice profile, data, tools, support, about, logout
-- [x] Light/dark/system theme with persisted preference — pure `AppThemeMode`
-      codec/resolver/cycle (`:core:model`, `resolveDarkMode`/`storageValue`/`next`/
-      `appThemeModeFromStorage`), durable DataStore-backed `ThemeStore` (`:sdk-core`,
-      hydrates on cold start, corrupt value → AUTO), `SettingsViewModel` pick/cycle
-      intents + segmented picker, `MainActivity` re-themes live via `ThemeViewModel`
-      (`settings-theme-mode`, 2026-07-05). +23 tests.
-- [x] Interface (UI chrome) language with persisted preference — pure `AppLanguage`
-      supported-set/codec/resolver (`:core:model`, `supportedCodes` from
-      `LanguageData.interfaceLanguages`, `fromStorage`/`storageValue`/`resolveInterfaceLocaleTag`;
-      corrupt/legacy/unsupported → System `null`), durable DataStore-backed
-      `InterfaceLanguageStore` (`:sdk-core`, hydrates on cold start), `SettingsViewModel`
-      pick intent + display-language dialog picker (System + fr/en/es/ar), `MainActivity`
-      re-localises the whole Compose tree live via `LanguageViewModel` +
-      `createConfigurationContext` (minSdk-26 safe, no AppCompat) (`settings-interface-language`,
-      2026-07-05). +32 tests. NB: **display** language only; the **regional** language row is a
-      Prisme *content*-preference (backend profile), not the app UI locale — shipped separately below.
-- [x] Regional (secondary content) language preference — the last Settings language row, now live
-      (`settings-regional-content-language`, 2026-07-06). Distinct from the interface language: it is a
-      Prisme *content* preference resolved via `LanguageResolver`, so it is stored on the backend profile
-      (`User.regionalLanguage`) — NOT the device-local `InterfaceLanguageStore`. Pure `:feature:settings`
-      `RegionalLanguageSelection.build(regionalCode, systemCode, query) → RegionalLanguagePresentation`
-      SSOT: options are the full content-language set (`LanguageData.allLanguages`, not the 4 interface
-      languages), the current choice is marked (trimmed/case-insensitive; blank/absent/unknown → no
-      label, no crash), the **primary (system) language is hidden** so a user can never pick their primary
-      as their secondary (unless it *is* the stored choice — a data-inconsistency never hides the active
-      selection), and a trimmed case-insensitive search spans English name / native name / code. Wired
-      through the existing optimistic + offline-queued profile-edit path: `SettingsViewModel`
-      `setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage=…))`
-      (session repaints instantly, durable `UPDATE_PROFILE` row, worker woken only on a real `cmid`; a
-      sessionless/superseded enqueue is inert) — reusing the `edit-profile-optimistic` machinery, **no new
-      store**; `SettingsScreen` renders the searchable flag+native-name dialog (mirrors the notification-type
-      search) with the current value as the row detail. +24 tests (18 pure-core, 6 VM). Surpasses iOS, whose
-      regional-language write is online-only. (EN/FR/ES/PT strings.)
-- [~] Notification preferences (push/email/sound/vibration, per-event types, DND schedule) —
-      **durable master toggles landed** (`settings-notification-prefs`, 2026-07-05): pure
-      `:core:model` JSON codec for the whole `UserNotificationPreferences` block
-      (`storageValue`/`notificationPreferencesFromStorage` — blank/absent/corrupt/partial/unknown-key
-      → safe defaults, never crashes), durable DataStore-backed `NotificationPreferencesStore`
-      (`:sdk-core`, hydrates on cold start, corrupt stored value → defaults), `SettingsViewModel`
-      per-toggle intents (push/new-message/sound/vibration) that persist the whole block without
-      clobbering the other fields, `SettingsScreen` state-driven `Switch` rows (push is the master —
-      the three sub-toggles disable when push is off). +25 tests. **DND schedule editor landed**
-      (`settings-dnd-schedule`, 2026-07-05): pure `:core:model` `DndWindow` SSOT (port of iOS
-      `isInDoNotDisturbWindow`) — `isActive(prefs, weekday, minuteOfDay)`/`isActive(prefs, LocalDateTime)`
-      (enable gate · midnight-wrap · per-day gating · corrupt-`HH:mm` → never-active),
-      `parseMinuteOfDay`/`formatTimeOfDay` (range-clamped) codec, `toggleDay` (canonical Mon→Sun,
-      dedup), `DndDay`↔ISO-`DayOfWeek` mapping; `SettingsViewModel` `setDndEnabled`/`setDndStart`/
-      `setDndEnd`/`toggleDndDay` intents persisting the whole block; `SettingsScreen` DND rows
-      (master toggle + Material3 24h `TimePicker` from/until rows + Mon→Sun `FilterChip` day selector +
-      a **live "quiet hours active now" status** computed from `DndWindow.isActive`). +32 tests
-      (EN/FR/ES/PT strings). Surpasses iOS which has no live-status readout in its editor.
-      **Per-event notification type toggles landed** (`settings-notification-type-toggles`, 2026-07-06):
-      pure `:core:model` `NotificationTypeCatalog` SSOT — 17 `NotificationType`s each with a `get`/`set`
-      lens over its `UserNotificationPreferences` boolean (`toggle`/`isEnabled` edit exactly one, never
-      clobber), grouped by 5 ordered `NotificationCategory`s (Messages · Calls · Social · Groups · System)
-      via `sections(prefs, query, label)` with a locale-aware injected-label case-insensitive/trimmed search
-      that omits empty categories; `SettingsViewModel` `setNotificationTypeEnabled`/`setNotificationTypeQuery`;
-      `SettingsScreen` search field + accent category headers + push-gated per-type switches + empty-state.
-      +14 tests (22 new strings ×EN/FR/ES/PT). Surpasses iOS which lists the same toggles without an in-section
-      search filter. **Offline-queued backend sync landed** (`settings-notification-prefs-sync`, 2026-07-06):
-      the previously-dead `OutboxKind.UPDATE_SETTINGS`/`OutboxLanes.SETTINGS` declarations are now wired
-      end-to-end — pure `:core:model` `NotificationPreferenceSyncBody.from(prefs)` projects the block into the
-      gateway `PATCH /me/preferences/notification` wire contract (all 30 fields, `extras` dropped, `dndDays` as
-      lowercase tokens); `core/network` `PreferencesApi`; `:sdk-core` `NotificationPreferencesSyncRepository`
-      (session-gated durable enqueue keyed by own user id; inert with no session) + an `OutboxCoalescer`
-      latest-snapshot rule (an offline toggle burst collapses to one PATCH) + an `OutboxFlushWorker`
-      `UPDATE_SETTINGS` sender. `SettingsViewModel.updateNotifications` now persists to the device-local store
-      instantly (UI SSOT) **then** enqueues the sync + wakes the worker on a real `cmid`. The PATCH is idempotent,
-      so a delivery retry is harmless (no rollback needed). +15 tests. Surpasses iOS, whose preference write is
-      online-only. **Still open:** the email channel toggle wiring (the field syncs, the UI row is pending).
+- [ ] Light/dark/system theme with persisted preference
+- [ ] Notification preferences (push/email/sound/vibration, per-event types, DND schedule)
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync

@@ -187,15 +187,6 @@ export class CallService {
   // iOS suspends the socket after ~45s in background; CallKit keeps the RTP
   // stream alive. Give backgrounded participants 5 min before timing them out.
   private readonly BACKGROUND_HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000;
-  // Phantom-cleanup staleness budgets (P0 fix 2026-07-06, see
-  // `isPhantomCallStale`) — intentionally mirror CallCleanupService's own
-  // tiers (MAX_CONNECTING_MS / HEARTBEAT_TIMEOUT_MS) so a call classified as
-  // "stale" here is stale by the exact same yardstick the periodic GC sweep
-  // already uses, just evaluated immediately instead of on the next 60s tick.
-  // Declared independently (not imported) to avoid a value-level dependency
-  // on CallCleanupService, which already type-imports CallService.
-  private readonly PHANTOM_CONNECTING_GRACE_MS = 90 * 1000;
-  private readonly PHANTOM_HEARTBEAT_GRACE_MS = 120 * 1000;
 
   constructor(private prisma: PrismaClient) {
     this.turnCredentialService = new TURNCredentialService();
@@ -252,7 +243,7 @@ export class CallService {
   /**
    * Generate ICE servers with per-user TURN credentials
    */
-  generateIceServers(userId: string): RTCIceServer[] {
+  generateIceServers(userId: string): any[] {
     return this.turnCredentialService.generateCredentials(userId);
   }
 
@@ -315,59 +306,6 @@ export class CallService {
   }
 
   /**
-   * Force-terminates a CallSession that a normal endCall/leaveCall path could
-   * not cleanly resolve — e.g. the ending participant no longer resolves, or
-   * the authoritative write itself failed — after the caller has already told
-   * the call room the call ended (CallEventsHandler's disconnect force-cleanup
-   * fallback and call:end optimistic-broadcast recovery paths). Mirrors
-   * CallCleanupService.forceEndCall's terminal-write protocol: scoped to
-   * ACTIVE_STATUSES (a no-op, returning null, if another path already resolved
-   * the call) and bumps `version` so a version-guarded writer that read the
-   * row moments earlier can't silently clobber this terminal state.
-   */
-  async forceEndOrphanedCallSession(
-    callId: string,
-    endReason: CallEndReason
-  ): Promise<{ duration: number; conversationId: string } | null> {
-    const session = await this.prisma.callSession.findUnique({
-      where: { id: callId },
-      select: { startedAt: true, conversationId: true }
-    });
-    if (!session) return null;
-
-    const now = new Date();
-    const duration = Math.max(0, Math.floor((now.getTime() - session.startedAt.getTime()) / 1000));
-
-    const ended = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.callSession.updateMany({
-        where: { id: callId, status: { in: ACTIVE_STATUSES } },
-        data: {
-          status: CallStatus.ended,
-          endedAt: now,
-          duration,
-          endReason,
-          version: { increment: 1 }
-        }
-      });
-      if (updated.count === 0) return false;
-
-      await tx.callParticipant.updateMany({
-        where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
-        data: { leftAt: now }
-      });
-      return true;
-    });
-
-    if (!ended) return null;
-
-    this.clearHeartbeats(callId);
-    this.clearRingingTimeout(callId);
-    await this.releaseActiveCallClaim(session.conversationId, callId);
-
-    return { duration, conversationId: session.conversationId };
-  }
-
-  /**
    * Mark a participant as backgrounded, granting them an extended heartbeat
    * grace period (BACKGROUND_HEARTBEAT_TIMEOUT_MS) so CallKit audio calls
    * survive iOS socket suspension (~45s after backgrounding).
@@ -408,60 +346,6 @@ export class CallService {
       }
     }
     return stale;
-  }
-
-  /**
-   * Number of participants with at least one recorded in-memory heartbeat for
-   * this call. Paired with `getStaleHeartbeats` to tell "everyone stale" (the
-   * call is truly dead) from "someone is still fresh" (the call is alive) —
-   * mirrors `CallCleanupService.hasFreshLiveness`'s `stale.length <
-   * participants.length` check without needing a DB round-trip for the
-   * participant list.
-   */
-  getHeartbeatParticipantCount(callId: string): number {
-    return this.heartbeats.get(callId)?.size ?? 0;
-  }
-
-  /**
-   * P0 fix (2026-07-06) — is an initiator-phantom candidate actually stale,
-   * or is it a genuinely live call (e.g. a second device/tab) the initiator
-   * happens to still be a live participant of? Without this gate,
-   * `initiateCall`'s phantom-cleanup force-ends ANY non-terminal call the
-   * initiator is still attached to — including a real, in-progress call in a
-   * completely unrelated conversation — the instant the same user starts a
-   * new call elsewhere. `CallService` holds no Socket.IO reference, so that
-   * force-end never broadcasts `call:ended`: the other party's client is left
-   * "connected" indefinitely, silently, until its own next action discovers
-   * the row is already terminal.
-   *
-   * Mirrors `CallCleanupService`'s tiered staleness semantics: a
-   * ringing/initiated call gets the same budget as its own scheduled ringing
-   * timeout, a connecting call gets the GC's connecting budget anchored on
-   * `answeredAt`, and an active/reconnecting call is stale only when there is
-   * no evidence — in memory or otherwise — that anyone is still beating.
-   */
-  private isPhantomCallStale(
-    session: { id: string; status?: CallStatus; startedAt: Date | null; answeredAt?: Date | null },
-    now: Date
-  ): boolean {
-    // A call record missing its own start time is anomalous — safe to treat
-    // as ancient (stale) rather than risk sparing a corrupt row forever.
-    const startedAtMs = session.startedAt ? session.startedAt.getTime() : 0;
-
-    if (session.status === CallStatus.initiated || session.status === CallStatus.ringing) {
-      return now.getTime() - startedAtMs > this.RINGING_TIMEOUT_MS;
-    }
-    if (session.status === CallStatus.connecting) {
-      const anchorMs = session.answeredAt ? session.answeredAt.getTime() : startedAtMs;
-      return now.getTime() - anchorMs > this.PHANTOM_CONNECTING_GRACE_MS;
-    }
-    // active / reconnecting (ACTIVE_STATUSES guarantees a real status here in
-    // production; the fallback below only matters for incomplete test doubles).
-    if (this.hasHeartbeatData(session.id)) {
-      const staleCount = this.getStaleHeartbeats(session.id, this.PHANTOM_HEARTBEAT_GRACE_MS).length;
-      return staleCount >= this.getHeartbeatParticipantCount(session.id);
-    }
-    return now.getTime() - startedAtMs > this.PHANTOM_HEARTBEAT_GRACE_MS;
   }
 
   /**
@@ -694,22 +578,9 @@ export class CallService {
         // whose leftAt field was never written (pre-C5 participants).
         OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
         participant: { userId: initiatorId },
-        callSession: {
-          status: { in: ACTIVE_STATUSES },
-          // P0 fix (2026-07-06) — never let this cross-conversation sweep
-          // touch a call in the SAME conversation the caller is initiating
-          // into: the zombie-active-call check a few lines below is already
-          // scoped to `conversationId` and correctly handles a duplicate
-          // initiate there (CALL_ALREADY_ACTIVE vs. genuinely zombie) without
-          // this broader sweep's coarser, cross-conversation staleness gate.
-          conversationId: { not: conversationId }
-        }
+        callSession: { status: { in: ACTIVE_STATUSES } }
       },
-      include: {
-        callSession: {
-          select: { id: true, startedAt: true, conversationId: true, status: true, answeredAt: true }
-        }
-      }
+      include: { callSession: { select: { id: true, startedAt: true, conversationId: true } } }
     });
 
     if (initiatorStaleParticipations.length > 0) {
@@ -725,15 +596,6 @@ export class CallService {
         staleCallIds: staleCalls.map(([id]) => id)
       });
       for (const [staleCallId, staleSession] of staleCalls) {
-        if (staleSession && !this.isPhantomCallStale(staleSession, now)) {
-          logger.info('🔬 [CALL-DIAG] phantom-cleanup skipped — candidate still has fresh liveness', {
-            initiatorId,
-            conversationId,
-            staleCallId,
-            staleConversationId: staleSession.conversationId
-          });
-          continue;
-        }
         const startedAt = staleSession?.startedAt ? new Date(staleSession.startedAt) : now;
         try {
           await this.prisma.$transaction(async (tx) => {
@@ -919,21 +781,6 @@ export class CallService {
   }
 
   /**
-   * MongoDB can detect two transactions racing on the same CallSession
-   * document BEFORE either side's app-level `version` guard returns
-   * `count: 0` — Prisma surfaces that as P2034 ("write conflict or
-   * deadlock, please retry") instead of letting our own conditional
-   * `updateMany` resolve the race. Every version-guarded terminal write
-   * (join/end/leave) must treat P2034 the same as its own local
-   * version-conflict signal — fall back to the fresh-state path instead of
-   * throwing a raw Prisma error at the client (prod 2026-07-04, callId
-   * observed on `call:join`: two `call:join` 3-11ms apart).
-   */
-  private isTransientWriteConflict(error: unknown): boolean {
-    return (error as { code?: string } | null)?.code === 'P2034';
-  }
-
-  /**
    * TOCTOU close (audit 2026-07-02): `activeParticipants.length >= 2` below
    * reads a snapshot fetched before this method's own write, so two callers
    * racing to join the same call (a third party racing the intended callee,
@@ -1078,7 +925,17 @@ export class CallService {
     }).then(
       () => 'joined' as const,
       (error) => {
-        if (error === versionConflict || this.isTransientWriteConflict(error)) {
+        if (error === versionConflict) {
+          return 'conflict' as const;
+        }
+        // MongoDB can also detect the two racing transactions at the
+        // document level BEFORE our version guard returns count=0 — Prisma
+        // surfaces that as P2034 ("write conflict or deadlock, please
+        // retry"). Same semantics as versionConflict: retry against fresh
+        // state, where the already-joined check resolves a same-user
+        // double-join idempotently (observed in prod 2026-07-04: two
+        // call:join within ms → one joined, one errored to the client).
+        if ((error as { code?: string })?.code === 'P2034') {
           return 'conflict' as const;
         }
         throw error;
@@ -1357,7 +1214,7 @@ export class CallService {
     }).then(
       () => 'left' as const,
       (error) => {
-        if (error === leaveVersionConflict || this.isTransientWriteConflict(error)) {
+        if (error === leaveVersionConflict) {
           return 'conflict' as const;
         }
         throw error;
@@ -1566,7 +1423,7 @@ export class CallService {
     }).then(
       () => 'ended' as const,
       (error) => {
-        if (error === versionConflict || this.isTransientWriteConflict(error)) {
+        if (error === versionConflict) {
           return 'conflict' as const;
         }
         throw error;
@@ -1838,13 +1695,7 @@ export class CallService {
         status: CallStatus.missed,
         endedAt: now,
         duration,
-        endReason: CallEndReason.missed,
-        // Terminal write protocol: every terminal writer MUST bump `version`,
-        // even one guarded by status rather than by version — otherwise a
-        // version-guarded writer (endCall/leaveCall/updateCallStatus) that
-        // read the row a moment before this write still matches its stale
-        // `version` and clobbers this terminal state right after.
-        version: { increment: 1 }
+        endReason: CallEndReason.missed
       }
     });
 

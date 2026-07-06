@@ -127,21 +127,19 @@ function makePrisma(overrides: {
   } as unknown as PrismaClient;
 }
 
-function makeSocket(rooms: string[] = []) {
+function makeSocket() {
   const handlers: Record<string, (...args: any[]) => any> = {};
   const directEmit = jest.fn<any>();
-  const socketToEmit = jest.fn<any>();
   const socket = {
     id: 'socket-test-1',
     on: jest.fn((event: string, fn: (...args: any[]) => any) => {
       handlers[event] = fn;
     }),
     emit: directEmit,
-    to: jest.fn().mockReturnValue({ emit: socketToEmit }),
-    rooms: new Set<string>(['socket-test-1', ...rooms]),
+    to: jest.fn().mockReturnValue({ emit: jest.fn() }),
     data: {},
   };
-  return { socket, handlers, directEmit, socketToEmit };
+  return { socket, handlers, directEmit };
 }
 
 function makeIo() {
@@ -224,83 +222,6 @@ describe('CallEventsHandler — call:end handler', () => {
 
     it('posts call summary', () => {
       expect(mockCreateCallSummaryMessage).toHaveBeenCalledWith(CALL_ID);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Fast-path: instant call:ended to the call room BEFORE any DB round trip
-  // (2026-07-04 — the peer must hang up immediately, not after the multi-query
-  // termination path). Room membership is the in-memory authorization.
-  // -------------------------------------------------------------------------
-
-  describe('fast-path: sender socket is inside the call room', () => {
-    it('emits an immediate call:ended to the call room (excluding the sender)', async () => {
-      mockEndCall.mockResolvedValue(makeCallSession());
-
-      const prisma = makePrisma();
-      const { socket, handlers, socketToEmit } = makeSocket([`call:${CALL_ID}`]);
-      const { io } = makeIo();
-
-      const handler = new CallEventsHandler(prisma);
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END](END_DATA, jest.fn<any>());
-
-      expect(socket.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
-      expect(socketToEmit).toHaveBeenCalledWith(
-        CALL_EVENTS.ENDED,
-        expect.objectContaining({
-          callId: CALL_ID,
-          endedBy: CALLER_ID,
-          reason: END_DATA.reason,
-        })
-      );
-    });
-
-    it('fires the fast-path even when the DB termination path then fails', async () => {
-      mockEndCall.mockRejectedValue(new Error('CALL_NOT_FOUND: call does not exist'));
-
-      const prisma = makePrisma();
-      const { socket, handlers, socketToEmit } = makeSocket([`call:${CALL_ID}`]);
-      const { io } = makeIo();
-
-      const handler = new CallEventsHandler(prisma);
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END](END_DATA, jest.fn<any>());
-
-      expect(socketToEmit).toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.anything());
-    });
-
-    it('defaults the fast-path reason to "completed" when the client sends none', async () => {
-      mockEndCall.mockResolvedValue(makeCallSession());
-
-      const prisma = makePrisma();
-      const { socket, handlers, socketToEmit } = makeSocket([`call:${CALL_ID}`]);
-      const { io } = makeIo();
-
-      const handler = new CallEventsHandler(prisma);
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END]({ callId: CALL_ID }, jest.fn<any>());
-
-      expect(socketToEmit).toHaveBeenCalledWith(
-        CALL_EVENTS.ENDED,
-        expect.objectContaining({ reason: 'completed' })
-      );
-    });
-  });
-
-  describe('fast-path guard: sender socket is NOT in the call room', () => {
-    it('does not emit any early call:ended (authorization = room membership)', async () => {
-      mockEndCall.mockResolvedValue(makeCallSession());
-
-      const prisma = makePrisma();
-      const { socket, handlers, socketToEmit } = makeSocket();
-      const { io } = makeIo();
-
-      const handler = new CallEventsHandler(prisma);
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END](END_DATA, jest.fn<any>());
-
-      expect(socketToEmit).not.toHaveBeenCalled();
     });
   });
 

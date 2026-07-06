@@ -530,11 +530,6 @@ describe('MessagesService', () => {
     it('should return false for @ without username', () => {
       expect(messagesService.hasMentions('Email: test@ domain.com')).toBe(false);
     });
-
-    it('should detect an accented @DisplayName (Unicode parity with parseMentions)', () => {
-      expect(messagesService.hasMentions('Salut @Éric')).toBe(true);
-      expect(messagesService.hasMentions('Bonjour @François Dupont')).toBe(true);
-    });
   });
 
   describe('extractMentions', () => {

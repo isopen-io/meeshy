@@ -28,7 +28,6 @@ import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -788,16 +787,8 @@ export class MessageTranslationService extends EventEmitter {
             `language=${participant.language}`
           );
 
-          // Normalise like the registered branch: an anonymous/bot participant
-          // stores `language` unvalidated (anonymous join schema is a bare
-          // `z.string()`), so it may hold `'EN'` or `'en-US'`. Adding it verbatim
-          // would inject an uppercase/locale-cased target that never matches the
-          // lowercase-keyed MessageTranslation store — a duplicated NLLB request
-          // and a Prisme rule #1 miss (client falls back to the original).
           if (participant.language) {
-            languages.add(
-              normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
-            );
+            languages.add(participant.language);
           }
         }
       }
