@@ -22,6 +22,9 @@ jest.mock('socket.io', () => {
   const to = jest.fn().mockReturnValue(toChain);
   // Allow chaining: io.to(a).to(b).emit(...)
   toChain.to = to;
+  const except = jest.fn().mockReturnValue(toChain);
+  // Allow chaining: io.to(a).except(socketIds).emit(...)
+  toChain.except = except;
 
   const on = jest.fn();
   const emit = jest.fn();
@@ -31,7 +34,7 @@ jest.mock('socket.io', () => {
     adapter: { rooms: new Map<string, Set<string>>() },
   };
 
-  const state = { on, emit, to, toEmit, toChain, close, sockets, connectionHandler: null as any };
+  const state = { on, emit, to, toEmit, toChain, except, close, sockets, connectionHandler: null as any };
   on.mockImplementation((event: string, handler: unknown) => {
     if (event === 'connection') state.connectionHandler = handler as any;
   });
@@ -487,6 +490,7 @@ describe('MeeshySocketIOManager', () => {
     ioState.emit.mockClear();
     ioState.to.mockClear();
     ioState.toEmit.mockClear();
+    ioState.except.mockClear();
     ioState.close.mockClear();
     ioState.connectionHandler = null;
     ioState.sockets.sockets.clear();
@@ -1513,6 +1517,64 @@ describe('MeeshySocketIOManager', () => {
       // to(rooms) is called with an empty array — .emit should not be called with USER_STATUS
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.anything());
     });
+
+    it('excludes the socket of an online viewer blocked either way with the broadcaster (privacy parity with GET /users/presence)', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-reg-2',
+        username: 'alice',
+        displayName: 'Alice',
+        firstName: 'Alice',
+        lastName: 'Smith',
+        lastActiveAt: new Date(),
+      });
+      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared' }]);
+      // Two other users are currently online, only one of them blocked the broadcaster.
+      (manager as any).connectedUsers.set('user-blocker', {
+        id: 'user-blocker', socketId: 'sock-blocker', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      (manager as any).connectedUsers.set('user-friend', {
+        id: 'user-friend', socketId: 'sock-friend', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      (manager as any).userSockets.set('user-blocker', new Set(['sock-blocker']));
+      (manager as any).userSockets.set('user-friend', new Set(['sock-friend']));
+      // 'user-blocker' blocked 'user-reg-2' (findMany branch of getBlockedUserIdsAmong).
+      prisma.user.findMany.mockResolvedValue([{ id: 'user-blocker' }]);
+
+      await (manager as any)._broadcastUserStatus('user-reg-2', true, false);
+
+      expect(ioState.to).toHaveBeenCalledWith(expect.arrayContaining([ROOMS.conversation('conv-shared')]));
+      expect(ioState.except).toHaveBeenCalledWith(['sock-blocker']);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
+        userId: 'user-reg-2',
+        isOnline: true,
+      }));
+    });
+
+    it('does not call except() when no online user is blocked with the broadcaster', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-reg-3',
+        username: 'bob',
+        displayName: 'Bob',
+        firstName: 'Bob',
+        lastName: 'Jones',
+        lastActiveAt: new Date(),
+      });
+      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared-2' }]);
+      (manager as any).connectedUsers.set('user-friend-2', {
+        id: 'user-friend-2', socketId: 'sock-friend-2', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      (manager as any).userSockets.set('user-friend-2', new Set(['sock-friend-2']));
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await (manager as any)._broadcastUserStatus('user-reg-3', true, false);
+
+      expect(ioState.except).not.toHaveBeenCalled();
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
+        userId: 'user-reg-3',
+      }));
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -1825,6 +1887,29 @@ describe('MeeshySocketIOManager', () => {
       expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({ id: 'anon-id' }),
       }));
+    });
+
+    it('hides isOnline/lastActiveAt for a contact blocked either way with the viewer (privacy parity with GET /users/presence)', async () => {
+      const socket = makeSocket('sock-ps-blocked');
+      const seenAt = new Date('2026-01-01T00:00:00.000Z');
+      const cachedUsers = [
+        { userId: 'user-blocked', username: 'blocked-contact', isOnline: false, lastActiveAt: seenAt },
+        { userId: 'user-normal', username: 'normal-contact', isOnline: false, lastActiveAt: seenAt },
+      ];
+      (manager as any).presenceSnapshotCache.set('user-viewer', { users: cachedUsers, cachedAt: Date.now() });
+      jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+      jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      // The viewer blocked 'user-blocked' (bidirectional block model on User.blockedUserIds).
+      prisma.user.findUnique.mockResolvedValue({ blockedUserIds: ['user-blocked'] });
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
+
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
+        users: [
+          { userId: 'user-blocked', username: 'blocked-contact', isOnline: false, lastActiveAt: null },
+          { userId: 'user-normal', username: 'normal-contact', isOnline: false, lastActiveAt: seenAt },
+        ],
+      });
     });
 
     it('does not throw on DB error', async () => {
@@ -3830,6 +3915,15 @@ describe('MeeshySocketIOManager', () => {
       );
       expect(ioState.toEmit).toHaveBeenCalledWith(
         SERVER_EVENTS.READ_STATUS_UPDATED,
+        expect.objectContaining({ conversationId: convId2, userId, type: 'received' })
+      );
+      // Dual-emitted alongside the legacy name — see tasks/socketio-events-cleanup.md #3.
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED,
+        expect.objectContaining({ conversationId: convId1, userId, type: 'received' })
+      );
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED,
         expect.objectContaining({ conversationId: convId2, userId, type: 'received' })
       );
     });

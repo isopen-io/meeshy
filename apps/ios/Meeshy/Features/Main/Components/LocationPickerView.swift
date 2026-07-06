@@ -284,8 +284,8 @@ struct LocationPickerView: View {
         .padding(16)
         // iOS 26 Liquid Glass — floating bottom action card over the map. Neutral
         // glass; the inner accent CTA + secondary button stay as fills ON the glass.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
@@ -323,7 +323,7 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
         selectedCoordinate = coordinate
         geocodeTask?.cancel()
         geocodeTask = Task {
-            try? await Task.sleep(for: .seconds(0.3))
+            try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             reverseGeocode(coordinate)
         }

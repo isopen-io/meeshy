@@ -182,8 +182,6 @@ struct iPadLeftColumnHeader: View {
                             .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
                     )
                 }
-                .accessibilityLabel(String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main))
-                .accessibilityHint(String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main))
             }
 
             Text(title)
@@ -215,11 +213,8 @@ struct iPadLeftColumnHeader: View {
                         }
                     }
                 }
-                .accessibilityLabel(String(localized: "root.menu.notifications", defaultValue: "Notifications", bundle: .main))
-                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main))
-                .accessibilityValue(notificationCount > 0
-                    ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationCount)
-                    : "")
+                .accessibilityLabel(String(localized: "root.ipad.notifications", defaultValue: "Notifications", bundle: .main))
+                .accessibilityValue(notificationCount > 0 ? String(notificationCount) : "")
             }
 
             if let onSettingsTap {
@@ -231,8 +226,7 @@ struct iPadLeftColumnHeader: View {
                         .font(MeeshyFont.relative(16, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                 }
-                .accessibilityLabel(String(localized: "root.menu.settings", defaultValue: "Réglages", bundle: .main))
-                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main))
+                .accessibilityLabel(String(localized: "root.ipad.settings", defaultValue: "Paramètres", bundle: .main))
             }
         }
         .padding(.horizontal, 16)
@@ -282,13 +276,6 @@ struct iPadResizableHandle: View {
                     isDragging = false
                 }
         )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "a11y.ipad.resize_handle", defaultValue: "Poignée de redimensionnement", bundle: .main))
-        .accessibilityHint(String(localized: "a11y.ipad.resize_handle.hint", defaultValue: "Faites glisser pour ajuster la largeur des colonnes", bundle: .main))
-        .accessibilityValue(String(format: "%.0f%%", ratio * 100))
-        .accessibilityAction(named: String(localized: "a11y.ipad.resize_handle.reset", defaultValue: "Réinitialiser la taille", bundle: .main)) {
-            withAnimation(.spring()) { ratio = 0.38 }
-        }
         .ignoresSafeArea()
     }
 }

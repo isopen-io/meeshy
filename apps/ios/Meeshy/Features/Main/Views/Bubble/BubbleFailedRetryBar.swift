@@ -43,7 +43,7 @@ struct BubbleFailedRetryBar: View {
                     .scaleEffect(0.7)
             } else {
                 Image(systemName: "arrow.clockwise")
-                    .font(MeeshyFont.relative(14, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
             }
         }

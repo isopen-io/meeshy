@@ -1199,10 +1199,10 @@ struct UniversalComposerBar: View {
             .padding(.vertical, 8)
         }
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 0.5)
                 )
         )
@@ -1453,10 +1453,10 @@ extension UniversalComposerBar {
             .padding(.vertical, 8)
         }
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)
                 )
         )

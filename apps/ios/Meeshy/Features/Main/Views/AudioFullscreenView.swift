@@ -300,7 +300,7 @@ private struct AudioFullscreenPage: View {
             } label: {
                 // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le libellé porte le sens
                 Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.white.opacity(0.2)))
@@ -501,7 +501,7 @@ private struct AudioFullscreenPage: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "gobackward.10")
-                    .font(MeeshyFont.relative(28, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundColor(.white)
             }
             .accessibilityLabel(String(localized: "media.skipBack10s", defaultValue: "Reculer de 10 secondes", bundle: .main))
@@ -523,7 +523,7 @@ private struct AudioFullscreenPage: View {
                         ProgressView().tint(.white).scaleEffect(0.8)
                     } else {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(MeeshyFont.relative(32, weight: .bold))
+                            .font(.system(size: 32, weight: .bold))
                             .foregroundColor(.white)
                             .offset(x: player.isPlaying ? 0 : 3)
                     }
@@ -538,7 +538,7 @@ private struct AudioFullscreenPage: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "goforward.10")
-                    .font(MeeshyFont.relative(28, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundColor(.white)
             }
             .accessibilityLabel(String(localized: "media.skipForward10s", defaultValue: "Avancer de 10 secondes", bundle: .main))
@@ -693,7 +693,7 @@ private struct AudioFullscreenPage: View {
         Task {
             do {
                 try await AttachmentService.shared.requestTranscription(attachmentId: attachment.id)
-                try? await Task.sleep(for: .seconds(3))
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await MainActor.run {
                     isRequestingTranscription = false
                 }
@@ -739,7 +739,7 @@ private struct AudioFullscreenPage: View {
             } label: {
                 // Glyphe dans un cercle de dimension fixe 26×26 : figé (déborderait s'il scalait, doctrine 86i) ; le libellé porte le sens
                 Image(systemName: "translate")
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.white.opacity(0.08)))

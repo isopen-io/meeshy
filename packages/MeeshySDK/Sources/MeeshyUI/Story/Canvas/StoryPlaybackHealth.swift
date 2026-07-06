@@ -72,4 +72,35 @@ public enum StoryPlaybackHealth {
             return true
         }
     }
+
+    // MARK: - Self-heal du playback (C-DIR3)
+
+    /// Grâce avant re-kick : absorbe la latence normale attach→play d'un
+    /// démarrage sain (le kick ne doit jamais concurrencer le GO).
+    public nonisolated static let kickGraceSeconds: Double = 0.75
+    /// Budget de kicks PAR SESSION de lecture (slide) : une force externe qui
+    /// re-pause en boucle (pause légitime non traquée) doit finir par gagner.
+    public nonisolated static let maxPlaybackKicks = 3
+
+    /// C-DIR3 — sur device réel, un player peut se retrouver `.paused` alors que
+    /// toutes les portes disent « joue » (interruption d'audio session, préemption
+    /// d'un canvas mourant pendant la transition…). Or `isPlaybackActive` ne
+    /// rejoue que sur CHANGEMENT de valeur : flag déjà `true` → personne ne
+    /// re-appelle `play()` — la story reste figée jusqu'à un long-press/relâcher
+    /// manuel (symptôme iPhone 16 Pro Max 2026-07-04, invisible au simulateur).
+    /// La sonde 60 Hz demande alors un re-kick : UNIQUEMENT sur `.paused`
+    /// (`.waiting` = buffering, territoire du stall gate — un play() n'y peut
+    /// rien), jamais contre une pause user ou un asset mort, après grâce, borné.
+    public static nonisolated func shouldKickPlayback(
+        status: AVPlayer.TimeControlStatus?,
+        isUserPaused: Bool,
+        isFailed: Bool,
+        pausedSinceSeconds: Double,
+        kicksDelivered: Int
+    ) -> Bool {
+        guard !isUserPaused, !isFailed else { return false }
+        guard status == .paused else { return false }
+        guard pausedSinceSeconds >= kickGraceSeconds else { return false }
+        return kicksDelivered < maxPlaybackKicks
+    }
 }

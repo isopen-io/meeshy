@@ -46,7 +46,7 @@ struct SkeletonProfileHeader: View {
             SkeletonShape(
                 width: nil,
                 height: bannerHeight,
-                cornerRadius: MeeshyRadius.lg
+                cornerRadius: 16
             )
 
             ZStack {

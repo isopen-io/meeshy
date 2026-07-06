@@ -88,6 +88,6 @@ struct UploadProgressBar: View {
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
-        AttachmentDownloader.fmt(bytes)
+        bytes.formatted(.byteCount(style: .file))
     }
 }

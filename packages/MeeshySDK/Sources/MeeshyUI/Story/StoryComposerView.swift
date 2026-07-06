@@ -23,7 +23,6 @@ public struct StoryComposerView: View {
 
     @State var selectedFilter: StoryFilter?
     @State var selectedImage: UIImage?
-    @State var stickerObjects: [StorySticker] = []
 
     // MARK: - Background audio (legacy panel state)
 
@@ -54,13 +53,14 @@ public struct StoryComposerView: View {
 
     @State var showAudioDocumentPicker = false
     @State var showVoiceRecorderSheet = false
+    /// C8 — picker de stickers (bouton « Stickers » du panneau Texte).
+    @State var showStickerPicker = false
     // Prisme Linguistique: the story's source language comes from the user's
     // in-app content preferences (systemLanguage → regionalLanguage → "fr"),
     // NEVER from the keyboard locale. See `StoryComposerViewModel
     // .resolveComposerSourceLanguage(user:)` for the canonical resolver.
     @State var storyLanguage: String = StoryComposerViewModel
         .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
-    @State var showFilterSheet = false
     @State var showTransitionSheet = false
     @State var audioEditorItem: AudioEditorItemWrapper?
     @State var mediaAudioEditorItem: AudioEditorItemWrapper?
@@ -98,15 +98,6 @@ public struct StoryComposerView: View {
     /// reste PLEIN — ce drawer flotte par-dessus, il ne rétrécit plus le canvas.
     @State var composerBandHeight: CGFloat = 280
 
-    /// Drawer d'outil replié « totalement » : seul le grabber reste visible et le
-    /// canvas est 100 % visible. Vaut pour TOUS les outils (2026-06-02) — replier ne
-    /// quitte pas l'outil actif (en dessin, le contrôleur flottant `StoryDrawingToolbar`
-    /// persiste en plus). Re-déplier via le grabber.
-    @State var bandDrawerCollapsed = false
-
-    /// Hauteur du drawer dessin une fois replié (poignée seule).
-    static let drawingDrawerGrabberHeight: CGFloat = 38
-
     @State var showDiscardAlert = false
     @State var showRestoreDraftAlert = false
     /// U4 inc.2 — données de la carte de reprise (cover rendu async depuis
@@ -120,6 +111,12 @@ public struct StoryComposerView: View {
     /// ou publié : un debounce d'autosave encore en vol ne doit pas le
     /// re-persister pendant le démontage du composer.
     @State var draftAutosaveSuspended = false
+    /// C16 (audit it.91) — l'échec de chargement d'un média DOIT parler :
+    /// avant, les guards/catch du flux picker retournaient en silence (photo
+    /// iCloud non téléchargeable, format refusé, écriture temp échouée) — le
+    /// spinner disparaissait et l'utilisateur ne savait jamais pourquoi rien
+    /// ne s'était ajouté.
+    @State var mediaLoadFailed = false
     @State var isLoadingMedia = false
     @State var mediaLoadProgress: Double = 0
     @State var mediaLoadLabel: String = ""
@@ -131,11 +128,6 @@ public struct StoryComposerView: View {
     @State var visibilityUserIds: [String] = []
     @State var audiencePickerMode: PostVisibility?
     @State var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
-
-    // MARK: - Transition effects (local until synced to effects)
-
-    @State var openingEffect: StoryTransitionEffect?
-    @State var closingEffect: StoryTransitionEffect?
 
     // MARK: - Keyboard observation + canvas shift
 
@@ -263,7 +255,28 @@ public struct StoryComposerView: View {
                   )
             )
         }
-        .onAppear { checkForDraft() }
+        .alert(
+            String(localized: "story.composer.mediaLoadFailedTitle",
+                   defaultValue: "Chargement impossible", bundle: .module),
+            isPresented: $mediaLoadFailed
+        ) {
+            Button(String(localized: "story.composer.ok", defaultValue: "OK", bundle: .module)) {
+                mediaLoadFailed = false
+            }
+            .tint(MeeshyColors.indigo500)
+        } message: {
+            Text(String(
+                localized: "story.composer.mediaLoadFailedMessage",
+                defaultValue: "Ce média n'a pas pu être chargé. Vérifiez qu'il est téléchargé sur l'appareil (iCloud) et réessayez.",
+                bundle: .module
+            ))
+        }
+        .onAppear {
+            checkForDraft()
+            // C9 — trajectoire d'annulation : seed sur l'état d'entrée
+            // (composer vierge ; `restoreDraft()` re-seed après reprise).
+            viewModel.seedHistory()
+        }
         // D1 — le travail d'édition survit au kill de l'app : auto-save du
         // draft au passage en BACKGROUND (jamais onDisappear — le discard
         // fire onDisappear et re-persisterait un draft explicitement jeté).
@@ -275,6 +288,14 @@ public struct StoryComposerView: View {
         // (publisher STABLE côté VM — cf. `autosaveTrigger`).
         .onReceive(viewModel.autosaveTrigger) { _ in
             autosaveDraftAfterMutation()
+        }
+        // C9 Inc.2 — capture débouncée d'une étape d'annulation après chaque
+        // accalmie de mutation. Mêmes gardes que l'autosave : jamais pendant
+        // la décision de reprise (le composer vierge sous la carte ne doit
+        // pas semer d'étapes), ni pendant le démontage post-discard/publish.
+        .onReceive(viewModel.historyTrigger) { _ in
+            guard !showRestoreDraftAlert, !draftAutosaveSuspended else { return }
+            viewModel.pushHistorySnapshot()
         }
     }
 

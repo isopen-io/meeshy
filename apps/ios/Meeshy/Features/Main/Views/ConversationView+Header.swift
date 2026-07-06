@@ -213,7 +213,7 @@ private struct HeaderCallButtonsView: View {
                 Image(systemName: "phone.fill")
                     .font(MeeshyFont.relative(10, weight: .semibold))
                 Text(callManager.formattedDuration)
-                    .font(MeeshyFont.relative(11, weight: .semibold).monospacedDigit())
+                    .font(MeeshyFont.relative(11, weight: .semibold, design: .monospaced))
             }
             .foregroundColor(MeeshyColors.success)
             .padding(.horizontal, 10)

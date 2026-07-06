@@ -32,7 +32,7 @@ struct ReelAudioBackdrop: View, Equatable {
             }
             .frame(maxHeight: 120)
             Image(systemName: "waveform")
-                .font(MeeshyFont.relative(44, weight: .semibold))
+                .font(.system(size: 44, weight: .semibold))
                 .foregroundColor(.white.opacity(0.25))
         }
         .onAppear { if isActive { startAnimating() } }

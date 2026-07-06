@@ -410,6 +410,49 @@ describe('CommentReactionHandler', () => {
         })
       );
     });
+
+    it('test_handleAddReaction_reelPost_forwardsPostTypeReel', async () => {
+      // F58: a reaction on a comment under a REEL must forward postType='REEL'
+      // (not collapse to a story/post boolean).
+      const reactorSocketToUser = new Map<string, string>();
+      reactorSocketToUser.set(SOCKET_ID, ANOTHER_USER_ID);
+
+      const reactorConnectedUsers = new Map();
+      reactorConnectedUsers.set(ANOTHER_USER_ID, {
+        id: ANOTHER_USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'fr', userId: ANOTHER_USER_ID,
+      });
+
+      const reelPrisma = createMockPrisma(USER_ID);
+      reelPrisma.postComment.findUnique.mockResolvedValue({ authorId: USER_ID, content: 'nice' });
+      reelPrisma.post.findUnique.mockResolvedValue({
+        type: 'REEL',
+        author: { displayName: 'Bob', username: 'bob' },
+      });
+
+      const reelHandler = new CommentReactionHandler({
+        io: mockIO as any,
+        prisma: reelPrisma,
+        notificationService: mockNotificationService,
+        commentReactionService: mockReactionService,
+        connectedUsers: reactorConnectedUsers as any,
+        socketToUser: reactorSocketToUser,
+      });
+
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID, postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue({ ...sampleReactionData, userId: ANOTHER_USER_ID });
+      mockReactionService.createUpdateEvent.mockResolvedValue({ ...sampleUpdateEvent, userId: ANOTHER_USER_ID });
+
+      await reelHandler.handleAddReaction(socket as any, data, callback);
+      await Promise.resolve(); await Promise.resolve();
+
+      expect(mockNotificationService.createCommentReactionNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ postType: 'REEL', postAuthorName: 'Bob' })
+      );
+    });
   });
 
   // ===== handleRemoveReaction =====
@@ -449,7 +492,11 @@ describe('CommentReactionHandler', () => {
       });
     });
 
-    it('test_handleRemoveReaction_notFound_callbackError', async () => {
+    it('test_handleRemoveReaction_alreadyAbsent_isIdempotent_callbackSuccessNoBroadcast', async () => {
+      // The reaction is already gone (concurrent removal, retry of an applied
+      // remove, double-tap un-like). `{ success: false }` would make the client
+      // roll the optimistic un-like back, re-showing a like that is gone.
+      // Mirrors ReactionHandler.handleReactionRemove (message reactions).
       const socket = createMockSocket();
       const data = { commentId: COMMENT_ID, postId: POST_ID, emoji: EMOJI };
       const callback = jest.fn();
@@ -461,8 +508,8 @@ describe('CommentReactionHandler', () => {
 
       expect(mockIO.to).not.toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith({
-        success: false,
-        error: 'Reaction not found',
+        success: true,
+        data: { message: 'Reaction already absent' },
       });
     });
 

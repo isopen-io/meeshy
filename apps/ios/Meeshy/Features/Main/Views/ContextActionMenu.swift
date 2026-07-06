@@ -116,11 +116,11 @@ struct ContextActionButton: View {
         } label: {
             VStack(spacing: showLabel ? 2 : 0) {
                 Image(systemName: action.icon)
-                    .font(MeeshyFont.relative(15, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                 if showLabel {
                     Text(action.label)
-                        .font(MeeshyFont.relative(10, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .lineLimit(1)
                 }
             }

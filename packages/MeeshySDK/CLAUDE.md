@@ -362,8 +362,8 @@ let result = try await service.list(offset: 0, limit: 30)
 - Les services app (AuthManager, APIClient) sont ceux du SDK via `.shared`
 
 ## Scurit
-- **DETTE TECHNIQUE**: Tokens stocks dans `UserDefaults` (DOIT migrer vers Keychain)
-- HTTPS enforc via App Transport Security
+- Tokens JWT et VoIP stocks dans Keychain (`AuthManager` via `KeychainStoring`/`KeychainManager`, `VoIPTokenStore` avec `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`) — la migration UserDefaults -> Keychain est termine (`KeychainManager.migrateFromUserDefaults`, cls legacy uniquement). `UserDefaults` ne sert plus qu'aux prfrences non sensibles.
+- HTTPS enforc via App Transport Security ; TLS pinning (SPKI) partag entre `APIClient` et `MessageSocketManager` via `CertificatePinningDelegate`
 
 ## Build
 ```bash

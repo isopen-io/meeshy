@@ -118,7 +118,7 @@ struct ConvBgFixedAvatar: View {
                 .frame(width: 40, height: 40)
 
             Image(systemName: "person.fill")
-                .font(MeeshyFont.relative(16))
+                .font(.system(size: 16))
                 .foregroundColor(color.opacity(0.50))
 
             Circle()
@@ -256,7 +256,7 @@ struct ConvBgSatellite: View {
                 .blur(radius: 8)
 
             Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(MeeshyFont.relative(16, weight: .medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundColor(color.opacity(0.50))
 
             Circle()

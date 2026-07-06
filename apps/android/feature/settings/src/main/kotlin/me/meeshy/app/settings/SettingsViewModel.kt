@@ -2,13 +2,27 @@ package me.meeshy.app.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.language.InterfaceLanguageStore
+import me.meeshy.sdk.model.AppThemeMode
+import me.meeshy.sdk.model.DndDay
+import me.meeshy.sdk.model.DndWindow
+import me.meeshy.sdk.model.NotificationType
+import me.meeshy.sdk.model.NotificationTypeCatalog
+import me.meeshy.sdk.model.UpdateProfileRequest
+import me.meeshy.sdk.model.UserNotificationPreferences
+import me.meeshy.sdk.model.next
+import me.meeshy.sdk.notification.NotificationPreferencesStore
+import me.meeshy.sdk.notification.NotificationPreferencesSyncRepository
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.theme.ThemeStore
 import me.meeshy.sdk.user.UserRepository
 import javax.inject.Inject
 
@@ -17,6 +31,13 @@ data class SettingsUiState(
     val username: String? = null,
     val email: String? = null,
     val avatar: String? = null,
+    val themeMode: AppThemeMode = AppThemeMode.AUTO,
+    val interfaceLanguage: String? = null,
+    val systemLanguage: String? = null,
+    val regionalLanguage: String? = null,
+    val regionalLanguageQuery: String = "",
+    val notifications: UserNotificationPreferences = UserNotificationPreferences(),
+    val notificationTypeQuery: String = "",
     val isLoading: Boolean = false,
 )
 
@@ -24,6 +45,11 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val userRepository: UserRepository,
+    private val themeStore: ThemeStore,
+    private val interfaceLanguageStore: InterfaceLanguageStore,
+    private val notificationPreferencesStore: NotificationPreferencesStore,
+    private val notificationPreferencesSyncRepository: NotificationPreferencesSyncRepository,
+    private val workManager: WorkManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -32,8 +58,134 @@ class SettingsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
-                _state.update { it.copy(userId = user?.id, username = user?.username, email = user?.email, avatar = user?.avatar) }
+                _state.update {
+                    it.copy(
+                        userId = user?.id,
+                        username = user?.username,
+                        email = user?.email,
+                        avatar = user?.avatar,
+                        systemLanguage = user?.systemLanguage,
+                        regionalLanguage = user?.regionalLanguage,
+                    )
+                }
             }
+        }
+        viewModelScope.launch {
+            themeStore.themeMode.collect { mode ->
+                _state.update { it.copy(themeMode = mode) }
+            }
+        }
+        viewModelScope.launch {
+            interfaceLanguageStore.languageCode.collect { code ->
+                _state.update { it.copy(interfaceLanguage = code) }
+            }
+        }
+        viewModelScope.launch {
+            notificationPreferencesStore.preferences.collect { prefs ->
+                _state.update { it.copy(notifications = prefs) }
+            }
+        }
+    }
+
+    /** Persists an explicit appearance choice (light/dark/system). */
+    fun setThemeMode(mode: AppThemeMode) {
+        viewModelScope.launch { themeStore.setThemeMode(mode) }
+    }
+
+    /** Advances the appearance to the next mode — the tap-to-cycle gesture. */
+    fun cycleTheme() {
+        viewModelScope.launch { themeStore.setThemeMode(themeStore.themeMode.value.next()) }
+    }
+
+    /** Persists the interface (UI chrome) language; `null` follows the device locale. */
+    fun setInterfaceLanguage(code: String?) {
+        viewModelScope.launch { interfaceLanguageStore.setLanguageCode(code) }
+    }
+
+    /**
+     * Sets the regional (secondary content) language — a Prisme *content* preference on the
+     * backend profile, NOT the app UI locale. It flows through the optimistic + offline-queued
+     * profile-edit path: [UserRepository.enqueueProfileEdit] repaints the session identity
+     * instantly (so this row and every content surface reflect the choice at once) and queues
+     * a durable `UPDATE_PROFILE` mutation, waking the flush worker only when a real row was
+     * enqueued (a sessionless/superseded enqueue returns `null` — nothing to flush).
+     */
+    fun setRegionalLanguage(code: String) {
+        viewModelScope.launch {
+            val cmid = userRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage = code))
+            if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
+        }
+    }
+
+    /** Updates the UI-only search query that filters the regional-language picker. */
+    fun setRegionalLanguageQuery(query: String) {
+        _state.update { it.copy(regionalLanguageQuery = query) }
+    }
+
+    /** Toggles push notifications, persisting the whole block (other toggles preserved). */
+    fun setPushEnabled(enabled: Boolean) {
+        updateNotifications { it.copy(pushEnabled = enabled) }
+    }
+
+    /** Toggles the notification sound. */
+    fun setSoundEnabled(enabled: Boolean) {
+        updateNotifications { it.copy(soundEnabled = enabled) }
+    }
+
+    /** Toggles notification vibration. */
+    fun setVibrationEnabled(enabled: Boolean) {
+        updateNotifications { it.copy(vibrationEnabled = enabled) }
+    }
+
+    /** Toggles new-message notifications. */
+    fun setNewMessageEnabled(enabled: Boolean) {
+        updateNotifications { it.copy(newMessageEnabled = enabled) }
+    }
+
+    /** Toggles the Do-Not-Disturb (quiet-hours) schedule on/off. */
+    fun setDndEnabled(enabled: Boolean) {
+        updateNotifications { it.copy(dndEnabled = enabled) }
+    }
+
+    /** Sets the quiet-hours start, formatting the picked time into the stored `HH:mm`. */
+    fun setDndStart(hour: Int, minute: Int) {
+        updateNotifications { it.copy(dndStartTime = DndWindow.formatTimeOfDay(hour, minute)) }
+    }
+
+    /** Sets the quiet-hours end, formatting the picked time into the stored `HH:mm`. */
+    fun setDndEnd(hour: Int, minute: Int) {
+        updateNotifications { it.copy(dndEndTime = DndWindow.formatTimeOfDay(hour, minute)) }
+    }
+
+    /** Adds/removes a day from the quiet-hours schedule (empty ⇒ every day). */
+    fun toggleDndDay(day: DndDay) {
+        updateNotifications { it.copy(dndDays = DndWindow.toggleDay(it.dndDays, day)) }
+    }
+
+    /** Sets a single per-event notification type on/off, preserving every other toggle. */
+    fun setNotificationTypeEnabled(type: NotificationType, enabled: Boolean) {
+        updateNotifications { NotificationTypeCatalog.toggle(it, type, enabled) }
+    }
+
+    /** Updates the search query that filters the per-event notification-type list. */
+    fun setNotificationTypeQuery(query: String) {
+        _state.update { it.copy(notificationTypeQuery = query) }
+    }
+
+    /**
+     * The single funnel every persisted notification toggle flows through: it paints the
+     * device-local store instantly (UI source of truth) and then queues a durable
+     * `UPDATE_SETTINGS` sync so the choice reaches the gateway offline-safely, waking the
+     * flush worker only when a real row was enqueued (a superseded/sessionless enqueue
+     * returns `null` and there is nothing to flush). The UI-only search query does NOT go
+     * through here, so it never triggers a backend write.
+     */
+    private fun updateNotifications(edit: (UserNotificationPreferences) -> UserNotificationPreferences) {
+        viewModelScope.launch {
+            val updated = edit(notificationPreferencesStore.preferences.value)
+            notificationPreferencesStore.setPreferences(updated)
+            val cmid = notificationPreferencesSyncRepository.enqueueSync(updated)
+            if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
         }
     }
 }

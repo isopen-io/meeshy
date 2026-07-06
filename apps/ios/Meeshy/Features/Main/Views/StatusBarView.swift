@@ -35,7 +35,7 @@ struct StatusBarView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .glassCard(cornerRadius: MeeshyRadius.xl)
+                    .glassCard(cornerRadius: 20)
                     .accessibilityElement(children: .combine)
                     .onTapGesture {
                         Task { await viewModel.loadStatuses() }
@@ -82,7 +82,7 @@ struct StatusBarView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .glassCard(cornerRadius: MeeshyRadius.xl)
+            .glassCard(cornerRadius: 20)
             .breathingGlow(color: Color(hex: status.avatarColor), intensity: 0.4)
         }
         .accessibilityLabel(String(localized: "status.bar.my_status_label", defaultValue: "Mon statut \(status.moodEmoji)", bundle: .main))
@@ -106,7 +106,7 @@ struct StatusBarView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .glassCard(cornerRadius: MeeshyRadius.xl)
+            .glassCard(cornerRadius: 20)
         }
         .accessibilityLabel(String(localized: "status.bar.add_label", defaultValue: "Ajouter un statut", bundle: .main))
         .accessibilityHint(String(localized: "status.bar.add_hint", defaultValue: "Publie un statut visible par vos contacts", bundle: .main))
@@ -130,7 +130,7 @@ struct StatusBarView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .glassCard(cornerRadius: MeeshyRadius.xl)
+            .glassCard(cornerRadius: 20)
         }
         .accessibilityLabel("\(status.moodEmoji) \(status.username)")
         .accessibilityHint(String(localized: "status.bar.status_hint", defaultValue: "Voir le statut", bundle: .main))
@@ -141,7 +141,7 @@ struct StatusBarView: View {
     private func statusPopover(_ entry: StatusEntry) -> some View {
         VStack(spacing: 8) {
             Text(entry.moodEmoji)
-                .font(MeeshyFont.relative(36))
+                .font(.system(size: 36))
 
             Text(entry.username)
                 .font(.subheadline.weight(.semibold))

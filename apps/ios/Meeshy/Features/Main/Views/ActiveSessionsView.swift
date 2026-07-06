@@ -106,7 +106,7 @@ struct ActiveSessionsView: View {
     private func sessionRow(_ session: UserSession) -> some View {
         HStack(spacing: 12) {
             Image(systemName: session.isCurrent ? "iphone" : "desktopcomputer")
-                .font(MeeshyFont.relative(16, weight: .medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundColor(session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400)
                 .frame(width: 32, height: 32)
                 .background(
@@ -161,10 +161,10 @@ struct ActiveSessionsView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(theme.surfaceGradient(tint: session.isCurrent ? "34D399" : "6366F1"))
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(theme.border(tint: session.isCurrent ? "34D399" : "6366F1"), lineWidth: 1)
                 )
         )

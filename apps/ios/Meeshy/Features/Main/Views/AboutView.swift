@@ -222,17 +222,17 @@ struct AboutView: View {
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+        RoundedRectangle(cornerRadius: 16)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
-            .font(MeeshyFont.relative(14, weight: .medium))
+            .font(.system(size: 14, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
