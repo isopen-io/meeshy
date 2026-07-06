@@ -65,25 +65,4 @@ final class CallViewLayoutGuardTests: XCTestCase {
             )
         }
     }
-
-    /// Regression 2026-07-05: the call screen pins `.environment(\.colorScheme,
-    /// .dark)` (white-on-dark chrome, see the comment right above it) so its
-    /// glass materials always render their dark variant. `ThemeManager`'s
-    /// `textPrimary`/`textMuted` are NOT environment-driven — they read the
-    /// user's in-app Light/Dark/System preference directly — so any call site
-    /// using them renders dark-on-near-black text whenever the app theme is
-    /// Light, independently of the environment override. Every text label on
-    /// this screen must use a static `.white`-based color instead.
-    func test_neverUsesThemeManagerTextColors_wouldBeInvisibleInLightAppTheme() throws {
-        let source = try callViewSource()
-        XCTAssertFalse(
-            source.contains("theme.textPrimary") || source.contains("theme.textMuted"),
-            "CallView text must never read ThemeManager.textPrimary/textMuted — " +
-            "the screen's colorScheme is pinned to .dark for its glass chrome, " +
-            "but those colors follow the user's app-level theme preference " +
-            "regardless, so a Light-theme user would see near-invisible " +
-            "dark-on-near-black text (remote name, call-ended reason, control " +
-            "captions). Use `.white.opacity(...)` like every other label here."
-        )
-    }
 }

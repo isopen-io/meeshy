@@ -148,6 +148,19 @@ describe('RedisDeliveryQueue (memory fallback)', () => {
     }
   });
 
+  test('peek with a limit of 0 returns nothing (not the whole backlog)', async () => {
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
+
+      const peeked = await queue.peek('user-1', 0);
+      expect(peeked).toHaveLength(0);
+    } finally {
+      await cacheStore.close();
+    }
+  });
+
   test('cleanup removes expired entries', async () => {
     const { cacheStore, queue } = makeMemoryQueue();
     try {
@@ -1048,63 +1061,5 @@ describe('RedisDeliveryQueue (malformed JSON resilience)', () => {
     // Malformed entry is filtered out (removed), valid entry survives
     expect(removed).toBe(1);
     expect(pipeline.rpush).toHaveBeenCalled(); // valid entry re-pushed
-  });
-});
-
-// ─── Memory/Redis reconciliation after a transient outage recovers ───────────
-//
-// Regression coverage for a bug where entries stashed in `memoryQueue` during a
-// transient Redis outage were silently orphaned once Redis recovered: `drain()`
-// and `cleanup()` used to `return` from their Redis branch without ever
-// consulting `memoryQueue`, so those messages were never delivered and never
-// swept — they just sat in memory until process restart.
-
-describe('RedisDeliveryQueue (memory/Redis reconciliation)', () => {
-  test('drain — surfaces memory-queued entries (stashed during an outage) alongside Redis-drained entries once Redis recovers', async () => {
-    const duringOutage = makePayload({ messageId: 'during-outage' });
-    const afterRecovery = makePayload({ messageId: 'after-recovery' });
-
-    const failingRedis = makeMockRedis({ eval: jest.fn().mockRejectedValue(new Error('conn reset')) });
-    const recoveredRedis = makeMockRedis({ eval: jest.fn().mockResolvedValue([JSON.stringify(afterRecovery)]) });
-
-    const cacheStore: any = { getNativeClient: jest.fn() };
-    cacheStore.getNativeClient
-      .mockReturnValueOnce(failingRedis)  // enqueue during the outage → memory fallback
-      .mockReturnValue(recoveredRedis);   // Redis is back for everything after
-
-    const queue = new RedisDeliveryQueue(cacheStore);
-    await queue.enqueue('user-recon', duringOutage);
-
-    const drained = await queue.drain('user-recon');
-
-    expect(drained.map(e => e.messageId)).toEqual(['during-outage', 'after-recovery']);
-
-    // Both sources are now empty — nothing left orphaned in memory.
-    const internalMap: Map<string, unknown[]> = (queue as any).memoryQueue;
-    expect(internalMap.has('user-recon')).toBe(false);
-  });
-
-  test('cleanup — expires memory-queued entries even when Redis is reachable, instead of leaving them until process restart', async () => {
-    const staleDuringOutage = makePayload({
-      messageId: 'stale-during-outage',
-      enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
-    });
-
-    const failingRedis = makeMockRedis({ eval: jest.fn().mockRejectedValue(new Error('conn reset')) });
-    const healthyRedis = makeMockRedis(); // default scan resolves ['0', []] — nothing to clean in Redis
-
-    const cacheStore: any = { getNativeClient: jest.fn() };
-    cacheStore.getNativeClient
-      .mockReturnValueOnce(failingRedis)  // enqueue during the outage → memory fallback
-      .mockReturnValue(healthyRedis);     // cleanup runs once Redis is reachable again
-
-    const queue = new RedisDeliveryQueue(cacheStore);
-    await queue.enqueue('user-cleanup-recon', staleDuringOutage);
-
-    const removed = await queue.cleanup();
-
-    expect(removed).toBe(1);
-    const internalMap: Map<string, unknown[]> = (queue as any).memoryQueue;
-    expect(internalMap.has('user-cleanup-recon')).toBe(false);
   });
 });

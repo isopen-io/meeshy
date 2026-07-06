@@ -1,10 +1,40 @@
 # Android — current loop
 
+> ✅ **PR #1562 (`message-effects-lifecycle`) merged to `main`** 2026-07-06 (squash `485cc18d`) after a
+> clean rebase (doc-only conflicts resolved keeping the branch superset) + full CI green (11/11 jobs).
+
 > Live state and the next slice now live in
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-regional-content-language` ✅
+## This loop (Phase: Chat — rich message features) — slice `delivery-status-resolver` ✅
+**Honest all-or-nothing delivery indicator** — the sender-side 1→2→2-check indicator was lying in groups:
+`BubbleContentBuilder` used a naive `readCount > 0 → Read` / `deliveredCount > 0 → Delivered` threshold with
+**no recipient denominator**, so one reader in a group showed "read by all". New pure `:core:model`
+`DeliveryStatusResolver.resolve(base, deliveredCount, readCount, recipientCount, deliveredToAllAt?,
+readByAllAt?) → DeliveryState` (port of the iOS `DeliveryStatusResolver`): WhatsApp-style all-or-nothing
+(Delivered/Read only when **every** recipient received/read), `recipientCount <= 1` trusts the `> 0`
+threshold (1:1 / unknown denominator), the unambiguous "all" markers win denominator-independent, counts
+clamped, send-cycle (Pending/Failed) returned verbatim. Never over-reports. Wired with **no DB migration**
+(`ApiMessage.deliveredToAllAt` rides the JSON payload): `BubbleContentBuilder` gains a `recipientCount`
+param (default 1 = backward-compatible 1:1) and re-resolves via the SSOT; `ChatViewModel` threads
+`memberCount - 1` from the conversation stream through the bubble combine.
+
+## Prior loop (Phase: Chat — rich message features) — slice `message-effects-lifecycle` ✅
+**Message-effects lifecycle (ephemeral / blurred / view-once)** — makes the rich-but-dead `MessageEffects`
+model live and centralises, as an Android SSOT, the lifecycle logic iOS scatters across its message views.
+Pure `:core:model` `MessageLifecyclePresentation.of(effects, createdAtMillis, nowMillis, revealed, viewCount)
+→ MessageLifecycle` decides three independent axes — ephemeral (`Inactive`/`Counting(remaining,total)`/`Expired`,
+skew-clamped, unknown-send-time → just-started, non-positive duration → inactive), blur (`None`/`Concealed`/
+`Revealed`), view-once (`None`/`Available(remaining)`/`Consumed`, default max 1, coerced/clamped) — plus
+stable-order appearance/persistent effect lists; the 3 missing iOS `MessageEffects` accessors ported. Wired
+end-to-end with **no DB migration** (`ApiMessage.effects` rides the JSON payload): `BubbleContentBuilder` carries
+`effects` (dropped on delete), `ChatScreen` renders a compact accent-coherent badge — 1 Hz clock ticking only
+while an ephemeral message is visible, natural tap-to-reveal, EN/FR/ES/PT. +35 tests, `assembleDebug` +
+`testDebugUnitTest` green, diff = `apps/android` only. Next: avatar/banner upload (last §K profile-edit item,
+two-hop reuse of the story upload→publish graft) or the worker drain-list Robolectric test.
+
+## Prior loop (Phase: Settings §L) — slice `settings-regional-content-language` ✅
 **Regional (secondary content) language preference** — the last no-op Settings language row is now live. A
 Prisme *content* preference (resolved via `LanguageResolver`, stored on the backend profile
 `User.regionalLanguage`), NOT the device-local UI locale. Pure `:feature:settings`

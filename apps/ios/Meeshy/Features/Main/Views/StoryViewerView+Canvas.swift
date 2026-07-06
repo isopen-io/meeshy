@@ -808,11 +808,7 @@ struct StoryCardView: View {
             bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
             state: canvasPresentation,
-            cardedCornerRadius: 22,
-            // Directive user 2026-07-04 : la carte se place DIRECTEMENT sous
-            // la ligne d'expiration — le mou vertical va en bas, plus de vide
-            // entre le header et la story.
-            verticalAlignment: .top))
+            cardedCornerRadius: 22))
     }
 
     var body: some View {

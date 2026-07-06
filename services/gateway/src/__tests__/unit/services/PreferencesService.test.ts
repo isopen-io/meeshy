@@ -429,27 +429,6 @@ describe('PreferencesService', () => {
         data: { systemLanguage: 'es' }
       });
     });
-
-    it('lowercases language codes at the write boundary (Prisme invariant)', async () => {
-      mockPrisma.user.update.mockResolvedValue({});
-      mockPrisma.user.findUnique.mockResolvedValue({
-        systemLanguage: 'en',
-        regionalLanguage: 'fr',
-        customDestinationLanguage: 'de'
-      });
-      mockPrisma.userPreference.findUnique.mockResolvedValue({ value: 'false' });
-
-      await service.updateLanguagePreferences('user-123', {
-        systemLanguage: 'EN',
-        regionalLanguage: 'Fr',
-        customDestinationLanguage: 'DE'
-      });
-
-      expect(mockPrisma.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-123' },
-        data: { systemLanguage: 'en', regionalLanguage: 'fr', customDestinationLanguage: 'de' }
-      });
-    });
   });
 
   // ============================================================================

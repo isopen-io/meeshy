@@ -13,9 +13,6 @@ struct ComposerToolPanelHost: View {
     var onSwitchTool: ((StoryToolMode) -> Void)? = nil
     var onEditMedia: ((String) -> Void)? = nil
     var onEditText: ((String) -> Void)? = nil
-    /// C8 — ouvre le picker de stickers (sheet au niveau View : le sticker
-    /// ajouté rejoint l'état canvas-authored du composer, pas le VM).
-    var onOpenStickerPicker: (() -> Void)? = nil
     /// Suppression d'un texte depuis la liste : remontée jusqu'à
     /// `ComposerControlsLayer` afin de fermer le format panel si le texte
     /// supprimé était celui en cours d'édition — sans ce relai la branche
@@ -184,7 +181,7 @@ struct ComposerToolPanelHost: View {
         case .audio:    return 220
         case .drawing:  return 280   // liste des traits
         case .text:     return 280
-        case .texture:  return 236  // couleurs + rangée « Ouverture » (C1)
+        case .texture:  return 160
         case .filters:  return 180
         case .timeline: return 0  // presented as sheet, not in band
         }
@@ -502,28 +499,6 @@ struct ComposerToolPanelHost: View {
                         )
                     }
                 }
-                // C8 — les stickers redeviennent atteignables : le picker
-                // complet existait (StickerPickerView) mais n'avait AUCUN
-                // call site depuis le retrait du tool dédié. Foyer choisi :
-                // le panneau Texte (les stickers sont des overlays de la
-                // même famille), même style que « Ajouter du texte ».
-                Button {
-                    onOpenStickerPicker?()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "face.smiling")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(MeeshyColors.brandPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(MeeshyColors.brandPrimary.opacity(0.12))
-                    )
-                }
                 Spacer()
             }
 
@@ -663,82 +638,31 @@ struct ComposerToolPanelHost: View {
     }
 
     private var texturePanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
-                        let isSelected = viewModel.backgroundColor == "#\(hex)"
-                        Button {
-                            viewModel.backgroundColor = "#\(hex)"
-                            viewModel.hasBackgroundImage = false
-                            HapticFeedback.light()
-                        } label: {
-                            Circle().fill(Color(hex: hex))
-                                .frame(width: 44, height: 44)
-                                .overlay(
-                                    Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
-                                        .padding(2)
-                                )
-                                .shadow(color: Color(hex: hex).opacity(isSelected ? 0.5 : 0), radius: 6)
-                        }
-                        .accessibilityLabel(String(localized: "story.background.swatch", defaultValue: "Couleur de fond", bundle: .module))
-                        .accessibilityValue("#\(hex)")
-                        .accessibilityHint(String(localized: "story.background.swatch.hint", defaultValue: "Touchez pour appliquer ce fond.", bundle: .module))
-                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
+                    let isSelected = viewModel.backgroundColor == "#\(hex)"
+                    Button {
+                        viewModel.backgroundColor = "#\(hex)"
+                        viewModel.hasBackgroundImage = false
+                        HapticFeedback.light()
+                    } label: {
+                        Circle().fill(Color(hex: hex))
+                            .frame(width: 44, height: 44)
+                            .overlay(
+                                Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
+                                    .padding(2)
+                            )
+                            .shadow(color: Color(hex: hex).opacity(isSelected ? 0.5 : 0), radius: 6)
                     }
-                    // C11 — la palette de dégradés (définie depuis l'origine
-                    // mais jamais offerte) rejoint la rangée : même format de
-                    // pastille, valeur sérialisée « gradient:HEX1:HEX2 »
-                    // (StoryBackgroundValue, rendue par les 3 renderers).
-                    ForEach(Array(StoryBackgroundPalette.gradients.enumerated()), id: \.offset) { _, pair in
-                        let serialized = StoryBackgroundValue.gradient(pair.0, pair.1).serialized
-                        let isSelected = viewModel.backgroundColor == serialized
-                        Button {
-                            viewModel.backgroundColor = serialized
-                            viewModel.hasBackgroundImage = false
-                            HapticFeedback.light()
-                        } label: {
-                            Circle()
-                                .fill(LinearGradient(
-                                    colors: [Color(hex: pair.0), Color(hex: pair.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ))
-                                .frame(width: 44, height: 44)
-                                .overlay(
-                                    Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
-                                        .padding(2)
-                                )
-                                .shadow(color: Color(hex: pair.0).opacity(isSelected ? 0.5 : 0), radius: 6)
-                        }
-                        .accessibilityLabel(String(localized: "story.background.gradient",
-                                                   defaultValue: "Fond dégradé", bundle: .module))
-                        .accessibilityValue("\(pair.0) → \(pair.1)")
-                        .accessibilityAddTraits(isSelected ? .isSelected : [])
-                    }
+                    .accessibilityLabel(String(localized: "story.background.swatch", defaultValue: "Couleur de fond", bundle: .module))
+                    .accessibilityValue("#\(hex)")
+                    .accessibilityHint(String(localized: "story.background.swatch.hint", defaultValue: "Touchez pour appliquer ce fond.", bundle: .module))
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
-                .padding(.horizontal, 2)
-                .padding(.vertical, 14)
             }
-
-            // C1 — l'animation d'ouverture du slide devient accessible par
-            // GESTE (FAB Fond → band → chips ; swipe-down pour fermer), plus
-            // seulement via le menu ⋯ → sheet Transitions. Même source de
-            // vérité (viewModel.openingEffect) et même persistance
-            // (granularCanvasSync) que la sheet — cf. OpeningEffectChips.
-            Text(String(
-                localized: "story.composer.openingTitle",
-                defaultValue: "Ouverture du slide",
-                bundle: .module
-            ))
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(.white.opacity(0.65))
             .padding(.horizontal, 2)
-            .padding(.bottom, 8)
-
-            OpeningEffectChips(selection: viewModel.openingEffect) { effect in
-                viewModel.openingEffect = effect
-            }
+            .padding(.vertical, 14)
         }
     }
 }

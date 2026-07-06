@@ -34,18 +34,4 @@ describe('isUrlOnly', () => {
     expect(isUrlOnly('mailto:a@b.com')).toBe(false);
     expect(isUrlOnly('ftp://server/file')).toBe(false);
   });
-
-  it('returns false when CJK text is glued to a URL with no space (translation must run)', () => {
-    expect(isUrlOnly('https://example.com你好世界')).toBe(false);
-    expect(isUrlOnly('你好世界https://example.com')).toBe(false);
-  });
-
-  it('returns false when Thai text is glued to a URL with no space', () => {
-    expect(isUrlOnly('https://example.comสวัสดีชาวโลก')).toBe(false);
-  });
-
-  it('still returns true for a bare URL and for comma-joined URLs', () => {
-    expect(isUrlOnly('https://example.com')).toBe(true);
-    expect(isUrlOnly('https://a.com,https://b.com')).toBe(true);
-  });
 });

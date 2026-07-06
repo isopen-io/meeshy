@@ -3,6 +3,8 @@ package me.meeshy.ui.component.bubble
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.DeliveryState
+import me.meeshy.sdk.model.DeliveryStatusResolver
 
 public object BubbleContentBuilder {
 
@@ -16,19 +18,27 @@ public object BubbleContentBuilder {
         ownReactions: Set<String> = emptySet(),
         showOriginal: Boolean = false,
         mediaBaseUrl: String? = null,
+        recipientCount: Int = 1,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
         val isTranslated = !isDeleted && message.isTranslated(preferences)
         val isShowingOriginal = isTranslated && showOriginal
-        val deliveryStatus = when {
-            !isOutgoing -> DeliveryStatus.Sent
-            isFailed -> DeliveryStatus.Failed
-            isPending -> DeliveryStatus.Pending
-            message.readByAllAt != null -> DeliveryStatus.Read
-            message.readCount > 0 -> DeliveryStatus.Read
-            message.deliveredCount > 0 -> DeliveryStatus.Delivered
-            else -> DeliveryStatus.Sent
+        val deliveryStatus = if (!isOutgoing) {
+            DeliveryStatus.Sent
+        } else {
+            DeliveryStatusResolver.resolve(
+                base = when {
+                    isFailed -> DeliveryState.Failed
+                    isPending -> DeliveryState.Pending
+                    else -> DeliveryState.Sent
+                },
+                deliveredCount = message.deliveredCount,
+                readCount = message.readCount,
+                recipientCount = recipientCount,
+                deliveredToAllAt = message.deliveredToAllAt,
+                readByAllAt = message.readByAllAt,
+            ).toBubbleStatus()
         }
         val reactions = message.reactionSummary
             ?.map { (emoji, count) ->
@@ -90,7 +100,16 @@ public object BubbleContentBuilder {
             } else {
                 0
             },
+            effects = if (isDeleted) null else message.effects,
         )
+    }
+
+    private fun DeliveryState.toBubbleStatus(): DeliveryStatus = when (this) {
+        DeliveryState.Pending -> DeliveryStatus.Pending
+        DeliveryState.Sent -> DeliveryStatus.Sent
+        DeliveryState.Delivered -> DeliveryStatus.Delivered
+        DeliveryState.Read -> DeliveryStatus.Read
+        DeliveryState.Failed -> DeliveryStatus.Failed
     }
 
     private val ApiMessageAttachment.isImage: Boolean

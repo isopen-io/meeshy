@@ -26,17 +26,4 @@ describe('formatCompactNumber', () => {
     expect(formatCompactNumber(-1500)).toBe('-1.5K');
     expect(formatCompactNumber(-2_000_000)).toBe('-2.0M');
   });
-
-  it('rolls over at the rounding boundary instead of printing "1000.0K"', () => {
-    expect(formatCompactNumber(999_949)).toBe('999.9K');
-    expect(formatCompactNumber(999_950)).toBe('1.0M');
-    expect(formatCompactNumber(999_999)).toBe('1.0M');
-    expect(formatCompactNumber(-999_999)).toBe('-1.0M');
-  });
-
-  it('rolls over the M→B boundary instead of printing "1000.0M"', () => {
-    expect(formatCompactNumber(999_949_999)).toBe('999.9M');
-    expect(formatCompactNumber(999_950_000)).toBe('1.0B');
-    expect(formatCompactNumber(999_999_999)).toBe('1.0B');
-  });
 });

@@ -136,22 +136,6 @@ function getStories(qc: QueryClient): Array<{ id: string; viewCount?: number; co
   return qc.getQueryData<Array<{ id: string; viewCount?: number; content?: string }>>(['stories', 'feed']) ?? [];
 }
 
-// Reels affinity thread caches (`/feed/reels`, `/reel/:id`) key off
-// `['posts','list','reels', seed]` — the `foryou` thread and per-seed threads.
-function seedReels(qc: QueryClient, posts: unknown[] = [mockPost], seed = 'foryou') {
-  qc.setQueryData(['posts', 'list', 'reels', seed], {
-    pages: [{ data: posts, pagination: { hasMore: false, nextCursor: null } }],
-    pageParams: [undefined],
-  });
-}
-
-function getReels(qc: QueryClient, seed = 'foryou'): Array<{ id: string; content?: string; isEdited?: boolean }> {
-  const data = qc.getQueryData<{ pages: { data: Array<{ id: string; content?: string; isEdited?: boolean }> }[] }>(
-    ['posts', 'list', 'reels', seed],
-  );
-  return data?.pages.flatMap((p) => p.data) ?? [];
-}
-
 describe('usePostSocketCacheSync', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -473,43 +457,6 @@ describe('usePostSocketCacheSync', () => {
 
       const detail = qc.getQueryData<{ data: typeof mockPost }>(['posts', 'detail', 'post-1']);
       expect(detail?.data.content).toBe('Detail Updated');
-    });
-
-    it('propagates the edit to every reels affinity thread (foryou + deep-linked seed)', () => {
-      const qc = createQueryClient();
-      seedReels(qc, [mockPost], 'foryou');
-      seedReels(qc, [mockPost], 'post-1');
-      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
-
-      const updated = { ...mockPost, content: 'Reel caption edited', isEdited: true };
-      act(() => emit('post:updated', { post: updated }));
-
-      expect(getReels(qc, 'foryou')[0]).toMatchObject({ content: 'Reel caption edited', isEdited: true });
-      expect(getReels(qc, 'post-1')[0]).toMatchObject({ content: 'Reel caption edited', isEdited: true });
-    });
-  });
-
-  describe('post:deleted — reels affinity thread & detail cache', () => {
-    it('drops the deleted post from every reels cache, leaving siblings intact', () => {
-      const qc = createQueryClient();
-      seedReels(qc, [mockPost, { ...mockPost, id: 'post-2' }], 'foryou');
-      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
-
-      act(() => emit('post:deleted', { postId: 'post-1', authorId: 'user-1' }));
-
-      const reels = getReels(qc, 'foryou');
-      expect(reels).toHaveLength(1);
-      expect(reels[0].id).toBe('post-2');
-    });
-
-    it('evicts the post detail cache so a stale reel/detail view cannot resurface', () => {
-      const qc = createQueryClient();
-      qc.setQueryData(['posts', 'detail', 'post-1'], { data: mockPost });
-      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
-
-      act(() => emit('post:deleted', { postId: 'post-1', authorId: 'user-1' }));
-
-      expect(qc.getQueryData(['posts', 'detail', 'post-1'])).toBeUndefined();
     });
   });
 

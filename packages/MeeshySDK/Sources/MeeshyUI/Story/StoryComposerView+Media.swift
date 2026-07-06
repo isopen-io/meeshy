@@ -56,18 +56,6 @@ extension StoryComposerView {
             }
             .presentationDetents([.medium])
         }
-        .sheet(isPresented: $showStickerPicker) {
-            // C8 — le picker existait, complet, sans AUCUN call site. Sheet
-            // medium, dismiss gestuel natif ; reste ouverte après un ajout
-            // (poser plusieurs stickers d'affilée, fermer par swipe-down).
-            StickerPickerView { emoji in
-                // C13 — chemin VM unique (currentEffects source de vérité).
-                viewModel.addSticker(emoji: emoji)
-                HapticFeedback.light()
-            }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
         .sheet(isPresented: $viewModel.isTimelineVisible,
                onDismiss: { viewModel.commitTimelineToCurrentSlide() }) {
             TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
@@ -77,6 +65,20 @@ extension StoryComposerView {
         }
         .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, isVisible in
             if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
+        }
+        .sheet(isPresented: $showFilterSheet) {
+            NavigationStack {
+                StoryFilterPicker(selectedFilter: $selectedFilter, previewImage: selectedImage)
+                    .navigationTitle(String(localized: "story.composer.filter", defaultValue: "Filtre", bundle: .module))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(String(localized: "story.composer.done", defaultValue: "OK", bundle: .module)) { showFilterSheet = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showTransitionSheet) {
             NavigationStack {
@@ -251,10 +253,7 @@ extension StoryComposerView {
             }
             let objectId = UUID().uuidString
             if kind == .video {
-                guard let data = try? await item.loadTransferable(type: Data.self) else {
-                    mediaLoadFailed = true  // C16 — l'échec parle
-                    return
-                }
+                guard let data = try? await item.loadTransferable(type: Data.self) else { return }
                 mediaLoadProgress = 0.3
                 let ext = item.supportedContentTypes
                     .first { $0.conforms(to: .audiovisualContent) }?
@@ -318,16 +317,12 @@ extension StoryComposerView {
                     }
                 } catch {
                     Logger.media.error("[StoryComposer] Video write error: \(error.localizedDescription)")
-                    mediaLoadFailed = true  // C16 — l'échec parle
                 }
             } else {
                 // ImageIO downsample for foreground images (max 1080px)
                 mediaLoadProgress = 0.3
                 guard let data = try? await item.loadTransferable(type: Data.self),
-                      let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else {
-                    mediaLoadFailed = true  // C16 — l'échec parle
-                    return
-                }
+                      let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else { return }
                 mediaLoadProgress = 0.7
                 // Persist the image to a temp file so StoryMediaLayer.configureImage
                 // can load it via its file:// URL. Without this, media.mediaURL stays

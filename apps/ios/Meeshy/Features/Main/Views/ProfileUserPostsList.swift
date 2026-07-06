@@ -222,7 +222,7 @@ struct ProfileUserPostsList: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "square.text.square")
-                .font(.system(size: 44))
+                .font(MeeshyFont.relative(44))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
             Text(String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .main))
@@ -601,7 +601,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private func scheduleImpressionFlush() {
         impressionTask?.cancel()
         impressionTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
             await self?.flushImpressions()
         }

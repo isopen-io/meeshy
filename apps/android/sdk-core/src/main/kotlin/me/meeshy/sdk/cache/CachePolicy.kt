@@ -62,14 +62,5 @@ data class CachePolicy(
             freshForMillis = 60_000L,
             keepForMillis = 90L * 24 * 60 * 60_000L,
         )
-
-        // The empty-query "discover people" suggestions shift as the social graph
-        // does but not by the second; fresh for a minute so a return to the tab
-        // paints instantly, kept a few hours so a cold revisit still shows the last
-        // list while it revalidates.
-        val Suggestions = CachePolicy(
-            freshForMillis = 60_000L,
-            keepForMillis = 6 * 60 * 60_000L,
-        )
     }
 }

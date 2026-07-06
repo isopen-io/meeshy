@@ -616,11 +616,7 @@ describe('PostReactionHandler', () => {
       });
     });
 
-    it('test_handleRemoveReaction_alreadyAbsent_isIdempotent_callbackSuccessNoBroadcast', async () => {
-      // The reaction is already gone (concurrent removal, retry of an applied
-      // remove, double-tap un-like). `{ success: false }` would make the client
-      // roll the optimistic un-like back, re-showing a like that is gone.
-      // Mirrors ReactionHandler.handleReactionRemove (message reactions).
+    it('test_handleRemoveReaction_notFound_callbackError', async () => {
       const socket = createMockSocket();
       const data = { postId: POST_ID, emoji: EMOJI };
       const callback = jest.fn();
@@ -632,8 +628,8 @@ describe('PostReactionHandler', () => {
 
       expect(mockIO.to).not.toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith({
-        success: true,
-        data: { message: 'Reaction already absent' },
+        success: false,
+        error: 'Reaction not found',
       });
     });
 

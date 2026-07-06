@@ -1,13 +1,11 @@
 import SwiftUI
-import MeeshySDK
 import MeeshyUI
 
 // MARK: - Call Pill Status
 
-/// What the minimised call banner's status line should convey, derived purely
-/// from `CallState`. Only `.connected` shows the running call duration (green +
-/// glyphe signal) ; every pre-connection state shows a color-coded glyph
-/// (amber = sonnerie/connexion, red = rupture réseau) so a call that is merely
+/// What the minimised call pill's status line should convey, derived purely from
+/// `CallState`. Only `.connected` shows the running call duration (green); every
+/// pre-connection state shows a textual status (amber) so a call that is merely
 /// ringing/connecting/reconnecting is never misrepresented as an established
 /// 00:00 call.
 enum CallPillStatus: Equatable {
@@ -16,41 +14,17 @@ enum CallPillStatus: Equatable {
     case connecting
     case reconnecting
 
-    /// `true` only for an established call → the banner shows the live duration.
+    /// `true` only for an established call → the pill shows the live duration.
     var isConnected: Bool { self == .connected }
 
     /// Pre-connection status label (empty for `.connected`, where the view shows
-    /// the formatted duration instead). Porté par VoiceOver — visuellement,
-    /// l'état est un glyphe code couleur (retour user 2026-07-04 : remplacer
-    /// les textes « Sonnerie… »/« Connexion… » par des glyphes).
+    /// the formatted duration instead).
     var label: String {
         switch self {
         case .connected:    return ""
         case .ringing:      return String(localized: "call.pill.status.ringing", defaultValue: "Sonnerie…")
         case .connecting:   return String(localized: "call.pill.status.connecting", defaultValue: "Connexion…")
         case .reconnecting: return String(localized: "call.pill.status.reconnecting", defaultValue: "Reconnexion…")
-        }
-    }
-
-    /// Glyphe d'état pré-connexion (nil pour `.connected` : la durée + le
-    /// glyphe signal prennent le relais).
-    var glyphSystemName: String? {
-        switch self {
-        case .connected:    return nil
-        case .ringing:      return "bell.and.waves.left.and.right"
-        case .connecting:   return "arrow.triangle.2.circlepath"
-        case .reconnecting: return "wifi.exclamationmark"
-        }
-    }
-
-    /// Code couleur de l'état : ambre = en attente (sonnerie/connexion),
-    /// rouge = rupture réseau en cours de récupération.
-    var glyphColor: Color? {
-        switch self {
-        case .connected:    return nil
-        case .ringing:      return MeeshyColors.warning
-        case .connecting:   return MeeshyColors.warning
-        case .reconnecting: return MeeshyColors.error
         }
     }
 
@@ -69,12 +43,6 @@ enum CallPillStatus: Equatable {
 
 // MARK: - Floating Call Pill View
 
-/// Bannière d'appel réduite — pleine largeur façon WhatsApp, incrustée au
-/// sommet de TOUTE l'app (overlay RootView). Toucher la bannière revient au
-/// plein écran ; le bouton « agrandir » dédié a été retiré (redondant avec le
-/// tap, retour user 2026-07-04). L'avatar réel du correspondant est résolu
-/// cache-first (Instant App) et l'état de connexion est porté par des glyphes
-/// code couleur, pas par du texte.
 struct FloatingCallPillView: View {
     // Use the singleton directly via @ObservedObject like the rest of the
     // app (RootView, CallView). The previous @EnvironmentObject form
@@ -89,17 +57,12 @@ struct FloatingCallPillView: View {
     // when reduce motion is on, collapse it to a simple cross-fade.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Avatar réel du correspondant — cache-first UNIQUEMENT (le refresh API +
-    // la persistance cache sont déjà faits par CallView.resolveRemoteProfile ;
-    // la bannière se contente de servir le cache, même stale, sans réseau).
-    @State private var remoteProfile: MeeshyUser?
-
     private let pillHeight: CGFloat = 64
 
     var body: some View {
         if callManager.displayMode == .pip && callManager.callState.isActive && !callManager.isSystemPiPActive {
             pillContent
-                // Bannière verre + contrôles blancs : on épingle le verre en
+                // Pilule verre + contrôles blancs : on épingle le verre en
                 // sombre pour rester lisible quel que soit le mode système.
                 .environment(\.colorScheme, .dark)
                 // P2-iOS-9 — slide-in from top when motion is allowed; fade
@@ -107,9 +70,6 @@ struct FloatingCallPillView: View {
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.75), value: callManager.displayMode)
                 .zIndex(999)
-                .task(id: callManager.remoteUserId) {
-                    await resolveRemoteProfile(userId: callManager.remoteUserId)
-                }
         }
     }
 
@@ -119,34 +79,26 @@ struct FloatingCallPillView: View {
         HStack(spacing: 12) {
             pillLeadingVisual
             userInfoSection
-            Spacer(minLength: 8)
+            Spacer()
             controlButtons
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         // minHeight (not an exact height): userInfoSection stacks two
         // Dynamic-Type-scalable Text lines that can exceed pillHeight at
         // accessibility text sizes (AX1+) — an exact frame would force-clip
         // the name/status instead of letting the pill grow to fit.
         .frame(minHeight: pillHeight)
-        // Pleine largeur (façon barre d'appel WhatsApp) : la bannière s'étire
-        // d'un bord à l'autre au sommet de l'app au lieu de flotter en capsule.
-        .frame(maxWidth: .infinity)
-        // iOS 26 Liquid Glass surface (SDK Compatibility wrapper owns the
+        // iOS 26 Liquid Glass capsule surface (SDK Compatibility wrapper owns the
         // gating + the .ultraThinMaterial fallback). The small inner controls stay
         // as vibrancy fills ON the glass — Apple HIG: don't nest glass in glass.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .adaptiveGlass(in: Capsule())
+        .clipShape(Capsule())
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            Capsule()
                 .stroke(MeeshyColors.glassBorderGradient(isDark: true), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 6)
-        // Plafond iPad/Mac : la barre reste un bandeau lisible et centré au
-        // lieu de s'étirer sur toute une fenêtre paysage ; sur iPhone (<560 pt)
-        // elle est pleine largeur.
-        .frame(maxWidth: 560)
-        .padding(.horizontal, 10)
-        .contentShape(Rectangle())
+        .padding(.horizontal, 16)
         .onTapGesture {
             expandToFullScreen()
         }
@@ -156,7 +108,6 @@ struct FloatingCallPillView: View {
             + (callManager.remoteUsername.map { " — \($0)" } ?? "")
         )
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
-        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Leading Visual (remote video thumbnail or avatar)
@@ -194,44 +145,13 @@ struct FloatingCallPillView: View {
         return ZStack {
             Circle()
                 .fill(MeeshyColors.brandGradient)
+                .frame(width: 44, height: 44)
 
             Text(initial)
                 .font(.system(.callout, design: .rounded).weight(.bold))
                 .foregroundColor(.white)
-
-            // Vraie photo de profil par-dessus le fallback initiale (le
-            // dégradé + initiale restent visibles pendant le chargement).
-            if let avatar = remoteProfile?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: 44, height: 44),
-                    thumbHash: remoteProfile?.avatarThumbHash
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
-            }
         }
-        .frame(width: 44, height: 44)
         .accessibilityHidden(true)
-    }
-
-    /// Résolution cache-first de l'avatar (Instant App) : `.fresh`/`.stale`
-    /// servis immédiatement, pas d'appel réseau ici — CallView rafraîchit et
-    /// ré-alimente le cache quand l'appel passe en plein écran.
-    private func resolveRemoteProfile(userId: String?) async {
-        guard let userId, !userId.isEmpty else {
-            remoteProfile = nil
-            return
-        }
-        switch await CacheCoordinator.shared.profiles.load(for: userId) {
-        case .fresh(let users, _), .stale(let users, _):
-            remoteProfile = users.first
-        case .expired, .empty:
-            break
-        }
     }
 
     // MARK: - User Info
@@ -243,44 +163,16 @@ struct FloatingCallPillView: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
 
-            statusLine
+            Text(pillStatus.isConnected ? formattedDuration : pillStatus.label)
+                .font(.caption.weight(.medium).monospacedDigit())
+                .foregroundColor(pillStatus.isConnected ? MeeshyColors.success : MeeshyColors.warning)
         }
     }
 
-    /// Seconde ligne : durée verte + glyphe signal code couleur quand l'appel
-    /// est établi ; sinon le glyphe d'état pré-connexion (sonnerie/connexion en
-    /// ambre, rupture réseau en rouge). Le libellé texte survit pour VoiceOver.
-    private var statusLine: some View {
-        HStack(spacing: 5) {
-            if pillStatus.isConnected {
-                TransientCallSignalGlyph(strength: signalStrength)
-                Text(formattedDuration)
-                    .font(.caption.weight(.medium).monospacedDigit())
-                    .foregroundColor(MeeshyColors.success)
-            } else if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
-                Image(systemName: glyph)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(color)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(pillStatus.isConnected ? formattedDuration : pillStatus.label)
-        .accessibilityAddTraits(.updatesFrequently)
-    }
-
-    /// Status conveyed by the banner's second line — drives whether the live
-    /// duration (green) or a pre-connection glyph (amber/red) is shown.
+    /// Status conveyed by the pill's second line — drives whether the live
+    /// duration (green) or a pre-connection label (amber) is shown.
     private var pillStatus: CallPillStatus {
         CallPillStatus.from(callManager.callState)
-    }
-
-    /// Même dérivation que CallView : stats RTT+perte d'abord, état ICE en
-    /// repli — le mapping vit dans `CallSignalStrength` (pur, testé).
-    private var signalStrength: CallSignalStrength {
-        CallSignalStrength.from(
-            level: callManager.liveVideoQualityLevel,
-            connection: callManager.connectionQuality
-        )
     }
 
     // MARK: - Control Buttons
@@ -289,6 +181,7 @@ struct FloatingCallPillView: View {
         HStack(spacing: 8) {
             muteButton
             speakerButton
+            expandButton
             hangupButton
         }
     }
@@ -333,6 +226,24 @@ struct FloatingCallPillView: View {
             ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
             : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
         .callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)
+    }
+
+    private var expandButton: some View {
+        Button {
+            expandToFullScreen()
+        } label: {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.footnote.weight(.medium))
+                .foregroundColor(.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.1))
+                )
+        }
+        .pressable()
+        .accessibilityLabel(String(localized: "call.pill.expand", defaultValue: "Agrandir l'appel"))
+        .accessibilityHint(String(localized: "call.pill.expand.hint", defaultValue: "Revient à l'affichage plein écran de l'appel"))
     }
 
     private var hangupButton: some View {

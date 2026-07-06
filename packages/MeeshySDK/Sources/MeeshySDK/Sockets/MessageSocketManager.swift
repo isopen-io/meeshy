@@ -767,12 +767,6 @@ public struct CallMediaToggleData: Decodable, Sendable {
 public struct CallErrorData: Decodable, Sendable {
     public let code: String?
     public let message: String?
-    /// The call this error pertains to, when the gateway knows it. Consumers with
-    /// an active call MUST ignore any error whose `callId` is present and does not
-    /// match their current call — errors for a different call must never affect a
-    /// healthy, unrelated one. Absent for errors that occur before a call context
-    /// exists (e.g. auth failures) or from emit sites not yet call-scoped server-side.
-    public let callId: String?
 }
 
 public struct CallQualityAlertData: Decodable, Sendable {
