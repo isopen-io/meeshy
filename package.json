@@ -55,7 +55,7 @@
     "concurrently": "^9.2.1",
     "dotenv": "^17.4.2",
     "tsx": "^4.21.0",
-    "turbo": "^2.9.18",
+    "turbo": "^2.10.3",
     "typescript": "^6.0.3"
   },
   "pnpm": {
