@@ -3,6 +3,26 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-06 (`delivery-status-resolver`): `main` was force-reset and lost merged Android work — and the
+  monorepo CI does NOT build Android, so a broken `main` compiles "green".** On this run `origin/main` had been
+  force-updated (`6cd1a3c4…→5ee31e52`, a forced push) to a state whose `apps/android/tasks/*` docs had regressed
+  ~21 slices AND whose `:core:model` `IsoTime.kt` was missing `isoToEpochMillisOrNull` — yet the just-merged
+  message-effects `ChatScreen.kt` references it, so `main` was **uncompilable for Android**. `ci.yml` only tests
+  JS/TS/Python, so it never caught it. **Takeaways:** (1) after a step-0 rebase onto `main`, run `meeshy.sh check`
+  locally before trusting — CI green ≠ Android compiles; (2) when resolving doc conflicts from a force-reset, the
+  feature-branch side is the superset (verified: 0 `main`-unique slices) so keep it; (3) restoring a
+  force-dropped helper that a merged file needs is legitimate in-scope work (`apps/android` only) and required to
+  leave `main` green; (4) a dedicated Android CI job (`.github/`, its own run) would have flagged this — still a
+  tracked follow-up.
+- **2026-07-06 (`delivery-status-resolver`): the delivery indicator must be honest — resolve at the display point
+  with an all-or-nothing rule, never a `> 0` count threshold.** iOS centralises this in a pure
+  `DeliveryStatusResolver`; Android now mirrors it: `resolve(base, deliveredCount, readCount, recipientCount,
+  deliveredToAllAt?, readByAllAt?)` returns Delivered/Read only when the count `>= recipientCount` (recipients =
+  `memberCount - 1`), trusts `> 0` when `recipientCount <= 1` (1:1 / unknown denominator), and lets unambiguous
+  "all" markers win denominator-independent. **Under-report, never over-report** — an upstream Read downgrades
+  honestly when group counts are partial. Thread `recipientCount` as a reactive `MutableStateFlow` in the
+  ViewModel (from the conversation stream) into the bubble `combine`, so the check refreshes when *either* the
+  counts or the member list arrives — not a one-shot read.
 - **2026-07-06 (`message-effects-lifecycle`): a new nullable field on `ApiMessage` needs NO DB migration.**
   `MessageEntity.payload` stores the serialized `ApiMessage` JSON (not columns), so `val effects: MessageEffects?
   = null` decodes from the wire, persists in the payload, and reloads for free — kotlinx lenient decode tolerates
