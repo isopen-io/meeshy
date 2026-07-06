@@ -4,7 +4,21 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-notification-prefs-sync` ✅
+## This loop (Phase: Settings §L) — slice `settings-regional-content-language` ✅
+**Regional (secondary content) language preference** — the last no-op Settings language row is now live. A
+Prisme *content* preference (resolved via `LanguageResolver`, stored on the backend profile
+`User.regionalLanguage`), NOT the device-local UI locale. Pure `:feature:settings`
+`RegionalLanguageSelection.build(regionalCode, systemCode, query)` SSOT (options = full
+`LanguageData.allLanguages`; primary/system language hidden unless it is the stored choice;
+trimmed/case-insensitive marking + label lookup + name/nativeName/code search; empty query → all; unknown
+code → no label, no crash). Wiring reuses `edit-profile-optimistic` — **no new store**:
+`SettingsViewModel.setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(
+UpdateProfileRequest(regionalLanguage=…))` (optimistic session repaint + durable `UPDATE_PROFILE` + wake
+worker on real `cmid`) + UI-only `setRegionalLanguageQuery`; `SettingsScreen` searchable flag+native-name
+dialog (EN/FR/ES/PT). +24 tests, `assembleDebug`+`testDebugUnitTest` green, diff = `apps/android` only.
+Next: the worker drain-list Robolectric test (PROGRESS.md "Next" #5).
+
+## Prior loop (Phase: Settings §L) — slice `settings-notification-prefs-sync` ✅
 **Offline-queued notification-preference backend sync** — wires the dead `OutboxKind.UPDATE_SETTINGS`/
 `OutboxLanes.SETTINGS` end-to-end (mirrors `edit-profile-optimistic`). Pure `:core:model`
 `NotificationPreferenceSyncBody.from(prefs)` (gateway `PATCH /me/preferences/notification` contract SSOT — all
@@ -12,7 +26,7 @@
 `NotificationPreferencesSyncRepository.enqueueSync` (session-gated, no optimistic flip — store is truth);
 `OutboxCoalescer` `UPDATE_SETTINGS` latest-snapshot rule + `OutboxFlushWorker` sender; `SettingsViewModel`
 local-first-then-sync funnel (persist → enqueue → wake worker on real `cmid`). +15 tests, `meeshy.sh check`
-green, diff = `apps/android` only. Next: regional (content) language preference (PROGRESS.md "Next" #4).
+green, diff = `apps/android` only.
 
 ## Prior loop (Phase: Settings §L) — slice `settings-interface-language` ✅
 **Persisted interface (UI chrome) language** — mirrors the theme slice one step further. Pure `:core:model`

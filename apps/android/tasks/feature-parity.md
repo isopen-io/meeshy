@@ -1266,9 +1266,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       pick intent + display-language dialog picker (System + fr/en/es/ar), `MainActivity`
       re-localises the whole Compose tree live via `LanguageViewModel` +
       `createConfigurationContext` (minSdk-26 safe, no AppCompat) (`settings-interface-language`,
-      2026-07-05). +32 tests. NB: **display** language only; the **regional** language row stays
-      a no-op — it is a Prisme *content*-preference (backend profile / content store), not the
-      app UI locale, and belongs to a separate content-preference slice.
+      2026-07-05). +32 tests. NB: **display** language only; the **regional** language row is a
+      Prisme *content*-preference (backend profile), not the app UI locale — shipped separately below.
+- [x] Regional (secondary content) language preference — the last Settings language row, now live
+      (`settings-regional-content-language`, 2026-07-06). Distinct from the interface language: it is a
+      Prisme *content* preference resolved via `LanguageResolver`, so it is stored on the backend profile
+      (`User.regionalLanguage`) — NOT the device-local `InterfaceLanguageStore`. Pure `:feature:settings`
+      `RegionalLanguageSelection.build(regionalCode, systemCode, query) → RegionalLanguagePresentation`
+      SSOT: options are the full content-language set (`LanguageData.allLanguages`, not the 4 interface
+      languages), the current choice is marked (trimmed/case-insensitive; blank/absent/unknown → no
+      label, no crash), the **primary (system) language is hidden** so a user can never pick their primary
+      as their secondary (unless it *is* the stored choice — a data-inconsistency never hides the active
+      selection), and a trimmed case-insensitive search spans English name / native name / code. Wired
+      through the existing optimistic + offline-queued profile-edit path: `SettingsViewModel`
+      `setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage=…))`
+      (session repaints instantly, durable `UPDATE_PROFILE` row, worker woken only on a real `cmid`; a
+      sessionless/superseded enqueue is inert) — reusing the `edit-profile-optimistic` machinery, **no new
+      store**; `SettingsScreen` renders the searchable flag+native-name dialog (mirrors the notification-type
+      search) with the current value as the row detail. +24 tests (18 pure-core, 6 VM). Surpasses iOS, whose
+      regional-language write is online-only. (EN/FR/ES/PT strings.)
 - [~] Notification preferences (push/email/sound/vibration, per-event types, DND schedule) —
       **durable master toggles landed** (`settings-notification-prefs`, 2026-07-05): pure
       `:core:model` JSON codec for the whole `UserNotificationPreferences` block

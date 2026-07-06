@@ -18,6 +18,9 @@
     <string name="settings_language_system">System default</string>
     <string name="settings_language_dialog_close">Close</string>
     <string name="settings_regional_language">Regional language</string>
+    <string name="settings_regional_language_none">Not set</string>
+    <string name="settings_regional_language_search">Search languages</string>
+    <string name="settings_regional_language_empty">No language matches your search</string>
     <string name="settings_push_notifications">Push notifications</string>
     <string name="settings_new_message_notifications">New messages</string>
     <string name="settings_notification_sound">Sound</string>

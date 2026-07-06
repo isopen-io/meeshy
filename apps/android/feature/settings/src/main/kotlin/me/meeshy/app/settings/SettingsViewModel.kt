@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.DndDay
 import me.meeshy.sdk.model.DndWindow
 import me.meeshy.sdk.model.NotificationType
 import me.meeshy.sdk.model.NotificationTypeCatalog
+import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.model.next
 import me.meeshy.sdk.notification.NotificationPreferencesStore
@@ -32,6 +33,9 @@ data class SettingsUiState(
     val avatar: String? = null,
     val themeMode: AppThemeMode = AppThemeMode.AUTO,
     val interfaceLanguage: String? = null,
+    val systemLanguage: String? = null,
+    val regionalLanguage: String? = null,
+    val regionalLanguageQuery: String = "",
     val notifications: UserNotificationPreferences = UserNotificationPreferences(),
     val notificationTypeQuery: String = "",
     val isLoading: Boolean = false,
@@ -54,7 +58,16 @@ class SettingsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
-                _state.update { it.copy(userId = user?.id, username = user?.username, email = user?.email, avatar = user?.avatar) }
+                _state.update {
+                    it.copy(
+                        userId = user?.id,
+                        username = user?.username,
+                        email = user?.email,
+                        avatar = user?.avatar,
+                        systemLanguage = user?.systemLanguage,
+                        regionalLanguage = user?.regionalLanguage,
+                    )
+                }
             }
         }
         viewModelScope.launch {
@@ -87,6 +100,26 @@ class SettingsViewModel @Inject constructor(
     /** Persists the interface (UI chrome) language; `null` follows the device locale. */
     fun setInterfaceLanguage(code: String?) {
         viewModelScope.launch { interfaceLanguageStore.setLanguageCode(code) }
+    }
+
+    /**
+     * Sets the regional (secondary content) language — a Prisme *content* preference on the
+     * backend profile, NOT the app UI locale. It flows through the optimistic + offline-queued
+     * profile-edit path: [UserRepository.enqueueProfileEdit] repaints the session identity
+     * instantly (so this row and every content surface reflect the choice at once) and queues
+     * a durable `UPDATE_PROFILE` mutation, waking the flush worker only when a real row was
+     * enqueued (a sessionless/superseded enqueue returns `null` — nothing to flush).
+     */
+    fun setRegionalLanguage(code: String) {
+        viewModelScope.launch {
+            val cmid = userRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage = code))
+            if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
+        }
+    }
+
+    /** Updates the UI-only search query that filters the regional-language picker. */
+    fun setRegionalLanguageQuery(query: String) {
+        _state.update { it.copy(regionalLanguageQuery = query) }
     }
 
     /** Toggles push notifications, persisting the whole block (other toggles preserved). */

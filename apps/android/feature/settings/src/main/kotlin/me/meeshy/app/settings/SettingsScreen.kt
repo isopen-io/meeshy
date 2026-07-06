@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -150,7 +151,14 @@ fun SettingsScreen(
                     onSelect = viewModel::setInterfaceLanguage,
                 )
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_regional_language), detail = null, onClick = {})
+                RegionalLanguageRow(
+                    label = stringResource(R.string.settings_regional_language),
+                    regionalLanguage = state.regionalLanguage,
+                    systemLanguage = state.systemLanguage,
+                    query = state.regionalLanguageQuery,
+                    onQueryChange = viewModel::setRegionalLanguageQuery,
+                    onSelect = viewModel::setRegionalLanguage,
+                )
             }
 
             SettingsSection(title = stringResource(R.string.settings_section_notifications)) {
@@ -360,6 +368,98 @@ private fun LanguageOptionRow(
         Spacer(Modifier.width(MeeshySpacing.sm))
         Text(text = label, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+@Composable
+private fun RegionalLanguageRow(
+    label: String,
+    regionalLanguage: String?,
+    systemLanguage: String?,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val presentation = RegionalLanguageSelection.build(regionalLanguage, systemLanguage, query)
+    val detail = presentation.selectedLabel ?: stringResource(R.string.settings_regional_language_none)
+
+    SettingsRow(
+        label = label,
+        detail = detail,
+        onClick = {
+            onQueryChange("")
+            showDialog = true
+        },
+    )
+
+    if (showDialog) {
+        RegionalLanguageDialog(
+            options = presentation.options,
+            query = query,
+            onQueryChange = onQueryChange,
+            onSelect = {
+                onSelect(it)
+                showDialog = false
+            },
+            onDismiss = { showDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun RegionalLanguageDialog(
+    options: List<RegionalLanguageOption>,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_regional_language)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    placeholder = { Text(stringResource(R.string.settings_regional_language_search)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = MeeshySpacing.xs),
+                )
+                if (options.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.settings_regional_language_empty),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = MeeshySpacing.sm),
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        options.forEach { option ->
+                            LanguageOptionRow(
+                                label = "${option.flag}  ${option.nativeName}",
+                                isSelected = option.isSelected,
+                                onClick = { onSelect(option.code) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_language_dialog_close))
+            }
+        },
+    )
 }
 
 @Composable

@@ -3,6 +3,29 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-06 (`settings-regional-content-language`): `:sdk-core` `ThemeStoreTest` (and other DataStore
+  tests) flake under the FULL parallel run, not in isolation.** They use a real `Dispatchers.IO` DataStore
+  with `withTimeout(5_000)`; when `gradle :app:assembleDebug testDebugUnitTest` compiles+tests every module
+  at once, IO contention can push a single `store.themeMode.first { … }` past 5s → a *different* test fails
+  each run (`dataStore_setThemeMode_…` one run, `dataStore_hydrates…` the next). It is environmental, not a
+  regression: run the same test 3× in isolation (`--tests "*ThemeStoreTest*" --rerun-tasks`) — green every
+  time — then re-run the full check on the warm cache (compilation already done → no IO storm) and it passes.
+  Don't "fix" it by touching sdk-core; a warm-cache re-run is the gate evidence. (Candidate future hardening:
+  bump the timeout or pin these to a test dispatcher — a separate sdk-core slice, out of scope here.)
+- **2026-07-06 (`settings-regional-content-language`): reuse the `edit-profile-optimistic` outbox path for
+  any single-field backend content preference — no new store.** The regional (content) language is just a
+  `regionalLanguage` profile field, so the whole slice was a pure picker SSOT (`RegionalLanguageSelection`)
+  + a 3-line VM intent delegating to `UserRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage=…))`
+  (optimistic session repaint + durable `UPDATE_PROFILE` + wake-worker-on-`cmid`). Contrast the *interface*
+  language, which is device-local UI chrome → its own `InterfaceLanguageStore`. The test for "does it hit the
+  right seam" asserts on the captured `UpdateProfileRequest`: `regionalLanguage == picked` AND every other
+  field (`systemLanguage`/`customDestinationLanguage`/`displayName`) stays `null` (edits exactly one field).
+- **2026-07-06 (`settings-regional-content-language`): `LanguageData.info(code)` is case-SENSITIVE (codes are
+  lowercase).** If you clean a stored code to upper/mixed case (`" ES "` → `"ES"`) and feed it to `info()`,
+  you get `null` and lose the label — even though your `equals(ignoreCase=true)` selection-marking still
+  works. Resolve the display label with `allLanguages.firstOrNull { it.code.equals(code, ignoreCase=true) }`,
+  not `info()`, whenever the code may not be canonically lowercase. Caught by a `" ES "` test that asserted
+  the `selectedLabel` equals the native name.
 - **2026-07-06 (`settings-notification-prefs-sync`): a literal `/*` inside a KDoc `/** */` is an "Unclosed comment".**
   Writing `` `/api/v1/me/preferences/*` `` in a KDoc line makes the Kotlin lexer open a *nested* block comment at
   the `/*` that never closes → `error: Unclosed comment`, and the whole file fails to compile (which cascaded into
