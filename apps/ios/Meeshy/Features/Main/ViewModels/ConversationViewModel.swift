@@ -86,8 +86,8 @@ class ConversationViewModel: ObservableObject {
         }
 
         _messageIdIndex = nil
-        _cachedLastReceivedIndex = nil
-        _cachedLastSentIndex = nil
+        _cachedLastReceivedIndex = .uncomputed
+        _cachedLastSentIndex = .uncomputed
 
         if structureChanged {
             _messagesByDate = nil
@@ -102,20 +102,33 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // Double-optional: nil = not computed, .some(nil) = computed but no match, .some(.some(N)) = found at N
-    private var _cachedLastReceivedIndex: Int?? = nil
+    /// Two-state cache sentinel for Int? properties where both `nil` (absent)
+    /// and a concrete index are valid computed results. Replaces the `Int??`
+    /// pattern (`nil` = uncomputed, `.some(nil)` = absent) with explicit cases
+    /// that are immediately readable without knowing Swift nested-optional semantics.
+    private enum IndexCache {
+        case uncomputed
+        case resolved(Int?)
+
+        var index: Int? {
+            if case .resolved(let i) = self { return i }
+            return nil
+        }
+    }
+
+    private var _cachedLastReceivedIndex: IndexCache = .uncomputed
     var cachedLastReceivedIndex: Int? {
-        if let cached = _cachedLastReceivedIndex { return cached }
+        if case .resolved(let cached) = _cachedLastReceivedIndex { return cached }
         let result = messages.indices.last(where: { !messages[$0].isMe })
-        _cachedLastReceivedIndex = .some(result)
+        _cachedLastReceivedIndex = .resolved(result)
         return result
     }
 
-    private var _cachedLastSentIndex: Int?? = nil
+    private var _cachedLastSentIndex: IndexCache = .uncomputed
     var cachedLastSentIndex: Int? {
-        if let cached = _cachedLastSentIndex { return cached }
+        if case .resolved(let cached) = _cachedLastSentIndex { return cached }
         let result = messages.indices.last(where: { messages[$0].isMe })
-        _cachedLastSentIndex = .some(result)
+        _cachedLastSentIndex = .resolved(result)
         return result
     }
 
@@ -1795,7 +1808,7 @@ class ConversationViewModel: ObservableObject {
             Task { [weak self] in
                 // Small delay to let the current batch render and the
                 // scroll position stabilize before we start the next fetch.
-                try? await Task.sleep(nanoseconds: 150_000_000)
+                try? await Task.sleep(for: .seconds(0.15))
                 guard let self, !self.isLoadingOlder else { return }
                 await self.loadOlderMessages()
             }
@@ -2890,6 +2903,10 @@ class ConversationViewModel: ObservableObject {
     func toggleReaction(messageId: String, emoji: String) {
         guard consumeReactionToken() else { return }
         guard let idx = messageIndex(for: messageId) else { return }
+        // Un message systeme n'est pas reactable : l'overlay menu gate deja
+        // l'affordance, l'action gate aussi pour couvrir tout autre call site
+        // (le gateway rejette en 400 en derniere barriere).
+        guard messages[idx].messageSource != .system else { return }
 
         // Own reactions are ALWAYS keyed by the `currentUserId` sentinel — the
         // canonical "my reaction" marker that `summarizeReactions` and
@@ -2925,6 +2942,15 @@ class ConversationViewModel: ObservableObject {
                 await OutboxFlushTrigger.flushNow()
             }
         } else {
+            // Modele 1-reaction-par-user (miroir de toggleAttachmentReaction et
+            // du swap serveur) : poser un emoji different REMPLACE ma reaction
+            // precedente au lieu de l'empiler. Les emojis des autres
+            // participants ne sont jamais touches.
+            let previousOwnEmojis = Array(Set(
+                messages[idx].reactions
+                    .filter { $0.participantId == participantId && $0.emoji != emoji }
+                    .map(\.emoji)
+            ))
             // Marque la reaction comme "nouvelle" AVANT l'ecriture async : quand
             // le store observe l'ajout et re-rend la bulle, la nouvelle pill
             // verra `shouldAnimate == true` et jouera la comete. Un scroll
@@ -2932,12 +2958,26 @@ class ConversationViewModel: ObservableObject {
             ReactionAnimationGate.markAdded(messageId: messageId, emoji: emoji)
             let reactionId = UUID().uuidString
             Task { [weak self] in
+                for oldEmoji in previousOwnEmojis {
+                    try? await self?.messagePersistence.removeReaction(
+                        localId: messageId, emoji: oldEmoji, participantId: participantId
+                    )
+                }
                 try? await self?.messagePersistence.appendReaction(
                     localId: messageId, reactionId: reactionId,
                     messageId: remoteId, participantId: participantId, emoji: emoji
                 )
             }
             Task {
+                // FIFO outbox : les removes partent avant l'add. Offline, le
+                // coalescing add(A)+remove(A) annule les deux rows — seul
+                // l'add du nouvel emoji atteint le serveur. Le remove d'une
+                // reaction deja swappee cote serveur est idempotent (R-GW2).
+                for oldEmoji in previousOwnEmojis {
+                    try? await OfflineQueue.shared.enqueueReaction(
+                        messageId: remoteId, emoji: oldEmoji, action: .remove, conversationId: convId
+                    )
+                }
                 try? await OfflineQueue.shared.enqueueReaction(
                     messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
                 )
@@ -3315,12 +3355,15 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Reconnection Sync (called by ConversationSocketHandler)
 
     func syncMissedMessages() async {
-        // The high-water mark is the newest message we already hold. With no
-        // local messages there is nothing to backfill *from* — a full load
-        // happens on conversation open instead, so no-op rather than refetch
-        // from the top. `.max()` is order-independent (doesn't assume the
-        // store sort).
-        guard let newestLocal = messages.map(\.createdAt).max() else { return }
+        // The high-water mark is the newest SERVER-TIMESTAMPED message we already
+        // hold. Optimistic own-sends still in flight carry a LOCAL device-clock
+        // `createdAt`; if the clock runs ahead of the server they would poison the
+        // watermark and the gateway's strict `createdAt > after` (server time)
+        // would silently skip real missed messages. `SyncWatermark.newest` (SDK
+        // rule) excludes them. With no server-timestamped message there is nothing
+        // to backfill *from* — a full load happens on conversation open instead,
+        // so no-op rather than refetch from the top.
+        guard let newestLocal = SyncWatermark.newest(among: messages) else { return }
 
         // Page size and total cap mirror the contiguous-backfill contract: a
         // missed-message gap of any size is filled by paging forward, not just
@@ -3531,7 +3574,7 @@ class ConversationViewModel: ObservableObject {
             // Small delay to let the diffable datasource apply the new snapshot
             // before the caller triggers scroll — otherwise the index path
             // won't exist yet.
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(for: .seconds(0.15))
 
             return .loadedFromServer
         } catch {
@@ -3840,7 +3883,7 @@ class ConversationViewModel: ObservableObject {
         Logger.messages.info("[TranscriptionRetry] Scheduling retry for \(msgIds.count) audio message(s) missing transcription")
 
         Task { [weak self, messageService] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+            try? await Task.sleep(for: .seconds(5)) // 5 seconds
             guard let self, !Task.isCancelled else { return }
 
             // Re-fetch the same messages from REST; by now Whisper should have
@@ -4071,8 +4114,7 @@ extension ConversationViewModel: ConversationSocketDelegate {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
         _topActiveMembers = nil
         let convId = conversationId
-        Task { [weak self] in
-            guard self != nil else { return }
+        Task {
             await CacheCoordinator.shared.participants.invalidate(for: convId)
         }
         objectWillChange.send()

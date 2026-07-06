@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StoryFilter
 import org.junit.Test
 
 /**
@@ -235,5 +236,109 @@ class StoryComposerDraftTest {
         ).toCreateStoryRequest(originalLanguage = "en")
         assertThat(request.storyEffects).isNull()
         assertThat(request.content).isEqualTo("caption")
+    }
+
+    @Test
+    fun `toCreateStoryRequest carries a selected photo filter and its strength`() {
+        val request = StoryComposerDraft(
+            text = "hello",
+            filter = StoryFilter.VINTAGE,
+            filterIntensity = 0.4f,
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects?.filter).isEqualTo("vintage")
+        assertThat(request.storyEffects?.filterIntensity).isWithin(1e-4).of(0.4)
+    }
+
+    @Test
+    fun `a filter-only draft still produces a storyEffects payload`() {
+        val request = StoryComposerDraft(
+            text = "",
+            filter = StoryFilter.BW,
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.filter).isEqualTo("bw")
+        assertThat(request.storyEffects?.textObjects).isEmpty()
+    }
+
+    @Test
+    fun `no filter leaves the storyEffects filter fields null`() {
+        val request = StoryComposerDraft(
+            textElements = listOf(StoryTextElement(id = "e1", text = "hi")),
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.filter).isNull()
+        assertThat(request.storyEffects?.filterIntensity).isNull()
+    }
+
+    @Test
+    fun `a clamped strength rides onto the wire`() {
+        val request = StoryComposerDraft(
+            filter = StoryFilter.WARM,
+            filterIntensity = 2.5f,
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects?.filterIntensity).isWithin(1e-4).of(1.0)
+    }
+
+    @Test
+    fun `toCreateStoryRequest serialises publishable stickers into storyEffects and drops blanks`() {
+        val request = StoryComposerDraft(
+            text = "",
+            stickers = listOf(
+                StoryStickerElement(id = "s1", emoji = "🎉", x = 0.2f, y = 0.8f, scale = 1.5f),
+                StoryStickerElement(id = "blank", emoji = "  "),
+            ),
+        ).toCreateStoryRequest(originalLanguage = "fr")
+
+        val objects = request.storyEffects?.stickerObjects.orEmpty()
+        assertThat(objects.map { it.id }).containsExactly("s1")
+        assertThat(objects.single().emoji).isEqualTo("🎉")
+        assertThat(objects.single().scale).isWithin(1e-6).of(1.5)
+    }
+
+    @Test
+    fun `a sticker-only draft still produces a storyEffects payload`() {
+        val request = StoryComposerDraft(
+            text = "",
+            stickers = listOf(StoryStickerElement(id = "s1", emoji = "😀")),
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.content).isNull()
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.stickerObjects).hasSize(1)
+        assertThat(request.storyEffects?.textObjects).isEmpty()
+    }
+
+    @Test
+    fun `no sticker leaves the storyEffects stickerObjects null`() {
+        val request = StoryComposerDraft(
+            textElements = listOf(StoryTextElement(id = "e1", text = "hi")),
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.stickerObjects).isNull()
+    }
+
+    @Test
+    fun `a sticker-only draft is publishable`() {
+        val draft = StoryComposerDraft(
+            text = "",
+            stickers = listOf(StoryStickerElement(id = "s1", emoji = "😀")),
+        )
+        assertThat(draft.canPublish).isTrue()
+        assertThat(draft.hasStickers).isTrue()
+    }
+
+    @Test
+    fun `a draft with only a blank sticker is not publishable`() {
+        val draft = StoryComposerDraft(
+            text = "",
+            stickers = listOf(StoryStickerElement(id = "s1", emoji = "  ")),
+        )
+        assertThat(draft.canPublish).isFalse()
+        assertThat(draft.hasStickers).isFalse()
     }
 }

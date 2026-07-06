@@ -94,12 +94,14 @@ export function registerCoreRoutes(
         }
       }
 
-      // Trigger async translation for posts/stories with text content (fire-and-forget)
+      // Trigger async translation for plain posts with text content
+      // (fire-and-forget). G2 — les STORY sont EXCLUES : leur `content` est
+      // déjà traduit par le pipeline audience-driven du service
+      // (`PostService.triggerStoryTextTranslation`) ; déclencher AUSSI
+      // `translatePost` (5 langues fixes) doublait les jobs ZMQ et créait
+      // des écritures concurrentes dans `Post.translations`.
       const postType = parsed.data.type ?? 'POST';
-      const shouldTranslateContent = Boolean(parsed.data.content) && (
-        postType === 'POST' ||
-        (postType === 'STORY' && parsed.data.content?.trim())
-      );
+      const shouldTranslateContent = Boolean(parsed.data.content) && postType === 'POST';
       if (shouldTranslateContent) {
         try {
           const translationService = PostTranslationService.shared;

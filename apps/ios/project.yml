@@ -81,6 +81,7 @@ targets:
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
+      - target: MeeshyShareExtension
       # MeeshyShareExtension is intentionally NOT embedded yet — see its target
       # definition below. Embedding it makes `fastlane build_production` fail the
       # distribution archive ("No profiles for 'me.meeshy.app.share-extension'")
@@ -116,11 +117,20 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: MeeshyWidgets
+    dependencies:
+      - package: MeeshySDK
+        product: MeeshySDK
     settings:
       INFOPLIST_FILE: MeeshyWidgets/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.widgets
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyWidgets/MeeshyWidgets.entitlements
+      # SPM explicit module builds fail to resolve GRDB's C target (CSQLite)
+      # for this app-extension target ("Unable to find module dependency:
+      # 'CSQLite'") even though the same MeeshySDK product builds fine in the
+      # main app target — a known Xcode/SPM limitation with C-language SPM
+      # targets linked into extensions under explicit module builds.
+      SWIFT_ENABLE_EXPLICIT_MODULES: NO
 
   MeeshyNotificationExtension:
     type: app-extension

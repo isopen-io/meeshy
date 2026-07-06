@@ -145,6 +145,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
     public let userId: String?
     public let displayName: String?
     public let avatar: String?
+    public let banner: String?
     public let role: String?
     public let conversationRole: String?
     public let language: String?
@@ -165,6 +166,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
         userId: String? = nil,
         displayName: String? = nil,
         avatar: String? = nil,
+        banner: String? = nil,
         role: String? = nil,
         conversationRole: String? = nil,
         language: String? = nil,
@@ -184,6 +186,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
         self.userId = userId
         self.displayName = displayName
         self.avatar = avatar
+        self.banner = banner
         self.role = role
         self.conversationRole = conversationRole
         self.language = language
@@ -200,6 +203,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
 
     public var name: String { nickname ?? displayName ?? "Unknown" }
     public var resolvedAvatar: String? { avatar ?? user?.resolvedAvatar }
+    public var resolvedBanner: String? { banner ?? user?.resolvedBanner }
     public var effectiveRole: String { conversationRole ?? role ?? "member" }
 }
 

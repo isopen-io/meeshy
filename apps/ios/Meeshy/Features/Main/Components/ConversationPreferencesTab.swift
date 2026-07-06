@@ -109,7 +109,7 @@ struct ConversationPreferencesTab: View {
 
             if let error = viewModel.errorMessage {
                 Text(error)
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
@@ -160,19 +160,22 @@ struct ConversationPreferencesTab: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "pencil")
+                        // Decorative glyph in a fixed 28×28 badge — kept fixed (86i doctrine:
+                        // a scalable glyph would overflow the fixed frame) + hidden (the label carries the meaning).
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(Color(hex: "A855F7"))
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "A855F7").opacity(0.12)))
+                        .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Custom name", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
 
                 HStack(spacing: 6) {
                     TextField(String(localized: "conversation.prefs.custom-name.placeholder", defaultValue: "Give this conversation a nickname...", bundle: .main), text: $customNameLocal)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .adaptiveOnChange(of: customNameLocal) { _, newValue in
                             viewModel.setCustomName(newValue)
@@ -183,7 +186,7 @@ struct ConversationPreferencesTab: View {
                             viewModel.setCustomName("")
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
+                                .font(MeeshyFont.relative(14))
                                 .foregroundColor(theme.textMuted)
                         }
                         .buttonStyle(.plain)
@@ -210,14 +213,14 @@ struct ConversationPreferencesTab: View {
                 settingsRow(icon: "heart.fill", iconColor: "A855F7", title: String(localized: "conversation.prefs.reaction", defaultValue: "Reaction", bundle: .main)) {
                     HStack(spacing: 6) {
                         if let r = viewModel.prefs.reaction, !r.isEmpty {
-                            Text(r).font(.system(size: 24))
+                            Text(r).font(MeeshyFont.relative(24))
                         } else {
                             Text(String(localized: "conversation.prefs.reaction.none", defaultValue: "None", bundle: .main))
-                                .font(.system(size: 14))
+                                .font(MeeshyFont.relative(14))
                                 .foregroundColor(theme.textMuted)
                         }
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(MeeshyFont.relative(11, weight: .semibold))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -233,6 +236,7 @@ struct ConversationPreferencesTab: View {
                 }
             )
             .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -254,12 +258,14 @@ struct ConversationPreferencesTab: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "square.grid.2x2.fill")
+                        // Decorative glyph in a fixed 28×28 badge — kept fixed + hidden (86i doctrine).
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(MeeshyColors.info)
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(MeeshyColors.info.opacity(0.12)))
+                        .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.category", defaultValue: "Category", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
 
@@ -284,12 +290,14 @@ struct ConversationPreferencesTab: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "tag.fill")
+                        // Decorative glyph in a fixed 28×28 badge — kept fixed + hidden (86i doctrine).
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(MeeshyColors.info)
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(MeeshyColors.info.opacity(0.12)))
+                        .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.tags", defaultValue: "Tags", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
 
@@ -382,12 +390,15 @@ struct ConversationPreferencesTab: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: color))
+                    .accessibilityHidden(true)
                 Text(title.uppercased())
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: color))
                     .tracking(1.2)
+                    .accessibilityLabel(title)
+                    .accessibilityAddTraits(.isHeader)
             }
             .padding(.leading, 4)
 
@@ -395,10 +406,10 @@ struct ConversationPreferencesTab: View {
                 content()
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: color))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: color), lineWidth: 1)
                     )
             )
@@ -414,12 +425,14 @@ struct ConversationPreferencesTab: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
+                // Decorative glyph in a fixed 28×28 badge — kept fixed + hidden (86i doctrine).
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(Color(hex: iconColor))
                 .frame(width: 28, height: 28)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: iconColor).opacity(0.12)))
+                .accessibilityHidden(true)
             Text(title)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .foregroundColor(theme.textPrimary)
             Spacer()
             trailing()

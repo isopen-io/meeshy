@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.hexColor
@@ -95,13 +96,15 @@ fun ContactsScreen(
                 }
             }
             when (state.selectedTab) {
+                ContactsTab.Contacts -> ContactsListTab()
                 ContactsTab.Requests -> RequestsTab(
                     state = state,
                     onAccept = viewModel::acceptRequest,
                     onDecline = viewModel::declineRequest,
                     onCancel = viewModel::cancelRequest,
                 )
-                else -> ComingSoon()
+                ContactsTab.Discover -> DiscoverTab()
+                ContactsTab.Blocked -> BlockedTab()
             }
         }
     }
@@ -248,18 +251,8 @@ private fun EmptyState(message: String) {
     }
 }
 
-@Composable
-private fun ComingSoon() {
-    EmptyState(stringResource(R.string.contacts_coming_soon))
-}
-
-private fun FriendRequestUser?.displayLabel(): String {
-    if (this == null) return "?"
-    displayName?.takeIf { it.isNotBlank() }?.let { return it }
-    val full = listOfNotNull(firstName, lastName).joinToString(" ").trim()
-    if (full.isNotBlank()) return full
-    return username.ifBlank { "?" }
-}
+private fun FriendRequestUser?.displayLabel(): String =
+    this?.resolvedName?.takeIf { it.isNotBlank() } ?: "?"
 
 @get:StringRes
 private val ContactsTab.labelRes: Int

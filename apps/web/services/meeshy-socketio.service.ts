@@ -362,6 +362,26 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationNew(listener);
   }
 
+  public onFriendRequestCancelled(listener: (data: { friendRequestId: string; cancelledBy: string }) => void): () => void {
+    return this.orchestrator.onFriendRequestCancelled(listener);
+  }
+
+  public onFriendRequestNew(listener: (data: { friendRequestId: string; senderId: string; receiverId: string }) => void): () => void {
+    return this.orchestrator.onFriendRequestNew(listener);
+  }
+
+  public onFriendRequestAccepted(listener: (data: { friendRequestId: string; accepterId: string; conversationId?: string }) => void): () => void {
+    return this.orchestrator.onFriendRequestAccepted(listener);
+  }
+
+  public onFriendRequestRejected(listener: (data: { friendRequestId: string; rejecterId: string }) => void): () => void {
+    return this.orchestrator.onFriendRequestRejected(listener);
+  }
+
+  public onUserUpdated(listener: (data: { userId: string; changes: Record<string, unknown> }) => void): () => void {
+    return this.orchestrator.onUserUpdated(listener);
+  }
+
   public onConversationDeleted(listener: (data: { userId: string; conversationId: string }) => void): () => void {
     return this.orchestrator.onConversationDeleted(listener);
   }

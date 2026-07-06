@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// Loading tile shown in the composer tray while an attachment is being
 /// prepared (image decoded, video compressed, thumbnail extracted, ThumbHash
@@ -30,6 +31,7 @@ struct AttachmentLoadingTile: View {
                         onCancel()
                     } label: {
                         Image(systemName: "xmark")
+                            // Doctrine 86i : glyphe d'annulation dans un cercle fixe 18×18 → figé.
                             .font(.system(size: 8, weight: .bold))
                             .foregroundColor(.white)
                             .frame(width: 18, height: 18)
@@ -45,7 +47,7 @@ struct AttachmentLoadingTile: View {
             }
 
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(ThemeManager.shared.textSecondary)
                 .lineLimit(1)
                 .frame(width: max(size, 60))
@@ -114,6 +116,8 @@ struct AttachmentLoadingTile: View {
                     .tint(.white)
                     .scaleEffect(0.75)
                 Text(stageLabel)
+                    // Doctrine 86i : label d'étape borné par la tuile de dimension fixe
+                    // `size`×`size` (≈56) → figé (déjà `minimumScaleFactor` pour rétrécir).
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundColor(.white.opacity(0.9))
                     .lineLimit(1)
@@ -127,9 +131,13 @@ struct AttachmentLoadingTile: View {
     private var failureOverlay: some View {
         VStack(spacing: 2) {
             Image(systemName: "exclamationmark.triangle.fill")
+                // Doctrine 86i : glyphe d'erreur borné par la tuile fixe → figé ; décoratif
+                // (le libellé « Erreur » adjacent porte le sens).
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(.white)
+                .accessibilityHidden(true)
             Text(String(localized: "attachment.loading.error", defaultValue: "Erreur", bundle: .main))
+                // Doctrine 86i : label borné par la tuile de dimension fixe → figé.
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundColor(.white)
         }
@@ -144,8 +152,10 @@ struct AttachmentLoadingTile: View {
     private var readyOverlay: some View {
         if prep.kind == .video {
             Image(systemName: "play.circle.fill")
+                // Doctrine 86i : indicateur vidéo décoratif borné par la tuile fixe → figé + masqué.
                 .font(.system(size: 20))
                 .foregroundStyle(.white, .black.opacity(0.4))
+                .accessibilityHidden(true)
         }
     }
 

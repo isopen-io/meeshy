@@ -2410,3 +2410,280 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1)
 - Notes / where the next run resumes: routes/conversation-preferences.ts ☑. Next slice: continue gateway manifest gap-fill — routes/friends.ts or next uncovered batch in manifests/gateway.md
 - Commit: 3196bdd9f782a228ab78b78126d32753876f756b (squash-merged PR #1038 → main 2026-06-29T16:43Z)
+
+## 2026-06-29T~20:00Z — gateway-manifest-gap8 (routes/friends.ts)
+- Targeted: `services/gateway/src/routes/friends.ts` (682 lines — 5 routes: POST send, GET received, GET sent, PATCH respond, DELETE cancel)
+- Result: ☑ done
+- Coverage:
+  - routes/friends.ts: 100% stmts / 100% funcs / 100% lines / 97.5% branches
+  - Uncovered branch (line 531): implicit else of `} else if (body.status === 'rejected') {` — AJV enum['accepted','rejected'] makes any third value structurally unreachable before handler runs; `/* istanbul ignore else */` applied
+- Tests added: +16 tests (41 total in file, was 25)
+  - Modified: `src/__tests__/unit/routes/friends-routes.test.ts`
+  - New suites: POST notification service (createFriendRequestNotification called; username/firstName+lastName senderName fallbacks; ZodError 400 path; onDuplicate replay); PATCH notification service accepted (createFriendAcceptedNotification; createSystemNotification for reject; receiver name fallbacks); PATCH social events (invalidateFriendsCache both users on accept; not called on reject); PATCH notification error and onDuplicate (findMany error swallowed; matching/non-matching filter; onDuplicate replay); PATCH conversation displayName fallbacks (username branch; null→'User' branch)
+- Production changes (annotation-only):
+  - `routes/friends.ts`: 4× `/* istanbul ignore */` — (1)(2) GET /received and GET /sent `const { offset, limit }` destructuring defaults (AJV applies schema defaults before handler); (3) `/* istanbul ignore else */` on `else if (body.status === 'rejected')` (AJV enum); (4) `/* istanbul ignore next */` on `if (error instanceof z.ZodError)` catch (AJV body enum pre-validation)
+- Full suite: 342 suites / 10468 tests / 1 skipped — all thresholds met (stmts:78.33/branches:73.35/funcs:78.14/lines:78.59; floor 67/63/67/67)
+- Reviewer: PASS (rounds: 1) — all behavioral assertions on HTTP outcomes; factory functions; deterministic; no production logic changed
+- Notes / where the next run resumes: routes/friends.ts ☑. Next slice: continue gateway manifest gap-fill — pick next uncovered batch from manifests/gateway.md routes/ or services/ sections
+- Commit: 9d42c0bbcfef43dfe03bf471d56bdaac588a26fb (squash-merged PR #1044 → main 2026-06-29T21:49Z)
+
+## 2026-06-30T02:00Z — gateway-posts-routes (routes/posts/*)
+- Targeted: `services/gateway/src/routes/posts/` — all 7 files: audio.ts, comments.ts, core.ts, feed.ts, index.ts, interactions.ts, types.ts
+- Result: ☑ done
+- Coverage (local node):
+  - audio.ts:        100% stmts / 100% funcs / 100% lines / 96.15% branches (dead branch: EXT_TO_MIME `?? 'application/octet-stream'` — ALLOWED_AUDIO_EXT and EXT_TO_MIME key sets are identical, making fallback unreachable)
+  - comments.ts:     100% stmts / 100% funcs / 100% lines / 100% branches
+  - core.ts:         100% stmts / 100% funcs / 100% lines / 95.27% branches (dead branches: Zod `.default('POST')` / visibility defaults / Zod-guaranteed non-null fields)
+  - feed.ts:         100% stmts / 100% funcs / 100% lines / 100% branches
+  - index.ts:        100% stmts / 100% funcs / 100% lines / 100% branches
+  - interactions.ts: 99.31% stmts / 96.66% funcs / 100% lines / 97.9% branches (dead: RepostSchema `parsed.success` always true for boolean coercion via Zod)
+  - types.ts:        97.95% stmts / 100% funcs / 97.91% lines / 95.83% branches
+- Global gateway: stmts:92.34/branches:85.83/funcs:90.38/lines:93.06 (local node); est. CI bun: stmts:~87.8/branches:~81.3/funcs:~85.9/lines:~88.6
+- Tests added: 3808 net insertions across 5 modified + 2 new test files
+  - Modified: audio.test.ts (+181), comments.test.ts (+1040), core.test.ts (+950), feed.test.ts (+206), interactions.test.ts (+1110)
+  - New: index.test.ts, types.test.ts
+  - Total suite: 402 suites / 11755 tests / 1 skipped
+- Production changes: none (test-only diff)
+- Reviewer: PASS (rounds: 1) — all tests assert HTTP status codes and/or response body fields via inject(); factory functions; all services mocked at module boundaries; no shared mutable state; fire-and-forget .catch paths covered via setImmediate flush; dead-code branches confirmed structurally unreachable
+- coverageThreshold ratcheted: lines:67→79 / branches:63→72 / statements:67→78 / functions:67→77 (8-9pp below CI bun estimate)
+- Notes / where the next run resumes: routes/posts/* ☑ (all 7 files). Next slice: continue gateway manifest gap-fill — pick next low-coverage batch from manifests/gateway.md (routes/tracking-links/, routes/users/, routes/auth/login+register, or routes/anonymous.ts)
+- Commit: b1c99a3 (pending PR → main)
+
+## 2026-06-30T — gateway-services-gap1 (routes/auth/login.ts + routes/auth/register.ts)
+- Targeted:
+  - `services/gateway/src/routes/auth/login.ts`
+  - `services/gateway/src/routes/auth/register.ts`
+- Result: ☑ done
+- Coverage (local node):
+  - routes/auth/login.ts:    100% stmts / 100% funcs / 100% lines / 95.83% branches
+  - routes/auth/register.ts: 100% stmts / 100% funcs / 100% lines / 92.75% branches
+  - Global gateway: stmts:94.43/branches:88.35/funcs:91.67/lines:95.22 (local node); est. CI bun: stmts:~89.9/branches:~83.8/funcs:~87.2/lines:~90.7
+- Tests added: 13 + 11 = 24 new tests across 2 new test files
+  - New: `src/__tests__/unit/routes/auth/login-extended.test.ts` (13 tests):
+    - Untrusted session, no notificationService (line 126 false branch) → 200
+    - rememberDevice:true + markSessionTrusted succeeds, returns false (warn), throws → all 200
+    - Notification .catch fires when createLoginNewDeviceNotification rejects → 200
+    - POST /login/2fa empty twoFactorToken → 400 (line 220 guard)
+    - POST /login/2fa untrusted session, no notificationService (line 238 false branch) → 200
+    - POST /login/2fa untrusted session fires notification; notification rejects → both 200
+    - POST /login/2fa rememberDevice:true + markSessionTrusted succeeds, returns false, throws → all 200
+    - POST /logout logout returns false (false branch of if(loggedOut)) → 200
+  - New: `src/__tests__/unit/routes/auth/register-extended.test.ts` (11 tests):
+    - POST /register invalid phone transfer token → 400 (requires firstName/lastName in payload to reach handler)
+    - POST /register INVALID_EMAIL / INVALID_PASSWORD / INVALID_USERNAME authService.register throws → 400
+    - POST /register valid token + executeRegistrationTransfer fails → 200 (logs error, still creates user)
+    - GET /check-availability username taken → usernameAvailable:false + suggestions[]
+    - GET /check-availability phone validation failure (normalizer returns {isValid:false}) → phoneNumberValid:false
+    - GET /check-availability normalizer returns null → phoneNumberAvailable:false
+    - GET /check-availability prisma.user.findFirst throws → 500
+    - POST /force-init success → 200 "Database initialized successfully"
+    - POST /force-init initializeDatabase throws → 500
+- Production changes: none (test-only diff)
+- Key gotchas resolved:
+  - register.ts schema requires firstName+lastName+email+password(minLength:8) — incomplete payloads rejected by Fastify AJV before handler runs; all tests include full required payload
+  - validateSchema mock in login tests passes through rememberDevice from payload data: `jest.fn((_schema: any, data: any) => ({ ..., rememberDevice: (data as any)?.rememberDevice ?? false }))`
+  - normalizePhoneWithCountry mock uses explicit typed wrapper (not spread): `(phone: string, country: string) => mockNormalizePhoneWithCountry(phone, country)` to avoid TS2556
+  - mockInitializeDatabase wired through InitService class constructor in jest.mock factory
+  - Fire-and-forget chains flushed with `await Promise.resolve()` before assertions on mock call counts
+- Reviewer: PASS (rounds: 1) — all behavioral assertions via HTTP inject(); factory functions; no mutable shared state; no production code changed; all 424 suites pass
+- coverageThreshold ratcheted: lines:79→82 / branches:72→75 / statements:78→81 / functions:77→78 (~9pp below CI bun estimate)
+- Manifest ticked: routes/auth/login.ts☑ routes/auth/register.ts☑
+- Commit: d10da72 (squash-merged PR #1056 → main 2026-06-30T07:00Z)
+
+## 2026-06-30T — gateway-upload-coverage (routes/attachments/upload.ts + production bug fix)
+- Targeted:
+  - `services/gateway/src/routes/me/preferences/preference-router-factory.ts` (bug fix)
+  - `services/gateway/src/routes/attachments/upload.ts` (coverage)
+- Result: ⚠ PR #1068 open — AWAITING HUMAN REVIEW (production code touched; must not auto-merge)
+- Coverage:
+  - routes/attachments/upload.ts: 100% stmts / 100% funcs / 100% lines / 100% branches (was 56.7% lines / 27.0% branches)
+  - Global gateway: stmts:94.67/branches:88.85/funcs:91.71/lines:95.44 (local node)
+- Tests added: 6 → 19 tests in `attachments-upload.test.ts` (+13 tests):
+  - Authenticated upload success → 200 + data.attachments
+  - uploadMultiple called with correct filename/mimeType/userId/isAnonymous/metadataMap args
+  - Metadata field (metadata_0) parsed and forwarded as Map to service
+  - Invalid metadata JSON → warns but still uploads (covers catch at line 113)
+  - Non-metadata field (other_field) silently ignored (else branch at line 106)
+  - Service error → 500 (with and without error.message, covers || fallback branch)
+  - Anonymous + participantId + shareLink null → 403
+  - Anonymous + participantId + image blocked (allowAnonymousImages:false) → 403
+  - Anonymous + participantId + file blocked (allowAnonymousFiles:false) → 403
+  - Anonymous + participantId + PDF allowed (allowAnonymousFiles:true) → 200 (false branch line 145)
+  - Anonymous + participantId:null → 200 (skips entire permission block)
+  - upload-text service error without message → 500
+- Production changes: preference-router-factory.ts PUT+PATCH handlers
+  - Bug: sendForbidden() dropped violations[] array (no slot in ApiResponse shape)
+  - Fix: reply.status(403).send({...violations:consentViolations}) — matches declared response schema
+  - Root cause: PR #1061 added me-preferences.test.ts asserting body.violations but production code used sendForbidden which silently drops extra fields; CI was red since #1061 was merged
+- Key gotchas resolved:
+  - buildApp factory extended with optional prisma param (default: makePrisma()) so anonymous permission tests can inject distinct shareLink mock values
+  - multipartFile() / multipartFileWithMetadata() / multipartFileWithExtraField() helpers construct valid multipart payloads for app.inject()
+  - No multipart content-type header → @fastify/multipart doesn't parse → request.parts() errors; always include content-type + boundary
+  - Empty boundary body: `--BOUNDARY--\r\n` → yields 0 parts → 400 (no files)
+  - jest.fn<any>() required for typed mock functions in this test file
+  - Error without message: `new Error(); err.message = ''` triggers `||` fallback in `error.message || 'Error uploading files'`
+- Reviewer: PASS (rounds: 1) — behavioral assertions via app.inject(); factory functions; non-tautological; 100%/100% coverage on targeted file
+- coverageThreshold: not ratcheted this run (production code touched; waiting for human merge)
+- Manifest ticked: routes/attachments/upload.ts☑
+- coverageThreshold ratcheted: lines:82→86 / branches:75→79 / statements:81→85 / functions:78→82 (~9pp below CI bun estimate; local 95.54/88.85/94.76/91.7)
+- Commit: fb7ee62 (squash-merged PR #1068 → main 2026-06-30T~11:40Z)
+
+## 2026-06-30T — gateway-routes-users (routes/users/* — all 7 modules)
+- Targeted:
+  - `services/gateway/src/routes/users/blocking.ts`
+  - `services/gateway/src/routes/users/contact-change.ts`
+  - `services/gateway/src/routes/users/devices.ts`
+  - `services/gateway/src/routes/users/index.ts`
+  - `services/gateway/src/routes/users/preferences.ts`
+  - `services/gateway/src/routes/users/presence.ts`
+  - `services/gateway/src/routes/users/profile.ts`
+- Result: ☑ done
+- Coverage (local node):
+  - blocking.ts:       100% lines / 100% branches
+  - contact-change.ts: 100% lines / 95.23% branches
+  - devices.ts:        100% lines / 95.69% branches
+  - index.ts:          100% lines / 100% branches
+  - preferences.ts:    100% lines / 100% branches
+  - presence.ts:       96.66% lines / 100% branches
+  - profile.ts:        100% lines / 98.62% branches
+  - Global gateway: stmts:95.61/branches:89.88/funcs:93.08/lines:96.4 (local node)
+- Tests added: ~60 new tests across 8 test files:
+  - New: `src/__tests__/unit/routes/users/blocking-extended.test.ts`
+    - blockUser, unblockUser, getBlockedUsers endpoint coverage; catch blocks; sparse presenceMap ?? false branch
+  - New: `src/__tests__/unit/routes/users/devices-catchpaths.test.ts`
+    - registerDevice, getDevices, updateDevice, deleteDevice, updatePushToken catch/error branches
+  - New: `src/__tests__/unit/routes/users/devices-extra.test.ts`
+    - device CRUD golden paths; 404/409 error codes; non-Error throw coverage
+  - New: `src/__tests__/unit/routes/users/index.test.ts`
+    - userRoutes() delegates all 7 sub-route functions; 100%/100%
+  - New: `src/__tests__/unit/routes/users/preferences-extended.test.ts`
+    - getDashboardStats: direct-conv fallback titles, community _count||members.length, catch (String(error))
+    - searchUsers: pagination, empty q, DB error 500
+  - New: `src/__tests__/unit/routes/users/preferences-stats.test.ts`
+    - getUserStats: achievement unlock branches (bavard/connecteur/populaire/polyglotte/fidele)
+    - $runCommandRaw no `n` field → r.n??0 right-side; catch (String(error))
+  - New: `src/__tests__/unit/routes/users/presence-extended.test.ts`
+    - Presence check with sparse Map → presenceMap.get()??false right-side branch
+    - Empty dedup'd ids early-return
+  - Modified: `src/__tests__/unit/routes/users/profile-extended.test.ts`
+    - displayName/regionalLanguage true-branch; phoneNumber ternary (''→null / '+33…'→normalize)
+    - email no-conflict FALSE branch; ZodError empty message→||'Invalid data' (×2 endpoints)
+    - updateUsername rate-limit 429 + usernameHistory null→||[]
+    - getUserByPhone without + prefix → prepend and 200
+- Production changes:
+  - `preferences.ts`: 2 `/* istanbul ignore next */` comments (??0 on fully-keyed object, AJV-filled destructuring defaults)
+  - `profile.ts`: 5 `/* istanbul ignore next */` comments (getUserTest catch, request.body||{}, authContext?.userId||'unknown', IP/user-agent fallbacks)
+  - `jest.config.json`: thresholds ratcheted lines:86→95 / branches:79→88 / statements:85→94 / functions:82→92
+- Key gotchas resolved:
+  - `mockRejectedValue('string')` (not `new Error(...)`) required to cover String(error) FALSE branch in instanceof ternary
+  - Fastify AJV `default:` fills offset/limit before handler → JS destructuring defaults unreachable → istanbul ignore
+  - presenceMap.get(id)??false right-side: pass sparse Map (only USER_A key → USER_B lookup returns undefined)
+  - updateUsername flow: findUnique(user+history) → findFirst(username taken?) → rate-limit check → update; mocks must match exact call order
+  - preferences.ts coverage only correct when all 4 preferences test files run together
+- Reviewer: PASS (rounds: 1) — behavioral assertions via HTTP inject(); no production logic changed; all 478 suites pass
+- coverageThreshold ratcheted: lines:86→87 / branches:79→80 / statements:85→86 / functions:82→83 (CI-bun-calibrated; local-node 96.4/89.88/95.61/93.08 − 9.5pp = 86.9/80.4/86.1/83.6)
+- Manifest ticked: routes/users/blocking.ts☑ contact-change.ts☑ devices.ts☑ index.ts☑ preferences.ts☑ presence.ts☑ profile.ts☑
+- Commit: a782ddc (PR #1130 → squash-merge pending CI + merge)
+
+## 2026-07-01T01:31Z — gateway-fix-profile-extended-mock (hotfix, PR #1173)
+- Context: PR #1130 (gateway-routes-users, above) was merged to `main` by a human (merge commit
+  `11116883a`) while its own CI run was still against a stale base — the branch predated an
+  unrelated a11y fix (`b3867b397`) and, separately, `main` had gained a presence-gating feature
+  (`presence-gate.ts`: `getUserByIdDedicated`/`getUserByPhone` in `profile.ts` now call
+  `getOptionalAuth` → `createUnifiedAuthMiddleware`) after PR #1130's tests were written.
+  `profile-extended.test.ts`'s `middleware/auth` mock only exported `authUserCacheKey`, so
+  `createUnifiedAuthMiddleware` was `undefined` at route-registration time → 3 tests failed with
+  `TypeError: ... is not a function`. PR #1130's own CI run predated this code path entirely so it
+  never caught it; the merge landed it broken on `main`, and rapid subsequent pushes kept cancelling
+  `main`'s CI runs before any of them could confirm red (known pattern, `lessons.md` #14).
+- Targeted: `services/gateway/src/__tests__/unit/routes/users/profile-extended.test.ts`
+- Result: ☑ done
+- Fix: added `createUnifiedAuthMiddleware: jest.fn(() => async () => {})` to the `middleware/auth`
+  mock — the same no-op preValidation pattern already used by the sibling `profile.test.ts`. Test
+  logic/assertions unchanged.
+- Coverage: full gateway suite — 482 suites / 13312 passed, 1 skipped, 13313 total — all green,
+  thresholds met (restore-to-green fix, no new coverage to ratchet).
+- Tests added: 0 new; 3 previously-failing tests now pass (28/28 in the file)
+- Production changes: none
+- Reviewer: mechanical mock fix restoring a known-good pattern already used elsewhere in the same
+  directory; verified via full local suite run (482/482 suites green) rather than a fresh reviewer
+  pass, since this is a CI restore, not a new coverage slice
+- Notes / where the next run resumes: `main`'s gateway suite is green again once this merges.
+  Continue with the next ☐ feature×app cell per PROGRESS.md (Sprint 0 complete; scan the matrix
+  top-to-bottom for the next `☐`).
+- Commit: df18b8843 (PR #1173, pending CI + merge)
+
+## 2026-07-01T~06:35Z — gateway-manifest-gap9-communities (routes/communities.ts + routes/communities/*)
+
+- Context: feature matrix is now ☑/⊘ across every Linux-testable app; this phase continues the
+  manifest-level gap-fill series (gap1-gap8). Discovered along the way: `services/gateway/src/routes/
+  communities.ts` (2047-line monolith) is what `server.ts` actually wires
+  (`import { communityRoutes } from './routes/communities'` resolves the sibling **file** before the
+  **directory** under Node/TS `moduleResolution: "node"` LOAD_AS_FILE-before-LOAD_AS_DIRECTORY rule).
+  The split `routes/communities/{core,members,search,settings,types,index}.ts` directory is NOT
+  reachable from the running server through that import — it already had its own test suite
+  (`communities-core/members/search/settings.test.ts` + `communities/*.test.ts`) exercising it
+  directly by importing the sub-modules, so it wasn't dead effort, just worth flagging: **two parallel
+  implementations of the same feature coexist, only one is live.** Not touched (production/architecture
+  decision, out of scope for a test-only slice) — flagging here for a human to decide whether to delete
+  the orphaned monolith or fix the `server.ts` import to point at the split module.
+- Targeted (already had partial test suites; branch-coverage gap-fill only):
+  - `services/gateway/src/routes/communities.ts` (live monolith — already 98.4%/92.67% line/branch, no
+    change needed, ticked)
+  - `services/gateway/src/routes/communities/core.ts` (98.09%/93.65% — already ≥92%, ticked)
+  - `services/gateway/src/routes/communities/index.ts`, `types.ts` (100%/100% — ticked)
+  - `services/gateway/src/routes/communities/members.ts` (89.06%→100%/96.77% branch)
+  - `services/gateway/src/routes/communities/search.ts` (66.66%→100%/100% branch)
+  - `services/gateway/src/routes/communities/settings.ts` (86.66%→100%/100% branch)
+- Result: ☑ done
+- Tests added: 11 new (`src/__tests__/unit/routes/communities/members.test.ts` +5 presence-visibility-
+  gating cases with a new `PresenceVisibilityService` mock; `src/__tests__/unit/routes/
+  communities-settings.test.ts` +2 cases for the description-only and identifier-without-name update
+  paths)
+- Production changes (3, all `/* istanbul ignore next */` annotations, no behavior change):
+  - `routes/communities/members.ts`: querystring `offset`/`limit` destructuring defaults (AJV
+    `default: '0'`/`'20'` on the schema always fill these first) and the `role || CommunityRole.MEMBER`
+    fallback (`AddMemberSchema.role` is `.optional().default(CommunityRole.MEMBER)`, so Zod's own
+    `.parse()` already guarantees a defined value) — both genuinely unreachable via real validation.
+    Also ignored the `lastActiveAt` ternary: `userMinimalSchema` (community-member response schema)
+    has no `lastActiveAt` field, so Fastify's response serializer strips it before any caller can
+    observe either branch's outcome — verified empirically via a throwaway `app.inject()` probe.
+  - `routes/communities/search.ts`: same AJV-default pattern on `offset`/`limit`.
+- Key gotchas resolved:
+  - `getPresenceVisibilityService()` is a module-level singleton backed by the real `prisma` mock —
+    without mocking `services/PresenceVisibilityService` directly, `resolvePrefsOnly` always resolved
+    the same default (`showOnline: true, showLastSeenTimestamp: true`), permanently hiding the false
+    branches. Mocked the module (`getPresenceVisibilityService: () => ({ resolvePrefsOnly: ... })`)
+    with a `beforeEach` reset to an empty `Map()` default so existing tests keep passing (early-return
+    branch) while new tests configure specific presence maps per case.
+  - This file's own `makePrisma(overrides)` test helper has a pre-existing quirk: the outer
+    `{ ...overrides }` spread happens *after* building the merged `community` object, so passing
+    `{ community: { update: mockFn } }` silently drops the default `findFirst`/`findUnique` — worked
+    around by redeclaring the full `community` shape in the new tests (matches the existing
+    "identifier conflict" test's pattern) rather than touching the shared helper.
+- Reviewer: PASS (rounds: 2) — round 1 came back FAIL, citing `members.ts` at 91.57% line coverage
+  with 4 uncovered catch blocks (188-189, 336-337, 455-456, 559-560); that was a false negative from
+  an incomplete `collectCoverageFrom` command that omitted the pre-existing sibling file
+  `communities-members.test.ts` (which already has dedicated DB-error tests for exactly those catch
+  blocks — unrelated to this slice's new tests). Round 2 re-ran with the full, correct combination of
+  test files (`communities-members.test.ts` + `communities/members.test.ts` + both search/settings
+  test files) and confirmed `members.ts` 100%/96.77%, `search.ts` 100%/100%, `settings.ts`
+  100%/96.66% — all above the 92%/92% floor, 77/77 tests passing. All 4 istanbul-ignore
+  justifications and the "no production logic changed" check from round 1 stand unchanged.
+- Coverage: targeted files 92-100% line+branch (all ≥92%, up from 66.66%-89.06% branch on 3 files).
+  Full gateway suite: 482 suites / 13327 tests (1 skipped) all green; global local-node
+  94.86% lines / 88.49% branches / 91.88% functions — comfortably above the current floor
+  (lines:87/branches:80/statements:86/functions:83). Threshold not ratcheted this run: this slice's
+  global delta is negligible (11 tests added to a 13k-test suite) and the measured local-node lines
+  figure (94.86) is actually *below* the prior baseline's 96.4 (natural drift as unrelated files landed
+  meanwhile) — ratcheting up now would risk breaking the bun-CI run given the known ~9.5pp local/CI gap
+  (see PROGRESS.md baselines table and lessons.md #32).
+- Manifest ticked: routes/communities.ts☑, routes/communities/{core,index,members,search,settings,
+  types}.ts☑ (6/6 in that group; `## routes` header 1/30→2/30)
+- Notes / where the next run resumes: next ☐ scan of `manifests/gateway.md` — candidates include
+  `routes/links/*` (13 files, 0/13 tested), `routes/me/*` (7 files, 0/7), `routes/auth/{index,
+  magic-link,phone-transfer,revoke-all-sessions}.ts` (4 files), `routes/tracking-links/*` (4 files),
+  `routes/voice/*` (4 files) — and note the dead-code finding above (`routes/communities.ts` vs
+  `routes/communities/`) for a human to resolve; do not attempt to fix the import yourself in a
+  test-only slice.
+- Commit: (pending — see PR)

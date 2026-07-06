@@ -2,6 +2,8 @@
 <resources>
     <string name="chat_title">Mensajes</string>
     <string name="chat_back">Atrás</string>
+    <string name="chat_call_audio">Llamada de audio</string>
+    <string name="chat_call_video">Videollamada</string>
     <string name="chat_message_placeholder">Mensaje</string>
     <string name="chat_send">Enviar</string>
     <string name="chat_no_messages">Aún no hay mensajes</string>
@@ -26,4 +28,9 @@
     <string name="chat_typing_two">%1$s y %2$s están escribiendo…</string>
     <string name="chat_typing_many">%1$d personas están escribiendo…</string>
     <string name="chat_scroll_to_bottom">Ir al último mensaje</string>
+    <string name="chat_effect_reveal">Toca para revelar</string>
+    <string name="chat_effect_seconds_left">Quedan %1$d s</string>
+    <string name="chat_effect_expired">Caducado</string>
+    <string name="chat_effect_view_once">Ver una vez</string>
+    <string name="chat_effect_viewed">Visto</string>
 </resources>

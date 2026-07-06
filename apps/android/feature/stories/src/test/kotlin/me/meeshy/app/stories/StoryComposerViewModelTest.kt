@@ -21,6 +21,7 @@ import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -1139,6 +1140,87 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementMoved snaps a small drag onto the centre guide and reports it`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.015f, dy = 0f)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        // Without snapping the centre would drift to 0.515; the magnet holds it at 0.5.
+        assertThat(element.x).isEqualTo(StoryTextElement.CENTER)
+        val feedback = vm.state.value.snapFeedback!!
+        assertThat(feedback.verticalGuide).isEqualTo(0.5f)
+        assertThat(feedback.horizontalGuide).isEqualTo(0.5f)
+        assertThat(feedback.withinSafeZone).isTrue()
+    }
+
+    @Test
+    fun `onTextElementMoved past the threshold drags free with no guide lines`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.2f, dy = 0.2f)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.x).isWithin(1e-4f).of(0.7f)
+        assertThat(element.y).isWithin(1e-4f).of(0.7f)
+        val feedback = vm.state.value.snapFeedback!!
+        assertThat(feedback.verticalGuide).isNull()
+        assertThat(feedback.horizontalGuide).isNull()
+    }
+
+    @Test
+    fun `onTextElementMoved toward the edge reports out of the safe zone`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.49f, dy = 0f)
+
+        assertThat(vm.state.value.snapFeedback!!.withinSafeZone).isFalse()
+    }
+
+    @Test
+    fun `onTextElementMoved on an unknown id leaves the element and shows no feedback`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value.selectedSlideTextElements.single()
+
+        vm.onTextElementMoved("ghost", dx = 0.1f, dy = 0.1f)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single()).isEqualTo(before)
+        assertThat(vm.state.value.snapFeedback).isNull()
+    }
+
+    @Test
+    fun `onTextElementDragEnd clears the snap feedback but keeps the element placed`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onTextElementMoved(id, dx = 0.015f, dy = 0f)
+        assertThat(vm.state.value.snapFeedback).isNotNull()
+
+        vm.onTextElementDragEnd()
+
+        assertThat(vm.state.value.snapFeedback).isNull()
+        assertThat(vm.state.value.selectedSlideTextElements.single().x).isEqualTo(StoryTextElement.CENTER)
+    }
+
+    @Test
+    fun `onTextElementDragEnd is inert when no drag feedback is showing`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value
+
+        vm.onTextElementDragEnd()
+
+        assertThat(vm.state.value).isSameInstanceAs(before)
+    }
+
+    @Test
     fun `onRemoveTextElement removes the element and ends its editing`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
@@ -1150,6 +1232,106 @@ class StoryComposerViewModelTest {
         val state = vm.state.value
         assertThat(state.selectedSlideTextElements).isEmpty()
         assertThat(state.isEditingTextElement).isFalse()
+    }
+
+    @Test
+    fun `onDuplicateTextElement clones the edited element, offsets it, and selects the copy`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Salut")
+        val original = vm.state.value.selectedTextElement!!
+
+        vm.onDuplicateTextElement(original.id)
+
+        val state = vm.state.value
+        assertThat(state.selectedSlideTextElements).hasSize(2)
+        val copy = state.selectedTextElement!!
+        assertThat(copy.id).isNotEqualTo(original.id)
+        assertThat(copy.text).isEqualTo("Salut")
+        assertThat(copy.x).isGreaterThan(original.x)
+        assertThat(copy.y).isGreaterThan(original.y)
+        assertThat(state.isEditingTextElement).isTrue()
+    }
+
+    @Test
+    fun `onDuplicateTextElement carries the source style onto the copy`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Hola")
+        val original = vm.state.value.selectedTextElement!!
+        vm.onTextElementStyle(original.id, StoryTextStyle.NEON)
+
+        vm.onDuplicateTextElement(original.id)
+
+        val copy = vm.state.value.selectedTextElement!!
+        assertThat(copy.style).isEqualTo(StoryTextStyle.NEON)
+        assertThat(copy.text).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `onDuplicateTextElement at the per-slide cap surfaces a warning and adds nothing`() = runTest {
+        val vm = viewModel()
+        repeat(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE) { vm.onAddTextElement() }
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onDuplicateTextElement(id)
+
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE)
+        assertThat(vm.state.value.errorMessage).isNotNull()
+    }
+
+    @Test
+    fun `onDuplicateTextElement on an unknown id is inert and selects nothing new`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onDeselectTextElement()
+
+        vm.onDuplicateTextElement("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(1)
+        assertThat(vm.state.value.selectedTextElementId).isNull()
+    }
+
+    @Test
+    fun `onReorderTextElement sends the edited element to the back and keeps it selected`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val first = vm.state.value.selectedTextElement!!.id
+        vm.onAddTextElement()
+        val second = vm.state.value.selectedTextElement!!.id
+
+        vm.onReorderTextElement(second, StoryZOrder.TO_BACK)
+
+        assertThat(vm.state.value.selectedSlideTextElements.map { it.id })
+            .containsExactly(second, first).inOrder()
+        assertThat(vm.state.value.selectedTextElementId).isEqualTo(second)
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+    }
+
+    @Test
+    fun `onReorderTextElement brings the edited element to the front`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val first = vm.state.value.selectedTextElement!!.id
+        vm.onAddTextElement()
+        val second = vm.state.value.selectedTextElement!!.id
+
+        vm.onReorderTextElement(first, StoryZOrder.TO_FRONT)
+
+        assertThat(vm.state.value.selectedSlideTextElements.map { it.id })
+            .containsExactly(second, first).inOrder()
+    }
+
+    @Test
+    fun `onReorderTextElement on an unknown id leaves the state unchanged`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onAddTextElement()
+        val before = vm.state.value
+
+        vm.onReorderTextElement("ghost", StoryZOrder.TO_FRONT)
+
+        assertThat(vm.state.value).isSameInstanceAs(before)
     }
 
     @Test
@@ -1243,6 +1425,46 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementTransform pinch-scales and rotates the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Salut")
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementTransform(id, scaleBy = 2f, rotateByDeg = 30f)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.scale).isWithin(1e-6f).of(2f)
+        assertThat(element.rotationDeg).isWithin(1e-4f).of(30f)
+        assertThat(element.text).isEqualTo("Salut")
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+    }
+
+    @Test
+    fun `onTextElementTransform accumulates across successive gestures and clamps`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementTransform(id, scaleBy = 2f, rotateByDeg = 0f)
+        vm.onTextElementTransform(id, scaleBy = 10f, rotateByDeg = 0f)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().scale)
+            .isEqualTo(StoryTextElement.MAX_SCALE)
+    }
+
+    @Test
+    fun `onTextElementTransform on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value.selectedSlideTextElements.single()
+
+        vm.onTextElementTransform("ghost", scaleBy = 2f, rotateByDeg = 45f)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single()).isEqualTo(before)
+    }
+
+    @Test
     fun `styling one element of several leaves the others untouched`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
@@ -1290,6 +1512,301 @@ class StoryComposerViewModelTest {
         val objects = request.captured.storyEffects?.textObjects.orEmpty()
         assertThat(objects.map { it.text }).containsExactly("Bonjour")
         assertThat(objects.single().sourceLanguage).isEqualTo("fr")
+        assertThat(request.captured.content).isNull()
+    }
+
+    // --- Bottom-band toolbar (Contenu / Effets) -----------------------------
+
+    @Test
+    fun `the band starts hidden`() = runTest {
+        val vm = viewModel()
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `tapping a band FAB opens that category`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.CONTENU))
+    }
+
+    @Test
+    fun `tapping the open category FAB again closes the band`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `tapping the other FAB switches the open category`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
+    }
+
+    @Test
+    fun `dismissing the band hides it`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandDismiss()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `swapping the band category flips contenu to effets`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandSwapCategory()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
+    }
+
+    @Test
+    fun `swapping the band category is inert while hidden`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandSwapCategory()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `selecting a filter applies it to the selected slide`() = runTest {
+        val vm = viewModel()
+
+        vm.onSelectFilter(StoryFilter.VINTAGE)
+
+        assertThat(vm.state.value.selectedSlideFilter).isEqualTo(StoryFilter.VINTAGE)
+        assertThat(vm.state.value.selectedSlideFilterMatrix)
+            .isEqualTo(StoryFilterMatrix.baseMatrix(StoryFilter.VINTAGE))
+    }
+
+    @Test
+    fun `clearing a filter returns the canvas to the identity matrix`() = runTest {
+        val vm = viewModel()
+        vm.onSelectFilter(StoryFilter.BW)
+
+        vm.onSelectFilter(null)
+
+        assertThat(vm.state.value.selectedSlideFilter).isNull()
+        assertThat(vm.state.value.selectedSlideFilterMatrix).isEqualTo(StoryColorMatrix.IDENTITY)
+    }
+
+    @Test
+    fun `changing the filter intensity clamps and blends toward identity`() = runTest {
+        val vm = viewModel()
+        vm.onSelectFilter(StoryFilter.DRAMATIC)
+
+        vm.onFilterIntensityChange(0.5f)
+
+        assertThat(vm.state.value.selectedSlideFilterIntensity).isEqualTo(0.5f)
+        assertThat(vm.state.value.selectedSlideFilterMatrix)
+            .isEqualTo(StoryColorMatrix.IDENTITY.blend(StoryFilterMatrix.baseMatrix(StoryFilter.DRAMATIC), 0.5f))
+    }
+
+    @Test
+    fun `the filter intensity is clamped above one`() = runTest {
+        val vm = viewModel()
+        vm.onSelectFilter(StoryFilter.COOL)
+
+        vm.onFilterIntensityChange(9f)
+
+        assertThat(vm.state.value.selectedSlideFilterIntensity).isEqualTo(1f)
+    }
+
+    @Test
+    fun `a filter stays on its own slide when the selection moves`() = runTest {
+        val vm = viewModel()
+        val firstSlideId = vm.state.value.deck.selectedId
+        vm.onSelectFilter(StoryFilter.WARM)
+        vm.onAddSlide()
+
+        assertThat(vm.state.value.selectedSlideFilter).isNull()
+
+        vm.onSelectSlide(firstSlideId)
+        assertThat(vm.state.value.selectedSlideFilter).isEqualTo(StoryFilter.WARM)
+    }
+
+    @Test
+    fun `selecting a filter keeps an in-progress text element edit`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val elementId = vm.state.value.selectedTextElement?.id
+
+        vm.onSelectFilter(StoryFilter.FADE)
+
+        assertThat(vm.state.value.selectedTextElement?.id).isEqualTo(elementId)
+        assertThat(vm.state.value.selectedSlideFilter).isEqualTo(StoryFilter.FADE)
+    }
+
+    // --- stickers ---
+
+    @Test
+    fun `onAddSticker adds the emoji to the selected slide and selects it`() = runTest {
+        val vm = viewModel()
+
+        vm.onAddSticker("😀")
+
+        val state = vm.state.value
+        assertThat(state.selectedSlideStickers).hasSize(1)
+        assertThat(state.selectedSticker?.emoji).isEqualTo("😀")
+        assertThat(state.canPublish).isTrue()
+    }
+
+    @Test
+    fun `onAddSticker ignores a blank emoji`() = runTest {
+        val vm = viewModel()
+
+        vm.onAddSticker("  ")
+
+        assertThat(vm.state.value.selectedSlideStickers).isEmpty()
+        assertThat(vm.state.value.selectedStickerId).isNull()
+    }
+
+    @Test
+    fun `adding a sticker clears an in-progress text element edit`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+
+        vm.onAddSticker("🎉")
+
+        assertThat(vm.state.value.isEditingTextElement).isFalse()
+        assertThat(vm.state.value.selectedSticker?.emoji).isEqualTo("🎉")
+    }
+
+    @Test
+    fun `selecting a text element clears a selected sticker`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        vm.onAddTextElement()
+        val elementId = vm.state.value.selectedTextElement!!.id
+
+        // de-select then re-select the text element to exercise onSelectTextElement
+        vm.onSelectSticker(vm.state.value.selectedSlideStickers.single().id)
+        assertThat(vm.state.value.selectedTextElementId).isNull()
+        vm.onSelectTextElement(elementId)
+
+        assertThat(vm.state.value.selectedStickerId).isNull()
+        assertThat(vm.state.value.selectedTextElementId).isEqualTo(elementId)
+    }
+
+    @Test
+    fun `onAddSticker at the per-slide cap surfaces a warning and adds nothing`() = runTest {
+        val vm = viewModel()
+        repeat(StorySlideDeck.MAX_STICKERS_PER_SLIDE) { vm.onAddSticker("😀") }
+        assertThat(vm.state.value.selectedSlideStickers).hasSize(StorySlideDeck.MAX_STICKERS_PER_SLIDE)
+
+        vm.onAddSticker("🎉")
+
+        assertThat(vm.state.value.selectedSlideStickers).hasSize(StorySlideDeck.MAX_STICKERS_PER_SLIDE)
+        assertThat(vm.state.value.errorMessage).isNotNull()
+    }
+
+    @Test
+    fun `onSelectSticker on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onSelectSticker("ghost")
+        assertThat(vm.state.value.selectedStickerId).isNull()
+    }
+
+    @Test
+    fun `onStickerMoved drags the sticker clamped to the canvas`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val id = vm.state.value.selectedSlideStickers.single().id
+
+        vm.onStickerMoved(id, dx = 0.6f, dy = -0.9f)
+
+        val moved = vm.state.value.selectedSlideStickers.single()
+        assertThat(moved.x).isEqualTo(1f)
+        assertThat(moved.y).isEqualTo(0f)
+    }
+
+    @Test
+    fun `onStickerTransform scales and rotates the sticker and accumulates`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val id = vm.state.value.selectedSlideStickers.single().id
+
+        vm.onStickerTransform(id, scaleBy = 2f, rotateByDeg = 20f)
+        vm.onStickerTransform(id, scaleBy = 1.5f, rotateByDeg = 10f)
+
+        val t = vm.state.value.selectedSlideStickers.single()
+        assertThat(t.scale).isEqualTo(3f)
+        assertThat(t.rotationDeg).isEqualTo(30f)
+    }
+
+    @Test
+    fun `onStickerTransform on an unknown id leaves the deck unchanged`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val before = vm.state.value.deck
+
+        vm.onStickerTransform("ghost", scaleBy = 2f, rotateByDeg = 0f)
+
+        assertThat(vm.state.value.deck).isEqualTo(before)
+    }
+
+    @Test
+    fun `onRemoveSticker removes it and clears the selection when it was selected`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val id = vm.state.value.selectedSlideStickers.single().id
+
+        vm.onRemoveSticker(id)
+
+        assertThat(vm.state.value.selectedSlideStickers).isEmpty()
+        assertThat(vm.state.value.selectedStickerId).isNull()
+    }
+
+    @Test
+    fun `onDeselectSticker drops the selection`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        assertThat(vm.state.value.selectedStickerId).isNotNull()
+
+        vm.onDeselectSticker()
+
+        assertThat(vm.state.value.selectedStickerId).isNull()
+        assertThat(vm.state.value.selectedSlideStickers).hasSize(1)
+    }
+
+    @Test
+    fun `switching slides clears a stale sticker selection`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val firstSlide = vm.state.value.deck.selectedId
+        assertThat(vm.state.value.selectedStickerId).isNotNull()
+
+        vm.onAddSlide()
+
+        assertThat(vm.state.value.deck.selectedId).isNotEqualTo(firstSlide)
+        assertThat(vm.state.value.selectedSticker).isNull()
+    }
+
+    @Test
+    fun `publish carries the slide's stickers into the wire request`() = runTest {
+        val vm = viewModel()
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+        vm.onAddSticker("🎉")
+
+        vm.publish()
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
+        assertThat(request.captured.storyEffects?.stickerObjects?.map { it.emoji }).containsExactly("🎉")
         assertThat(request.captured.content).isNull()
     }
 }

@@ -7,12 +7,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,26 +24,39 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +65,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,9 +81,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -82,6 +104,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -94,6 +118,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
 
 /**
@@ -145,6 +170,17 @@ fun StoryComposerScreen(
 
     val imageAndVideo = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
 
+    var showStickerPicker by remember { mutableStateOf(false) }
+    if (showStickerPicker) {
+        StickerPickerDialog(
+            onPick = { emoji ->
+                viewModel.onAddSticker(emoji)
+                showStickerPicker = false
+            },
+            onDismiss = { showStickerPicker = false },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -166,6 +202,7 @@ fun StoryComposerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -182,16 +219,41 @@ fun StoryComposerScreen(
                 transform = state.selectedSlideTransform,
                 backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
                     ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
+                colorMatrix = state.selectedSlideFilterMatrix,
                 textElements = state.selectedSlideTextElements,
-                selectedElementId = state.selectedTextElementId,
+                selectedElement = state.selectedTextElement,
+                stickers = state.selectedSlideStickers,
+                selectedStickerId = state.selectedStickerId,
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onSelectTextElement,
                 onElementDrag = viewModel::onTextElementMoved,
+                onElementDragEnd = viewModel::onTextElementDragEnd,
+                onElementTransform = viewModel::onTextElementTransform,
                 onElementRemove = viewModel::onRemoveTextElement,
-                onBackgroundTap = viewModel::onDeselectTextElement,
+                onStickerTap = viewModel::onSelectSticker,
+                onStickerDrag = viewModel::onStickerMoved,
+                onStickerTransform = viewModel::onStickerTransform,
+                onStickerRemove = viewModel::onRemoveSticker,
+                onBackgroundTap = {
+                    viewModel.onDeselectTextElement()
+                    viewModel.onDeselectSticker()
+                },
+                snapFeedback = state.snapFeedback,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
+                floatingToolbar = {
+                    state.selectedTextElement?.let { element ->
+                        TextStyleToolbar(
+                            element = element,
+                            onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
+                            onColor = { color -> viewModel.onTextElementColor(element.id, color) },
+                            onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
+                            onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
+                            onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
+                        )
+                    }
+                },
             )
 
             OutlinedTextField(
@@ -225,28 +287,6 @@ fun StoryComposerScreen(
                 },
             )
 
-            state.selectedTextElement?.let { element ->
-                TextStyleToolbar(
-                    element = element,
-                    onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
-                    onColor = { color -> viewModel.onTextElementColor(element.id, color) },
-                    onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            OutlinedButton(
-                onClick = viewModel::onAddTextElement,
-                enabled = state.deck.selectedCanAddTextElement,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.TextFields, contentDescription = null)
-                Text(
-                    text = stringResource(R.string.stories_composer_add_text),
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-
             if (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty()) {
                 MediaPreviewRow(
                     attachments = state.selectedSlideAttachments,
@@ -255,41 +295,228 @@ fun StoryComposerScreen(
                 )
             }
 
-            OutlinedButton(
-                onClick = {
+            ComposerControlsLayer(
+                band = state.band,
+                visibility = state.draft.visibility,
+                selectedFilter = state.selectedSlideFilter,
+                filterIntensity = state.selectedSlideFilterIntensity,
+                canAddText = state.deck.selectedCanAddTextElement,
+                canAddSticker = state.deck.selectedCanAddSticker,
+                isUploadingMedia = state.isUploadingMedia,
+                isMediaFull = state.draft.isMediaFull,
+                mediaCount = state.draft.mediaIds.size,
+                hasMedia = state.draft.hasMedia,
+                onFabTap = viewModel::onBandFabTap,
+                onDismiss = viewModel::onBandDismiss,
+                onSwapCategory = viewModel::onBandSwapCategory,
+                onAddText = viewModel::onAddTextElement,
+                onAddSticker = { showStickerPicker = true },
+                onPickMedia = {
                     when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
                         StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
                         StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
                         StoryMediaPickMode.None -> Unit
                     }
                 },
-                enabled = !state.isUploadingMedia && !state.draft.isMediaFull,
-                modifier = Modifier.fillMaxWidth(),
+                onSelectVisibility = viewModel::onVisibilityChange,
+                onSelectFilter = viewModel::onSelectFilter,
+                onFilterIntensityChange = viewModel::onFilterIntensityChange,
+            )
+        }
+    }
+}
+
+/**
+ * The bottom-band tools toolbar — parity with iOS's composer FAB column + bottom band
+ * (`Contenu` / `Effets`). Two FABs toggle a tools drawer that animates in above them;
+ * the drawer shows the active [BandCategory]'s tools — Contenu's add-text / add-media
+ * tiles, or Effets' visibility chips. Which category is showing, and whether the drawer
+ * is open at all, is decided by the pure, unit-tested [ComposerBandState]; this
+ * Composable only renders that state and forwards intents. The drawer is dismissable by
+ * a downward swipe and swaps category on a horizontal swipe — natural gestures routed
+ * through [onDismiss] / [onSwapCategory].
+ */
+@Composable
+private fun ComposerControlsLayer(
+    band: ComposerBandState,
+    visibility: StoryVisibility,
+    selectedFilter: StoryFilter?,
+    filterIntensity: Float,
+    canAddText: Boolean,
+    canAddSticker: Boolean,
+    isUploadingMedia: Boolean,
+    isMediaFull: Boolean,
+    mediaCount: Int,
+    hasMedia: Boolean,
+    onFabTap: (BandCategory) -> Unit,
+    onDismiss: () -> Unit,
+    onSwapCategory: () -> Unit,
+    onAddText: () -> Unit,
+    onAddSticker: () -> Unit,
+    onPickMedia: () -> Unit,
+    onSelectVisibility: (StoryVisibility) -> Unit,
+    onSelectFilter: (StoryFilter?) -> Unit,
+    onFilterIntensityChange: (Float) -> Unit,
+) {
+    val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AnimatedVisibility(visible = band.isVisible) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        var total = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragEnd = { if (total > swipeThresholdPx) onDismiss() },
+                        ) { change, dy -> change.consume(); total += dy }
+                    }
+                    .pointerInput(Unit) {
+                        var total = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragEnd = { if (abs(total) > swipeThresholdPx) onSwapCategory() },
+                        ) { change, dx -> change.consume(); total += dx }
+                    },
             ) {
-                if (state.isUploadingMedia) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
-                }
-                Text(
-                    text = if (state.draft.hasMedia) {
-                        stringResource(
-                            R.string.stories_composer_add_media_count,
-                            state.draft.mediaIds.size,
-                            StoryComposerDraft.MAX_MEDIA,
+                when (band.activeCategory) {
+                    BandCategory.CONTENU -> ContentTilesRow(
+                        canAddText = canAddText,
+                        canAddSticker = canAddSticker,
+                        isUploadingMedia = isUploadingMedia,
+                        isMediaFull = isMediaFull,
+                        mediaCount = mediaCount,
+                        hasMedia = hasMedia,
+                        onAddText = onAddText,
+                        onAddSticker = onAddSticker,
+                        onPickMedia = onPickMedia,
+                    )
+                    BandCategory.EFFETS -> Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterRow(
+                            selected = selectedFilter,
+                            intensity = filterIntensity,
+                            onSelect = onSelectFilter,
+                            onIntensityChange = onFilterIntensityChange,
                         )
+                        VisibilityRow(
+                            selected = visibility,
+                            onSelect = onSelectVisibility,
+                        )
+                    }
+                    null -> Unit
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BandFab(
+                icon = Icons.Filled.Add,
+                label = stringResource(R.string.stories_composer_band_contenu),
+                active = band.activeCategory == BandCategory.CONTENU,
+                onClick = { onFabTap(BandCategory.CONTENU) },
+            )
+            BandFab(
+                icon = Icons.Filled.Tune,
+                label = stringResource(R.string.stories_composer_band_effets),
+                active = band.activeCategory == BandCategory.EFFETS,
+                onClick = { onFabTap(BandCategory.EFFETS) },
+            )
+        }
+    }
+}
+
+/** One bottom-band FAB. Brand-coloured when its category's drawer is open. */
+@Composable
+private fun BandFab(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    val container = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
+    val content = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
+    ExtendedFloatingActionButton(
+        onClick = onClick,
+        containerColor = container,
+        contentColor = content,
+        icon = { Icon(icon, contentDescription = null) },
+        text = { Text(label) },
+    )
+}
+
+/** The Contenu drawer's tiles — add-text and pick-media — rendered in [ComposerBand.contentTiles] order. */
+@Composable
+private fun ContentTilesRow(
+    canAddText: Boolean,
+    canAddSticker: Boolean,
+    isUploadingMedia: Boolean,
+    isMediaFull: Boolean,
+    mediaCount: Int,
+    hasMedia: Boolean,
+    onAddText: () -> Unit,
+    onAddSticker: () -> Unit,
+    onPickMedia: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ComposerBand.contentTiles.forEach { tile ->
+            when (tile) {
+                ComposerContentTile.TEXT -> BandTile(
+                    icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
+                    label = stringResource(R.string.stories_composer_add_text),
+                    enabled = canAddText,
+                    onClick = onAddText,
+                    modifier = Modifier.weight(1f),
+                )
+                ComposerContentTile.MEDIA -> BandTile(
+                    icon = {
+                        if (isUploadingMedia) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
+                        }
+                    },
+                    label = if (hasMedia) {
+                        stringResource(R.string.stories_composer_add_media_count, mediaCount, StoryComposerDraft.MAX_MEDIA)
                     } else {
                         stringResource(R.string.stories_composer_add_media)
                     },
-                    modifier = Modifier.padding(start = 8.dp),
+                    enabled = !isUploadingMedia && !isMediaFull,
+                    onClick = onPickMedia,
+                    modifier = Modifier.weight(1f),
+                )
+                ComposerContentTile.STICKER -> BandTile(
+                    icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
+                    label = stringResource(R.string.stories_composer_add_sticker),
+                    enabled = canAddSticker,
+                    onClick = onAddSticker,
+                    modifier = Modifier.weight(1f),
                 )
             }
-
-            VisibilityRow(
-                selected = state.draft.visibility,
-                onSelect = viewModel::onVisibilityChange,
-            )
         }
+    }
+}
+
+/** A single content-drawer tile: an icon over a label, forwarding [onClick]. Glue. */
+@Composable
+private fun BandTile(
+    icon: @Composable () -> Unit,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+        icon()
+        Text(label, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -301,23 +528,50 @@ fun StoryComposerScreen(
  * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
  * the measured canvas size into normalised fractions), so this Composable stays
  * declarative glue. A tap on the empty canvas deselects ([onBackgroundTap]).
+ *
+ * While a text element is being edited the [floatingToolbar] floats in-place just
+ * clear of that element — above or below it, clamped inside the canvas — at the
+ * vertical anchor decided by the pure, unit-tested [StoryToolbarPlacement] (fed the
+ * element's measured centre/half-height, the toolbar's measured height, and the
+ * keyboard-shrunk canvas height). The composer applies `imePadding`, so the canvas
+ * already excludes the soft keyboard and the toolbar always lands in view.
  */
 @Composable
 private fun StoryCanvasSurface(
     transform: StoryCanvasTransform,
     backgroundModel: Any?,
+    colorMatrix: StoryColorMatrix,
     textElements: List<StoryTextElement>,
-    selectedElementId: String?,
+    selectedElement: StoryTextElement?,
+    stickers: List<StoryStickerElement>,
+    selectedStickerId: String?,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
+    onElementDragEnd: () -> Unit,
+    onElementTransform: (String, Float, Float) -> Unit,
     onElementRemove: (String) -> Unit,
+    onStickerTap: (String) -> Unit,
+    onStickerDrag: (String, Float, Float) -> Unit,
+    onStickerTransform: (String, Float, Float) -> Unit,
+    onStickerRemove: (String) -> Unit,
     onBackgroundTap: () -> Unit,
+    snapFeedback: SnapFeedback?,
     modifier: Modifier = Modifier,
+    floatingToolbar: @Composable () -> Unit = {},
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
+    val guideColor = MaterialTheme.colorScheme.primary
+    val warnBorder = if (snapFeedback?.withinSafeZone == false) {
+        BorderStroke(2.dp, MaterialTheme.colorScheme.error)
+    } else {
+        null
+    }
     var canvasWidthPx by remember { mutableFloatStateOf(0f) }
     var canvasHeightPx by remember { mutableFloatStateOf(0f) }
+    var selectedHalfHeightPx by remember { mutableFloatStateOf(0f) }
+    var toolbarHeightPx by remember { mutableFloatStateOf(0f) }
+    val gapPx = with(LocalDensity.current) { 8.dp.toPx() }
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
@@ -328,6 +582,13 @@ private fun StoryCanvasSurface(
                 .aspectRatio(9f / 16f)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .then(
+                    if (warnBorder != null) {
+                        Modifier.border(warnBorder, RoundedCornerShape(16.dp))
+                    } else {
+                        Modifier
+                    },
+                )
                 .onSizeChanged {
                     canvasWidthPx = it.width.toFloat()
                     canvasHeightPx = it.height.toFloat()
@@ -345,6 +606,7 @@ private fun StoryCanvasSurface(
                     model = backgroundModel,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    colorFilter = ColorFilter.colorMatrix(ColorMatrix(colorMatrix.values.toFloatArray())),
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
@@ -355,10 +617,30 @@ private fun StoryCanvasSurface(
                         },
                 )
             }
+            if (snapFeedback != null) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    snapFeedback.verticalGuide?.let { gx ->
+                        drawLine(
+                            color = guideColor,
+                            start = Offset(gx * size.width, 0f),
+                            end = Offset(gx * size.width, size.height),
+                            strokeWidth = 2f,
+                        )
+                    }
+                    snapFeedback.horizontalGuide?.let { gy ->
+                        drawLine(
+                            color = guideColor,
+                            start = Offset(0f, gy * size.height),
+                            end = Offset(size.width, gy * size.height),
+                            strokeWidth = 2f,
+                        )
+                    }
+                }
+            }
             textElements.forEach { element ->
                 TextElementLayer(
                     element = element,
-                    selected = element.id == selectedElementId,
+                    selected = element.id == selectedElement?.id,
                     canvasWidthPx = canvasWidthPx,
                     canvasHeightPx = canvasHeightPx,
                     onTap = { onElementTap(element.id) },
@@ -367,8 +649,52 @@ private fun StoryCanvasSurface(
                             onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
                         }
                     },
+                    onDragEnd = onElementDragEnd,
+                    onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
                     onRemove = { onElementRemove(element.id) },
+                    onMeasured = { size ->
+                        if (element.id == selectedElement?.id) selectedHalfHeightPx = size.height / 2f
+                    },
                 )
+            }
+            stickers.forEach { sticker ->
+                StickerLayer(
+                    sticker = sticker,
+                    selected = sticker.id == selectedStickerId,
+                    canvasWidthPx = canvasWidthPx,
+                    canvasHeightPx = canvasHeightPx,
+                    onTap = { onStickerTap(sticker.id) },
+                    onDrag = { dxPx, dyPx ->
+                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                            onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                        }
+                    },
+                    onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
+                    onRemove = { onStickerRemove(sticker.id) },
+                )
+            }
+            if (selectedElement != null) {
+                val placement = StoryToolbarPlacement.resolve(
+                    elementCenterYpx = selectedElement.y * canvasHeightPx,
+                    elementHalfHeightPx = selectedHalfHeightPx,
+                    toolbarHeightPx = toolbarHeightPx,
+                    canvasHeightPx = canvasHeightPx,
+                    gapPx = gapPx,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(0, placement.topPx.roundToInt()) }
+                        .padding(horizontal = 8.dp)
+                        .onSizeChanged { toolbarHeightPx = it.height.toFloat() }
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                        .padding(8.dp),
+                ) {
+                    floatingToolbar()
+                }
             }
         }
     }
@@ -389,7 +715,10 @@ private fun TextElementLayer(
     canvasHeightPx: Float,
     onTap: () -> Unit,
     onDrag: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onTransform: (Float, Float) -> Unit,
     onRemove: () -> Unit,
+    onMeasured: (IntSize) -> Unit = {},
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     Box(
@@ -400,12 +729,32 @@ private fun TextElementLayer(
                     y = (element.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
                 )
             }
-            .onSizeChanged { sizePx = it }
+            .graphicsLayer {
+                scaleX = element.scale
+                scaleY = element.scale
+                rotationZ = element.rotationDeg
+            }
+            .onSizeChanged {
+                sizePx = it
+                onMeasured(it)
+            }
             .pointerInput(element.id) { detectTapGestures { onTap() } }
             .pointerInput(element.id) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    onDrag(dragAmount.x, dragAmount.y)
+                detectTransformGestures { _, pan, zoom, rotation ->
+                    onDrag(pan.x, pan.y)
+                    onTransform(zoom, rotation)
+                }
+            }
+            .pointerInput(element.id) {
+                // Observes the Final pass without consuming, so it fires the moment
+                // the drag/pinch lifts (every pointer up) — clearing the snap guides —
+                // while the transform detector above still owns the gesture deltas.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Final)
+                    } while (event.changes.any { it.pressed })
+                    onDragEnd()
                 }
             }
             .background(
@@ -453,6 +802,165 @@ private fun TextElementLayer(
     }
 }
 
+/**
+ * One on-canvas emoji sticker: placed at its normalised ([StoryStickerElement.x],
+ * [StoryStickerElement.y]) of the measured canvas (centred on that point), draggable,
+ * pinch/rotate-able with one gesture, tappable to select, and — when selected —
+ * carrying a small remove affordance. The normalised→pixel placement and the
+ * pixel→normalised drag delta are the only arithmetic here; the clamp lives in the
+ * pure [StoryStickerElement]. Mirrors [TextElementLayer]; pure glue.
+ */
+@Composable
+private fun StickerLayer(
+    sticker: StoryStickerElement,
+    selected: Boolean,
+    canvasWidthPx: Float,
+    canvasHeightPx: Float,
+    onTap: () -> Unit,
+    onDrag: (Float, Float) -> Unit,
+    onTransform: (Float, Float) -> Unit,
+    onRemove: () -> Unit,
+) {
+    var sizePx by remember { mutableStateOf(IntSize.Zero) }
+    Box(
+        modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = (sticker.x * canvasWidthPx - sizePx.width / 2f).roundToInt(),
+                    y = (sticker.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
+                )
+            }
+            .graphicsLayer {
+                scaleX = sticker.scale
+                scaleY = sticker.scale
+                rotationZ = sticker.rotationDeg
+            }
+            .onSizeChanged { sizePx = it }
+            .pointerInput(sticker.id) { detectTapGestures { onTap() } }
+            .pointerInput(sticker.id) {
+                detectTransformGestures { _, pan, zoom, rotation ->
+                    onDrag(pan.x, pan.y)
+                    onTransform(zoom, rotation)
+                }
+            }
+            .background(
+                color = if (selected) Color.Black.copy(alpha = 0.25f) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = sticker.emoji, fontSize = STICKER_BASE_FONT_SIZE)
+        if (selected) {
+            Surface(
+                onClick = onRemove,
+                shape = RoundedCornerShape(50),
+                color = Color.Black.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(20.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.stories_composer_remove_sticker),
+                    tint = Color.White,
+                    modifier = Modifier.padding(2.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The emoji sticker picker — category tabs ([StickerCategory]) plus a live search field,
+ * both driven by the pure [StickerPickerState] so the "what is visible" decision is
+ * unit-tested in one place (a non-blank query searches across every category and the tab
+ * row is hidden). Tapping an emoji forwards it to [onPick] (which adds it to the canvas
+ * and closes the dialog). Pure glue.
+ */
+@Composable
+private fun StickerPickerDialog(
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var picker by remember { mutableStateOf(StickerPickerState()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.stories_composer_cancel))
+            }
+        },
+        title = { Text(stringResource(R.string.stories_composer_add_sticker)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = picker.query,
+                    onValueChange = { picker = picker.withQuery(it) },
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.stories_composer_sticker_search)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (!picker.isSearching) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(StickerCategory.values().toList()) { category ->
+                            FilterChip(
+                                selected = picker.category == category,
+                                onClick = { picker = picker.withCategory(category) },
+                                label = { Text(category.label()) },
+                            )
+                        }
+                    }
+                }
+                val visible = picker.visibleEmojis
+                if (visible.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.stories_composer_sticker_no_results),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 16.dp),
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(STICKER_PICKER_COLUMNS),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        gridItems(visible) { emoji ->
+                            Text(
+                                text = emoji,
+                                fontSize = STICKER_PICKER_FONT_SIZE,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onPick(emoji) }
+                                    .padding(8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun StickerCategory.label(): String = stringResource(
+    when (this) {
+        StickerCategory.SMILEYS -> R.string.stories_composer_sticker_cat_smileys
+        StickerCategory.ANIMALS -> R.string.stories_composer_sticker_cat_animals
+        StickerCategory.FOOD -> R.string.stories_composer_sticker_cat_food
+        StickerCategory.ACTIVITIES -> R.string.stories_composer_sticker_cat_activities
+        StickerCategory.TRAVEL -> R.string.stories_composer_sticker_cat_travel
+        StickerCategory.OBJECTS -> R.string.stories_composer_sticker_cat_objects
+        StickerCategory.SYMBOLS -> R.string.stories_composer_sticker_cat_symbols
+        StickerCategory.FLAGS -> R.string.stories_composer_sticker_cat_flags
+    },
+)
+
+private const val STICKER_PICKER_COLUMNS = 6
+private val STICKER_PICKER_FONT_SIZE = 28.sp
+
 private fun StoryTextAlign.toTextAlign(): TextAlign = when (this) {
     StoryTextAlign.LEFT -> TextAlign.Start
     StoryTextAlign.CENTER -> TextAlign.Center
@@ -465,6 +973,9 @@ private fun StoryTextFontFamily.toFontFamily(): FontFamily = when (this) {
     StoryTextFontFamily.MONOSPACE -> FontFamily.Monospace
     StoryTextFontFamily.CURSIVE -> FontFamily.Cursive
 }
+
+/** The intrinsic on-canvas emoji size before per-sticker [StoryStickerElement.scale]. */
+private val STICKER_BASE_FONT_SIZE = 48.sp
 
 /** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
 private val STORY_TEXT_COLORS = listOf(
@@ -499,6 +1010,8 @@ private fun TextStyleToolbar(
     onStyle: (StoryTextStyle) -> Unit,
     onColor: (String) -> Unit,
     onAlign: (StoryTextAlign) -> Unit,
+    onDuplicate: () -> Unit,
+    onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -518,6 +1031,30 @@ private fun TextStyleToolbar(
             AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
             AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
             AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
+            IconButton(onClick = onDuplicate) {
+                Icon(
+                    Icons.Filled.ContentCopy,
+                    contentDescription = stringResource(R.string.stories_composer_duplicate_element),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ZOrderButton(Icons.Filled.VerticalAlignBottom, R.string.stories_composer_zorder_to_back) {
+                onReorder(StoryZOrder.TO_BACK)
+            }
+            ZOrderButton(Icons.Filled.ArrowDownward, R.string.stories_composer_zorder_backward) {
+                onReorder(StoryZOrder.BACKWARD)
+            }
+            ZOrderButton(Icons.Filled.ArrowUpward, R.string.stories_composer_zorder_forward) {
+                onReorder(StoryZOrder.FORWARD)
+            }
+            ZOrderButton(Icons.Filled.VerticalAlignTop, R.string.stories_composer_zorder_to_front) {
+                onReorder(StoryZOrder.TO_FRONT)
+            }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(STORY_TEXT_COLORS) { hex ->
@@ -548,6 +1085,21 @@ private fun AlignToggle(
             icon,
             contentDescription = stringResource(label),
             tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ZOrderButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    labelRes: Int,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick) {
+        Icon(
+            icon,
+            contentDescription = stringResource(labelRes),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -745,9 +1297,10 @@ private fun MediaThumbnail(
 private fun VisibilityRow(
     selected: StoryVisibility,
     onSelect: (StoryVisibility) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     LazyRow(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -766,6 +1319,69 @@ private fun StoryVisibility.labelRes(): Int = when (this) {
     StoryVisibility.FRIENDS -> R.string.stories_visibility_friends
     StoryVisibility.COMMUNITY -> R.string.stories_visibility_community
     StoryVisibility.PRIVATE -> R.string.stories_visibility_private
+}
+
+/**
+ * The Effets drawer's photo-filter picker: a "None" chip plus one chip per
+ * [StoryFilter] preset (selecting toggles the slide's filter), and — only while a
+ * filter is active — a strength slider. All per-slide; the deck holds the state and
+ * the colour math lives in [StoryFilterMatrix], so this stays glue.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterRow(
+    selected: StoryFilter?,
+    intensity: Float,
+    onSelect: (StoryFilter?) -> Unit,
+    onIntensityChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            item {
+                FilterChip(
+                    selected = selected == null,
+                    onClick = { onSelect(null) },
+                    label = { Text(stringResource(R.string.stories_composer_filter_none)) },
+                )
+            }
+            items(StoryFilter.entries) { filter ->
+                FilterChip(
+                    selected = filter == selected,
+                    onClick = { onSelect(filter) },
+                    label = { Text(stringResource(filter.labelRes())) },
+                )
+            }
+        }
+        if (selected != null) {
+            val intensityLabel = stringResource(R.string.stories_composer_filter_intensity)
+            Slider(
+                value = intensity,
+                onValueChange = onIntensityChange,
+                valueRange = 0f..1f,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = intensityLabel },
+            )
+        }
+    }
+}
+
+private fun StoryFilter.labelRes(): Int = when (this) {
+    StoryFilter.VINTAGE -> R.string.stories_composer_filter_vintage
+    StoryFilter.BW -> R.string.stories_composer_filter_bw
+    StoryFilter.WARM -> R.string.stories_composer_filter_warm
+    StoryFilter.COOL -> R.string.stories_composer_filter_cool
+    StoryFilter.DRAMATIC -> R.string.stories_composer_filter_dramatic
+    StoryFilter.VIVID -> R.string.stories_composer_filter_vivid
+    StoryFilter.FADE -> R.string.stories_composer_filter_fade
+    StoryFilter.CHROME -> R.string.stories_composer_filter_chrome
 }
 
 /**

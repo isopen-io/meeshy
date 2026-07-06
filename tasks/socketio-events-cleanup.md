@@ -73,30 +73,44 @@ Le générique `NOTIFICATION` (sans `:action`) est inhabituel — quel sens vs `
 
 ---
 
-## 5. `CONVERSATION_CLOSED` vs `CONVERSATION_DELETED`
+## 5. `CONVERSATION_CLOSED` vs `CONVERSATION_DELETED` — ✅ Résolu (2026-06-30)
 
-**Problème** : `CONVERSATION_CLOSED` existe (`'conversation:closed'`), pas `CONVERSATION_DELETED`. La sémantique n'est pas documentée :
-- closed = read-only, history préservée ?
-- deleted = supprimée pour tous ?
-- Comment le client distingue archive perso vs delete global ?
-
-**Action proposée** :
-- Documenter la sémantique exacte de `CONVERSATION_CLOSED` dans le code
-- Si "delete" est un cas distinct → ajouter `CONVERSATION_DELETED`
-- Sinon → docstring sur le const pour clarifier
+Docstrings ajoutées sur les deux constantes dans `socketio-events.ts`, vérifiées contre le code (`routes/conversations/core.ts` / `delete-for-me.ts`) :
+- `CONVERSATION_CLOSED` : suppression **globale** par le créateur/un admin (`DELETE /conversations/:id`), `Conversation.isActive=false`, broadcast à `ROOMS.conversation` (tous les membres).
+- `CONVERSATION_DELETED` : "delete for me" **par utilisateur** (`DELETE /conversations/:id/delete-for-me`), broadcast uniquement à `ROOMS.user` du caller (ses autres devices), la conversation reste active pour les autres participants.
 
 ---
 
-## 6. `USER_UPDATED` manquant
+## 6. `USER_UPDATED` manquant — ✅ Résolu (2026-07-02)
 
-**Problème** : Pas d'event quand un user modifie son profil (avatar, displayName, etc.). Actuellement la diffusion implicite passe par la mise à jour des `participants` dans les events `CONVERSATION_UPDATED`. Limite :
+**Problème (historique)** : Pas d'event quand un user modifie son profil (avatar, displayName, etc.). La diffusion implicite passait par la mise à jour des `participants` dans les events `CONVERSATION_UPDATED`. Limite :
 - Coût : N events de conv update pour un seul changement profil
 - Latence : tant que l'user n'est pas dans une conv affichée, le profile reste stale dans le cache iOS/web
 
-**Action proposée** :
-- Ajouter `USER_UPDATED: 'user:updated'` émis aux contacts/follow de l'utilisateur
-- Payload léger : `{ userId, changes: Partial<UserPublic> }`
-- iOS/web invalide les caches profile correspondants
+**Fix appliqué** : `USER_UPDATED: 'user:updated'` (`packages/shared/types/socketio-events.ts`,
+payload `{ userId, changes: Partial<{ displayName, avatar, banner, username, firstName,
+lastName }> }`) émis via `NotificationService.emitUserUpdated()` (realtime-only, pas de
+`Notification` persistée — même pattern que `emitFriendRequestCancelled`) depuis les 4
+routes `PATCH /users/me`, `/users/me/avatar`, `/users/me/banner`, `/users/me/username`
+(`services/gateway/src/routes/users/profile.ts`), fire-and-forget après l'update DB.
+
+Fan-out ciblé (pas de broadcast complet) : nouveau helper
+`getDistinctConversationPartnerUserIds(prisma, userId)`
+(`services/gateway/src/utils/conversation-partners.ts`), 2 requêtes Prisma (conversations du
+user → participants distincts des autres users dans ces conversations), même forme que le
+dédup existant de `MeeshySocketIOManager._emitPresenceSnapshot` mais scopé aux users
+enregistrés (les participants anonymes n'ont pas de profil à propager).
+
+Web câblé de bout en bout (`presence.service.ts` → `orchestrator.service.ts` →
+`meeshy-socketio.service.ts` → `use-socket-cache-sync.ts` invalide
+`queryKeys.users.detail(userId)`, ce qui couvre `useUserProfileQuery` puisque `profile()` est
+nested sous `detail()`). iOS non câblé dans ce passage (pas de toolchain Swift dans
+l'environnement d'exécution) — à faire en suivi, même pattern que
+`CONVERSATION_NEW`/`FRIEND_REQUEST_*`.
+
+Tests : gateway (`emitUserUpdated.test.ts` ×4, `conversation-partners.test.ts` ×4,
+`profile.test.ts` ×4 nouveaux cas), shared (`socketio-events.test.ts`), web
+(`presence.service.test.ts` ×2, `use-socket-cache-sync.test.tsx` ×2).
 
 ---
 
@@ -109,6 +123,57 @@ Le générique `NOTIFICATION` (sans `:action`) est inhabituel — quel sens vs `
 - Émettre aux user-rooms respectifs
 - Migrer clients
 
+**`FRIEND_REQUEST_CANCELLED` — ✅ Résolu (2026-07-01)**
+
+Contrairement à `NEW`/`ACCEPTED`/`REJECTED` (délivrance fonctionnelle via
+`NOTIFICATION_NEW`, juste non typée), `DELETE /friend-requests/:id` n'émettait
+**RIEN** à l'autre partie — vrai gap temps réel (même classe de bug que
+`CONVERSATION_NEW` avant son fix) : si Alice annule une demande envoyée à Bob (ou
+si Bob supprime une demande reçue sans y répondre), l'autre côté gardait sa liste
+de demandes en attente périmée jusqu'à un refetch complet manuel.
+
+Fix : event dédié `FRIEND_REQUEST_CANCELLED: 'friend-request:cancelled'`
+(`packages/shared/types/socketio-events.ts`, payload `{ friendRequestId, cancelledBy }`),
+émis via `NotificationService.emitFriendRequestCancelled()` (realtime-only, PAS de
+`Notification` persistée) vers `ROOMS.user(otherUserId)` depuis le handler
+`DELETE /friend-requests/:id` (`services/gateway/src/routes/friends.ts`). Web câblé
+de bout en bout (`presence.service.ts` → `orchestrator.service.ts` →
+`meeshy-socketio.service.ts` → `use-friend-requests-v2.ts` invalide la query au
+reçu). iOS non câblé dans ce passage (pas de toolchain Swift dans l'environnement
+d'exécution) — à faire en suivi, même pattern que `CONVERSATION_NEW`.
+
+`NEW`/`ACCEPTED`/`REJECTED` restent P2/P3 (cosmétique — pattern à corriger mais pas
+de gap de délivrance fonctionnel aujourd'hui).
+
+**`FRIEND_REQUEST_NEW` / `FRIEND_REQUEST_ACCEPTED` / `FRIEND_REQUEST_REJECTED` — ✅ Résolu (2026-07-01)**
+
+Ajoutés en dual-émission (mêmes points d'appel que `createFriendRequestNotification` /
+`createFriendAcceptedNotification` / la notification système de rejet, legacy
+`NOTIFICATION_NEW` conservé ~3 mois). Un gap de délivrance réel a été trouvé au passage :
+côté **web**, `use-friend-requests-v2.ts` n'invalidait la liste `sent` sur aucun signal
+socket pour `friend_accepted`/rejet (`onNotification` ne filtrait que
+`friend_request`/`contact_request`) — l'expéditeur ne voyait pas en temps réel que sa
+demande avait été acceptée/refusée, seulement au prochain refetch complet.
+
+- `packages/shared/types/socketio-events.ts` : `FRIEND_REQUEST_NEW: 'friend-request:new'`
+  (`{ friendRequestId, senderId, receiverId }`), `FRIEND_REQUEST_ACCEPTED:
+  'friend-request:accepted'` (`{ friendRequestId, accepterId, conversationId? }`),
+  `FRIEND_REQUEST_REJECTED: 'friend-request:rejected'` (`{ friendRequestId, rejecterId }`).
+- `NotificationService.emitFriendRequestNew/Accepted/Rejected()` (realtime-only, même
+  pattern que `emitFriendRequestCancelled`) appelées depuis
+  `services/gateway/src/routes/friends.ts` : `POST /friend-requests` (NEW → user-room du
+  receiver), `PATCH /friend-requests/:id` accepted (ACCEPTED → user-room du sender,
+  `conversationId` résolu après création/lookup de la conversation directe) et rejected
+  (REJECTED → user-room du sender).
+- Web câblé de bout en bout (`presence.service.ts` → `orchestrator.service.ts` →
+  `meeshy-socketio.service.ts` → `use-friend-requests-v2.ts`, invalide `invalidateAll()`
+  sur les 3 events — ferme le gap ci-dessus).
+- iOS non câblé dans ce passage (pas de toolchain Swift dans l'environnement d'exécution)
+  — à faire en suivi, même pattern que `CONVERSATION_NEW`/`FRIEND_REQUEST_CANCELLED`.
+- Tests : gateway (`friends-routes.test.ts`, 6 nouveaux cas), shared
+  (`socketio-events.test.ts`), web (`presence.service.test.ts` ×6,
+  `use-friend-requests-v2.test.tsx` ×3).
+
 ---
 
 ## Priorisation suggérée
@@ -119,7 +184,7 @@ Le générique `NOTIFICATION` (sans `:action`) est inhabituel — quel sens vs `
 | P1 | #5 CONVERSATION_CLOSED docstring | 30min — ambiguïté coûte plus cher qu'un fix |
 | P2 | #1 NOTIFICATION_NEW audit complet | Pattern récurrent qui pourrira chaque domaine ajouté |
 | P2 | #7 FRIEND_REQUEST events | Visibility équivalente au bug de conv créateur, juste pas remonté yet |
-| P3 | #6 USER_UPDATED | Performance + UX cache invalidation, gain modéré |
+| ~~P3~~ | ~~#6 USER_UPDATED~~ | ✅ Résolu 2026-07-02 |
 | P3 | #3 READ_STATUS namespace | Cosmétique, faible blast radius |
 | P3 | #4 NOTIFICATION générique | À élucider d'abord |
 

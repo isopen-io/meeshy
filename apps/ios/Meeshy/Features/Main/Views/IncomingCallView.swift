@@ -12,11 +12,9 @@ struct IncomingCallView: View {
     // Receive the manager from the parent so SwiftUI keeps the same
     // subscription throughout the view's lifetime.
     @ObservedObject var callManager: CallManager
-    @Environment(\.colorScheme) private var colorScheme
     // Audit P2-iOS-9 — see CallView; skip repeating animations for
     // motion-sensitive users.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var ringScale: CGFloat = 0.8
     @State private var ringOpacity: Double = 1.0
@@ -149,7 +147,7 @@ struct IncomingCallView: View {
                 .frame(width: 110, height: 110)
 
             Text(initial)
-                .font(.system(size: 44, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(44, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
         .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)
@@ -161,7 +159,7 @@ struct IncomingCallView: View {
     private var callTypeBadge: some View {
         HStack(spacing: 6) {
             Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .accessibilityHidden(true)
             Text(callManager.isVideoEnabled
                 ? String(localized: "call.incoming.badge.video", defaultValue: "Video", bundle: .main)
@@ -195,7 +193,7 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: "phone.down.fill")
-                            .font(.system(size: 28, weight: .medium))
+                            .font(MeeshyFont.relative(28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
@@ -215,7 +213,7 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                            .font(.system(size: 28, weight: .medium))
+                            .font(MeeshyFont.relative(28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.success)

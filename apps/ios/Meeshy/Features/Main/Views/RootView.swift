@@ -27,6 +27,10 @@ struct StoryViewerRequest: Identifiable, Equatable {
     /// de post, ma story) : le viewer ne montre que le groupe de cet
     /// utilisateur. Les contextes « flux » (tray, liste) gardent `false`.
     var singleGroup: Bool = false
+    /// R4 inc.2 — id exact du post story quand le producteur le connaît
+    /// (notification, deep link). Permet au container un fetch unitaire
+    /// léger si le tray ignore le groupe. `nil` = comportement historique.
+    var postId: String? = nil
 }
 
 /// Named magic numbers for the iPhone root-view audio overlay layout.
@@ -74,6 +78,12 @@ struct RootView: View {
     /// every parent view. The coordinator's `pendingRequest` mirrors the
     /// legacy `Identifiable?` contract expected by `.fullScreenCover(item:)`.
     @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
+
+    /// U1 — namespace de la transition zoom tray→viewer (iOS 18+). Injecté
+    /// dans l'environnement pour que la bulle du tray (source) et le cover
+    /// (destination) partagent la même identité visuelle. iOS 16-17 : les
+    /// helpers `zoomTransition*` sont no-op, comportement historique intact.
+    @Namespace private var storyZoomNamespace
 
     /// Conversation surfaced by a long-press / pull-down on an in-app
     /// notification toast — presented as a reusable `ConversationView` preview
@@ -412,6 +422,7 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
+        .environment(\.zoomTransitionNamespace, storyZoomNamespace)
         // In-app notification preview: long-press / pull-down on a toast opens
         // the conversation (last messages + simple composer) over the current
         // page. A sheet creates a fresh environment, so the objects the reused
@@ -512,6 +523,7 @@ struct RootView: View {
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
                 singleGroup: request.singleGroup,
+                postId: request.postId,
                 startAtFirstUnviewed: request.startAtFirstUnviewed,
                 presentationSource: "RootView.fromConv",
                 initialAction: request.initialAction
@@ -529,6 +541,11 @@ struct RootView: View {
             // cover ne pouvait pas se cacher sans ça. Bug sync pill
             // chevauche header 2026-05-27.
             .environment(\.isStoryViewerPresenting, true)
+            // U1 — transition zoom depuis la bulle du tray (iOS 18+, no-op
+            // sinon). sourceID = userId du groupe : si la story s'ouvre
+            // depuis un point d'entrée sans bulle enregistrée (notification,
+            // deep link), iOS retombe sur la transition cover standard.
+            .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
         }
         // Call presentation is split between fullScreen and PiP modes so the
         // user can keep using the rest of the app during an active call:
@@ -556,7 +573,7 @@ struct RootView: View {
         }
         .overlay(alignment: .top) {
             FloatingCallPillView()
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
         }
         // §7.6 — call-waiting: a 2nd incoming call while one is active. Was dead
         // code (CallManager API + CallWaitingBannerView existed but were never
@@ -571,7 +588,7 @@ struct RootView: View {
                     onReject: { callManager.rejectPendingCall() },
                     onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
                 )
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
         }
         // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
@@ -1345,7 +1362,7 @@ struct RootView: View {
                     lastError = error
                     Logger.messages.error("[RootView] navigateToConversationById attempt=\(attempt) id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                     if attempt == 0 {
-                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        try? await Task.sleep(for: .seconds(0.6))
                     }
                 }
             }
@@ -1452,6 +1469,8 @@ struct RootView: View {
         FreeFloatingButtonsContainer(
             leftPosition: $feedButtonPosition,
             rightPosition: $menuButtonPosition,
+            leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
+            rightA11yLabel: String(localized: "a11y.floating.menu", defaultValue: "Menu", bundle: .main),
             onLeftTap: {
                 HapticFeedback.light()
                 // Le tap ouvre l'overlay Feed (sa vocation : l'icône est le Feed).
@@ -1498,13 +1517,19 @@ struct RootView: View {
                 router.push(.profile)
             },
             isSearchBarVisible: !isScrollingDown,
-            leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
             leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
-            rightA11yLabel: String(localized: "a11y.floating.menu", defaultValue: "Menu", bundle: .main),
+            leftA11yValue: showFeed ? String(localized: "a11y.floating.feed.opened", defaultValue: "Ouvert", bundle: .main) : String(localized: "a11y.floating.feed.closed", defaultValue: "Fermé", bundle: .main),
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
-            rightA11yValue: notificationManager.unreadCount > 0
-                ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
-                : nil,
+            rightA11yValue: {
+                var values: [String] = []
+                if showMenu {
+                    values.append(String(localized: "a11y.floating.menu.opened", defaultValue: "Ouvert", bundle: .main))
+                }
+                if notificationManager.unreadCount > 0 {
+                    values.append(String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount))
+                }
+                return values.isEmpty ? nil : values.joined(separator: ", ")
+            }(),
             rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
             leftContent: {
                 // Feed button content
@@ -1524,7 +1549,7 @@ struct RootView: View {
                             .frame(width: 26, height: 26)
                     } else {
                         Image(systemName: "square.stack.fill")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(MeeshyFont.relative(20, weight: .semibold))
                             .foregroundColor(.white)
                     }
                 }
@@ -1827,17 +1852,17 @@ private struct PendingSettingsBannerInline: View {
             if pendingCount > 0 {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
                     Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
-                        .font(.system(size: 10, weight: .regular))
+                        .font(MeeshyFont.relative(10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }
@@ -1853,9 +1878,9 @@ private struct PendingSettingsBannerInline: View {
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -1888,17 +1913,17 @@ private struct PendingStoryBannerInline: View {
             if publishService.pendingCount > 0 {
                 HStack(spacing: 8) {
                     Image(systemName: "photo.stack")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
                     Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
-                        .font(.system(size: 10, weight: .regular))
+                        .font(MeeshyFont.relative(10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }
@@ -1914,9 +1939,9 @@ private struct PendingStoryBannerInline: View {
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }

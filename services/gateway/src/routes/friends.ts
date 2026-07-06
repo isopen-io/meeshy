@@ -102,9 +102,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             firstName: true,
             lastName: true,
             displayName: true,
-            avatar: true,
-            isOnline: true,
-            lastActiveAt: true
+            avatar: true
           }
         },
         receiver: {
@@ -114,9 +112,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             firstName: true,
             lastName: true,
             displayName: true,
-            avatar: true,
-            isOnline: true,
-            lastActiveAt: true
+            avatar: true
           }
         }
       } as const;
@@ -152,6 +148,12 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           recipientUserId: body.receiverId,
           requesterId: userId,
           friendRequestId: friendRequest.id,
+        });
+
+        notificationService.emitFriendRequestNew({
+          receiverId: body.receiverId,
+          friendRequestId: friendRequest.id,
+          senderId: userId,
         });
       }
 
@@ -223,6 +225,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
+      /* istanbul ignore next -- Fastify AJV applies schema defaults before handler runs */
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
@@ -240,9 +243,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
                 firstName: true,
                 lastName: true,
                 displayName: true,
-                avatar: true,
-                isOnline: true,
-                lastActiveAt: true
+                avatar: true
               }
             }
           },
@@ -322,6 +323,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
+      /* istanbul ignore next -- Fastify AJV applies schema defaults before handler runs */
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
@@ -339,9 +341,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
                 firstName: true,
                 lastName: true,
                 displayName: true,
-                avatar: true,
-                isOnline: true,
-                lastActiveAt: true
+                avatar: true
               }
             }
           },
@@ -448,9 +448,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             firstName: true,
             lastName: true,
             displayName: true,
-            avatar: true,
-            isOnline: true,
-            lastActiveAt: true
+            avatar: true
           }
         },
         receiver: {
@@ -460,9 +458,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             firstName: true,
             lastName: true,
             displayName: true,
-            avatar: true,
-            isOnline: true,
-            lastActiveAt: true
+            avatar: true
           }
         }
       } as const;
@@ -525,12 +521,18 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             accepterUserId: userId,
             conversationId: undefined, // Sera ajouté après
           });
+        /* istanbul ignore else -- AJV enum validates status; only 'accepted' or 'rejected' reach this block */
         } else if (body.status === 'rejected') {
           await notificationService.createSystemNotification({
             recipientUserId: updatedRequest.senderId,
             content: `${receiverName} a refuse votre demande d'amitie`,
             priority: 'low',
             systemType: 'announcement',
+          });
+          notificationService.emitFriendRequestRejected({
+            senderId: updatedRequest.senderId,
+            friendRequestId: id,
+            rejecterId: userId,
           });
         }
       }
@@ -560,6 +562,8 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           }
         });
 
+        let acceptedConversationId = existingConversation?.id;
+
         if (!existingConversation) {
           // Generer un identifier unique pour la conversation directe
           const identifier = `direct_${friendRequest.senderId}_${friendRequest.receiverId}_${Date.now()}`;
@@ -587,12 +591,23 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
           // Ajouter la conversation a la reponse
           (updatedRequest as any).conversation = conversation;
+          acceptedConversationId = conversation.id;
+        }
+
+        if (notificationService) {
+          notificationService.emitFriendRequestAccepted({
+            senderId: updatedRequest.senderId,
+            friendRequestId: id,
+            accepterId: userId,
+            conversationId: acceptedConversationId,
+          });
         }
       }
 
       return sendSuccess(reply, updatedRequest);
 
     } catch (error) {
+      /* istanbul ignore next -- AJV enforces enum['accepted','rejected'] before handler runs */
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'Donnees invalides');
       }
@@ -671,6 +686,21 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       await fastify.prisma.friendRequest.delete({
         where: { id }
       });
+
+      // Realtime signal a l'AUTRE partie (celle qui n'a pas appele ce endpoint)
+      // pour qu'elle invalide sa liste de demandes en attente immediatement,
+      // au lieu de rester perimee jusqu'a son prochain refetch complet.
+      const notificationService = fastify.notificationService;
+      if (notificationService) {
+        const otherUserId = friendRequest.senderId === userId
+          ? friendRequest.receiverId
+          : friendRequest.senderId;
+        notificationService.emitFriendRequestCancelled({
+          recipientUserId: otherUserId,
+          friendRequestId: id,
+          cancelledBy: userId,
+        });
+      }
 
       return sendSuccess(reply, { message: 'Demande d\'ami supprimee' });
 

@@ -404,8 +404,9 @@ extension FeedView {
                     pendingThumbnails.removeValue(forKey: id)
                 }
             } label: {
+                // Glyphe chrome dans un cadre de tap fixe 28×28 : figé (doctrine 82i) ; le libellé porte le sens
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(MeeshyFont.relative(12, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 28, height: 28)
                     .background(
@@ -414,6 +415,7 @@ extension FeedView {
                             .shadow(color: MeeshyColors.error.opacity(0.4), radius: 4, y: 2)
                     )
             }
+            .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
             .padding(.trailing, 8)
 
             VStack(spacing: 4) {
@@ -427,8 +429,9 @@ extension FeedView {
 
                         if attachment.type == .video {
                             Image(systemName: "play.circle.fill")
-                                .font(.system(size: 20))
+                                .font(MeeshyFont.relative(20))
                                 .foregroundStyle(.white, .black.opacity(0.4))
+                                .accessibilityHidden(true)
                         }
                     } else if attachment.type == .location {
                         ZStack {
@@ -443,8 +446,9 @@ extension FeedView {
                                 .frame(width: 56, height: 56)
                             VStack(spacing: 2) {
                                 Image(systemName: "mappin.circle.fill")
-                                    .font(.system(size: 22))
+                                    .font(MeeshyFont.relative(22))
                                     .foregroundStyle(.white, .white.opacity(0.3))
+                                    .accessibilityHidden(true)
                                 Circle()
                                     .fill(Color.white.opacity(0.3))
                                     .frame(width: 8, height: 4)
@@ -463,14 +467,15 @@ extension FeedView {
                             .frame(width: 56, height: 56)
 
                         Image(systemName: feedIconForType(attachment.type))
-                            .font(.system(size: 22))
+                            .font(MeeshyFont.relative(22))
                             .foregroundColor(.white)
+                            .accessibilityHidden(true)
                     }
                 }
                 .frame(width: 56, height: 56)
 
                 Text(feedLabelForAttachment(attachment))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(MeeshyFont.relative(10, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textSecondary)
                     .lineLimit(1)
                     .frame(width: 60)
@@ -589,11 +594,11 @@ struct FeedComposerSheet: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: forcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
                 Text(forcePlainPost
                     ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
                     : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
             }
             .foregroundColor(forcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
         }
@@ -612,14 +617,14 @@ struct FeedComposerSheet: View {
                         cleanupAndDismiss()
                     } label: {
                         Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(MeeshyFont.relative(15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
                     Text(String(localized: "feed.post.composer.title", defaultValue: "Nouveau post", bundle: .main))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
@@ -633,7 +638,7 @@ struct FeedComposerSheet: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text(String(localized: "feed.post.composer.publish", defaultValue: "Publier", bundle: .main))
-                                .font(.system(size: 15, weight: .bold))
+                                .font(MeeshyFont.relative(15, weight: .bold))
                                 .foregroundColor(hasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
@@ -669,13 +674,13 @@ struct FeedComposerSheet: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
-                                    .font(.system(size: 10))
+                                    .font(MeeshyFont.relative(10))
                                 Text(postVisibility == "PUBLIC"
                                     ? String(localized: "feed.post.visibility.public", defaultValue: "Public", bundle: .main)
                                     : postVisibility == "FRIENDS"
                                         ? String(localized: "feed.post.visibility.friends", defaultValue: "Amis", bundle: .main)
                                         : String(localized: "feed.post.visibility.private", defaultValue: "Privé", bundle: .main))
-                                    .font(.system(size: 12))
+                                    .font(MeeshyFont.relative(12))
                             }
                             .foregroundColor(theme.textMuted)
                         }
@@ -692,7 +697,7 @@ struct FeedComposerSheet: View {
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
                         Text(String(localized: "feed.post.composer.placeholder", defaultValue: "Qu'avez-vous en tête ?", bundle: .main))
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 16)
                             .padding(.top, 12)
@@ -701,7 +706,7 @@ struct FeedComposerSheet: View {
                         .focused($isFocused)
                         .scrollContentBackground(.hidden)
                         .foregroundColor(theme.textPrimary)
-                        .font(.system(size: 17))
+                        .font(MeeshyFont.relative(17))
                         .frame(minHeight: 120)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
@@ -718,15 +723,15 @@ struct FeedComposerSheet: View {
                                 avatarURL: quoted.authorAvatarURL
                             )
                             Text(quoted.author)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
                                 .foregroundColor(theme.accentText(quoted.authorColor))
                             Text("·").foregroundColor(theme.textMuted)
                             Text(quoted.timestamp, style: .relative)
-                                .font(.system(size: 11))
+                                .font(MeeshyFont.relative(11))
                                 .foregroundColor(theme.textMuted)
                         }
                         Text(quoted.displayContent)
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(4)
                     }
@@ -761,37 +766,37 @@ struct FeedComposerSheet: View {
                 HStack(spacing: 16) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.brandPrimary)
                     }
                     .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
                     .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
                     .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.success)
                     }
                     .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.errorStrong)
                     }
                     .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
@@ -804,9 +809,9 @@ struct FeedComposerSheet: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "globe")
-                                .font(.system(size: 14))
+                                .font(MeeshyFont.relative(14))
                             Text(composerLanguageDisplayName)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
                         }
                         .foregroundColor(MeeshyColors.indigo500)
                         .padding(.horizontal, 10)
@@ -1003,17 +1008,19 @@ struct FeedComposerSheet: View {
 
                     if attachment.type == .video {
                         Image(systemName: "play.circle.fill")
-                            .font(.system(size: 22))
+                            .font(MeeshyFont.relative(22))
                             .foregroundStyle(.white, .black.opacity(0.4))
+                            .accessibilityHidden(true)
                     }
                 } else if attachment.type == .location {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(LinearGradient(colors: [Color(hex: "2ECC71"), Color(hex: "27AE60")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                         .overlay(
                             Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 26))
+                                .font(MeeshyFont.relative(26))
                                 .foregroundStyle(.white, .white.opacity(0.3))
+                                .accessibilityHidden(true)
                         )
                 } else {
                     RoundedRectangle(cornerRadius: 10)
@@ -1021,8 +1028,9 @@ struct FeedComposerSheet: View {
                         .frame(width: 72, height: 72)
                         .overlay(
                             Image(systemName: sheetIconForType(attachment.type))
-                                .font(.system(size: 26))
+                                .font(MeeshyFont.relative(26))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         )
                 }
             }
@@ -1039,8 +1047,9 @@ struct FeedComposerSheet: View {
                         pendingThumbnails.removeValue(forKey: id)
                     }
                 } label: {
+                    // Glyphe chrome dans un cadre de tap fixe 20×20 : figé (doctrine 82i) ; le libellé porte le sens
                     Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(MeeshyFont.relative(9, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 20, height: 20)
                         .background(
@@ -1049,11 +1058,12 @@ struct FeedComposerSheet: View {
                                 .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                         )
                 }
+                .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
                 .offset(x: 6, y: -6)
             }
 
             Text(sheetLabelForAttachment(attachment))
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 72)

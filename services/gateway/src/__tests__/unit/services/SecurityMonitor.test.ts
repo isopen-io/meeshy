@@ -285,4 +285,120 @@ describe('SecurityMonitor', () => {
       expect(email.sendSecurityAlertEmail).toHaveBeenCalled();
     });
   });
+
+  // ── getRecentEvents / getMetrics / getUserEvents ───────────────────────────
+
+  describe('getRecentEvents', () => {
+    it('queries securityEvent.findMany with time filter', async () => {
+      const prisma = makePrisma();
+      prisma.securityEvent.findMany.mockResolvedValue([{ id: 'e1', eventType: 'LOGIN_FAILED' }]);
+      const { monitor } = makeSut(undefined, prisma);
+
+      const result = await monitor.getRecentEvents(12);
+
+      expect(prisma.securityEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ createdAt: expect.anything() }) })
+      );
+      expect(result).toHaveLength(1);
+    });
+
+    it('includes severity filter when provided', async () => {
+      const prisma = makePrisma();
+      const { monitor } = makeSut(undefined, prisma);
+
+      await monitor.getRecentEvents(24, 'CRITICAL');
+
+      expect(prisma.securityEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ severity: 'CRITICAL' }) })
+      );
+    });
+  });
+
+  describe('getMetrics', () => {
+    it('returns metrics with totals and eventsByType', async () => {
+      const prisma = makePrisma();
+      prisma.securityEvent.count
+        .mockResolvedValueOnce(100)
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(20);
+      prisma.securityEvent.groupBy.mockResolvedValue([
+        { eventType: 'LOGIN_FAILED', severity: 'LOW', _count: { id: 3 } },
+      ]);
+      const { monitor } = makeSut(undefined, prisma);
+
+      const metrics = await monitor.getMetrics(48);
+
+      expect(metrics.period).toBe('48h');
+      expect(metrics.totalEvents).toBe(100);
+      expect(metrics.criticalEvents).toBe(5);
+      expect(metrics.highEvents).toBe(20);
+      expect(metrics.eventsByType).toHaveLength(1);
+    });
+  });
+
+  describe('getUserEvents', () => {
+    it('queries securityEvent.findMany with userId filter', async () => {
+      const prisma = makePrisma();
+      prisma.securityEvent.findMany.mockResolvedValue([{ id: 'e2', userId: 'user-42' }]);
+      const { monitor } = makeSut(undefined, prisma);
+
+      const result = await monitor.getUserEvents('user-42');
+
+      expect(prisma.securityEvent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ userId: 'user-42' }) })
+      );
+      expect(result).toHaveLength(1);
+    });
+  });
+
+  // ── sendAlert email error handling ────────────────────────────────────────
+
+  describe('sendAlert email error handling', () => {
+    it('does not throw when sendSecurityAlertEmail rejects', async () => {
+      const email = makeEmailService();
+      email.sendSecurityAlertEmail = jest.fn<any>().mockRejectedValue(new Error('SMTP down'));
+      const { monitor } = makeSut(email);
+      monitor.addAdminEmail('admin@test.com');
+
+      await expect(
+        monitor.logEvent(makeEvent({ eventType: 'IMPOSSIBLE_TRAVEL', severity: 'CRITICAL' }))
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  // ── LRU eviction at MAX_EVENT_COUNTS ─────────────────────────────────────
+
+  describe('LRU eviction', () => {
+    it('evicts the oldest entry when eventCounts reaches MAX_EVENT_COUNTS', async () => {
+      const { monitor } = makeSut();
+      const counts = (monitor as any).eventCounts as Map<string, { count: number; firstSeen: Date }>;
+
+      const MAX = (monitor as any).MAX_EVENT_COUNTS as number;
+      for (let i = 0; i < MAX; i++) {
+        counts.set(`key-${i}`, { count: 1, firstSeen: new Date() });
+      }
+      expect(counts.size).toBe(MAX);
+
+      await monitor.logEvent(makeEvent({ eventType: 'LOGIN_FAILED', ipAddress: '1.2.3.4' }));
+
+      expect(counts.size).toBeLessThanOrEqual(MAX);
+    });
+  });
+
+  // ── startEventCountCleanup interval ──────────────────────────────────────
+
+  describe('startEventCountCleanup', () => {
+    it('deletes entries older than 1 hour when cleanup fires', async () => {
+      const { monitor } = makeSut();
+      const counts = (monitor as any).eventCounts as Map<string, { count: number; firstSeen: Date }>;
+
+      counts.set('old-key', { count: 5, firstSeen: new Date(Date.now() - 2 * 60 * 60 * 1000) });
+      counts.set('fresh-key', { count: 2, firstSeen: new Date() });
+
+      jest.advanceTimersByTime(600_001);
+
+      expect(counts.has('old-key')).toBe(false);
+      expect(counts.has('fresh-key')).toBe(true);
+    });
+  });
 });

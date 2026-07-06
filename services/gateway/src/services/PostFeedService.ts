@@ -1,7 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, postInclude, NOT_DELETED } from './posts/postIncludes';
+import { authorSelect, postInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
@@ -85,29 +86,47 @@ export class PostFeedService {
     const candidateLimit = limit + 1;
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
+    // Resolve the viewer's social graph BEFORE the candidate query: the feed
+    // MUST gate FRIENDS/COMMUNITY/ONLY/EXCEPT visibility to people the viewer is
+    // actually entitled to see (buildVisibilityFilter — the same SSOT every
+    // sibling feed method uses). A flat `visibility: { in: ['PUBLIC','FRIENDS'] }`
+    // leaked every user's friends-only posts to every viewer. `friendIds`
+    // (accepted friends only) is reused below for affinity scoring; contacts
+    // (friends ∪ direct-conversation partners) widen the FRIENDS gate exactly
+    // like getStories/getStatuses/getReels.
+    const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
+      this.getFriendIds(userId),
+      this.getDirectConversationContactIds(userId),
+      getCommunityCoMemberIds(this.prisma, userId, this.cache),
+    ]);
+    const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
+    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
+
     // Phase 1 — Fetch candidates
     const where: any = {
       deletedAt: NOT_DELETED,
       type: { in: [PostType.POST, PostType.REEL] },
-      visibility: { in: ['PUBLIC', 'FRIENDS'] },
-      // Exclude expired (isSet: false matches MongoDB docs where field is absent)
-      OR: [
-        { expiresAt: { isSet: false } },
-        { expiresAt: { equals: null } },
-        { expiresAt: { gt: new Date() } },
+      AND: [
+        visibilityFilter,
+        // Exclude expired (isSet: false matches MongoDB docs where field is absent)
+        {
+          OR: [
+            { expiresAt: { isSet: false } },
+            { expiresAt: { equals: null } },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
       ],
     };
 
     if (cursorData) {
-      // Cursor-based: get posts before cursor
-      where.AND = [
-        {
-          OR: [
-            { createdAt: { lt: new Date(cursorData.createdAt) } },
-            { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
-          ],
-        },
-      ];
+      // Cursor-based: get posts strictly before the cursor (createdAt, id).
+      where.AND.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
     }
 
     const candidates = await this.prisma.post.findMany({
@@ -134,12 +153,11 @@ export class PostFeedService {
 
     const candidateIds = page.map((c) => c.id);
 
-    // Fetch affinity & intent signals in parallel:
-    // - friendIds       : graphe social (affinité binaire)
+    // Fetch intent signals in parallel (friendIds already resolved above for the
+    // visibility gate, and reused here for binary affinity scoring):
     // - interestAffinity : intérêt personnalisé dérivé de l'engagement passé du viewer
     // - seenCounts       : combien de fois chaque candidat est déjà remonté (fatigue)
-    const [friendIds, interestAffinity, seenCounts] = await Promise.all([
-      this.getFriendIds(userId),
+    const [interestAffinity, seenCounts] = await Promise.all([
       this.getInterestAffinity(userId),
       this.getSeenCounts(userId, candidateIds),
     ]);
@@ -212,8 +230,16 @@ export class PostFeedService {
     };
   }
 
-  async getStories(userId: string) {
+  async getStories(
+    userId: string,
+    options?: { updatedSince?: Date; projection?: 'tray'; cursor?: string; limit?: number }
+  ) {
     const now = new Date();
+    // G1(c) pagination keyset (createdAt, id) — même patron que getStatuses /
+    // getDiscoverStatuses. Sans cursor ni limit explicites, la première page
+    // de 50 reproduit le plafond historique (rétro-compatible).
+    const limit = Math.min(Math.max(options?.limit ?? 50, 1), 50);
+    const cursorData = options?.cursor ? decodeCursor(options.cursor) : null;
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
       this.getDirectConversationContactIds(userId),
@@ -231,24 +257,64 @@ export class PostFeedService {
       ],
     };
 
-    const stories = await this.prisma.post.findMany({
-      where,
-      include: feedPostInclude,
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    // G1 delta-sync : `updatedSince` ne renvoie que les stories créées ou
+    // modifiées (compteurs, traductions) depuis le timestamp — le client
+    // fusionne avec son cache 24 h. Les disparitions restent couvertes par
+    // les événements socket (story:deleted) et le filtre expiry client.
+    // Sans le paramètre, comportement historique complet (rétro-compatible).
+    if (options?.updatedSince) {
+      where.AND.push({ updatedAt: { gt: options.updatedSince } });
+    }
+
+    if (cursorData) {
+      where.AND.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
+    }
+
+    // G1(b) projection tray : select léger (anneaux + miniature + vu) au lieu
+    // du plein corps — opt-in, le défaut reste l'include canonique complet.
+    // Deux appels distincts : Prisma type `select`/`include` comme des
+    // overloads exclusifs, un spread conditionnel produit une union rejetée.
+    const isTrayProjection = options?.projection === 'tray';
+    const fetched = isTrayProjection
+      ? await this.prisma.post.findMany({
+          where,
+          select: trayStorySelect,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: limit + 1,
+        })
+      : await this.prisma.post.findMany({
+          where,
+          include: feedPostInclude,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: limit + 1,
+        });
+
+    const hasMore = fetched.length > limit;
+    const stories = hasMore ? fetched.slice(0, limit) : fetched;
+    const nextCursor = hasMore && stories.length > 0
+      ? encodeCursor(stories[stories.length - 1].createdAt, stories[stories.length - 1].id)
+      : null;
 
     const storyIds = stories.map((s) => s.id);
+    // Le tray ne rend pas les réactions — la requête batch est coupée en
+    // projection ; isViewedByMe (anneau vu/non-vu) reste servi dans les deux.
     const [viewedRows, userReactions] = storyIds.length > 0
       ? await Promise.all([
           this.prisma.postView.findMany({
             where: { postId: { in: storyIds }, userId },
             select: { postId: true },
           }),
-          this.prisma.postReaction.findMany({
-            where: { userId, postId: { in: storyIds } },
-            select: { postId: true, emoji: true },
-          }),
+          isTrayProjection
+            ? Promise.resolve([] as { postId: string; emoji: string }[])
+            : this.prisma.postReaction.findMany({
+                where: { userId, postId: { in: storyIds } },
+                select: { postId: true, emoji: true },
+              }),
         ])
       : [[], []];
     const viewedSet = new Set(viewedRows.map((v) => v.postId));
@@ -259,11 +325,13 @@ export class PostFeedService {
       userReactionsMap.set(r.postId, list);
     }
 
-    return stories.map((s) => ({
+    const items = stories.map((s) => ({
       ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
       isViewedByMe: viewedSet.has(s.id),
       currentUserReactions: userReactionsMap.get(s.id) ?? [],
     }));
+
+    return { items, nextCursor, hasMore };
   }
 
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {
@@ -374,7 +442,15 @@ export class PostFeedService {
     opts: { seedReelId?: string; cursor?: string; limit?: number } = {}
   ) {
     const { seedReelId, cursor, limit = 20 } = opts;
-    const candidatePoolSize = Math.min(limit * 4, 120);
+    // Chronological window + 1 probe row to detect `hasMore`, mirroring getFeed.
+    // We deliberately do NOT over-fetch then drop: the cursor advances by
+    // `createdAt`, so any candidate we fetch-but-drop (the old `limit * 4` pool)
+    // would be silently skipped — or re-served as a duplicate — on the next
+    // page, because the cursor was taken from the score-sorted last item rather
+    // than the chronological boundary. Affinity ranking reorders *within* the
+    // window only, which keeps infinite scroll lossless: every reel appears
+    // exactly once. Same invariant as getFeed (see its Phase 1 comment).
+    const candidatePoolSize = limit + 1;
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     const [friendIds, dmContactIds, viewerLanguages, seed, communityCoMemberIds] = await Promise.all([
@@ -414,7 +490,17 @@ export class PostFeedService {
       return { items: [], nextCursor: null, hasMore: false };
     }
 
-    const candidateIds = candidates.map((c) => c.id);
+    // The page is the chronological window (candidates arrive createdAt desc).
+    // The cursor is the OLDEST reel of the shown window, captured BEFORE score
+    // reordering, so the next page is strictly older — no skips, no duplicates.
+    const hasMore = candidates.length > limit;
+    const page = hasMore ? candidates.slice(0, limit) : candidates;
+    const oldest = page[page.length - 1];
+    const nextCursor = hasMore && oldest
+      ? encodeCursor(oldest.createdAt, oldest.id)
+      : null;
+
+    const candidateIds = page.map((c) => c.id);
     const [seenReelIds, mentionsByPost] = await Promise.all([
       this.getSeenPostIds(userId, candidateIds),
       this.getMentionsByPost(candidateIds),
@@ -429,7 +515,8 @@ export class PostFeedService {
       seed,
     };
 
-    const scored = candidates
+    // Score the window for display order only (cursor is fixed above).
+    const scored = page
       .map((post) => ({
         post,
         score: reelAffinityScore(
@@ -450,16 +537,8 @@ export class PostFeedService {
       }))
       .sort((a, b) => b.score - a.score);
 
-    const top = scored.slice(0, limit + 1);
-    const hasMore = top.length > limit;
-    const items = hasMore ? top.slice(0, limit) : top;
-    const lastItem = items[items.length - 1];
-    const nextCursor = hasMore && lastItem
-      ? encodeCursor(lastItem.post.createdAt, lastItem.post.id)
-      : null;
-
     return {
-      items: await this.enrichReelsForViewer(items.map((s) => s.post), userId),
+      items: await this.enrichReelsForViewer(scored.map((s) => s.post), userId),
       nextCursor,
       hasMore,
     };
@@ -583,16 +662,37 @@ export class PostFeedService {
       type: { in: [PostType.POST, PostType.REEL] },
     };
 
-    // Visibility filter
-    if (viewerUserId !== targetUserId) {
-      where.visibility = 'PUBLIC';
+    const andClauses: any[] = [];
+
+    // Visibility gate. The author sees all of their own posts; an anonymous
+    // viewer only PUBLIC; an authenticated non-author viewer sees PUBLIC plus
+    // whatever the author shared with them (FRIENDS if a contact, COMMUNITY if a
+    // co-member, ONLY/EXCEPT if targeted) — the same buildVisibilityFilter SSOT
+    // used by every feed method. Hard-coding PUBLIC here previously hid an
+    // author's friends-only posts from their actual friends.
+    if (!viewerUserId) {
+      where.visibility = PostVisibility.PUBLIC;
+    } else if (viewerUserId !== targetUserId) {
+      const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
+        this.getFriendIds(viewerUserId),
+        this.getDirectConversationContactIds(viewerUserId),
+        getCommunityCoMemberIds(this.prisma, viewerUserId, this.cache),
+      ]);
+      const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
+      andClauses.push(this.buildVisibilityFilter(viewerUserId, allContactIds, communityCoMemberIds));
     }
 
     if (cursorData) {
-      where.OR = [
-        { createdAt: { lt: new Date(cursorData.createdAt) } },
-        { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
-      ];
+      andClauses.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
+    }
+
+    if (andClauses.length > 0) {
+      where.AND = andClauses;
     }
 
     const posts = await this.prisma.post.findMany({
@@ -759,17 +859,11 @@ export class PostFeedService {
   // PRIVATE HELPERS
   // ============================================
 
+  /// G5 — délègue au filtre canonique unique (posts/postVisibility.ts).
+  /// Audience feed = friends ∪ contacts DM (divergence assumée vs PostService,
+  /// décision produit en attente — story-sota §4).
   private buildVisibilityFilter(viewerId: string, friendIds: string[], communityCoMemberIds: string[] = []) {
-    return {
-      OR: [
-        { authorId: viewerId },
-        { visibility: PostVisibility.PUBLIC },
-        { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
-        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
-        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerId } } },
-        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
-      ],
-    };
+    return buildPostVisibilityOrFilter(viewerId, friendIds, communityCoMemberIds);
   }
 
   private async getDirectConversationContactIds(userId: string): Promise<string[]> {

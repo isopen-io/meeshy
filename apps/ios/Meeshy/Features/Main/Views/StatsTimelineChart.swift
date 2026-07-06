@@ -38,20 +38,20 @@ struct StatsTimelineChart: View {
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 6)) { _ in
                 AxisValueLabel()
-                    .font(.system(size: 9))
+                    .font(MeeshyFont.relative(9))
                     .foregroundStyle(theme.textMuted)
             }
         }
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
                 AxisValueLabel()
-                    .font(.system(size: 9))
+                    .font(MeeshyFont.relative(9))
                     .foregroundStyle(theme.textMuted)
                 AxisGridLine()
                     .foregroundStyle(theme.textMuted.opacity(0.15))
             }
         }
-        .accessibilityLabel("Graphique d'activite sur 30 jours")
+        .accessibilityLabel(String(localized: "stats.timeline.chart.a11y", defaultValue: "Activity chart over 30 days", bundle: .main))
     }
 
     private func shortDate(_ dateString: String) -> String {

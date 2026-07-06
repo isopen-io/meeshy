@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import MeeshySDK
 
 /// Pure formatter for the author "reach line" (`@pseudo · 👁 vues · 📊 impressions`),
 /// shared by the inline author block (`authorReachLine`) and the collapsed header
@@ -7,9 +8,7 @@ import Foundation
 enum PostReachFormatter {
     /// Compact count: 1.2k / 3.4M. Mirrors the per-card `compactCount` copies.
     static func compact(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
+        MeeshyNumberFormatter.formatCompact(value)
     }
 
     struct Components: Equatable {
@@ -33,5 +32,16 @@ enum PostReachFormatter {
 enum StoryCanvasVisibility {
     static func isVisible(canvasFrame: CGRect, viewportHeight: CGFloat) -> Bool {
         canvasFrame.maxY > 0 && canvasFrame.minY < viewportHeight
+    }
+}
+
+/// Pure mute/pause policy for the inline story canvas in PostDetailView, shared by
+/// BOTH the native story canvas and the STORY-repost canvas so the two paths can't
+/// drift (RF3). The canvas pauses when scrolled fully off-screen OR while a call
+/// owns the audio session. Audio is always ON in detail (`mute: false`) — the
+/// detail viewer matches the native story experience, unlike the muted feed.
+enum StoryDetailPlaybackPolicy {
+    static func isPaused(visible: Bool, callActive: Bool) -> Bool {
+        !visible || callActive
     }
 }

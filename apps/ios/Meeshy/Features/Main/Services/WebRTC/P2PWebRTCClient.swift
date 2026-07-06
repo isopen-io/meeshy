@@ -114,6 +114,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // MARK: - Configuration
 
     func configure(iceServers: [IceServer]) throws {
+        // Defensive: callers are expected to `disconnect()` before
+        // re-configuring (CallManager's FSM enforces `.idle` first), but if
+        // that invariant is ever violated, tear the stale connection down via
+        // the same `disconnect()` used everywhere else — not just `.close()`.
+        // A bare `.close()` (audit 2026-07-03) left `audioTransceiver` /
+        // `videoTransceiver` / local-track properties pointing at the closed
+        // connection's objects; `addOffererTransceiversIfNeeded(on:)` guards
+        // on `audioTransceiver == nil` and would then skip attaching media to
+        // the brand-new peerConnection, producing a silently medialess SDP
+        // offer (a call that "succeeds" but is completely silent).
+        if peerConnection != nil {
+            Logger.webrtc.warning("configure() called with a live peerConnection — disconnecting it before creating a new one")
+            disconnect()
+        }
         let config = RTCConfiguration()
         config.iceServers = iceServers.map { server in
             RTCIceServer(
@@ -461,17 +475,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         } else {
             Logger.webrtc.warning("[WEBRTC] video encoding NOT applied — encodings array empty")
         }
-    }
-
-    func setMaxAudioBitrate(_ bitrate: Int) {
-        guard let at = audioTransceiver else { return }
-        let params = at.sender.parameters
-        guard !params.encodings.isEmpty else { return }
-        for encoding in params.encodings {
-            encoding.maxBitrateBps = NSNumber(value: bitrate)
-        }
-        at.sender.parameters = params
-        Logger.webrtc.info("[WEBRTC] audio max bitrate updated to \(bitrate / 1000, privacy: .public)kbps")
     }
 
     /// Adjusts the audio sender's max bitrate at runtime. Called by the
@@ -1127,7 +1130,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
         sender.insertDtmf(digits, duration: 100, interToneGap: 70)
-        Logger.webrtc.info("DTMF: sending '\(digits)'")
+        // Never log DTMF digits: they carry conference PINs, voicemail
+        // passwords, and IVR/banking security codes typed on the in-call keypad.
+        Logger.webrtc.info("DTMF: sending \(digits.count) digit(s)")
     }
 
     private func startDataChannelPing() {
@@ -1617,7 +1622,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func toggleAudio(_ enabled: Bool) {}
     func toggleVideo(_ enabled: Bool) {}
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {}
-    func setMaxAudioBitrate(_ bitrate: Int) {}
+    func applyAudioEncoding(maxBitrateBps: Int) {}
     var hasLocalVideoTrack: Bool { false }
     func enableLocalVideo() async throws -> Bool { throw WebRTCError.notSupported }
     func disableLocalVideo() async -> Bool { false }
@@ -1631,6 +1636,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func disconnect() {}
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { nil }
+    var videoFilterPipeline = VideoFilterPipeline()
     func setAudioEffect(_ effect: AudioEffectConfig?) throws { throw WebRTCError.notSupported }
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws { throw WebRTCError.notSupported }
 }

@@ -1,59 +1,47 @@
 # Iteration 114 — Plan d'implémentation (2026-07-06)
 
-## Objectifs
-Homogénéiser le service des **réactions de message** (`ReactionService`) sur le contrat de cohérence
-déjà appliqué à `PostReactionService` / `CommentReactionService` :
-1. `updateMessageReactionSummary` → `$transaction` + `reactionCount` autoritaire re-dérivé via
-   `tx.reaction.count(...)`.
-2. `addReaction` → `try/catch` **P2002** idempotent.
+## Objectives
+Corriger **F84** : le « load more » des chats anonymes (lien partagé) recharge la page 1 en boucle
+(doublons + historique ancien inaccessible), car `getNextPageParam` renvoie un ID de message (string)
+que la branche offset anonyme retransforme en page 1.
 
-## Modules affectés
-- `services/gateway/src/services/ReactionService.ts` (méthodes `addReaction` + `updateMessageReactionSummary`).
-- Tests : `services/gateway/src/__tests__/unit/services/ReactionService.test.ts` (mock `$transaction`
-  + `reaction.count`, nouveaux tests transaction/autorité/P2002).
-- Aucun changement de schéma, de route, de forme de réponse ni de signature publique.
+## Affected modules
+- `apps/web/hooks/queries/use-conversation-messages-rq.ts` — `getNextPageParam`.
+- `apps/web/__tests__/hooks/queries/use-conversation-messages-rq.test.tsx` — 1 test de régression.
+- Caller (hérité, inchangé) : `apps/web/components/common/bubble-stream-page.tsx` (surface chat anonyme).
 
-## Phases d'implémentation
-1. **RED** — tests : `$transaction` appelé par add/remove ; `reactionCount` écrit == valeur de
-   `reaction.count()` (autoritaire, ≠ incrément) ; `addReaction` renvoie l'existant sans lever sur P2002.
-2. **GREEN source** — envelopper `updateMessageReactionSummary` dans `$transaction`, recomputer
-   `reactionCount` via `tx.reaction.count`; ajouter le `try/catch` P2002 idempotent dans `addReaction`.
-3. **Refactor** — vérifier le miroir exact avec `PostReactionService` (commentaires FR alignés).
-4. **Validation** — bun install (parité CI), Prisma generate + build shared, jest gateway sur
-   `ReactionService.test.ts` + suites réactions voisines, puis suite complète.
-5. **Commit + push**.
+## Implementation phases
+1. **Fix** — brancher `getNextPageParam` sur `linkId` : mode anonyme (offset) → `allPages.length + 1` ;
+   mode authentifié (cursor) → inchangé. Commentaire du *pourquoi*. ✅
+2. **Test** — « anonymous loadMore advances the offset » : 1ᵉʳ appel `loadMessages(20,0)`, 2ᵉ appel
+   `loadMessages(20,20)` (pas `(20,0)`), 3 messages distincts sans doublon. ✅
+3. **Validation** — `npx jest use-conversation-messages-rq.test.tsx` : 19/19. ✅
 
-## Dépendances
-- `bun install` (node_modules absent au démarrage).
-- `npx prisma generate --generator client` + `bun run build` dans `packages/shared` (parité CI gateway).
+## Dependencies
+Aucune. Aucun changement de signature/API.
 
-## Risques estimés
-Faibles. Alignement sur un patron déjà en production et testé (post/commentaire). Surcoût d'un `count()`
-par mutation, négligeable (`@@index([messageId])` présent), déjà accepté ailleurs.
+## Estimated risks
+Très faible. Chemin authentifié inchangé (branche `linkId` prise en premier). Mode anonyme : boucle
+cassée → offset croissant correct.
 
-## Stratégie de rollback
-Restaurer les deux méthodes à leur forme incrémentale précédente (diff localisé à un seul fichier source).
+## Rollback strategy
+Réversible en une ligne (retirer la branche `if (linkId)`). Aucun état persistant.
 
-## Critères de validation
-- [x] RED prouvé (3 assertions transaction/autorité échouent sur le code d'origine après `git stash`).
-- [x] GREEN source (2 méthodes).
-- [x] jest `ReactionService.test.ts` vert (229/229 sur les 5 suites appariées).
-- [x] suites réactions voisines vertes (17 suites / 465 tests `reaction|Reaction`).
-- [x] typecheck gateway `tsc --noEmit` sans erreur.
-- [ ] CI verte après push.
+## Validation criteria
+- [x] 18 tests existants préservés + 1 neuf = 19/19 (jest).
+- [x] 1ᵉʳ appel offset 0, 2ᵉ appel offset = limit ; pas de doublon dans la liste finale.
 
-## Statut de complétion
-- Source : **fait**. Tests : **fait**. Validation locale : **fait** (jest + tsc verts). CI : **en attente**.
+## Completion status
+**COMPLET.** Fix + test + docs. Prêt à commit/push/PR.
 
 ## Progress tracking
-- [x] Analyse écrite (`docs/routine/analyses/2026-07-06-iteration-114-analyse.md`).
-- [x] Plan écrit (ce fichier).
-- [x] Fix source + tests.
-- [x] Validation locale (jest + tsc verts).
-- [ ] Push + CI verte + merge main + suppression branche.
+- [x] Analyse (`2026-07-06-iteration-114-analyse.md`).
+- [x] Plan (ce fichier).
+- [x] Fix `use-conversation-messages-rq.ts`.
+- [x] Test de régression.
+- [x] `npx jest` vert (19/19).
+- [ ] Commit + push + PR.
 
-## Améliorations futures
-- **F84b** — `locationCount` incrémental (nécessite `messageType` au handler) — inchangé.
-- Envisager un helper partagé de recompte autoritaire pour les 3 services de réaction (dé-duplication),
-  cycle dédié — la structure diffère (participantId vs userId, likeCount présent/absent).
-</content>
+## Future improvements
+- **F85** (MEDIUM, translator) : `Synthesizer._segment_text` perte de phrase courte — PR Python ciblée.
+- **F86** (LOW) : dedup traduction premium/basic ignorant le timestamp — intention produit à confirmer.

@@ -10,6 +10,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface TextLightboxProps {
   attachment: UploadedAttachmentResponse | null;
@@ -187,13 +188,12 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
   const language = getLanguageFromExtension(extension);
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
+    const { success } = await copyToClipboard(content);
+    if (success) {
       setIsCopied(true);
       toast.success(tViewers('text.copied'));
       setTimeout(() => setIsCopied(false), 2000);
-    } catch (error) {
-      console.error('Error copying:', error);
+    } else {
       toast.error(tViewers('text.copyError'));
     }
   };

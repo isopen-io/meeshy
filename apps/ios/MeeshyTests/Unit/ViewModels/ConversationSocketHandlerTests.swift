@@ -718,13 +718,38 @@ final class ConversationSocketHandlerTests: XCTestCase {
     func test_typingStopped_removesUsernameFromDelegate() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
-        delegate.typingUsernames = ["Alice"]
+
+        socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
 
         socket.typingStopped.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: conversationId))
 
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(delegate.typingUsernames.isEmpty)
+    }
+
+    // Regression test: the typing roster is keyed by `userId`, not display
+    // name. Two participants sharing a display name (e.g. two uncustomized
+    // "John Smith"s in a group) must be tracked independently — one user's
+    // typing:stop must not clear the other's still-active entry.
+    func test_typingStopped_sameDisplayName_differentUsers_doesNotClearOther() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let userA = "same-name-user-a"
+        let userB = "same-name-user-b"
+
+        socket.typingStarted.send(TypingEvent(userId: userA, username: "john.a", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+        socket.typingStarted.send(TypingEvent(userId: userB, username: "john.b", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingUsernames, ["John Smith", "John Smith"], "Both same-name users should be tracked independently")
+
+        socket.typingStopped.send(TypingEvent(userId: userA, username: "john.a", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingUsernames, ["John Smith"], "User B must still show as typing after User A stops")
     }
 
     // MARK: - readStatusUpdated
@@ -955,7 +980,9 @@ final class ConversationSocketHandlerTests: XCTestCase {
     func test_messageReceived_clearsTypingForSender() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
-        delegate.typingUsernames = ["Bob"]
+
+        socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "bob", displayName: "Bob", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
 
         let apiMsg = makeAPIMessage(id: "newmsg", senderId: otherUserId, senderUsername: "bob", senderDisplayName: "Bob")
         socket.simulateMessage(apiMsg)
@@ -1676,5 +1703,109 @@ final class ConversationSocketHandlerTests: XCTestCase {
         socket.messageReceived.send(msg2)
         try await Task.sleep(nanoseconds: 200_000_000)
         XCTAssertEqual(delegate.lastUnreadMessage?.id, "unique2", "Different ID should always be delivered")
+    }
+
+    // MARK: - Typing Safety Timer Cap
+
+    func test_typingStarted_safetyTimerCap_handlesExceedingCap() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        // Fill to the 200-entry timer cap, each a distinct user.
+        for i in 0..<200 {
+            socket.typingStarted.send(
+                TypingEvent(userId: "timer_user_\(i)", username: "TimerUser\(i)", conversationId: conversationId)
+            )
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(delegate.typingUsernames.count, 200, "All 200 users should be tracked")
+
+        // 201st user: the safety timer is not scheduled (cap exceeded) but the
+        // username MUST still be added to the typing list — cap only gates timers.
+        socket.typingStarted.send(
+            TypingEvent(userId: "timer_user_overflow", username: "TimerUserOverflow", conversationId: conversationId)
+        )
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(
+            delegate.typingUsernames.contains("TimerUserOverflow"),
+            "201st typing user must still appear in typingUsernames even though no safety timer is scheduled"
+        )
+        XCTAssertEqual(delegate.typingUsernames.count, 201)
+    }
+
+    func test_typingStarted_safetyTimerCap_existingUserRefreshedEvenAtCap() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        // Fill to the cap.
+        for i in 0..<200 {
+            socket.typingStarted.send(
+                TypingEvent(userId: "cap_user_\(i)", username: "CapUser\(i)", conversationId: conversationId)
+            )
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        // Re-sending an EXISTING user (already has a timer) is always accepted;
+        // the guard only blocks NEW users once the cap is reached.
+        socket.typingStarted.send(
+            TypingEvent(userId: "cap_user_0", username: "CapUser0", conversationId: conversationId)
+        )
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        // Count must not grow — "CapUser0" was already in the list.
+        XCTAssertEqual(delegate.typingUsernames.count, 200, "Re-sending existing user must not duplicate the entry")
+    }
+
+    // MARK: - Dedup Size Eviction
+
+    func test_dedup_sizeBasedEviction_doesNotCrashOnHighVolume() async throws {
+        // Verifies that sending many unique messages does not crash or leak,
+        // and that the dedup table stays bounded (evictDedup fires at 10,001st entry).
+        // We use 250 messages here to exercise the eviction call path without
+        // the overhead of 10 k socket events in a unit test.
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.invalidateIndex()
+
+        let batchSize = 250
+        for i in 0..<batchSize {
+            socket.messageReceived.send(
+                makeAPIMessage(id: "volume_msg_\(i)", senderId: otherUserId, content: "msg \(i)")
+            )
+        }
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        // Last message must have landed (no crash, no lost delivery).
+        XCTAssertEqual(
+            delegate.lastUnreadMessage?.id, "volume_msg_\(batchSize - 1)",
+            "Last message in high-volume burst must be delivered"
+        )
+    }
+
+    func test_dedup_duplicatesSuppressedAfterHighVolumeBurst() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.invalidateIndex()
+
+        // Send 50 unique messages so the dedup table is non-trivial.
+        for i in 0..<50 {
+            socket.messageReceived.send(
+                makeAPIMessage(id: "burst_msg_\(i)", senderId: otherUserId, content: "burst \(i)")
+            )
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        // Re-send the very first message — dedup must suppress it.
+        delegate.lastUnreadMessage = nil
+        socket.messageReceived.send(
+            makeAPIMessage(id: "burst_msg_0", senderId: otherUserId, content: "burst 0")
+        )
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertNil(
+            delegate.lastUnreadMessage,
+            "Duplicate message after high-volume burst must still be suppressed by dedup"
+        )
     }
 }

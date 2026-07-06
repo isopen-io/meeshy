@@ -29,6 +29,8 @@ const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
 const clampNonNegativeInt = (value?: number | null): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
 
+// Mirror of `CALL_TERMINAL_STATUSES` (@meeshy/shared/types/video-call),
+// typed on the Prisma enum — keep both lists in sync.
 const TERMINAL_STATUSES: CallStatus[] = [
   CallStatus.ended,
   CallStatus.missed,
@@ -180,10 +182,20 @@ export class CallService {
   // heartbeat grace period so CallKit audio calls survive iOS socket suspension.
   private backgroundedParticipants: Map<string, Set<string>> = new Map();
   private readonly RINGING_TIMEOUT_MS = 60_000;   // Phase 1 fix P2 — FaceTime parity
+  private readonly RINGING_REHYDRATE_FLOOR_MS = 5_000; // item H — min budget after boot rehydration
   private readonly HEARTBEAT_DB_DEBOUNCE_MS = 30_000; // Write at most every 30s per participant
   // iOS suspends the socket after ~45s in background; CallKit keeps the RTP
   // stream alive. Give backgrounded participants 5 min before timing them out.
   private readonly BACKGROUND_HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000;
+  // Phantom-cleanup staleness budgets (P0 fix 2026-07-06, see
+  // `isPhantomCallStale`) — intentionally mirror CallCleanupService's own
+  // tiers (MAX_CONNECTING_MS / HEARTBEAT_TIMEOUT_MS) so a call classified as
+  // "stale" here is stale by the exact same yardstick the periodic GC sweep
+  // already uses, just evaluated immediately instead of on the next 60s tick.
+  // Declared independently (not imported) to avoid a value-level dependency
+  // on CallCleanupService, which already type-imports CallService.
+  private readonly PHANTOM_CONNECTING_GRACE_MS = 90 * 1000;
+  private readonly PHANTOM_HEARTBEAT_GRACE_MS = 120 * 1000;
 
   constructor(private prisma: PrismaClient) {
     this.turnCredentialService = new TURNCredentialService();
@@ -200,13 +212,33 @@ export class CallService {
    *
    * Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.5
    */
-  scheduleRingingTimeout(callId: string, onTimeout: () => void): void {
+  scheduleRingingTimeout(
+    callId: string,
+    onTimeout: () => void,
+    delayMs: number = this.RINGING_TIMEOUT_MS
+  ): void {
     this.clearRingingTimeout(callId);
     const handle = setTimeout(() => {
       this.ringingTimeouts.delete(callId);
       onTimeout();
-    }, this.RINGING_TIMEOUT_MS);
+    }, delayMs);
     this.ringingTimeouts.set(callId, handle);
+  }
+
+  /**
+   * CALL-RESILIENCE (item H) — re-arm a ringing timer lost to a process
+   * restart. Fires at `startedAt + RINGING_TIMEOUT_MS`, as if the in-process
+   * timer had never been wiped; when that budget is already exhausted the
+   * short floor still gives just-rebooted clients a beat to answer or cancel
+   * before the call resolves to missed.
+   */
+  rescheduleRingingTimeout(callId: string, startedAt: Date, onTimeout: () => void): void {
+    const elapsedMs = Date.now() - startedAt.getTime();
+    const remainingMs = Math.max(
+      this.RINGING_REHYDRATE_FLOOR_MS,
+      this.RINGING_TIMEOUT_MS - elapsedMs
+    );
+    this.scheduleRingingTimeout(callId, onTimeout, remainingMs);
   }
 
   clearRingingTimeout(callId: string): void {
@@ -220,7 +252,7 @@ export class CallService {
   /**
    * Generate ICE servers with per-user TURN credentials
    */
-  generateIceServers(userId: string): any[] {
+  generateIceServers(userId: string): RTCIceServer[] {
     return this.turnCredentialService.generateCredentials(userId);
   }
 
@@ -251,19 +283,12 @@ export class CallService {
   private async persistHeartbeatToDb(callId: string, participantId: string): Promise<void> {
     try {
       await this.prisma.callParticipant.updateMany({
-        where: { callSessionId: callId, participantId, leftAt: null },
+        where: { callSessionId: callId, participantId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
         data: { lastHeartbeatAt: new Date() }
       });
     } catch (err) {
       logger.warn('Failed to persist heartbeat to DB', { callId, participantId, err });
     }
-  }
-
-  /**
-   * Get last heartbeat timestamp for a participant
-   */
-  getLastHeartbeat(callId: string, participantId: string): number | undefined {
-    return this.heartbeats.get(callId)?.get(participantId);
   }
 
   /**
@@ -287,6 +312,59 @@ export class CallService {
         this.heartbeatDbWriteTimers.delete(key);
       }
     }
+  }
+
+  /**
+   * Force-terminates a CallSession that a normal endCall/leaveCall path could
+   * not cleanly resolve — e.g. the ending participant no longer resolves, or
+   * the authoritative write itself failed — after the caller has already told
+   * the call room the call ended (CallEventsHandler's disconnect force-cleanup
+   * fallback and call:end optimistic-broadcast recovery paths). Mirrors
+   * CallCleanupService.forceEndCall's terminal-write protocol: scoped to
+   * ACTIVE_STATUSES (a no-op, returning null, if another path already resolved
+   * the call) and bumps `version` so a version-guarded writer that read the
+   * row moments earlier can't silently clobber this terminal state.
+   */
+  async forceEndOrphanedCallSession(
+    callId: string,
+    endReason: CallEndReason
+  ): Promise<{ duration: number; conversationId: string } | null> {
+    const session = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      select: { startedAt: true, conversationId: true }
+    });
+    if (!session) return null;
+
+    const now = new Date();
+    const duration = Math.max(0, Math.floor((now.getTime() - session.startedAt.getTime()) / 1000));
+
+    const ended = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.callSession.updateMany({
+        where: { id: callId, status: { in: ACTIVE_STATUSES } },
+        data: {
+          status: CallStatus.ended,
+          endedAt: now,
+          duration,
+          endReason,
+          version: { increment: 1 }
+        }
+      });
+      if (updated.count === 0) return false;
+
+      await tx.callParticipant.updateMany({
+        where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
+        data: { leftAt: now }
+      });
+      return true;
+    });
+
+    if (!ended) return null;
+
+    this.clearHeartbeats(callId);
+    this.clearRingingTimeout(callId);
+    await this.releaseActiveCallClaim(session.conversationId, callId);
+
+    return { duration, conversationId: session.conversationId };
   }
 
   /**
@@ -333,6 +411,136 @@ export class CallService {
   }
 
   /**
+   * Number of participants with at least one recorded in-memory heartbeat for
+   * this call. Paired with `getStaleHeartbeats` to tell "everyone stale" (the
+   * call is truly dead) from "someone is still fresh" (the call is alive) —
+   * mirrors `CallCleanupService.hasFreshLiveness`'s `stale.length <
+   * participants.length` check without needing a DB round-trip for the
+   * participant list.
+   */
+  getHeartbeatParticipantCount(callId: string): number {
+    return this.heartbeats.get(callId)?.size ?? 0;
+  }
+
+  /**
+   * P0 fix (2026-07-06) — is an initiator-phantom candidate actually stale,
+   * or is it a genuinely live call (e.g. a second device/tab) the initiator
+   * happens to still be a live participant of? Without this gate,
+   * `initiateCall`'s phantom-cleanup force-ends ANY non-terminal call the
+   * initiator is still attached to — including a real, in-progress call in a
+   * completely unrelated conversation — the instant the same user starts a
+   * new call elsewhere. `CallService` holds no Socket.IO reference, so that
+   * force-end never broadcasts `call:ended`: the other party's client is left
+   * "connected" indefinitely, silently, until its own next action discovers
+   * the row is already terminal.
+   *
+   * Mirrors `CallCleanupService`'s tiered staleness semantics: a
+   * ringing/initiated call gets the same budget as its own scheduled ringing
+   * timeout, a connecting call gets the GC's connecting budget anchored on
+   * `answeredAt`, and an active/reconnecting call is stale only when there is
+   * no evidence — in memory or otherwise — that anyone is still beating.
+   */
+  private isPhantomCallStale(
+    session: { id: string; status?: CallStatus; startedAt: Date | null; answeredAt?: Date | null },
+    now: Date
+  ): boolean {
+    // A call record missing its own start time is anomalous — safe to treat
+    // as ancient (stale) rather than risk sparing a corrupt row forever.
+    const startedAtMs = session.startedAt ? session.startedAt.getTime() : 0;
+
+    if (session.status === CallStatus.initiated || session.status === CallStatus.ringing) {
+      return now.getTime() - startedAtMs > this.RINGING_TIMEOUT_MS;
+    }
+    if (session.status === CallStatus.connecting) {
+      const anchorMs = session.answeredAt ? session.answeredAt.getTime() : startedAtMs;
+      return now.getTime() - anchorMs > this.PHANTOM_CONNECTING_GRACE_MS;
+    }
+    // active / reconnecting (ACTIVE_STATUSES guarantees a real status here in
+    // production; the fallback below only matters for incomplete test doubles).
+    if (this.hasHeartbeatData(session.id)) {
+      const staleCount = this.getStaleHeartbeats(session.id, this.PHANTOM_HEARTBEAT_GRACE_MS).length;
+      return staleCount >= this.getHeartbeatParticipantCount(session.id);
+    }
+    return now.getTime() - startedAtMs > this.PHANTOM_HEARTBEAT_GRACE_MS;
+  }
+
+  /**
+   * Release the conversation's active-call claim taken by `initiateCall`'s
+   * atomic claim step, so a future `initiateCall` on this conversation is no
+   * longer blocked. Scoped to `activeCallId: callId` (compare-and-clear) so a
+   * call that never held the claim — or one that already lost it to a newer
+   * call — can never clobber someone else's live claim. Best-effort: a
+   * failure here is logged, not thrown, since the call's own status write is
+   * always the source of truth and the claim self-heals the next time a call
+   * is attempted for this conversation and finds this one already terminal.
+   * Public: the ringing-timeout handler (CallEventsHandler) owns the atomic
+   * missed-transition and must release the claim itself — delegating to
+   * markCallAsMissed hit the non-ringing guard and leaked the claim (prod
+   * incident 2026-07-02, conversation blocked CALL_ALREADY_ACTIVE ~5 min).
+   */
+  async releaseActiveCallClaim(conversationId: string, callId: string): Promise<void> {
+    try {
+      await this.prisma.conversation.updateMany({
+        where: { id: conversationId, activeCallId: callId },
+        data: { activeCallId: null }
+      });
+    } catch (error) {
+      logger.error('Failed to release active-call claim', { conversationId, callId, error });
+    }
+  }
+
+  /**
+   * Self-heal a leaked active-call claim. A claim can outlive its call when
+   * a terminal write raced the release (prod incident 2026-07-02: ringing
+   * timeout won the missed-transition, the delegated release was skipped by
+   * markCallAsMissed's non-ringing guard, and the conversation rejected
+   * every initiateCall for minutes). When the current holder is terminal —
+   * or the claim vanished between our failed claim and this read — take the
+   * claim for `newCallId` with a single compare-and-swap, so a concurrent
+   * healthy claim can never be clobbered. Returns true when the claim is won.
+   */
+  private async reclaimFromTerminalHolder(conversationId: string, newCallId: string): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { activeCallId: true }
+    });
+    const holderId = conversation?.activeCallId;
+
+    if (!holderId) {
+      const retry = await this.prisma.conversation.updateMany({
+        where: {
+          id: conversationId,
+          OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
+        },
+        data: { activeCallId: newCallId }
+      });
+      return retry.count > 0;
+    }
+
+    const holder = await this.prisma.callSession.findUnique({
+      where: { id: holderId },
+      select: { status: true }
+    });
+    if (holder && ACTIVE_STATUSES.includes(holder.status)) {
+      return false;
+    }
+
+    const swap = await this.prisma.conversation.updateMany({
+      where: { id: conversationId, activeCallId: holderId },
+      data: { activeCallId: newCallId }
+    });
+    if (swap.count > 0) {
+      logger.warn('⚠️ Active-call claim self-healed from terminal holder', {
+        conversationId,
+        staleHolderCallId: holderId,
+        newCallId
+      });
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Update call status with validation (state machine transition)
    */
   async updateCallStatus(callId: string, newStatus: CallStatus, endReason?: CallEndReason): Promise<CallSessionWithParticipants> {
@@ -346,6 +554,20 @@ export class CallService {
 
     if (TERMINAL_STATUSES.includes(call.status)) {
       logger.warn('Call already in terminal state', { callId, currentStatus: call.status, requestedStatus: newStatus });
+      return this.getCallSession(callId);
+    }
+
+    // FSM guard (2026-07-03, prod call 6a47689d) — `reconnecting` only makes
+    // sense for a call that was actually answered (media once established).
+    // A stale client whose ring-time watchdog fires during the ring (the
+    // pre-f86a907c4 iOS .offering bug) must not drag the session out of
+    // `ringing`: it hid `ringing` from the boot-rehydration path and made
+    // endCall/leaveCall classify the never-answered call as completed.
+    // Server-side mirror of CallReliabilityPolicy.reconnectingAllowed.
+    if (newStatus === CallStatus.reconnecting && !call.answeredAt) {
+      logger.warn('⚠️ Ignoring reconnecting transition on a never-answered call', {
+        callId, currentStatus: call.status
+      });
       return this.getCallSession(callId);
     }
 
@@ -364,10 +586,27 @@ export class CallService {
       updateData.answeredAt = new Date();
     }
 
-    await this.prisma.callSession.update({
-      where: { id: callId },
-      data: updateData
+    // Version-guarded write: the plain `update` this replaced could blind-write
+    // over a concurrent terminal transition (e.g. endCall()/leaveCall() resolving
+    // the call to `missed`/`ended` between our `findUnique` above and this write),
+    // resurrecting an already-ended call back to a non-terminal status. Scoping
+    // to the version we read makes a losing writer's update a no-op instead —
+    // same optimistic-lock pattern as joinCallAttempt().
+    const lock = await this.prisma.callSession.updateMany({
+      where: { id: callId, version: call.version },
+      data: { ...updateData, version: { increment: 1 } }
     });
+
+    if (lock.count === 0) {
+      logger.warn('⚠️ Call status update lost race to a concurrent write — no-op', {
+        callId, requestedStatus: newStatus
+      });
+      return this.getCallSession(callId);
+    }
+
+    if (TERMINAL_STATUSES.includes(newStatus)) {
+      await this.releaseActiveCallClaim(call.conversationId, callId);
+    }
 
     logger.info('Call status updated', { callId, from: call.status, to: newStatus, endReason });
 
@@ -408,7 +647,22 @@ export class CallService {
       );
     }
 
-    // Check if user is participant of conversation
+    // Check if user is participant of conversation. `participantId` MUST be
+    // checked explicitly before hitting Prisma: passing `id: undefined` in a
+    // `where` clause makes Prisma treat the field as omitted rather than
+    // "match nothing", so the query silently degrades to "does this
+    // conversation have ANY active participant" — true for virtually every
+    // real conversation. Without this guard a caller whose participantId
+    // failed to resolve (e.g. genuinely not a member) would sail through the
+    // membership check for a conversation they have no access to.
+    if (!participantId) {
+      logger.error('❌ Missing participantId — cannot verify conversation membership', {
+        conversationId,
+        initiatorId
+      });
+      throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not a participant in this conversation`);
+    }
+
     const membership = await this.prisma.participant.findFirst({
       where: {
         conversationId,
@@ -436,11 +690,26 @@ export class CallService {
     // marked left + status ended) so it can never block the conversation either.
     const initiatorStaleParticipations = await this.prisma.callParticipant.findMany({
       where: {
-        leftAt: null,
+        // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
+        // whose leftAt field was never written (pre-C5 participants).
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
         participant: { userId: initiatorId },
-        callSession: { status: { in: ACTIVE_STATUSES } }
+        callSession: {
+          status: { in: ACTIVE_STATUSES },
+          // P0 fix (2026-07-06) — never let this cross-conversation sweep
+          // touch a call in the SAME conversation the caller is initiating
+          // into: the zombie-active-call check a few lines below is already
+          // scoped to `conversationId` and correctly handles a duplicate
+          // initiate there (CALL_ALREADY_ACTIVE vs. genuinely zombie) without
+          // this broader sweep's coarser, cross-conversation staleness gate.
+          conversationId: { not: conversationId }
+        }
       },
-      include: { callSession: { select: { id: true, startedAt: true, conversationId: true } } }
+      include: {
+        callSession: {
+          select: { id: true, startedAt: true, conversationId: true, status: true, answeredAt: true }
+        }
+      }
     });
 
     if (initiatorStaleParticipations.length > 0) {
@@ -456,11 +725,20 @@ export class CallService {
         staleCallIds: staleCalls.map(([id]) => id)
       });
       for (const [staleCallId, staleSession] of staleCalls) {
+        if (staleSession && !this.isPhantomCallStale(staleSession, now)) {
+          logger.info('🔬 [CALL-DIAG] phantom-cleanup skipped — candidate still has fresh liveness', {
+            initiatorId,
+            conversationId,
+            staleCallId,
+            staleConversationId: staleSession.conversationId
+          });
+          continue;
+        }
         const startedAt = staleSession?.startedAt ? new Date(staleSession.startedAt) : now;
         try {
           await this.prisma.$transaction(async (tx) => {
             await tx.callParticipant.updateMany({
-              where: { callSessionId: staleCallId, leftAt: null },
+              where: { callSessionId: staleCallId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
               data: { leftAt: now }
             });
             await tx.callSession.updateMany({
@@ -475,6 +753,7 @@ export class CallService {
           });
           this.clearHeartbeats(staleCallId);
           this.clearRingingTimeout(staleCallId);
+          await this.releaseActiveCallClaim(staleSession?.conversationId ?? conversationId, staleCallId);
         } catch (cleanupErr) {
           logger.error('phantom-cleanup failed for stale call', { staleCallId, error: cleanupErr });
         }
@@ -508,8 +787,13 @@ export class CallService {
         const now = new Date();
         const duration = Math.floor((now.getTime() - activeCall.startedAt.getTime()) / 1000);
 
-        await this.prisma.callSession.update({
-          where: { id: activeCall.id },
+        // Scoped to status still in ACTIVE_STATUSES (mirrors the
+        // initiatorStaleParticipations cleanup above): if the last
+        // participant reconnected/rejoined between the `activeParticipants`
+        // read above and this write, this becomes a no-op instead of
+        // force-ending a call that just resumed.
+        await this.prisma.callSession.updateMany({
+          where: { id: activeCall.id, status: { in: ACTIVE_STATUSES } },
           data: {
             status: CallStatus.ended,
             endedAt: now,
@@ -519,6 +803,7 @@ export class CallService {
         });
 
         this.clearHeartbeats(activeCall.id);
+        await this.releaseActiveCallClaim(conversationId, activeCall.id);
 
         logger.info('Zombie call cleaned up', { zombieCallId: activeCall.id });
       } else {
@@ -545,11 +830,19 @@ export class CallService {
       });
 
       // Create participant for initiator
+      // Audit C5 (2026-07-02): `leftAt` must be written explicitly as `null`
+      // — MongoDB has no NULL-vs-missing-field distinction at the storage
+      // layer, but Prisma's query engine treats them differently: a field
+      // omitted from `data` at create time is never written to the document,
+      // so a later `findFirst({ where: { leftAt: null } })` (used throughout
+      // this service, e.g. updateParticipantMedia) never matches it. That
+      // caused 100% of media-toggle DB writes to silently no-op in prod.
       await tx.callParticipant.create({
         data: {
           callSessionId: session.id,
           participantId,
           role: ParticipantRole.initiator,
+          leftAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: type === 'video' ? (settings?.videoEnabled ?? true) : false
         }
@@ -557,6 +850,47 @@ export class CallService {
 
       return session;
     });
+
+    // TOCTOU close (audit 2026-07-02): the zombie/active-call check above is a
+    // plain read that ran BEFORE this session was created — two near-
+    // simultaneous `initiateCall` calls for the same conversation (mutual
+    // calling, or a client double-tap racing its own UI's disable-button)
+    // can both pass that read and each create a `CallSession`. MongoDB
+    // guarantees single-document writes are atomic even without a
+    // transaction, so this conditional `updateMany` against `Conversation`
+    // deterministically lets exactly one of two concurrent callers win the
+    // claim; the loser observes `count === 0` and unwinds its own orphaned
+    // session instead of leaving two live sessions for one conversation.
+    // Prisma-on-MongoDB null semantics: `activeCallId: null` matches ONLY
+    // documents where the field is explicitly null — NOT documents missing
+    // the field entirely (every conversation created before this claim was
+    // introduced, plus any new conversation Prisma creates while omitting
+    // unset optionals). Without the `isSet: false` arm the claim can NEVER
+    // succeed on those documents and every initiateCall fails
+    // CALL_ALREADY_ACTIVE (prod incident 2026-07-02: 211/211 conversations
+    // lacked the field; hot-fixed by backfilling `activeCallId: null`).
+    const claim = await this.prisma.conversation.updateMany({
+      where: {
+        id: conversationId,
+        OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
+      },
+      data: { activeCallId: callSession.id }
+    });
+
+    if (claim.count === 0) {
+      const healed = await this.reclaimFromTerminalHolder(conversationId, callSession.id);
+      if (!healed) {
+        logger.error('❌ Call already active (lost race to claim conversation)', {
+          conversationId,
+          orphanedCallId: callSession.id
+        });
+        await this.prisma.$transaction(async (tx) => {
+          await tx.callParticipant.deleteMany({ where: { callSessionId: callSession.id } });
+          await tx.callSession.delete({ where: { id: callSession.id } });
+        });
+        throw new Error(`${CALL_ERROR_CODES.CALL_ALREADY_ACTIVE}: A call is already active in this conversation`);
+      }
+    }
 
     logger.info('✅ Call initiated successfully', {
       callId: callSession.id,
@@ -581,6 +915,42 @@ export class CallService {
     callSession: CallSessionWithParticipants;
     iceServers: RTCIceServer[]
   }> {
+    return this.joinCallAttempt(data, 0);
+  }
+
+  /**
+   * MongoDB can detect two transactions racing on the same CallSession
+   * document BEFORE either side's app-level `version` guard returns
+   * `count: 0` — Prisma surfaces that as P2034 ("write conflict or
+   * deadlock, please retry") instead of letting our own conditional
+   * `updateMany` resolve the race. Every version-guarded terminal write
+   * (join/end/leave) must treat P2034 the same as its own local
+   * version-conflict signal — fall back to the fresh-state path instead of
+   * throwing a raw Prisma error at the client (prod 2026-07-04, callId
+   * observed on `call:join`: two `call:join` 3-11ms apart).
+   */
+  private isTransientWriteConflict(error: unknown): boolean {
+    return (error as { code?: string } | null)?.code === 'P2034';
+  }
+
+  /**
+   * TOCTOU close (audit 2026-07-02): `activeParticipants.length >= 2` below
+   * reads a snapshot fetched before this method's own write, so two callers
+   * racing to join the same call (a third party racing the intended callee,
+   * or the same user answering from two devices within milliseconds) could
+   * both read `< 2` and both insert a `CallParticipant`, exceeding the P2P
+   * cap every downstream consumer assumes. The join transaction now also
+   * does a version-guarded conditional update on the shared `CallSession`
+   * document — MongoDB detects the write conflict when two transactions
+   * touch that same document concurrently, so at most one caller's
+   * transaction commits. The loser retries once against freshly-read state,
+   * where the cap check above will correctly reject it if the winner took
+   * the last slot.
+   */
+  private async joinCallAttempt(data: JoinCallData, attempt: number): Promise<{
+    callSession: CallSessionWithParticipants;
+    iceServers: RTCIceServer[]
+  }> {
     const { callId, userId, participantId, settings } = data;
 
     logger.info('📞 User joining call', { callId, userId });
@@ -602,7 +972,19 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_ENDED}: This call has already ended`);
     }
 
-    // Check if user is participant of conversation
+    // Check if user is participant of conversation. See the matching guard in
+    // `initiateCall` for why `participantId` must be checked before the
+    // Prisma query: `id: undefined` is treated as an omitted field, not
+    // "match nothing", which would otherwise let a non-member's join sail
+    // through as long as the conversation has any active participant.
+    if (!participantId) {
+      logger.error('❌ Missing participantId — cannot verify conversation membership', {
+        conversationId: call.conversationId,
+        userId
+      });
+      throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not a participant in this conversation`);
+    }
+
     const membership = await this.prisma.participant.findFirst({
       where: {
         conversationId: call.conversationId,
@@ -647,30 +1029,70 @@ export class CallService {
       );
     }
 
-    // Join call in transaction
-    await this.prisma.$transaction(async (tx) => {
-      // Create participant
+    // Join call in transaction, guarded by an optimistic-lock claim on
+    // CallSession.version so a concurrent joiner can't silently slip past
+    // the cap check above (see joinCallAttempt's doc comment).
+    const versionConflict = Symbol('versionConflict');
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      // Create participant. See the C5 note on the initiator's `create` above
+      // — `leftAt: null` must be explicit or later `findFirst({ leftAt: null })`
+      // lookups (e.g. updateParticipantMedia) never match this row.
       await tx.callParticipant.create({
         data: {
           callSessionId: callId,
           participantId,
           role: ParticipantRole.participant,
+          leftAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: settings?.videoEnabled ?? true
         }
       });
 
-      // Transition: initiated/ringing → connecting (WebRTC negotiation starts)
-      if (call.status === CallStatus.initiated || call.status === CallStatus.ringing) {
-        await tx.callSession.update({
-          where: { id: callId },
-          data: {
-            status: CallStatus.connecting,
-            answeredAt: new Date()
-          }
-        });
+      // Item F (chaos-test 2, callId 6a4690a2…) — the callee EARLY-joins while
+      // still ringing (the SDP offer must flow during the ring), so this
+      // transition means "it is ringing on their device", NOT "they answered".
+      // Stamping connecting+answeredAt here made `ringing` invisible
+      // server-side, gave the boot rehydration (initiated/ringing) nothing to
+      // re-arm after a mid-ring restart (the call decayed to failed/91s via
+      // the connecting GC tier instead of resolving missed), and inflated
+      // `duration` with the ringing time. The real pick-up already stamps
+      // active+answeredAt via updateCallStatus on the SDP answer.
+      // Server FSM: initiated → ringing → active.
+      const statusChange =
+        call.status === CallStatus.initiated || call.status === CallStatus.ringing
+          ? { status: CallStatus.ringing }
+          : {};
+
+      // Conditional update scoped to the version we read at the top of this
+      // attempt: if a concurrent joiner already committed a change to this
+      // CallSession, `count` is 0 and we roll back (including the
+      // CallParticipant just created above) by throwing.
+      const lock = await tx.callSession.updateMany({
+        where: { id: callId, version: call.version },
+        data: { version: { increment: 1 }, ...statusChange }
+      });
+
+      if (lock.count === 0) {
+        throw versionConflict;
       }
-    });
+    }).then(
+      () => 'joined' as const,
+      (error) => {
+        if (error === versionConflict || this.isTransientWriteConflict(error)) {
+          return 'conflict' as const;
+        }
+        throw error;
+      }
+    );
+
+    if (outcome === 'conflict') {
+      if (attempt >= 1) {
+        logger.error('❌ Call state conflict persisted after retry', { callId, userId });
+        throw new Error(`${CALL_ERROR_CODES.CALL_STATE_CONFLICT}: Call state changed concurrently, please retry`);
+      }
+      logger.warn('⚠️ Call state conflict on join — retrying with fresh state', { callId, userId });
+      return this.joinCallAttempt(data, attempt + 1);
+    }
 
     logger.info('✅ User joined call successfully', { callId, userId });
 
@@ -696,12 +1118,13 @@ export class CallService {
 
     logger.info('📞 User leaving call', { callId, userId });
 
-    // Find the call participant
+    // Find the call participant. Audit C5 (2026-07-02) — match both explicit
+    // null and never-written leftAt (pre-C5 Mongo docs).
     const callParticipant = await this.prisma.callParticipant.findFirst({
       where: {
         callSessionId: callId,
         participantId,
-        leftAt: null
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
       }
     });
 
@@ -751,26 +1174,52 @@ export class CallService {
 
       // Direct call (or last participant): end it so the OTHER party is notified.
       const idemNow = new Date();
-      const idemPreAnswered =
-        existing.status === CallStatus.initiated ||
-        existing.status === CallStatus.ringing ||
-        existing.status === CallStatus.connecting;
-      await this.prisma.$transaction(async (tx) => {
+      // Same `answeredAt` criterion as the main path below (2026-07-03).
+      const idemPreAnswered = !existing.answeredAt;
+      // Version-guarded (see endCall()'s doc comment): a racing terminal
+      // writer (call:end, force-end) could resolve this same call between
+      // the `existing` read above and this write; scope to `existing.version`
+      // so the losing writer no-ops instead of clobbering the winner's
+      // duration/endReason.
+      const idemVersionConflict = Symbol('idemVersionConflict');
+      const idemOutcome = await this.prisma.$transaction(async (tx) => {
         await tx.callParticipant.updateMany({
-          where: { callSessionId: callId, leftAt: null },
+          where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
           data: { leftAt: idemNow }
         });
-        await tx.callSession.update({
-          where: { id: callId },
+        const lock = await tx.callSession.updateMany({
+          where: { id: callId, version: existing.version },
           data: {
             status: idemPreAnswered ? CallStatus.missed : CallStatus.ended,
             endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
             endedAt: idemNow,
-            duration: Math.max(0, Math.floor((idemNow.getTime() - existing.startedAt.getTime()) / 1000))
+            duration: Math.max(0, Math.floor((idemNow.getTime() - existing.startedAt.getTime()) / 1000)),
+            version: { increment: 1 }
           }
         });
-      });
+        if (lock.count === 0) {
+          throw idemVersionConflict;
+        }
+      }).then(
+        () => 'ended' as const,
+        (error) => {
+          if (error === idemVersionConflict) {
+            return 'conflict' as const;
+          }
+          throw error;
+        }
+      );
+
+      if (idemOutcome === 'conflict') {
+        logger.warn('⚠️ Idempotent leave lost race to a concurrent terminal write — returning current session', {
+          callId, userId
+        });
+        return this.getCallSession(callId);
+      }
+
       this.clearHeartbeats(callId);
+      this.clearRingingTimeout(callId);
+      await this.releaseActiveCallClaim(existing.conversationId, callId);
       logger.info('✅ Idempotent leave — call force-ended for absent participant', {
         callId, userId, wasPreAnswered: idemPreAnswered
       });
@@ -786,6 +1235,26 @@ export class CallService {
     if (!call) {
       logger.error('❌ Call not found', { callId });
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
+    }
+
+    // Terminal guard (probe prod 2026-07-02 22:41Z): a leave landing on a call
+    // that another path already resolved (ringing timeout → missed, force-end,
+    // concurrent hangup) must only stamp the leaver's leftAt. Recomputing the
+    // outcome from a terminal status corrupts history — `missed` is not a
+    // pre-answer status, so the old path rewrote it ended/completed with a
+    // duration measured to the leave, and the handler posted a second summary.
+    if (TERMINAL_STATUSES.includes(call.status) || call.endedAt) {
+      await this.prisma.callParticipant.update({
+        where: { id: callParticipant.id },
+        data: { leftAt: new Date() }
+      });
+      this.clearParticipantBackgrounded(callId, participantId);
+      this.heartbeats.get(callId)?.delete(participantId);
+      await this.releaseActiveCallClaim(call.conversationId, callId);
+      logger.info('ℹ️ Leave on already-terminal call — participant marked left, terminal status preserved', {
+        callId, userId, status: call.status
+      });
+      return this.getCallSession(callId);
     }
 
     const leftAt = new Date();
@@ -808,23 +1277,29 @@ export class CallService {
     const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== callParticipant.id);
     const isLastParticipant = activeParticipants.length === 0 || isDirectCall;
 
-    // Audit P1-29 — distinguish "leave during ringing/connecting" (callee
-    // declined or initiator cancelled before media negotiation completed)
-    // from "leave during an active call". The pre-answer case must map to
-    // `missed` (with `endReason: missed`) so:
+    // Audit P1-29 — distinguish "leave before the call was ever answered"
+    // (callee declined or initiator cancelled before media negotiation
+    // completed) from "leave during an active call". The pre-answer case
+    // must map to `missed` (with `endReason: missed`) so:
     //   - the iOS UI surfaces a missed-call banner on the OTHER device,
     //   - Recents shows "Missed" / "Cancelled" instead of "Ended",
     //   - the gateway emits `call:missed` in addition to `call:ended` and
     //     can create missed-call push notifications for offline callees.
-    const wasPreAnswered =
-      call.status === CallStatus.initiated ||
-      call.status === CallStatus.ringing ||
-      call.status === CallStatus.connecting;
+    // 2026-07-03 — keyed on `answeredAt` (stamped once, on the SDP answer),
+    // not on a status list: `reconnecting` is reachable pre-answer via a
+    // stale client's ring-time watchdog (see endCall's doc comment).
+    const wasPreAnswered = !call.answeredAt;
     const targetEndedStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
     const targetEndReason = wasPreAnswered ? CallEndReason.missed : CallEndReason.completed;
 
-    // Update in transaction
-    await this.prisma.$transaction(async (tx) => {
+    // Update in transaction. Version-guarded on the terminal write (see
+    // endCall()'s doc comment): a racing terminal writer for this same call
+    // (e.g. a retried call:end, or the OTHER participant's own leave landing
+    // concurrently) could resolve it between the `call` read above and this
+    // write; scoping to `call.version` makes the losing writer's terminal
+    // write a no-op instead of clobbering the winner's duration/endReason.
+    const leaveVersionConflict = Symbol('leaveVersionConflict');
+    const leaveOutcome = await this.prisma.$transaction(async (tx) => {
       // Update participant left time
       await tx.callParticipant.update({
         where: { id: callParticipant.id },
@@ -833,19 +1308,43 @@ export class CallService {
 
       // If last participant, end the call (status depends on pre/post-answer).
       if (isLastParticipant) {
+        // Stamp leftAt on any OTHER still-active participant too (mirrors
+        // endCall()'s updateMany and the idempotent-leave branch above). A
+        // direct call always ends here regardless of whether the other party
+        // has formally left — without this, the other party's CallParticipant
+        // row keeps leftAt: null forever even though the CallSession is now
+        // terminal, so every per-event authorization check that gates on
+        // `!leftAt` (resolveActiveCallParticipantId — call:signal, heartbeat,
+        // quality-report, reconnecting/reconnected, request-ice-servers,
+        // backgrounded/foregrounded, screen-capture-detected) keeps accepting
+        // that party's events against a dead call indefinitely.
+        await tx.callParticipant.updateMany({
+          where: {
+            callSessionId: callId,
+            id: { not: callParticipant.id },
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+          },
+          data: { leftAt }
+        });
+
         const duration = Math.floor(
           (leftAt.getTime() - call.startedAt.getTime()) / 1000
         );
 
-        await tx.callSession.update({
-          where: { id: callId },
+        const lock = await tx.callSession.updateMany({
+          where: { id: callId, version: call.version },
           data: {
             status: targetEndedStatus,
             endReason: targetEndReason,
             endedAt: leftAt,
-            duration
+            duration,
+            version: { increment: 1 }
           }
         });
+
+        if (lock.count === 0) {
+          throw leaveVersionConflict;
+        }
 
         logger.info('✅ Call closed - last participant left', {
           callId,
@@ -855,15 +1354,35 @@ export class CallService {
           wasPreAnswered
         });
       }
-    });
+    }).then(
+      () => 'left' as const,
+      (error) => {
+        if (error === leaveVersionConflict || this.isTransientWriteConflict(error)) {
+          return 'conflict' as const;
+        }
+        throw error;
+      }
+    );
+
+    if (leaveOutcome === 'conflict') {
+      logger.warn('⚠️ Leave-triggered call end lost race to a concurrent terminal write — returning current session', {
+        callId, userId
+      });
+      return this.getCallSession(callId);
+    }
 
     if (isLastParticipant) {
       this.clearHeartbeats(callId);
+      this.clearRingingTimeout(callId);
+      await this.releaseActiveCallClaim(call.conversationId, callId);
     } else {
-      // Mid-call leave: clear only this participant's backgrounded state.
-      // clearHeartbeats() handles the full call cleanup when the last participant
-      // leaves; for mid-call leaves we must clean up individually.
+      // Mid-call leave: clear only this participant's backgrounded state and
+      // heartbeat entry. clearHeartbeats() handles the full call cleanup when
+      // the last participant leaves; for mid-call leaves we must clean up
+      // individually, or the departed participant's stale heartbeat lingers
+      // in memory for the rest of the call.
       this.clearParticipantBackgrounded(callId, participantId);
+      this.heartbeats.get(callId)?.delete(participantId);
     }
 
     logger.info('✅ User left call successfully', { callId, userId, wasPreAnswered });
@@ -955,8 +1474,16 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
     }
 
-    if (call.status === CallStatus.ended) {
-      logger.warn('⚠️ Call already ended', { callId });
+    // Idempotency: `updateCallStatus`/`leaveCall` already short-circuit on
+    // ANY terminal status, not just `ended` — this guard only checked
+    // `ended`, so a call already resolved to `missed`/`rejected`/`failed`
+    // by another path (e.g. the ringing-timeout's `markCallAsMissed`, which
+    // never touches participant rows) could still be re-processed by a
+    // delayed/retried `call:end` and get silently overwritten back to
+    // `ended`/`completed` — reopening the exact "phantom completed call"
+    // bug the C3/C4 pre-answer fix above was meant to close.
+    if (TERMINAL_STATUSES.includes(call.status)) {
+      logger.warn('⚠️ Call already in terminal state', { callId, currentStatus: call.status });
       return this.getCallSession(callId);
     }
 
@@ -976,35 +1503,88 @@ export class CallService {
       ? Math.floor((endedAt.getTime() - call.answeredAt.getTime()) / 1000)
       : 0;
 
-    const endReason = this.resolveEndReason(reason);
+    // Audit C3/C4 (2026-07-02 prod audit) — mirror leaveCall()'s pre-answer
+    // handling: a call ended before it was ever answered must resolve to
+    // `missed`, never `completed`. Without this, `call:end` fired before the
+    // callee answered persisted status='ended'/duration=0/reason='completed'
+    // — a phantom "completed" call in history that never triggered a
+    // missed-call notification for the other party. An explicit non-default
+    // reason (rejected/failed/...) is preserved as endReason; only the status
+    // is normalized to `missed` so history/Recents filters stay consistent
+    // with leaveCall().
+    // 2026-07-03 (prod call 6a47689d) — the criterion is `answeredAt`, NOT a
+    // status list: a pre-answer client watchdog dragged the session
+    // ringing→reconnecting during the ring, and the old
+    // initiated|ringing|connecting check classified that never-answered call
+    // as completed. `answeredAt` is stamped exactly once, on the SDP answer
+    // (updateCallStatus → active) — it is the authoritative "was ever
+    // answered" signal across every status the session may pass through.
+    const wasPreAnswered = !call.answeredAt;
+    const resolvedReason = this.resolveEndReason(reason);
+    const endReason = wasPreAnswered && resolvedReason === CallEndReason.completed
+      ? CallEndReason.missed
+      : resolvedReason;
+    const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
 
-    await this.prisma.$transaction(async (tx) => {
+    // Version-guarded: a plain read-modify-write here raced with any other
+    // terminal writer touching this same call (a retried `call:end`, a
+    // concurrent `leaveCall`/force-end from CallCleanupService/disconnect
+    // handling) — both read the same pre-terminal snapshot, both pass the
+    // `TERMINAL_STATUSES` guard above, and whichever writes last silently
+    // clobbers the other's `duration`/`endReason`. Scoping the final write to
+    // `version: call.version` (same optimistic-lock field `joinCallAttempt`
+    // uses) makes the losing writer's update a no-op and roll back its
+    // participant `leftAt` stamps too, instead of corrupting the record.
+    const versionConflict = Symbol('versionConflict');
+    const outcome = await this.prisma.$transaction(async (tx) => {
       await tx.callParticipant.updateMany({
         where: {
           callSessionId: callId,
-          leftAt: null
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
         },
         data: { leftAt: endedAt }
       });
 
-      await tx.callSession.update({
-        where: { id: callId },
+      const lock = await tx.callSession.updateMany({
+        where: { id: callId, version: call.version },
         data: {
-          status: CallStatus.ended,
+          status: targetStatus,
           endedAt,
           duration,
           endReason,
           metadata: {
             ...(call.metadata as Record<string, unknown>),
             endedBy
-          }
+          },
+          version: { increment: 1 }
         }
       });
-    });
+
+      if (lock.count === 0) {
+        throw versionConflict;
+      }
+    }).then(
+      () => 'ended' as const,
+      (error) => {
+        if (error === versionConflict || this.isTransientWriteConflict(error)) {
+          return 'conflict' as const;
+        }
+        throw error;
+      }
+    );
+
+    if (outcome === 'conflict') {
+      logger.warn('⚠️ Call end lost race to a concurrent terminal write — returning current session', {
+        callId, endedBy
+      });
+      return this.getCallSession(callId);
+    }
 
     this.clearHeartbeats(callId);
+    this.clearRingingTimeout(callId);
+    await this.releaseActiveCallClaim(call.conversationId, callId);
 
-    logger.info('Call ended successfully', { callId, duration, endedBy, endReason });
+    logger.info('Call ended successfully', { callId, duration, endedBy, endReason, wasPreAnswered });
 
     return this.getCallSession(callId);
   }
@@ -1146,12 +1726,14 @@ export class CallService {
       enabled
     });
 
-    // Find the call participant
+    // Find the call participant. Audit C5 (2026-07-02) — the `{leftAt: null}`
+    // filter alone never matched docs whose leftAt field was never written,
+    // making this lookup (and the DB media flag below) a 100% no-op in prod.
     const callParticipant = await this.prisma.callParticipant.findFirst({
       where: {
         callSessionId: callId,
         participantId,
-        leftAt: null
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
       }
     });
 
@@ -1220,6 +1802,20 @@ export class CallService {
         callId,
         currentStatus: callSession.status
       });
+      // Audit 2026-07-02 — if the status write already landed via another
+      // path (the ringing-timeout handler's own atomic `updateMany`), that
+      // path only touches CallSession.status: it never stamps participant
+      // rows, clears in-memory heartbeats/timers, or releases the
+      // conversation's active-call claim. Skipping those here left the claim
+      // locked forever (every future `call:initiate` on the conversation
+      // failed CALL_ALREADY_ACTIVE) and left `call:signal` still relaying
+      // SDP/ICE between "missed" participants (their `leftAt` was never
+      // set). Only run this for genuinely terminal statuses — an `active`/
+      // `connecting`/`reconnecting` call must never be torn down here.
+      // Idempotent: a no-op if another terminal path already did it.
+      if (TERMINAL_STATUSES.includes(callSession.status)) {
+        await this.finalizeMissedCallCleanup(callSession.conversationId, callId);
+      }
       return this.getCallSession(callId);
     }
 
@@ -1227,17 +1823,37 @@ export class CallService {
     const now = new Date();
     const duration = Math.floor((now.getTime() - callSession.startedAt.getTime()) / 1000);
 
-    await this.prisma.callSession.update({
-      where: { id: callId },
+    // Version/status-scoped write, mirroring updateCallStatus()'s optimistic
+    // lock — a concurrent terminal writer (call:end, call:leave, the ringing
+    // timeout handler on another path, CallCleanupService GC) can resolve this
+    // call between the findUnique read above and this write. Scoping the
+    // update to the source statuses we actually read makes a losing writer's
+    // update a no-op instead of clobbering endedAt/duration/endReason.
+    const result = await this.prisma.callSession.updateMany({
+      where: {
+        id: callId,
+        status: { in: [CallStatus.initiated, CallStatus.ringing] }
+      },
       data: {
         status: CallStatus.missed,
         endedAt: now,
         duration,
-        endReason: CallEndReason.missed
+        endReason: CallEndReason.missed,
+        // Terminal write protocol: every terminal writer MUST bump `version`,
+        // even one guarded by status rather than by version — otherwise a
+        // version-guarded writer (endCall/leaveCall/updateCallStatus) that
+        // read the row a moment before this write still matches its stale
+        // `version` and clobbers this terminal state right after.
+        version: { increment: 1 }
       }
     });
 
-    this.clearHeartbeats(callId);
+    if (result.count === 0) {
+      logger.warn('⚠️ markCallAsMissed lost race to a concurrent terminal write — no-op', { callId });
+      return this.getCallSession(callId);
+    }
+
+    await this.finalizeMissedCallCleanup(callSession.conversationId, callId);
 
     logger.info('Call marked as missed', { callId, duration });
 
@@ -1245,43 +1861,23 @@ export class CallService {
   }
 
   /**
-   * Marquer un appel comme rejeté
-   * À appeler quand un participant rejette l'appel
+   * Shared terminal cleanup for a call resolved to `missed` — stamps any
+   * still-open participant rows so `call:signal` stops relaying between them,
+   * clears in-memory heartbeat/ringing-timer state, and releases the
+   * conversation's active-call claim. Safe to call more than once: every
+   * write here is scoped/idempotent.
    */
-  async markCallAsRejected(callId: string): Promise<CallSessionWithParticipants> {
-    logger.info('📞 Marking call as rejected', { callId });
-
-    const callSession = await this.prisma.callSession.findUnique({
-      where: { id: callId },
-      include: {
-        participants: true
-      }
+  private async finalizeMissedCallCleanup(conversationId: string, callId: string): Promise<void> {
+    await this.prisma.callParticipant.updateMany({
+      where: {
+        callSessionId: callId,
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+      },
+      data: { leftAt: new Date() }
     });
-
-    if (!callSession) {
-      logger.error('❌ Call session not found', { callId });
-      throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
-    }
-
-    // Mettre à jour le statut de l'appel
-    const now = new Date();
-    const duration = Math.floor((now.getTime() - callSession.startedAt.getTime()) / 1000);
-
-    await this.prisma.callSession.update({
-      where: { id: callId },
-      data: {
-        status: CallStatus.rejected,
-        endedAt: now,
-        duration,
-        endReason: CallEndReason.rejected
-      }
-    });
-
     this.clearHeartbeats(callId);
-
-    logger.info('Call marked as rejected', { callId, duration });
-
-    return this.getCallSession(callId);
+    this.clearRingingTimeout(callId);
+    await this.releaseActiveCallClaim(conversationId, callId);
   }
 
   /**

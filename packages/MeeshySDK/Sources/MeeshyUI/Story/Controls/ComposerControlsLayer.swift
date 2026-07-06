@@ -99,7 +99,7 @@ public struct ComposerControlsLayer: View {
                         sonBadge: sonBadge,
                         textBadge: textBadge,
                         drawingBadge: drawingBadge,
-                        filtersBadge: filtersBadge,
+                        textureBadge: textureBadge,
                         timelineBadge: timelineBadge,
                         activeCategory: nil, // band is hidden so no active category
                         onTap: { cat in
@@ -247,8 +247,10 @@ public struct ComposerControlsLayer: View {
         viewModel.drawingData != nil ? 1 : 0
     }
 
-    private var filtersBadge: Int {
-        viewModel.selectedFilter != nil ? 1 : 0
+    private var textureBadge: Int {
+        // Signale qu'un fond média custom est appliqué (l'outil Fond a remplacé
+        // l'ancien FAB Effets). Une simple couleur unie ne déclenche pas de badge.
+        viewModel.hasBackgroundImage ? 1 : 0
     }
 
     private var timelineBadge: Int {

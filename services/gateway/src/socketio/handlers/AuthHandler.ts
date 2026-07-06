@@ -188,7 +188,7 @@ export class AuthHandler {
 
     try {
       if (user.id && typeof user.id === 'string') {
-        await Promise.all([
+        await Promise.allSettled([
           socket.join(ROOMS.user(user.id)),
           socket.join(ROOMS.feed(user.id)),
         ]);
@@ -338,41 +338,52 @@ export class AuthHandler {
     this.userSockets.delete(userIdOrToken);
     this.statusService.markDisconnected(userIdOrToken, isAnonymous);
 
-    try {
-      const activeParticipations = await this.prisma.callParticipant.findMany({
-        where: {
-          leftAt: null,
-          participant: isAnonymous
-            ? { id: userIdOrToken }
-            : { userId: userIdOrToken }
-        },
-        include: {
-          callSession: true
-        }
-      });
-
-      if (activeParticipations.length > 0) {
-        logger.debug('disconnect-cleanup: active call participations found', {
-          socketId: socket.id,
-          userId: userIdOrToken,
-          count: activeParticipations.length,
-          callIds: activeParticipations.map((p: { callSessionId: string }) => p.callSessionId)
+    // CALL-RESILIENCE — call lifecycle on disconnect is owned by
+    // CallEventsHandler's per-socket disconnect handler (reconnect grace for
+    // answered calls, immediate leave pre-answer, shutdown guard). Leaving
+    // calls here too marked answered CallSessions ended in DB while their P2P
+    // media was still alive (socket blip / gateway restart on a single-device
+    // user), defeating that grace window. Anonymous participants are the one
+    // case that handler cannot resolve (its lookup is keyed on
+    // participant.userId) and they get no reconnect grace (ADR-6) — the
+    // immediate auto-leave stays for them only.
+    if (isAnonymous) {
+      try {
+        const activeParticipations = await this.prisma.callParticipant.findMany({
+          where: {
+            // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
+            // whose leftAt field was never written (pre-C5 participants).
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+            participant: { id: userIdOrToken }
+          },
+          include: {
+            callSession: true
+          }
         });
-      }
 
-      for (const participation of activeParticipations) {
-        try {
-          await this.callService.leaveCall({
-            callId: participation.callSessionId,
+        if (activeParticipations.length > 0) {
+          logger.debug('disconnect-cleanup: active call participations found', {
+            socketId: socket.id,
             userId: userIdOrToken,
-            participantId: participation.participantId
+            count: activeParticipations.length,
+            callIds: activeParticipations.map((p: { callSessionId: string }) => p.callSessionId)
           });
-        } catch (error) {
-          logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
         }
+
+        for (const participation of activeParticipations) {
+          try {
+            await this.callService.leaveCall({
+              callId: participation.callSessionId,
+              userId: userIdOrToken,
+              participantId: participation.participantId
+            });
+          } catch (error) {
+            logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
+          }
+        }
+      } catch (error) {
+        logger.error('error checking/leaving active calls on disconnect', { userId: userIdOrToken, error });
       }
-    } catch (error) {
-      logger.error('error checking/leaving active calls on disconnect', { userId: userIdOrToken, error });
     }
 
     // Guard: a new socket may have reconnected while async cleanup was in progress.
@@ -438,8 +449,12 @@ export class AuthHandler {
         });
       }
 
-      await Promise.all(conversations.map(conv => socket.join(ROOMS.conversation(conv.conversationId))));
-      logger.debug('user joined conversation rooms', { userId, count: conversations.length });
+      const joinResults = await Promise.allSettled(conversations.map(conv => socket.join(ROOMS.conversation(conv.conversationId))));
+      const failedJoins = joinResults.filter(r => r.status === 'rejected');
+      if (failedJoins.length > 0) {
+        logger.warn('some conversation room joins failed', { userId, failed: failedJoins.length, total: conversations.length });
+      }
+      logger.debug('user joined conversation rooms', { userId, count: conversations.length - failedJoins.length });
     } catch (error) {
       logger.error('error joining conversations for user', { userId, error });
     }

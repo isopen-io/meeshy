@@ -1,6 +1,8 @@
 import SwiftUI
 import os
 
+private let videoLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+
 #if canImport(WebRTC)
 import WebRTC
 
@@ -68,12 +70,16 @@ struct CallVideoView: View {
         if let rtcTrack = track as? RTCVideoTrack {
             WebRTCVideoView(track: rtcTrack, mirror: mirror, contentMode: contentMode)
         } else {
+            if let unexpected = track {
+                let _ = videoLogger.error("CallVideoView: unexpected track type \(type(of: unexpected)) — expected RTCVideoTrack")
+            }
             Color.black
                 .overlay(
                     Image(systemName: "video.slash")
-                        .font(.system(size: 32))
+                        .font(MeeshyFont.relative(32))
                         .foregroundColor(.white.opacity(0.3))
                 )
+                .accessibilityLabel(String(localized: "call.video.unavailable", defaultValue: "Video non disponible", bundle: .main))
         }
     }
 }
@@ -92,7 +98,7 @@ struct CallVideoView: View {
             .overlay(
                 Text(String(localized: "call.video.unavailable", defaultValue: "Video non disponible", bundle: .main))
                     .foregroundColor(.white.opacity(0.4))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.footnote.weight(.medium))
             )
     }
 }

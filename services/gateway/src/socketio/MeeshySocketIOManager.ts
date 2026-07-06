@@ -57,6 +57,7 @@ import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socket
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
@@ -64,6 +65,14 @@ import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
+
+// Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
+// event replayed on reconnect for that offline-queue entry.
+function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string {
+  if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
+  if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
+  return SERVER_EVENTS.MESSAGE_NEW;
+}
 
 export interface SocketUser {
   id: string;
@@ -104,6 +113,21 @@ export class MeeshySocketIOManager {
     return this.io;
   }
 
+  /// RC-4 — exposes the shared CallService instance so CallCleanupService's
+  /// heartbeat GC tier observes the same in-memory heartbeat/ringing-timeout
+  /// state that CallEventsHandler and AuthHandler write to, instead of an
+  /// unwired second instance that always looks empty.
+  getCallService(): CallService {
+    return this.callService;
+  }
+
+  /// Exposes the shared CallEventsHandler so CallCleanupService's GC tiers
+  /// can post the call-summary system message on calls they force-end —
+  /// mirrors `getCallService()` above.
+  getCallEventsHandler(): CallEventsHandler {
+    return this.callEventsHandler;
+  }
+
   private prisma: PrismaClient;
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
@@ -139,9 +163,9 @@ export class MeeshySocketIOManager {
   // Rate limiter in-memory par socket (clé → timestamps des requêtes)
   private socketRateLimits: Map<string, number[]> = new Map();
 
-  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries LRU)
-  private conversationIdCache = new Map<string, string>();
+  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries FIFO)
   private readonly CONVERSATION_ID_CACHE_MAX = 2000;
+  private conversationIdCache = new BoundedTtlCache<string, string>({ maxSize: this.CONVERSATION_ID_CACHE_MAX });
 
   // Cache presence snapshot par userId — évite 2 queries Prisma par reconnexion (TTL 60s)
   private presenceSnapshotCache = new Map<string, { users: Array<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }>; cachedAt: number }>();
@@ -179,13 +203,18 @@ export class MeeshySocketIOManager {
     this.notificationService = new NotificationService(prisma);
     this.mentionService = new MentionService(prisma);
     this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
-    this.callEventsHandler = new CallEventsHandler(prisma);
+    // RC-4 — construct the shared CallService BEFORE CallEventsHandler so both
+    // it and AuthHandler observe the same in-memory ringingTimeouts/heartbeats/
+    // backgroundedParticipants maps (previously two independent instances,
+    // silently desyncing disconnect-cleanup from the ringing-timeout/heartbeat
+    // state actually being written by the socket handlers).
+    this.callService = new CallService(prisma);
+    this.callEventsHandler = new CallEventsHandler(prisma, this.callService);
     // P3 — let the call handler post the call-summary system message through
     // the canonical message broadcast path when a call ends.
     this.callEventsHandler.setMessageBroadcaster(
       (message, conversationId) => this.broadcastMessage(message as Message, conversationId)
     );
-    this.callService = new CallService(prisma);
 
     // CORRECTION: Configurer le callback de broadcast pour le MaintenanceService
     this.maintenanceService.setStatusBroadcastCallback(
@@ -359,6 +388,9 @@ export class MeeshySocketIOManager {
 
   setDeliveryQueue(queue: RedisDeliveryQueue): void {
     this.deliveryQueue = queue;
+    // The WS `message:send` path (MessageHandler) enqueues offline recipients
+    // itself, in parallel with this REST-path queue — same shared instance.
+    this.messageHandler.setDeliveryQueue(queue);
   }
 
   private async _drainPendingMessages(socket: Socket, userId: string): Promise<void> {
@@ -369,7 +401,7 @@ export class MeeshySocketIOManager {
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
       for (const entry of pending) {
-        socket.emit(SERVER_EVENTS.MESSAGE_NEW, entry.payload);
+        socket.emit(_drainedEventName(entry.eventType), entry.payload);
       }
       const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
       socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
@@ -399,6 +431,12 @@ export class MeeshySocketIOManager {
     userId: string,
     pending: QueuedMessagePayload[]
   ): Promise<void> {
+    // Delivery receipts only make sense for actual new messages — an edited
+    // or deleted entry replays its own event (see `_drainedEventName`) but
+    // was never awaiting a "delivered" checkmark in the first place.
+    const newEntries = pending.filter((entry) => (entry.eventType ?? 'new') === 'new');
+    if (newEntries.length === 0) return;
+
     // Check privacy preference first — single cheap cached call.
     const prefMap = await this.privacyPreferencesService.getPreferencesForUsers([
       { id: userId, isAnonymous: false },
@@ -408,7 +446,7 @@ export class MeeshySocketIOManager {
     // Group by conversationId, keeping the last (newest) messageId per conv
     // so we call markMessagesAsReceived once per conversation.
     const convLatest = new Map<string, string>();
-    for (const entry of pending) {
+    for (const entry of newEntries) {
       convLatest.set(entry.conversationId, entry.messageId);
     }
 
@@ -453,11 +491,6 @@ export class MeeshySocketIOManager {
         select: { id: true, identifier: true }
       });
       if (conversation) {
-        // Evict oldest entry when cap reached (simple FIFO bounded LRU)
-        if (this.conversationIdCache.size >= this.CONVERSATION_ID_CACHE_MAX) {
-          const firstKey = this.conversationIdCache.keys().next().value;
-          if (firstKey !== undefined) this.conversationIdCache.delete(firstKey);
-        }
         this.conversationIdCache.set(conversationId, conversation.id);
         return conversation.id;
       }
@@ -519,11 +552,32 @@ export class MeeshySocketIOManager {
    * Permet au client de seed son store sans attendre qu'un changement d'état arrive
    * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
    */
+  /**
+   * Masque la présence des contacts selon leurs préférences privacy (cascade
+   * showOnlineStatus maître + showLastSeen). Anonymes → défaut (montrés).
+   * Appliqué à l'émission (pas au cache) pour couvrir aussi le cache-hit.
+   */
+  private async _applyPresencePrefs(
+    users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
+  ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
+    if (users.length === 0) return users;
+    const prefsMap = await this.privacyPreferencesService.getPreferencesForUsers(
+      users.map(u => ({ id: u.userId, isAnonymous: false })),
+    );
+    return users.map(u => {
+      const p = prefsMap.get(u.userId);
+      if (p && !p.showOnlineStatus) return { ...u, isOnline: false, lastActiveAt: null };
+      return { ...u, lastActiveAt: p && !p.showLastSeen ? null : u.lastActiveAt };
+    });
+  }
+
   private async _emitPresenceSnapshot(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
-        const users = cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) }));
+        const users = await this._applyPresencePrefs(
+          cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
+        );
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
         logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
       } else {
@@ -577,7 +631,7 @@ export class MeeshySocketIOManager {
           }
 
           this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
-          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
+          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: await this._applyPresencePrefs(users) });
           logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
       }
@@ -831,7 +885,12 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
-        this.adminAgentHandler.handleUnsubscribe(socket, callback);
+        try {
+          this.adminAgentHandler.handleUnsubscribe(socket, callback);
+        } catch (error) {
+          logger.error('[ADMIN_AGENT_UNSUBSCRIBE] Error:', error);
+          callback?.({ success: false, error: 'Internal server error' });
+        }
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
@@ -1794,7 +1853,7 @@ export class MeeshySocketIOManager {
           // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
           const readStatusService = this.readStatusService;
 
-          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId, senderId);
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId);
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
@@ -2054,9 +2113,22 @@ export class MeeshySocketIOManager {
         metadata: { source: 'api' as const },
       };
 
+      // Résout le Participant.id du sender AVANT d'appeler handleMessage — mirroring
+      // handleAgentReaction just below. MessagingService attend un Participant.id ;
+      // lui passer asUserId (un User.id) ne fonctionnait que via son fallback
+      // DEPRECATED (query supplémentaire + log d'erreur à chaque réponse d'agent).
+      const senderParticipant = await this.prisma.participant.findFirst({
+        where: { userId: response.asUserId, conversationId: response.conversationId, isActive: true },
+        select: { id: true },
+      });
+      if (!senderParticipant) {
+        logger.warn(`[Agent] No active participant for userId=${response.asUserId} in conv=${response.conversationId}`);
+        return;
+      }
+
       const result = await this.messagingService.handleMessage(
         messageRequest,
-        response.asUserId
+        senderParticipant.id
       );
 
       if (!result.success || !result.data) {
@@ -2148,6 +2220,18 @@ export class MeeshySocketIOManager {
 
       if (message) {
         const normalizedConversationId = message.conversationId;
+        // Swap 1-réaction-par-user : broadcast du retrait de l'ancien emoji de
+        // l'agent avant l'ajout du nouveau.
+        for (const removedEmoji of result.replacedEmojis) {
+          const removeEvent = await reactionService.createUpdateEvent(
+            reaction.targetMessageId,
+            removedEmoji,
+            'remove',
+            participant.id,
+            normalizedConversationId
+          );
+          this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
+        }
         this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
 
         const authorParticipant = message.senderId

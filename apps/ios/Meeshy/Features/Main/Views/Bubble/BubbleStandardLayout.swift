@@ -468,7 +468,7 @@ struct BubbleStandardLayout: View {
                             .contentShape(Rectangle())
                             .accessibilityElement(children: .combine)
                             .accessibilityLabel(String(localized: "bubble.content.hidden", defaultValue: "Hidden content", bundle: .main))
-                            .accessibilityHint("Toucher pour reveler le contenu")
+                            .accessibilityHint(String(localized: "bubble.content.hidden.hint", defaultValue: "Toucher pour révéler le contenu", bundle: .main))
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
@@ -560,38 +560,48 @@ struct BubbleStandardLayout: View {
                     targetWidthPx: targetPx
                 )
                 let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
-                ImageFullscreen(
-                    imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
-                    accentColor: contactColor,
-                    caption: caption,
-                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                )
+                // Composant UNIFIÉ « Enregistrer » : le flow vit DANS le cover
+                // pour que la sheet de destinations se présente par-dessus.
+                SavableMediaFullscreen(attachment: attachment) { requestSave in
+                    ImageFullscreen(
+                        imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
+                        accentColor: contactColor,
+                        caption: caption,
+                        mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                        onSaveRequested: requestSave
+                    )
+                }
             case .video:
                 if !attachment.fileUrl.isEmpty {
                     let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                     let resolvedShareURL = MeeshyConfig.resolveMediaURL(attachment.fileUrl)
-                    VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
-                        MeeshyVideoPlayer(
-                            attachment: attachment,
-                            style: .fullscreen,
-                            controls: .fullscreenDefault,
-                            accentColor: contactColor,
-                            frame: .flat,
-                            availability: availability,
-                            performance: .fullscreen,
-                            author: makeFullscreenVideoAuthor(),
-                            caption: caption,
-                            fileName: attachment.originalName,
-                            mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
-                            onDownload: onDownload,
-                            onShare: resolvedShareURL.map { url in
-                                {
-                                    shareURL = url
-                                    showShareSheet = true
-                                }
-                            },
-                            onClose: { fullscreenAttachment = nil }
-                        )
+                    // Composant UNIFIÉ « Enregistrer » : flow DANS le cover
+                    // (miroir du case .image ci-dessus).
+                    SavableMediaFullscreen(attachment: attachment) { requestSave in
+                        VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                            MeeshyVideoPlayer(
+                                attachment: attachment,
+                                style: .fullscreen,
+                                controls: .fullscreenDefault,
+                                accentColor: contactColor,
+                                frame: .flat,
+                                availability: availability,
+                                performance: .fullscreen,
+                                author: makeFullscreenVideoAuthor(),
+                                caption: caption,
+                                fileName: attachment.originalName,
+                                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                                onDownload: onDownload,
+                                onShare: resolvedShareURL.map { url in
+                                    {
+                                        shareURL = url
+                                        showShareSheet = true
+                                    }
+                                },
+                                onClose: { fullscreenAttachment = nil },
+                                onSaveRequested: requestSave
+                            )
+                        }
                     }
                 } else {
                     Color.black.onAppear { fullscreenAttachment = nil }
@@ -790,7 +800,7 @@ struct BubbleStandardLayout: View {
                 content
                     .blur(radius: shouldBlur ? 20 : 0)
                     .mask(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2, style: .continuous)
                             .blur(radius: shouldBlur ? 5 : 0)
                     )
             } else {
@@ -816,7 +826,7 @@ struct BubbleStandardLayout: View {
                 // Emoji-only intentionally renders the ORIGINAL `message.content`,
                 // not the translated text — emoji bubbles are not translated.
                 Text(message.content)
-                    .font(.system(size: emojiFontSize))
+                    .font(MeeshyFont.relative(emojiFontSize, design: .default))
                     .fixedSize(horizontal: false, vertical: true)
                     .overlay(alignment: .topLeading) {
                         if content.editedAt != nil {
@@ -892,7 +902,7 @@ struct BubbleStandardLayout: View {
                         // card), pas s'etirer sur 70% de la largeur d'ecran. Le
                         // VStack parent gere deja l'alignement naturel a gauche.
                         Text(message.content)
-                            .font(.system(size: emojiFontSize))
+                            .font(MeeshyFont.relative(emojiFontSize, design: .default))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         expandableTextView
@@ -963,7 +973,7 @@ struct BubbleStandardLayout: View {
                     .frame(width: Self.retryBandWidth)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2))
         // Simplification forte : plus d'ombre portée par bulle. Une `.shadow`
         // teintée par cellule force un rendu offscreen à chaque frame de scroll
         // (classique tueur de FPS). Les bulles sont désormais plates et nettes.
@@ -1007,7 +1017,8 @@ struct BubbleStandardLayout: View {
             flags: showFlags
                 ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
                 : [],
-            showsTranslate: showTranslation
+            showsTranslate: showTranslation,
+            sendStartedAt: message.createdAt
         )
 
         // Le tap sur les coches n'a de sens que sur les messages envoyes
@@ -1280,7 +1291,7 @@ struct BubbleStandardLayout: View {
                 .offset(x: 20, y: 12)
         }
         .opacity(blurController.fogOpacity)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2))
         .allowsHitTesting(false)
     }
 

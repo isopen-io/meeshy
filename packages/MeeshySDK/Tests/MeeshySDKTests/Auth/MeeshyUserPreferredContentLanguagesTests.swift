@@ -118,8 +118,25 @@ final class MeeshyUserPreferredContentLanguagesTests: XCTestCase {
         XCTAssertNil(MeeshyUser.normalizeLanguageCode("a"))
     }
 
-    func test_normalizeLanguageCode_threeLetterCodeIsTruncated() {
-        // Matches NLLB-200 2-letter mapping contract.
+    func test_normalizeLanguageCode_iso6393ReducesToSupportedPrefix() {
+        // "eng" has no Meeshy entry but its 2-letter prefix "en" is supported.
         XCTAssertEqual(MeeshyUser.normalizeLanguageCode("eng"), "en")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("fra"), "fr")
+    }
+
+    func test_normalizeLanguageCode_supportedThreeLetterCodePreserved() {
+        // Cameroonian languages have no ISO 639-1 code and are keyed by their
+        // 3-letter code everywhere. Truncating "bas" → "ba" (Bashkir) would
+        // break the Prisme Linguistique resolution.
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("bas"), "bas")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("dua"), "dua")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("ewo"), "ewo")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("bas-CM"), "bas")
+    }
+
+    func test_normalizeLanguageCode_unknownIso6393Rejected() {
+        // "spa" → "sp" would be wrong (Spanish is "es"); refuse rather than corrupt.
+        XCTAssertNil(MeeshyUser.normalizeLanguageCode("spa"))
+        XCTAssertNil(MeeshyUser.normalizeLanguageCode("xyz"))
     }
 }

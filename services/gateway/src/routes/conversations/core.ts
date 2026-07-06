@@ -4,6 +4,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
   generateDefaultConversationTitle
@@ -69,6 +70,7 @@ export const conversationListParticipantSelect = {
       firstName: true,
       lastName: true,
       avatar: true,
+      banner: true,
       isOnline: true,
       lastActiveAt: true
     }
@@ -501,12 +503,19 @@ export function registerCoreRoutes(
 
         // Merge presence override. firstName/lastName now come directly from m.user
         // (participant select was extended in iter-8 — no separate memberUsers query needed).
+        const isDirect = conversation.type === 'direct';
         const membersWithUser = conversation.participants
           .slice(0, 5)
           .map((m: any) => {
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
             return {
               ...m,
+              // Bannière de profil top-level : le schéma participant (minimal) est
+              // plat et strippe `user`, donc on lève la bannière au niveau
+              // participant pour la remontée en DM. Réservé aux DM — en groupe le
+              // client ignore `participantBanner` (évite le sur-transfert).
+              // Note : `Participant` n'a pas de colonne `banner`, seule `User` en a.
+              banner: isDirect ? (m.user?.banner ?? null) : null,
               isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
               user: m.userId
                 ? { ...m.user, isOnline: liveOnline === undefined ? m.user?.isOnline : liveOnline }
@@ -547,7 +556,7 @@ export function registerCoreRoutes(
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
                 displayName: sender.displayName ?? sender.user?.displayName ?? null,
-                avatar: sender.avatar ?? sender.user?.avatar ?? null,
+                avatar: resolveParticipantAvatar(sender),
                 isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
                 lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
               } : null
@@ -834,6 +843,48 @@ export function registerCoreRoutes(
         if (blocked) {
           throw createError(ErrorCode.USER_BLOCKED);
         }
+
+        // Idempotence DM — une conversation directe entre deux users est
+        // UNIQUE. Sans ce check, chaque « Nouvelle conversation → Créer »
+        // fabriquait une DM de plus (2 DM identiques observées en prod le
+        // 2026-07-03 pendant les tests d'appel) : on rouvre l'existante
+        // (200) au lieu d'en créer une deuxième. Les archivées comptent —
+        // recréer la DM d'un contact archivé doit la ROUVRIR, pas la
+        // dupliquer. Groupes : jamais dédupliqués (même-membres légitime).
+        const existingDirect = await prisma.conversation.findFirst({
+          where: {
+            type: 'direct',
+            AND: [
+              { participants: { some: { userId, isActive: true } } },
+              { participants: { some: { userId: uniqueParticipantIds[0], isActive: true } } }
+            ]
+          },
+          // Des doublons historiques existent (5 DM atabeth↔jcnm datant
+          // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
+          // arbitraire — sinon l'utilisateur retombe sur une DM morte.
+          orderBy: { lastMessageAt: 'desc' },
+          include: {
+            participants: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    avatar: true,
+                    banner: true
+                  }
+                }
+              }
+            }
+          }
+        });
+        if (existingDirect) {
+          return sendSuccess(reply, {
+            ...existingDirect,
+            title: existingDirect.title || null
+          }, { statusCode: 200 });
+        }
       }
 
       const allUserIds = [userId, ...uniqueParticipantIds];
@@ -894,7 +945,8 @@ export function registerCoreRoutes(
                   id: true,
                   username: true,
                   displayName: true,
-                  avatar: true
+                  avatar: true,
+                  banner: true
                 }
               }
             }
@@ -1116,7 +1168,8 @@ export function registerCoreRoutes(
                   id: true,
                   username: true,
                   displayName: true,
-                  avatar: true
+                  avatar: true,
+                  banner: true
                 }
               }
             }

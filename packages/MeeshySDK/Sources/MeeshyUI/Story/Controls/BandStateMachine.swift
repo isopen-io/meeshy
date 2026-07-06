@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Category & ElementKind
 
 public nonisolated enum BandCategory: Equatable, Sendable {
-    case media, son, text, drawing, filters, timeline
+    case media, son, text, drawing, filters, timeline, texture
 }
 
 public nonisolated enum BandElementKind: Equatable, Sendable {
@@ -43,7 +43,8 @@ nonisolated extension StoryToolMode {
     /// Bridges the existing `StoryToolMode` enum to `BandCategory` for the new layer.
     public var bandCategory: BandCategory {
         switch self {
-        case .media, .texture: return .media
+        case .media: return .media
+        case .texture: return .texture
         case .audio: return .son
         case .drawing: return .drawing
         case .text: return .text
@@ -56,6 +57,7 @@ nonisolated extension StoryToolMode {
     public static func from(category: BandCategory) -> StoryToolMode {
         switch category {
         case .media: return .media
+        case .texture: return .texture
         case .son: return .audio
         case .text: return .text
         case .drawing: return .drawing

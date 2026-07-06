@@ -90,6 +90,15 @@ public final class StoryReaderPrefetcher {
     /// Returns the prefetched canvas view for `itemId`, if any. Returns
     /// `nil` when the slide is outside the current window (caller should
     /// fall back to lazy instantiation).
+    ///
+    /// WS3.5 — activate(.play) contract: every prefetched canvas is bootstrapped
+    /// in `.edit` (see `bootstrap`) so neighbour slides do NOT auto-start their
+    /// audio + background/foreground video at mount time. A canvas returned here
+    /// is therefore still in `.edit`; the caller MUST promote it to `.play` via
+    /// `activate(currentId:)` BEFORE displaying it, otherwise its bg/fg video and
+    /// audio never start (the slide renders its first frame but stays paused).
+    /// This method intentionally does NOT auto-flip the mode: doing so would
+    /// start audio for a slide that is prefetched but not yet visible.
     public func view(for itemId: String) -> StoryCanvasUIView? {
         bootstrapped[itemId]
     }

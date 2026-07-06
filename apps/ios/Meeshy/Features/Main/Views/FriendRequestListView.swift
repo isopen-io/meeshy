@@ -32,6 +32,7 @@ struct FriendRequestListView: View {
                     .font(.callout.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
             }
+            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 
@@ -79,7 +80,7 @@ struct FriendRequestListView: View {
             Spacer()
 
             Image(systemName: "person.2.slash")
-                .font(.system(size: 48, weight: .light))
+                .font(MeeshyFont.relative(48, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
 
             Text(String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main))

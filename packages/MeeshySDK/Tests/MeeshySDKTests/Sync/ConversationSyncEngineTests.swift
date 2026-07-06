@@ -177,6 +177,77 @@ final class ConversationSyncEngineTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 2.0)
     }
 
+    // MARK: - P7-10: réconciliation complète périodique (ghost pruning)
+
+    /// Une conversation HARD-supprimée côté serveur n'est JAMAIS renvoyée par
+    /// le delta `?updatedSince=` (contrairement aux `isActive:false` que
+    /// `mergeDeltaConversations` retire déjà) → elle survit à vie dans le
+    /// cache, inouvrable (fantôme observé E2E : « Test Conv » épinglée,
+    /// absente du serveur sous tous les filtres, tuée uniquement par un
+    /// pull-to-refresh manuel). Le delta doit chaîner une réconciliation
+    /// COMPLÈTE (fullSync = replace de la liste) quand la dernière date de
+    /// plus de `fullReconcileInterval`.
+    func test_syncSinceLastCheckpoint_prunesServerHardDeletedConversation_whenFullReconcileDue() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.removeObject(forKey: "me.meeshy.lastFullReconcileAt")
+
+        let kept = MeeshyConversation(id: "c-kept", identifier: "test-c-kept", type: .direct)
+        let ghost = MeeshyConversation(id: "c-ghost", identifier: "test-c-ghost", type: .direct)
+        try? await CacheCoordinator.shared.conversations.save([kept, ghost], for: "list")
+
+        // Delta : rien de nouveau (le fantôme n'est jamais renvoyé).
+        let emptyDelta = OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [],
+            pagination: OffsetPagination(total: 0, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        )
+        mockAPI.stub("/conversations", result: emptyDelta)
+
+        // Vérité serveur complète : seule c-kept existe encore.
+        mockConvService.listResult = .success(OffsetPaginatedAPIResponse(
+            success: true,
+            data: [TestFactories.makeAPIConversation(id: "c-kept")],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 100, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let ids = Set(cached.map(\.id))
+        XCTAssertFalse(ids.contains("c-ghost"),
+            "a server-hard-deleted conversation must be pruned by the periodic full reconcile")
+        XCTAssertTrue(ids.contains("c-kept"),
+            "conversations still on the server must survive the reconcile")
+    }
+
+    /// Garde-fou « données jamais rapatriées inutilement » : la réconciliation
+    /// complète est bornée — si elle a couru récemment, le delta ne re-fetch
+    /// PAS la liste complète (aucun appel service.list) et le cache est
+    /// laissé tel quel.
+    func test_syncSinceLastCheckpoint_skipsFullReconcile_whenRecentlyReconciled() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        let ghost = MeeshyConversation(id: "c-ghost2", identifier: "test-c-ghost2", type: .direct)
+        try? await CacheCoordinator.shared.conversations.save([ghost], for: "list")
+
+        let emptyDelta = OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [],
+            pagination: OffsetPagination(total: 0, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        )
+        mockAPI.stub("/conversations", result: emptyDelta)
+
+        await engine.syncSinceLastCheckpoint()
+
+        XCTAssertEqual(mockConvService.listCallCount, 0,
+            "no full-list refetch when the reconcile ran recently (delta stays cheap)")
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertTrue(Set(cached.map(\.id)).contains("c-ghost2"),
+            "without a due reconcile the delta must not touch rows it did not receive")
+    }
+
     // MARK: - ensureMessages
 
     func test_ensureMessages_callsMessageServiceList() async {
@@ -657,6 +728,65 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertEqual(row?.lastMessagePreview, "",
                        "deleting the only message must clear the stale deleted text from the row")
         XCTAssertNil(row?.lastMessageId)
+    }
+
+    /// An own-echo REST send racing the socket broadcast (or any other
+    /// out-of-order `message:new`) must not regress the list row to older
+    /// content once a newer message has already been applied — mirrors the
+    /// monotone guard in `ConversationStore.applyConversationUpdated`.
+    func test_messageNew_staleMessage_doesNotRegressListRow() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let newer = Date(timeIntervalSince1970: 1_700_000_000)
+        let older = Date(timeIntervalSince1970: 1_699_000_000)
+        let conv = MeeshyConversation(
+            id: "c-order", identifier: "test-c-order", type: .direct,
+            lastMessageAt: newer,
+            lastMessagePreview: "current preview", lastMessageId: "m-current")
+        try? await CacheCoordinator.shared.conversations.save([conv], for: "list")
+        await engine.startSocketRelay()
+
+        let exp = expectation(description: "conversationsDidChange after stale message:new")
+        engine.conversationsDidChange.first().sink { exp.fulfill() }.store(in: &cancellables)
+
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "m-stale", conversationId: "c-order",
+                                          content: "stale content", createdAt: older))
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let row = cached.first(where: { $0.id == "c-order" })
+        XCTAssertEqual(row?.lastMessagePreview, "current preview",
+                       "a stale message:new must not overwrite the newer preview")
+        XCTAssertEqual(row?.lastMessageId, "m-current")
+        XCTAssertEqual(row?.lastMessageAt, newer)
+    }
+
+    /// The normal, in-order case: a genuinely newer message still updates
+    /// the row and bumps it to the top.
+    func test_messageNew_newerMessage_updatesListRow() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let older = Date(timeIntervalSince1970: 1_699_000_000)
+        let newer = Date(timeIntervalSince1970: 1_700_000_000)
+        let conv = MeeshyConversation(
+            id: "c-order2", identifier: "test-c-order2", type: .direct,
+            lastMessageAt: older,
+            lastMessagePreview: "old preview", lastMessageId: "m-old")
+        try? await CacheCoordinator.shared.conversations.save([conv], for: "list")
+        await engine.startSocketRelay()
+
+        let exp = expectation(description: "conversationsDidChange after newer message:new")
+        engine.conversationsDidChange.first().sink { exp.fulfill() }.store(in: &cancellables)
+
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "m-new", conversationId: "c-order2",
+                                          content: "fresh content", createdAt: newer))
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let row = cached.first(where: { $0.id == "c-order2" })
+        XCTAssertEqual(row?.lastMessagePreview, "fresh content")
+        XCTAssertEqual(row?.lastMessageId, "m-new")
+        XCTAssertEqual(row?.lastMessageAt, newer)
     }
 
     // Helper: seed the conversations cache with [id, unreadCount] tuples.

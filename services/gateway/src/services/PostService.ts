@@ -6,6 +6,7 @@ import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
+import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
@@ -18,7 +19,11 @@ const log = enhancedLogger.child({ module: 'PostService' });
 
 interface StoryTextObjectRaw {
   id?: string;
-  content: string;
+  // The iOS composer encodes overlay text under `text`; `content` is the
+  // pre-rename legacy alias (still accepted by the SDK decoder and the web
+  // transform). Both optional — resolve via `PostService.storyTextObjectText`.
+  text?: string;
+  content?: string;
   sourceLanguage?: string;
   translations?: Record<string, string>;
   [key: string]: unknown;
@@ -203,7 +208,7 @@ export class PostService {
 
     if (textObjects?.length) {
       const searchContent = textObjects
-        .map((t) => t.content)
+        .map((t) => PostService.storyTextObjectText(t))
         .filter(Boolean)
         .join(' ');
 
@@ -214,7 +219,9 @@ export class PostService {
         });
       }
 
-      this.triggerStoryTextObjectTranslation(post.id, textObjects);
+      this.triggerStoryTextObjectTranslation(post.id, textObjects, userId).catch((err: unknown) => {
+        log.error('triggerStoryTextObjectTranslation failed', err instanceof Error ? err : new Error(String(err)));
+      });
     }
 
     // Tracking des URLs brutes du post/story : mapping `url → token` rangé dans
@@ -227,7 +234,7 @@ export class PostService {
     const trackingContent =
       data.content
       ?? (textObjects?.length
-        ? textObjects.map((t) => t.content).filter(Boolean).join(' ')
+        ? textObjects.map((t) => PostService.storyTextObjectText(t)).filter(Boolean).join(' ')
         : undefined);
     if (trackingContent) {
       try {
@@ -258,21 +265,19 @@ export class PostService {
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
     try {
-      // 1. Résoudre les langues cibles depuis les contacts de l'auteur
-      const contacts = await this.prisma.participant.findMany({
-        where: {
-          conversation: { participants: { some: { userId: authorId } } },
-          userId: { not: authorId },
-        },
-        include: { user: { select: { systemLanguage: true } } },
-        take: 100,
-      });
+      // An explicit source (e.g. the language chosen when editing a post) wins
+      // over the heuristic detector, which only guesses from word patterns.
+      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
 
-      const targetLanguages: string[] = [...new Set(
-        contacts
-          .map((c) => c.user?.systemLanguage ?? undefined)
-          .filter((l): l is string => !!l && l !== 'en')
-      )].slice(0, 10);
+      // 1. Résoudre les langues cibles depuis les contacts de l'auteur, hors
+      // la langue source elle-même — même garde que le sibling
+      // `triggerStoryTextObjectTranslation`. Sans elle, un auteur écrivant
+      // dans une langue déjà parlée par (une partie de) son audience
+      // déclenche un aller-retour NLLB source→source qui réécrit
+      // `translations.<source>` avec une paraphrase de l'original au lieu de
+      // le laisser intact.
+      const allTargetLanguages = await this.resolveAudienceTargetLanguages(authorId);
+      const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
 
       if (targetLanguages.length === 0) {
         log.info('StoryTranslation: no target languages', { postId });
@@ -287,9 +292,6 @@ export class PostService {
       }
 
       const storyMessageId = `story:${postId}`;
-      // An explicit source (e.g. the language chosen when editing a post) wins
-      // over the heuristic detector, which only guesses from word patterns.
-      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
 
       log.info('StoryTranslation: sending ZMQ request', { postId, sourceLanguage, targetLanguages });
 
@@ -382,18 +384,25 @@ export class PostService {
     }
   }
 
-  private triggerStoryTextObjectTranslation(
+  private async triggerStoryTextObjectTranslation(
     postId: string,
-    textObjects: StoryTextObjectRaw[]
-  ): void {
+    textObjects: StoryTextObjectRaw[],
+    authorId: string
+  ): Promise<void> {
     // Envoie les textObjects au pipeline de traduction.
     // La persistence des résultats est gérée par le handler ZMQ Task 15
     // (story_text_object_translation_completed → storyEffects.textObjects[n].translations).
-    // TODO: query audience's actual languages (like triggerStoryTextTranslation does for message content)
-    const allTargetLanguages = this.getActiveTargetLanguages();
+    // G3 — langues RÉELLES de l'audience (mêmes règles que le pipeline
+    // `content` ci-dessus), plus la liste fixe de 10 langues : un auteur
+    // sans contact n'émet aucun job (le Prisme sert l'original au viewer).
+    const allTargetLanguages = await this.resolveAudienceTargetLanguages(authorId);
+    if (allTargetLanguages.length === 0) {
+      log.info('StoryTextObjectTranslation: no audience languages', { postId });
+      return;
+    }
 
     textObjects.forEach((obj, index) => {
-      const text = obj.content?.trim();
+      const text = PostService.storyTextObjectText(obj)?.trim();
       if (!text) return;
 
       const zmqClient = ZMQSingleton.getInstanceSync();
@@ -422,8 +431,40 @@ export class PostService {
     });
   }
 
-  private getActiveTargetLanguages(): string[] {
-    return ['en', 'fr', 'es', 'de', 'pt', 'ar', 'zh', 'ja', 'ko', 'ru'];
+  /** Résolution canonique du texte d'un overlay de story. Le composer iOS encode
+   *  désormais le texte sous `text` ; `content` est l'alias legacy pré-renommage
+   *  (encore accepté par le décodeur SDK et le transform web). On lit la clé
+   *  canonique d'abord, fallback sur la legacy — sans ça la gateway abandonnait
+   *  chaque overlay iOS de l'indexation de recherche, de l'extraction des liens
+   *  de tracking ET de la traduction (mêmes symptômes que le bug déjà corrigé
+   *  côté web dans `apps/web/lib/story-transforms.ts`). */
+  static storyTextObjectText(obj: { text?: unknown; content?: unknown }): string | undefined {
+    if (typeof obj.text === 'string') return obj.text;
+    if (typeof obj.content === 'string') return obj.content;
+    return undefined;
+  }
+
+  /** G3 — cœur PUR de la résolution d'audience (testable) : systemLanguage
+   *  des contacts, dédupliqués, hors 'en' (langue pivot), cap 10. */
+  static audienceLanguages(systemLanguages: Array<string | null | undefined>): string[] {
+    return [...new Set(
+      systemLanguages.filter((l): l is string => !!l && l !== 'en')
+    )].slice(0, 10);
+  }
+
+  /** G3 — langues cibles réelles de l'audience de `authorId` (participants de
+   *  conversations communes). Partagée par les pipelines `content`
+   *  (triggerStoryTextTranslation) et `textObjects`. */
+  private async resolveAudienceTargetLanguages(authorId: string): Promise<string[]> {
+    const contacts = await this.prisma.participant.findMany({
+      where: {
+        conversation: { participants: { some: { userId: authorId } } },
+        userId: { not: authorId },
+      },
+      include: { user: { select: { systemLanguage: true } } },
+      take: 100,
+    });
+    return PostService.audienceLanguages(contacts.map((c) => c.user?.systemLanguage));
   }
 
   /// Returns the post if and only if `viewerUserId` is allowed to see it,
@@ -495,16 +536,9 @@ export class PostService {
       this.getFriendIdsForViewer(viewerUserId),
       getCommunityCoMemberIds(this.prisma, viewerUserId),
     ]);
-    return {
-      OR: [
-        { authorId: viewerUserId },
-        { visibility: PostVisibility.PUBLIC },
-        { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
-        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
-        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerUserId } } },
-        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerUserId } },
-      ],
-    };
+    // G5 — filtre canonique unique. Audience = friends STRICTS ici (le feed
+    // passe friends ∪ contacts DM — divergence remontée, story-sota §4).
+    return buildPostVisibilityOrFilter(viewerUserId, friendIds, communityCoMemberIds);
   }
 
   private async getFriendIdsForViewer(userId: string): Promise<string[]> {
@@ -972,8 +1006,21 @@ export class PostService {
       });
 
       return true;
-    } catch {
-      // Ignore race conditions
+    } catch (error) {
+      // P7-2 — course double-submit : l'index unique (postId,userId) fait
+      // lever P2002 sur le create concurrent. Dédup ATTENDUE → no-op
+      // silencieux ; les compteurs restent exacts (l'incrément n'a pas été
+      // atteint). Pattern miroir de recordAnonymousOpen ci-dessous.
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+        return false;
+      }
+      // Toute AUTRE erreur (Mongo injoignable, validation) était avalée en
+      // silence par l'ancien `catch {}` — loggée désormais pour ne pas
+      // masquer une vraie panne sur ce chemin (initiative 6cd1a3c47).
+      log.warn('recordView failed', {
+        postId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return false;
     }
   }

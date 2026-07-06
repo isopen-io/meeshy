@@ -877,7 +877,7 @@ export const conversationParticipantSchema = {
     lastName: { type: 'string', nullable: true, description: 'Last name' },
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
-    email: { type: 'string', nullable: true, description: 'Email address' },
+    banner: { type: 'string', nullable: true, description: 'Profile banner URL' },
     role: {
       type: 'string',
       enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
@@ -1158,6 +1158,7 @@ export const conversationParticipantMinimalSchema = {
     type: { type: 'string', nullable: true, description: 'Participant type (registered/anonymous)' },
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+    banner: { type: 'string', nullable: true, description: 'Profile banner URL (flattened top-level for DM surfacing)' },
     role: { type: 'string', description: 'Member role' },
     language: { type: 'string', nullable: true, description: 'Preferred language' },
     nickname: { type: 'string', nullable: true, description: 'Nickname in conversation' },
@@ -1204,6 +1205,7 @@ export const conversationParticipantMinimalSchema = {
         firstName: { type: 'string', nullable: true, description: 'First name' },
         lastName: { type: 'string', nullable: true, description: 'Last name' },
         avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+        banner: { type: 'string', nullable: true, description: 'Profile banner URL' },
         isOnline: { type: 'boolean', description: 'Online status' },
         lastActiveAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last active timestamp' }
       }

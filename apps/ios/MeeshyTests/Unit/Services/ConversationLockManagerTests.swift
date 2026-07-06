@@ -109,4 +109,26 @@ final class ConversationLockManagerTests: XCTestCase {
         manager.removeMasterPin()
         XCTAssertTrue(manager.hasMasterPin())
     }
+
+    // MARK: - P7-11 : logout = purge totale (invariant 9)
+
+    /// Le keychain (`me.meeshy.app.conversation-locks`) survit au logout, à la
+    /// réinstallation ET n'est pas namespacé par compte : sans wipe, le master
+    /// PIN et les verrous du compte A s'appliquent au compte B (fuite
+    /// cross-compte, miroir du bug URLCache T15b-b). Après logout, les
+    /// conversations elles-mêmes sont purgées — leurs PINs n'ont plus d'objet.
+    func test_resetForLogout_wipesMasterPin_andAllLocks() {
+        manager.setMasterPin("123456")
+        manager.setLock(conversationId: "conv-logout", pin: "1234")
+
+        manager.resetForLogout()
+
+        XCTAssertFalse(manager.hasMasterPin(),
+            "master PIN must not survive logout (cross-account leak)")
+        XCTAssertFalse(manager.isLocked("conv-logout"),
+            "per-conversation locks must not survive logout")
+        XCTAssertFalse(manager.verifyLock(conversationId: "conv-logout", pin: "1234"),
+            "the lock's keychain entry must be wiped, not just the in-memory set")
+        XCTAssertTrue(manager.lockedConversationIds.isEmpty)
+    }
 }

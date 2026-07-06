@@ -31,17 +31,20 @@ struct CommunityLinkDetailView: View {
         VStack(spacing: 10) {
             ZStack {
                 Circle().fill(MeeshyColors.communityAccent.opacity(0.15)).frame(width: 60, height: 60)
+                // Glyphe héros dans un cercle de dimension fixe 60×60 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
                 Image(systemName: "person.3.fill").font(.system(size: 26))
                     .foregroundColor(MeeshyColors.communityAccent)
+                    .accessibilityHidden(true)
             }
-            Text(link.name).font(.system(size: 20, weight: .bold)).foregroundColor(theme.textPrimary)
-            Text(link.joinUrl).font(.system(size: 12, design: .monospaced))
+            Text(link.name).font(MeeshyFont.relative(20, weight: .bold)).foregroundColor(theme.textPrimary)
+            Text(link.joinUrl).font(MeeshyFont.relative(12, design: .monospaced))
                 .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(20).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
-            .overlay(RoundedRectangle(cornerRadius: 20)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(MeeshyColors.communityAccent.opacity(0.2), lineWidth: 1)))
+        .accessibilityElement(children: .combine)
     }
 
     private var actionsBar: some View {
@@ -82,11 +85,14 @@ struct CommunityLinkDetailView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
                         .frame(width: 52, height: 52)
+                    // Glyphe dans une tuile de dimension fixe 52×52 : figé (déborderait s'il scalait) — le libellé sous le glyphe est lu par VoiceOver (doctrine 86i)
                     Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
+                        .accessibilityHidden(true)
                 }
-                Text(label).font(.system(size: 10, weight: .medium)).foregroundColor(theme.textSecondary)
+                Text(label).font(MeeshyFont.relative(10, weight: .medium)).foregroundColor(theme.textSecondary)
             }
         }.frame(maxWidth: .infinity)
+        .accessibilityLabel(label)
     }
 
     private var statsSection: some View {
@@ -105,16 +111,18 @@ struct CommunityLinkDetailView: View {
 
     private func communityStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 22)).foregroundColor(Color(hex: color))
+            Image(systemName: icon).font(MeeshyFont.relative(22)).foregroundColor(Color(hex: color))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(value).font(.system(size: 22, weight: .bold)).foregroundColor(theme.textPrimary)
-                Text(label).font(.system(size: 12)).foregroundColor(theme.textSecondary)
+                Text(value).font(MeeshyFont.relative(22, weight: .bold)).foregroundColor(theme.textPrimary)
+                Text(label).font(MeeshyFont.relative(12)).foregroundColor(theme.textSecondary)
             }
             Spacer()
         }
         .padding(14).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.surfaceGradient(tint: color))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
+        .accessibilityElement(children: .combine)
     }
 
     private var infoSection: some View {
@@ -122,6 +130,7 @@ struct CommunityLinkDetailView: View {
             Text(String(localized: "communityLink.informations", defaultValue: "INFORMATIONS", bundle: .main))
                 .font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
+                .accessibilityAddTraits(.isHeader)
             VStack(spacing: 0) {
                 infoRow(String(localized: "communityLink.identifier", defaultValue: "Identifiant", bundle: .main), value: link.identifier)
                 Divider().padding(.leading, 16)
@@ -136,10 +145,11 @@ struct CommunityLinkDetailView: View {
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.system(size: 14)).foregroundColor(theme.textSecondary)
+            Text(label).font(MeeshyFont.relative(14)).foregroundColor(theme.textSecondary)
             Spacer()
-            Text(value).font(.system(size: 13, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
+            Text(value).font(MeeshyFont.relative(13, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 }

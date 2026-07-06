@@ -71,6 +71,13 @@ export class SocketIOOrchestrator {
   // Message conversion helper
   private messageConverter: ((msg: SocketIOMessage) => Message) | null = null;
 
+  // Socket instance for which listeners were last wired up. `initializeConnection()`
+  // is called repeatedly on reconnect-adjacent paths (ensureConnection() before every
+  // send, setCurrentUser() retries); the underlying socket is reused across those calls
+  // (ConnectionService.initializeConnection returns the existing socket if one exists),
+  // so re-running setupEventListeners() on it would stack duplicate Socket.IO listeners.
+  private listenersAttachedSocket: TypedSocket | null = null;
+
   // Current user ID for E2EE initialization
   private currentUserId: string | null = null;
 
@@ -119,22 +126,26 @@ export class SocketIOOrchestrator {
       return;
     }
 
-    // Setup connection listeners
-    this.connectionService.setupConnectionListeners(
-      () => this.onAuthenticated(),
-      (reason) => this.onDisconnected(reason),
-      (error) => this.onError(error),
-      () => this.onSessionRevoked()
-    );
+    if (socket !== this.listenersAttachedSocket) {
+      // Setup connection listeners
+      this.connectionService.setupConnectionListeners(
+        () => this.onAuthenticated(),
+        (reason) => this.onDisconnected(reason),
+        (error) => this.onError(error),
+        () => this.onSessionRevoked()
+      );
 
-    // Setup service listeners
-    if (this.messageConverter) {
-      this.messagingService.setupEventListeners(socket, this.messageConverter);
+      // Setup service listeners
+      if (this.messageConverter) {
+        this.messagingService.setupEventListeners(socket, this.messageConverter);
+      }
+      this.typingService.setupEventListeners(socket);
+      this.presenceService.setupEventListeners(socket);
+      this.translationService.setupEventListeners(socket);
+      this.preferencesSyncService.setupEventListeners(socket);
+
+      this.listenersAttachedSocket = socket;
     }
-    this.typingService.setupEventListeners(socket);
-    this.presenceService.setupEventListeners(socket);
-    this.translationService.setupEventListeners(socket);
-    this.preferencesSyncService.setupEventListeners(socket);
 
     // Connect the socket
     this.connectionService.connect();
@@ -671,6 +682,26 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationNew(listener);
   }
 
+  onFriendRequestCancelled(listener: import('./types').FriendRequestCancelledListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestCancelled(listener);
+  }
+
+  onFriendRequestNew(listener: import('./types').FriendRequestNewListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestNew(listener);
+  }
+
+  onFriendRequestAccepted(listener: import('./types').FriendRequestAcceptedListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestAccepted(listener);
+  }
+
+  onFriendRequestRejected(listener: import('./types').FriendRequestRejectedListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestRejected(listener);
+  }
+
+  onUserUpdated(listener: import('./types').UserUpdatedListener): UnsubscribeFn {
+    return this.presenceService.onUserUpdated(listener);
+  }
+
   onConversationDeleted(listener: import('./types').ConversationDeletedListener): UnsubscribeFn {
     return this.presenceService.onConversationDeleted(listener);
   }
@@ -716,6 +747,7 @@ export class SocketIOOrchestrator {
     this.presenceService.cleanup();
     this.translationService.cleanup();
     this.preferencesSyncService.cleanup();
+    this.listenersAttachedSocket = null;
   }
 
   /**

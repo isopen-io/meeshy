@@ -209,6 +209,7 @@
       "participantRemoved": "Participant removed",
       "removeParticipantError": "Error removing participant",
       "searchParticipants": "Search participants...",
+      "searchOrAddParticipants": "Search or add a member...",
       "noOneOnline": "No one online",
       "you": "you",
       "removeFromGroup": "Remove from group",
@@ -226,6 +227,9 @@
       "noDescription": "No description",
       "editDescription": "Edit description",
       "clickToChangeImage": "Click to change image",
+      "changeImage": "Change image",
+      "editCustomName": "Edit custom name",
+      "editReaction": "Edit reaction",
       "imageUpdated": "Conversation image updated",
       "imageUploadError": "Error uploading image",
       "personalTags": "Personal tags",
@@ -524,7 +528,10 @@
       "add": "Add",
       "cancel": "Cancel",
       "inviting": "Inviting...",
-      "inviteButton": "Invite {count} user(s)"
+      "inviteButton": "Invite {count} user(s)",
+      "addUserAria": "Add {name}",
+      "selectedUserAria": "{name} already selected",
+      "removeUserAria": "Remove {name}"
     },
     "drawer": {
       "title": "Options",

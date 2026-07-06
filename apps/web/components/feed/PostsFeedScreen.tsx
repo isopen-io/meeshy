@@ -35,6 +35,8 @@ import { useAuthStore } from '@/stores/auth-store';
 import { TusUploadService } from '@/services/tusUploadService';
 import type { MobileTranscription } from '@/services/posts.service';
 import type { Post } from '@meeshy/shared/types/post';
+import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { copyToClipboard } from '@/lib/clipboard';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -42,13 +44,12 @@ type TFunc = (key: string, paramsOrFallback?: Record<string, unknown> | string) 
 
 function formatRelativeTime(date: string | Date, t: TFunc): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  const diff = Date.now() - d.getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return t('time.now', 'Just now');
-  if (minutes < 60) return t('time.minutes', { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('time.hours', { count: hours });
-  const days = Math.floor(hours / 24);
+  // beyondDays: Infinity → always falls in now/minutes/hours/days (no absolute date tail).
+  const bucket = classifyRelativeTime(d.getTime(), Date.now(), { beyondDays: Infinity });
+  if (bucket.unit === 'now') return t('time.now', 'Just now');
+  if (bucket.unit === 'minutes') return t('time.minutes', { count: bucket.value });
+  if (bucket.unit === 'hours') return t('time.hours', { count: bucket.value });
+  const days = bucket.unit === 'days' ? bucket.value : Math.floor((Date.now() - d.getTime()) / 86_400_000);
   return t('time.days', { count: days });
 }
 
@@ -256,13 +257,14 @@ export function PostsFeedScreen() {
   );
 
   const handleStoryPublish = useCallback(
-    (story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; mediaIds?: string[] }) => {
+    (story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; visibilityUserIds?: string[]; mediaIds?: string[] }) => {
       setStoryComposerOpen(false);
       createStoryMutation.mutate(
         {
           content: story.content,
           storyEffects: story.storyEffects,
           visibility: story.visibility,
+          visibilityUserIds: story.visibilityUserIds,
           mediaIds: story.mediaIds,
           originalLanguage: userLanguage,
         },
@@ -370,17 +372,17 @@ export function PostsFeedScreen() {
 
   const handleShare = useCallback(
     async (postId: string) => {
-      try {
-        const post = posts.find((p) => p.id === postId);
-        const url =
-          post?.type === 'REEL'
-            ? `${window.location.origin}/reel/${postId}`
-            : `${window.location.origin}/feeds/post/${postId}`;
+      const post = posts.find((p) => p.id === postId);
+      const url =
+        post?.type === 'REEL'
+          ? `${window.location.origin}/reel/${postId}`
+          : `${window.location.origin}/feeds/post/${postId}`;
 
-        await navigator.clipboard.writeText(url);
+      const { success } = await copyToClipboard(url);
+      if (success) {
         shareMutation.mutate({ postId });
         showToast(t('toast.linkCopied', 'Link copied!'), 'success');
-      } catch {
+      } else {
         showToast(t('toast.error', 'Error'), 'error', t('toast.linkCopyError', "Couldn't copy the link."));
       }
     },

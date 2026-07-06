@@ -40,9 +40,9 @@ struct MediaDownloadSettingsView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -51,7 +51,7 @@ struct MediaDownloadSettingsView: View {
             Spacer()
 
             Text(String(localized: "settings.media.download.title", defaultValue: "Telechargement auto", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -105,17 +105,18 @@ struct MediaDownloadSettingsView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "settings.media.download.auto_title", defaultValue: "Telechargement automatique", bundle: .main))
-                            .font(.system(size: 14, weight: .medium))
+                            .font(MeeshyFont.relative(14, weight: .medium))
                             .foregroundColor(theme.textPrimary)
 
                         Text(String(localized: "settings.media.download.auto_subtitle", defaultValue: "Choisissez quand telecharger automatiquement chaque type de media selon votre connexion.", bundle: .main))
-                            .font(.system(size: 12, weight: .regular))
+                            .font(MeeshyFont.relative(12, weight: .regular))
                             .foregroundColor(theme.textMuted)
                             .lineSpacing(2)
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                .accessibilityElement(children: .combine)
             }
             .background(sectionBackground(tint: "6B7280"))
         }
@@ -142,12 +143,12 @@ struct MediaDownloadSettingsView: View {
                         HStack(spacing: 12) {
                             fieldIcon(policyIcon(policy), color: color)
                             Text(policy.shortLabel)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(MeeshyFont.relative(14, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
                             Spacer()
                             if binding.wrappedValue == policy {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(MeeshyFont.relative(14, weight: .bold))
                                     .foregroundColor(Color(hex: accentColor))
                             }
                         }
@@ -157,7 +158,7 @@ struct MediaDownloadSettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(title), \(policy.shortLabel)")
-                    .accessibilityValue(binding.wrappedValue == policy ? String(localized: "common.selected", defaultValue: "selectionne", bundle: .main) : "")
+                    .accessibilityAddTraits(binding.wrappedValue == policy ? .isSelected : [])
 
                     if index != AutoDownloadPolicy.allCases.count - 1 {
                         Divider().padding(.leading, 54)
@@ -182,10 +183,10 @@ struct MediaDownloadSettingsView: View {
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
@@ -193,17 +194,17 @@ struct MediaDownloadSettingsView: View {
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(14, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(

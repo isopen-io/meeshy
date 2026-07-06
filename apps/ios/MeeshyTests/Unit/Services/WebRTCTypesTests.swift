@@ -75,6 +75,24 @@ final class QualityThresholdsAudioBitrateTests: XCTestCase {
                        "Stats collection cadence — also the minimum gap between quality-level transitions (debounce)")
     }
 
+    func test_highJitterThresholdMs_is30ms() {
+        XCTAssertEqual(QualityThresholds.highJitterThresholdMs, 30.0, accuracy: 0.001,
+                       "Opus PLC degrades noticeably above ~30 ms jitter; this threshold triggers minBitrate cap")
+    }
+
+    func test_highJitterThresholdMs_isPositive() {
+        XCTAssertGreaterThan(QualityThresholds.highJitterThresholdMs, 0,
+                             "A zero threshold would always cap audio bitrate regardless of network conditions")
+    }
+
+    func test_highJitterThresholdMs_belowExcellentRTT() {
+        // Jitter can be high even on low-latency paths (buffering variability).
+        // The threshold must be small enough to detect real PLC degradation before
+        // RTT/loss signals fire. 30ms < 100ms (excellentRTT) confirms orthogonality.
+        XCTAssertLessThan(QualityThresholds.highJitterThresholdMs, QualityThresholds.excellentRTT,
+                          "highJitterThresholdMs must be < excellentRTT to catch jitter-induced degradation on otherwise-healthy paths")
+    }
+
     func test_videoFairRTT_is200ms() {
         XCTAssertEqual(QualityThresholds.videoFairRTT, 200.0, accuracy: 0.001,
                        "RTT boundary between good and fair video tiers (200 ms)")
@@ -656,6 +674,15 @@ final class QualityThresholdsSignalingTests: XCTestCase {
             "Ping interval must be ≤ quality-reset window so recovery is confirmed before the badge clears"
         )
     }
+
+    func test_maxPendingIceCandidates_exceedsDocumentedGatheringRoundSize() {
+        // The cap's own doc comment says a single gathering round can produce
+        // "50+" candidates. A cap sitting exactly at 50 would drop legitimate
+        // candidates from a busy round while the socket is down — the cap must
+        // leave headroom above that documented figure.
+        XCTAssertGreaterThan(QualityThresholds.maxPendingIceCandidates, 50,
+                              "Cap must exceed the documented 50+ candidates a single gathering round can produce")
+    }
 }
 
 // MARK: - PiP Thermal Frame-Rate Ladder
@@ -1019,6 +1046,12 @@ final class IceServerTURNValidationTests: XCTestCase {
         let hasTURN = IceServer.defaultServers.contains(where: \.hasTURNURL)
         XCTAssertFalse(hasTURN, "defaultServers are STUN-only fallbacks — the fault-log fires when TURN is absent")
     }
+
+    func test_defaultServers_containsCloudflareSTUN() {
+        let cfStun = "stun:stun.cloudflare.com:3478"
+        let has = IceServer.defaultServers.contains { $0.urls.contains(cfStun) }
+        XCTAssertTrue(has, "defaultServers must include Cloudflare STUN for multi-provider resilience against Google STUN outages")
+    }
 }
 
 // MARK: - CallStats.reduce() unit tests
@@ -1048,18 +1081,21 @@ final class CallStatsReducerTests: XCTestCase {
     }
 
     private func inboundRTP(id: String = "I01", kind: String = "audio", packets: Double = 10,
-                            lost: Double = 0, bytes: Double = 0, codecId: String? = nil) -> CallStats.RawEntry {
-        CallStats.RawEntry(
+                            lost: Double = 0, bytes: Double = 0, codecId: String? = nil,
+                            jitter: Double? = nil) -> CallStats.RawEntry {
+        var values: [String: Double] = [
+            "packetsReceived": packets,
+            "packetsLost": lost,
+            "bytesReceived": bytes
+        ]
+        if let j = jitter { values["jitter"] = j }
+        return CallStats.RawEntry(
             id: id,
             type: "inbound-rtp",
             kind: kind,
             codecId: codecId,
             mimeType: nil,
-            values: [
-                "packetsReceived": packets,
-                "packetsLost": lost,
-                "bytesReceived": bytes
-            ]
+            values: values
         )
     }
 
@@ -1099,6 +1135,7 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(result.inboundVideoPackets, 0)
         XCTAssertEqual(result.outboundPacketsSent, 0)
         XCTAssertEqual(result.availableOutgoingBitrateBps, 0)
+        XCTAssertEqual(result.jitterMs, 0, accuracy: 0.0001)
     }
 
     // MARK: - candidate-pair
@@ -1179,6 +1216,49 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(stats.bytesReceived, 5000)
     }
 
+    // MARK: - jitterMs
+
+    func test_reduce_jitter_audioEntry_convertedToMs() {
+        // libwebrtc reports jitter in seconds; reduce must multiply by 1000
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "audio", jitter: 0.015)])
+        XCTAssertEqual(stats.jitterMs, 15, accuracy: 0.001,
+            "jitter 0.015 s must be converted to 15 ms")
+    }
+
+    func test_reduce_jitter_averagedAcrossMultipleAudioStreams() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", packets: 10, jitter: 0.010),
+            inboundRTP(id: "I02", kind: "audio", packets: 10, jitter: 0.030),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.jitterMs, 20, accuracy: 0.001,
+            "(10ms + 30ms) / 2 = 20ms mean audio jitter")
+    }
+
+    func test_reduce_jitter_videoStreamExcludedFromMean() {
+        // Video jitter must not affect jitterMs — only Opus PLC is sensitive to audio jitter
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", packets: 10, jitter: 0.020),
+            inboundRTP(id: "I02", kind: "video", packets: 30, jitter: 0.100),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.jitterMs, 20, accuracy: 0.001,
+            "Video jitter (100 ms) must be excluded; only the audio jitter (20 ms) counts")
+    }
+
+    func test_reduce_jitter_zeroWhenNoAudioInbound() {
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "video", packets: 30, jitter: 0.050)])
+        XCTAssertEqual(stats.jitterMs, 0, accuracy: 0.0001,
+            "jitterMs must be 0 when there are no audio inbound-rtp entries")
+    }
+
+    func test_reduce_jitter_zeroWhenKeyAbsent() {
+        // Audio entry present but no 'jitter' key in values
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "audio", packets: 10)])
+        XCTAssertEqual(stats.jitterMs, 0, accuracy: 0.0001,
+            "jitterMs must be 0 when the 'jitter' key is absent from the stats entry")
+    }
+
     // MARK: - outbound-rtp
 
     func test_reduce_outboundRTP_packetsSentExtracted() {
@@ -1247,7 +1327,7 @@ final class CallStatsReducerTests: XCTestCase {
     func test_reduce_fullReport_allFieldsCorrect() {
         let entries: [CallStats.RawEntry] = [
             candidatePair(rtt: 0.08, bitrate: 250_000),
-            inboundRTP(id: "IA", kind: "audio", packets: 50, lost: 2, bytes: 10_000, codecId: "C1"),
+            inboundRTP(id: "IA", kind: "audio", packets: 50, lost: 2, bytes: 10_000, codecId: "C1", jitter: 0.012),
             inboundRTP(id: "IV", kind: "video", packets: 100, lost: 5, bytes: 80_000),
             outboundRTP(packets: 120, bytes: 95_000),
             codec(id: "C1", mimeType: "audio/opus"),
@@ -1263,6 +1343,92 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(stats.outboundPacketsSent, 120)
         XCTAssertEqual(stats.bandwidth, 95_000)
         XCTAssertEqual(stats.codec, "opus")
+        XCTAssertEqual(stats.jitterMs, 12, accuracy: 0.001,
+            "Single audio stream jitter 0.012 s → 12 ms")
+    }
+}
+
+// MARK: - CallStats Codable backward-compatibility tests
+
+/// Guards that `CallStats.Codable` handles old persisted snapshots (UserDefaults)
+/// that were encoded before `jitterMs` was added. Decoding must succeed with
+/// `jitterMs == 0` instead of throwing `DecodingError.keyNotFound`.
+@MainActor
+final class CallStatsCodableTests: XCTestCase {
+
+    private func makeStats(jitterMs: Double = 12.5) -> CallStats {
+        CallStats(
+            roundTripTimeMs: 80, packetsLost: 3, bandwidth: 95_000,
+            bytesReceived: 90_000, codec: "opus",
+            inboundPacketsReceived: 150, inboundAudioPackets: 50,
+            inboundVideoPackets: 100, outboundPacketsSent: 120,
+            availableOutgoingBitrateBps: 250_000, jitterMs: jitterMs
+        )
+    }
+
+    func test_encode_decode_roundTrip_preservesAllFields() throws {
+        let original = makeStats(jitterMs: 18.3)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(CallStats.self, from: data)
+        XCTAssertEqual(decoded.roundTripTimeMs, original.roundTripTimeMs, accuracy: 0.001)
+        XCTAssertEqual(decoded.packetsLost, original.packetsLost)
+        XCTAssertEqual(decoded.bandwidth, original.bandwidth)
+        XCTAssertEqual(decoded.bytesReceived, original.bytesReceived)
+        XCTAssertEqual(decoded.codec, original.codec)
+        XCTAssertEqual(decoded.inboundPacketsReceived, original.inboundPacketsReceived)
+        XCTAssertEqual(decoded.inboundAudioPackets, original.inboundAudioPackets)
+        XCTAssertEqual(decoded.inboundVideoPackets, original.inboundVideoPackets)
+        XCTAssertEqual(decoded.outboundPacketsSent, original.outboundPacketsSent)
+        XCTAssertEqual(decoded.availableOutgoingBitrateBps, original.availableOutgoingBitrateBps)
+        XCTAssertEqual(decoded.jitterMs, original.jitterMs, accuracy: 0.001)
+    }
+
+    func test_decode_legacyPayload_withoutJitterMs_succeedsWithZero() throws {
+        // Simulate a UserDefaults snapshot encoded before jitterMs was added.
+        // The JSON has all fields except "jitterMs" — decoding must not throw.
+        let json = """
+        {
+          "roundTripTimeMs": 80,
+          "packetsLost": 3,
+          "bandwidth": 95000,
+          "bytesReceived": 90000,
+          "codec": "opus",
+          "inboundPacketsReceived": 150,
+          "inboundAudioPackets": 50,
+          "inboundVideoPackets": 100,
+          "outboundPacketsSent": 120,
+          "availableOutgoingBitrateBps": 250000
+        }
+        """
+        let data = Data(json.utf8)
+        let stats = try JSONDecoder().decode(CallStats.self, from: data)
+        XCTAssertEqual(stats.jitterMs, 0, accuracy: 0.0001,
+            "Legacy snapshot without jitterMs must decode to jitterMs == 0")
+        XCTAssertEqual(stats.roundTripTimeMs, 80, accuracy: 0.001)
+        XCTAssertEqual(stats.codec, "opus")
+    }
+
+    func test_decode_nilCodec_decodesSuccessfully() throws {
+        let json = """
+        {
+          "roundTripTimeMs": 0, "packetsLost": 0, "bandwidth": 0,
+          "bytesReceived": 0, "inboundPacketsReceived": 0,
+          "inboundAudioPackets": 0, "inboundVideoPackets": 0,
+          "outboundPacketsSent": 0, "availableOutgoingBitrateBps": 0
+        }
+        """
+        let stats = try JSONDecoder().decode(CallStats.self, from: Data(json.utf8))
+        XCTAssertNil(stats.codec)
+        XCTAssertEqual(stats.jitterMs, 0, accuracy: 0.0001)
+    }
+
+    func test_encode_zeroJitter_notTruncated() throws {
+        // Encoding must always include jitterMs (even when 0) so future decoders
+        // can rely on the field being present in new-format snapshots.
+        let data = try JSONEncoder().encode(makeStats(jitterMs: 0))
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains("jitterMs"),
+            "jitterMs must be encoded even when 0 so new decoders can read it")
     }
 }
 
@@ -1490,5 +1656,106 @@ final class CallReliabilityPolicyTests: XCTestCase {
             secondsInAttempt: QualityThresholds.reconnectAttemptBudgetSeconds
         )
         XCTAssertEqual(outcome, .retry)
+    }
+}
+
+// MARK: - DataChannelTranscriptionMessage Decodable
+
+// @MainActor required: DataChannelTranscriptionMessage is defined in the app target
+// with SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor, so its Decodable init and all stored
+// property getters are @MainActor-isolated. The test bundle uses nonisolated by default,
+// so this class must explicitly opt into @MainActor to access those members.
+@MainActor
+final class DataChannelTranscriptionMessageTests: XCTestCase {
+
+    func test_decode_fullMessage_succeeds() throws {
+        let json = """
+        {
+            "type": "transcription-segment",
+            "text": "Bonjour le monde",
+            "speakerId": "user_abc",
+            "startTime": 1.23,
+            "isFinal": true,
+            "language": "fr",
+            "translatedText": "Hello world",
+            "translatedLanguage": "en"
+        }
+        """.data(using: .utf8)!
+        let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
+        // Capture @MainActor-isolated properties before XCTAssert autoclosures
+        // (XCTAssert* @autoclosure params are nonisolated — can't access @MainActor members directly).
+        let type = msg.type
+        let text = msg.text
+        let speakerId = msg.speakerId
+        let startTime = msg.startTime
+        let isFinal = msg.isFinal
+        let language = msg.language
+        let translatedText = msg.translatedText
+        let translatedLanguage = msg.translatedLanguage
+        XCTAssertEqual(type, "transcription-segment")
+        XCTAssertEqual(text, "Bonjour le monde")
+        XCTAssertEqual(speakerId, "user_abc")
+        XCTAssertEqual(startTime, 1.23, accuracy: 0.001)
+        XCTAssertTrue(isFinal)
+        XCTAssertEqual(language, "fr")
+        XCTAssertEqual(translatedText, "Hello world")
+        XCTAssertEqual(translatedLanguage, "en")
+    }
+
+    func test_decode_withNilOptionals_succeeds() throws {
+        let json = """
+        {
+            "type": "transcription-segment",
+            "text": "Test",
+            "speakerId": "uid",
+            "startTime": 0.0,
+            "isFinal": false,
+            "language": "en"
+        }
+        """.data(using: .utf8)!
+        let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
+        let translatedText = msg.translatedText
+        let translatedLanguage = msg.translatedLanguage
+        XCTAssertNil(translatedText)
+        XCTAssertNil(translatedLanguage)
+    }
+
+    func test_decode_pingMessage_failsBecauseOfMissingRequiredFields() {
+        // Ping messages sent by startDataChannelPing are {"type":"ping"} — they
+        // deliberately fail to decode as DataChannelTranscriptionMessage. The
+        // receiver uses try? and silently discards non-transcription messages.
+        let json = """
+        {"type":"ping"}
+        """.data(using: .utf8)!
+        // Decode outside autoclosure: @MainActor-isolated decode must not run
+        // inside the nonisolated @autoclosure of XCTAssertNil.
+        let result = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
+        XCTAssertNil(result,
+                     "Ping messages must not decode as DataChannelTranscriptionMessage — " +
+                     "the receiver correctly ignores them via try?")
+    }
+
+    func test_decode_partialFinalFlag_false() throws {
+        let json = """
+        {"type":"t","text":"hi","speakerId":"s","startTime":0,"isFinal":false,"language":"en"}
+        """.data(using: .utf8)!
+        let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
+        let isFinal = msg.isFinal
+        XCTAssertFalse(isFinal)
+    }
+
+    func test_type_isSendable() {
+        // Compile-time check — DataChannelTranscriptionMessage must be Sendable
+        // since it crosses the WebRTC nonisolated boundary into the @MainActor Task.
+        let _: any Sendable = DataChannelTranscriptionMessage(
+            type: "transcription-segment",
+            text: "x",
+            speakerId: "y",
+            startTime: 0,
+            isFinal: true,
+            language: "fr",
+            translatedText: nil,
+            translatedLanguage: nil
+        )
     }
 }

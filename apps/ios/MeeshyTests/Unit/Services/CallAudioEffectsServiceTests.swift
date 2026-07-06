@@ -234,6 +234,25 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         XCTAssertEqual(result.format.channelCount, buffer.format.channelCount)
     }
 
+    // MARK: - Performance Timing (guarded by stateLock — see CallAudioEffectsService.swift)
+
+    func test_processBuffer_recordsLastProcessingTimeMs() throws {
+        let sut = makeSUT()
+        try sut.setEffect(.voiceCoder(.default))
+        XCTAssertNil(sut.lastProcessingTimeMs)
+        _ = sut.processAudioBuffer(makeBuffer())
+        XCTAssertNotNil(sut.lastProcessingTimeMs)
+    }
+
+    func test_reset_clearsLastProcessingTimeMs() throws {
+        let sut = makeSUT()
+        try sut.setEffect(.voiceCoder(.default))
+        _ = sut.processAudioBuffer(makeBuffer())
+        XCTAssertNotNil(sut.lastProcessingTimeMs)
+        sut.reset()
+        XCTAssertNil(sut.lastProcessingTimeMs)
+    }
+
     // MARK: - Auto-Degradation
 
     func test_autoDegradation_triggersAfterConsecutiveOverBudget() throws {
@@ -270,6 +289,28 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         for _ in 0..<AudioEffectsConstants.underBudgetThreshold {
             sut.reportProcessingTime(ms: AudioEffectsConstants.restoreBudgetMs - 0.5)
         }
+        XCTAssertFalse(sut.isAutoDegraded)
+    }
+
+    // MARK: - Performance Counters Thread Safety
+
+    func test_reset_afterDegradation_requiresFullThresholdToDegradeAgain() throws {
+        let sut = makeSUT()
+        try sut.setEffect(.demonVoice(.default))
+
+        for _ in 0..<AudioEffectsConstants.overBudgetThreshold {
+            sut.reportProcessingTime(ms: AudioEffectsConstants.maxProcessingTimeMs + 1)
+        }
+        XCTAssertTrue(sut.isAutoDegraded)
+
+        sut.reset()
+        try sut.setEffect(.demonVoice(.default))
+        XCTAssertFalse(sut.isAutoDegraded)
+
+        // Regression guard: reset() must fully zero the over-budget counter
+        // (not just the isAutoDegraded flag). If the counter carried over,
+        // a single over-budget frame here would immediately re-degrade.
+        sut.reportProcessingTime(ms: AudioEffectsConstants.maxProcessingTimeMs + 1)
         XCTAssertFalse(sut.isAutoDegraded)
     }
 
@@ -325,5 +366,29 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         try sut.setEffect(.demonVoice(DemonVoiceParams(pitch: -10, distortion: 50, reverb: 50)))
         let timePitch = sut.activeNodeChain.first(where: { $0 is AVAudioUnitTimePitch }) as? AVAudioUnitTimePitch
         XCTAssertEqual(timePitch?.pitch ?? 0, Float(-10 * 100), accuracy: Float(0.01))
+    }
+}
+
+// MARK: - Engine laziness (audit 2026-07-02, bug 4)
+
+final class CallAudioEffectsEngineLazinessTests: XCTestCase {
+
+    /// The voice-effects render pipeline has no production feed (its UI entry
+    /// points were removed 2026-07-02) — the AVAudioEngine must not be built
+    /// eagerly at service init (which happens once at CallManager.shared
+    /// startup) but only if/when an effect is actually activated.
+    func test_engine_isLazilyConstructed() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/CallAudioEffectsService.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("private lazy var engine = AVAudioEngine()"),
+            "engine must be `private lazy var` — an eager `let` builds an AVAudioEngine at app " +
+            "startup for a pipeline that has zero production callers"
+        )
     }
 }

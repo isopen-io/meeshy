@@ -371,8 +371,9 @@ struct StoryActionSidebarView: View {
                                     )
                                 }
                             } label: {
+                                // Drapeau dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                                 Text(lang.flag)
-                                    .font(.system(size: 22))
+                                    .font(MeeshyFont.relative(22))
                                     .frame(width: 38, height: 38)
                                     .background(Circle().fill(Color.white.opacity(0.1)))
                             }
@@ -398,8 +399,9 @@ struct StoryActionSidebarView: View {
                     Circle()
                         .fill(Color.white.opacity(0.15))
                         .frame(width: 38, height: 38)
+                    // Glyphe dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                     Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(MeeshyFont.relative(13, weight: .bold))
                         .foregroundColor(.white.opacity(0.85))
                 }
             }
@@ -550,22 +552,22 @@ struct StoryHeaderView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(group.username)
-                                .font(.system(size: 15, weight: .bold))
+                                .font(MeeshyFont.relative(15, weight: .bold))
                                 .foregroundColor(.white)
 
                             if let story = currentStory {
                                 HStack(spacing: 4) {
                                     Text(story.timeAgo)
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
 
                                     if story.repostOfId != nil {
                                         Image(systemName: "arrow.2.squarepath")
-                                            .font(.system(size: 10, weight: .semibold))
+                                            .font(MeeshyFont.relative(10, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.6))
                                         if let authorName = story.repostAuthorName {
                                             Text(String(localized: "story.viewer.via", defaultValue: "via @\(authorName)", bundle: .main))
-                                                .font(.system(size: 11, weight: .medium))
+                                                .font(MeeshyFont.relative(11, weight: .medium))
                                                 .foregroundColor(.white.opacity(0.55))
                                         }
                                     }
@@ -574,10 +576,10 @@ struct StoryHeaderView: View {
                                         Text("\u{00B7}")
                                             .foregroundColor(.white.opacity(0.4))
                                         Image(systemName: "clock")
-                                            .font(.system(size: 9, weight: .semibold))
+                                            .font(MeeshyFont.relative(9, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.5))
                                         Text(storyTimeRemaining(expiresAt))
-                                            .font(.system(size: 12, weight: .medium))
+                                            .font(MeeshyFont.relative(12, weight: .medium))
                                             .foregroundColor(.white.opacity(0.55))
                                     }
                                 }
@@ -693,8 +695,9 @@ struct StoryHeaderView: View {
                     }
                 }
             } label: {
+                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MeeshyFont.relative(15, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))
                     .frame(width: 36, height: 36)
                     .background(
@@ -713,8 +716,9 @@ struct StoryHeaderView: View {
                 HapticFeedback.light()
                 dismissViewer()
             } label: {
+                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))
                     .frame(width: 36, height: 36)
                     .background(

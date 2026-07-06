@@ -162,6 +162,17 @@ internal struct _InlineRenderer: View {
                 controlsTimer = nil
             }
         }
+        .onAppear { autoplayIfNeeded() }
+        // WS3.7 / F1 — autoplay must ALSO fire when availability flips to `.ready`
+        // after first appear. On a cold cache `VideoAvailabilityResolver` mounts
+        // this renderer at `.needsDownload/.downloading`; `.onAppear` then fires
+        // too early (asset not ready) and never refires when the resolver flips
+        // `player.availability` to `.ready` (the view identity is unchanged). Key
+        // the retry on that exact value — the resolver re-inits `MeeshyVideoPlayer`
+        // with the new availability, so `player.availability` is the observable
+        // that changes. `autoplayIfNeeded`'s `!isThisActive` guard prevents a
+        // double-start. Mirrors the reel path's `adaptiveOnChange(of: ready)`.
+        .adaptiveOnChange(of: player.availability) { _, _ in autoplayIfNeeded() }
         .onDisappear { teardown() }
         .animation(.easeInOut(duration: 0.2), value: showControls)
         .animation(.easeInOut(duration: 0.15), value: isThisActive)
@@ -332,6 +343,38 @@ internal struct _InlineRenderer: View {
         scheduleControlsHide()
     }
 
+    /// Pure autoplay-on-appear decision (WS3.7). Autoplay only when the opaque
+    /// opt-in is set AND the asset is ready AND the view is on-screen AND no call
+    /// owns the audio session. Extracted `static` so the contract is unit-testable
+    /// without a SwiftUI render lifecycle.
+    static func shouldAutoplayOnAppear(
+        autoplayOnAppear: Bool,
+        isReady: Bool,
+        isOnScreen: Bool,
+        isCallActive: Bool
+    ) -> Bool {
+        autoplayOnAppear && isReady && isOnScreen && !isCallActive
+    }
+
+    private func autoplayIfNeeded() {
+        let isReady: Bool = { if case .ready = player.availability { return true }; return false }()
+        guard Self.shouldAutoplayOnAppear(
+            autoplayOnAppear: player.autoplayOnAppear,
+            isReady: isReady,
+            isOnScreen: true,
+            isCallActive: MediaSessionCoordinator.shared.isCallActive
+        ) else { return }
+        // No-op if this attachment is already the active inline playback (avoids
+        // restarting on a re-appear after the surface was already driving).
+        guard !isThisActive else { return }
+        // F5 — the mute intent is an opaque param: the SDK applies it, the app
+        // decides it. PostDetailView passes `autoplayMuted: false` (detail = sound
+        // on); the default `false` keeps the historical unmute-on-autoplay. The
+        // product mute decision stays app-side (SDK purity).
+        manager.isMuted = player.autoplayMuted
+        startPlayback()
+    }
+
     private func teardown() {
         controlsTimer?.invalidate(); controlsTimer = nil
         // Release plutôt que pause : sans ça, `manager.player` + `activeURL`
@@ -481,7 +524,13 @@ internal struct _FullscreenRenderer: View {
                     controls: player.controls,
                     fileName: player.fileName,
                     onClose: { closePlayer() },
-                    onSave: { saveToPhotos() },
+                    onSave: {
+                        if let onSaveRequested = player.onSaveRequested {
+                            onSaveRequested()
+                        } else {
+                            saveToPhotos()
+                        }
+                    },
                     onShare: player.onShare,
                     saveState: saveState
                 )

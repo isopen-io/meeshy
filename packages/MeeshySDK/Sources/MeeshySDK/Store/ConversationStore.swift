@@ -315,7 +315,7 @@ public actor ConversationStore {
     /// Store's internal dispatch path. Call at app foreground and on
     /// network reachability changes.
     public func flushOutbox() async {
-        await outbox.flush { [weak self] task in
+        await outbox.flush(force: true) { [weak self] task in
             guard let self else { return .failedTransient(reason: "store deallocated") }
             let result = await self.dispatch(task)
             // Outbox dispatch outcome maps 1:1 to the local result, minus
@@ -413,22 +413,26 @@ public actor ConversationStore {
     /// Apply a `conversation:updated` socket event. Updates conversation
     /// metadata and/or the last-message fields used for bump-to-top list
     /// reordering. Only non-nil fields are applied (nil = "not provided by
-    /// this payload variant"). `lastMessageAt` is monotone: an incoming
-    /// value older than the current one is silently skipped so a stale
-    /// broadcast can't push a conversation down the list, while any other
-    /// fields in the same event (e.g. `title`) are still applied. No-op
-    /// for an unknown conversation (the next list refresh will catch up).
+    /// this payload variant"). `lastMessageAt`, `lastMessageId` and
+    /// `lastMessagePreview` are monotone as a group: an incoming
+    /// `lastMessageAt` older than the current one means the whole payload
+    /// describes a stale message, so the id/preview are skipped along with
+    /// the timestamp (otherwise a delayed broadcast for an older message
+    /// would leave the row showing the newest timestamp paired with the
+    /// older message's text). Fields unrelated to message ordering (e.g.
+    /// `title`) are still applied regardless. No-op for an unknown
+    /// conversation (the next list refresh will catch up).
     public func applyConversationUpdated(_ event: ConversationUpdatedStoreEvent) {
         guard var conv = conversations[event.conversationId] else { return }
 
         var changed = false
 
-        if let incoming = event.lastMessageAt, incoming > conv.lastMessageAt {
-            conv.lastMessageAt = incoming
-            changed = true
+        let lastMessageIsCurrent = event.lastMessageAt.map { $0 > conv.lastMessageAt } ?? true
+        if lastMessageIsCurrent {
+            if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
+            if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
+            if let v = event.lastMessagePreview { conv.lastMessagePreview = v; changed = true }
         }
-        if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
-        if let v = event.lastMessagePreview { conv.lastMessagePreview = v; changed = true }
         if let v = event.title { conv.title = v; changed = true }
         if let v = event.avatar { conv.avatar = v; changed = true }
         if let v = event.description { conv.description = v; changed = true }

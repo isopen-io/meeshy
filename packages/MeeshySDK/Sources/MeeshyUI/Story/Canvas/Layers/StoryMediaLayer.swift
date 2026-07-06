@@ -249,7 +249,7 @@ public final class StoryMediaLayer: CALayer {
     /// côté rendu. Le cadre foreground (`StoryCanvasUIView.applyForegroundFrames`)
     /// pose son `border` sur ce même layer : bordure et image héritent donc
     /// exactement du même arrondi, sans constante dupliquée.
-    static let cornerRadiusFraction: CGFloat = 0.06
+    nonisolated static let cornerRadiusFraction: CGFloat = 0.06
 
     /// Base design size (in 1080-référentiel pixels) of a media before user `scale`
     /// is layered on. Envelope is 65 % of the short canvas side, fitted to aspect.
@@ -271,6 +271,27 @@ public final class StoryMediaLayer: CALayer {
             return CGSize(width: target * ratio, height: target)
         }
         return CGSize(width: target, height: target / ratio)
+    }
+
+    /// Resynchronise l'`AVPlayerLayer` hébergé (et le `cornerRadius`) sur les
+    /// `bounds` courants. `configureVideo` ne pose `avPlayerLayer.frame` qu'à la
+    /// création, et le fast-path gesture (`StoryCanvasUIView`) mute `bounds`
+    /// directement sans recréer le player (réutilisation via `replaceCurrentItem`)
+    /// — sans ça la vidéo foreground gardait son ancienne taille pendant que le
+    /// cadre/bordure grandissait : elle ne remplissait plus son cadre d'effet à
+    /// la bonne proportion (bug resize / player recyclé). `CATransaction` désactive
+    /// l'animation implicite pour ne pas introduire de tween par tick en `.play`.
+    public override nonisolated func layoutSublayers() {
+        super.layoutSublayers()
+        let targetRadius = min(bounds.width, bounds.height) * Self.cornerRadiusFraction
+        let needsRadius = abs(cornerRadius - targetRadius) > 0.01
+        let needsPlayerFrame = avPlayerLayer != nil && avPlayerLayer?.frame != bounds
+        guard needsRadius || needsPlayerFrame else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if needsRadius { cornerRadius = targetRadius }
+        if needsPlayerFrame { avPlayerLayer?.frame = bounds }
+        CATransaction.commit()
     }
 
     // MARK: - URL resolution
@@ -600,17 +621,42 @@ public final class StoryMediaLayer: CALayer {
     /// un resume en place (long-press) ou un démarrage déjà aligné ne provoque
     /// aucun saut. Une vidéo arrivée en retard (réseau) ou une ouverture à `t>0`
     /// est en revanche recalée pour rester en phase avec le reste de la slide.
+    /// Thin public seam (WS3.3) routing a canvas « GO » through the single
+    /// drift-aware start path. A no-op unless `isPlaybackActive` (the slide is
+    /// past content-ready), so the canvas can call it on every foreground media
+    /// layer without re-checking each layer's state. Replaces the raw
+    /// `forEachAVPlayer { $0.play() }` at GO, which bypassed timeline alignment
+    /// and could flash frame 0 on an open-at-t>0. Idempotent: `play()` is a
+    /// no-op when already playing and the seek only fires past the drift seuil.
+    @MainActor
+    public func startAlignedIfActive() {
+        guard isPlaybackActive else { return }
+        alignToTimelineThenPlay()
+    }
+
     @MainActor
     private func alignToTimelineThenPlay() {
         guard let player = avPlayer else { return }
         let target = max(0, slidePlayheadSeconds - (media?.startTime ?? 0))
         let current = player.currentTime().seconds
-        if target.isFinite, current.isFinite,
-           abs(current - target) > Self.timelineSeekDriftThreshold {
+        if Self.shouldSeekToAlign(current: current, target: target) {
             player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
                         toleranceBefore: .zero, toleranceAfter: .zero)
         }
         player.play()
+    }
+
+    /// Pure drift decision (WS3.3 / F4): the aligned start seeks the foreground
+    /// player ONLY when the gap between the current position and the timeline
+    /// `target` exceeds `timelineSeekDriftThreshold`. A resume-in-place
+    /// (long-press) or an already-aligned start stays put (no jump); a video that
+    /// arrived late (network) or an open-at-`t>0` is recaled. Non-finite inputs
+    /// never seek. Extracted (non-private) so the seek trigger is unit-testable
+    /// without a decodable `AVAsset` — `AVPlayer` seek movement on a fixture mp4
+    /// is not observable.
+    static func shouldSeekToAlign(current: Double, target: Double) -> Bool {
+        guard target.isFinite, current.isFinite else { return false }
+        return abs(current - target) > timelineSeekDriftThreshold
     }
 
     /// Reprise/pause transitoire sur lifecycle d'app (foreground/background),

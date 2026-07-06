@@ -21,6 +21,12 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         var activeVoiceEffect: AudioEffectType?
         var isBackSoundActive: Bool = false
         var isAutoDegraded: Bool = false
+        var consecutiveOverBudgetFrames: Int = 0
+        var consecutiveUnderBudgetFrames: Int = 0
+        // Same dual-thread hazard as the two counters above: written from the
+        // audio thread (processAudioBuffer) and reset from any caller thread
+        // (reset()) — guarded by stateLock rather than a plain property.
+        var lastProcessingTimeMs: Double?
     }
 
     private let stateLock = OSAllocatedUnfairLock(initialState: LockedState())
@@ -28,6 +34,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     var activeVoiceEffect: AudioEffectType? { stateLock.withLock { $0.activeVoiceEffect } }
     var isBackSoundActive: Bool { stateLock.withLock { $0.isBackSoundActive } }
     var isAutoDegraded: Bool { stateLock.withLock { $0.isAutoDegraded } }
+    var lastProcessingTimeMs: Double? { stateLock.withLock { $0.lastProcessingTimeMs } }
 
     var isEffectsActive: Bool {
         stateLock.withLock { $0.activeVoiceEffect != nil || $0.isBackSoundActive }
@@ -39,7 +46,11 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
 
     // MARK: - Engine & Nodes
 
-    private let engine = AVAudioEngine()
+    // Audit 2026-07-02 (bug 4) — lazy: the render pipeline has no production
+    // feed (UI entry points removed), so the engine must not be built at
+    // CallManager.shared startup. First touch happens on configQueue when an
+    // effect is actually activated (all engine accesses are configQueue-serial).
+    private lazy var engine = AVAudioEngine()
     private var voiceEffectNodes: [AVAudioNode] = []
     private var backSoundPlayerNode: AVAudioPlayerNode?
     private var backSoundMixerNode: AVAudioMixerNode?
@@ -72,11 +83,13 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     private var renderBufferPool: [AVAudioPCMBuffer] = []
     private var renderBufferFormat: AVAudioFormat?
 
-    // MARK: - Performance Monitoring (accessed from audio thread only)
-
-    private var consecutiveOverBudgetFrames = 0
-    private var consecutiveUnderBudgetFrames = 0
-    private(set) var lastProcessingTimeMs: Double?
+    // MARK: - Performance Monitoring
+    //
+    // consecutiveOverBudgetFrames/consecutiveUnderBudgetFrames/lastProcessingTimeMs
+    // live in LockedState (guarded by stateLock) because they are written from
+    // the audio thread (processAudioBuffer) and can be reset concurrently from
+    // any other thread (reset()) — an unsynchronized mutation from two threads
+    // is a data race even though it rarely crashes.
 
     // MARK: - Set Effect
 
@@ -158,7 +171,6 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         let start = CACurrentMediaTime()
         let processed = renderThroughBlocks(buffer, blocks: blocks)
         let elapsed = (CACurrentMediaTime() - start) * 1000
-        lastProcessingTimeMs = elapsed
         updatePerformanceCounters(ms: elapsed)
 
         return processed
@@ -174,10 +186,12 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
             renderBufferPool = []
             renderBufferFormat = nil
         }
-        consecutiveOverBudgetFrames = 0
-        consecutiveUnderBudgetFrames = 0
-        stateLock.withLock { $0.isAutoDegraded = false }
-        lastProcessingTimeMs = nil
+        stateLock.withLock {
+            $0.isAutoDegraded = false
+            $0.consecutiveOverBudgetFrames = 0
+            $0.consecutiveUnderBudgetFrames = 0
+            $0.lastProcessingTimeMs = nil
+        }
         Logger.audioEffects.info("Audio effects service reset")
     }
 
@@ -187,37 +201,54 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         updatePerformanceCounters(ms: ms)
     }
 
+    private enum PerformanceTransition {
+        case degraded
+        case restored
+        case none
+    }
+
     private func updatePerformanceCounters(ms: Double) {
-        if ms > AudioEffectsConstants.maxProcessingTimeMs {
-            consecutiveOverBudgetFrames += 1
-            consecutiveUnderBudgetFrames = 0
-            if consecutiveOverBudgetFrames >= AudioEffectsConstants.overBudgetThreshold {
-                let didDegrade = stateLock.withLock { state -> Bool in
-                    guard !state.isAutoDegraded else { return false }
-                    state.isAutoDegraded = true
-                    return true
-                }
-                if didDegrade {
-                    Logger.audioEffects.warning(
-                        "Audio effects auto-degraded: \(ms, privacy: .public)ms exceeds budget"
-                    )
-                }
+        // Read the (MainActor-isolated-by-default) constants into local
+        // Sendable values *before* entering the lock: stateLock.withLock's
+        // closure is @Sendable and cannot reference main-actor-isolated
+        // static properties directly, even though this function itself
+        // runs on the same actor as AudioEffectsConstants.
+        let maxProcessingTimeMs = AudioEffectsConstants.maxProcessingTimeMs
+        let overBudgetThreshold = AudioEffectsConstants.overBudgetThreshold
+        let restoreBudgetMs = AudioEffectsConstants.restoreBudgetMs
+        let underBudgetThreshold = AudioEffectsConstants.underBudgetThreshold
+
+        let transition = stateLock.withLock { state -> PerformanceTransition in
+            state.lastProcessingTimeMs = ms
+            if ms > maxProcessingTimeMs {
+                state.consecutiveOverBudgetFrames += 1
+                state.consecutiveUnderBudgetFrames = 0
+                guard state.consecutiveOverBudgetFrames >= overBudgetThreshold,
+                      !state.isAutoDegraded else { return .none }
+                state.isAutoDegraded = true
+                return .degraded
+            } else if ms < restoreBudgetMs {
+                state.consecutiveUnderBudgetFrames += 1
+                guard state.consecutiveUnderBudgetFrames >= underBudgetThreshold,
+                      state.isAutoDegraded else { return .none }
+                state.isAutoDegraded = false
+                state.consecutiveOverBudgetFrames = 0
+                return .restored
+            } else {
+                state.consecutiveUnderBudgetFrames = 0
+                return .none
             }
-        } else if ms < AudioEffectsConstants.restoreBudgetMs {
-            consecutiveUnderBudgetFrames += 1
-            if consecutiveUnderBudgetFrames >= AudioEffectsConstants.underBudgetThreshold {
-                let didRestore = stateLock.withLock { state -> Bool in
-                    guard state.isAutoDegraded else { return false }
-                    state.isAutoDegraded = false
-                    return true
-                }
-                if didRestore {
-                    consecutiveOverBudgetFrames = 0
-                    Logger.audioEffects.info("Audio effects restored from auto-degradation")
-                }
-            }
-        } else {
-            consecutiveUnderBudgetFrames = 0
+        }
+
+        switch transition {
+        case .degraded:
+            Logger.audioEffects.warning(
+                "Audio effects auto-degraded: \(ms, privacy: .public)ms exceeds budget"
+            )
+        case .restored:
+            Logger.audioEffects.info("Audio effects restored from auto-degradation")
+        case .none:
+            break
         }
     }
 

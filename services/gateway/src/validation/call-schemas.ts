@@ -363,3 +363,39 @@ export const socketCallScreenCaptureDetectedSchema = z.object({
   isCapturing: z.boolean(),
 });
 export type SocketCallScreenCaptureDetectedInput = z.infer<typeof socketCallScreenCaptureDetectedSchema>;
+
+/**
+ * Socket.IO Event: call:analytics (fire-and-forget, Client → Server)
+ * Emitted once at call end with lifecycle telemetry. Gateway logs and
+ * optionally persists the payload for quality dashboards.
+ */
+export const socketCallAnalyticsSchema = z.object({
+  callId: objectIdSchema,
+  setupTimeMs: z.number().int(),
+  // answer/join → connected : la négociation WebRTC seule, SANS le temps de
+  // sonnerie humain que setupTimeMs inclut (23 s observés — métrique
+  // inutilisable pour détecter une régression de setup). Optionnel : absent
+  // des builds iOS < 2026-07-03 ; -1 = jamais connecté / ancrage manquant.
+  negotiationTimeMs: z.number().int().optional(),
+  durationSeconds: z.number().nonnegative(),
+  reconnectionCount: z.number().int().nonnegative(),
+  networkTransitions: z.number().int().nonnegative(),
+  averageRtt: z.number().nonnegative(),
+  averagePacketLoss: z.number().nonnegative(),
+  maxPacketLoss: z.number().nonnegative(),
+  codec: z.string().max(50),
+  effectsUsed: z.array(z.string().max(50)).max(50),
+  filtersUsed: z.boolean(),
+  transcriptionUsed: z.boolean(),
+  qualityDistribution: z.object({
+    excellent: z.number().min(0).max(1),
+    good: z.number().min(0).max(1),
+    fair: z.number().min(0).max(1),
+    poor: z.number().min(0).max(1),
+  }),
+  platform: z.string().max(50),
+  deviceModel: z.string().max(100),
+  isVideo: z.boolean(),
+  endReason: z.string().max(50),
+});
+export type SocketCallAnalyticsInput = z.infer<typeof socketCallAnalyticsSchema>;

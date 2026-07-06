@@ -7,6 +7,8 @@ import { Badge } from './Badge';
 import { Button } from './Button';
 import { Check, X, Clock, RotateCcw } from 'lucide-react';
 import type { FriendRequest } from '@/types/contacts';
+import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { getUserDisplayName } from '@/utils/user-display-name';
 
 export type FriendRequestAction = 'accept' | 'reject' | 'cancel' | 'resend';
 
@@ -24,27 +26,17 @@ function getOtherUser(request: FriendRequest, currentUserId?: string) {
   return isSender ? request.receiver : request.sender;
 }
 
-function getUserDisplayName(user?: { displayName?: string; firstName?: string; lastName?: string; username?: string }) {
-  if (!user) return '?';
-  if (user.displayName) return user.displayName;
-  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-  return fullName || user.username || '?';
-}
-
 function formatRelativeDate(
   dateStr: string,
   t: (key: string, params?: Record<string, unknown>) => string,
   locale?: string
 ): string {
   const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
+  const bucket = classifyRelativeTime(date.getTime(), Date.now());
 
-  if (diffDays === 0) return t('status.justNow');
-  if (diffDays === 1) return t('status.daysAgo', { count: 1 });
-  if (diffDays < 7) return t('status.daysAgo', { count: diffDays });
-  return date.toLocaleDateString(locale);
+  if (bucket.unit === 'days') return t('status.daysAgo', { count: bucket.value });
+  if (bucket.unit === 'beyond') return date.toLocaleDateString(locale);
+  return t('status.justNow');
 }
 
 export const FriendRequestCard = memo(function FriendRequestCard({
@@ -57,7 +49,7 @@ export const FriendRequestCard = memo(function FriendRequestCard({
 }: FriendRequestCardProps) {
   const isSender = request.senderId === currentUserId;
   const otherUser = getOtherUser(request, currentUserId);
-  const displayName = getUserDisplayName(otherUser);
+  const displayName = getUserDisplayName(otherUser, '?');
 
   return (
     <div

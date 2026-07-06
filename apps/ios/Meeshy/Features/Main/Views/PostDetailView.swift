@@ -1122,7 +1122,7 @@ struct PostDetailView: View {
                     .padding(.horizontal, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(langColor.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
@@ -1237,7 +1237,7 @@ struct PostDetailView: View {
                         .padding(.horizontal, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(langColor.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2))
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
@@ -1245,17 +1245,19 @@ struct PostDetailView: View {
                 }
             }
 
-            // Story-type repost — render the canvas
+            // Story-type repost — render the canvas. Unmuted to match the native
+            // story detail (RF3); the SHARED `storyCanvasContainer` brings the SAME
+            // off-screen + call-aware pause wiring, so the repost canvas can't play
+            // with sound while scrolled off-screen.
             if isStoryRepost {
-                StoryReaderRepresentable(
-                    repost: repost,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                    mute: true
+                storyCanvasContainer(
+                    StoryReaderRepresentable(
+                        repost: repost,
+                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                        mute: false,
+                        isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                    )
                 )
-                .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                .frame(maxWidth: 460)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
             } else if !repost.media.isEmpty {
@@ -1286,7 +1288,7 @@ struct PostDetailView: View {
                         onDownload: onDownload
                     )
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
             }
@@ -1312,10 +1314,10 @@ struct PostDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: repost.authorColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
                 )
         )
@@ -1505,18 +1507,30 @@ struct PostDetailView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 32)
         } else {
-            StoryReaderRepresentable(
-                feedPost: post,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                mute: false,
-                isPaused: !storyCanvasVisible || isCallActive
+            storyCanvasContainer(
+                StoryReaderRepresentable(
+                    feedPost: post,
+                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                    mute: false,
+                    isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                )
             )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+    }
+
+    /// Shared canvas wrapper for BOTH the native story and the STORY-repost paths
+    /// (RF3): identical sizing + the GeometryReader/`StoryCanvasFrameKey`/
+    /// `onPreferenceChange` visibility tracking that updates `storyCanvasVisible`.
+    /// Extracting it guarantees the off-screen pause wiring can't exist on one path
+    /// and be missing on the other (which would leak audio on the repost path).
+    private func storyCanvasContainer(_ reader: StoryReaderRepresentable) -> some View {
+        reader
             .aspectRatio(9.0 / 16.0, contentMode: .fit)
             .frame(maxWidth: 460)
             .frame(maxWidth: .infinity, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
             .background(
                 GeometryReader { geo in
                     Color.clear.preference(key: StoryCanvasFrameKey.self,
@@ -1527,7 +1541,6 @@ struct PostDetailView: View {
                 let h = scrollViewportHeight > 0 ? scrollViewportHeight : frame.maxY + 1
                 storyCanvasVisible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
             }
-        }
     }
 
     // MARK: - Media Views
@@ -1542,30 +1555,44 @@ struct PostDetailView: View {
         VStack(spacing: 8) {
             // Single media
             if mediaList.count == 1, let media = mediaList.first {
-                detailSingleMedia(media)
+                detailSingleMedia(media, isPrimaryVideo: media.id == primaryAutoplayVideoId)
             } else {
-                // Visual grid
+                // Visual grid (multi-media videos render as tap-to-play thumbnails
+                // here — they never autoplay).
                 if !visualMedia.isEmpty {
                     detailVisualGrid(visualMedia)
                 }
-                // Audio players
+                // Audio players (never a video → never the primary autoplay video)
                 ForEach(audioMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
                 // Documents
                 ForEach(docMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
                 // Locations
                 ForEach(locMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
             }
         }
     }
 
+    /// The single video that autoplays on open (F2): deterministic own > repost.
+    /// The first `.video` of the post's own media; if the post has no own video,
+    /// the first `.video` of the repost's media. `nil` when neither has a video.
+    /// Only this media id gets `autoplayOnAppear: true` — every other video stays
+    /// tap-to-play so two videos (own + repost) never fight over the single
+    /// `SharedAVPlayerManager` (last-to-appear-wins flicker / clobbered load).
+    private var primaryAutoplayVideoId: String? {
+        guard let post = displayPost else { return nil }
+        if let own = post.media.first(where: { $0.type == .video }) { return own.id }
+        if let reposted = post.repost?.media.first(where: { $0.type == .video }) { return reposted.id }
+        return nil
+    }
+
     @ViewBuilder
-    private func detailSingleMedia(_ media: FeedMedia) -> some View {
+    private func detailSingleMedia(_ media: FeedMedia, isPrimaryVideo: Bool) -> some View {
         switch media.type {
         case .image:
             let aspectRatio: CGFloat? = {
@@ -1582,7 +1609,7 @@ struct PostDetailView: View {
             }
             .aspectRatio(aspectRatio, contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: 400)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
             .onTapGesture { openMediaFullscreen(media) }
             .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isButton)
@@ -1600,12 +1627,23 @@ struct PostDetailView: View {
                     frame: .card,
                     availability: availability,
                     performance: .inline,
+                    // WS3.7 / D2 / F2 — detail media is a focused view: autoplay
+                    // the PRIMARY video (with sound) on appear. The feed and every
+                    // other call site keep the default (tap-to-play, muted). Only
+                    // the primary video (deterministic own > repost, see
+                    // `primaryAutoplayVideoId`) autoplays — a post + repost each
+                    // with a video would otherwise both hit the single
+                    // `SharedAVPlayerManager` and clobber each other.
+                    autoplayOnAppear: isPrimaryVideo,
+                    // F5 — detail = sound on. The mute intent is now an opaque SDK
+                    // param; the product decision lives here, app-side.
+                    autoplayMuted: false,
                     onDownload: onDownload,
                     onExpand: { openMediaFullscreen(media) }
                 )
             }
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
 
         case .audio:
             let audioAttachment = media.toMessageAttachment()
@@ -1619,12 +1657,12 @@ struct PostDetailView: View {
                     onDownload: onDownload
                 )
             }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
 
         case .document:
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                         .frame(width: 48, height: 56)
                     Image(systemName: "doc.fill")
@@ -1650,9 +1688,9 @@ struct PostDetailView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md - 2)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.document", defaultValue: "Document : %@", bundle: .main), media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main)))
@@ -1660,7 +1698,7 @@ struct PostDetailView: View {
         case .location:
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                         .frame(width: 64, height: 64)
                     Image(systemName: "mappin.circle.fill")
@@ -1681,9 +1719,9 @@ struct PostDetailView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md - 2)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.location", defaultValue: "Position : %@", bundle: .main), media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main)))
@@ -1701,7 +1739,7 @@ struct PostDetailView: View {
                 detailGridCell(visualMedia[1])
             }
             .frame(height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         } else if count == 3 {
             HStack(spacing: spacing) {
                 detailGridCell(visualMedia[0])
@@ -1712,7 +1750,7 @@ struct PostDetailView: View {
                 }
             }
             .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         } else {
             VStack(spacing: spacing) {
                 HStack(spacing: spacing) {
@@ -1745,7 +1783,7 @@ struct PostDetailView: View {
                 }
             }
             .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         }
     }
 
@@ -1854,10 +1892,10 @@ struct PostDetailView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.surfaceGradient(tint: accentColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                     )
             )

@@ -1,5 +1,16 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryFilter
+
+/**
+ * A z-order restack of an on-canvas text element within its slide's paint order.
+ * The slide's `elements` list order *is* the paint order — index 0 is the back,
+ * the last index the front — so these map onto a list move:
+ * [TO_BACK]/[TO_FRONT] jump to either end, [BACKWARD]/[FORWARD] step one place.
+ * Mirrors the iOS composer's front/back + forward/backward layering controls.
+ */
+enum class StoryZOrder { TO_BACK, BACKWARD, FORWARD, TO_FRONT }
+
 /**
  * One slide of a multi-slide story draft. [id] is stable across the slide's life
  * (a duplicate mints a fresh one). A slide carries its caption [text], attached
@@ -13,6 +24,9 @@ data class StorySlide(
     val mediaIds: List<String> = emptyList(),
     val transform: StoryCanvasTransform = StoryCanvasTransform.IDENTITY,
     val elements: List<StoryTextElement> = emptyList(),
+    val stickers: List<StoryStickerElement> = emptyList(),
+    val filter: StoryFilter? = null,
+    val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
 )
 
 /**
@@ -63,15 +77,21 @@ data class StorySlideDeck(
     /** At least one slide carries a publishable (non-blank) on-canvas text element. */
     val hasTextElements: Boolean get() = slides.any { slide -> slide.elements.any { it.isPublishable } }
 
+    /** At least one slide carries a publishable (non-blank emoji) on-canvas sticker. */
+    val hasStickers: Boolean get() = slides.any { slide -> slide.stickers.any { it.isPublishable } }
+
     /**
      * The slides that would each become a published story — those carrying real
      * content (non-blank text **or** attached media **or** a publishable text
-     * element), in order. A media-only or text-element-only slide publishes; a
-     * slide with none of the three is skipped.
+     * element **or** a publishable sticker), in order. A media-only, text-element-only,
+     * or sticker-only slide publishes; a slide with none of these is skipped.
      */
     val publishableSlides: List<StorySlide>
         get() = slides.filter { slide ->
-            slide.text.isNotBlank() || slide.mediaIds.isNotEmpty() || slide.elements.any { it.isPublishable }
+            slide.text.isNotBlank() ||
+                slide.mediaIds.isNotEmpty() ||
+                slide.elements.any { it.isPublishable } ||
+                slide.stickers.any { it.isPublishable }
         }
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */
@@ -85,6 +105,13 @@ data class StorySlideDeck(
     /** A text element may still be added to the **selected** slide (below the per-slide cap). */
     val selectedCanAddTextElement: Boolean get() = selectedRemainingTextSlots > 0
 
+    /** Free sticker slots left on the **selected** slide; never negative. */
+    val selectedRemainingStickerSlots: Int
+        get() = (MAX_STICKERS_PER_SLIDE - selectedSlide.stickers.size).coerceAtLeast(0)
+
+    /** A sticker may still be added to the **selected** slide (below the per-slide cap). */
+    val selectedCanAddSticker: Boolean get() = selectedRemainingStickerSlots > 0
+
     /** Every slide's raw text is within [maxChars] (surrounding whitespace counts). */
     fun isWithinTextLimit(maxChars: Int): Boolean = slides.all { it.text.length <= maxChars }
 
@@ -93,6 +120,9 @@ data class StorySlideDeck(
 
     /** Every slide's text-element count is within the per-slide cap ([MAX_TEXT_ELEMENTS_PER_SLIDE]). */
     fun isWithinTextElementLimit(): Boolean = slides.all { it.elements.size <= MAX_TEXT_ELEMENTS_PER_SLIDE }
+
+    /** Every slide's sticker count is within the per-slide cap ([MAX_STICKERS_PER_SLIDE]). */
+    fun isWithinStickerLimit(): Boolean = slides.all { it.stickers.size <= MAX_STICKERS_PER_SLIDE }
 
     /**
      * Appends [mediaId] to the **selected** slide's media, leaving every other slide
@@ -189,6 +219,136 @@ data class StorySlideDeck(
         updateTextElement(id) { it.nudged(dx, dy) }
 
     /**
+     * Pinch-scales and rotates the text element [id] by the incremental gesture
+     * deltas (clamped/wrapped by the pure [StoryTextElement.transformed]). Inert when
+     * the id is unknown. The on-canvas `detectTransformGestures` callback binds here so
+     * the transform math lives in one place alongside the move/style reducers.
+     */
+    fun transformTextElement(id: String, scaleBy: Float, rotateByDeg: Float): StorySlideDeck =
+        updateTextElement(id) { it.transformed(scaleBy, rotateByDeg) }
+
+    /**
+     * Inserts a clone of the text element [sourceId] (carrying every styled field) as
+     * a new element [newId] immediately after it on whichever slide holds it, nudged by
+     * the normalised canvas deltas [dx]/[dy] (clamped by [StoryTextElement.nudged]) so
+     * the copy is visibly offset rather than hidden behind the original. Inert (same
+     * instance) when [sourceId] is unknown, [newId] already exists on any slide, or the
+     * holding slide is at the [MAX_TEXT_ELEMENTS_PER_SLIDE] cap — so the ≤5-per-slide
+     * invariant holds in one place and the caller stays glue. The selection (which the
+     * deck does not own) is left to the ViewModel.
+     */
+    fun duplicateTextElement(sourceId: String, newId: String, dx: Float, dy: Float): StorySlideDeck {
+        if (slides.any { slide -> slide.elements.any { it.id == newId } }) return this
+        val slideIndex = slides.indexOfFirst { slide -> slide.elements.any { it.id == sourceId } }
+        if (slideIndex < 0) return this
+        val slide = slides[slideIndex]
+        if (slide.elements.size >= MAX_TEXT_ELEMENTS_PER_SLIDE) return this
+        val sourceIndex = slide.elements.indexOfFirst { it.id == sourceId }
+        val clone = slide.elements[sourceIndex].copy(id = newId).nudged(dx, dy)
+        val nextElements = slide.elements.toMutableList().apply { add(sourceIndex + 1, clone) }
+        val next = slides.mapIndexed { i, s -> if (i == slideIndex) s.copy(elements = nextElements) else s }
+        return copy(slides = next)
+    }
+
+    /**
+     * Restacks the on-canvas text element [id] within its holding slide's paint order
+     * per [op] (the list order *is* the z-order: index 0 = back, last = front). The
+     * other elements keep their relative order and every other slide and the selection
+     * are untouched. Inert (same instance) when [id] is unknown or the move would not
+     * change the order (already at the extreme, a single-element slide), so the ≤1
+     * paint-order invariant lives in one place and the caller stays glue.
+     */
+    fun reorderTextElement(id: String, op: StoryZOrder): StorySlideDeck {
+        val slideIndex = slides.indexOfFirst { slide -> slide.elements.any { it.id == id } }
+        if (slideIndex < 0) return this
+        val elements = slides[slideIndex].elements
+        val from = elements.indexOfFirst { it.id == id }
+        val target = when (op) {
+            StoryZOrder.TO_BACK -> 0
+            StoryZOrder.BACKWARD -> from - 1
+            StoryZOrder.FORWARD -> from + 1
+            StoryZOrder.TO_FRONT -> elements.lastIndex
+        }.coerceIn(0, elements.lastIndex)
+        if (target == from) return this
+        val restacked = elements.toMutableList().apply { add(target, removeAt(from)) }
+        val next = slides.mapIndexed { i, s -> if (i == slideIndex) s.copy(elements = restacked) else s }
+        return copy(slides = next)
+    }
+
+    /**
+     * Appends [sticker] (with its position clamped into the canvas) to the **selected**
+     * slide's stickers, leaving every other slide and the selection untouched. Inert
+     * (same instance) when a sticker with that id already exists on the selected slide
+     * or the slide is at the [MAX_STICKERS_PER_SLIDE] cap, so the caller stays glue and
+     * the per-slide invariant holds in one place. Mirrors [addTextElementToSelected].
+     */
+    fun addStickerToSelected(sticker: StoryStickerElement): StorySlideDeck {
+        val selected = selectedSlide
+        if (selected.stickers.any { it.id == sticker.id } || selected.stickers.size >= MAX_STICKERS_PER_SLIDE) {
+            return this
+        }
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide ->
+            if (i == index) slide.copy(stickers = slide.stickers + sticker.normalised()) else slide
+        }
+        return copy(slides = next)
+    }
+
+    /**
+     * Removes the sticker [id] from whichever slide holds it (a sticker id lives on
+     * exactly one slide), preserving order, selection, and every other slide. Inert
+     * when no slide carries the id.
+     */
+    fun removeSticker(id: String): StorySlideDeck {
+        if (slides.none { slide -> slide.stickers.any { it.id == id } }) return this
+        val next = slides.map { slide ->
+            if (slide.stickers.any { it.id == id }) {
+                slide.copy(stickers = slide.stickers.filterNot { it.id == id })
+            } else {
+                slide
+            }
+        }
+        return copy(slides = next)
+    }
+
+    /**
+     * Rewrites the sticker [id] via [transform] wherever it lives (re-clamping its
+     * position/scale/rotation), leaving every other sticker, slide, and the selection
+     * untouched. Inert when no slide carries the id.
+     */
+    fun updateSticker(id: String, transform: (StoryStickerElement) -> StoryStickerElement): StorySlideDeck {
+        if (slides.none { slide -> slide.stickers.any { it.id == id } }) return this
+        val next = slides.map { slide ->
+            if (slide.stickers.none { it.id == id }) {
+                slide
+            } else {
+                slide.copy(
+                    stickers = slide.stickers.map { sticker ->
+                        if (sticker.id == id) transform(sticker).normalised() else sticker
+                    },
+                )
+            }
+        }
+        return copy(slides = next)
+    }
+
+    /**
+     * Translates the sticker [id] by the normalised canvas deltas [dx]/[dy] (clamped by
+     * [StoryStickerElement.nudged]). Inert when the id is unknown. The on-canvas drag
+     * binds here so the move math lives in one place.
+     */
+    fun moveSticker(id: String, dx: Float, dy: Float): StorySlideDeck =
+        updateSticker(id) { it.nudged(dx, dy) }
+
+    /**
+     * Pinch-scales and rotates the sticker [id] by the incremental gesture deltas
+     * (clamped/wrapped by [StoryStickerElement.transformed]). Inert when the id is
+     * unknown. The on-canvas `detectTransformGestures` callback binds here.
+     */
+    fun transformSticker(id: String, scaleBy: Float, rotateByDeg: Float): StorySlideDeck =
+        updateSticker(id) { it.transformed(scaleBy, rotateByDeg) }
+
+    /**
      * Rewrites the **selected** slide's [text], leaving its id and media — and every
      * other slide and the selection — untouched. The editor binds here so each slide
      * keeps its own caption as the user moves between slides.
@@ -207,6 +367,29 @@ data class StorySlideDeck(
     fun updateSelectedTransform(transform: StoryCanvasTransform): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(transform = transform) else slide }
+        return copy(slides = next)
+    }
+
+    /**
+     * Sets the **selected** slide's photo [filter] (null clears it), leaving its id,
+     * text, media, and canvas transform — and every other slide and the selection —
+     * untouched. The Effets filter picker binds here so each slide keeps its own look.
+     */
+    fun setSelectedFilter(filter: StoryFilter?): StorySlideDeck {
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(filter = filter) else slide }
+        return copy(slides = next)
+    }
+
+    /**
+     * Sets the **selected** slide's filter [intensity] (clamped/guarded by
+     * [StoryFilterMatrix.clampIntensity]), leaving every other slide and the selection
+     * untouched. The strength slider binds here so the clamp lives in one place.
+     */
+    fun setSelectedFilterIntensity(intensity: Float): StorySlideDeck {
+        val clamped = StoryFilterMatrix.clampIntensity(intensity)
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(filterIntensity = clamped) else slide }
         return copy(slides = next)
     }
 
@@ -279,6 +462,14 @@ data class StorySlideDeck(
 
         /** Maximum on-canvas text elements per slide — parity with the iOS composer's ≤5 rule. */
         const val MAX_TEXT_ELEMENTS_PER_SLIDE: Int = 5
+
+        /**
+         * Maximum on-canvas stickers per slide. iOS enforces no hard composer cap (its
+         * rasterizer LRU is a 100-entry cache, not a count limit), so we set a generous
+         * upper bound that prevents a pathological slide from carrying an unbounded
+         * sticker count while never getting in a real user's way.
+         */
+        const val MAX_STICKERS_PER_SLIDE: Int = 30
 
         /** A fresh deck of a single empty slide, selected. */
         fun single(slideId: String): StorySlideDeck =

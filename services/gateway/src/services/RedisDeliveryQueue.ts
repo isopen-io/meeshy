@@ -15,15 +15,23 @@ redis.call('DEL', KEYS[1])
 return entries
 `.trim();
 
-// Idempotent enqueue: only push if no entry with the same messageId exists.
-// Returns 1 when pushed, 0 when the messageId was already present (dedup).
-// KEYS[1] = queue key, ARGV[1] = serialized entry, ARGV[2] = messageId, ARGV[3] = TTL
+// Idempotent enqueue: only push if no entry with the same messageId AND
+// eventType already exists. A queued 'new' must NOT block a later 'edited'
+// or 'deleted' for the same message — those are distinct events that must
+// all replay on drain, in FIFO order, so the recipient's final state matches
+// the sender's (edit/delete after an offline 'new' must not be dropped).
+// Returns 1 when pushed, 0 when the (messageId, eventType) pair was already present.
+// KEYS[1] = queue key, ARGV[1] = serialized entry, ARGV[2] = messageId,
+// ARGV[3] = TTL, ARGV[4] = normalized eventType
 const ENQUEUE_DEDUP_LUA = `
 local entries = redis.call('LRANGE', KEYS[1], 0, -1)
 for _, entry in ipairs(entries) do
   local ok, decoded = pcall(cjson.decode, entry)
   if ok and decoded and decoded.messageId == ARGV[2] then
-    return 0
+    local decodedEventType = decoded.eventType or 'new'
+    if decodedEventType == ARGV[4] then
+      return 0
+    end
   end
 end
 redis.call('RPUSH', KEYS[1], ARGV[1])
@@ -33,6 +41,10 @@ return 1
 
 function queueKey(userId: string): string {
   return `${DELIVERY_QUEUE_PREFIX}${userId}`;
+}
+
+function normalizedEventType(entry: QueuedMessagePayload): string {
+  return entry.eventType ?? 'new';
 }
 
 const MEMORY_QUEUE_MAX_USERS = 1000;
@@ -56,7 +68,7 @@ export class RedisDeliveryQueue {
         const key = queueKey(userId);
         const pushed = await redis.eval(
           ENQUEUE_DEDUP_LUA, 1, key,
-          serialized, entry.messageId, String(DELIVERY_QUEUE_TTL_SECONDS)
+          serialized, entry.messageId, String(DELIVERY_QUEUE_TTL_SECONDS), normalizedEventType(entry)
         );
         if (pushed === 0) {
           logger.debug('Delivery queue dedup: messageId already queued', { userId, messageId: entry.messageId });
@@ -77,8 +89,8 @@ export class RedisDeliveryQueue {
       }
     }
     const existing = this.memoryQueue.get(userId) ?? [];
-    if (existing.some(e => e.messageId === entry.messageId)) {
-      logger.debug('Delivery queue dedup (memory): messageId already queued', { userId, messageId: entry.messageId });
+    if (existing.some(e => e.messageId === entry.messageId && normalizedEventType(e) === normalizedEventType(entry))) {
+      logger.debug('Delivery queue dedup (memory): messageId+eventType already queued', { userId, messageId: entry.messageId, eventType: normalizedEventType(entry) });
       return;
     }
     const bounded = existing.length >= MEMORY_QUEUE_MAX_PER_USER
@@ -96,7 +108,14 @@ export class RedisDeliveryQueue {
         const rawEntries = await redis.eval(DRAIN_LUA, 1, key);
 
         if (!Array.isArray(rawEntries)) return [];
-        return (rawEntries as string[]).map(raw => JSON.parse(raw) as QueuedMessagePayload);
+        return (rawEntries as string[]).flatMap(raw => {
+          try {
+            return [JSON.parse(raw) as QueuedMessagePayload];
+          } catch {
+            logger.error('RedisDeliveryQueue: malformed entry in drain, dropping', { userId, raw: raw.substring(0, 120) });
+            return [];
+          }
+        });
       } catch (error) {
         logger.warn('Redis drain failed, falling back to memory', { userId, error });
       }
@@ -113,16 +132,25 @@ export class RedisDeliveryQueue {
     if (redis) {
       try {
         const key = queueKey(userId);
-        const end = limit ? limit - 1 : -1;
+        // `limit` is a count, not a flag: an explicit 0 must peek nothing, not
+        // the whole backlog (`limit ? …` would coerce 0 to the no-limit branch).
+        const end = limit != null ? limit - 1 : -1;
         const rawEntries = await redis.lrange(key, 0, end);
-        return rawEntries.map(raw => JSON.parse(raw) as QueuedMessagePayload);
+        return rawEntries.flatMap(raw => {
+          try {
+            return [JSON.parse(raw) as QueuedMessagePayload];
+          } catch {
+            logger.error('RedisDeliveryQueue: malformed entry in peek, dropping', { userId, raw: raw.substring(0, 120) });
+            return [];
+          }
+        });
       } catch (error) {
         logger.warn('Redis peek failed, falling back to memory', { userId, error });
       }
     }
 
     const entries = this.memoryQueue.get(userId) ?? [];
-    return limit ? entries.slice(0, limit) : [...entries];
+    return limit != null ? entries.slice(0, limit) : [...entries];
   }
 
   async size(userId: string): Promise<number> {
@@ -156,8 +184,13 @@ export class RedisDeliveryQueue {
           for (const key of keys) {
             const entries = await redis.lrange(key, 0, -1);
             const fresh = entries.filter(raw => {
-              const parsed = JSON.parse(raw) as QueuedMessagePayload;
-              return new Date(parsed.enqueuedAt).getTime() > cutoff;
+              try {
+                const parsed = JSON.parse(raw) as QueuedMessagePayload;
+                return new Date(parsed.enqueuedAt).getTime() > cutoff;
+              } catch {
+                logger.error('RedisDeliveryQueue: malformed entry in cleanup, dropping', { key, raw: raw.substring(0, 120) });
+                return false;
+              }
             });
 
             const removed = entries.length - fresh.length;

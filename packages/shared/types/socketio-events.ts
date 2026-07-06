@@ -38,6 +38,10 @@ import type {
   CallTranslationEnabledEvent,
   CallTranscriptionResultEvent,
   CallAlreadyAnsweredEvent,
+  CallForceLeaveClientEvent,
+  CallForceLeaveServerEvent,
+  CallRequestIceServersEvent,
+  CallIceServersRefreshedEvent,
 } from './video-call.js';
 
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
@@ -161,6 +165,10 @@ export const SERVER_EVENTS = {
   CALL_TRANSCRIPTION_RESULT: 'call:transcription-result',
   CALL_ALREADY_ANSWERED: 'call:already-answered',
   CALL_SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
+  /** Server-side GC/admin forced the call to end — clients should dismiss call UI. */
+  CALL_FORCE_LEAVE: 'call:force-leave',
+  /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
+  CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
   READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
@@ -176,9 +184,53 @@ export const SERVER_EVENTS = {
    * so older clients keep working during rollout.
    */
   CONVERSATION_NEW: 'conversation:new',
+  /**
+   * Emitted to the OTHER party's user-room when a pending friend request is
+   * removed via `DELETE /friend-requests/:id` — either the sender cancelling
+   * their own outgoing request, or the receiver declining/removing it without
+   * an explicit accept/reject. Previously this path emitted NOTHING, leaving
+   * the counterpart's pending-request list stale until their next full
+   * refetch (same class of gap `CONVERSATION_NEW` fixed for conversation
+   * creation). Realtime-only signal — no persisted `Notification` row.
+   */
+  FRIEND_REQUEST_CANCELLED: 'friend-request:cancelled',
+  /**
+   * Emitted to the RECEIVER's user-room when `POST /friend-requests`
+   * creates a new pending request. Same rationale as `CONVERSATION_NEW`:
+   * replaces string-discrimination on `NOTIFICATION_NEW(type=friend_request)`
+   * with a typed, domain-specific event. The legacy `notification:new` is
+   * kept emitted in parallel for ~3 months so older clients keep working.
+   */
+  FRIEND_REQUEST_NEW: 'friend-request:new',
+  /**
+   * Emitted to the ORIGINAL SENDER's user-room when the receiver accepts
+   * via `PATCH /friend-requests/:id`. Typed counterpart of
+   * `NOTIFICATION_NEW(type=friend_accepted)`, emitted in parallel.
+   */
+  FRIEND_REQUEST_ACCEPTED: 'friend-request:accepted',
+  /**
+   * Emitted to the ORIGINAL SENDER's user-room when the receiver rejects
+   * via `PATCH /friend-requests/:id`. Typed counterpart of the legacy
+   * system notification, emitted in parallel.
+   */
+  FRIEND_REQUEST_REJECTED: 'friend-request:rejected',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
+  /**
+   * GLOBAL soft-delete by the creator/an admin (`DELETE /conversations/:id`):
+   * `Conversation.isActive` is set to `false` (with `closedAt`/`closedBy`)
+   * and the conversation disappears from every member's list. Broadcast to
+   * the **conversation room** (`ROOMS.conversation`) so all members react —
+   * contrast with `CONVERSATION_DELETED` below.
+   */
   CONVERSATION_CLOSED: 'conversation:closed',
+  /**
+   * PER-USER "delete for me" (`DELETE /conversations/:id/delete-for-me`):
+   * removes the conversation from the caller's own device list only — the
+   * conversation stays active for every other participant. Broadcast to the
+   * caller's **user room** (`ROOMS.user`) only, so their other devices stay
+   * in sync — contrast with `CONVERSATION_CLOSED` above.
+   */
   CONVERSATION_DELETED: 'conversation:deleted',
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
@@ -315,6 +367,9 @@ export const SERVER_EVENTS = {
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
 
+  // --- User Profile (realtime propagation to conversation partners) ---
+  USER_UPDATED: 'user:updated',
+
   // --- Conversation Categories ---
   CATEGORY_CREATED: 'category:created',
   CATEGORY_UPDATED: 'category:updated',
@@ -373,6 +428,12 @@ export const CLIENT_EVENTS = {
   CALL_AUDIO_CHUNK: 'call:audio-chunk',
   CALL_QUALITY_FEEDBACK: 'call:quality-feedback',
   CALL_SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
+  /** Preflight sent before `call:initiate` to evict zombie call sessions. */
+  CALL_FORCE_LEAVE: 'call:force-leave',
+  /** Reconnect probe: client asks gateway if an active call still exists. */
+  CALL_CHECK_ACTIVE: 'call:check-active',
+  /** Request fresh TURN credentials before the current TTL expires. */
+  CALL_REQUEST_ICE_SERVERS: 'call:request-ice-servers',
 
   // --- Location sharing ---
   LOCATION_SHARE: 'location:share',
@@ -536,6 +597,63 @@ export interface ConversationNewEventData {
   readonly creatorId: string;
   readonly participantIds: readonly string[]; // tous les participants y compris le créateur
   readonly createdAt: string;                 // ISO8601
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_CANCELLED` — émis à l'user-room de l'AUTRE
+ * partie (pas l'auteur de l'action) lors d'un `DELETE /friend-requests/:id`.
+ */
+export interface FriendRequestCancelledEventData {
+  readonly friendRequestId: string;
+  readonly cancelledBy: string; // userId de qui a déclenché la suppression
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_NEW` — émis à l'user-room du DESTINATAIRE
+ * lors d'un `POST /friend-requests`.
+ */
+export interface FriendRequestNewEventData {
+  readonly friendRequestId: string;
+  readonly senderId: string;
+  readonly receiverId: string;
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_ACCEPTED` — émis à l'user-room de l'EXPÉDITEUR
+ * original lors d'un `PATCH /friend-requests/:id` avec `status=accepted`.
+ */
+export interface FriendRequestAcceptedEventData {
+  readonly friendRequestId: string;
+  readonly accepterId: string;
+  readonly conversationId?: string;
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_REJECTED` — émis à l'user-room de l'EXPÉDITEUR
+ * original lors d'un `PATCH /friend-requests/:id` avec `status=rejected`.
+ */
+export interface FriendRequestRejectedEventData {
+  readonly friendRequestId: string;
+  readonly rejecterId: string;
+}
+
+/**
+ * Payload de `USER_UPDATED` — émis aux user-rooms de tous les contacts
+ * (utilisateurs partageant au moins une conversation avec `userId`) quand un
+ * profil change (displayName, avatar, banner, username). Delta léger : seuls
+ * les champs modifiés sont présents dans `changes`, pas le user complet.
+ * Voir tasks/socketio-events-cleanup.md #6.
+ */
+export interface UserUpdatedEventData {
+  readonly userId: string;
+  readonly changes: Readonly<{
+    displayName?: string;
+    avatar?: string | null;
+    banner?: string | null;
+    username?: string;
+    firstName?: string;
+    lastName?: string;
+  }>;
 }
 
 /**
@@ -1181,7 +1299,13 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT]: (data: CallTranscriptionResultEvent) => void;
   [SERVER_EVENTS.CALL_ALREADY_ANSWERED]: (data: CallAlreadyAnsweredEvent) => void;
   [SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT]: (data: CallScreenCaptureEvent) => void;
+  [SERVER_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveServerEvent) => void;
+  [SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED]: (data: CallIceServersRefreshedEvent) => void;
   [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_CANCELLED]: (data: FriendRequestCancelledEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_NEW]: (data: FriendRequestNewEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
@@ -1252,6 +1376,9 @@ export interface ServerToClientEvents {
   // User Preferences
   [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;
   [SERVER_EVENTS.USER_PREFERENCES_REORDERED]: (data: UserPreferencesReorderedEventData) => void;
+
+  // User Profile
+  [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;
 
   // Conversation Categories
   [SERVER_EVENTS.CATEGORY_CREATED]: (data: CategoryCreatedEventData) => void;
@@ -1463,6 +1590,9 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_AUDIO_CHUNK]: (data: CallAudioChunkEvent) => void;
   [CLIENT_EVENTS.CALL_QUALITY_FEEDBACK]: (data: CallQualityFeedbackEvent) => void;
   [CLIENT_EVENTS.CALL_SCREEN_CAPTURE_DETECTED]: (data: CallScreenCaptureEvent) => void;
+  [CLIENT_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveClientEvent) => void;
+  [CLIENT_EVENTS.CALL_CHECK_ACTIVE]: () => void;
+  [CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS]: (data: CallRequestIceServersEvent) => void;
 
   // Location sharing
   [CLIENT_EVENTS.LOCATION_SHARE]: (data: LocationShareData, callback?: (response: SocketIOResponse<LocationSharedEventData>) => void) => void;

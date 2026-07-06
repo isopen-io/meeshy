@@ -355,12 +355,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       carousel / audio / location / contact pending
 - [ ] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight)
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
-- [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
+- [◐] Delivery status checkmarks + offline-pending hourglass + failed-message retry — 1→2→2-check
+      indicator now **honest all-or-nothing** via the pure `DeliveryStatusResolver` SSOT (`delivery-status-resolver`
+      2026-07-06: WhatsApp-style group rule, `recipientCount` threaded from the conversation, "all" markers,
+      never over-reports; pending/failed/retry already wired). Pending: the read-precision viewport gating +
+      live "all"-marker stamping in `applyReadReceipt` (race-free live groups) + the who-read detail sheet.
 - [ ] Edited / pinned / forwarded indicators; edit-history viewer
-- [ ] Ephemeral (self-destruct) messages with duration picker + countdown badges
-- [ ] Blurred ("tap to reveal") + view-once messages with fog effect
-- [ ] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
-      — picker sheet + cross-platform bitfield encoding
+- [◐] Ephemeral (self-destruct) messages with countdown badges ✅ (render/decision — `message-effects-lifecycle`
+      2026-07-06: pure `MessageLifecyclePresentation` ephemeral countdown + `ChatScreen` badge). Pending: the
+      **send-side duration picker** in the composer.
+- [◐] Blurred ("tap to reveal") + view-once messages ✅ (render/decision — `message-effects-lifecycle`: blur
+      `Concealed`/`Revealed` tap-to-reveal + view-once `Available`/`Consumed` badge). Pending: the fog/blur visual
+      overlay over the bubble text + the send-side effect picker.
+- [◐] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
+      — `MessageLifecyclePresentation` already extracts the appearance/persistent flag sets (stable bit order) from
+      the cross-platform bitfield. Pending: the animation renderers + the composer picker sheet.
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
@@ -479,7 +488,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `StorySlideDeck.updateSelectedTransform` and driven by `StoryComposerViewModel.onCanvasTransform`.
       `StoryCanvasSurface` renders the selected slide's first media as a 9:16 background under a
       `graphicsLayer` + `detectTransformGestures` (glue only; the math is unit-tested in one place).
-      Pending: FAB + bottom-band toolbar (Contenu/Effets), on-canvas text/sticker/drawing elements.
+      **FAB + bottom-band toolbar done** (`story-composer-band`): the flat add-text / add-media /
+      visibility buttons are replaced by a two-FAB (Contenu / Effets) bottom band — the pure value-type
+      port of iOS `BandStateMachine`. `ComposerBandState` (`Hidden` | `Tiles(BandCategory)`) +
+      `BandCategory.swapped` + `ComposerContentTile` own the navigation: `tapFab(category)` opens /
+      switches / toggle-closes the drawer, `swipeDown()` dismisses, `swipeHorizontal()` swaps category
+      (inert while hidden); `activeCategory`/`isVisible` derive the render. The drawer shows the Contenu
+      tiles (Texte → `onAddTextElement`, Médias → system picker) or the Effets visibility chips, with
+      natural swipe-to-dismiss / swipe-to-swap gestures (glue). All decisions live in one unit-tested
+      place; the VM holds `band` and applies the pure transitions (`onBandFabTap`/`onBandDismiss`/
+      `onBandSwapCategory`). +18 tests (11 state machine, 7 VM). Pending: Effets tiles (filters / drawing
+      / timeline), on-canvas sticker/drawing elements.
 - [~] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
       size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing.
       **Model + add/move/remove + publish done** (`story-text-elements`): a pure `StoryTextElement`
@@ -508,8 +527,31 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       wrappers, inert on unknown id, selection untouched). `TextElementLayer` renders
       weight/slant/family/tracking + a neon glow `Shadow`; a `TextStyleToolbar` (style chips +
       L/C/R `AlignToggle` + `ColorSwatch` palette) appears while editing an element. Pending:
-      size/background/outline/RTL/fade, the in-place floating editor + tool bubbles below.
-- [ ] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
+      size/background/outline/RTL/fade.
+- [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
+      **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
+      element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats
+      in-place over the canvas, anchored just clear of the element. The vertical anchor is decided by
+      the pure, unit-tested `StoryToolbarPlacement.resolve(elementCenterY, elementHalfHeight,
+      toolbarHeight, canvasHeight, gap)` → `ToolbarPlacement(topPx, ToolbarSide.ABOVE|BELOW)`: BELOW
+      when the toolbar fits beneath the element, otherwise ABOVE, clamped into the canvas so it never
+      spills off the top or past the bottom (boundary-exact, degenerate-canvas safe). The composer
+      applies `imePadding`, so the canvas measurement already excludes the soft keyboard — the
+      keyboard-aware shift — and the resolver keeps the toolbar inside the keyboard-free band.
+      `StoryCanvasSurface` measures the selected element's half-height + the toolbar's height and offsets
+      it (glue). Surpasses iOS's fixed bottom style bar. Pending: floating tool *bubbles* per element
+      handle (delete chip exists; rotate/scale now via direct gesture — see below).
+- [x] Per-element pinch-scale + rotate (`story-text-element-transform`): `StoryTextElement` carries a
+      `scale` (clamped `[0.3, 4]`) and `rotationDeg` (wrapped to the canonical `(-180, 180]` turn); the
+      pure `transformed(scaleBy, rotateByDeg)` applies an incremental pinch/rotate gesture with the
+      clamp/wrap rules in one unit-tested place (a non-finite/non-positive factor collapses to the
+      neutral value, never a broken element), `normalised()` re-pulls both fields into range, and
+      `toTextObject` carries `scale`/`rotation` onto the gateway wire. The deck's
+      `transformTextElement(id, scaleBy, rotateByDeg)` and the VM's `onTextElementTransform` mirror the
+      move/style reducers (inert on unknown id, selection/editing untouched). `TextElementLayer` binds a
+      single `detectTransformGestures` so one two-finger gesture pans **and** pinch-scales **and** rotates
+      the element, rendered via `graphicsLayer` (glue). A natural direct-manipulation gesture rather than
+      discrete handle chips. +21 tests (14 element, 4 deck, 3 VM).
 - [~] Media elements (≤10/slide): photo/video import, crop/edit, aspect-ratio preservation.
       **Upload foundation done** (`media-upload-api`): `MediaApi` multipart `POST /attachments/upload`
       (`files` parts) + `MediaRepository.upload()` → domain `UploadedMedia` (id = `mediaId`, url,
@@ -536,12 +578,82 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       upload-then-publish outbox chain (SOTA follow-up).
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
-- [ ] Emoji sticker picker (categorised + searchable)
+- [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
+      `StickerCatalog` (8 iOS-parity categories — smileys/animals/food/activities/travel/objects/
+      symbols/flags, ~16 keyworded emojis each, every glyph in exactly one category) owns the emoji
+      data + a pure `search(query, category?)` (trim+lowercase substring over keywords or the glyph
+      itself; blank query ⇒ whole scope; result preserves catalogue order, duplicate-free). A pure
+      `StickerPickerState(category, query)` reducer encodes the product rule — a non-blank query
+      searches **across every category** (iOS parity) and hides the tab row, otherwise the active tab
+      shows; `withCategory`/`withQuery` are inert on no-op. The picker dialog becomes glue: a search
+      field + `FilterChip` tab row + filtered grid + empty-state. +22 tests. Replaces the old flat
+      `STORY_STICKER_EMOJIS` palette.
+- [x] Emoji sticker picker — **on-canvas sticker elements done** (`story-sticker-elements`): a pure
+      `StoryStickerElement` (id/emoji/normalised x,y/scale/rotation) reusing [StoryTextElement]'s
+      canvas-geometry clamps (the single source of truth) + a `toSticker()` gateway-wire mapper
+      (`StoryEffects.stickerObjects`). The deck mirrors the text-element reducer per-slide
+      (`addStickerToSelected`/`removeSticker`/`updateSticker`/`moveSticker`/`transformSticker`,
+      `MAX_STICKERS_PER_SLIDE=30`, `selectedRemainingStickerSlots`, `isWithinStickerLimit`,
+      `hasStickers`); a sticker-only slide now publishes. `StoryComposerDraft.toCreateStoryRequest`
+      serialises publishable stickers into `storyEffects.stickerObjects` (blanks dropped). The VM adds
+      add/select/deselect/move/transform/remove intents with selection mutually exclusive vs the
+      text-element edit; a "Sticker" tile in the Contenu drawer opens an emoji-grid picker, and each
+      on-canvas sticker is draggable / pinch-rotatable / removable (glue mirroring `TextElementLayer`).
+      +50 tests (15 model, 21 deck, 5 draft, ~12 VM). Categorised + searchable picker shipped above
+      (`story-sticker-picker-search`).
 - [ ] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
-- [ ] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
-- [ ] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
-- [ ] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
-- [ ] Multi-element context menu (edit, duplicate, reorder, delete)
+- [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
+      (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
+      `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value
+      equality so it unit-tests on the JVM); `effectiveMatrix(filter, intensity)` blends the base toward
+      the neutral `IDENTITY` by a clamped/guarded strength (0 → no effect, 1 → full, non-finite → full),
+      and `StoryFilter.wireValue()` is the single enum→token mapping kept beside the matrices. Per-slide
+      state: `StorySlide.filter`/`filterIntensity` + the deck reducers `setSelectedFilter`/
+      `setSelectedFilterIntensity` (clamp in one place); the VM exposes `onSelectFilter`/
+      `onFilterIntensityChange` and the derived `selectedSlideFilterMatrix`. The Effets drawer gains a
+      None + 8-chip filter row and a strength `Slider` (shown only while a filter is active); the canvas
+      `AsyncImage` renders `ColorFilter.colorMatrix(...)` live; publish carries the look on
+      `storyEffects.filter`/`filterIntensity` (a filter-only slide still emits a `storyEffects` payload).
+      +31 tests (21 matrix, 10 deck) + 7 VM + 5 draft; +11 strings × 4 locales. Mirrors iOS's per-slide
+      photo filter with an adjustable strength.
+- [~] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
+      **Snap-to-guide + out-of-bounds warning done** (`story-canvas-snap-guides`): a pure
+      `StorySnapResolver.resolve(x, y, …)` → `SnapResult(x, y, verticalGuide, horizontalGuide,
+      withinSafeZone)` is the single source of truth for where a dragged element settles. Each axis
+      **independently** locks onto the nearest in-range alignment guide (rule-of-thirds + centre)
+      within `SNAP_THRESHOLD`; outside it the axis stays at its clamped candidate; a non-finite
+      candidate collapses to the canvas centre and out-of-canvas values clamp into `0f..1f`.
+      `withinSafeZone` flags a centre that drifts inside the `SAFE_ZONE_INSET` edge margin. The
+      existing `onTextElementMoved` drag now routes its resulting centre through the resolver and
+      moves the element by the **snap-adjusted** delta (reusing `StorySlideDeck.moveTextElement`,
+      no new reducer), exposing the live guides + safe-zone verdict as transient
+      `StoryComposerUiState.snapFeedback` (cleared by `onTextElementDragEnd` on lift). The canvas
+      draws the active guide line(s) (accent `primary`) and an `error`-coloured warning border when
+      out of bounds; the drag-end signal is a non-consuming `Final`-pass `awaitEachGesture` that
+      runs alongside the transform detector (glue). A natural magnetic-alignment gesture — surpasses
+      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM). Pending:
+      frosted-glass text backdrops, persistent safe-zone overlay grid.
+- [x] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
+      (`story-text-element-zorder`): the slide's `elements` list order *is* the paint order (index 0 =
+      back, last = front), so a pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks the
+      element within its holding slide — `TO_BACK`/`TO_FRONT` jump to either end, `BACKWARD`/`FORWARD`
+      step one place (target index `coerceIn`-clamped to the list bounds). Inert (same instance) on an
+      unknown id, an already-at-the-extreme move, or a single-element slide; only the holding slide is
+      restacked and the selection is preserved. `StoryComposerViewModel.onReorderTextElement` wraps it
+      and keeps the same state instance on an inert move (no recomposition churn). The floating
+      `TextStyleToolbar` gains a 4-button z-order row (send-to-back / backward / forward / bring-to-front)
+      whose order rides into publish via the existing element serialisation. +16 tests (13 reducer, 3 VM);
+      +4 strings × 4 locales. Mirrors iOS's front/back + forward/backward layering controls.
+- [~] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
+      caption/element routing), **delete** (per-element remove handle), **duplicate**
+      (`story-text-element-duplicate`), and **reorder** (`story-text-element-zorder`, z-order row in the
+      floating toolbar) done. Duplicate: pure `StorySlideDeck.duplicateTextElement`
+      clones every styled field as a fresh id right after the source on its slide, nudged by a small
+      normalised offset (clamped into the canvas) so the copy is visible, inert when the source id is
+      unknown / the new id collides / the slide is at the ≤5 cap; `StoryComposerViewModel.onDuplicateTextElement`
+      mints the id, selects the copy, and warns-without-adding at the cap; a duplicate `ContentCopy`
+      handle sits in the floating `TextStyleToolbar`. Pending: a single unified long-press context menu
+      consolidating these per-element actions.
 - [ ] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide)
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
@@ -666,20 +778,265 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)
-- [ ] System call UI (Telecom/ConnectionService) + ringback tone
-- [ ] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent)
+- [~] System call UI (Telecom/ConnectionService) + ringback tone —
+      **call-audio decision core landed** (slice `call-sound-policy`): the pure
+      `core:model` `CallSoundPolicy` is the SSOT mapping call lifecycle → sound,
+      the Android analogue of the iOS `RingbackTonePlayer` call sites collected
+      into one total function. `loopFor(state)` (`CallSound.None/Ringback/Ringtone`)
+      plays the caller **ringback** through the whole pre-answer wait
+      (`Ringing(outgoing)` + `Offering`) and stops it the instant the answer lands
+      (`Connecting`) — tighter than iOS, which drags it to `.connected` — and the
+      callee **ringtone** while `Ringing(incoming)`; `cueFor(prev, next)` fires the
+      one-shot `CallCue.Connected` on every entry into `Connected` (first connect
+      **and** a successful reconnect) and `CallCue.Ended` only when a *live* call
+      ends (`prev.isActive`, mirroring iOS `if wasActive`), so a phantom `Idle→Ended`
+      or idempotent `Ended→Ended` stays silent; `plan(prev, next)` bundles both per
+      edge. The `:feature:calls` `CallToneController` seam (thin `ToneGenerator`/
+      `RingtoneManager` glue behind an interface, `@Binds` `AndroidCallToneController`)
+      is folded into `CallViewModel.dispatch`: each FSM edge drives the loop (switched
+      only on a genuine change — an inert event never restarts the ringback) + fires
+      the cue, released on `onCleared`. +28 tests (19 policy, 9 VM-fold via a recording
+      fake). **Telecom-connection decision core landed** (slice `call-telecom-state-plan`):
+      the pure `core:model` `TelecomCallPolicy` is the SSOT mapping call lifecycle → the OS
+      telecom reports a self-managed `ConnectionService` must make — the Android analogue of
+      the `CXProvider.reportCall(...)`/`report(_:endedAt:)` calls the iOS `CallManager` makes
+      to CallKit. `connectionStateFor(state)` keys purely on `CallState` (outgoing ring/
+      `Offering` → `Dialing`, incoming ring → `Ringing`, answered = `Active` for
+      `Connecting`/`Connected`/`Reconnecting` so an ICE restart never tears the system call
+      down, `Ended` → `Disconnected`, `Idle` → none); `disconnectCauseFor(reason)` maps every
+      `CallEndReason` (lost/failed → `Error`); `plan(prev,next)` reports only on a genuine
+      transition (dedupes already-active edges, phantom `Idle→Ended`, idempotent `Ended→Ended`
+      and settle `Ended→Idle` to `null`). The `:feature:calls` `TelecomCallReporter` seam
+      (thin `LogTelecomCallReporter` interim glue behind an interface, `@Binds` into a Hilt
+      module) is folded into `CallViewModel.dispatch` (report each genuine edge; released on
+      `onCleared`). +35 tests (28 policy, 7 VM-fold via a recording fake). **Pending:** the
+      real self-managed `ConnectionService`/`PhoneAccount` registration + full-screen call UI +
+      foreground service (swaps the `LogTelecomCallReporter` `@Binds`), then the WebRTC media
+      transport.
+- [~] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent) —
+      **pure decision core landed** (slice `incoming-call-push-decision`): `core:model`
+      `me.meeshy.sdk.model.call` gains `IncomingCallPush` (typed FCM `data`-map / VoIP payload at
+      parity with the gateway `CallEventsHandler` push `type:"call"` and `PushNotificationService`
+      `type:"voip_call"` — `callId`/`conversationId`/`callerUserId`/`callerName`/`isVideo` string flag/
+      `iceServers` JSON) + blank-skipping `displayName`; the total, side-effect-free
+      `IncomingCallPushParser.parse(Map<String,String>) → IncomingCallPush?` (call iff `type ∈
+      {call,voip_call}` AND non-blank `callId`; leniently decodes `iceServers`, degrading a
+      missing/malformed value to `[]` rather than dropping the push); the immutable `SeenCallRing`
+      (pure port of the iOS `VoIPDedupRing`, capacity 24 / ttl 30s — `contains`/`insert`/`remove`,
+      expiry-pruning + capacity-trimming, every mutation returns a new ring); and the pure
+      `IncomingCallDecider.decide(push, context) → IncomingCallDecision` (`Ring` | `Ignore(reason)`)
+      faithful to the iOS `VoIPPushManager`/`CallManager.reportIncomingVoIPCall` ordering: self-fanout →
+      duplicate (active-or-seen) → busy (different call active) → ring. The SSOT the FCM service +
+      Telecom/`ConnectionService` full-screen-intent wiring will consume. +39 behavioural tests.
+      **FCM routing landed** (slice `fcm-call-push-route`): the pure `IncomingCallPushRouter.route(data,
+      context) → IncomingCallPushRoute` (`NotACallPush` | `Ring(push, updatedSeen)` | `Suppress(reason)`)
+      folds parser + decider + ring-insert into the single total decision the service delegates to
+      (ring advanced only on a `Ring`, so a retried push is deduped while a suppressed one never
+      poisons the ring); the app-layer `@Singleton IncomingCallRingStore` owns the live `SeenCallRing`
+      (synchronized `route`/`forget`, self-user id threaded from `SessionRepository`); and
+      `MeeshyFcmService.onMessageReceived` now routes a call push → a full-screen, CATEGORY_CALL /
+      `PRIORITY_MAX` notification on the new `meeshy_calls` channel (`setFullScreenIntent` → `MainActivity`
+      with `callId`/`conversationId`/`callerName`/`isVideo` extras), suppresses duplicates silently, and
+      hands every non-call push to the existing message path. +19 behavioural tests (11 router, 8 store).
+      **Deep-link wired** (slice `incoming-call-deeplink`): the pure `me.meeshy.app.navigation.LaunchRouter`
+      decodes the launch/full-screen intent extras (`LaunchExtras`) into a nav route — a non-blank
+      `callId` → `CallRoute.incoming(...)` (call push wins, deep-links into the incoming-call screen with
+      `isOutgoing=false` carrying the server id so the ring is answerable), else a non-blank
+      `conversationId` → `Routes.chat(...)` (the shared message-notification tap path), else `null`.
+      `CallRoute` was refactored to a **static `call` path + all-optional query args** so a blank room /
+      peer name can never collapse the route or crash `navigate()`. `MainActivity` extracts the extras +
+      hands them to `LaunchRouter` (in `onCreate` and `onNewIntent`); `MeeshyApp` navigates once the graph
+      is live and the user is authenticated, then marks the route consumed. +14 behavioural tests (8
+      router, 6 route). **Pending:** a full `ConnectionService`/Telecom integration + ringtone, then the
+      WebRTC media transport.
 - [ ] Call reconnection on network change (ICE restart)
-- [ ] Call states: ringing/connecting/connected/ended; PiP / floating call pill
+- [~] Call states: ringing/connecting/connected/ended; PiP / floating call pill —
+      **pure call-lifecycle FSM landed** (`core:model` `me.meeshy.sdk.model.call`):
+      `CallState` (Idle/Ringing(isOutgoing)/Offering/Connecting/Connected/Reconnecting(attempt)/
+      Ended(reason)) + `CallEndReason` (Local/Remote/Rejected/Missed/ConnectionLost/Failed(msg)) +
+      `CallEvent` + total side-effect-free `CallStateMachine.reduce(state, event)` faithfully
+      mirroring iOS `CallManager`/`WebRTCTypes` transitions (incl. the 3-attempt reconnect budget →
+      `ConnectionLost`). SSOT the `:feature:calls` wiring will drive — surpasses iOS, where the FSM
+      validator is only a P1 todo. 31 behavioural tests. PiP/call-pill UI + the WebRTC plumbing pending.
+      **`:feature:calls` now consumes the FSM** (slice `calls-viewmodel-screen`): a UDF `CallViewModel`
+      (`StateFlow<CallUiState>`) folds accept/decline/hang-up/mute/camera intents + signalling events
+      through `CallStateMachine.reduce`, with a pure `CallPresenter` projecting `CallState × CallConfig ×
+      CallMedia → CallUiState` (status/answer/hang-up/media-toggle affordances, end-reason label,
+      reconnect attempt). A minimal accent-coherent Compose call screen renders ringing/connecting/
+      connected/ended and is reachable from **audio/video call buttons in the chat header** (iOS parity);
+      dismissal returns to chat. +34 behavioural tests. WebRTC/signalling plumbing still pending.
+      **Live in-call duration timer landed** (slice `call-duration-timer`): a pure `CallDuration.clock(
+      seconds)` in `:core:model` is now the SSOT for call-length formatting (`M:SS` / `H:MM:SS`, `"0:00"`
+      at zero), reused by `CallRecord.durationLabel`; `CallViewModel` runs a 1-Hz timer (injected
+      `CallSecondsTicker` flow seam) exactly while connected/reconnecting, and `CallPresenter` derives a
+      `CallUiState.durationLabel` — `"0:00"` the instant media connects, ticking up through a reconnect,
+      frozen at the final length on the ended screen, and `null` for a call that never connected. The
+      connected screen renders the running clock; the ended screen appends the final length. +18
+      behavioural tests (6 formatter, 5 presenter, 7 VM).
 - [ ] Live in-call transcription overlay (on-device speech-to-text, leader/follower)
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [ ] Camera-covered ("dark frame") detection during video calls
-- [ ] Thermal-aware quality degradation (fps/resolution caps, video disable)
-- [ ] Adaptive call quality (bitrate ladder, auto video-disable on critical link)
-- [ ] Connection-quality indicator; call-waiting banner (second incoming call)
+- [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
+      (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
+      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
+      app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping + the live RTP-sender actuator.
+- [~] Adaptive call quality (bitrate ladder, auto video-disable on critical link) —
+      **quality-tier SSOT landed** (slice `call-quality-level`): pure `core:model`
+      `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
+      `VideoQualityLevel`) with `CallQualityThresholds` (the iOS `QualityThresholds`
+      constants) + two classifiers `from(rttMs, packetLoss)` (worse-of-two-axes,
+      strict `>` boundaries) and `from(availableOutgoingBitrateBps)`, plus each
+      tier's sender caps (`targetResolutionHeight`/`targetFps`/`targetVideoBitrateBps`)
+      the future adaptive-bitrate ladder will apply. **Time-hysteresis auto-video-disable
+      policy landed** (slice `call-video-survival-policy`): the pure `core:model`
+      `VideoSurvivalPolicy` (port of iOS `VideoSurvivalPolicy`) — `reduce(state, level,
+      nowSeconds, userWantsVideo) → (state, VideoSurvivalAction)` drops outbound video to
+      audio-only after a sustained `POOR`/`CRITICAL` streak (`Suspend`, 6 s) and resumes
+      after a sustained `EXCELLENT`/`GOOD` streak (`Resume`, 10 s), with `FAIR` holding the
+      recovery timer and a monotonic-seconds `VideoSurvivalState` (fixed-size, O(1) over a
+      marathon call). Duration-based hysteresis (cadence-independent); user camera-off resets
+      to `INITIAL`. +19 tests. **Adaptive sender-cap plan landed** (slice `call-sender-cap-plan`,
+      2026-07-03): the pure `core:model` `VideoSenderCapPlan` maps a `VideoQualityLevel` (+ a
+      framework-agnostic `ThermalState`) to the concrete RTP sender parameters
+      (`maxBitrateBps`/`maxFramerate`/`scaleResolutionDownBy`) — `forLevel` reads each axis off the
+      tier and floors CRITICAL to 360p15 @ 100 kbps (never a zero encoder / never an upscale);
+      `forConditions` composes it with a `ThermalCeiling` (port of iOS `VideoThermalProfile`,
+      `NOMINAL` a no-op) taking the more conservative value per axis. Closes the
+      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Pending:** the real
+      WebRTC actuator seam (map `PowerManager.THERMAL_STATUS_*` → `ThermalState`, apply the cap to the
+      live RTP video sender, debounce re-apply) + consuming `Suspend`/`Resume`.
+- [~] Connection-quality indicator; call-waiting banner (second incoming call) —
+      **connection-quality indicator landed** (slice `call-quality-level`): the pure
+      four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,
+      parity with iOS `CallManager.connectionQualityLabel`) with `bars`(1–4)/`isWeak`;
+      a `CallQualitySampler` stats seam (interim `NoopCallQualitySampler`) folded into
+      `CallViewModel` exactly while media flows (connected/reconnecting), projected by
+      `CallPresenter` into `CallUiState.connectionQuality` and rendered as an
+      accent-coherent 4-bar signal indicator on the call screen (error hue on a weak
+      link, VoiceOver tier label). +37 tests. The **call-waiting banner** landed
+      (slice `call-waiting-banner`, 2026-07-03): pure `core:model` `WaitingCall` +
+      `CallWaitingReducer` (Offered/Rejected/Accepted/RemotelyEnded), a
+      `CallSignalManager.incomingOffers` identity stream, a `CallViewModel` fold that
+      raises the banner for a *second* offer while active, a 15s auto-dismiss-as-reject
+      `CallWaitingTimer` seam, `rejectWaiting()`/`acceptWaitingSwap()` (end-and-answer,
+      parity with iOS `endCurrentAndAnswerPending`), and an accent-coherent top banner in
+      `CallScreen`. +35 tests. The **`RemotelyEnded` socket driver** landed (slice
+      `call-ended-signal-identity`, 2026-07-03): pure `CallSignalMapper.endedCallId` decode
+      of a `call:ended`/`call:missed` frame's `callId`, a `CallSignalManager.endedCalls`
+      identity stream (parallel to `incomingOffers`), and a `CallViewModel.onRemoteEnded`
+      fold that auto-dismisses the banner + cancels its timer (no `emitEnd`) only for the
+      *pending* call's id. +15 tests. The **identity-aware active-call teardown** landed (slice
+      `call-ended-identity-teardown`, 2026-07-03): `call:ended`/`call:missed` are now `null` in
+      `CallSignalMapper.map` (off the identity-less `events`); the single pure `endedSignal →
+      CallEndedSignal(callId, event)` decode on `endedCalls: SharedFlow<CallEndedSignal>` is the
+      sole teardown path, and `onRemoteEnded` gates on identity — active id reduces the FSM,
+      waiting id only dismisses the banner, neither is inert — so a waiting call's fanned-out
+      teardown no longer tears down the active call. **Pending:** the WebRTC stats source that
+      feeds real quality samples.
 - [ ] Front-camera mirroring; extensible call media pipeline hook bus
-- [ ] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle)
+- [~] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle) —
+      **inbound event models + pure frame→`CallEvent` mapper landed** (slice `call-signalling-events`):
+      `core:model` `me.meeshy.sdk.model.call` gains `@Serializable` payload types at parity with the iOS
+      `MessageSocketManager` listen table (`CallInitiatedPayload`/`CallSignalEnvelope`+`CallSignalPayload`/
+      `CallParticipantPayload`/`CallEndedPayload`/`CallMissedPayload`/`CallMediaTogglePayload`/
+      `CallErrorPayload`/`CallAlreadyAnsweredPayload`) plus a total, side-effect-free `CallSignalMapper.map(
+      eventName, rawJson)` routing each `call:*` frame into the FSM vocabulary: `call:initiated`→
+      `ReceiveIncoming`, `call:participant-joined`→`ParticipantJoined`, `call:signal` type=`answer`→
+      `RemoteAnswer` (offer/ice-candidate inert), `call:ended` reason=`missed`→`RingTimeout` else
+      `RemoteHangUp`, `call:missed`→`RingTimeout`, `call:error`→`ConnectionFailed(msg)`,
+      `call:already-answered`→`RemoteHangUp`; `call:media-toggled` + malformed/unknown frames → `null`
+      (inert, never crashes). +22 behavioural tests. **Socket subscription + outbound emit table landed**
+      (slice `call-signal-manager`): `:sdk-core` `CallSignalManager` (mirrors `SocialSocketManager`/
+      `MessageSocketManager`) — `attach()` listens to all 8 inbound `call:*` frames, routes each through
+      `CallSignalMapper`, and republishes the mapped `CallEvent` on a hot `SharedFlow<CallEvent> events`
+      the `CallViewModel` will fold; a non-JSONObject arg / malformed / inert frame emits nothing.
+      Outbound fire-and-forget emit table at iOS-exact payload keys: `emitJoin`/`emitLeave`/`emitEnd`
+      (`{callId}`), `emitToggleAudio`/`emitToggleVideo` (`{callId, enabled}`), `emitSignal`
+      (`{callId, signal}`). +18 behavioural tests. **ACK-based `call:initiate` landed** (slice
+      `call-initiate-ack`): `core:model` gains the pure `SocketIceServer` (with
+      `IceServerUrlsSerializer` normalising the gateway's single-string-or-array `urls` to a `List`),
+      `CallInitiateAck` (`callId`/`mode`/`iceServers`/`ttlSeconds`), the sealed `CallInitiateResult`
+      (`Success`/`ServerError`/`Malformed`/`Timeout`), and the total `CallInitiateAckParser.parse(rawJson)`
+      — parity with the iOS `emitCallInitiate` guard (`success:true` + non-blank `data.callId` → `Success`;
+      else the gateway error from `error.message` → bare-string `error` → `"unknown error"`; undecodable
+      body → `Malformed`). `:sdk-core` `CallSignalManager.emitInitiate(conversationId, isVideo)` is the
+      suspend transport: emits `call:initiate` with `{conversationId, type}`, awaits the ACK within a 10s
+      budget (iOS parity), delegates the body to the parser, and maps a missing/non-object ACK to
+      `Timeout`. +26 behavioural tests (21 parser: success incl. minimal/unknown-keys, single vs array
+      urls, TURN creds, every ServerError fallback incl. non-string error, Malformed bad-JSON/bad-shape,
+      robust urls dropping; 5 manager: payload keys, video/audio, ServerError, no-ACK Timeout,
+      non-JSONObject Timeout). **VM-fold landed** (slice `call-viewmodel-signal-fold`): the
+      `:feature:calls` `CallViewModel` now folds `CallSignalManager.events` in `viewModelScope` (each
+      mapped `CallEvent` reduced through the FSM, so a peer answer / remote hang-up / stall drives the
+      screen with no manual wiring); an **outgoing** `start` mints the real `callId` via `emitInitiate`
+      (optimistic ring first, then `Ended(Failed)` on a rejected/timed-out/malformed ACK — the gateway
+      message surfaced on `ServerError`); and accept/decline/hang-up/mute/camera fan out to
+      `emitJoin`/`emitEnd`/`emitToggleAudio`/`emitToggleVideo`, each **keyed by the known `callId`** and
+      inert until one is known (outgoing minted, incoming from `CallConfig.callId`). +14 behavioural tests.
+      **App-level socket-lifecycle caller landed** (slice `realtime-session-coordinator`): the whole
+      realtime layer was dead — nothing called `SocketManager.connect()` and no `*.attach()` ran, so
+      `CallSignalManager.events` (and every `message:*`/social frame) never flowed. `:sdk-core`
+      `RealtimeSessionCoordinator.onAuthenticatedChanged(isAuthenticated)` is the auth→socket bridge:
+      sign-in `connect()`s **then** attaches message/social/call, sign-out `disconnect()`s, edge-only (no
+      double-connect). Ordering (connect-before-attach) + edge invariants live in the pure
+      `RealtimeLifecyclePlan`; **attach is paired with every connect** so a logout→login re-attaches on
+      the new socket. Driven by `AuthViewModel` at init (restored token) / login / logout. +16 behavioural
+      tests. **Outgoing-call room threading landed** (slice `call-nav-conversation-thread`): the `:app`
+      CALL route previously dropped the `conversationId`, so `CallViewModel.start` → `emitInitiate("", …)`
+      fired into an empty room (every outgoing call dead-on-arrival). A pure
+      `me.meeshy.app.navigation.CallRoute` (`PATTERN`/`path`/`config(conversationId?, peerName?, isVideo?)
+      → CallConfig`) now owns the route as the SSOT; the CHAT composable threads its own `conversationId`
+      nav-arg into `Routes.call(...)` and the CALL composable decodes the args through `CallRoute.config`.
+      Outgoing calls now initiate into the real room. +8 behavioural tests (first `:app` test source set).
+      **WebRTC-plumbing emits landed** (slice `call-webrtc-plumbing-emits`): `CallSignalManager` gains the
+      five remaining outbound frames at iOS payload-key parity — `emitRequestIceServers(callId)`
+      (`call:request-ice-servers`, TURN-credential refresh), `emitHeartbeat(callId)` (`call:heartbeat`,
+      dead-peer liveness), `emitQualityReport(callId, report)` (`call:quality-report`, `{callId, stats}`),
+      `emitReconnecting(callId, participantId, attempt)` and `emitReconnected(callId, participantId)`
+      (ICE-restart bookkeeping). The `stats` shape is decided once by the pure `core:model`
+      `CallQualityReport.statsFields()` — base five metrics always present, `availableOutgoingBitrateBps`
+      and `jitterMs` appended only when strictly positive (iOS parity); `ConnectionQuality.wireValue`
+      (`excellent|good|fair|poor`) is the SSOT for the `level` token. Byte counters modelled as `Long`
+      (iOS `Int`) so a long call's cumulative totals never overflow the 32-bit range. +16 tests (10 report,
+      6 manager). **Pending:** the app-side driver seams (heartbeat/quality-report timers, ICE-restart
+      controller) that call these emits — land with the WebRTC media transport.
+- [x] Call history / journal (recent + missed calls list, direction, duration, data usage) —
+      **pure call-journal model landed** (slice `call-history-model`): `core:model`
+      `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades
+      unknown → incoming, parity with iOS `CallDirection(raw:)`), `CallMediaType` (audioOnly/audioVideo,
+      port of `WebRTCTypes.swift`), the `@Serializable` `CallHistoryPeer`, and `@Serializable` `CallRecord`
+      mirroring the gateway `CallHistoryItem` REST contract (`GET /api/v1/calls/history`) field-for-field
+      (timestamps kept as ISO-8601 strings → `:core:model` stays date-dependency-free). Pure display
+      accessors are the single tested SSOT a future list renders: `directionKind`/`isMissed`, `mediaType`,
+      four-tier `displayName` (peer display → peer username → conversation title → "Inconnu", blank-skipping,
+      surpasses iOS's empty-only skip), `avatarUrl` (peer → conversation fallback), `durationLabel`
+      (`M:SS`/`H:MM:SS`, empty at zero), `dataLabel` (deterministic locale-independent byte ladder, null
+      when no counters / zero total). +22 behavioural tests (every direction arm incl. unknown, name/avatar
+      fallbacks, hour boundary, byte-ladder + guards, gateway-shaped JSON decode with/without peer). The
+      call-history repository landed (slice `call-history-repository`): `:core:network`
+      `CallHistoryApi` (`GET calls/history?cursor&limit&filter`), `:core:database` `CallHistoryEntity`/
+      `CallHistoryDao` (DB v6→v7, destructive fallback), and `:sdk-core` `CallHistoryRepository` — a
+      cache-first SWR stream (`historyStream()` via `CallHistoryCacheSource`, port of the `StoryCacheSource`
+      pattern, `CachePolicy.CallHistory` fresh 60s / keep the 3-month window) plus a cursor-paginated raw
+      `fetchPage(cursor, limit, missedOnly) → CallHistoryPage(records, nextCursor, hasMore)` the list UI
+      will drive for older pages. +17 behavioural tests (DAO order/upsert/deleteNotIn/clear; cold-cache
+      Empty, refresh persist + prune + sync-meta, Fresh-after-refresh, sync-exception, fetchPage
+      pagination/no-pagination/all+missed filter forwarding/failed-envelope/network-exception). The
+      recent/missed-calls **list UI landed** (slice `call-history-list`): a UDF `CallHistoryViewModel`
+      (`StateFlow<CallHistoryUiState>` over `historyStream()`) with cache-first SWR flags (skeleton only
+      on cold empty), a client-side missed-only filter, cursor-paged infinite scroll via `fetchPage`
+      (de-dup, cursor advance, `hasMore`/re-entrancy/failure gating), and pull-to-refresh that resets
+      paging — backed by pure `CallHistoryList` (combine+filter) and `CallTimeLabel` (ISO → relative
+      label), rendered by an accent-coherent `CallHistoryScreen` (avatar rows, direction icon with
+      missed=error colour, relative time, All/Missed filter chips, skeleton/empty states). +30
+      behavioural tests. The dedicated Calls **tab landed** (slice `calls-tab-nav`): `Routes.CALLS`
+      (`Call` icon, order Messages · Feed · **Calls** · Activity · Profile) mounts `CallHistoryScreen`
+      in the `NavHost`; tapping a journal row re-dials via the pure `CallRoute.redial(record)` (threads
+      the record's conversation, resolved `displayName` and media into the outgoing-call route, identical
+      to a chat-header call). +4 behavioural tests. (The outgoing-call `conversationId` threading + folding
+      `CallSignalManager.events` into `CallViewModel` both landed — see the signalling row above.)
 
 ## I. Communities
 - [ ] Community creation (name, `mshy_` identifier, description, emoji, privacy, initial members)
@@ -691,21 +1048,70 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Community invite links: list, stats, detail, copy/share
 
 ## J. Contacts & Friends
-- [~] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges —
+- [x] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges —
       `:feature:contacts` hub reachable from the conversations top bar (People icon),
-      4-tab `TabRow` with a live count badge on the **Requests** tab ; Contacts /
-      Discover / Blocked tabs remain placeholders pending their data slices
-- [ ] Contacts list (online/offline filters + counts, search, presence + mood-emoji)
-- [ ] Cache-first friends list with cross-screen reconciliation; online-first sorting
-- [ ] Friendship status resolution (friend / pending sent / pending received / blocked)
+      4-tab `TabRow` with a live count badge on the **Requests** tab ; **all four tabs
+      are now live** (Contacts / Requests / Discover / Blocked) — no placeholder remains
+      (slice `contacts-blocked-list`, 2026-07-04). **Pending:** per-tab count badges beyond
+      Requests (Blocked/Discover counts).
+- [~] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
+      **filters + search + presence shipped** (slice `contacts-list-friends`): the Contacts tab now
+      renders the online-first friend list with an All/Online/Offline `FilterChip` row, a search field
+      (matches username or resolved name), and a per-row online presence dot. **Pending:** per-filter
+      counts and mood-emoji presence.
+- [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
+      **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
+      landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the
+      in-memory SSOT for the friend graph. The **list** now landed: the pure `:core:model` `ContactList`
+      folds accepted received+sent requests into the online-first (then most-recently-active) friend
+      list (port of iOS `ContactsListViewModel.fetchFriendsFromNetwork`), `ContactsListViewModel`
+      hydrates the cache and reconciles the shown list against it on every cross-screen mutation
+      (removals apply locally via `ContactList.reconcile`, additions trigger a single silent refetch —
+      port of iOS `reconcileWithCache`), and `ContactList.visible` is the pure filter+search SSOT.
+      `FriendshipCache.currentFriendIds` exposes the defensive friend-id snapshot the reconcile reads.
+      **Pending:** a persistent GRDB/Room friends cache (iOS `CacheCoordinator.friends`) for cold-start
+      paint — today the list is network-first + in-memory-cache reconciled. +38 tests
+      (25 `ContactList`, +2 `FriendshipCache`, 11 `ContactsListViewModel`).
+- [x] Friendship status resolution (friend / pending sent / pending received / blocked) —
+      **shipped** (slice `friendship-relationship-resolver`): the pure `:core:model`
+      `UserRelationshipRules.resolve(target, currentUserId, isBlocked, friendship)` is the total
+      precedence SSOT (blank→None, current wins over block wins over friendship, port of iOS
+      `UserRelationshipResolver`), with `FriendshipStatus` + `UserRelationshipState` (`isPending`)
+      pure models. The `:sdk-core` `UserRelationshipResolver` supplies the live inputs (the
+      `FriendshipCache` status + a `BlockStatusProvider` fun-interface seam + a current-user
+      provider). **The block seam is now bound** (slice `contacts-blocked-list`): the `:sdk-core`
+      `@Singleton BlockCache` (blocklist SSOT, hydrated by `BlockRepository`) backs the
+      `BlockStatusProvider` in `DiscoverViewModel`, so a blocked user resolves live to `Blocked`
+      everywhere. +31 behavioural tests (10 rules, 13 cache, 8 resolver).
 - [~] Send / accept / decline / cancel friend request — **Requests tab** lists received +
       sent requests (avatars tinted by deterministic `DynamicColorGenerator.colorForName`),
       with optimistic accept / decline (`respond`) + cancel (`deleteRequest`), in-flight
       guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT) ;
       send (compose-new) + offline-queue + idempotency pending
 - [ ] Invite by email; invite by SMS; import phone contacts
-- [ ] Discover suggestions (cache-first) + live user search with inline connect
-- [ ] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback
+- [~] Discover suggestions (cache-first) + live user search with inline connect —
+      **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab
+      (was `ComingSoon()`) now runs a debounced-by-threshold user search (pure `:core:model`
+      `DiscoverSearch.action` — trim + ≥2-char gate, port of iOS `performSearch` guard) via
+      `UserRepository.searchUsers`, and renders each result with an inline connect control whose
+      state is the shared `UserRelationshipResolver` (pure `:core:model` `ConnectAction.from`,
+      port of iOS `ConnectionActionView`): Connect / Pending / Accept / Contact / Blocked / Hidden.
+      `connect` sends a request (row flips to Pending once the gateway mints the id), `acceptReceived`
+      accepts an inbound one optimistically with rollback; a cross-screen friendship change re-derives
+      every visible row via the `FriendshipCache.version` stream, so Discover stays in lock-step with
+      the Requests tab. +29 tests (13 `DiscoverSearch`, 16 `DiscoverViewModel`). **Pending:** the
+      empty-query cache-first suggestions list (iOS `loadSuggestions` via `CacheCoordinator.userSearch`).
+- [x] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback —
+      **shipped** (slice `contacts-blocked-list`, 2026-07-04): the Blocked tab (was placeholder)
+      renders the blocklist from `BlockRepository.listBlocked()` (which hydrates the shared
+      `:sdk-core` `BlockCache` SSOT), skeleton only on cold empty, error+retry, empty state.
+      Unblock pops an `AlertDialog` confirm, then removes the row optimistically (VM restores the
+      snapshot + surfaces the error on network failure), guarded against double-taps via
+      `pendingIds`. Pure `:core:model` `BlockedUser` + `resolvedName`; `:core:network` `BlockApi`
+      (`GET users/me/blocked-users`, `POST/DELETE users/{id}/block`, iOS `BlockService` parity).
+      +29 tests (4 `BlockedUser`, 9 `BlockCache`, 6 `BlockRepository`, 9 `BlockedListViewModel`,
+      +1 `DiscoverViewModel` seam). **Pending:** durable offline-queued unblock (iOS routes it via
+      `OfflineQueue`) — today it's an online-first optimistic REST call with snapshot rollback.
 
 ## K. Profile & Account
 - [ ] View profile (by id / username / public handle / email / phone)

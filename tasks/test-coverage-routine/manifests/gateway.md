@@ -65,17 +65,17 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [ ] `services/gateway/src/migrations/migrate-from-legacy.ts`
 
-## routes  (1/30 have a test)
+## routes  (2/30 have a test)
 
 - [ ] `services/gateway/src/routes/affiliate.ts`
 - [ ] `services/gateway/src/routes/anonymous.ts`
 - [ ] `services/gateway/src/routes/attachments.ts`
 - [x] `services/gateway/src/routes/calls.ts`
-- [ ] `services/gateway/src/routes/communities.ts`
+- [x] `services/gateway/src/routes/communities.ts`
 - [x] `services/gateway/src/routes/community-preferences.ts`
 - [x] `services/gateway/src/routes/conversation-encryption.ts`
 - [x] `services/gateway/src/routes/conversation-preferences.ts`
-- [ ] `services/gateway/src/routes/friends.ts`
+- [x] `services/gateway/src/routes/friends.ts`
 - [x] `services/gateway/src/routes/invitations.ts`
 - [x] `services/gateway/src/routes/magic-link.ts`
 - [x] `services/gateway/src/routes/maintenance.ts`
@@ -127,26 +127,26 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/attachments/metadata.ts`
 - [ ] `services/gateway/src/routes/attachments/translation.ts`
 - [ ] `services/gateway/src/routes/attachments/types.ts`
-- [ ] `services/gateway/src/routes/attachments/upload.ts`
+- [x] `services/gateway/src/routes/attachments/upload.ts`
 
-## routes/auth  (0/7 have a test)
+## routes/auth  (2/7 have a test)
 
 - [ ] `services/gateway/src/routes/auth/index.ts`
-- [ ] `services/gateway/src/routes/auth/login.ts`
+- [x] `services/gateway/src/routes/auth/login.ts`
 - [ ] `services/gateway/src/routes/auth/magic-link.ts`
 - [ ] `services/gateway/src/routes/auth/phone-transfer.ts`
-- [ ] `services/gateway/src/routes/auth/register.ts`
+- [x] `services/gateway/src/routes/auth/register.ts`
 - [ ] `services/gateway/src/routes/auth/revoke-all-sessions.ts`
 - [x] `services/gateway/src/routes/auth/types.ts`
 
-## routes/communities  (0/6 have a test)
+## routes/communities  (6/6 have a test)
 
-- [ ] `services/gateway/src/routes/communities/core.ts`
-- [ ] `services/gateway/src/routes/communities/index.ts`
-- [ ] `services/gateway/src/routes/communities/members.ts`
-- [ ] `services/gateway/src/routes/communities/search.ts`
-- [ ] `services/gateway/src/routes/communities/settings.ts`
-- [ ] `services/gateway/src/routes/communities/types.ts`
+- [x] `services/gateway/src/routes/communities/core.ts`
+- [x] `services/gateway/src/routes/communities/index.ts`
+- [x] `services/gateway/src/routes/communities/members.ts`
+- [x] `services/gateway/src/routes/communities/search.ts`
+- [x] `services/gateway/src/routes/communities/settings.ts`
+- [x] `services/gateway/src/routes/communities/types.ts`
 
 ## routes/conversations  (2/15 have a test)
 
@@ -192,15 +192,15 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/me/preferences/preference-router-factory.ts`
 - [ ] `services/gateway/src/routes/me/preferences/types.ts`
 
-## routes/posts  (0/7 have a test)
+## routes/posts  (7/7 have a test)
 
-- [ ] `services/gateway/src/routes/posts/audio.ts`
-- [ ] `services/gateway/src/routes/posts/comments.ts`
-- [ ] `services/gateway/src/routes/posts/core.ts`
-- [ ] `services/gateway/src/routes/posts/feed.ts`
-- [ ] `services/gateway/src/routes/posts/index.ts`
-- [ ] `services/gateway/src/routes/posts/interactions.ts`
-- [ ] `services/gateway/src/routes/posts/types.ts`
+- [x] `services/gateway/src/routes/posts/audio.ts`
+- [x] `services/gateway/src/routes/posts/comments.ts`
+- [x] `services/gateway/src/routes/posts/core.ts`
+- [x] `services/gateway/src/routes/posts/feed.ts`
+- [x] `services/gateway/src/routes/posts/index.ts`
+- [x] `services/gateway/src/routes/posts/interactions.ts`
+- [x] `services/gateway/src/routes/posts/types.ts`
 
 ## routes/tracking-links  (0/4 have a test)
 
@@ -213,15 +213,15 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [ ] `services/gateway/src/routes/uploads/tus-handler.ts`
 
-## routes/users  (1/8 have a test)
+## routes/users  (7/8 have a test)
 
-- [~] `services/gateway/src/routes/users/blocking.ts`
-- [ ] `services/gateway/src/routes/users/contact-change.ts`
-- [ ] `services/gateway/src/routes/users/devices.ts`
-- [ ] `services/gateway/src/routes/users/index.ts`
-- [ ] `services/gateway/src/routes/users/preferences.ts`
-- [ ] `services/gateway/src/routes/users/presence.ts`
-- [ ] `services/gateway/src/routes/users/profile.ts`
+- [x] `services/gateway/src/routes/users/blocking.ts`
+- [x] `services/gateway/src/routes/users/contact-change.ts`
+- [x] `services/gateway/src/routes/users/devices.ts`
+- [x] `services/gateway/src/routes/users/index.ts`
+- [x] `services/gateway/src/routes/users/preferences.ts`
+- [x] `services/gateway/src/routes/users/presence.ts`
+- [x] `services/gateway/src/routes/users/profile.ts`
 - [ ] `services/gateway/src/routes/users/types.ts`
 
 ## routes/voice  (0/4 have a test)

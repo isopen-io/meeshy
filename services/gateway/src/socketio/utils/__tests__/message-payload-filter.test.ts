@@ -66,6 +66,22 @@ describe('filterMessagePayloadForLanguages', () => {
     const out = filterMessagePayloadForLanguages(src, ['en']);
     expect(out).toEqual({ id: 'x' });
   });
+
+  it('returns attachment unchanged when its translations field is an array', () => {
+    const src = {
+      id: 'msg-2',
+      attachments: [
+        { id: 'att-array', translations: ['not', 'an', 'object'] },
+        { id: 'att-null', translations: null },
+        { id: 'att-normal', translations: { en: { url: 'en.mp3' }, fr: { url: 'fr.mp3' } } },
+      ],
+    };
+    const out = filterMessagePayloadForLanguages(src, ['en']);
+    const atts = out.attachments as any[];
+    expect(atts[0]).toBe(src.attachments[0]);
+    expect(atts[1]).toBe(src.attachments[1]);
+    expect(Object.keys(atts[2].translations)).toEqual(['en']);
+  });
 });
 
 describe('groupSocketsByLanguage', () => {

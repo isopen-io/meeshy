@@ -148,12 +148,14 @@ export class CommentReactionHandler {
 
       this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
 
-      await this._createCommentReactionNotification(
+      // Fire-and-forget: notification errors must not reach the outer catch after
+      // success was already confirmed to the client.
+      this._createCommentReactionNotification(
         validated.commentId,
         validated.postId,
         validated.emoji,
         userId
-      );
+      ).catch(err => this.logger.error('comment reaction notification failed', err, { commentId: validated.commentId }));
     } catch (error: unknown) {
       this.logger.error('Failed to add comment reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {

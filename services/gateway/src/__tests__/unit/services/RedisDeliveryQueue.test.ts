@@ -148,6 +148,19 @@ describe('RedisDeliveryQueue (memory fallback)', () => {
     }
   });
 
+  test('peek with a limit of 0 returns nothing (not the whole backlog)', async () => {
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
+
+      const peeked = await queue.peek('user-1', 0);
+      expect(peeked).toHaveLength(0);
+    } finally {
+      await cacheStore.close();
+    }
+  });
+
   test('cleanup removes expired entries', async () => {
     const { cacheStore, queue } = makeMemoryQueue();
     try {
@@ -215,7 +228,8 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
       'delivery:queue:user-r',
       JSON.stringify(entry),
       entry.messageId,
-      String(DELIVERY_QUEUE_TTL_SECONDS)
+      String(DELIVERY_QUEUE_TTL_SECONDS),
+      'new'
     );
   });
 
@@ -557,6 +571,7 @@ describe('RedisDeliveryQueue (Redis path)', () => {
       JSON.stringify(entry),
       entry.messageId,
       String(DELIVERY_QUEUE_TTL_SECONDS),
+      'new',
     );
     // memory fallback was NOT used
     expect(await queue.size('user-redis')).toBe(0);
@@ -907,6 +922,57 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
 
     expect(await queue.size('user-dup2')).toBe(2);
   });
+
+  test('dedup (memory): an "edited" event for a messageId is NOT dropped by a queued "new" for the same messageId', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const original = makePayload({ messageId: 'msg-edit-me', payload: { content: 'original' } });
+    const edited = makePayload({ messageId: 'msg-edit-me', eventType: 'edited', payload: { content: 'edited content' } });
+
+    await queue.enqueue('user-offline', original);
+    await queue.enqueue('user-offline', edited);
+
+    const drained = await queue.drain('user-offline');
+    expect(drained).toHaveLength(2);
+    expect(drained[0].payload.content).toBe('original');
+    expect(drained[1].payload.content).toBe('edited content');
+  });
+
+  test('dedup (memory): a "deleted" event for a messageId is NOT dropped by a queued "new" for the same messageId', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const original = makePayload({ messageId: 'msg-delete-me' });
+    const deleted = makePayload({ messageId: 'msg-delete-me', eventType: 'deleted' });
+
+    await queue.enqueue('user-offline', original);
+    await queue.enqueue('user-offline', deleted);
+
+    const drained = await queue.drain('user-offline');
+    expect(drained.map(d => d.eventType ?? 'new')).toEqual(['new', 'deleted']);
+  });
+
+  test('dedup (memory): a repeated "edited" event for the same messageId IS still deduped', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const edited = makePayload({ messageId: 'msg-edit-twice', eventType: 'edited' });
+
+    await queue.enqueue('user-offline', edited);
+    await queue.enqueue('user-offline', edited);
+
+    expect(await queue.size('user-offline')).toBe(1);
+  });
+});
+
+describe('RedisDeliveryQueue (Redis dedup via eval, eventType-aware)', () => {
+  test('enqueue passes normalized eventType as ARGV[4] for new/edited/deleted', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-evt', makePayload({ messageId: 'm1' }));
+    await queue.enqueue('user-evt', makePayload({ messageId: 'm1', eventType: 'edited' }));
+    await queue.enqueue('user-evt', makePayload({ messageId: 'm1', eventType: 'deleted' }));
+
+    expect(redis.eval).toHaveBeenNthCalledWith(1, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'new');
+    expect(redis.eval).toHaveBeenNthCalledWith(2, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'edited');
+    expect(redis.eval).toHaveBeenNthCalledWith(3, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'deleted');
+  });
 });
 
 describe('RedisDeliveryQueue (Redis dedup via eval)', () => {
@@ -939,5 +1005,61 @@ describe('RedisDeliveryQueue (Redis dedup via eval)', () => {
 
     expect(redis.eval).toHaveBeenCalledTimes(2);
     expect(await queue.size('user-r2')).toBe(1); // llen returns 1
+  });
+});
+
+// ─── Malformed JSON resilience (new try-catch in drain/peek/cleanup) ──────────
+
+describe('RedisDeliveryQueue (malformed JSON resilience)', () => {
+  test('drain — drops malformed entry and returns only valid ones', async () => {
+    const valid = makePayload({ messageId: 'valid-msg' });
+    const redis = makeMockRedis({
+      eval: jest.fn().mockResolvedValue([JSON.stringify(valid), 'not-valid-json{{{'])
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const drained = await queue.drain('user-r');
+
+    expect(drained).toHaveLength(1);
+    expect(drained[0].messageId).toBe('valid-msg');
+  });
+
+  test('drain — returns empty array when all entries are malformed', async () => {
+    const redis = makeMockRedis({
+      eval: jest.fn().mockResolvedValue(['{bad', 'also-bad}'])
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    expect(await queue.drain('user-r')).toEqual([]);
+  });
+
+  test('peek — drops malformed entry and returns only valid ones', async () => {
+    const valid = makePayload({ messageId: 'peek-valid' });
+    const redis = makeMockRedis({
+      lrange: jest.fn().mockResolvedValue(['{corrupt', JSON.stringify(valid)])
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const peeked = await queue.peek('user-r');
+
+    expect(peeked).toHaveLength(1);
+    expect(peeked[0].messageId).toBe('peek-valid');
+  });
+
+  test('cleanup — drops malformed entry (counts as stale removal)', async () => {
+    const valid = makePayload({ messageId: 'cleanup-valid', enqueuedAt: new Date().toISOString() });
+    const pipeline = makePipeline([[null, 1]]);
+    const redis = makeMockRedis({
+      scan: jest.fn().mockResolvedValue(['0', ['delivery:queue:u1']]),
+      lrange: jest.fn().mockResolvedValue(['{bad-json', JSON.stringify(valid)]),
+      pipeline: jest.fn().mockReturnValue(pipeline),
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const removed = await queue.cleanup();
+
+    // Malformed entry is filtered out (removed), valid entry survives
+    expect(removed).toBe(1);
+    expect(pipeline.rpush).toHaveBeenCalled(); // valid entry re-pushed
   });
 });

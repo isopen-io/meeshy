@@ -17,9 +17,36 @@ import MeeshyUI
 /// re-render.
 struct ReelRepostEmbedCell: View {
     let post: FeedPost
+    /// Drives the inline muted autoplay surface for a video reel. Elected by
+    /// `ReelFeedAutoplayCoordinator` and threaded in by `ReelRepostEmbedContainer`
+    /// — keyed on this card's CONTAINING post id (`reelCellId`), never the reposted
+    /// reel id, so a reel shown natively AND as a repost elects exactly one surface.
+    var isActive: Bool = false
     var onTap: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
+
+    /// Election identity reported to `ReelFeedAutoplayCoordinator`: the CONTAINING
+    /// (reposter's) post id. NEVER `post.repost?.id` (the reposted reel id) — if a
+    /// reel appears both as a native reel card and inside this repost cell, keying
+    /// on the reel id would make BOTH surfaces bind the single shared player.
+    var reelCellId: String { post.id }
+
+    /// The reposted reel's primary media when it is a VIDEO — the only case that
+    /// mounts the autoplay surface. `nil` for audio-only / media-less reels (which
+    /// keep the tinted music backdrop) or non-reel reposts. Pure; unit-tested.
+    static func reelVideoMedia(for repost: RepostContent) -> FeedMedia? {
+        guard let media = repost.primaryReelMedia, media.type == .video else { return nil }
+        return media
+    }
+
+    private func reelKind(_ repost: RepostContent) -> ReelMediaKind {
+        switch repost.primaryReelMedia?.type {
+        case .video: return .video
+        case .audio: return .audio
+        default: return .imageOnly
+        }
+    }
 
     /// Short media-strip height. Tall enough to read the reel badge + the
     /// centered music glyph (audio) or a cropped poster band (video), short
@@ -129,11 +156,22 @@ struct ReelRepostEmbedCell: View {
         .frame(maxWidth: .infinity)
         .frame(height: stripHeight)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        // Publish this card's frame so the feed coordinator can elect it (keyed on
+        // the containing post id — see `reelCellId`). Same `.global` aggregation as
+        // the native `ReelFeedCard`, so native + repost cells compete in one election.
+        .reportReelFrame(id: reelCellId, kind: reelKind(repost))
     }
 
     @ViewBuilder
     private func poster(_ repost: RepostContent) -> some View {
-        if let media = repost.primaryReelMedia, media.type != .audio, posterURL(media) != nil {
+        if let videoMedia = Self.reelVideoMedia(for: repost) {
+            // Video reel: inline MUTED autoplay surface routed through the single
+            // `SharedAVPlayerManager` (no 2nd player), call-gated, force-muted (feed
+            // policy). It renders its own poster beneath until the first frame, and
+            // shows only the poster while inactive.
+            ReelFeedVideoSurface(media: videoMedia, isActive: isActive)
+                .aspectRatio(contentMode: .fill)
+        } else if let media = repost.primaryReelMedia, media.type != .audio, posterURL(media) != nil {
             ProgressiveCachedImage(
                 thumbHash: media.thumbHash,
                 thumbnailUrl: media.thumbnailUrl,
@@ -148,6 +186,7 @@ struct ReelRepostEmbedCell: View {
             ZStack {
                 Color(hex: repost.authorColor).opacity(0.45)
                 Image(systemName: "music.note")
+                    // doctrine 86i — glyphe décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundColor(.white.opacity(0.85))
             }
@@ -159,6 +198,7 @@ struct ReelRepostEmbedCell: View {
     private func centerPlayButton(_ repost: RepostContent) -> some View {
         if repost.primaryReelMedia?.type == .video {
             Image(systemName: "play.fill")
+                // doctrine 86i — affordance décorative bornée par la bande média de hauteur fixe (stripHeight)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.white)
                 .padding(13)
@@ -175,6 +215,7 @@ struct ReelRepostEmbedCell: View {
             HStack {
                 Spacer()
                 Image(systemName: "play.rectangle.on.rectangle.fill")
+                    // doctrine 86i — badge décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.white)
                     .padding(6)
@@ -212,5 +253,42 @@ struct ReelRepostEmbedCell: View {
     /// own URL falling back to its thumbnail.
     private func posterURL(_ media: FeedMedia) -> String? {
         media.type == .image ? (media.url ?? media.thumbnailUrl) : media.thumbnailUrl
+    }
+}
+
+// MARK: - Equatable (leaf-cell short-circuit)
+
+extension ReelRepostEmbedCell: Equatable {
+    /// Re-render only when identity, the elected `isActive`, or the visible reel
+    /// fields change — election churn from OTHER cells leaves this one untouched.
+    nonisolated static func == (lhs: ReelRepostEmbedCell, rhs: ReelRepostEmbedCell) -> Bool {
+        lhs.post.id == rhs.post.id
+            && lhs.isActive == rhs.isActive
+            && lhs.post.content == rhs.post.content
+            && lhs.post.repost?.id == rhs.post.repost?.id
+            && lhs.post.repost?.likes == rhs.post.repost?.likes
+            && lhs.post.repost?.content == rhs.post.repost?.content
+    }
+}
+
+// MARK: - Autoplay container
+
+/// Observes the feed's `ReelFeedAutoplayCoordinator` and drives the embedded reel
+/// cell's `isActive` from the CONTAINING post id (cell identity). Mirrors
+/// `ReelFeedCardContainer`: the container observes the coordinator while the inner
+/// `.equatable()` `ReelRepostEmbedCell` short-circuits, so an election change on a
+/// different cell never re-renders this one.
+struct ReelRepostEmbedContainer: View {
+    @ObservedObject var coordinator: ReelFeedAutoplayCoordinator
+    let post: FeedPost
+    var onTap: (() -> Void)? = nil
+
+    var body: some View {
+        ReelRepostEmbedCell(
+            post: post,
+            isActive: coordinator.activeReelId == post.id,
+            onTap: onTap
+        )
+        .equatable()
     }
 }

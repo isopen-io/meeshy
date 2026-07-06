@@ -117,8 +117,17 @@ extension UniversalComposerBar {
                 Divider().opacity(0.4).padding(.horizontal, 14)
                 RecentMediaStrip(
                     accentColor: accentColor,
-                    onOpenLibrary: { fire { onPhotoLibrary?() } },
-                    onSelect: onRecentMediaSelected
+                    onOpenLibrary: { preselectedIds in
+                        fire {
+                            if let onPhotoLibraryPreselecting {
+                                onPhotoLibraryPreselecting(preselectedIds)
+                            } else {
+                                onPhotoLibrary?()
+                            }
+                        }
+                    },
+                    onSelect: onRecentMediaSelected,
+                    onEdit: onRecentMediaEdit
                 )
             } else {
                 Spacer(minLength: 0)
@@ -384,8 +393,6 @@ extension UniversalComposerBar {
     }
 
     func formatFileSize(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
-        return String(format: "%.1f MB", Double(bytes) / Double(1024 * 1024))
+        AttachmentDownloader.fmt(Int64(bytes))
     }
 }

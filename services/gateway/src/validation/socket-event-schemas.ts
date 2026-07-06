@@ -26,6 +26,11 @@ export const SocketMessageSendSchema = z.object({
   replyToId: mongoId.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,
+  // Forward references — validated as ObjectIds so malformed strings are
+  // rejected at the schema boundary before reaching the DB query in
+  // broadcastNewMessage (which would otherwise throw P2023 on a bad id).
+  forwardedFromId: mongoId.optional(),
+  forwardedFromConversationId: mongoId.optional(),
   // Effets de message — parité avec la route REST POST /messages.
   // `MessageProcessor.saveMessage` recompose le bitfield `effectFlags`
   // depuis `isBlurred` / `expiresAt` / `isViewOnce`.
@@ -46,6 +51,9 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   replyToId: mongoId.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,
+  // Forward references — validated as ObjectIds (mirrors SocketMessageSendSchema).
+  forwardedFromId: mongoId.optional(),
+  forwardedFromConversationId: mongoId.optional(),
 });
 
 export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageSendWithAttachmentsSchema>;

@@ -11,12 +11,14 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
+import { resolveParticipant } from '../utils/participant-resolver';
 import type { TypingEvent } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketTypingSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 
 const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
@@ -29,8 +31,9 @@ export interface StatusHandlerDependencies {
 }
 
 const IDENTITY_CACHE_TTL_MS = 60_000;
+const IDENTITY_CACHE_MAX_SIZE = 5_000;
 
-type CachedIdentity = { username: string; displayName: string; expiresAt: number };
+type CachedIdentity = { username: string; displayName: string };
 
 type ActiveTyper = { conversationId: string; userId: string; username: string; displayName: string };
 
@@ -40,7 +43,10 @@ export class StatusHandler {
   private privacyPreferencesService: PrivacyPreferencesService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
-  private identityCache = new Map<string, CachedIdentity>();
+  private identityCache = new BoundedTtlCache<string, CachedIdentity>({
+    maxSize: IDENTITY_CACHE_MAX_SIZE,
+    ttlMs: IDENTITY_CACHE_TTL_MS
+  });
   private typingThrottleMap = new Map<string, number>();
   private activeTypers = new Map<string, Array<ActiveTyper>>();
   private static readonly TYPING_THROTTLE_MS = 2_000;
@@ -55,7 +61,7 @@ export class StatusHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
-    this.typingThrottleCleanupTimer = setInterval(() => this._evictStaleThrottleEntries(), 30_000);
+    this.typingThrottleCleanupTimer = setInterval(() => this._evictStale(), 30_000);
     if (this.typingThrottleCleanupTimer.unref) this.typingThrottleCleanupTimer.unref();
   }
 
@@ -64,6 +70,11 @@ export class StatusHandler {
       clearInterval(this.typingThrottleCleanupTimer);
       this.typingThrottleCleanupTimer = null;
     }
+  }
+
+  private _evictStale(): void {
+    this._evictStaleThrottleEntries();
+    this.identityCache.evictExpired();
   }
 
   private _evictStaleThrottleEntries(): void {
@@ -161,7 +172,7 @@ export class StatusHandler {
     }
     const cacheKey = `user:${userId}`;
     const cached = this.identityCache.get(cacheKey);
-    const identity = cached && cached.expiresAt > Date.now()
+    const identity = cached
       ? { username: cached.username, displayName: cached.displayName }
       : null;
     return { conversationIds, identity };
@@ -196,6 +207,22 @@ export class StatusHandler {
         return;
       }
       const { user: connectedUser, realUserId: userId } = result;
+
+      // Every sibling handler (message send, reaction add, location share) verifies
+      // the caller is an active participant of the target conversation before
+      // broadcasting into its room. typing:start skipped this check, letting any
+      // authenticated user — including one removed/banned from the conversation —
+      // broadcast their identity into a room they don't belong to.
+      const participant = await resolveParticipant({
+        prisma: this.prisma,
+        userIdOrToken,
+        conversationId: normalizedId,
+        connectedUsers: this.connectedUsers,
+      });
+      if (!participant) {
+        logger.warn('typing:start — not a participant in conversation', { userId, conversationId: normalizedId });
+        return;
+      }
 
       // Mettre à jour l'activité
       this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);
@@ -264,6 +291,17 @@ export class StatusHandler {
       }
       const { user: connectedUser, realUserId: userId } = result;
 
+      const participant = await resolveParticipant({
+        prisma: this.prisma,
+        userIdOrToken,
+        conversationId: normalizedId,
+        connectedUsers: this.connectedUsers,
+      });
+      if (!participant) {
+        logger.warn('typing:stop — not a participant in conversation', { userId, conversationId: normalizedId });
+        return;
+      }
+
       const shouldShowTyping = await this.privacyPreferencesService.shouldShowTypingIndicator(
         userId,
         connectedUser.isAnonymous
@@ -307,7 +345,7 @@ export class StatusHandler {
   ): Promise<{ username: string; displayName: string } | null> {
     const cacheKey = `${isAnonymous ? 'anon' : 'user'}:${userId}`;
     const cached = this.identityCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
+    if (cached) {
       return { username: cached.username, displayName: cached.displayName };
     }
 
@@ -329,7 +367,7 @@ export class StatusHandler {
 
       const displayName = participant.nickname || participant.displayName;
       const identity = { username: displayName, displayName };
-      this.identityCache.set(cacheKey, { ...identity, expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS });
+      this.identityCache.set(cacheKey, identity);
       return identity;
     } else {
       const dbUser = await this.prisma.user.findUnique({
@@ -353,7 +391,7 @@ export class StatusHandler {
         `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() ||
         dbUser.username;
       const identity = { username: dbUser.username, displayName };
-      this.identityCache.set(cacheKey, { ...identity, expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS });
+      this.identityCache.set(cacheKey, identity);
       return identity;
     }
   }

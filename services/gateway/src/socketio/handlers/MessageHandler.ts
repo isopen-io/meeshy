@@ -21,7 +21,7 @@ import {
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { validateMessageLength } from '../../config/message-limits';
 import {
@@ -60,6 +60,7 @@ import {
   SocketMessageDeleteSchema,
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
+import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -78,6 +79,7 @@ export interface MessageHandlerDependencies {
   attachmentService: AttachmentService;
   readStatusService: MessageReadStatusService;
   privacyPreferencesService: PrivacyPreferencesService;
+  deliveryQueue?: RedisDeliveryQueue | null;
 }
 
 export class MessageHandler {
@@ -94,6 +96,7 @@ export class MessageHandler {
   private attachmentService: AttachmentService;
   private readStatusService: MessageReadStatusService;
   private privacyPreferencesService: PrivacyPreferencesService;
+  private deliveryQueue: RedisDeliveryQueue | null;
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -119,6 +122,16 @@ export class MessageHandler {
     this.attachmentService = deps.attachmentService;
     this.readStatusService = deps.readStatusService;
     this.privacyPreferencesService = deps.privacyPreferencesService;
+    this.deliveryQueue = deps.deliveryQueue ?? null;
+  }
+
+  /**
+   * Injected after construction by `MeeshySocketIOManager.setDeliveryQueue`
+   * (same instance shared with the REST broadcast path), since the queue is
+   * built once `server.ts` has the Redis-backed CacheStore ready.
+   */
+  setDeliveryQueue(queue: RedisDeliveryQueue): void {
+    this.deliveryQueue = queue;
   }
 
   /**
@@ -240,8 +253,8 @@ export class MessageHandler {
         messageType: validated.messageType || 'text',
         replyToId: validated.replyToId,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: data.forwardedFromId,
-        forwardedFromConversationId: data.forwardedFromConversationId,
+        forwardedFromId: validated.forwardedFromId,
+        forwardedFromConversationId: validated.forwardedFromConversationId,
         encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
         // Effets de message — parité avec POST /messages. Le bitfield final
         // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
@@ -444,8 +457,8 @@ export class MessageHandler {
         messageType: 'text',
         replyToId: validated.replyToId,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: data.forwardedFromId,
-        forwardedFromConversationId: data.forwardedFromConversationId,
+        forwardedFromId: validated.forwardedFromId,
+        forwardedFromConversationId: validated.forwardedFromConversationId,
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
@@ -569,7 +582,7 @@ export class MessageHandler {
           content: true,
           originalLanguage: true,
           sender: { select: { id: true, userId: true, displayName: true, avatar: true } },
-          attachments: { select: { id: true } },
+          attachments: { select: attachmentMediaSelect },
         },
       });
 
@@ -611,18 +624,26 @@ export class MessageHandler {
         conversationId: message.conversationId,
         senderId: message.senderId,
       };
-      (this.translationService as unknown as { _processRetranslationAsync: (id: string, msg: unknown) => Promise<void> })
-        ._processRetranslationAsync(validated.messageId, retranslationPayload)
+      this.translationService.retranslateMessageAsync(validated.messageId, retranslationPayload)
         .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
 
+      // Attachments are unaffected by a content edit — carry over the ones
+      // fetched pre-edit so clients that overwrite their cached message with
+      // this payload (`{ ...cached, ...editedPayload }`) do not lose the
+      // photo/video/audio that was attached to the message being edited.
       const editedPayload = {
         ...updatedMessage,
         conversationId: message.conversationId,
         translations: [],
+        attachments: this._serializeAttachmentsField(message as unknown as Message),
       };
 
       const room = ROOMS.conversation(message.conversationId);
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+
+      this._enqueueOfflineEventForParticipants(
+        message.conversationId, message.senderId, 'edited', validated.messageId, editedPayload
+      ).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
       handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
@@ -677,6 +698,7 @@ export class MessageHandler {
           conversation: {
             select: {
               createdAt: true,
+              lastMessageAt: true,
               participants: {
                 where: { userId, isActive: true },
                 select: { role: true },
@@ -719,34 +741,43 @@ export class MessageHandler {
         );
       }
 
-      // Soft delete: clear translations then set deletedAt
+      // Soft delete: atomically clear translations and set deletedAt in one write
       await this.prisma.message.update({
         where: { id: validated.messageId },
-        data: { translations: null },
-      });
-      await this.prisma.message.update({
-        where: { id: validated.messageId },
-        data: { deletedAt: new Date() },
+        data: { translations: null, deletedAt: new Date() },
       });
 
-      // Update conversation's lastMessageAt to the latest non-deleted message
+      // Recompute conversation's lastMessageAt to the latest non-deleted message.
+      // Optimistic-concurrency guard: only write while lastMessageAt is still the
+      // value read at handler start. A `message:new` committing between the read
+      // and this write advances lastMessageAt; the guard then mismatches (0 rows
+      // updated) so the cursor never regresses backward onto the deleted message
+      // and mis-sorts the conversation list.
       const lastNonDeleted = await this.prisma.message.findFirst({
         where: { conversationId: message.conversationId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true },
       });
-      await this.prisma.conversation.update({
-        where: { id: message.conversationId },
+      await this.prisma.conversation.updateMany({
+        where: {
+          id: message.conversationId,
+          lastMessageAt: message.conversation.lastMessageAt,
+        },
         data: {
           lastMessageAt: lastNonDeleted?.createdAt ?? message.conversation.createdAt,
         },
       });
 
       const room = ROOMS.conversation(message.conversationId);
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
+      const deletedPayload = {
         messageId: validated.messageId,
         conversationId: message.conversationId,
-      });
+      };
+      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+
+      this._enqueueOfflineEventForParticipants(
+        message.conversationId, message.senderId, 'deleted', validated.messageId, deletedPayload
+      ).catch((err) => handlerLogger.warn('offline enqueue (delete) failed', { error: err }));
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
       handlerLogger.debug('message:delete processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
@@ -960,6 +991,26 @@ export class MessageHandler {
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: sharedParticipants.filter((p) => p.userId).length });
       }
 
+      // Offline delivery queue — parity with the REST send path
+      // (`MeeshySocketIOManager.broadcastMessage` / `_broadcastNewMessage`).
+      // Without this, a message sent via the primary WS `message:send` path
+      // to a currently-offline recipient is never replayed on their next
+      // reconnect (`_drainPendingMessages`) and never triggers the
+      // sent→delivered receipt upgrade for the sender. Uses the cid-stripped
+      // `broadcastPayload` (same one peers receive live) so a replayed
+      // message never leaks the sender's local optimistic id to another user.
+      if (this.deliveryQueue) {
+        for (const p of sharedParticipants) {
+          if (!p.userId || p.id === message.senderId || this.connectedUsers.has(p.userId)) continue;
+          this.deliveryQueue.enqueue(p.userId, {
+            messageId: message.id,
+            conversationId: normalizedId,
+            payload: broadcastPayload,
+            enqueuedAt: new Date().toISOString(),
+          }).catch((err) => handlerLogger.warn('Failed to enqueue message for offline user', { userId: p.userId, error: err }));
+        }
+      }
+
       // Mettre à jour unread counts (re-uses the participant list already fetched above)
       await this._updateUnreadCounts(message, normalizedId, sharedParticipants);
 
@@ -1025,6 +1076,43 @@ export class MessageHandler {
       let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
       for (const sid of restSids) emitter = emitter.to(sid);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
+    }
+  }
+
+  /**
+   * Offline delivery queue for message:edit / message:delete — mirrors the
+   * enqueue block in `broadcastNewMessage` for the WS `message:send` path.
+   * Without this, an edit or delete made while a recipient is offline is
+   * lost for them: `RedisDeliveryQueue` only ever replayed `message:new`
+   * entries on reconnect, so the recipient's cached message stays on the
+   * pre-edit content (or a "deleted" message stays visible) until an
+   * unrelated full refetch of that conversation happens to occur.
+   */
+  private async _enqueueOfflineEventForParticipants(
+    conversationId: string,
+    senderParticipantId: string | null | undefined,
+    eventType: 'edited' | 'deleted',
+    messageId: string,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.deliveryQueue) return;
+    try {
+      const participants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true },
+        select: { id: true, userId: true }
+      });
+      for (const p of participants) {
+        if (!p.userId || p.id === senderParticipantId || this.connectedUsers.has(p.userId)) continue;
+        this.deliveryQueue.enqueue(p.userId, {
+          messageId,
+          conversationId,
+          payload,
+          enqueuedAt: new Date().toISOString(),
+          eventType,
+        }).catch((err) => handlerLogger.warn('Failed to enqueue offline event', { userId: p.userId, eventType, error: err }));
+      }
+    } catch (err) {
+      handlerLogger.warn('Failed to fetch participants for offline enqueue', { conversationId, eventType, error: err });
     }
   }
 
@@ -1323,11 +1411,11 @@ export class MessageHandler {
       // Filter out the sender — unread counts are for recipients only
       const participants = allParticipants.filter((p) => p.id !== senderId);
 
-      // Batch: 1 cursor query + N parallel counts instead of 3N sequential queries
+      // Batch: 1 cursor query + 1 message fetch instead of 3N sequential queries.
+      // Each recipient's count excludes their OWN messages (handled inside the service).
       const unreadCounts = await this.readStatusService.getUnreadCountsForParticipants(
         participants,
-        conversationId,
-        senderId
+        conversationId
       );
 
       await Promise.all(participants.map(async (participant) => {

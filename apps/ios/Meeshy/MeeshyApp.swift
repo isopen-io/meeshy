@@ -34,6 +34,10 @@ struct MeeshyApp: App {
         !hasCompletedOnboarding && !authManager.isAuthenticated
     }
 
+    // Kept alive for the process lifetime so the Combine pipeline is never
+    // deallocated. A static var on the App struct survives SwiftUI re-evaluations.
+    private static var nearCapacityCancellable: AnyCancellable?
+
     init() {
         // Task 1.3 — register the BGProcessingTask identifier BEFORE the
         // scene is created. `BGTaskScheduler.register` MUST run before
@@ -53,6 +57,23 @@ struct MeeshyApp: App {
         // nonisolated flag — the SDK stays call-agnostic (SDK purity).
         MessageSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
         SocialSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
+
+        // Surface a one-shot toast when the offline outbox reaches 80% of its
+        // 500-item capacity. removeDuplicates() in nearCapacityPublisher ensures
+        // the toast fires exactly once per true→false→true crossing, not on
+        // every new enqueue while near capacity.
+        Self.nearCapacityCancellable = OfflineQueue.shared.nearCapacityPublisher
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { _ in
+                Task { @MainActor in
+                    FeedbackToastManager.shared.showError(
+                        String(localized: "offline.queue.near_capacity",
+                               defaultValue: "File d'envoi presque pleine — reconnectez-vous pour vider la file.",
+                               bundle: .main)
+                    )
+                }
+            }
     }
 
     var body: some Scene {
@@ -286,6 +307,15 @@ struct MeeshyApp: App {
                     // This runs at every boot (not just once) so items from the
                     // previous session are retried as soon as the app is active.
                     Task.detached(priority: .background) {
+                        // bootRecovery resets any rows that were left in the
+                        // `.inflight` state by a prior crash mid-dispatch. Without
+                        // this, those rows are invisible to flush() (which only
+                        // selects `.pending`) until the next background/foreground
+                        // cycle triggers BackgroundTransitionCoordinator which also
+                        // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
+                        // NOT fire on the initial `.active` state, so the coordinator
+                        // path is skipped on cold start.
+                        _ = try? await OfflineQueue.shared.bootRecovery()
                         let flusher = OutboxFlusher(
                             pool: bootPool,
                             dispatcher: OutboxDispatcher(),
@@ -467,8 +497,13 @@ struct MeeshyApp: App {
                         // Capture dbPool before crossing the actor boundary.
                         let pool = dependencies.dbPool
                         Task.detached(priority: .background) {
-                            try? DatabaseMaintenance.runIncrementalVacuum(on: pool)
-                            try? DatabaseMaintenance.runOptimize(on: pool)
+                            do {
+                                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                                try DatabaseMaintenance.runOptimize(on: pool)
+                            } catch {
+                                Logger(subsystem: "me.meeshy.app", category: "maintenance")
+                                    .error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
+                            }
                         }
                     case .inactive:
                         break
@@ -493,6 +528,9 @@ struct MeeshyApp: App {
                         // publishers would be left without subscribers.
                         NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
                         NotificationCoordinator.shared.start()
+                        // A5.3 — resync notifications quand SyncSeqTracker
+                        // détecte un trou de séquence (_seq) sur notification:new.
+                        NotificationGapResyncCoordinator.shared.start()
                         Task { await CacheCoordinator.shared.start() }
                         // SOTA audit Pilier 22 V2 — register the publish-queue
                         // handler + listeners so any pending stories from a
@@ -649,9 +687,8 @@ struct MeeshyApp: App {
         let reports = CrashDiagnosticsManager.shared.consumePending()
         guard let mostRecent = reports.first else { return }
 
-        let isoFormatter = ISO8601DateFormatter()
         for report in reports {
-            let when = isoFormatter.string(from: report.timestamp)
+            let when = report.timestamp.formatted(.iso8601)
             Logger.crash.error("""
                 [\(report.kind.rawValue, privacy: .public)] \
                 \(when, privacy: .public) — \
@@ -662,17 +699,17 @@ struct MeeshyApp: App {
 
         crashReportsToShow = reports
 
-        let kindLabel: String
-        switch mostRecent.kind {
-        case .nsException: kindLabel = "Exception"
-        case .crash: kindLabel = "Crash"
-        case .hang: kindLabel = "Blocage"
-        case .cpuException: kindLabel = "Pic CPU"
-        case .diskWriteException: kindLabel = "Ecriture disque"
-        }
+        let kindLabel = mostRecent.kind.localizedLabel
         let extra = reports.count > 1 ? " (+\(reports.count - 1))" : ""
         toastManager.show(
-            "\(kindLabel) precedent\(extra) : \(mostRecent.summary)",
+            String(
+                format: String(
+                    localized: "crash.toast.previous",
+                    defaultValue: "%1$@ précédent%2$@ : %3$@",
+                    bundle: .main
+                ),
+                kindLabel, extra, mostRecent.summary
+            ),
             type: .info
         ) { [self] in
             showCrashSheet = true

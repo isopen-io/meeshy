@@ -3,7 +3,10 @@ import Foundation
 // MARK: - Protocol
 
 public protocol StoryServiceProviding: Sendable {
-    func list(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    /// R8/G1 — `updatedSince` non-nil = delta-sync (`?updatedSince=ISO8601`) :
+    /// le gateway ne renvoie que les stories créées/modifiées depuis ce
+    /// timestamp. `nil` = tray complet (comportement historique).
+    func list(cursor: String?, limit: Int, updatedSince: Date?) async throws -> PaginatedAPIResponse<[APIPost]>
     func markViewed(storyId: String) async throws
     func delete(storyId: String) async throws
     func react(storyId: String, emoji: String) async throws
@@ -15,6 +18,14 @@ public protocol StoryServiceProviding: Sendable {
     /// post drained on a cold-start notification tap), so `cachedPost(id:)` then
     /// resolves it without a network round-trip.
     func cache(post: APIPost)
+}
+
+public extension StoryServiceProviding {
+    /// Compat : les call sites historiques (tray complet) restent binaires —
+    /// seule l'exigence 3-params est à implémenter par les conformers.
+    func list(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        try await list(cursor: cursor, limit: limit, updatedSince: nil)
+    }
 }
 
 public final class StoryService: StoryServiceProviding, @unchecked Sendable {
@@ -34,8 +45,20 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
         self.api = api
     }
 
-    public func list(cursor: String? = nil, limit: Int = 50) async throws -> PaginatedAPIResponse<[APIPost]> {
-        let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(endpoint: "/posts/feed/stories", cursor: cursor, limit: limit)
+    public func list(cursor: String? = nil, limit: Int = 50, updatedSince: Date? = nil) async throws -> PaginatedAPIResponse<[APIPost]> {
+        var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let cursor {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        if let updatedSince {
+            queryItems.append(URLQueryItem(
+                name: "updatedSince",
+                value: ISO8601DateFormatter().string(from: updatedSince)
+            ))
+        }
+        let response: PaginatedAPIResponse<[APIPost]> = try await api.request(
+            endpoint: "/posts/feed/stories", method: "GET", body: nil, queryItems: queryItems
+        )
         cachePosts(response.data)
         return response
     }

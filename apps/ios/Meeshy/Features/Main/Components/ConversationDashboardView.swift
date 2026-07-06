@@ -99,7 +99,7 @@ struct ConversationDashboardView: View {
                         .frame(height: 100)
 
                         Text(String(localized: "dashboard.health", defaultValue: "Sante", bundle: .main))
-                            .font(.system(size: 11, weight: .heavy, design: .rounded))
+                            .font(MeeshyFont.relative(11, weight: .heavy, design: .rounded))
                             .foregroundColor(theme.textMuted)
                             .tracking(1.0)
                     }
@@ -127,11 +127,12 @@ struct ConversationDashboardView: View {
                 } else if !summary.text.isEmpty {
                     HStack(alignment: .top, spacing: 4) {
                         Text("\u{201C}")
+                            // Dynamic Type exception: decorative opening-quote glyph, absolute offset(y:) tuned to its point size
                             .font(.system(size: 48, weight: .bold, design: .serif))
                             .foregroundColor(accent.opacity(0.3))
                             .offset(y: -12)
                         Text(summary.text)
-                            .font(.system(size: 14, weight: .regular, design: .serif))
+                            .font(MeeshyFont.relative(14, weight: .regular, design: .serif))
                             .italic()
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(6)
@@ -141,7 +142,7 @@ struct ConversationDashboardView: View {
 
                 if summary.healthScore != nil, !summary.text.isEmpty {
                     Text(summary.text)
-                        .font(.system(size: 13, weight: .regular, design: .serif))
+                        .font(MeeshyFont.relative(13, weight: .regular, design: .serif))
                         .italic()
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
@@ -152,7 +153,7 @@ struct ConversationDashboardView: View {
                     FlowLayout(spacing: 6) {
                         ForEach(summary.currentTopics, id: \.self) { topic in
                             Text(topic)
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(MeeshyFont.relative(11, weight: .semibold))
                                 .foregroundColor(accent)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
@@ -167,7 +168,7 @@ struct ConversationDashboardView: View {
                     FlowLayout(spacing: 5) {
                         ForEach(summary.dominantEmotions, id: \.self) { emotion in
                             Text(emotion)
-                                .font(.system(size: 10, weight: .medium))
+                                .font(MeeshyFont.relative(10, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
@@ -182,17 +183,17 @@ struct ConversationDashboardView: View {
                 if !summary.overallTone.isEmpty {
                     HStack(spacing: 6) {
                         Image(systemName: "theatermasks.fill")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(MeeshyFont.relative(10, weight: .semibold))
                             .foregroundColor(accent)
                         Text(String(format: String(localized: "dashboard.tone", defaultValue: "Ton : %@", bundle: .main), summary.overallTone))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                     }
                 }
 
                 if let dynamique = summary.dynamique, !dynamique.isEmpty {
                     Text(dynamique)
-                        .font(.system(size: 12, weight: .regular, design: .serif))
+                        .font(MeeshyFont.relative(12, weight: .regular, design: .serif))
                         .italic()
                         .foregroundColor(theme.textMuted)
                 }
@@ -203,10 +204,10 @@ struct ConversationDashboardView: View {
     private func metricPill(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(color)
             Text(text)
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, 12)
@@ -354,6 +355,7 @@ struct ConversationDashboardView: View {
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 5)) { _ in
                         AxisValueLabel()
+                            // Dynamic Type exception: Swift Charts axis label kept compact inside the fixed-height chart
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(theme.textMuted)
                     }
@@ -361,6 +363,7 @@ struct ConversationDashboardView: View {
                 .chartYAxis {
                     AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
                         AxisValueLabel()
+                            // Dynamic Type exception: Swift Charts axis label kept compact inside the fixed-height chart
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(theme.textMuted)
                         AxisGridLine()
@@ -384,7 +387,7 @@ struct ConversationDashboardView: View {
                     HapticFeedback.light()
                 } label: {
                     Text(period.rawValue)
-                        .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                        .font(MeeshyFont.relative(11, weight: isSelected ? .bold : .medium))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -403,10 +406,10 @@ struct ConversationDashboardView: View {
     private var emptyChartPlaceholder: some View {
         VStack(spacing: 8) {
             Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.system(size: 24, weight: .light))
+                .font(MeeshyFont.relative(24, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.3))
             Text(String(localized: "dashboard.activity.empty", defaultValue: "Pas assez de donnees", bundle: .main))
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(height: 120)
@@ -427,14 +430,14 @@ struct ConversationDashboardView: View {
                             .frame(width: 10, height: 10)
 
                         Text(profile.displayName ?? profile.username ?? "?")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(MeeshyFont.relative(14, weight: .bold))
                             .foregroundColor(theme.textPrimary)
 
                         Spacer()
 
                         if profile.confidence > 0 {
                             Text("\(Int(profile.confidence * 100))%")
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .font(MeeshyFont.relative(10, weight: .bold, design: .rounded))
                                 .foregroundColor(theme.textMuted)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
@@ -446,7 +449,7 @@ struct ConversationDashboardView: View {
 
                     if !profile.personaSummary.isEmpty {
                         Text(profile.personaSummary)
-                            .font(.system(size: 12, weight: .regular, design: .serif))
+                            .font(MeeshyFont.relative(12, weight: .regular, design: .serif))
                             .italic()
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(3)
@@ -468,11 +471,11 @@ struct ConversationDashboardView: View {
                     if !profile.catchphrases.isEmpty {
                         HStack(alignment: .top, spacing: 6) {
                             Image(systemName: "quote.opening")
-                                .font(.system(size: 9))
+                                .font(MeeshyFont.relative(9))
                                 .foregroundColor(accent.opacity(0.5))
                                 .offset(y: 2)
                             Text(profile.catchphrases.prefix(3).joined(separator: " \u{00B7} "))
-                                .font(.system(size: 11, weight: .medium, design: .serif))
+                                .font(MeeshyFont.relative(11, weight: .medium, design: .serif))
                                 .italic()
                                 .foregroundColor(theme.textMuted)
                                 .lineLimit(2)
@@ -489,7 +492,7 @@ struct ConversationDashboardView: View {
                         HStack(spacing: 8) {
                             ForEach(profile.topicsOfExpertise.prefix(3), id: \.self) { topic in
                                 Text(topic)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(MeeshyFont.relative(10, weight: .medium))
                                     .foregroundColor(theme.textMuted)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -499,7 +502,7 @@ struct ConversationDashboardView: View {
                             }
                             if !profile.commonEmojis.isEmpty {
                                 Text(profile.commonEmojis.prefix(6).joined(separator: ""))
-                                    .font(.system(size: 13))
+                                    .font(MeeshyFont.relative(13))
                             }
                         }
                     }
@@ -522,9 +525,9 @@ struct ConversationDashboardView: View {
     private func profileTag(icon: String, text: String) -> some View {
         HStack(spacing: 3) {
             Image(systemName: icon)
-                .font(.system(size: 9, weight: .semibold))
+                .font(MeeshyFont.relative(9, weight: .semibold))
             Text(text)
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
         }
         .foregroundColor(theme.textSecondary)
         .padding(.horizontal, 8)
@@ -569,14 +572,14 @@ struct ConversationDashboardView: View {
         let sorted = traits.sorted { $0.score > $1.score }
         return VStack(alignment: .leading, spacing: 4) {
             Text(category.uppercased())
-                .font(.system(size: 9, weight: .bold))
+                .font(MeeshyFont.relative(9, weight: .bold))
                 .foregroundColor(theme.textMuted)
                 .tracking(0.8)
 
             ForEach(sorted.prefix(4), id: \.label) { trait in
                 HStack(spacing: 8) {
                     Text(trait.label)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                         .frame(width: 80, alignment: .leading)
                         .lineLimit(1)
@@ -598,7 +601,7 @@ struct ConversationDashboardView: View {
                     .frame(height: 4)
 
                     Text("\(trait.score)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(10, weight: .bold, design: .rounded))
                         .foregroundColor(traitScoreColor(trait.score))
                         .frame(width: 24, alignment: .trailing)
                 }
@@ -627,7 +630,7 @@ struct ConversationDashboardView: View {
                 HStack(spacing: 10) {
                     if index < 3 {
                         Text("#\(index + 1)")
-                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .font(MeeshyFont.relative(11, weight: .black, design: .rounded))
                             .foregroundColor(accent)
                             .frame(width: 24)
                     } else {
@@ -639,11 +642,11 @@ struct ConversationDashboardView: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(stat.name)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
                         Text(String(format: String(localized: "dashboard.words-count", defaultValue: "%@ mots", bundle: .main), formatNumber(stat.wordCount)))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(MeeshyFont.relative(10, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
                     .frame(width: 80, alignment: .leading)
@@ -663,7 +666,7 @@ struct ConversationDashboardView: View {
                     .frame(height: 18)
 
                     Text("\(stat.messageCount)")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textSecondary)
                         .frame(width: 40, alignment: .trailing)
                 }
@@ -714,12 +717,12 @@ struct ConversationDashboardView: View {
         let pct = total > 0 ? Int(Double(count) / Double(total) * 100) : 0
         return VStack(spacing: 4) {
             Text(emoji)
-                .font(.system(size: 22))
+                .font(MeeshyFont.relative(22))
             Text("\(pct)%")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .bold, design: .rounded))
                 .foregroundColor(color)
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -774,12 +777,12 @@ struct ConversationDashboardView: View {
                 ForEach(types, id: \.type) { stat in
                     HStack(spacing: 10) {
                         Image(systemName: stat.icon)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                             .foregroundColor(stat.color)
                             .frame(width: 20)
 
                         Text(stat.type)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                             .frame(width: 60, alignment: .leading)
 
@@ -800,7 +803,7 @@ struct ConversationDashboardView: View {
                         .frame(height: 10)
 
                         Text("\(stat.count)")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 40, alignment: .trailing)
                     }
@@ -818,11 +821,11 @@ struct ConversationDashboardView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(isDark ? Color.white.opacity(0.035) : Color.white.opacity(0.9))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .strokeBorder(
                     LinearGradient(
                         colors: [accent.opacity(0.2), accent.opacity(0.05)],
@@ -837,10 +840,10 @@ struct ConversationDashboardView: View {
     private func sectionHeader(icon: String, title: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(accent)
             Text(title.uppercased())
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .font(MeeshyFont.relative(12, weight: .heavy, design: .rounded))
                 .foregroundColor(theme.textMuted)
                 .tracking(1.5)
         }
@@ -1115,8 +1118,8 @@ struct ConversationDashboardView: View {
     // MARK: - Helpers
 
     private func formatNumber(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
-        if n >= 10_000 { return String(format: "%.1fk", Double(n) / 1_000) }
+        if n >= 1_000_000 { return MeeshyNumberFormatter.formatCompact(n) }
+        if n >= 10_000 { return MeeshyNumberFormatter.formatCompact(n) }
         if n >= 1_000 {
             return n.formatted()
         }
@@ -1141,10 +1144,7 @@ private struct StatRing: View {
     }
 
     private var displayValue: String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 10_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
+        MeeshyNumberFormatter.formatCompact(value)
     }
 
     var body: some View {
@@ -1160,6 +1160,7 @@ private struct StatRing: View {
                     .animation(.spring(response: 0.8, dampingFraction: 0.7), value: animated)
 
                 Text(displayValue)
+                    // Dynamic Type exception: value centered in a fixed 60pt ring (minimumScaleFactor shrinks-to-fit)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundColor(textColor)
                     .minimumScaleFactor(0.6)
@@ -1168,6 +1169,7 @@ private struct StatRing: View {
             .frame(width: 60, height: 60)
 
             Text(label.uppercased())
+                // Dynamic Type exception: compact ring caption under the fixed-geometry ring
                 .font(.system(size: 9, weight: .bold, design: .rounded))
                 .foregroundColor(mutedColor)
                 .tracking(0.5)
@@ -1211,6 +1213,7 @@ private struct ArcGauge: View {
 
                 VStack(spacing: 0) {
                     Text("\(score)")
+                        // Dynamic Type exception: score centered in the fixed-geometry arc gauge (position is radius-relative)
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundColor(scoreColor)
                 }

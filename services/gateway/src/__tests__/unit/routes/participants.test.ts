@@ -31,6 +31,7 @@ jest.mock('@meeshy/shared/types', () => ({
 
 import { canAccessConversation } from '../../../routes/conversations/utils/access-control';
 import { registerParticipantsRoutes } from '../../../routes/conversations/participants';
+import { cacheParticipant, getCachedParticipant } from '../../../utils/participant-lookup-cache';
 
 const VALID_CONV_ID = '507f1f77bcf86cd799439011';
 const VALID_USER_ID = '507f1f77bcf86cd799439022';
@@ -283,7 +284,6 @@ describe('registerParticipantsRoutes', () => {
               lastName: 'User',
               displayName: 'TestUser',
               avatar: 'avatar.png',
-              email: 'test@test.com',
               role: 'USER',
               conversationRole: 'member',
               isOnline: true,
@@ -300,6 +300,10 @@ describe('registerParticipantsRoutes', () => {
           pagination: expect.objectContaining({ nextCursor: null, hasMore: false }),
         })
       );
+      // PII: l'email des co-participants n'est jamais exposé dans la liste des
+      // participants (aucun client ne l'affiche ; les modos ont les endpoints admin).
+      const participantData = reply.send.mock.calls[0][0].data[0];
+      expect(participantData.email).toBeUndefined();
     });
 
     it('should use default limit of 20 when not provided', async () => {
@@ -480,7 +484,7 @@ describe('registerParticipantsRoutes', () => {
       expect(data.firstName).toBe('AnonUser');
       expect(data.lastName).toBe('');
       expect(data.avatar).toBeNull();
-      expect(data.email).toBe('');
+      expect(data.email).toBeUndefined();
       expect(data.role).toBe('USER');
       expect(data.systemLanguage).toBe('de');
       expect(data.regionalLanguage).toBe('de');
@@ -1242,6 +1246,23 @@ describe('registerParticipantsRoutes', () => {
       expect(io._leave).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
       expect(mockFastify._invalidateParticipantCache).toHaveBeenCalledWith(TARGET_USER_ID, VALID_CONV_ID);
       expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('should evict the removed participant from the message-send lookup cache', async () => {
+      const route = getRoute(mockFastify, 'DELETE', '/participants');
+      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
+      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      const reply = createMockReply();
+      cacheParticipant(PARTICIPANT_ID, VALID_CONV_ID, {
+        id: PARTICIPANT_ID,
+        conversationId: VALID_CONV_ID,
+        isActive: true,
+      });
+
+      await route.handler(createDeleteRequest(), reply);
+
+      expect(getCachedParticipant(PARTICIPANT_ID, VALID_CONV_ID)).toBeUndefined();
     });
 
     it('should soft delete the participant when authorized as ADMIN user role', async () => {

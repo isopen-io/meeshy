@@ -70,11 +70,11 @@ struct SharePickerView: View {
                 }
             }
             .background(theme.backgroundPrimary)
-            .navigationTitle("Partager avec...")
+            .navigationTitle(String(localized: "share.picker.title", defaultValue: "Partager avec...", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") {
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                         onDismiss()
                     }
@@ -96,15 +96,16 @@ struct SharePickerView: View {
                 .frame(width: 3, height: 32)
 
             contentIcon
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(contentLabel)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
                     .lineLimit(1)
 
                 Text(contentPreview)
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(2)
             }
@@ -114,6 +115,7 @@ struct SharePickerView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -121,11 +123,11 @@ struct SharePickerView: View {
         switch sharedContent {
         case .text:
             Image(systemName: "text.bubble.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.indigo400)
         case .url:
             Image(systemName: "link.circle.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.indigo600)
         case .image(let image):
             Image(uiImage: image)
@@ -135,22 +137,22 @@ struct SharePickerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         case .message:
             Image(systemName: "arrowshape.turn.up.forward.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.warning)
         case .story:
             Image(systemName: "play.rectangle.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.indigo500)
         }
     }
 
     private var contentLabel: String {
         switch sharedContent {
-        case .text: return "Texte"
-        case .url: return "Lien"
-        case .image: return "Image"
-        case .message: return "Message transf\u{00e9}r\u{00e9}"
-        case .story: return "Story partag\u{00e9}e"
+        case .text: return String(localized: "share.content.text", defaultValue: "Texte", bundle: .main)
+        case .url: return String(localized: "share.content.url", defaultValue: "Lien", bundle: .main)
+        case .image: return String(localized: "share.content.image", defaultValue: "Image", bundle: .main)
+        case .message: return String(localized: "share.content.message", defaultValue: "Message transf\u{00e9}r\u{00e9}", bundle: .main)
+        case .story: return String(localized: "share.content.story", defaultValue: "Story partag\u{00e9}e", bundle: .main)
         }
     }
 
@@ -161,14 +163,14 @@ struct SharePickerView: View {
         case .url(let url):
             return url.absoluteString
         case .image:
-            return "Photo a partager"
+            return String(localized: "share.preview.image", defaultValue: "Photo \u{00e0} partager", bundle: .main)
         case .message(let msg):
-            return msg.content.isEmpty ? "[Media]" : String(msg.content.prefix(120))
+            return msg.content.isEmpty ? String(localized: "share.preview.media", defaultValue: "[M\u{00e9}dia]", bundle: .main) : String(msg.content.prefix(120))
         case .story(let item, let authorName):
             if let content = item.content, !content.isEmpty {
                 return String(content.prefix(120))
             }
-            return "Story de \(authorName)"
+            return String(format: String(localized: "share.preview.story", defaultValue: "Story de %@", bundle: .main), authorName)
         }
     }
 
@@ -177,11 +179,12 @@ struct SharePickerView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
-            TextField("Rechercher une conversation...", text: $searchText)
-                .font(.system(size: 15))
+            TextField(String(localized: "share.search.placeholder", defaultValue: "Rechercher une conversation...", bundle: .main), text: $searchText)
+                .font(MeeshyFont.relative(15))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -191,7 +194,7 @@ struct SharePickerView: View {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
@@ -221,7 +224,7 @@ struct SharePickerView: View {
     private var emptyState: some View {
         EmptyStateView(
             icon: "bubble.left.and.bubble.right",
-            title: "Aucune conversation",
+            title: String(localized: "share.empty", defaultValue: "Aucune conversation", bundle: .main),
             subtitle: ""
         )
     }
@@ -253,26 +256,28 @@ struct SharePickerView: View {
                 ConversationTitleLabel(
                     name: conv.displayName,
                     favoriteEmoji: conv.userState.reaction,
-                    font: .system(size: 15, weight: .medium),
+                    font: MeeshyFont.relative(15, weight: .medium),
                     color: theme.textPrimary
                 )
 
                 HStack(spacing: 4) {
                     Text(conversationTypeLabel(conv.type))
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
 
                     if let preview = conv.lastMessagePreview, !preview.isEmpty {
                         Text("\u{2022}")
-                            .font(.system(size: 10))
+                            .font(MeeshyFont.relative(10))
                             .foregroundColor(theme.textMuted)
+                            .accessibilityHidden(true)
                         Text(preview)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -285,11 +290,19 @@ struct SharePickerView: View {
 
     @ViewBuilder
     private func shareButton(for conv: Conversation) -> some View {
+        // Colonne de contrôle en fin de ligne : les 3 états (envoyer / en cours /
+        // envoyé) restent à 26pt fixe pour rester alignés avec le ProgressView
+        // contraint à 26×26 — un glyphe scalable ferait sauter la largeur de la
+        // colonne d'action au fil du réglage Dynamic Type (doctrine 86i, contrôle
+        // à taille fixe). Tap target ≥44pt garanti par le padding de ligne.
         if sentToIds.contains(conv.id) {
+            // Fixed control-sized status glyph (26pt): fills the row's trailing action
+            // slot at a deliberate control size, not reading text (74i/86i doctrine).
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 26))
+                .font(MeeshyFont.relative(26))
                 .foregroundColor(MeeshyColors.success)
                 .transition(.scale.combined(with: .opacity))
+                .accessibilityLabel(String(localized: "share.sent", defaultValue: "Envoy\u{00e9}", bundle: .main))
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
@@ -298,8 +311,9 @@ struct SharePickerView: View {
             Button {
                 shareToConversation(conv)
             } label: {
+                // Fixed control-sized action glyph (26pt): control size, not reading text.
                 Image(systemName: "paperplane.circle.fill")
-                    .font(.system(size: 26))
+                    .font(MeeshyFont.relative(26))
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .disabled(sendingToId != nil)
@@ -311,14 +325,14 @@ struct SharePickerView: View {
 
     private func conversationTypeLabel(_ type: MeeshyConversation.ConversationType) -> String {
         switch type {
-        case .direct: return "Direct"
-        case .group: return "Groupe"
-        case .public: return "Publique"
-        case .global: return "Globale"
-        case .community: return "Communaut\u{00e9}"
-        case .channel: return "Canal"
-        case .bot: return "Bot"
-        case .broadcast: return "Communication"
+        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
+        case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
+        case .public: return String(localized: "conversation.type.public", defaultValue: "Publique", bundle: .main)
+        case .global: return String(localized: "conversation.type.global", defaultValue: "Globale", bundle: .main)
+        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaut\u{00e9}", bundle: .main)
+        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Canal", bundle: .main)
+        case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
+        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
         }
     }
 
@@ -341,7 +355,7 @@ struct SharePickerView: View {
         Task {
             guard let content = contentToSend, !content.isEmpty else {
                 HapticFeedback.error()
-                FeedbackToastManager.shared.showError("Erreur lors du partage")
+                FeedbackToastManager.shared.showError(String(localized: "share.error", defaultValue: "Erreur lors du partage", bundle: .main))
                 return
             }
             let success = await viewModel.send(
@@ -353,7 +367,7 @@ struct SharePickerView: View {
                 HapticFeedback.success()
             } else {
                 HapticFeedback.error()
-                FeedbackToastManager.shared.showError("Erreur lors du partage")
+                FeedbackToastManager.shared.showError(String(localized: "share.error", defaultValue: "Erreur lors du partage", bundle: .main))
             }
         }
     }
@@ -365,7 +379,7 @@ struct SharePickerView: View {
         case .image: return nil
         case .message(let msg): return msg.content.isEmpty ? nil : msg.content
         case .story(let item, let authorName):
-            return "🔗 Story de \(authorName) : https://meeshy.me/story/\(item.id)"
+            return String(format: String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .main), authorName, "https://meeshy.me/story/\(item.id)")
         }
     }
 

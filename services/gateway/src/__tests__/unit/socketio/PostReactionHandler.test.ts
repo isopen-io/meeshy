@@ -497,6 +497,70 @@ describe('PostReactionHandler', () => {
       );
     });
 
+    it('test_handleAddReaction_reactionOnStory_forwardsRealTypeAndEphemeralContext', async () => {
+      // Sibling-drift guard: the socket path must forward the real post type +
+      // ephemeral context (mirror of the REST like route), NOT hardcode 'POST'.
+      // Without it, a STORY reaction yields a generic post_like notification and
+      // loses expiry context.
+      const reactorSocketToUser = new Map<string, string>();
+      reactorSocketToUser.set(SOCKET_ID, ANOTHER_USER_ID);
+
+      const reactorConnectedUsers = new Map();
+      reactorConnectedUsers.set(ANOTHER_USER_ID, {
+        id: ANOTHER_USER_ID,
+        socketId: SOCKET_ID,
+        isAnonymous: false,
+        language: 'fr',
+        userId: ANOTHER_USER_ID,
+      });
+
+      const storyCreatedAt = new Date('2026-07-04T10:00:00.000Z');
+      const storyExpiresAt = new Date('2026-07-05T10:00:00.000Z');
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: USER_ID,
+        type: 'STORY',
+        content: 'my ephemeral story caption',
+        createdAt: storyCreatedAt,
+        expiresAt: storyExpiresAt,
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        deletedAt: null,
+      });
+
+      const storyHandler = new PostReactionHandler({
+        io: mockIO as any,
+        prisma: mockPrisma,
+        notificationService: mockNotificationService,
+        postReactionService: mockReactionService,
+        connectedUsers: reactorConnectedUsers as any,
+        socketToUser: reactorSocketToUser,
+        socialEvents: mockSocialEvents,
+      });
+
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      const reactorUpdateEvent = { ...sampleUpdateEvent, userId: ANOTHER_USER_ID };
+      const reactorReactionData = { ...sampleReactionData, userId: ANOTHER_USER_ID };
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue(reactorReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(reactorUpdateEvent);
+
+      await storyHandler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockNotificationService.createPostLikeNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          postType: 'STORY',
+          postPreview: 'my ephemeral story caption',
+          postCreatedAt: storyCreatedAt,
+          postExpiresAt: storyExpiresAt,
+        })
+      );
+    });
+
     it('test_handleAddReaction_rateLimitExceeded_callbackError', async () => {
       const socket = createMockSocket();
       const data = { postId: POST_ID, emoji: EMOJI };

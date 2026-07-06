@@ -54,6 +54,9 @@ struct OutboxDispatcher: OutboxDispatching {
         case .markAsRead:
             try await dispatchMarkAsRead(record)
 
+        case .markStoryViewed:
+            try await dispatchMarkStoryViewed(record)
+
         case .createConversation:
             try await dispatchCreateConversation(record)
 
@@ -99,17 +102,21 @@ struct OutboxDispatcher: OutboxDispatching {
     /// Decoded the typed payload from `record.payload`. Treats a decode
     /// failure as permanent so the flusher escalates to `.exhausted` after
     /// the next attempt instead of looping forever on a corrupt row.
+    ///
+    /// Throws a typed `MeeshyError.server(statusCode: 400, _)` — not a raw
+    /// `NSError` — so `OutboxFlusher.isPermanentServerRejection` (which
+    /// pattern-matches on `MeeshyError`) recognizes a corrupt local payload
+    /// as permanent and dead-letters it on the first attempt, the same as
+    /// any other 4xx rejection, instead of burning the full retry budget
+    /// (~1 min of exponential backoff) on a row that can never succeed.
     private func decodePayload<P: Decodable>(_ record: OutboxRecord, as type: P.Type) throws -> P {
         do {
             return try decoder.decode(P.self, from: record.payload)
         } catch {
             logger.error("Failed to decode \(String(describing: P.self), privacy: .public) for outbox \(record.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            throw NSError(
-                domain: "OutboxDispatcher",
-                code: 400,
-                userInfo: [
-                    NSLocalizedDescriptionKey: "Corrupt \(record.kind.rawValue) payload for \(record.id)"
-                ]
+            throw MeeshyError.server(
+                statusCode: 400,
+                message: "Corrupt \(record.kind.rawValue) payload for \(record.id)"
             )
         }
     }
@@ -229,6 +236,25 @@ struct OutboxDispatcher: OutboxDispatching {
     /// `X-Client-Mutation-Id` header (no server-side dedup to feed).
     /// A 404 means the conversation was deleted while the row was pending
     /// — swallow as success so the flusher removes the row.
+    /// R6 — `POST /posts/:id/view`, même contrat que le chemin direct
+    /// historique (`StoryService.markViewed`) : le gateway renvoie
+    /// `{ viewed: true }` (Bool) et un P2002 (déjà vu) est un no-op serveur.
+    /// Une story supprimée/expirée (404) rend le « vu » obsolète — succès.
+    private func dispatchMarkStoryViewed(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: MarkStoryViewedPayload.self)
+        do {
+            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
+                endpoint: "/posts/\(payload.storyId)/view",
+                method: "POST",
+                body: nil,
+                queryItems: nil
+            )
+            logger.info("markStoryViewed dispatched story=\(payload.storyId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("markStoryViewed 404 story=\(payload.storyId, privacy: .public) — story gone, accepting as success")
+        }
+    }
+
     private func dispatchMarkAsRead(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: MarkAsReadPayload.self)
         do {
@@ -440,7 +466,11 @@ struct OutboxDispatcher: OutboxDispatching {
             queryItems: nil,
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
         )
-        for path in uploadedLocalPaths { try? FileManager.default.removeItem(atPath: path) }
+        for path in uploadedLocalPaths {
+            do { try FileManager.default.removeItem(atPath: path) } catch {
+                logger.warning("createPost: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
         logger.info("createPost dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
@@ -675,7 +705,11 @@ struct OutboxDispatcher: OutboxDispatching {
                 // reclaimed by `OutboxFlusher.cleanupLocalFiles(for:)` when
                 // the outbox record terminates (applied or exhausted), which
                 // now sweeps both `localAudioPath` and `localAudioPaths`.
-                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
+                for path in uploadedPaths {
+                    do { try FileManager.default.removeItem(atPath: path) } catch {
+                        logger.warning("audio dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
@@ -753,7 +787,11 @@ struct OutboxDispatcher: OutboxDispatching {
                     )
                 }
 
-                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
+                for path in uploadedPaths {
+                    do { try FileManager.default.removeItem(atPath: path) } catch {
+                        logger.warning("media dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,

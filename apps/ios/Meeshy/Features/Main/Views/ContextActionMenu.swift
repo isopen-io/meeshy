@@ -18,6 +18,8 @@ struct ContextAction: Identifiable, Equatable {
         case delete
         case edit
         case pin
+        case star
+        case thread
         case info
     }
 
@@ -74,6 +76,15 @@ extension ContextAction {
     static func edit(label: String = "Éditer") -> ContextAction {
         .init(kind: .edit, label: label, icon: "pencil", role: .standard)
     }
+    static func pin(label: String = "Épingler", isActive: Bool = false) -> ContextAction {
+        .init(kind: .pin, label: label, icon: isActive ? "pin.slash.fill" : "pin.fill", role: .standard)
+    }
+    static func star(label: String = "Favori", isActive: Bool = false) -> ContextAction {
+        .init(kind: .star, label: label, icon: isActive ? "star.slash.fill" : "star.fill", role: .standard)
+    }
+    static func thread(label: String = "Discussion") -> ContextAction {
+        .init(kind: .thread, label: label, icon: "bubble.left.and.bubble.right.fill", role: .standard)
+    }
 }
 
 /// Single action button inside the context menu capsule. Press feedback is
@@ -105,11 +116,11 @@ struct ContextActionButton: View {
         } label: {
             VStack(spacing: showLabel ? 2 : 0) {
                 Image(systemName: action.icon)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(MeeshyFont.relative(15, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                 if showLabel {
                     Text(action.label)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .lineLimit(1)
                 }
             }

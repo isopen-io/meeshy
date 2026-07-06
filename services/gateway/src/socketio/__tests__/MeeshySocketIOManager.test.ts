@@ -209,6 +209,7 @@ jest.mock('../handlers/MessageHandler', () => ({
     mockMessageHandlerInstance = {
       handleMessageSend: jest.fn().mockResolvedValue(undefined),
       handleMessageSendWithAttachments: jest.fn().mockResolvedValue(undefined),
+      setDeliveryQueue: jest.fn(),
     };
     return mockMessageHandlerInstance;
   }),
@@ -304,7 +305,7 @@ jest.mock('../AgentAdminRelay', () => ({
 
 jest.mock('../../services/ReactionService.js', () => ({
   ReactionService: jest.fn().mockImplementation(() => ({
-    addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+    addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
     createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1' }),
   })),
 }));
@@ -781,6 +782,12 @@ describe('MeeshySocketIOManager', () => {
       const fakeQueue = { drain: jest.fn(), enqueue: jest.fn() };
       manager.setDeliveryQueue(fakeQueue as any);
       expect((manager as any).deliveryQueue).toBe(fakeQueue);
+    });
+
+    it('setDeliveryQueue forwards the same queue to MessageHandler (WS message:send path)', () => {
+      const fakeQueue = { drain: jest.fn(), enqueue: jest.fn() };
+      manager.setDeliveryQueue(fakeQueue as any);
+      expect(mockMessageHandlerInstance.setDeliveryQueue).toHaveBeenCalledWith(fakeQueue);
     });
 
     it('setAgentClient stores the client on the manager', () => {
@@ -1689,16 +1696,15 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('evicts oldest entry when cache exceeds 2000 items', async () => {
-      const cache: Map<string, string> = (manager as any).conversationIdCache;
-      // Fill to max
+      const cache = (manager as any).conversationIdCache;
+      // Fill to max — 'key-0' is the oldest (first-inserted) entry.
       for (let i = 0; i < 2000; i++) {
         cache.set(`key-${i}`, `val-${i}`);
       }
-      const firstKey = cache.keys().next().value;
-      // Add one more via DB
+      // Add one more via DB — pushes past the cap and FIFO-evicts the oldest.
       prisma.conversation.findUnique.mockResolvedValue({ id: 'd'.repeat(24), identifier: 'new-key' });
       await (manager as any).normalizeConversationId('new-key');
-      expect(cache.has(firstKey)).toBe(false);
+      expect(cache.has('key-0')).toBe(false);
       expect(cache.has('new-key')).toBe(true);
     });
 
@@ -1741,6 +1747,22 @@ describe('MeeshySocketIOManager', () => {
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p1', conversationId: 'conv-1' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: 'conv-1' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
+    });
+
+    it('routes entries by eventType: edited → MESSAGE_EDITED, deleted → MESSAGE_DELETED, default → MESSAGE_NEW', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-new' }, eventType: undefined },
+          { payload: { id: 'msg-edit' }, eventType: 'edited' },
+          { payload: { messageId: 'msg-del' }, eventType: 'deleted' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const socket = makeSocket('sock-drain-types');
+      await (manager as any)._drainPendingMessages(socket, 'user-drain-types');
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-new' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_EDITED, { id: 'msg-edit' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_DELETED, { messageId: 'msg-del' });
     });
   });
 
@@ -1866,6 +1888,7 @@ describe('MeeshySocketIOManager', () => {
       });
       prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
+      prisma.participant.findFirst.mockResolvedValue({ id: 'agent-participant-1' });
 
       await manager.handleAgentResponse(baseAgentResponse);
 
@@ -1894,8 +1917,18 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('does not throw on unexpected error', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'agent-participant-err' });
       mockMessagingServiceInstance.handleMessage.mockRejectedValue(new Error('unexpected'));
       await expect(manager.handleAgentResponse(baseAgentResponse)).resolves.not.toThrow();
+    });
+
+    it('returns early without calling handleMessage when the agent has no active participant', async () => {
+      prisma.participant.findFirst.mockResolvedValue(null);
+
+      await manager.handleAgentResponse(baseAgentResponse);
+
+      expect(mockMessagingServiceInstance.handleMessage).not.toHaveBeenCalled();
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
     });
   });
 
@@ -1934,7 +1967,7 @@ describe('MeeshySocketIOManager', () => {
     it('emits REACTION_ADDED to conversation room on success', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -1955,7 +1988,7 @@ describe('MeeshySocketIOManager', () => {
     it('creates notification when reactor !== author', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -1975,7 +2008,7 @@ describe('MeeshySocketIOManager', () => {
     it('skips notification when reactor === author', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -2319,6 +2352,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.user.findMany.mockResolvedValue([]);
       prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
+      prisma.participant.findFirst.mockResolvedValue({ id: 'agent-1-participant' });
       await manager.handleAgentResponse({
         type: 'agent:response',
         conversationId: 'conv-123456789012',
@@ -2329,9 +2363,11 @@ describe('MeeshySocketIOManager', () => {
         messageSource: 'agent',
         metadata: { agentType: 'animator', roleConfidence: 0.9 },
       });
+      // Second arg is the resolved Participant.id, NOT the raw asUserId — see
+      // the DEPRECATED fallback note in MessagingService.handleMessage.
       expect(mockMessagingServiceInstance.handleMessage).toHaveBeenCalledWith(
         expect.objectContaining({ mentionedUserIds: undefined }),
-        'agent-1'
+        'agent-1-participant'
       );
     });
   });
@@ -2981,7 +3017,7 @@ describe('MeeshySocketIOManager', () => {
     it('continues when createReactionNotification rejects', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '🔥' }),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -3843,6 +3879,28 @@ describe('MeeshySocketIOManager', () => {
         (manager as any)._emitDeliveryForDrainedMessages(userId, pending)
       ).resolves.not.toThrow();
     });
+
+    it('ignores edited/deleted entries — only "new" entries bump the delivered receipt', async () => {
+      const userId = 'user-drain-eventtype';
+      const convId = '507f1f77bcf86cd799439215';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-evt', conversationId: convId },
+      ]);
+
+      const pending = [
+        { messageId: 'msg-edited', conversationId: convId, payload: {}, enqueuedAt: 1, eventType: 'edited' },
+        { messageId: 'msg-deleted', conversationId: convId, payload: {}, enqueuedAt: 2, eventType: 'deleted' },
+      ];
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+
+      expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -4032,7 +4090,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-msg-null' });
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
       ReactionService.mockImplementationOnce(() => ({
-        addReaction: jest.fn().mockResolvedValue({ id: 'rxn-msg-null' }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'rxn-msg-null' }, replacedEmojis: [] }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'rxn-msg-null' }),
       }));
       prisma.message.findUnique.mockResolvedValue(null);  // message not found
@@ -4054,7 +4112,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-sndr-null' });
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
       ReactionService.mockImplementationOnce(() => ({
-        addReaction: jest.fn().mockResolvedValue({ id: 'rxn-sndr-null' }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'rxn-sndr-null' }, replacedEmojis: [] }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'rxn-sndr-null' }),
       }));
       prisma.message.findUnique.mockResolvedValue({

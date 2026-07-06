@@ -19,6 +19,19 @@ struct AboutView: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
+    private var versionString: String {
+        String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main)
+    }
+
+    private var copyLabel: String {
+        String(localized: "common.copy", defaultValue: "Copy", bundle: .main)
+    }
+
+    private func copyValue(_ value: String) {
+        UIPasteboard.general.string = value
+        HapticFeedback.success()
+    }
+
     var body: some View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
@@ -40,9 +53,9 @@ struct AboutView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -51,7 +64,7 @@ struct AboutView: View {
             Spacer()
 
             Text(String(localized: "about.title", defaultValue: "A propos", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -95,12 +108,20 @@ struct AboutView: View {
             .accessibilityHidden(true)
 
             Text("Meeshy")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main))
-                .font(.system(size: 13, weight: .medium))
+            Text(versionString)
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
+                .contextMenu {
+                    Button {
+                        copyValue(versionString)
+                    } label: {
+                        Label(copyLabel, systemImage: "doc.on.doc")
+                    }
+                }
+                .accessibilityAction(named: Text(copyLabel)) { copyValue(versionString) }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
@@ -130,7 +151,7 @@ struct AboutView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(String(localized: "about.description.body", defaultValue: "Meeshy est une plateforme de messagerie en temps reel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.", bundle: .main))
-                    .font(.system(size: 14, weight: .regular))
+                    .font(MeeshyFont.relative(14, weight: .regular))
                     .foregroundColor(theme.textPrimary)
                     .lineSpacing(4)
                     .padding(.horizontal, 14)
@@ -176,7 +197,7 @@ struct AboutView: View {
 
     private var copyrightSection: some View {
         Text(String(localized: "about.copyright", defaultValue: "2024-2026 Meeshy. Tous droits reserves.", bundle: .main))
-            .font(.system(size: 12, weight: .medium))
+            .font(MeeshyFont.relative(12, weight: .medium))
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity)
             .padding(.top, 8)
@@ -187,28 +208,31 @@ struct AboutView: View {
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
         .padding(.leading, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(14, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
@@ -222,19 +246,27 @@ struct AboutView: View {
             fieldIcon(icon, color: color)
 
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Text(value)
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
+        .contextMenu {
+            Button {
+                copyValue(value)
+            } label: {
+                Label(copyLabel, systemImage: "doc.on.doc")
+            }
+        }
+        .accessibilityAction(named: Text(copyLabel)) { copyValue(value) }
     }
 
     private func featureRow(title: String, icon: String) -> some View {
@@ -242,14 +274,14 @@ struct AboutView: View {
             fieldIcon(icon, color: "F8B500")
 
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 16))
-                .foregroundColor(Color(hex: "4ADE80"))
+                .font(MeeshyFont.relative(16))
+                .foregroundColor(MeeshyColors.success)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -264,13 +296,13 @@ struct AboutView: View {
                     fieldIcon(icon, color: color)
 
                     Text(title)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
 
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(Color(hex: color))
                 }
                 .padding(.horizontal, 14)

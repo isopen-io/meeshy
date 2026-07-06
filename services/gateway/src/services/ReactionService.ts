@@ -30,6 +30,16 @@ export interface GetReactionsOptions {
   currentParticipantId?: string;
 }
 
+export interface AddReactionResult {
+  reaction: ReactionData;
+  /**
+   * Emojis the participant had on this message before this add and that were
+   * swapped out by it (single-reaction-per-user model). Callers must broadcast
+   * a REACTION_REMOVED event per entry so other clients drop the old emoji.
+   */
+  replacedEmojis: string[];
+}
+
 export class ReactionService {
   private static readonly OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
@@ -41,7 +51,7 @@ export class ReactionService {
 
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addReaction(options: AddReactionOptions): Promise<ReactionData | null> {
+  async addReaction(options: AddReactionOptions): Promise<AddReactionResult | null> {
     const { messageId, participantId, emoji } = options;
 
     this.validateMessageId(messageId);
@@ -70,61 +80,53 @@ export class ReactionService {
       throw new Error('Message not found');
     }
 
+    if (message.messageType === 'system') {
+      throw new Error('Cannot react to a system message');
+    }
+
     const isParticipant = message.conversation.participants.some(p => p.id === participantId);
     if (!isParticipant) {
       throw new Error('User is not a participant of this conversation');
     }
 
-    const MAX_REACTIONS_PER_USER = 1;
-
-    const userExistingReactions = await this.prisma.reaction.findMany({
-      where: {
-        messageId,
-        participantId
-      },
+    const previousReaction = await this.prisma.reaction.findFirst({
+      where: { messageId, participantId },
       select: { emoji: true }
     });
 
-    const uniqueEmojis = new Set(userExistingReactions.map(r => r.emoji));
-
-    if (uniqueEmojis.size >= MAX_REACTIONS_PER_USER && !uniqueEmojis.has(sanitized)) {
-      throw new Error(`Maximum ${MAX_REACTIONS_PER_USER} different reactions per message reached`);
+    if (previousReaction?.emoji === sanitized) {
+      const existingReaction = await this.prisma.reaction.findFirst({
+        where: { messageId, participantId, emoji: sanitized }
+      });
+      if (existingReaction) {
+        return { reaction: this.mapReactionToData(existingReaction), replacedEmojis: [] };
+      }
     }
 
-    const existingReaction = await this.prisma.reaction.findFirst({
-      where: {
-        messageId,
-        participantId,
-        emoji: sanitized
-      }
+    // Single-reaction-per-user model: the DB unique key is (messageId,
+    // participantId) — no emoji — so this upsert is atomic at the Mongo
+    // level. Two concurrent addReaction calls for different emojis now race
+    // on the SAME document instead of each inserting its own row (the prior
+    // find/deleteMany/create sequence let both pass the "no existing
+    // reaction" check before either committed).
+    const reaction = await this.prisma.reaction.upsert({
+      where: { participant_reaction_unique: { messageId, participantId } },
+      update: { emoji: sanitized },
+      create: { messageId, participantId, emoji: sanitized }
     });
 
-    if (existingReaction) {
-      return this.mapReactionToData(existingReaction);
-    }
+    const replacedEmojis = previousReaction && previousReaction.emoji !== sanitized
+      ? [previousReaction.emoji]
+      : [];
 
-    try {
-      const reaction = await this.prisma.reaction.create({
-        data: {
-          messageId,
-          participantId,
-          emoji: sanitized
-        }
-      });
-
-      await this.updateMessageReactionSummary(messageId, sanitized, 'add');
-
-      return this.mapReactionToData(reaction);
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
-        // Concurrent insert race: treat as idempotent success, summary already correct.
-        const existing = await this.prisma.reaction.findFirst({
-          where: { messageId, participantId, emoji: sanitized }
-        });
-        if (existing) return this.mapReactionToData(existing);
+    if (replacedEmojis.length > 0) {
+      for (const removed of replacedEmojis) {
+        await this.updateMessageReactionSummary(messageId, removed, 'remove', 1);
       }
-      throw err;
     }
+    await this.updateMessageReactionSummary(messageId, sanitized, 'add');
+
+    return { reaction: this.mapReactionToData(reaction), replacedEmojis };
   }
 
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {
@@ -350,9 +352,7 @@ export class ReactionService {
         select: { reactionSummary: true }
       });
 
-      if (!message) {
-        return;
-      }
+      if (!message) return;
 
       const currentSummary = (message.reactionSummary as Record<string, number>) || {};
 
@@ -360,24 +360,18 @@ export class ReactionService {
         currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
       } else if (currentSummary[emoji]) {
         currentSummary[emoji] -= count;
-        if (currentSummary[emoji] <= 0) {
-          delete currentSummary[emoji];
-        }
+        if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
       }
 
       // Compteur AUTORITAIRE depuis la table `Reaction` (la ligne add/remove a déjà
-      // été appliquée par addReaction/removeReaction avant cet appel). Re-dérivé à
-      // chaque mutation : le compteur dénormalisé `reactionCount` ne dérive jamais
-      // sous concurrence et s'auto-répare. Miroir de PostReactionService /
-      // CommentReactionService (updatePostReactionSummary / updateCommentReactionSummary).
+      // été appliquée par addReaction/removeReaction avant cet appel). Auto-réparant
+      // (pas de dérive du compteur dénormalisé) — miroir de
+      // PostReactionService.updatePostReactionSummary / CommentReactionService.updateCommentReactionSummary.
       const total = await tx.reaction.count({ where: { messageId } });
 
       await tx.message.update({
         where: { id: messageId },
-        data: {
-          reactionSummary: currentSummary,
-          reactionCount: total
-        }
+        data: { reactionSummary: currentSummary, reactionCount: total }
       });
     });
   }

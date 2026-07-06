@@ -302,7 +302,7 @@ export class AuthMiddleware {
         });
       }
 
-      const userLanguage = resolveUserLanguage(user);
+      const userLanguage = resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined });
 
       return {
         type: 'user',

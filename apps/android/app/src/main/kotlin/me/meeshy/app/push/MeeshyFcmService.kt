@@ -6,26 +6,38 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
 import me.meeshy.app.MainActivity
+import me.meeshy.sdk.model.call.IncomingCallPush
+import me.meeshy.sdk.model.call.IncomingCallPushRoute
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.session.SessionRepository
 import timber.log.Timber
 import javax.inject.Inject
 
 /**
  * FCM push handler (ARCHITECTURE.md §8).
  * New token registration → persisted on server via [NotificationRepository.registerDeviceToken].
- * Incoming push → show rich notification + trigger outbox flush.
+ * Incoming push → routed by kind:
+ *  - a **call** data push ([IncomingCallPushRoute.Ring]) fires a full-screen,
+ *    CATEGORY_CALL notification so a backgrounded/killed device rings; duplicates
+ *    are suppressed by [IncomingCallRingStore].
+ *  - any other push shows the rich message notification + triggers an outbox flush.
  */
 @AndroidEntryPoint
 class MeeshyFcmService : FirebaseMessagingService() {
 
     @Inject
     lateinit var pushHandler: PushTokenHandler
+
+    @Inject
+    lateinit var ringStore: IncomingCallRingStore
+
+    @Inject
+    lateinit var session: SessionRepository
 
     override fun onNewToken(token: String) {
         Timber.d("FCM token refreshed")
@@ -35,7 +47,15 @@ class MeeshyFcmService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         Timber.d("FCM message: ${message.data}")
 
-        // Trigger outbox flush on any push (may have connectivity restored)
+        when (val route = ringStore.route(message.data, System.currentTimeMillis(), selfUserId = session.currentUserId)) {
+            is IncomingCallPushRoute.Ring -> showIncomingCallNotification(route.push)
+            is IncomingCallPushRoute.Suppress -> Timber.d("Suppressed call push: ${route.reason}")
+            IncomingCallPushRoute.NotACallPush -> handleMessagePush(message)
+        }
+    }
+
+    private fun handleMessagePush(message: RemoteMessage) {
+        // Trigger outbox flush on any non-call push (connectivity may be restored).
         WorkManager.getInstance(applicationContext)
             .enqueue(OutboxFlushWorker.buildRequest())
 
@@ -45,6 +65,44 @@ class MeeshyFcmService : FirebaseMessagingService() {
             body = notification.body ?: "",
             conversationId = message.data["conversationId"],
         )
+    }
+
+    private fun showIncomingCallNotification(push: IncomingCallPush) {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_CALLS, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Incoming voice and video calls"
+                setShowBadge(false)
+            },
+        )
+
+        val fullScreenIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_CALL_ID, push.callId)
+            push.conversationId?.let { putExtra(EXTRA_CONVERSATION_ID, it) }
+            putExtra(EXTRA_CALLER_NAME, push.displayName)
+            putExtra(EXTRA_IS_VIDEO, push.isVideo)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            push.callId.hashCode(),
+            fullScreenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_CALLS)
+            .setSmallIcon(android.R.drawable.sym_call_incoming)
+            .setContentTitle(push.displayName)
+            .setContentText(if (push.isVideo) "Appel vidéo entrant" else "Appel entrant")
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setOngoing(true)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setFullScreenIntent(pendingIntent, true)
+            .build()
+
+        manager.notify(push.callId.hashCode(), notification)
     }
 
     private fun showNotification(title: String, body: String, conversationId: String?) {
@@ -82,5 +140,10 @@ class MeeshyFcmService : FirebaseMessagingService() {
 
     companion object {
         const val CHANNEL_MESSAGES = "meeshy_messages"
+        const val CHANNEL_CALLS = "meeshy_calls"
+        const val EXTRA_CALL_ID = "callId"
+        const val EXTRA_CONVERSATION_ID = "conversationId"
+        const val EXTRA_CALLER_NAME = "callerName"
+        const val EXTRA_IS_VIDEO = "isVideo"
     }
 }

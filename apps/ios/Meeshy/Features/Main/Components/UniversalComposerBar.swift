@@ -126,8 +126,13 @@ struct UniversalComposerBar: View {
 
     // MARK: - External send state (disables button while a send is in flight)
 
-    /// When true, the send button is non-interactive. Pass `viewModel.isSending`
-    /// to prevent double-taps during the 0.2s bounce animation window.
+    /// When true, the send button is non-interactive. Réservé aux hosts dont le
+    /// flux d'envoi est LOCAL et COURT (ex. ThreadView et son `isSending`
+    /// éphémère). ⚠️ Ne JAMAIS passer `ConversationViewModel.isSending` : il
+    /// couvre tout le cycle REST+fallback (~22s en réseau dégradé) et gèlerait
+    /// le composer pendant qu'un message est sur l'horloge ⏳ — les envois de
+    /// messages DISTINCTS doivent s'enchaîner (outbox FIFO), le dedup double-tap
+    /// vit dans le ViewModel (`duplicateSendDebounce`).
     var externalIsSending: Bool = false
 
     // MARK: - Attachment ladder callbacks
@@ -150,6 +155,18 @@ struct UniversalComposerBar: View {
     /// (shown beneath the attachment carousel). When non-nil, the strip is
     /// rendered; the host ingests the resolved photo/video like a camera capture.
     var onRecentMediaSelected: ((RecentMediaPick) -> Void)? = nil
+
+    /// Called when the user picks "Éditer" on a recent-media thumbnail (long
+    /// press). The host opens its media editor with the resolved photo/video
+    /// and stages the edited result. When nil the action is hidden.
+    var onRecentMediaEdit: ((RecentMediaPick) -> Void)? = nil
+
+    /// Called when the user opens the full photo library from the recent-media
+    /// strip, carrying the asset identifiers already multi-selected there so
+    /// the host can preselect them in its PhotosPicker (via
+    /// `PhotosPickerItem(itemIdentifier:)` + `photoLibrary: .shared()`).
+    /// Falls back to `onPhotoLibrary` when nil.
+    var onPhotoLibraryPreselecting: (([String]) -> Void)? = nil
 
     /// Bind this to inject an emoji into the text field from outside (e.g. from parent's emoji picker)
     var injectedEmoji: Binding<String> = .constant("")
@@ -1182,10 +1199,10 @@ struct UniversalComposerBar: View {
             .padding(.vertical, 8)
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 0.5)
                 )
         )
@@ -1436,10 +1453,10 @@ extension UniversalComposerBar {
             .padding(.vertical, 8)
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)
                 )
         )

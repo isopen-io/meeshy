@@ -69,9 +69,9 @@ struct PrivacyPolicyView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -80,7 +80,7 @@ struct PrivacyPolicyView: View {
             Spacer()
 
             Text(String(localized: "legal.privacy.title", defaultValue: "Confidentialite", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -129,8 +129,8 @@ struct PrivacyPolicyView: View {
     // MARK: - Last Updated
 
     private var lastUpdated: some View {
-        Text(selectedLanguage == "fr" ? "Derniere mise a jour : 24 fevrier 2026" : "Last updated: February 24, 2026")
-            .font(.system(size: 12, weight: .medium))
+        Text(selectedLanguage == "fr" ? String(localized: "legal.privacy.lastUpdated.fr", defaultValue: "Derniere mise a jour : 24 fevrier 2026", bundle: .main) : String(localized: "legal.privacy.lastUpdated.en", defaultValue: "Last updated: February 24, 2026", bundle: .main))
+            .font(MeeshyFont.relative(12, weight: .medium))
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 4)
@@ -142,16 +142,16 @@ struct PrivacyPolicyView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "\(number).circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(MeeshyFont.relative(18, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
 
                 Text(title)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MeeshyFont.relative(15, weight: .bold))
                     .foregroundColor(theme.textPrimary)
             }
 
             Text(content)
-                .font(.system(size: 14, weight: .regular))
+                .font(MeeshyFont.relative(14, weight: .regular))
                 .foregroundColor(theme.textSecondary)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
@@ -159,10 +159,10 @@ struct PrivacyPolicyView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )

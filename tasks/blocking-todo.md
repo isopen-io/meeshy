@@ -3,15 +3,15 @@
 Décisions user : blocages entrants = backend rejette / front gère sortant ;
 enforcement DM uniquement (groupes non affectés). Erreur backend = `USER_BLOCKED` (403).
 
-## Backend (gateway + shared)
-- [ ] `ErrorCode.USER_BLOCKED` (enum + ErrorMessages FR/EN + ErrorStatusMap=403) dans `packages/shared/types/errors.ts`
-- [ ] Helper bidirectionnel `isBlockedBetween(prisma, a, b)` (A.blockedUserIds has B OR B.blockedUserIds has A)
-- [ ] Création conversation `core.ts` : si `type==='direct'`, rejeter si bloqué (2 sens). Groupes : pas d'enforcement.
-- [ ] Envoi message — 3 chemins, DM only, bidirectionnel :
-  - [ ] REST `POST /conversations/:id/messages` (`messages.ts`)
-  - [ ] Socket `message:send` (`MessageHandler.ts`) : rendre bidirectionnel
-  - [ ] Socket `message:send-with-attachments` (`MessageHandler.ts`) : ajouter le check
-- [ ] TDD gateway + build tsc
+## Backend (gateway + shared) — DONE (vérifié 2026-07-03, cf. section Review ci-dessous)
+- [x] `ErrorCode.USER_BLOCKED` (enum + ErrorMessages FR/EN + ErrorStatusMap=403) dans `packages/shared/types/errors.ts`
+- [x] Helper bidirectionnel `isBlockedBetween(prisma, a, b)` (A.blockedUserIds has B OR B.blockedUserIds has A)
+- [x] Création conversation `core.ts` : si `type==='direct'`, rejeter si bloqué (2 sens). Groupes : pas d'enforcement.
+- [x] Envoi message — 3 chemins, DM only, bidirectionnel :
+  - [x] REST `POST /conversations/:id/messages` (`messages.ts`)
+  - [x] Socket `message:send` (`MessageHandler.ts`) : rendu bidirectionnel
+  - [x] Socket `message:send-with-attachments` (`MessageHandler.ts`) : check ajouté
+- [x] TDD gateway + build tsc
 
 ## iOS (app + SDK) — DONE (build OK 34s, 11/11 NewConversationViewModelTests verts)
 - [x] Fix archive swipe : `ConversationListView.swift` `!isActive` → `userState.isArchived`
@@ -43,3 +43,7 @@ renvoie 500 sur throw, d'où sendForbidden), socket message:send (rendu bidirect
 
 Reste : 2 fichiers de tests non committés (conversation-create-block.test.ts,
 message-send-block.test.ts) → à committer si le user valide.
+
+**Suivi 2026-07-03** : les 2 fichiers de tests sont maintenant committés sur `main`
+(`git log -- services/gateway/src/__tests__/unit/routes/{message-send-block,conversation-create-block}.test.ts`
+→ commit `11d09a02`). Chantier entièrement clos, rien à reprendre.

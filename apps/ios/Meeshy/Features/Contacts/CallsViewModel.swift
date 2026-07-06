@@ -65,8 +65,10 @@ final class CallsViewModel: ObservableObject {
     func setFilter(_ newFilter: CallHistoryFilter) {
         guard newFilter != filter else { return }
         filter = newFilter
-        calls = []
-        loadState = .idle
+        // No synchronous `calls = []` here: loadCalls() is cache-first and
+        // its `apply` closure replaces `calls` once the new filter's
+        // cache/network result is ready — clearing eagerly would flash the
+        // list to empty even when a cached page for the new filter exists.
         Task { await loadCalls() }
     }
 }

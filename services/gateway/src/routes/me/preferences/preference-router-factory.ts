@@ -154,7 +154,12 @@ export function createPreferenceRouter<T>(
           );
 
           if (consentViolations.length > 0) {
-            return sendForbidden(reply, 'CONSENT_REQUIRED', { message: 'Missing required consents for requested preferences' });
+            return reply.status(403).send({
+              success: false,
+              error: 'CONSENT_REQUIRED',
+              message: 'Missing required consents for requested preferences',
+              violations: consentViolations,
+            });
           }
 
           // Idempotent via clientMutationId. The MutationLog row keys
@@ -266,7 +271,12 @@ export function createPreferenceRouter<T>(
           );
 
           if (consentViolations.length > 0) {
-            return sendForbidden(reply, 'CONSENT_REQUIRED', { message: 'Missing required consents for requested preferences' });
+            return reply.status(403).send({
+              success: false,
+              error: 'CONSENT_REQUIRED',
+              message: 'Missing required consents for requested preferences',
+              violations: consentViolations,
+            });
           }
 
           // Idempotent via clientMutationId — same reasoning as PUT.

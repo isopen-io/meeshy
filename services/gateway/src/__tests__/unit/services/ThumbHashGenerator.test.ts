@@ -143,4 +143,49 @@ describe('ThumbHashGenerator.generate — video (mocked ffmpeg)', () => {
     const result = await ThumbHashGenerator.generate('/tmp/video.mp4', 'video/mp4');
     expect(result).toBeNull();
   });
+
+  it('successfully generates thumbhash from video (happy path)', async () => {
+    // When pipe is called, emit data + end on the stream so extractVideoFrame resolves
+    mockPipe.mockImplementationOnce((stream: any) => {
+      process.nextTick(() => {
+        stream.emit('data', Buffer.from([0xde, 0xad, 0xbe, 0xef]));
+        stream.emit('end');
+      });
+      return stream;
+    });
+
+    const result = await ThumbHashGenerator.generate('/tmp/clip.mp4', 'video/mp4');
+
+    expect(typeof result).toBe('string');
+    expect(result).not.toBeNull();
+  });
+
+  it('falls back to frame 0 when seekInput(0.5) fails', async () => {
+    // First pipe invocation: trigger the registered 'error' handler
+    mockPipe.mockImplementationOnce((_stream: any) => {
+      // The error handler was registered via .on('error', ...) before .pipe()
+      const errorCall = (mockOn as jest.Mock<any>).mock.calls.find(
+        ([event]: [string]) => event === 'error',
+      );
+      if (errorCall) {
+        const handler = errorCall[1] as () => void;
+        // Before calling the handler, set up the SECOND pipe mock (fallback)
+        mockPipe.mockImplementationOnce((fallbackStream: any) => {
+          process.nextTick(() => {
+            fallbackStream.emit('data', Buffer.from([1, 2, 3, 4]));
+            fallbackStream.emit('end');
+          });
+          return fallbackStream;
+        });
+        handler();
+      }
+    });
+
+    const result = await ThumbHashGenerator.generate('/tmp/clip.mp4', 'video/mp4');
+
+    expect(typeof result).toBe('string');
+    expect(result).not.toBeNull();
+    // Two ffmpeg instances created: once for 0.5s, once for 0s fallback
+    expect(mockFfmpeg).toHaveBeenCalledTimes(2);
+  });
 });

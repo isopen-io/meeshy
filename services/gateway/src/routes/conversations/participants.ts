@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -8,9 +9,11 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
 
 /**
@@ -132,7 +135,6 @@ export function registerParticipantsRoutes(
               lastName: true,
               displayName: true,
               avatar: true,
-              email: true,
               role: true,
               isOnline: true,
               lastActiveAt: true,
@@ -162,6 +164,13 @@ export function registerParticipantsRoutes(
         }
       });
 
+      // Présence des co-participants : montrable (co-participation = contexte
+      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
+      // showLastSeen de chacun. Anonymes inchangés.
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        paginatedParticipants.map(p => p.userId).filter((uid): uid is string => !!uid),
+      );
+
       const formattedParticipants = paginatedParticipants.map(participant => ({
         id: participant.id,
         participantId: participant.id,
@@ -171,13 +180,12 @@ export function registerParticipantsRoutes(
         firstName: participant.user?.firstName ?? participant.displayName,
         lastName: participant.user?.lastName ?? '',
         displayName: participant.displayName,
-        avatar: participant.avatar ?? participant.user?.avatar ?? null,
-        email: participant.user?.email ?? '',
+        avatar: resolveParticipantAvatar(participant),
         role: participant.user?.role ?? 'USER',
         conversationRole: participant.role,
         joinedAt: participant.joinedAt,
-        isOnline: participant.isOnline,
-        lastActiveAt: participant.lastActiveAt,
+        isOnline: presenceVis.get(participant.userId ?? '')?.showOnline === false ? false : participant.isOnline,
+        lastActiveAt: presenceVis.get(participant.userId ?? '')?.showLastSeenTimestamp === false ? null : participant.lastActiveAt,
         systemLanguage: participant.user?.systemLanguage ?? participant.language,
         regionalLanguage: participant.user?.regionalLanguage ?? participant.language,
         customDestinationLanguage: participant.user?.customDestinationLanguage ?? participant.language,
@@ -498,7 +506,7 @@ export function registerParticipantsRoutes(
       // write and the emit so they agree.
       const removedParticipant = await prisma.participant.findFirst({
         where: { conversationId, userId, isActive: true },
-        select: { displayName: true }
+        select: { id: true, displayName: true }
       });
       const leftAt = new Date();
 
@@ -513,6 +521,9 @@ export function registerParticipantsRoutes(
           leftAt
         }
       });
+      if (removedParticipant) {
+        invalidateParticipantLookup(removedParticipant.id, conversationId);
+      }
 
       // R6-2 — broadcast so other members' devices drop the removed user from
       // the list + decrement the member count in real time (the DELETE

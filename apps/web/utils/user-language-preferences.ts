@@ -33,8 +33,8 @@ export function getUserLanguageChoices(user: User): LanguageChoice[] {
     });
   }
 
-  if (user.customDestinationLanguage && 
-      user.customDestinationLanguage !== user.systemLanguage && 
+  if (user.customDestinationLanguage &&
+      user.customDestinationLanguage !== user.systemLanguage &&
       user.customDestinationLanguage !== user.regionalLanguage) {
     choices.push({
       code: user.customDestinationLanguage,
@@ -76,24 +76,24 @@ export function resolveUserPreferredLanguage(user: User): string {
  */
 export function getUserLanguagePreferences(user: User): string[] {
   const languages = new Set<string>();
-  
+
   // Toujours inclure la langue système
   if (user.systemLanguage) {
     languages.add(user.systemLanguage);
   }
-  
+
   // Inclure la langue régionale si différente
   if (user.regionalLanguage && user.regionalLanguage !== user.systemLanguage) {
     languages.add(user.regionalLanguage);
   }
-  
+
   // Inclure la langue personnalisée si définie et différente
-  if (user.customDestinationLanguage && 
-      user.customDestinationLanguage !== user.systemLanguage && 
+  if (user.customDestinationLanguage &&
+      user.customDestinationLanguage !== user.systemLanguage &&
       user.customDestinationLanguage !== user.regionalLanguage) {
     languages.add(user.customDestinationLanguage);
   }
-  
+
   return Array.from(languages);
 }
 

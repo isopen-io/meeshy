@@ -4,6 +4,13 @@ import MeeshyUI
 
 // MARK: - Animated Step Background
 
+/// Decorative animated backdrop behind the registration wizard. Every glyph here
+/// (SF Symbols + flag emojis at ~0.04–0.12 opacity, absolutely positioned and
+/// animated) is **pure decoration** — the wizard content carries all meaning.
+/// Doctrine : the `.font(.system(size:))` sizes below stay **fixed on purpose**
+/// (they compose a layered animation; scaling them with Dynamic Type would
+/// distort the positioning), and the whole layer is `.accessibilityHidden(true)`
+/// so VoiceOver never reads the ambient symbols/flags.
 struct AnimatedStepBackground: View {
     let step: RegistrationStep
 
@@ -29,6 +36,7 @@ struct AnimatedStepBackground: View {
             }
         }
         .ignoresSafeArea()
+        .accessibilityHidden(true)
         .onAppear { startAnimations() }
         .onDisappear { stopAnimations() }
         .adaptiveOnChange(of: step) { _, _ in restartAnimations() }
@@ -256,7 +264,7 @@ struct AnimatedStepBackground: View {
 
     private func profileAnimation(in size: CGSize) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(step.accentColor.opacity(0.1), lineWidth: 2)
                 .frame(width: 140, height: 180)
                 .scaleEffect(animate ? 1.05 : 0.95)
@@ -494,10 +502,10 @@ struct GlowingButton: View {
                         .scaleEffect(0.85)
                 } else {
                     Text(title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                     if let icon {
                         Image(systemName: icon)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(MeeshyFont.relative(15, weight: .semibold))
                     }
                 }
             }

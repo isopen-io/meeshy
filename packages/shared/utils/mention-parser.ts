@@ -4,12 +4,17 @@ export interface MentionParticipant {
   readonly displayName: string;
 }
 
+const NAME_BOUNDARY_LEFT = '(?<![\\p{L}\\p{N}_])';
+const NAME_BOUNDARY_RIGHT = '(?![\\p{L}\\p{N}_])';
+
 /**
  * Parse les mentions dans un message.
  *
  * Priorité :
- * 1. @DisplayName → résolution exacte sur les participants (insensible casse, plus long en premier)
- * 2. @username → résolution par username sur les participants (regex \w+)
+ * 1. @DisplayName → résolution exacte sur les participants (insensible casse, plus long en premier).
+ *    Frontières Unicode gauche+droite : `@Marie` ne matche PAS `@Marienne` ni `contact@Marie.com`.
+ * 2. @username → résolution par username sur les participants (regex `\w{1,30}`, frontière gauche
+ *    pour ignorer les `@` internes d'adresses e-mail).
  * 3. Sans participants → retourne les handles bruts ("@alice")
  */
 export function parseMentions(
@@ -28,16 +33,17 @@ export function parseMentions(
 
   if (sorted.length > 0) {
     for (const p of sorted) {
-      const escaped = escapeRegex(p.displayName);
-      const regex = new RegExp(`@${escaped}`, 'gi');
+      if (!p.displayName) continue;
+      const pattern = `${NAME_BOUNDARY_LEFT}@${escapeRegex(p.displayName)}${NAME_BOUNDARY_RIGHT}`;
+      const regex = new RegExp(pattern, 'giu');
       if (regex.test(remaining)) {
         resolved.add(p.userId);
-        remaining = remaining.replace(new RegExp(`@${escaped}`, 'gi'), '');
+        remaining = remaining.replace(new RegExp(pattern, 'giu'), '');
       }
     }
   }
 
-  const handleRegex = /@(\w{1,30})/g;
+  const handleRegex = /(?<![\w])@(\w{1,30})/g;
   for (const match of remaining.matchAll(handleRegex)) {
     const rawHandle = match[1];
     if (rawHandle === undefined) continue;

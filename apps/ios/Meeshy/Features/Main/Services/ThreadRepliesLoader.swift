@@ -2,15 +2,13 @@ import Foundation
 import MeeshySDK
 
 /// Loads the paginated reply list under a parent message. Used by
-/// `ThreadView` (full-screen thread reader, distinct from the overlay
-/// covered by `ReplyThreadLoader`).
+/// `ThreadView` (full-screen thread reader).
 ///
-/// F2 follow-up to PR #280. Sibling of `ReplyThreadLoader` — kept as a
-/// separate small service rather than a `ThreadService` god-object so
-/// each call site stays trivially injectable for tests. If a third
-/// thread endpoint ever lands (e.g. unread-only replies, replies since
-/// timestamp), promote both into a single `ThreadService` in one focused
-/// PR.
+/// F2 follow-up to PR #280. Kept as a small, single-purpose service
+/// rather than a `ThreadService` god-object so each call site stays
+/// trivially injectable for tests. If more thread endpoints ever land
+/// (e.g. unread-only replies, replies since timestamp), promote into a
+/// single `ThreadService` in one focused PR.
 @MainActor
 final class ThreadRepliesLoader {
 

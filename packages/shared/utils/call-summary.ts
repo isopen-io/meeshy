@@ -16,6 +16,8 @@
  *   packages/shared/types/video-call.ts (`CallStatus`, `CallEndReason`).
  */
 
+import { formatClock } from './duration-format.js';
+
 export type CallSummaryOutcome = 'completed' | 'missed' | 'rejected' | 'failed';
 export type CallSummaryMediaType = 'audio' | 'video';
 export type CallNetworkQuality = 'excellent' | 'good' | 'fair' | 'poor';
@@ -102,22 +104,16 @@ const FAILURE_END_REASONS: ReadonlySet<string> = new Set([
   'heartbeatTimeout'
 ]);
 
-const pad2 = (value: number): string => (value < 10 ? `0${value}` : `${value}`);
-
 /**
  * Format a duration in seconds as "M:SS" (or "H:MM:SS" past an hour), with the
  * leading minutes zero-padded so a 4m32s call reads "04:32" (matches the
  * product spec). Negative or non-finite inputs clamp to "00:00".
+ *
+ * Delegates to the canonical {@link formatClock} (single source of truth for
+ * MM:SS / H:MM:SS rendering across shared, web and gateway).
  */
 export function formatCallDuration(seconds: number): string {
-  const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const secs = total % 60;
-  if (hours > 0) {
-    return `${hours}:${pad2(minutes)}:${pad2(secs)}`;
-  }
-  return `${pad2(minutes)}:${pad2(secs)}`;
+  return formatClock(seconds, { padMinutes: true });
 }
 
 const normalizeMediaType = (callType?: string | null): CallSummaryMediaType =>

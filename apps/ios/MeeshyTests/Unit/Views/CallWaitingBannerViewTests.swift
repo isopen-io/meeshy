@@ -125,6 +125,29 @@ final class CallWaitingBannerViewTests: XCTestCase {
         )
     }
 
+    // MARK: - Auto-dismiss timeout must reject the pending call, not just hide the banner
+
+    func test_scheduleAutoDismiss_callsOnReject() throws {
+        // Regression 2026-07-02: before this fix, the 15s auto-dismiss timeout
+        // only flipped `isVisible = false` and never called `onReject()` —
+        // unlike the explicit "Refuser" button, which calls both. That left
+        // the second caller ringing indefinitely (no busy signal sent) with
+        // no visible UI for the user to act on once the banner vanished.
+        let source = try bannerSource()
+        guard let fnRange = source.range(of: "private func scheduleAutoDismiss()") else {
+            XCTFail("scheduleAutoDismiss() not found in CallWaitingBannerView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("onReject()"),
+            "scheduleAutoDismiss()'s Task body must call onReject() after the timeout " +
+            "fires — mirroring the explicit reject button — so the caller receives a " +
+            "busy/reject signal instead of being left ringing until their own timeout."
+        )
+    }
+
     // MARK: - dismiss() cancels the Task before hiding
 
     func test_dismiss_cancelsTaskBeforeHiding() throws {
@@ -200,6 +223,28 @@ final class CallWaitingBannerViewTests: XCTestCase {
             body.contains("isReduceMotionEnabled"),
             "dismiss() must check UIAccessibility.isReduceMotionEnabled before using " +
             "withAnimation(.spring(...)) — motion-sensitive users must not see a spring bounce."
+        )
+    }
+
+    // MARK: - HIG 44x44pt minimum hit target (audit 2026-07-03)
+
+    /// Reject/Answer are plain Text-in-Capsule buttons with only
+    /// `.padding(.vertical, 8)` — at default Dynamic Type that's a ~32-36pt
+    /// tap height, under Apple HIG's 44pt minimum, while every other call
+    /// control in this app (CallView, FloatingCallPillView) explicitly
+    /// enforces 44x44. Two adjacent under-sized targets on a ringing banner
+    /// risk mis-tapping Answer/Reject for a live incoming call.
+    func test_rejectAndAnswerButtons_enforce44ptMinimumHeight() throws {
+        let source = try bannerSource()
+        let occurrences = source.components(separatedBy: "background(MeeshyColors.error, in: Capsule())").count - 1
+            + source.components(separatedBy: "background(MeeshyColors.success, in: Capsule())").count - 1
+        XCTAssertEqual(occurrences, 2, "Expected exactly the reject + answer buttons in this view.")
+        XCTAssertTrue(
+            source.contains(".frame(minHeight: 44)"),
+            "Reject/Answer buttons must enforce .frame(minHeight: 44) to satisfy the " +
+            "Apple HIG 44x44pt minimum tap target — without it, Dynamic Type default " +
+            "size yields a ~32-36pt hit area on a ringing banner where a mis-tap answers " +
+            "or rejects a live incoming call."
         )
     }
 }

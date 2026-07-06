@@ -2,18 +2,363 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lessons
+- **2026-07-06 (`delivery-status-resolver`): `main` was force-reset and lost merged Android work — and the
+  monorepo CI does NOT build Android, so a broken `main` compiles "green".** On this run `origin/main` had been
+  force-updated (`6cd1a3c4…→5ee31e52`, a forced push) to a state whose `apps/android/tasks/*` docs had regressed
+  ~21 slices AND whose `:core:model` `IsoTime.kt` was missing `isoToEpochMillisOrNull` — yet the just-merged
+  message-effects `ChatScreen.kt` references it, so `main` was **uncompilable for Android**. `ci.yml` only tests
+  JS/TS/Python, so it never caught it. **Takeaways:** (1) after a step-0 rebase onto `main`, run `meeshy.sh check`
+  locally before trusting — CI green ≠ Android compiles; (2) when resolving doc conflicts from a force-reset, the
+  feature-branch side is the superset (verified: 0 `main`-unique slices) so keep it; (3) restoring a
+  force-dropped helper that a merged file needs is legitimate in-scope work (`apps/android` only) and required to
+  leave `main` green; (4) a dedicated Android CI job (`.github/`, its own run) would have flagged this — still a
+  tracked follow-up.
+- **2026-07-06 (`delivery-status-resolver`): the delivery indicator must be honest — resolve at the display point
+  with an all-or-nothing rule, never a `> 0` count threshold.** iOS centralises this in a pure
+  `DeliveryStatusResolver`; Android now mirrors it: `resolve(base, deliveredCount, readCount, recipientCount,
+  deliveredToAllAt?, readByAllAt?)` returns Delivered/Read only when the count `>= recipientCount` (recipients =
+  `memberCount - 1`), trusts `> 0` when `recipientCount <= 1` (1:1 / unknown denominator), and lets unambiguous
+  "all" markers win denominator-independent. **Under-report, never over-report** — an upstream Read downgrades
+  honestly when group counts are partial. Thread `recipientCount` as a reactive `MutableStateFlow` in the
+  ViewModel (from the conversation stream) into the bubble `combine`, so the check refreshes when *either* the
+  counts or the member list arrives — not a one-shot read.
+- **2026-07-06 (`message-effects-lifecycle`): a new nullable field on `ApiMessage` needs NO DB migration.**
+  `MessageEntity.payload` stores the serialized `ApiMessage` JSON (not columns), so `val effects: MessageEffects?
+  = null` decodes from the wire, persists in the payload, and reloads for free — kotlinx lenient decode tolerates
+  the older payloads that lack it. Adding message-shaped optional fields is a pure `:core:model` change; reserve
+  DB-version bumps for genuinely new tables/columns (stats cache, friends cache).
+- **2026-07-06 (`message-effects-lifecycle`): centralise per-message "lifecycle state" as a pure `:core:model`
+  SSOT, not scattered in Compose.** iOS recomputes ephemeral-expiry / view-once-consumed / blur-revealed ad hoc
+  inside its message views. On Android, `MessageLifecyclePresentation.of(effects, createdAtMillis, nowMillis,
+  revealed, viewCount)` is one total, side-effect-free decision the bubble just draws — trivially 90%+ covered
+  (25 cases) and reusable by any surface (story reply). Runtime inputs (`now`/`revealed`/`viewCount`) are pushed
+  in by the UI each frame; the core owns no state. Gate the 1 Hz countdown clock on `messages.any { it.effects
+  ?.isEphemeral == true }` so there are no idle wake-ups when no ephemeral message is on screen.
+- **2026-07-06 (`settings-regional-content-language`): `:sdk-core` `ThemeStoreTest` (and other DataStore
+  tests) flake under the FULL parallel run, not in isolation.** They use a real `Dispatchers.IO` DataStore
+  with `withTimeout(5_000)`; when `gradle :app:assembleDebug testDebugUnitTest` compiles+tests every module
+  at once, IO contention can push a single `store.themeMode.first { … }` past 5s → a *different* test fails
+  each run (`dataStore_setThemeMode_…` one run, `dataStore_hydrates…` the next). It is environmental, not a
+  regression: run the same test 3× in isolation (`--tests "*ThemeStoreTest*" --rerun-tasks`) — green every
+  time — then re-run the full check on the warm cache (compilation already done → no IO storm) and it passes.
+  Don't "fix" it by touching sdk-core; a warm-cache re-run is the gate evidence. (Candidate future hardening:
+  bump the timeout or pin these to a test dispatcher — a separate sdk-core slice, out of scope here.)
+- **2026-07-06 (`settings-regional-content-language`): reuse the `edit-profile-optimistic` outbox path for
+  any single-field backend content preference — no new store.** The regional (content) language is just a
+  `regionalLanguage` profile field, so the whole slice was a pure picker SSOT (`RegionalLanguageSelection`)
+  + a 3-line VM intent delegating to `UserRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage=…))`
+  (optimistic session repaint + durable `UPDATE_PROFILE` + wake-worker-on-`cmid`). Contrast the *interface*
+  language, which is device-local UI chrome → its own `InterfaceLanguageStore`. The test for "does it hit the
+  right seam" asserts on the captured `UpdateProfileRequest`: `regionalLanguage == picked` AND every other
+  field (`systemLanguage`/`customDestinationLanguage`/`displayName`) stays `null` (edits exactly one field).
+- **2026-07-06 (`settings-regional-content-language`): `LanguageData.info(code)` is case-SENSITIVE (codes are
+  lowercase).** If you clean a stored code to upper/mixed case (`" ES "` → `"ES"`) and feed it to `info()`,
+  you get `null` and lose the label — even though your `equals(ignoreCase=true)` selection-marking still
+  works. Resolve the display label with `allLanguages.firstOrNull { it.code.equals(code, ignoreCase=true) }`,
+  not `info()`, whenever the code may not be canonically lowercase. Caught by a `" ES "` test that asserted
+  the `selectedLabel` equals the native name.
+- **2026-07-06 (`settings-notification-prefs-sync`): a literal `/*` inside a KDoc `/** */` is an "Unclosed comment".**
+  Writing `` `/api/v1/me/preferences/*` `` in a KDoc line makes the Kotlin lexer open a *nested* block comment at
+  the `/*` that never closes → `error: Unclosed comment`, and the whole file fails to compile (which cascaded into
+  a misleading Hilt/KSP `error.NonExistentClass` on the class the KDoc documented). Never put a bare `/*` (glob,
+  path wildcard, C-comment) in a doc comment — reword to `{category}`/`…`. Same trap applies to `*/` inside a KDoc.
+- **2026-07-06 (`settings-notification-prefs-sync`): wiring a *dead declaration* is a clean, high-value slice.**
+  `OutboxKind.UPDATE_SETTINGS` + `OutboxLanes.SETTINGS` existed with no coalescer rule and no worker sender (an
+  `else -> Enqueue` fall-through). The whole slice was: pure wire-body SSOT in `:core:model` (mirrors the gateway
+  Zod schema field-for-field, drops the local-only `extras`), a session-gated `enqueueSync` repo (mirrors
+  `enqueueProfileEdit` but with **no optimistic session flip** — the device DataStore store already holds the
+  value, and the PATCH is idempotent so no exhaust-rollback is needed), the explicit `UPDATE_SETTINGS` coalescer
+  arm, and the sender. Grep for enum values that have a lane mapping but no sender/coalescer arm — they are
+  latent "declared but never delivered" features. The `updateNotifications` single-funnel in the VM meant *one*
+  edit (persist-then-`enqueueSync`-then-wake-worker-on-`cmid`) covered **every** notification toggle at once.
+- **2026-07-06 (`settings-notification-type-toggles`): keep locale-aware search pure by injecting the label fn.**
+  A "searchable" list needs to match localized labels, but string resources must not leak into `:core:model`
+  (that would break SDK purity and force a Robolectric/Context dependency into a pure test). Solution:
+  `sections(prefs, query, label: (T)->String)` takes the label lookup as a parameter — the pure builder owns
+  grouping/ordering/`contains` matching and is tested with a fake label map; the Composable builds the real
+  `Map<T,String>` via `stringResource` (once, `NotificationType.entries.associateWith { stringResource(res(it)) }`)
+  and passes `label = { map.getValue(it) }`. Also: model per-event toggles as a **catalog of descriptors**
+  (`type → category + get/set lens`) rather than a giant `when` per field — one `associateBy`-backed map gives
+  total `toggle`/`isEnabled` and the `.copy` lens keeps every edit non-clobbering, and adding a type is one
+  list entry. `byType.getValue` is total because every enum value has a descriptor (guarded by the
+  round-trip-over-`entries` test).
+- **2026-07-06 (housekeeping): main CI red ≠ block for an apps/android-only PR.** `main`'s push CI is currently
+  failing only on the `Test Python (translator)` job (unrelated flake/pre-existing); an `apps/android`-only diff
+  touches none of the JS/TS/Python stack, so its PR CI can only ever inherit that same unrelated red as
+  `mergeable_state: unstable`. The real Android gate is the local `gradle :app:assembleDebug testDebugUnitTest`.
+  Confirm the *only* failing check is that pre-existing non-android job before merging; never merge if the
+  android diff itself introduced a failing check.
+- **2026-07-05 (`settings-interface-language`): re-localise a pure-Compose app app-wide with no AppCompat.**
+  minSdk 26 and the app is a `ComponentActivity` (not `AppCompatActivity`), so `AppCompatDelegate.setApplicationLocales`
+  isn't the free path (needs appcompat + the metadata service, and would become a *second* persistence SSOT next to
+  our DataStore). Instead: keep DataStore as the single persisted SSOT, and *apply* the locale by wrapping the whole
+  Compose tree — `CompositionLocalProvider(LocalContext provides base.createConfigurationContext(cfg.apply{setLocale}), LocalConfiguration provides cfg)` — so every `stringResource` re-resolves. Works on every API ≥17, no new
+  dependency, and the *decision* (`resolveInterfaceLocaleTag` → tag or null) stays a pure tested function; the
+  wrapper is the only (coverage-exempt) glue. Also: `null` = "follow the device locale" (System) is a cleaner model
+  than a magic sentinel — the pure codec maps corrupt/unsupported/`"system"`/blank all to `null`, and the applier
+  no-ops on `null` so an untranslated device locale still falls through Android's own resource resolution.
+  Distinguish **interface** language (app UI chrome → app locale, this slice) from **regional/content** language
+  (Prisme `ContentLanguagePreferences` → `LanguageResolver`, backend profile) — they are different stores; don't
+  wire the content row to the interface store.
+- **2026-07-05 (`settings-theme-mode`): DataStore allows only one active instance per file per process.**
+  A test that writes through one `DataStore`, cancels its scope, then opens a *second* `DataStore` over the
+  same file to prove persistence will hang/`TimeoutCancellationException` — cancelling the scope doesn't
+  reliably release the file from DataStore's internal `activeFiles` registry within the same JVM. To test
+  cold-start hydration, share ONE `DataStore` instance across two store wrappers and assert the freshly
+  constructed wrapper's `stateIn` reads the already-persisted value. That's the real unit under test
+  (the wrapper's hydration), not androidx's file persistence. Also: back a DataStore-backed `StateFlow`
+  with `stateIn(scope, SharingStarted.Eagerly, default)` so cold start has no flash of the default before
+  the persisted value loads; decode the stored token through a pure codec that maps garbage → the safe
+  default so a corrupt/legacy value can never brick the surface.
+- **2026-07-05 (`edit-profile-optimistic`): outbox kinds can be pre-declared but wired only partway.**
+  `OutboxKind.UPDATE_PROFILE` already existed with a lane (`OutboxLanes.PROFILE`, in `sharedDrainLanes`)
+  but no `OutboxFlushWorker` sender and no `OutboxCoalescer` rule — an enqueued row would drain, find no
+  sender, and `markExhausted("No sender registered…")`. When a slice "just needs an outbox mutation," grep
+  `buildSenders()` + `OutboxCoalescer.decide` for the kind first; a lane assignment alone is not a live path.
+- **2026-07-05: PATCH omit-null is the optimistic-merge contract.** kotlinx serialization omits null fields
+  (`encodeDefaults=false`), so the gateway `PATCH /users/me` never receives a null field → it's "leave
+  unchanged," not "clear." The optimistic local merge (`ProfileEditApply`) must use the exact same rule
+  (null → keep existing, non-null → overwrite) or the optimistic paint and the server result diverge. This
+  also means a blank editor field must degrade to `null` in the request builder (a blank edit = no-op),
+  never an empty string (which would clear the field server-side).
+- **2026-07-05: guard editor buffers against background state emissions.** The own-profile VM collects
+  `SessionRepository.currentUser`; naively re-seeding the editable buffers on every emission clobbers a
+  user's in-flight typing when a background `refresh()` fires. Fix: only re-seed the buffers when
+  `!isEditing`; while editing, advance only the read-only `user` reference.
+
 ## Environment
+- **The Gradle wrapper's 8.11.1 distribution zip is blocked in the web container (403 from
+  github.com/gradle releases via the agent proxy).** `./gradlew` / `./apps/android/meeshy.sh check`
+  therefore fail to *bootstrap*. A system Gradle **8.14.3** is preinstalled at `/opt/gradle/bin/gradle`
+  and drives the same build fine — run the gate as `cd apps/android && /opt/gradle/bin/gradle
+  assembleDebug testDebugUnitTest` (online; Google/Maven artifacts *do* resolve through the proxy, only
+  the wrapper's github-hosted distribution zip is blocked). Do **not** edit `gradle-wrapper.properties`
+  to work around this — CI/other envs rely on 8.11.1; keep the wrapper untouched and just use the
+  system binary for local verification. `--offline` fails on a cold cache (AGP 8.7.3 not pre-seeded);
+  run online the first time so Gradle can fetch AGP + deps. (2026-07-05, slice `profile-header-presentation`.)
+
+## CI / merge
+- **The monorepo `CI` workflow can run 40+ min (or sit queued behind the runner pool) on an
+  `apps/android`-only PR — `updated_at` on the run object freezes while it waits.** (2026-07-05, slice
+  `profile-details-rows`.) Only the `CI` workflow triggers for an android-only diff (iOS Tests / SDK
+  Tests are path-filtered out — good). Do **not** busy-poll `actions_list`/`actions_get`: each response
+  embeds the full ~5-6k-token repository object even with `minimal_output`/`perPage=1`, and
+  `get_status` returns `total_count:0` (CI is a check-run, not a legacy commit status). When CI is slow,
+  hand off to a recurring `CronCreate` (`*/8 * * * *`) that re-checks the run and squash-merges the
+  moment `status==completed && conclusion==success`, then `CronDelete`s itself — instead of blocking the
+  turn on `sleep`. A CI *failure* also arrives via the PR-activity webhook subscription.
+
+## Design lessons
+- **Reuse the existing pure SSOTs when building a projection — don't re-derive.** (2026-07-05, slice
+  `profile-header-presentation`.) `ProfileHeaderBuilder` composes three already-tested SSOTs rather than
+  re-implementing them: the display-name ladder is `MeeshyUser.effectiveDisplayName`, presence is
+  `UserPresence(isOnline, lastActiveAt).state(now)`, and member-since is `isoToEpochMillisOrNull`. The
+  builder's own new logic (blank→null degradation, `coerceIn(0,100)` on the completion %, `@handle`
+  formatting, E2EE = key-present) is what the 22 tests target — no test re-asserts a borrowed SSOT's
+  behaviour. Keeps the builder thin and the branch-coverage honest.
+- **"Absent" ≠ "epoch 0" — a 0L-defaulting parse silently poisons time-delta logic.**
+  (2026-07-04, slice `presence-away-indicator`.) `isoToEpochMillis` returns `0L` for both an absent/
+  unparseable string **and** the legitimate `1970-01-01T00:00:00Z`. Reusing it for presence
+  (`now - last > 5min → away`) would classify a friend with **no** `lastActiveAt` as "last active in
+  1970" → always away — the opposite of the iOS `UserPresence.state` rule (no timestamp ⇒ *online*).
+  Fix: a nullable `isoToEpochMillisOrNull` (null = no reliable time, `0L` = the real epoch instant),
+  with `isoToEpochMillis` delegating (`?: 0L`) so the single parse path stays the SSOT. Lesson: when a
+  helper collapses "missing" and "zero" into one sentinel, add a nullable sibling before building
+  time-arithmetic on top of it — and unit-test the epoch-0 case explicitly.
+- **A functional seam pays off when the real collaborator lands — zero churn to bind it.**
+  (2026-07-04, slice `contacts-blocked-list`.) `UserRelationshipResolver` shipped taking a
+  `BlockStatusProvider` `fun interface` seam (`{ false }` default). Binding the real block data was a
+  one-liner: `BlockStatusProvider { blockCache.isBlocked(it) }` in `DiscoverViewModel` — the resolver
+  class never changed. Confirms the earlier lesson: prefer a functional seam over a throwaway stub, and
+  the payoff is a trivial bind later. Prove the bind is *consumed* with a test (a blocked user →
+  `ConnectAction.Blocked`) so the seam-wiring isn't silent/orphan.
+- **`BlockCache` mirrors `FriendshipCache` deliberately** — same `@Singleton` + `synchronized` +
+  `version: StateFlow<Int>` shape. When adding a second in-memory SSOT store, copy the proven store's
+  structure (defensive-copy snapshot, blank-id inert, full-replace hydrate, version-bump-per-mutation)
+  rather than inventing a new one; the tests port 1:1 too.
+- **Test a ViewModel's transient in-flight state with a gated `CompletableDeferred`, not sleeps.**
+  Under `UnconfinedTestDispatcher` a `viewModelScope.launch` runs to completion synchronously, so a
+  `pendingIds`/`showSkeleton` flag is set-and-cleared before you can observe it. Stub the suspend repo
+  call with `coAnswers { gate.await() }`: assert the mid-flight state, then `gate.complete(...)` and
+  assert the settled state. Also the way to prove an in-flight guard (call the action twice while the
+  gate is open, `coVerify(exactly = 1)`).
+- **Mock an `ApiResponse<Unit>` DELETE as `ApiResponse(success = true, data = Unit)`** — `apiCall`
+  treats `data == null` as failure, and `Unit` is non-null, so a success needs `data = Unit` explicitly
+  (mirrors the existing `FriendRepository.deleteRequest` `ApiResponse<Unit>` pattern).
+
+- **`FriendRequest` carries BOTH id-strings and nested user objects — keep test fixtures consistent.**
+  (2026-07-04, slice `contacts-list-friends`.) `FriendshipCache.hydrate` keys the friend graph off the
+  `senderId`/`receiverId` **strings**, but `ContactList.fromAcceptedRequests` reads the `sender`/`receiver`
+  **user objects** (it needs name/avatar/presence). Production gateway payloads always populate both
+  consistently (`sender.id == senderId`). Two `ContactsListViewModel` tests were RED because the fixture
+  set only the object, leaving `senderId=""` → the cache hydrated empty while the list populated. Fix was
+  in the **test fixture** (derive `senderId`/`receiverId` from the objects), not the production code — a
+  faithful red→green. Lesson: when a model has redundant id+object fields consumed by different collaborators,
+  make fixtures set both, and prefer a helper that derives one from the other so they can't drift.
+- **Loop-guard a StateFlow-version reconcile with a `lastReconciled` snapshot.** The cache-observation
+  reconcile refetches on an unknown friend addition; that refetch re-hydrates the cache → bumps `version`
+  → re-enters the collector. Without a guard (`if (cacheIds == lastReconciledFriendIds) return`, port of
+  iOS's `guard cacheIds != lastObservedFriendIds`) an id the fetch can't resolve (in cache but no user
+  record) loops forever. Under `UnconfinedTestDispatcher` the re-entrancy is synchronous, so the guard is
+  load-bearing even in tests — assert "exactly N fetches" to pin it.
+- **Pivot areas when the current one runs out of pure cores, don't force glue.** (2026-07-04, slice
+  `friendship-relationship-resolver`.) The Calls area's remaining parity items are all WebRTC/Telecom/
+  FCM platform glue — untestable in JVM, high-risk to merge blind. Rather than stall, the routine
+  advanced to the next-richest in-progress area (Contacts §J) where a genuine pure vertical existed.
+  Build-order is a *default* sequencing, not a hard gate: when an area's testable surface is exhausted,
+  move to the highest-value pure slice available and note the pivot in PROGRESS "Next".
+- **Missing-dependency seam pattern: `fun interface` provider, not a stub service.** The iOS
+  `UserRelationshipResolver` folds in block state via `BlockServiceProviding.isBlocked`, but Android
+  has no BlockService yet. Instead of inventing a throwaway stub, the resolver takes a
+  `BlockStatusProvider` `fun interface { isBlocked(id): Boolean }` seam — fully testable now, and a
+  future `BlockRepository` binds to it with zero resolver churn. The `Blocked` state is honestly
+  tracked as `[~]`/seam-pending in feature-parity until that binding lands. Prefer a functional seam
+  over a fake when the real collaborator doesn't exist yet.
+- **Default constructor param keeps prior direct-construction tests green when injecting a new
+  `@Singleton`.** `ContactsViewModel` gained a `FriendshipCache` param; giving it a
+  `= FriendshipCache()` default meant the existing `ContactsViewModel(repository)` test calls compiled
+  unchanged (Hilt still injects the real singleton in prod — it ignores the default). Minimal test
+  churn, no weakened tests.
+- **Identity-less fan-out streams must not drive per-entity teardown.** The gateway fans `call:ended`
+  out to *every* member USER room, so a busy user (active call + a waiting-call banner) receives the
+  *waiting* call's teardown on the same socket. Folding an identity-less `CallEvent.RemoteHangUp` from
+  `CallSignalManager.events` blindly into the active FSM tore down the wrong call. Fix pattern (slice
+  `call-ended-identity-teardown`): teardown frames go **only** through the identity-carrying stream
+  (`endedCalls: SharedFlow<CallEndedSignal>` = id + the FSM event), and the consumer gates on the active
+  id. `CallSignalMapper.map` returns `null` for `call:ended`/`call:missed` — they are deliberately not
+  FSM-facing. Rule of thumb: if a socket frame's effect depends on *which* entity it names, decode the
+  identity at the boundary and gate on it; never let the identity-less convenience event drive a mutation.
+- When two decode helpers on the same object overlap (`endedCallId` returned just the id; the VM later
+  also needed the event), collapse them into one identity-carrying value type rather than calling both —
+  one SSOT decode, no chance of the id and the event disagreeing.
+
+## PR / CI
+- ⚠ **The monorepo CI (`ci.yml`) is the only gate on an `apps/android` PR, and it stays green
+  by construction** — the diff touches none of the JS/TS/Python stack it exercises. `mergeable_state:
+  unstable` right after opening just means checks are still running; poll the CI run to completion
+  before squash-merging. Webhooks deliver CI *failures* but NOT success, and `send_later` is not
+  available in this env — poll `pull_request_read get_status` (or `actions_list list_workflow_runs
+  ci.yml`) yourself; a short background timer to re-check is fine.
+
+## Environment
+- ⚠ **Always rebase the slice onto `origin/main`, never local `main`.** Fresh containers ship a
+  stale local `main`, and `git pull origin main` can hard-fail with `Need to specify how to
+  reconcile divergent branches` (no merge/rebase strategy configured) — which silently leaves you on
+  the stale tree. A branch cut from it **loses the previous merged slice** (e.g. `story-canvas-snap-guides`
+  was first cut without PR #1045's `scale`/`rotation` fields). Recipe: `git fetch origin main && git
+  checkout -B claude/apps/android/<slice> origin/main`. Verify a known recent symbol is present before coding.
+- ⚠ **Gradle wrapper distribution 403s through the egress proxy.** `./gradlew` downloads the pinned
+  `gradle-8.11.1-bin.zip` from `services.gradle.org`, which **302-redirects to a `github.com` release
+  asset** the org egress policy blocks (`403`). The wrapper then dies with
+  `Server returned HTTP response code: 403`. Fix: a full Gradle is preinstalled at **`/opt/gradle`**
+  (8.14.3) — run the build with `/opt/gradle/bin/gradle <tasks> --no-daemon` (the daemon had a startup
+  hiccup once; `--no-daemon` is reliable). 8.14.3 builds this AGP project fine. **Do NOT edit the
+  committed `gradle-wrapper.properties`** to work around this — that's a repo change unrelated to the
+  slice; keep the wrapper pinned and use the system gradle locally.
+  - **Run ONLINE, not `--offline`** (2026-07-03): AGP 8.7.3 + its transitive deps are **not** in the
+    local Gradle cache on a fresh container, so `gradle … --offline` fails with `Plugin [id:
+    'com.android.application'] … was not found`. Let it fetch through the agent proxy (Google Maven +
+    Maven Central are allowed). The partially-downloaded wrapper leaves a **0-byte
+    `~/.gradle/wrapper/dists/gradle-8.11.1-bin/*/*.part`** — harmless, ignore it. The daemon worked fine
+    this run (plain `gradle <tasks>`); `--no-daemon` remains the fallback if it hiccups.
 - Fresh container has **no Android SDK**. Install per `ROUTINE.md` recipe (~2 min).
 - JDK 21 preinstalled; modules target JVM 17 — fine.
 - First Gradle run downloads the whole toolchain (slow); run it in the
   background and poll the output file.
 - `./apps/android/meeshy.sh check` = `assembleDebug` + `testDebugUnitTest`.
   Full clean check ≈ 2.5 min once dependencies are cached.
+- ⚠ **Robolectric artifact-fetch SSL flake.** The first Robolectric run in a fresh container downloads
+  the `android-all-instrumented` jar from Maven through the agent proxy; that download can fail with
+  `SSLHandshakeException` inside `MavenArtifactFetcher` (surfaces as ONE test in a class "failing" with an
+  `AssertionError`/`EOFException` cause — not a real assertion failure). It is a network flake: simply
+  **re-run the same test task** and it passes once the jar is cached. Don't chase it as a code bug.
+  Seen in `call-history-repository` on `:core:database`'s first run.
+- The `:app` module now has a **JVM test source set** (`app/src/test/kotlin`, first added in
+  `call-nav-conversation-thread`). Test deps (junit/robolectric/truth/turbine/mockk) were already declared
+  in `app/build.gradle.kts`. Navigation-decision logic belongs in a pure helper under
+  `me.meeshy.app.navigation` (e.g. `CallRoute`) so it is unit-testable while the `NavHost` glue stays
+  exempt. `android.net.Uri` needs `@RunWith(RobolectricTestRunner::class)`.
+- **Pattern for platform-glue slices (FCM/Service/BroadcastReceiver): a pure router + a synchronized
+  live-state holder.** `fcm-call-push-route` kept `MeeshyFcmService` (untestable `FirebaseMessagingService`)
+  a 3-line delegation: (1) a pure `IncomingCallPushRouter.route(data, ctx) → sealed Route` in `:core:model`
+  folds all the decisions and *returns* the advanced state (never mutates), (2) a plain `@Singleton`
+  holder (`IncomingCallRingStore`, `@Inject constructor()`, no Android deps → JVM-testable without Hilt)
+  owns the live state and persists it only on the outcome that should advance it, (3) the Service just
+  pattern-matches the Route. 19 tests hit the real behaviour; zero test touches the Service. A store test
+  needs **no** `Dispatchers.setMain` — it's synchronous, so instantiate it real (`IncomingCallRingStore()`).
+- **`| tee file | tail -N` hides progress from a backgrounded Bash task.** `tail -N` only emits at pipe
+  close, so the task's own output file stays empty until the build ends — poll the **`tee` target**
+  (`appcheck.log`) for live `> Task :…` lines, or grep it for `BUILD SUCCESSFUL|BUILD FAILED` in a
+  `run_in_background` `until` loop to get one clean completion ping. First full `:app` `check` in a fresh
+  container ≈ 5 min (assembleDebug compiles the whole feature graph); `:core:model` alone ≈ 3.5 min cold.
+
+## CI / GitHub gotchas
+- ⚠ **Never poll GitHub via raw `curl` to `api.github.com`.** Even with `$GITHUB_TOKEN` set, the direct
+  API returns `{"message":"GitHub access is not enabled for this session..."}` — the token is not scoped
+  for it. All GitHub reads/writes must go through the **`mcp__github__*` tools** (they use the proxied auth
+  path). A `curl` poll loop will spin forever on a `None` status. Use `mcp__github__actions_list`
+  (`method:list_workflow_jobs`, `resource_id:<run_id>`, `filter:latest`) for a compact per-job
+  status/conclusion view — much smaller than `list_workflow_runs`, which overflows the token limit.
+- ⚠ **`pull_request_read get_status` shows `total_count:0` for an `apps/android`-only PR** — that's the
+  *legacy commit-status* API, which GitHub **Actions** check-runs do not populate. It does NOT mean CI
+  didn't run or failed. Confirm the real state via the workflow **jobs** endpoint above.
+- The monorepo `ci.yml` runs on **every** PR to `main` (no path filter), so an `apps/android`-only PR does
+  trigger the full JS/TS/Python suite (~10 min) — but it stays green because it touches none of that code.
+  Merge only once every job's `conclusion` is `success` (a `skipped` benchmark job is fine).
+
+## Serialization gotchas
+- ⚠ **Never put a `private companion object` on a `@Serializable` class.** The plugin generates the
+  public `serializer()` *onto the class's companion*; if you declare your own `private companion object`
+  (e.g. to hold `const`/helper functions), the generated `serializer()` inherits that `private`
+  visibility and `MyType.serializer()` becomes inaccessible from other files (compile error:
+  "Cannot access 'companion object Companion': it is private"). Fix: keep helpers/constants as
+  **file-private top-level** declarations (no companion), or make the companion non-private. Hit on
+  `call-history-model` (`CallRecord`).
+
+## Socket-emit patterns (established in repo)
+- **Keep the conditional payload shape as a pure `Map<String, Any>` in `:core:model`, not inline in the
+  emit.** `call-webrtc-plumbing-emits` put the `call:quality-report` `stats` decision (which optional
+  fields are present) in `CallQualityReport.statsFields()` — a pure map, JVM-tested for every branch with
+  no `org.json` dependency — and the `:sdk-core` emit just does `JSONObject(report.statsFields())`.
+  `org.json.JSONObject(Map)` works under Robolectric, so the manager test asserts the nested `stats` keys
+  directly. This mirrors the `CallInitiateAckParser` grain: transport in the manager, decision in the model.
+- **Prefer `Long` over `Int` for cumulative WebRTC byte counters.** iOS uses a 64-bit Swift `Int`; Kotlin
+  `Int` is 32-bit and a long video call's totals exceed ~2.1 GB → silent overflow. Modelling them as `Long`
+  is a correctness win over a literal iOS port (assert with a `> Int.MAX_VALUE` test case).
 
 ## Test patterns (established in repo)
 - ViewModel tests: `UnconfinedTestDispatcher` + `Dispatchers.setMain/resetMain`
   in `@Before/@After`; Truth `assertThat`; MockK (`relaxed = true`); Turbine
   `state.test {}` for flow assertions.
+- **Observe an intermediate cache-first state before the network resolves** (e.g.
+  "cached roster painted while the fetch is in flight"): under `UnconfinedTestDispatcher`
+  the whole `init` runs to completion synchronously, so hold the network stub open with a
+  `CompletableDeferred` and `coEvery { api.call(...) } coAnswers { gate.await() }`. Assert the
+  cached state, then `gate.complete(result)` and assert the network overwrite. NB: `coAnswers`
+  is an **infix member of `MockKStubScope`** (the receiver `coEvery {…}` returns) — do **not**
+  `import io.mockk.coAnswers` (there is no such top-level symbol; it fails to resolve). Used in
+  `contacts-friends-room-cache`.
+- **A `relaxed = true` MockK returns a NON-null fabricated instance even for a `T?` return type**
+  (e.g. `suspend fun cachedStats(id): UserStats?` → a mock `UserStats`, not `null`). (2026-07-05, slice
+  `profile-stats-room-cache`.) This silently defeats a "cache is cold → paints nothing" assumption: the
+  relaxed cache mock hands back data, so a network-failure test that expected an empty state suddenly sees
+  a painted one and fails. When a test needs a **cold** collaborator, stub it explicitly —
+  `coEvery { cache.cachedStats(any()) } returns null` (a small `coldStatsCache()` factory) — rather than
+  trusting `relaxed` to yield null. Only trust `relaxed` for values you don't assert on.
+- **Dagger `@Inject constructor` ignores Kotlin default args:** a param like
+  `clock: CacheClock = SystemCacheClock` still demands a binding and there is none for
+  `CacheClock`. For `@Singleton` repos that need `now`, call `SystemCacheClock.nowMillis()`
+  inline rather than injecting it (test time isn't asserted). Cf. `FriendListRepository`,
+  `CallHistoryRepository`, `SuggestionsRepository`.
+- **Cache-first cold-paint slice recipe** (`FriendListRepository`, the template to copy for the
+  suggestions cache): a `*Entity` with a serialized-payload column + a `sortIndex` so the DAO
+  (`ORDER BY sortIndex`) replays the pure builder's order verbatim (ordering SSOT stays in the
+  `:core:model` builder, never re-derived in SQL); a focused `@Singleton` repo with
+  `cachedSnapshot()` (null = cold, distinguished from a synced-but-empty roster via `sync_meta`)
+  + `persist()` (write-through; guard the empty case with `dao.clear()`, since Room `deleteNotIn`
+  on an empty list generates invalid `NOT IN ()` SQL); the ViewModel paints from the snapshot
+  first, then revalidates and writes the fresh roster back through.
 - `MeeshyConfig` is a plain `data class` with defaults — instantiate it real,
   do not mock.
 - `SessionRepository` is a concrete class — mock with `mockk(relaxed=true)` and
@@ -38,6 +383,15 @@ Append-only log of gotchas and decisions that save time next run.
   the behaviour: `story-composer-multi-pending` flipped "second offline pick is rejected" →
   "second offline pick is appended". Keep the assertion strong (assert the new outcome
   precisely), record the flip + rationale in the run log, and the reviewer gate passes.
+- **A "duplicate-free across categories" invariant pays for itself as a RED test.** `story-sticker-picker-search`'s
+  `all is … duplicate-free` test caught `⭐` accidentally placed in both OBJECTS and SYMBOLS on the first run
+  — exactly the kind of hand-curated-data slip that silently breaks `distinct`/counts. Assert structural
+  invariants (`containsNoDuplicates`, `hasSize(sum of parts)`, `isInOrder`) over curated catalogues, not just
+  spot-checks of individual entries.
+- **Encode "search ignores the active tab" as a pure reducer, not Compose state.** The product rule (a
+  non-blank query searches across all categories) lives in `StickerPickerState.visibleEmojis`, so it is
+  unit-tested with a one-liner (`state.withQuery("heart").visibleEmojis contains ❤️` while the tab is ANIMALS)
+  and the dialog never has to branch. Same grain as `ComposerBandState` — push the decision out of the Composable.
 - **One text field, two roles (caption vs on-canvas element):** rather than add a second editor,
   `story-text-elements` routes the existing field by a derived `editorText`/`isEditingTextElement`
   (selected element's text or the slide caption). `onTextChange` branches on
@@ -56,6 +410,17 @@ Append-only log of gotchas and decisions that save time next run.
   decision is fully unit-tested off the Composable (`StorySwipeResolver`, `SlideReorderResolver`).
   The Composable measures (`onSizeChanged`, `LocalDensity`), accumulates (`detectHorizontalDragGestures`
   with a local `totalDrag`), and on drag end calls the pure resolver → an existing tested intent.
+- **Float interpolation drifts at the endpoints — short-circuit them.** `a + (b - a) * 1f` is
+  **not** bit-equal to `b` for many floats (1-ULP error), so a lerp tested with `isEqualTo(b)` at
+  `t = 1` (and `isEqualTo(a)` at `t = 0`) fails. Don't switch the test to a tolerance and lose
+  exactness — make `blend` return `this`/`other` directly when `k ≤ 0` / `k ≥ 1`. It's also the
+  correct design: "full-strength filter == base matrix" should be exact. Hit on `story-photo-filters`
+  (3 reds: `blend at one`, `non-finite → full`, VM `selecting a filter`).
+- **Model a small fixed-size numeric vector as `List<Float>`, not `FloatArray`, when you want value
+  equality in tests.** `FloatArray` uses reference equality (a `data class` over it won't compare by
+  content), breaking `assertThat(matrix).isEqualTo(other)`. `StoryColorMatrix` wraps a 20-element
+  `List<Float>` (value equality, JVM-testable) and the Composable only does `values.toFloatArray()`
+  at the glue boundary to feed Compose `ColorMatrix`.
 - **`Float.roundToInt()` rounds half **up** toward +∞** (`2.5 → 3`, but `-0.5 → 0`). When a
   reorder/threshold test sits exactly on `.5` the expectation is ambiguous — pick a value clearly
   above/below half (e.g. `2.3` not `2.5`) so the assertion is unambiguous, not flaky. Hit while
@@ -543,3 +908,308 @@ Append-only log of gotchas and decisions that save time next run.
 - **Default field keeps existing tests byte-identical.** Adding `transform = IDENTITY` to `StorySlide`
   with a default means every prior `StorySlide(id=..)` / deck test still constructs the same value —
   only genuinely new per-slide-transform behaviour needed new tests.
+
+## `story-text-element-transform` — per-element pinch/rotate (2026-06-29)
+- **Extend `normalised()`, don't bolt clamps onto every mutator.** Adding `scale`/`rotationDeg` to
+  `StoryTextElement`, I made `normalised()` re-pull *all* continuous fields (x/y/scale/rotation) into
+  range. Because the deck's `updateTextElement` already calls `.normalised()` after every transform,
+  every reducer (move/style/transform) re-clamps for free — one place, no per-mutator clamp drift.
+  `transformed()` still clamps directly too (mirrors `nudged`), so the value is sane even if called
+  raw; `normalised()` is then idempotent.
+- **Non-finite is a real gesture input.** A `detectTransformGestures` zoom can be `0`/`NaN` on a
+  degenerate pinch. `clampScale` guards `isFinite()` → `DEFAULT_SCALE` (coerceIn would pass `NaN`
+  straight through — `NaN.coerceIn` returns `NaN` because every comparison is false). `normaliseRotation`
+  guards the same. Both have a unit test pinning the non-finite arm.
+- **Rotation wrap = `(-180, 180]`.** `% 360` then `+360` if `<= -180`, `-360` if `> 180`. `-180` maps
+  to `180` so `±180` are one canonical value; `360`→`0`, `540`→`180`, `270`→`-90`. Tested each arm.
+- **One gesture, three effects.** Switching the per-element `detectDragGestures` → `detectTransformGestures`
+  lets a single two-finger gesture pan (→ `onTextElementMoved`) *and* pinch-scale + rotate (→
+  `onTextElementTransform`). Single-finger drag still pans. More natural than separate handle chips
+  (CLAUDE.md UX rule). The Composable forwards `zoom`/`rotation` verbatim — zero testable decision lost
+  to the JVM gate; `graphicsLayer { scaleX/scaleY/rotationZ }` renders around the layer centre while the
+  `offset` keeps using the *unscaled* measured size, so centring stays correct under scale.
+- **Wire fields already existed.** `StoryTextObject.scale`/`rotation` were on the `:core:model` port
+  from day one but always left at defaults; this slice is purely `:feature:stories` consuming them — no
+  SDK/model change, keeps the diff `apps/android`-only.
+
+## `story-canvas-snap-guides` — magnetic snap + safe-zone on drag (2026-06-30)
+- **Snap the delta, reuse the reducer.** Rather than add an absolute `placeTextElement` reducer (which
+  would orphan `moveTextElement`/`nudged`), the snap-aware `onTextElementMoved` computes the resolver's
+  snapped centre, then moves by `snap.x - element.x` / `snap.y - element.y` through the **existing**
+  `StorySlideDeck.moveTextElement` delta path. One reducer, no orphan, the canvas clamp still lives in
+  `nudged`. The existing corner-clamp test (`drag 0.9,-0.9 → (1,0)`) stays green untouched because the
+  far corner is beyond every guide's threshold (snapping is a no-op there) — proof a magnetic enhancement
+  need not break the raw-move contract.
+- **Per-axis independent snap.** `resolve` snaps x against vertical guides and y against horizontal guides
+  separately, so an element can lock to the centre column while its row slides free — matches iOS. Guides
+  are `[1/3, 0.5, 2/3]` on each axis (rule-of-thirds + centre). Min guide gap (0.167) ≫ threshold (0.025),
+  so a centre is ever within threshold of at most one guide — `minByOrNull` then a single threshold check
+  is enough; no tie-breaking needed.
+- **`coerceIn` doesn't guard `NaN` (again).** Snap's `clampCoord` does `if (value.isFinite()) coerceIn(0,1)
+  else CENTER`. A `NaN`/∞ drag candidate (degenerate gesture) collapses to the canvas centre instead of
+  poisoning the position. Same lesson as `clampScale` — pin the non-finite arm with a test.
+- **Transient feedback, cleared on lift.** Guide lines + the out-of-bounds verdict live in
+  `StoryComposerUiState.snapFeedback: SnapFeedback?` — set during drag, cleared by `onTextElementDragEnd()`.
+  It's *transient UI feedback*, never persisted on the element; the element only carries its snapped x/y.
+- **Compose drag-end without reimplementing `detectTransformGestures`.** That detector never returns (its
+  internal `awaitEachGesture` loops forever), so you can't append an `onEnd` after it, and a parallel
+  detector on the **Main** pass would see consumed events and cancel early. Pattern that works: a second
+  `pointerInput` running `awaitEachGesture { awaitFirstDown(false); do { awaitPointerEvent(Final) } while
+  (changes.any { pressed }) ; onDragEnd() }`. The **`Final`** pass observes events *after* the transform
+  detector consumed them and only watches `pressed`, so it fires exactly on lift without stealing the
+  gesture. Pure glue (JVM-exempt); the testable decision (clear vs keep) is the VM's `onTextElementDragEnd`.
+
+## `story-text-element-zorder` — z-order restack (2026-06-30)
+- **The list order IS the z-order.** The canvas renders `slide.elements.forEach { TextElementLayer(...) }`,
+  so later items paint on top → index 0 = back, `lastIndex` = front. Z-order needs **no new field on the
+  element** — restacking is a pure list move within the holding slide. `TO_BACK`→0, `TO_FRONT`→lastIndex,
+  `BACKWARD`→from-1, `FORWARD`→from+1, all `coerceIn(0, lastIndex)`; `target == from` ⇒ inert (same
+  instance). This keeps the model minimal and the publish serialisation unchanged (order already rides).
+- **Same-`when`, four arms, one `coerceIn` covers all boundaries.** Mapping each `StoryZOrder` to a target
+  index then a single clamp + `target == from` guard collapses "already at front/back" and "single
+  element" into one inert path — no per-op boundary branches to miss. Test sweep: 4 op-arms × (move +
+  inert-at-extreme) + unknown-id + single-element + cross-slide isolation = full branch coverage in 13
+  reducer tests.
+- **VM must guard `copy` to keep the same-instance contract.** `_state.update { it.copy(deck = reducer(...)) }`
+  always mints a NEW `UiState` even when the reducer returned the same deck — so `isSameInstanceAs(before)`
+  would fail and an inert tap churns recomposition. Pattern: `val deck = state.deck.reorder(...); if (deck
+  === state.deck) state else state.copy(deck = deck)`. Same shape as `onTextElementDragEnd`'s null-guard.
+  Always pair a "returns same instance when inert" reducer with this guard at the VM edge.
+- **Step-0 conflict recovery (PR #1048).** A prior slice's PR can still be **open with conflicts** when
+  main advanced past its base. Recipe: `git fetch origin main <pr-branch>`; `git checkout -B <pr-branch>
+  origin/<pr-branch>`; `git rebase origin/main`; resolve keeping **both** sides (additive state fields /
+  imports / doc entries); `meeshy.sh check`; `git push --force-with-lease` (fall back to a plain `push -u`
+  if the remote ref was deleted out from under you → "couldn't find remote ref"). Verify with the merge
+  tool; the maintainer may merge it concurrently — re-`get` the PR to confirm `merged:true` before moving on.
+- **Reuse canvas geometry across element types (`story-sticker-elements`).** A new on-canvas object
+  (sticker) shares the *exact* clamp/wrap rules of `StoryTextElement` (coord `0..1`, scale `0.3..4`,
+  rotation `(-180,180]`). Don't re-derive them — call `StoryTextElement.clampCoord`/`clampScale`/
+  `normaliseRotation` from the new model so the geometry lives in **one** unit-tested place. Reads slightly
+  oddly ("a sticker using a text-element companion") but it's pure canvas math and keeps single-source-of-
+  truth. Mirror the deck reducer family verbatim (`add*ToSelected`/`remove*`/`update*`/`move*`/`transform*`)
+  so most behaviour falls out of the established, tested pattern.
+- **`when(tile)` exhaustiveness is your friend.** Adding `ComposerContentTile.STICKER` made the screen's
+  `when (tile)` non-exhaustive → compiler error until the new branch was wired. Free guarantee that a new
+  enum content-tile can't be silently unrendered (a dead-end tile). Same for any `when` over a sealed/enum.
+- **Grid `items` vs list `items` import clash.** `StoryComposerScreen` already imports
+  `androidx.compose.foundation.lazy.items` (LazyRow). For a `LazyVerticalGrid` use
+  `import androidx.compose.foundation.lazy.grid.items as gridItems` to disambiguate — importing both
+  un-aliased compiles but is fragile; the alias is explicit.
+- **Mutually-exclusive canvas selection.** When two selectable object kinds share a canvas (text element vs
+  sticker), each select/add intent must clear the *other*'s selection (`selectedTextElementId = null` when
+  selecting a sticker and vice-versa), and `mirrorDraftToSelection` must drop *both* stale ids on a slide
+  switch — otherwise a slide change can leave a phantom remove-handle on an object not on the visible slide.
+
+## Decisions (cont.) — Calls area kickoff (2026-06-30)
+- **Calls started with the pure FSM, not the WebRTC plumbing.** First Calls brick = a pure
+  call-lifecycle reducer (`core:model` `me.meeshy.sdk.model.call`: `CallState`/`CallEndReason`/
+  `CallEvent`/`CallStateMachine.reduce`). Faithful port of iOS `CallManager.CallState` +
+  `WebRTCTypes.CallEndReason`. The transition table is THE thing to get right (iOS only validates it
+  informally — a real FSM validator is a P1 todo in `tasks/calls-sota-plan-2026-06-05.md`), so it's the
+  highest-leverage, most-testable first slice. WebRTC/Telecom/FCM plumbing is glue-heavy → comes after.
+- **Why `core:model` and not a new `:feature:calls` module yet.** SDK-purity grain test: the FSM is a
+  stateless, parameter-driven building block agnostic to product orchestration → it belongs with the
+  codebase's other pure domain logic (`EmojiUsageRanker`, `ConversationFilter`, `LanguageResolver`),
+  not behind new-module wiring. The `:feature:calls` VM + screen that *consume* it (giving it a real,
+  non-orphan consumer) are the very next slice. A pure FSM in `core:model` is NOT a dead-end screen —
+  the reviewer's "no dead-end screens" is about navigation/UX, and SDK-purity explicitly endorses
+  stateless building blocks.
+- **FSM shape that keeps branch coverage honest + safe:** model phase only (media-type/mute live
+  alongside, never inside the state — matches iOS); make every inapplicable (state, event) pair
+  **inert** (return the same state) so the machine is total and idempotent; let terminal `Ended` leave
+  only via `Settle`→`Idle` so it always settles and never loops. A shared `terminal(event)` helper maps
+  the from-any-active-phase enders (LocalHangUp/RemoteHangUp/ConnectionFailed) so each per-state `when`
+  stays short. Reconnect budget (`attempt >= maxReconnectAttempts`, default 3 per iOS) → boundary tests
+  at both default max=3 and max=1.
+- **Merge-gate: unblock-then-merge a stale ⚠-blocked PR before the new slice.** PR #1135 had been
+  blocked on a pre-existing red `main` (web a11y test). Step 0 each run: if the prior PR is blocked on
+  `main`, re-check `main`'s latest CI — once green, rebase the blocked branch onto it
+  (`git rebase origin/main`, force-with-lease push), re-run CI, and squash-merge once green. Never merge
+  past red CI; the red must be gone (fixed on `main`), not bypassed.
+
+## Realtime socket lifecycle (slice `realtime-session-coordinator`, 2026-07-02)
+- ⚠ **The realtime layer was entirely dead until this slice.** `SocketManager.connect()` had **zero
+  callers in production** and no socket manager's `attach()` (message/social/call) ran anywhere. Only
+  `SocketManager.connectionState` was ever observed (for the connection banner). So no `call:*`,
+  `message:*` or social frame could reach any ViewModel — the whole `attach()`/`events` machinery built
+  over prior loops was orphaned. If you wire a new socket manager, remember it also needs its `attach()`
+  called from `RealtimeSessionCoordinator.attachAll()`, or it stays dead.
+- **Attach must follow every connect, and exactly once per socket.** `SocketManager.on(event, cb)`
+  registers on the current `_socket` and **no-ops when `_socket` is null** — so `attach()` before
+  `connect()` silently loses every listener. And `disconnect()` nulls `_socket`; a later `connect()`
+  mints a **new** `Socket` (socket.io's internal auto-reconnect reuses the *same* instance and keeps its
+  listeners, but a full disconnect→connect does not). Therefore the rule encoded in the pure
+  `RealtimeLifecyclePlan`: sign-in emits `[Connect, Attach]` **in that order**, and `Attach` is paired
+  with **every** `Connect` (a logout→login re-attaches on the new socket) — NOT an "attach once ever"
+  flag, which would leave the second session's socket listener-less.
+- **`SocketManager.reconnectWithToken()` (disconnect+connect on token refresh) still has no caller.**
+  When a token-refresh path is wired, it must also re-attach (it mints a new socket) — either route it
+  through the coordinator or call `attachAll()` after it. Tracked follow-up.
+- **Driver placement.** The "when to connect" edge is product orchestration → driven from `AuthViewModel`
+  (`:feature:auth`, the app-level auth holder created above the NavHost in `MeeshyApp`, so effectively
+  process-lifetime for the session). The coordinator + pure plan are stateless-ish SDK building blocks in
+  `:sdk-core`. The `@Singleton` coordinator dedups on the edge, so a VM recreation can't double-connect.
+
+## Compose Navigation route shape for nullable values (slice `incoming-call-deeplink`, 2026-07-02)
+- **A required path arg must be non-empty, or `navigate()` throws.** Compose Navigation compiles a path
+  placeholder `{arg}` to the regex `[^/]+` (one-or-more non-slash). A route built with a blank value —
+  e.g. `call/${Uri.encode("")}/…` → `call//…` — has an empty segment that the regex won't match, so
+  `navController.navigate(route)` throws `IllegalArgumentException: destination … cannot be found`. And
+  `Uri.getPathSegments()` **silently drops** empty segments, so a test parsing `path.split("/")`/
+  `pathSegments` won't even see the collapse — it just shifts indices and passes for the wrong reason.
+- **Fix: for any route field that can be blank/nullable, use an OPTIONAL QUERY ARG, not a path arg.** A
+  static path + `?a={a}&b={b}…` with `navArgument { … ; defaultValue = … }` (and `nullable = true` for
+  strings) matches with the arg present-blank OR absent, binding the default — never a crash. We migrated
+  `CallRoute` from `call/{conversationId}/{peerName}/{video}` to a static `call?…` query route so an
+  incoming call with no room (gateway may omit `conversationId`) still deep-links safely. Prefer this shape
+  from the start for routes carrying free-text names or optional ids.
+- **Test the route by decoding it back through the SSOT, not by string-splitting.** `Uri.parse(route)
+  .getQueryParameter(ARG)` (auto-decoded) → `CallRoute.config(...)` → assert on the real `CallConfig`. That
+  survives an encoding change (path→query) without rewriting the behavioural intent, and it asserts the
+  actual value the screen drives rather than a positional segment literal.
+- **`MainActivity` intent → NavHost deep-link.** Keep the decision pure: `MainActivity` reads the intent
+  extras into a plain `LaunchExtras` (thin, untestable glue) and calls `LaunchRouter.route(...)`; hold the
+  result in `mutableStateOf`, recompute in both `onCreate` and `onNewIntent` (a running Activity gets
+  `onNewIntent`, not a fresh `onCreate`). `MeeshyApp` navigates from a `LaunchedEffect(route, isAuth)` — gate
+  on `isAuthenticated` so a not-yet-logged-in cold launch defers the route across the login gate — then a
+  `onLaunchRouteConsumed` callback nulls the state so a recomposition never re-navigates.
+- **⚠ A self-rescheduling `while(true){ delay }` loop in `viewModelScope` HANGS `runTest`.**
+  `call-duration-timer` first shipped the 1-Hz timer as `viewModelScope.launch { while (isActive) {
+  delay(1000); elapsed++ } }`. Any existing test that merely *reached* the connected phase then spun a
+  gradle worker at 100% CPU forever: `runTest`'s end-of-test `advanceUntilIdle()` chases the infinite
+  chain of virtual-time-scheduled `delay` continuations and never idles (the ticker always has one more
+  task queued). A `SharedFlow.collect` that just *suspends* (like `signalManager.events`) is fine — it
+  schedules no timed task — which is why only the `delay`-loop version hung. **Fix / pattern:** inject the
+  tick source as a `Flow<Unit>` seam (`CallSecondsTicker` interface + `@Binds RealCallSecondsTicker`, whose
+  prod impl is the `flow { while(true){ delay(1000); emit(Unit) } }`), and collect it in the VM. Tests pass
+  a fake backed by a `MutableSharedFlow<Unit>` and drive the clock with plain `emit(Unit)` calls — fully
+  deterministic, no `advanceTimeBy`, no wall-clock, and impossible to hang because the fake schedules no
+  timed work. Same grain as every other "push the decision out of the untestable primitive" lesson: the
+  ticker is the primitive, the elapsed-count logic is what we test.
+
+## 2026-07-03 — env: gradle wrapper dist download is 403-blocked; use `/opt/gradle`
+- In a fresh web container the wrapper's `distributionUrl` (services.gradle.org →
+  github releases) returns **403 through the agent proxy**, and the cached
+  `~/.gradle/wrapper/dists/gradle-8.11.1-bin/` holds only a `.lck`/`.part` (incomplete).
+  `./gradlew` / `meeshy.sh` therefore can't bootstrap.
+- **Recipe:** a matching system gradle is preinstalled at `/opt/gradle/bin/gradle`
+  (8.11.1 — same version the wrapper pins). Run tasks with it directly, e.g.
+  `export ANDROID_HOME=$HOME/android-sdk ANDROID_SDK_ROOT=$HOME/android-sdk &&
+  /opt/gradle/bin/gradle assembleDebug testDebugUnitTest --console=plain`. Maven
+  dependency resolution goes through the proxy fine; only the wrapper's own dist zip is
+  blocked. (Follow-up if it recurs: pre-seed the dist, or point `distributionUrl` at a
+  reachable mirror — but that touches `apps/android/gradle/…`, a legit apps/android edit.)
+
+## 2026-07-03 — pattern: parallel *identity* stream beside the identity-less FSM `events`
+- The call socket layer republishes a decoded FSM `CallEvent` on `CallSignalManager.events`
+  — deliberately **identity-less** (`ReceiveIncoming`/`RemoteHangUp`/`RingTimeout` carry no
+  `callId`). When a feature needs the *identity* of a frame (which call?), do **not** widen
+  `events` or the `map` contract (that breaks every existing mapper/manager test). Instead add
+  a **parallel `SharedFlow`** fed by a separate pure decode: `incomingOffers` (call-waiting
+  raise, from `call:initiated`) and now `endedCalls` (banner dismiss, from `call:ended`/
+  `call:missed`) both follow this shape — pure `CallSignalMapper.{incomingOffer,endedCallId}`
+  decode + `_flow.tryEmit` in `listen`, collected in the VM. Keeps `map`/`events` frozen, adds
+  zero risk to the FSM path, and each stream is independently unit-testable.
+- **Known limitation this exposes (next Calls slice):** because `events` is identity-less, a
+  teardown for a *different* call (e.g. the waiting call's `call:ended`, which the gateway fans
+  out to member USER rooms) is folded into the *active* call's FSM as `RemoteHangUp` and wrongly
+  ends it. The `endedCalls` banner-dismiss is correct and self-contained, but the full fix is an
+  **identity-aware active-call teardown**: gate the FSM teardown so only a teardown whose `callId`
+  matches the active call reduces it. Deferred to keep this slice thin and non-test-breaking.
+
+## 2026-07-04 — pattern: durable absolute-state mutations (block/unblock) via the outbox
+- Block/unblock are **opposite terminal states**, not deltas — but they coalesce **exactly**
+  like the reaction add/remove toggle: a queued opposite for the same target **annihilates**
+  (the pair returns the user to the last-synced server state; the optimistic `BlockCache` flip
+  the second call made is the correct net state), and a repeated same-kind row is **superseded**
+  (idempotent). So reuse the reaction-toggle shape in `OutboxCoalescer`, don't invent a new one.
+- **No payload needed**: like `DELETE_MESSAGE`, the kind (`BLOCK_USER`/`UNBLOCK_USER`) + `targetId`
+  carry everything; `payload = ""`. That means **no DB migration** — a cheap durable slice.
+- **Delivery-exhaust rollback is the worker's job, not the VM's** (precedent: `markReadOptimistic`).
+  The VM writes optimistically + enqueues + wakes `OutboxFlushWorker`; it only rolls back on a
+  **local enqueue failure**. A *delivery* hard-exhaust rolls the **SSOT** (`BlockCache`) back in the
+  worker's `onExhausted`, and the list re-hydrates truthfully on next `load()`. Do **not** wire the
+  VM to `OutboxRepository.outcomes` for per-cmid list restoration — no existing durable mutation does,
+  and it adds a stateful cmid→row map for a rare tail case the SSOT already corrects.
+- **Wake the worker only on a real cmid**: `OutboxRepository.enqueue` returns `null` when the incoming
+  mutation annihilated a pending opposite — nothing to deliver, so schedule no `WorkManager` request
+  (mirrors `ConversationListViewModel.runPrefMutation` gating on the "something was queued" boolean).
+- **Enqueue-repo tests go Robolectric**: a repository that calls `OutboxRepository.enqueue` needs a
+  real in-memory `MeeshyDatabase` (`Room.inMemoryDatabaseBuilder` + `RobolectricTestRunner`) — the
+  established `StoryRepositoryTest`/`MediaUploadQueueTest` pattern. Assert the queued row via
+  `outbox.deliverable(lane)`; don't mock the final `OutboxRepository`.
+
+## 2026-07-05 — resolved: the lane-in-drain-list gotcha, structurally (outbox-lane-map-ssot)
+- The 2026-07-04 follow-up ("a worker drain-list test that asserts every lane with a registered
+  sender is drained") is **closed — one better than a test**. Instead of a Robolectric worker test
+  guarding the hand-maintained `lanes` list, the list is **gone**: a new pure `OutboxLaneMap`
+  (`sdk-core/.../outbox/OutboxModel.kt`) is the SSOT `OutboxKind → OutboxLaneAssignment`
+  (`PerConversation` | `Shared(lane)`, exhaustive `when` → every kind must have an assignment or it
+  won't compile), and `OutboxFlushWorker` now drains `OutboxLaneMap.sharedDrainLanes` (derived,
+  deduped, stable enum order) instead of a literal `listOf(...)`. A kind with a registered sender can
+  no longer be stranded on an undrained lane — the BLOCK/FRIEND omission class is now impossible, not
+  merely tested for. Bonus: the derivation drops the always-empty `PRESENCE`/`SOCIAL` lanes (no kind
+  maps there, no enqueue site) from the sweep — a behaviour-preserving no-op (draining an empty lane
+  did nothing). +9 pure tests over `assignmentFor`/`sharedDrainLanes` (per-arm mapping, dedup,
+  per-conversation exclusion, non-blank invariant, BLOCK/FRIEND regression). **Lesson generalised:**
+  when two lists must stay in lockstep (senders keyed by kind ↔ lanes drained), don't guard the drift
+  with a test — **derive one from the other** so the drift can't exist.
+
+## 2026-07-04 — pattern: durable friend-request send + the lane-in-drain-list gotcha
+- **Adding an `OutboxKind` + `OutboxLanes.X` is NOT enough — you MUST also add lane `X` to the
+  `OutboxFlushWorker` shared-lane drain list.** The prior `block-outbox-durable` slice added
+  `OutboxLanes.BLOCK` + senders but forgot the drain list, so block/unblock rows never delivered (a
+  silent no-op, invisible to the JVM tests because there is no worker integration test). This slice
+  added both `BLOCK` and `FRIEND` to the list. **Follow-up: a worker drain-list test** (Robolectric)
+  that asserts every lane with a registered sender is drained would have caught it — worth wiring.
+  ✅ **RESOLVED 2026-07-05 (`outbox-lane-map-ssot`)** — went one better: derived the drain list from a
+  kind→lane SSOT (`OutboxLaneMap`) so the drift is structurally impossible. See the 2026-07-05 entry above.
+- **Optimistic flip of a shared singleton cache must come AFTER the durable enqueue commits, not
+  before.** `DiscoverViewModel.connect` first flipped `FriendshipCache` (an app-wide `@Singleton`)
+  then enqueued in a `viewModelScope` coroutine — a cancellation between the two (VM cleared on
+  nav-away) left a **phantom `PendingSent`** in the cache with no queued row and no rollback, wrong on
+  every screen until a hydrate. Fix: enqueue first, flip only on a non-`null` cmid (the local Room
+  write is sub-ms, so it is still effectively instant). This differs from `BlockedListViewModel`,
+  which flips its **own** `_state` list (dies with the VM) — a cache-derived VM has no such safety, so
+  order matters. Deleted the local-enqueue-failure rollback path entirely (nothing to undo).
+- **A `SEND` overrides the drainer's "404-as-success" default** (ARCHITECTURE.md §5). That rule is for
+  idempotent deletes (404 = already gone). `FriendRequestSend.classify` maps 404 → permanent reject +
+  rollback (404 = receiver not found), never success — else a pending would strand toward a
+  non-existent user. Documented inline so the divergence reads as intentional.
+- **Known optimistic-drift edges (reconciled by a later hydrate, deferred):**
+  1. The gateway returns **409 for a friendRequest in EITHER direction and any status** (already
+     friends / inbound-pending / previously-rejected), so `409 → AlreadyExists` can leave the button
+     showing "Pending sent" when the truth is "Friends"/"Accept". A proper fix triggers a
+     friendship re-hydrate on 409 rather than trusting the optimistic placeholder.
+  2. **Cancel-while-queued**: cancelling a still-queued (placeholder) send does not annihilate the
+     outbox row (no cancel-via-outbox path yet), so on delivery `Delivered → didSendRequest` can
+     resurrect it. When the "cancel a pending sent request" flow lands, route it through a
+     `CANCEL_FRIEND_REQUEST` coalescer rule that **annihilates** a pending `SEND_FRIEND_REQUEST` to
+     the same receiver (mirror the send+delete message annihilation).
+
+## 2026-07-04 — env gotcha: the Gradle wrapper distribution is 403-blocked; use system gradle
+- **`./gradlew` cannot bootstrap in this container.** The wrapper downloads
+  `services.gradle.org/distributions/gradle-8.11.1-bin.zip`, which 302-redirects to
+  `github.com/gradle/gradle-distributions/releases/...` — a host the egress policy **blocks (403)**.
+  The cached dist under `~/.gradle/wrapper/dists/gradle-8.11.1-bin/` is a **partial** (`.part`+`.lck`
+  only), so the wrapper never completes.
+- **Fix:** a system Gradle is preinstalled at `/opt/gradle/bin/gradle` (8.14.3). Run the build with
+  `gradle <tasks>` instead of `./gradlew`. AGP 8.7.3 runs fine under it. Maven Central + Google Maven
+  are allowed, so **do NOT pass `--offline`** (the AGP plugin marker isn't pre-cached → resolution
+  fails). `meeshy.sh` calls `./gradlew`, so invoke `gradle` directly for `assembleDebug`/
+  `testDebugUnitTest` until a full wrapper dist can be primed.
+
+## 2026-07-05 — durable-preference codec: record-token (JSON) vs enum-token variant
+- The theme/language stores persist a **single enum token** with a pure `when`-based codec. The
+  notification block (`settings-notification-prefs`) persists a **whole record**
+  (`UserNotificationPreferences`, 30+ fields), so the codec round-trips as **JSON**, not an enum
+  string. Kept the same corruption-proof contract: `notificationPreferencesFromStorage(raw)` wraps
+  `decodeFromString` in `runCatching` → blank/absent/malformed/wrong-shape all degrade to
+  `UserNotificationPreferences()` defaults; `ignoreUnknownKeys` drops legacy fields; `encodeDefaults`
+  makes every field survive the round-trip. Same `:core:model` purity (private `Json` instance,
+  precedent `CallSignalMapper`) + `:sdk-core` DataStore store + `stateIn(Eagerly)` hydration pattern.
+- **ViewModel intent shape for a multi-field record:** don't add 30 setters. One private
+  `updateNotifications { copy(field = value) }` read-modify-writes the whole block from
+  `store.preferences.value`, so a single toggle never clobbers the others (tested by the
+  successive-toggles-compose case). Screen: push is the **master** — sub-toggles `enabled = pushEnabled`
+  so a coherent parent/child relationship, no dead ends.

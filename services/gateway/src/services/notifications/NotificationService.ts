@@ -10,6 +10,8 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SequenceService } from '../SequenceService';
+import { emitWithSeq } from '../../socketio/utils/emitWithSeq';
 import type {
   NotificationActor,
   NotificationContext,
@@ -18,12 +20,15 @@ import type {
   NotificationType,
   Notification,
 } from '@meeshy/shared/types/notification';
+import type { UserUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { getDistinctConversationPartnerUserIds } from '../../utils/conversation-partners';
 import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
@@ -33,10 +38,7 @@ import { EmailService } from '../EmailService';
 import { getCommunityCoMemberIds } from '../posts/communityVisibility';
 
 function formatDuration(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `0:${String(seconds).padStart(2, '0')}`;
+  return formatClock(Math.round(ms / 1000));
 }
 
 function formatFileSize(bytes: number): string {
@@ -407,11 +409,14 @@ export class NotificationService {
 
   private pushService?: PushNotificationService;
   private emailService?: EmailService;
+  private readonly sequenceService: SequenceService;
 
   constructor(
     private prisma: PrismaClient,
     private io?: SocketIOServer
   ) {
+    // A2 — allocation des `_seq` per-user pour les events user-scoped.
+    this.sequenceService = new SequenceService(prisma);
     // Nettoyer les entrées de rate limit périmées toutes les 2 minutes
     const mentionsCleanup = setInterval(() => this.cleanupOldMentions(), 120_000);
     mentionsCleanup.unref?.();
@@ -599,6 +604,13 @@ export class NotificationService {
     context: NotificationContext;
     metadata: NotificationMetadata;
     expiresAt?: Date;
+    /**
+     * Forwarded to APNs `apns-collapse-id` / FCM `collapseKey` so undelivered
+     * pushes pile up into one banner instead of spamming the device when it
+     * reconnects. Scope it per-conversation (`conv-${conversationId}`), never
+     * per-message — a per-message id is unique by construction and never
+     * collapses anything.
+     */
     collapseId?: string;
     /**
      * Langue résolue du destinataire (Prisme-first). Fournie par les méthodes
@@ -742,9 +754,11 @@ export class NotificationService {
         subtitle: pushSubtitle,
       };
 
-      // Émettre via Socket.IO
+      // Émettre via Socket.IO — A2 : event user-scoped enrichi de `_seq`
+      // (SyncEngine, détection de gap exacte). `emitWithSeq` est résilient :
+      // sur échec d'allocation de séquence, l'event part sans `_seq`.
       if (this.io) {
-        this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, socketPayload);
+        await emitWithSeq(this.io, this.sequenceService, params.userId, SERVER_EVENTS.NOTIFICATION_NEW, socketPayload as unknown as Record<string, unknown>);
         notificationLogger.debug('notification:new emitted via socket', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
@@ -759,6 +773,23 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}`) :
             undefined;
           const pushBody = params.content.substring(0, 200);
+
+          // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
+          // par le payload push : embarquer le même compte unread que
+          // `notification:counts` (même source → même sémantique, pas de
+          // flicker au recale foreground). `badge` pilote `aps.badge`
+          // nativement ; `data.unreadCount` (string) alimente le miroir App
+          // Group écrit par la NSE pour le widget. Best-effort : sur échec
+          // du count, le push part sans badge (comportement historique).
+          let unreadBadge: number | undefined;
+          try {
+            const count = await this.prisma.notification.count({
+              where: { userId: params.userId, readAt: null },
+            });
+            if (typeof count === 'number') unreadBadge = count;
+          } catch {
+            unreadBadge = undefined;
+          }
 
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
           this.pushService.sendToUser({
@@ -777,7 +808,9 @@ export class NotificationService {
               body: pushBody,
               link,
               collapseId: params.collapseId,
+              ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
+                ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',
                 conversationTitle: params.context.conversationTitle || '',
@@ -1094,7 +1127,7 @@ export class NotificationService {
       type: 'new_message',
       priority: 'normal',
       content,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
       lang: recipientLang,
 
       actor: {
@@ -1180,7 +1213,7 @@ export class NotificationService {
       type: 'user_mentioned',
       priority: 'high',
       content: params.messagePreview,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
 
       actor: {
         id: params.mentionerUserId,
@@ -2117,6 +2150,98 @@ export class NotificationService {
   }
 
   // ==============================================
+  // FRIEND_REQUEST_CANCELLED (realtime-only, no persisted Notification)
+  // ==============================================
+
+  /**
+   * Fired when a pending friend request is removed via
+   * `DELETE /friend-requests/:id` — sender cancelling, or receiver
+   * declining/removing without an explicit accept/reject. Unlike the other
+   * `create*FriendRequest*` methods this does NOT persist a `Notification`
+   * row (ephemeral realtime signal only) so the counterpart's pending list
+   * can invalidate immediately without polluting their notification feed.
+   */
+  emitFriendRequestCancelled(params: {
+    recipientUserId: string;
+    friendRequestId: string;
+    cancelledBy: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.recipientUserId)).emit(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, {
+      friendRequestId: params.friendRequestId,
+      cancelledBy: params.cancelledBy,
+    });
+  }
+
+  // ==============================================
+  // FRIEND_REQUEST_NEW / ACCEPTED / REJECTED (typed, dual-emitted
+  // alongside the legacy NOTIFICATION_NEW string-discriminated payload —
+  // see socketio-events-cleanup.md #7. Same pattern as CONVERSATION_NEW /
+  // FRIEND_REQUEST_CANCELLED: realtime-only signal, no separate
+  // `Notification` row of their own.)
+  // ==============================================
+
+  emitFriendRequestNew(params: {
+    receiverId: string;
+    friendRequestId: string;
+    senderId: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.receiverId)).emit(SERVER_EVENTS.FRIEND_REQUEST_NEW, {
+      friendRequestId: params.friendRequestId,
+      senderId: params.senderId,
+      receiverId: params.receiverId,
+    });
+  }
+
+  emitFriendRequestAccepted(params: {
+    senderId: string;
+    friendRequestId: string;
+    accepterId: string;
+    conversationId?: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.senderId)).emit(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, {
+      friendRequestId: params.friendRequestId,
+      accepterId: params.accepterId,
+      conversationId: params.conversationId,
+    });
+  }
+
+  emitFriendRequestRejected(params: {
+    senderId: string;
+    friendRequestId: string;
+    rejecterId: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.senderId)).emit(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, {
+      friendRequestId: params.friendRequestId,
+      rejecterId: params.rejecterId,
+    });
+  }
+
+  /**
+   * Propagates a profile change (displayName, avatar, banner, username) to
+   * every user sharing an active conversation with `userId`, instead of a
+   * full broadcast. Realtime-only signal — no `Notification` row, same
+   * pattern as `emitFriendRequestCancelled`. See
+   * tasks/socketio-events-cleanup.md #6.
+   */
+  async emitUserUpdated(params: {
+    userId: string;
+    changes: UserUpdatedEventData['changes'];
+  }): Promise<void> {
+    if (!this.io) return;
+    const partnerIds = await getDistinctConversationPartnerUserIds(this.prisma, params.userId);
+    if (partnerIds.length === 0) return;
+
+    const payload: UserUpdatedEventData = { userId: params.userId, changes: params.changes };
+    for (const partnerId of partnerIds) {
+      this.io.to(ROOMS.user(partnerId)).emit(SERVER_EVENTS.USER_UPDATED, payload);
+    }
+  }
+
+  // ==============================================
   // MEMBER_JOINED
   // ==============================================
 
@@ -2233,7 +2358,7 @@ export class NotificationService {
       type: 'message_reply',
       priority: 'normal',
       content: params.messagePreview,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
 
       actor: {
         id: params.replierUserId,

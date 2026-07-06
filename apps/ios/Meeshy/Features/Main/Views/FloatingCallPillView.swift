@@ -83,7 +83,11 @@ struct FloatingCallPillView: View {
             controlButtons
         }
         .padding(.horizontal, 16)
-        .frame(height: pillHeight)
+        // minHeight (not an exact height): userInfoSection stacks two
+        // Dynamic-Type-scalable Text lines that can exceed pillHeight at
+        // accessibility text sizes (AX1+) — an exact frame would force-clip
+        // the name/status instead of letting the pill grow to fit.
+        .frame(minHeight: pillHeight)
         // iOS 26 Liquid Glass capsule surface (SDK Compatibility wrapper owns the
         // gating + the .ultraThinMaterial fallback). The small inner controls stay
         // as vibrancy fills ON the glass — Apple HIG: don't nest glass in glass.
@@ -108,15 +112,17 @@ struct FloatingCallPillView: View {
 
     // MARK: - Leading Visual (remote video thumbnail or avatar)
 
-    /// §7.6 — for a minimized VIDEO call, show the live remote feed as a small
-    /// thumbnail so the user still sees their interlocutor (a return-to-call pill
-    /// that drops the video is a major gap). Falls back to the avatar for audio
-    /// calls, or when the peer's camera is off / no track yet. Only one renderer
-    /// is live at a time: CallView is dismounted while in `.pip`, so this does
-    /// not double-render the remote track.
+    /// §7.6 — whenever the peer's video is flowing, show the live remote feed
+    /// as a small thumbnail so the user still sees their interlocutor (a
+    /// return-to-call pill that drops the video is a major gap). Keyed on the
+    /// REMOTE stream only — the peer may have escalated an audio call to video
+    /// while the local camera stays off. Falls back to the avatar when the
+    /// peer's camera is off / no track yet. Only one renderer is live at a
+    /// time: CallView is dismounted while in `.pip`, so this does not
+    /// double-render the remote track.
     @ViewBuilder
     private var pillLeadingVisual: some View {
-        if callManager.isVideoEnabled && callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
+        if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
             CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
                 .frame(width: 44, height: 44)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -198,6 +204,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isMuted
             ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
             : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
+        .callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)
     }
 
     private var speakerButton: some View {
@@ -218,6 +225,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isSpeaker
             ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
             : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
+        .callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)
     }
 
     private var expandButton: some View {
@@ -235,6 +243,7 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.pill.expand", defaultValue: "Agrandir l'appel"))
+        .accessibilityHint(String(localized: "call.pill.expand.hint", defaultValue: "Revient à l'affichage plein écran de l'appel"))
     }
 
     private var hangupButton: some View {
@@ -259,6 +268,7 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.pill.hangup", defaultValue: "Raccrocher"))
+        .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
     }
 
     // MARK: - Actions

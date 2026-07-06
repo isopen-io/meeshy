@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect, memo, CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
+import { truncateText } from '@/utils/truncate';
+import { formatDuration } from '@/utils/audio-formatters';
 import { getLanguageColor } from './theme';
 
 // ============================================================================
@@ -76,24 +78,6 @@ const TRANSCRIPTION_MAX_LENGTH = 100;
 function getFlag(code: string): string {
   const normalized = code.toLowerCase().slice(0, 2);
   return FLAG_MAP[normalized] || '\u{1F310}';
-}
-
-function formatDuration(seconds: number): string {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-function truncateText(text: string, maxLength: number): { truncated: string; isTruncated: boolean } {
-  if (text.length <= maxLength) {
-    return { truncated: text, isTruncated: false };
-  }
-  return { truncated: text.slice(0, maxLength).trim() + '...', isTruncated: true };
 }
 
 // ============================================================================

@@ -115,6 +115,27 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertNil(result)
     }
 
+    func test_createAnswer_failure_doesNotMarkRemoteDescriptionAsSet() async {
+        // Regression guard: a failed createAnswer (e.g. the perfect-negotiation
+        // glare guard raising `.offerIgnored` for a collided offer) must NOT flip
+        // `hasRemoteDescription`, otherwise a subsequent ICE candidate is forwarded
+        // straight to the ICE agent instead of buffered — for a remote description
+        // that was never actually applied to the peer connection.
+        let (sut, client) = makeSUT()
+        client.createAnswerResult = .failure(WebRTCError.offerIgnored)
+
+        let offer = SessionDescription(type: .offer, sdp: "offer-sdp")
+        _ = await sut.createAnswer(from: offer)
+
+        let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
+        sut.addICECandidate(candidate)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(client.addIceCandidateCallCount, 0,
+            "ICE candidates must still be buffered after a failed createAnswer — " +
+            "the remote description was never successfully applied.")
+    }
+
     // MARK: - Media Controls
 
     func test_muteAudio_true_callsToggleAudioWithFalse() {
@@ -372,16 +393,29 @@ final class AdjustBitrateSourceGuardTests: XCTestCase {
         )
     }
 
-    /// BWE merge: when TWCC is active, quality level must be min(heuristic, bweLevel).
-    func test_adjustBitrate_mergesBWEWithHeuristicViaMin() throws {
+    /// BWE merge: the effective level must flow through the gated policy.
+    /// 2026-07-03 — the previous unconditional `min(heuristic, bwe)` WAS the
+    /// "Connexion instable à 00:06" bug: the BWE ladder is calibrated on
+    /// VIDEO tier bitrates, so audio-only calls (~64 kbps forever) and the
+    /// GCC ramp-up both read as .poor on a perfectly healthy link. The merge
+    /// now goes through CallReliabilityPolicy.effectiveQualityLevel, which
+    /// gates the BWE signal on video-sending + warm-up and still takes
+    /// min(heuristic, bwe) after warm-up (see QualityLevelMergePolicyTests).
+    func test_adjustBitrate_mergesBWEWithHeuristicViaPolicy() throws {
         let source = try webRTCServiceSource()
         XCTAssertTrue(
             source.contains("stats.availableOutgoingBitrateBps > 0"),
             "BWE gate: TWCC estimate should only be applied when availableOutgoingBitrateBps > 0"
         )
         XCTAssertTrue(
-            source.contains("min(heuristicLevel, $0)") || source.contains("min(heuristicLevel,"),
-            "BWE merge: effective quality level must be min(heuristicLevel, bweLevel) — never exceed what either signal permits."
+            source.contains("CallReliabilityPolicy.effectiveQualityLevel("),
+            "BWE merge: the effective quality level must be computed by " +
+            "CallReliabilityPolicy.effectiveQualityLevel (video-sending + " +
+            "warm-up gated min) — never an unconditional min(heuristic, bwe)."
+        )
+        XCTAssertTrue(
+            source.contains("isSendingVideo: hasLocalVideoTrack"),
+            "BWE merge: the video-sending gate must be driven by hasLocalVideoTrack."
         )
     }
 
@@ -593,9 +627,9 @@ final class AdjustBitrateAudioEncodingSourceGuardTests: XCTestCase {
     func test_adjustBitrate_callsApplyAudioEncoding_whenBitrateChanges() throws {
         let src = try webRTCServiceSource()
         XCTAssertTrue(
-            src.contains("client.applyAudioEncoding(maxBitrateBps: newBitrate)"),
-            "adjustBitrate must call client.applyAudioEncoding(maxBitrateBps:) when the bitrate changes — " +
-            "omitting this means the audio encoder never actually sheds bandwidth despite the computed level."
+            src.contains("client.applyAudioEncoding(maxBitrateBps: effectiveBitrate)"),
+            "adjustBitrate must call client.applyAudioEncoding(maxBitrateBps:) with effectiveBitrate " +
+            "(which applies the jitter gate) — omitting this means the audio encoder never actually sheds bandwidth."
         )
     }
 
@@ -609,6 +643,63 @@ final class AdjustBitrateAudioEncodingSourceGuardTests: XCTestCase {
             src.contains("guard let stats = await self.client.getStats() else { continue }"),
             "The quality monitor nil-stats guard must use `continue` (skip tick) not `return` (exit loop) — " +
             "a `return` here kills all future quality monitoring for the call."
+        )
+    }
+}
+
+// MARK: - Jitter-aware bitrate gate source guards
+
+/// `adjustBitrate` applies a jitter gate after the RTT/loss tier selection:
+/// when `stats.jitterMs > QualityThresholds.highJitterThresholdMs` the effective
+/// bitrate is capped to `minBitrate` regardless of RTT/loss signal.
+/// High jitter degrades Opus PLC even on a low-latency path; shedding encoder
+/// complexity gives the jitter buffer headroom to absorb the spikes.
+@MainActor
+final class AdjustBitrateJitterGateSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_adjustBitrate_jitterGate_comparesAgainstHighJitterThreshold() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("stats.jitterMs > QualityThresholds.highJitterThresholdMs"),
+            "adjustBitrate must gate on QualityThresholds.highJitterThresholdMs — " +
+            "a hardcoded literal here would silently diverge from the tested constant."
+        )
+    }
+
+    func test_adjustBitrate_jitterGate_capsToMinBitrate() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("? QualityThresholds.minBitrate : newBitrate"),
+            "When jitterMs exceeds the threshold the effective bitrate must be minBitrate — " +
+            "any other fallback value leaves the Opus encoder at a bitrate too high for the jitter buffer to compensate."
+        )
+    }
+
+    func test_adjustBitrate_jitterGate_producesEffectiveBitrate() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("let effectiveBitrate = stats.jitterMs > QualityThresholds.highJitterThresholdMs"),
+            "The jitter gate must produce an `effectiveBitrate` binding that downstream code uses for both " +
+            "the applyAudioEncoding call and the change-detection guard (currentBitrate comparison)."
+        )
+    }
+
+    func test_adjustBitrate_jitterGate_logsJitterTagWhenCapped() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("jitter=%.0fms[capped]"),
+            "When jitter caps the bitrate the log message must include a [capped] tag so operators " +
+            "can distinguish a jitter-driven reduction from a network-congestion-driven one."
         )
     }
 }
@@ -812,8 +903,141 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func disconnect() { disconnectCallCount += 1; isConnected = false }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
-    func setMaxAudioBitrate(_ bitrate: Int) {}
     func sendDTMF(digits: String) {}
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
+}
+
+// MARK: - Camera switch serialization source guard
+
+/// A rapid double-tap on flip-camera used to fire two untracked `Task`s, each
+/// running `stopCapture()`/`startCapture()` on the same `RTCCameraVideoCapturer`
+/// concurrently — can leave the capturer in an indeterminate state or desync
+/// `isUsingFrontCamera` from the actually active camera. `switchCamera()` and
+/// `switchToCamera(uniqueID:)` must chain onto the previous in-flight task
+/// (mirroring `CallManager.holdVideoTask`'s pattern) instead of firing a bare
+/// `Task { }` per call.
+@MainActor
+final class SwitchCameraSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func body(of funcSignature: String, in source: String) -> String? {
+        guard let range = source.range(of: funcSignature) else { return nil }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        return String(source[range.lowerBound..<end])
+    }
+
+    func test_switchCamera_chainsOntoPreviousTask() throws {
+        let src = try webRTCServiceSource()
+        guard let body = body(of: "func switchCamera()", in: src) else {
+            XCTFail("switchCamera() not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("switchCameraTask"),
+            "switchCamera() must track its Task in switchCameraTask so a rapid double-tap serializes " +
+            "instead of racing two concurrent capturer restarts"
+        )
+        XCTAssertTrue(
+            body.contains("await previousTask?.value"),
+            "switchCamera() must await the previous in-flight switch before starting a new one"
+        )
+    }
+
+    func test_switchToCamera_chainsOntoPreviousTask() throws {
+        let src = try webRTCServiceSource()
+        guard let body = body(of: "func switchToCamera(uniqueID: String)", in: src) else {
+            XCTFail("switchToCamera(uniqueID:) not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("switchCameraTask"),
+            "switchToCamera(uniqueID:) must track its Task in switchCameraTask so it serializes " +
+            "against a concurrent switchCamera()/switchToCamera(uniqueID:) call"
+        )
+        XCTAssertTrue(
+            body.contains("await previousTask?.value"),
+            "switchToCamera(uniqueID:) must await the previous in-flight switch before starting a new one"
+        )
+    }
+
+    func test_close_cancelsSwitchCameraTask() throws {
+        let src = try webRTCServiceSource()
+        guard let body = body(of: "func close()", in: src) else {
+            XCTFail("close() not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("switchCameraTask?.cancel()"),
+            "close() must cancel switchCameraTask like its other tracked tasks so a pending camera " +
+            "switch cannot outlive teardown"
+        )
+    }
+}
+
+// MARK: - No-WebRTC fallback conformance (`#else` branch, CI without the WebRTC package resolved)
+
+/// `P2PWebRTCClient`'s `#else` fallback (compiled only when `canImport(WebRTC)` is
+/// false) must implement every `WebRTCClientProviding` requirement like the real
+/// implementation does — a gap here only breaks a build that never resolves the
+/// WebRTC SPM package, so it is easy to introduce silently while editing the real
+/// implementation's protocol conformance.
+@MainActor
+final class P2PWebRTCClientFallbackConformanceSourceGuardTests: XCTestCase {
+
+    private func p2pClientSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func fallbackClassBody() throws -> String {
+        let source = try p2pClientSource()
+        guard let elseRange = source.range(of: "\n#else\n") else {
+            XCTFail("`#else` fallback branch not found in P2PWebRTCClient.swift"); throw XCTSkip()
+        }
+        guard let endRange = source.range(of: "\n#endif", range: elseRange.upperBound..<source.endIndex) else {
+            XCTFail("`#endif` closing the fallback branch not found"); throw XCTSkip()
+        }
+        return String(source[elseRange.upperBound..<endRange.lowerBound])
+    }
+
+    func test_fallback_implementsApplyAudioEncoding() throws {
+        let body = try fallbackClassBody()
+        XCTAssertTrue(
+            body.contains("func applyAudioEncoding(maxBitrateBps: Int)"),
+            "The no-WebRTC fallback class must implement applyAudioEncoding(maxBitrateBps:) " +
+            "(a WebRTCClientProviding requirement) — without it, a build with the WebRTC " +
+            "package unresolved fails to compile."
+        )
+    }
+
+    func test_fallback_declaresVideoFilterPipeline() throws {
+        let body = try fallbackClassBody()
+        XCTAssertTrue(
+            body.contains("videoFilterPipeline"),
+            "The no-WebRTC fallback class must declare videoFilterPipeline " +
+            "(a WebRTCClientProviding requirement) — without it, a build with the WebRTC " +
+            "package unresolved fails to compile."
+        )
+    }
+
+    func test_fallback_doesNotDeclareRemovedSetMaxAudioBitrate() throws {
+        let body = try fallbackClassBody()
+        XCTAssertFalse(
+            body.contains("setMaxAudioBitrate"),
+            "setMaxAudioBitrate was removed from WebRTCClientProviding (dead API, superseded " +
+            "by applyAudioEncoding, zero prod callers) — it must not reappear in the fallback."
+        )
+    }
 }

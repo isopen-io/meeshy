@@ -86,13 +86,13 @@ public struct NotificationRowView: View {
     private var contentView: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(notification.formattedTitle)
-                .font(.system(size: 14, weight: notification.isRead ? .medium : .semibold))
+                .font(MeeshyFont.relative(14, weight: notification.isRead ? .medium : .semibold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2)
 
             if let body = notification.formattedBody, !body.isEmpty {
                 Text(body)
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)
             }
@@ -108,15 +108,15 @@ public struct NotificationRowView: View {
                         Image(systemName: "clock.badge.xmark")
                     }
                 }
-                .font(.system(size: 11))
-                .foregroundColor(notification.isLinkedContentExpired ? Color(hex: "F87171") : theme.textMuted)
+                .font(MeeshyFont.relative(11))
+                .foregroundColor(notification.isLinkedContentExpired ? MeeshyColors.error : theme.textMuted)
                 .padding(.top, 1)
             }
 
             if let conversationTitle = notification.context?.conversationTitle,
                notification.context?.conversationType != "direct" {
                 Label(conversationTitle, systemImage: "bubble.left.and.bubble.right")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
                     .padding(.top, 1)
@@ -131,13 +131,13 @@ public struct NotificationRowView: View {
     /// coins arrondis, alignée sur l'avatar en tête de ligne.
     private func postThumbnail(_ urlString: String) -> some View {
         CachedAsyncImage(url: urlString, targetSize: CGSize(width: 44, height: 44)) {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(accentColor.opacity(0.12))
         }
         .frame(width: 44, height: 44)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .stroke(theme.textMuted.opacity(0.15), lineWidth: 0.5)
         )
         .accessibilityHidden(true)
@@ -147,33 +147,19 @@ public struct NotificationRowView: View {
 
     private var timestampView: some View {
         Text(relativeTime)
-            .font(.system(size: 11, weight: .medium))
+            .font(MeeshyFont.relative(11, weight: .medium))
             .foregroundColor(theme.textMuted)
     }
 
     // MARK: - Computed
 
-    // ISO8601DateFormatters memoises : `relativeTime` est lu a chaque rendu de
-    // ligne dans une liste de notifications qui scrolle. Allouer (puis muter
-    // `formatOptions`) un ISO8601DateFormatter par rendu et par ligne etait du
-    // gaspillage (setup ICU couteux). Deux instances configurees une fois puis
-    // lues seulement -- `date(from:)` est thread-safe comme tout formatter
-    // configure une fois.
-    private static let isoWithFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let isoNoFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     /// Parse an ISO-8601 timestamp, accepting either fractional or whole-second
-    /// `withInternetDateTime`. Mirrors the previous two-attempt fallback.
+    /// `withInternetDateTime`.
     static func parseISODate(_ string: String) -> Date? {
-        isoWithFractional.date(from: string) ?? isoNoFractional.date(from: string)
+        if let date = try? Date(string, strategy: .iso8601) {
+            return date
+        }
+        return try? Date(string, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true))
     }
 
     private var relativeTime: String {

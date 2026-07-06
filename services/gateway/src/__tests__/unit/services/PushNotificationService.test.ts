@@ -498,6 +498,49 @@ describe('PushNotificationService', () => {
       expect(result[0].success).toBe(true);
     });
 
+    it('silent payload builds a pure background APNS push: no alert, no sound, pushType background, priority 5', async () => {
+      mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+        APNS_BUNDLE_ID: 'me.meeshy.app',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await service.sendToUser({
+        userId: 'user-123',
+        payload: {
+          title: '',
+          body: '',
+          silent: true,
+          data: { type: 'call_cancel', callId: 'call-123' },
+        },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].success).toBe(true);
+      const sentNotification = mockApnsProviderSend.mock.calls[0][0];
+      // A visible alert/sound on a cancellation signal would surface a blank
+      // banner; the whole point is a data-only background wake.
+      expect(sentNotification.alert).toBeUndefined();
+      expect(sentNotification.sound).toBeUndefined();
+      expect(sentNotification.pushType).toBe('background');
+      expect(sentNotification.priority).toBe(5);
+      expect(sentNotification.contentAvailable).toBe(true);
+      expect(sentNotification.payload).toEqual(
+        expect.objectContaining({ type: 'call_cancel', callId: 'call-123' })
+      );
+    });
+
     it('should filter tokens by type when specified', async () => {
       const { PushNotificationService } = await getServiceWithEnv({
         ENABLE_PUSH_NOTIFICATIONS: 'true',
@@ -632,6 +675,181 @@ describe('PushNotificationService', () => {
       expect(result).toHaveLength(1);
       expect(result[0].success).toBe(false);
       expect(result[0].error).toBe('APNS connection failed');
+    });
+
+    it('should retry a transient APNS failure (InternalServerError) and succeed', async () => {
+      mockApnsProviderSend
+        .mockResolvedValueOnce({ sent: [], failed: [{ device: 'apns-token-123', response: { reason: 'InternalServerError' } }] })
+        .mockResolvedValueOnce({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+      jest.spyOn(service as any, 'wait').mockResolvedValue(undefined);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: null },
+      ]);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await service.sendToUser({
+        userId: 'user-123',
+        payload: { title: 'Test', body: 'Test' },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].success).toBe(true);
+      expect(mockApnsProviderSend).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not retry a permanent APNS failure (BadDeviceToken)', async () => {
+      mockApnsProviderSend.mockResolvedValue({
+        sent: [],
+        failed: [{ device: 'apns-token-123', response: { reason: 'BadDeviceToken' } }],
+      });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+      jest.spyOn(service as any, 'wait').mockResolvedValue(undefined);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: null },
+      ]);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await service.sendToUser({
+        userId: 'user-123',
+        payload: { title: 'Test', body: 'Test' },
+      });
+
+      expect(result[0].error).toBe('BadDeviceToken');
+      expect(mockApnsProviderSend).toHaveBeenCalledTimes(1);
+    });
+
+    it('should give up after exhausting retries on a persistently transient APNS failure', async () => {
+      mockApnsProviderSend.mockResolvedValue({
+        sent: [],
+        failed: [{ device: 'apns-token-123', response: { reason: 'ServiceUnavailable' } }],
+      });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+      jest.spyOn(service as any, 'wait').mockResolvedValue(undefined);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: null },
+      ]);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await service.sendToUser({
+        userId: 'user-123',
+        payload: { title: 'Test', body: 'Test' },
+      });
+
+      // 1 initial attempt + 2 retries = 3 calls, then surfaced as a failure
+      expect(mockApnsProviderSend).toHaveBeenCalledTimes(3);
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toBe('ServiceUnavailable');
+
+      // Transient failure must NOT count toward the 3-strike deactivation —
+      // the token is fine, Apple's servers had a hiccup.
+      expect(mockPrisma.pushToken.update).not.toHaveBeenCalled();
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        'Push delivery failed transiently, token left active',
+        expect.objectContaining({ tokenId: 'token-1' })
+      );
+    });
+
+    it('should fan out to multiple device tokens concurrently, not sequentially', async () => {
+      let inFlight = 0;
+      let maxInFlight = 0;
+      mockApnsProviderSend.mockImplementation(async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        inFlight -= 1;
+        return { sent: [{ device: 'apns-token' }], failed: [] };
+      });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+        APNS_BUNDLE_ID: 'me.meeshy.app',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-1', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        { id: 'token-2', token: 'apns-token-2', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        { id: 'token-3', token: 'apns-token-3', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await service.sendToUser({
+        userId: 'user-123',
+        payload: { title: 'Test', body: 'Test message' },
+      });
+
+      expect(result).toHaveLength(3);
+      expect(result.every((r) => r.success)).toBe(true);
+      // Sequential fan-out would cap concurrency at 1; parallel fan-out overlaps.
+      expect(maxInFlight).toBeGreaterThan(1);
+    });
+
+    it('still delivers to healthy tokens when one token send rejects', async () => {
+      mockApnsProviderSend
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValue({ sent: [{ device: 'apns-token' }], failed: [] });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+        APNS_BUNDLE_ID: 'me.meeshy.app',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+      jest.spyOn(service as any, 'wait').mockResolvedValue(undefined);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-1', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        { id: 'token-2', token: 'apns-token-2', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+      ]);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await service.sendToUser({
+        userId: 'user-123',
+        payload: { title: 'Test', body: 'Test message' },
+      });
+
+      expect(result).toHaveLength(2);
+      expect(result.filter((r) => r.success)).toHaveLength(1);
+      expect(result.filter((r) => !r.success)).toHaveLength(1);
     });
   });
 
@@ -1655,8 +1873,8 @@ describe('PushNotificationService', () => {
   // sendToUser outer catch — DB error on success path (lines 338-340)
   // ==============================================
 
-  describe('sendToUser — outer error catch', () => {
-    it('should record failure when prisma.pushToken.update throws on the success path', async () => {
+  describe('sendToUser — success-path bookkeeping error', () => {
+    it('keeps a delivered push as success when the lastUsedAt update throws', async () => {
       mockApnsProviderSend.mockResolvedValue({ sent: [{}], failed: [] });
 
       const { PushNotificationService } = await getServiceWithEnv({
@@ -1671,11 +1889,8 @@ describe('PushNotificationService', () => {
       mockPrisma.pushToken.findMany.mockResolvedValue([
         { id: 'tok', token: 'apns-tok', type: 'apns', platform: 'ios', bundleId: null, apnsEnvironment: null },
       ]);
-      // First update (lastUsedAt on success path) throws; subsequent updates succeed
-      // so handleFailedToken (called from the outer catch) can complete without error.
-      mockPrisma.pushToken.update
-        .mockRejectedValueOnce(new Error('DB connection lost'))
-        .mockResolvedValue({});
+      // The success-path bookkeeping update throws — but the push was delivered.
+      mockPrisma.pushToken.update.mockRejectedValue(new Error('DB connection lost'));
       mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
 
       const result = await service.sendToUser({
@@ -1683,12 +1898,14 @@ describe('PushNotificationService', () => {
         payload: { title: 'Test', body: 'Test' },
       });
 
-      // result[0]: the APNS send itself succeeded and was pushed before the update threw.
-      // result[1]: the outer catch pushed a failure entry for the DB error.
-      expect(result).toHaveLength(2);
+      // One result per token; the delivered push stays a success even though the
+      // best-effort bookkeeping write failed (avoids a double-send retry).
+      expect(result).toHaveLength(1);
       expect(result[0].success).toBe(true);
-      expect(result[1].success).toBe(false);
-      expect(result[1].error).toBe('DB connection lost');
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        'Failed to update push token bookkeeping after successful send',
+        expect.objectContaining({ tokenId: 'tok', error: 'DB connection lost' })
+      );
     });
   });
 
@@ -1814,6 +2031,54 @@ describe('PushNotificationService', () => {
       expect(sentMsg?.webpush?.fcmOptions?.link).toBe('/posts/123');
     });
 
+    it('should forward payload.badge as android notificationCount for android FCM', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android-badge',
+        payload: { title: 'Message', body: 'Hello', badge: 7 },
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.android?.notification?.notificationCount).toBe(7);
+    });
+
+    it('should forward a zero badge as android notificationCount for android FCM', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android-badge-zero',
+        payload: { title: 'Message', body: 'Hello', badge: 0 },
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.android?.notification?.notificationCount).toBe(0);
+    });
+
+    it('should omit android notificationCount when no badge is provided', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android-no-badge',
+        payload: { title: 'Message', body: 'Hello' },
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.android?.notification).not.toHaveProperty('notificationCount');
+    });
+
     it('should include collapseKey in FCM android config when collapseId set', async () => {
       const service = await getFCMService();
 
@@ -1921,6 +2186,7 @@ describe('PushNotificationService', () => {
       mockFirebaseMessagingSend.mockRejectedValue(err);
 
       const service = await getFCMServiceForErrors();
+      jest.spyOn(service as any, 'wait').mockResolvedValue(undefined);
 
       mockPrisma.pushToken.findMany.mockResolvedValue([
         { id: 'tok', token: 'fcm-tok', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
@@ -1931,8 +2197,58 @@ describe('PushNotificationService', () => {
         payload: { title: 'T', body: 'B' },
       });
 
+      // 'messaging/internal-error' is a transient code: 1 initial attempt + 2
+      // retries before it's surfaced as a real failure.
+      expect(mockFirebaseMessagingSend).toHaveBeenCalledTimes(3);
       expect(result[0].error).toBe('Internal FCM error');
       expect(result[0].success).toBe(false);
+
+      // Transient failures must not deactivate the token.
+      expect(mockPrisma.pushToken.update).not.toHaveBeenCalled();
+    });
+
+    it('should retry a transient FCM failure (messaging/internal-error) and succeed', async () => {
+      const err: any = new Error('Internal FCM error');
+      err.code = 'messaging/internal-error';
+      mockFirebaseMessagingSend
+        .mockRejectedValueOnce(err)
+        .mockResolvedValueOnce('message-id-retry-success');
+
+      const service = await getFCMServiceForErrors();
+      jest.spyOn(service as any, 'wait').mockResolvedValue(undefined);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-tok', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      const result = await service.sendToUser({
+        userId: 'user-fcm-retry',
+        payload: { title: 'T', body: 'B' },
+      });
+
+      expect(result[0].success).toBe(true);
+      expect(mockFirebaseMessagingSend).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not retry a permanent FCM failure (messaging/invalid-registration-token)', async () => {
+      const err: any = new Error('Invalid token');
+      err.code = 'messaging/invalid-registration-token';
+      mockFirebaseMessagingSend.mockRejectedValue(err);
+
+      const service = await getFCMServiceForErrors();
+      jest.spyOn(service as any, 'wait').mockResolvedValue(undefined);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-tok', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      const result = await service.sendToUser({
+        userId: 'user-fcm-permanent',
+        payload: { title: 'T', body: 'B' },
+      });
+
+      expect(result[0].error).toBe('TOKEN_INVALID');
+      expect(mockFirebaseMessagingSend).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -2025,27 +2341,35 @@ describe('PushNotificationService', () => {
         FIREBASE_ADMIN_CREDENTIALS_PATH: '/fake/creds.json',
       });
       const service = new PushNotificationService(mockPrisma as any);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
 
-      // 6 tokens: first 5 open the circuit, 6th hits the fallback (no Firebase call)
-      mockPrisma.pushToken.findMany.mockResolvedValue([
+      // First fan-out: 5 failing tokens open the circuit (5 real Firebase calls).
+      mockPrisma.pushToken.findMany.mockResolvedValueOnce([
         { id: 't1', token: 'fcm-1', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
         { id: 't2', token: 'fcm-2', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
         { id: 't3', token: 'fcm-3', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
         { id: 't4', token: 'fcm-4', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
         { id: 't5', token: 'fcm-5', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
-        { id: 't6', token: 'fcm-6', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
       ]);
-      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
-      mockPrisma.pushToken.update.mockResolvedValue({});
-
-      const result = await service.sendToUser({
+      const first = await service.sendToUser({
         userId: 'user-circuit',
         payload: { title: 'Test', body: 'Test' },
       });
-
-      // 5 real Firebase calls + 1 circuit-breaker bypass
+      expect(first).toHaveLength(5);
       expect(mockFirebaseMessagingSend).toHaveBeenCalledTimes(5);
-      expect(result).toHaveLength(6);
+
+      // Second fan-out: circuit is now OPEN, so the next token fails fast via the
+      // fallback without touching Firebase (call count stays at 5).
+      mockPrisma.pushToken.findMany.mockResolvedValueOnce([
+        { id: 't6', token: 'fcm-6', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+      const second = await service.sendToUser({
+        userId: 'user-circuit',
+        payload: { title: 'Test', body: 'Test' },
+      });
+      expect(second).toHaveLength(1);
+      expect(mockFirebaseMessagingSend).toHaveBeenCalledTimes(5);
     });
 
     it('APNS: after 5 consecutive failures, circuit opens and bypasses APNS provider on 6th call', async () => {
@@ -2059,26 +2383,36 @@ describe('PushNotificationService', () => {
         APNS_KEY_PATH: '/path/to/key.p8',
       });
       const service = new PushNotificationService(mockPrisma as any);
+      jest.spyOn(service as any, 'wait').mockResolvedValue(undefined);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
 
-      mockPrisma.pushToken.findMany.mockResolvedValue([
+      // First fan-out: 5 failing tokens open the circuit (5 real APNS calls).
+      mockPrisma.pushToken.findMany.mockResolvedValueOnce([
         { id: 't1', token: 'apns-1', type: 'apns', platform: 'ios', bundleId: null, apnsEnvironment: null },
         { id: 't2', token: 'apns-2', type: 'apns', platform: 'ios', bundleId: null, apnsEnvironment: null },
         { id: 't3', token: 'apns-3', type: 'apns', platform: 'ios', bundleId: null, apnsEnvironment: null },
         { id: 't4', token: 'apns-4', type: 'apns', platform: 'ios', bundleId: null, apnsEnvironment: null },
         { id: 't5', token: 'apns-5', type: 'apns', platform: 'ios', bundleId: null, apnsEnvironment: null },
-        { id: 't6', token: 'apns-6', type: 'apns', platform: 'ios', bundleId: null, apnsEnvironment: null },
       ]);
-      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
-      mockPrisma.pushToken.update.mockResolvedValue({});
-
-      const result = await service.sendToUser({
+      const first = await service.sendToUser({
         userId: 'user-apns-circuit',
         payload: { title: 'Test', body: 'Test' },
       });
-
-      // 5 real APNS calls + 1 circuit-breaker bypass
+      expect(first).toHaveLength(5);
       expect(mockApnsProviderSend).toHaveBeenCalledTimes(5);
-      expect(result).toHaveLength(6);
+
+      // Second fan-out: circuit is now OPEN, so the next token fails fast via the
+      // fallback without touching the APNS provider (call count stays at 5).
+      mockPrisma.pushToken.findMany.mockResolvedValueOnce([
+        { id: 't6', token: 'apns-6', type: 'apns', platform: 'ios', bundleId: null, apnsEnvironment: null },
+      ]);
+      const second = await service.sendToUser({
+        userId: 'user-apns-circuit',
+        payload: { title: 'Test', body: 'Test' },
+      });
+      expect(second).toHaveLength(1);
+      expect(mockApnsProviderSend).toHaveBeenCalledTimes(5);
     });
   });
 

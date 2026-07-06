@@ -55,7 +55,7 @@ struct VoiceProfileManageView: View {
     private var header: some View {
         HStack {
             Text(String(localized: "voice.profile.title", defaultValue: "Profil vocal", bundle: .main))
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
             Spacer()
             Button {
@@ -63,7 +63,7 @@ struct VoiceProfileManageView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
+                    .font(MeeshyFont.relative(28))
                     .foregroundStyle(theme.textMuted)
             }
         }
@@ -91,7 +91,7 @@ struct VoiceProfileManageView: View {
             Spacer()
 
             Image(systemName: "person.wave.2.fill")
-                .font(.system(size: 64))
+                .font(MeeshyFont.relative(64))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.7)],
@@ -101,11 +101,11 @@ struct VoiceProfileManageView: View {
                 )
 
             Text(String(localized: "voice.profile.empty.title", defaultValue: "Aucun profil vocal", bundle: .main))
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "voice.profile.empty.description", defaultValue: "Creez un profil vocal pour que vos messages traduits conservent votre voix naturelle.", bundle: .main))
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .multilineTextAlignment(.center)
                 .foregroundColor(theme.textSecondary)
                 .padding(.horizontal, 32)
@@ -116,9 +116,9 @@ struct VoiceProfileManageView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                     Text(String(localized: "voice.profile.create", defaultValue: "Creer un profil vocal", bundle: .main))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -155,7 +155,7 @@ struct VoiceProfileManageView: View {
 
                 if let error = viewModel.error {
                     Text(error)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MeeshyFont.relative(13, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                         .padding(.horizontal, 20)
                 }
@@ -171,16 +171,16 @@ struct VoiceProfileManageView: View {
     private func statusCard(_ profile: VoiceProfile) -> some View {
         HStack(spacing: 12) {
             Image(systemName: statusIcon(for: profile.status))
-                .font(.system(size: 28))
+                .font(MeeshyFont.relative(28))
                 .foregroundColor(statusColor(for: profile.status))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(statusLabel(for: profile.status))
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
 
                 Text(statusDescription(for: profile.status))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
             }
 
@@ -189,17 +189,17 @@ struct VoiceProfileManageView: View {
             if let quality = profile.quality {
                 VStack(spacing: 2) {
                     Text("\(Int(quality * 100))%")
-                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(18, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(hex: accentColor))
                     Text(String(localized: "voice.profile.quality", defaultValue: "Qualite", bundle: .main))
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
             }
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
@@ -218,7 +218,7 @@ struct VoiceProfileManageView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
@@ -227,11 +227,11 @@ struct VoiceProfileManageView: View {
     private func infoRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
     }
@@ -242,10 +242,10 @@ struct VoiceProfileManageView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(String(localized: "voice.profile.cloningEnabled", defaultValue: "Clonage vocal actif", bundle: .main))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                 Text(String(localized: "voice.profile.cloningDescription", defaultValue: "Les traductions audio utiliseront votre voix", bundle: .main))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
@@ -260,7 +260,7 @@ struct VoiceProfileManageView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
@@ -273,10 +273,10 @@ struct VoiceProfileManageView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                 Text(String(localized: "voice.makePublic.description", defaultValue: "Un echantillon de votre voix sera visible sur votre profil public", bundle: .main))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
@@ -291,7 +291,7 @@ struct VoiceProfileManageView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
@@ -304,7 +304,7 @@ struct VoiceProfileManageView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Echantillons vocaux", bundle: .main))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
                 Button {
@@ -313,9 +313,9 @@ struct VoiceProfileManageView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                         Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: accentColor))
                 }
@@ -323,7 +323,7 @@ struct VoiceProfileManageView: View {
 
             if viewModel.samples.isEmpty {
                 Text(String(localized: "voice.profile.noSamples", defaultValue: "Aucun echantillon disponible", bundle: .main))
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -335,7 +335,7 @@ struct VoiceProfileManageView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
@@ -344,15 +344,15 @@ struct VoiceProfileManageView: View {
     private func sampleRow(_ sample: VoiceSample) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(Color(hex: accentColor))
 
             Text("\(sample.durationSeconds)s")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
                 .foregroundColor(theme.textPrimary)
 
             Text(sample.status)
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -361,7 +361,7 @@ struct VoiceProfileManageView: View {
             Spacer()
 
             Text(sample.createdAt.formatted(date: .abbreviated, time: .omitted))
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundColor(theme.textMuted)
 
             Button {
@@ -369,7 +369,7 @@ struct VoiceProfileManageView: View {
                 Task { await viewModel.deleteSample(id: sample.id) }
             } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(MeeshyColors.error.opacity(0.7))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
@@ -388,9 +388,9 @@ struct VoiceProfileManageView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "trash.fill")
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                 Text(String(localized: "voice.profile.deleteProfile", defaultValue: "Supprimer le profil vocal", bundle: .main))
-                    .font(.system(size: 15, weight: .medium))
+                    .font(MeeshyFont.relative(15, weight: .medium))
             }
             .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
@@ -412,7 +412,7 @@ struct VoiceProfileManageView: View {
 
                 VStack(spacing: 16) {
                     Text(String(localized: "voice.profile.addSamples", defaultValue: "Ajouter des echantillons", bundle: .main))
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .padding(.top, 16)
 
@@ -462,21 +462,21 @@ struct VoiceProfileManageView: View {
 
     private func statusLabel(for status: VoiceProfileStatus) -> String {
         switch status {
-        case .pending: return "En attente"
-        case .processing: return "Analyse en cours"
-        case .ready: return "Actif"
-        case .failed: return "Echec"
-        case .expired: return "Expire"
+        case .pending: return String(localized: "voice.profile.status.pending.label", defaultValue: "En attente", bundle: .main)
+        case .processing: return String(localized: "voice.profile.status.processing.label", defaultValue: "Analyse en cours", bundle: .main)
+        case .ready: return String(localized: "voice.profile.status.ready.label", defaultValue: "Actif", bundle: .main)
+        case .failed: return String(localized: "voice.profile.status.failed.label", defaultValue: "Echec", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.label", defaultValue: "Expire", bundle: .main)
         }
     }
 
     private func statusDescription(for status: VoiceProfileStatus) -> String {
         switch status {
-        case .pending: return "Votre profil est en file d'attente"
-        case .processing: return "L'IA analyse vos echantillons vocaux"
-        case .ready: return "Votre profil vocal est pret a l'emploi"
-        case .failed: return "L'analyse a echoue, veuillez reessayer"
-        case .expired: return "Veuillez enregistrer de nouveaux echantillons"
+        case .pending: return String(localized: "voice.profile.status.pending.description", defaultValue: "Votre profil est en file d'attente", bundle: .main)
+        case .processing: return String(localized: "voice.profile.status.processing.description", defaultValue: "L'IA analyse vos echantillons vocaux", bundle: .main)
+        case .ready: return String(localized: "voice.profile.status.ready.description", defaultValue: "Votre profil vocal est pret a l'emploi", bundle: .main)
+        case .failed: return String(localized: "voice.profile.status.failed.description", defaultValue: "L'analyse a echoue, veuillez reessayer", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.description", defaultValue: "Veuillez enregistrer de nouveaux echantillons", bundle: .main)
         }
     }
 }

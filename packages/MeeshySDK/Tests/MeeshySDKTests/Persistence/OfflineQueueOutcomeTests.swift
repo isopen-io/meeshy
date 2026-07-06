@@ -139,6 +139,47 @@ final class OfflineQueueOutcomeTests: XCTestCase {
             "Publisher MUST emit each intermediate count change")
     }
 
+    /// Item H — le DRAIN de la file doit refermer le bandeau
+    /// « Synchronisation… » : quand le flusher termine une row (delete sur
+    /// `.applied`), le callback `onOutcome → publishOutcome` rafraîchit
+    /// `pendingCountSubject` (fix 80e7dc874 — avant, le compteur ne tournait
+    /// que sur enqueue/retry, jamais sur le drainage → bannière figée à vie).
+    /// Ce test verrouille le chemin DESCENDANT complet avec un vrai flusher
+    /// câblé comme en production ; seul le chemin montant était testé.
+    func test_pendingCountPublisher_returnsToBaseline_afterFlusherDrainsQueue() async throws {
+        let stable = await stabilizePendingCount()
+
+        let cmid = "cid_drain_\(UUID().uuidString)"
+        try await queue.enqueue(OfflineQueueItem(
+            conversationId: "conv-drain",
+            content: "drain test",
+            clientMessageId: cmid
+        ))
+
+        let recorder = Recorder<Int>()
+        let cancellable = queue.pendingCountPublisher
+            .sink { recorder.append($0) }
+        defer { cancellable.cancel() }
+
+        // Vrai flusher, câblage production (onOutcome → publishOutcome) :
+        // claim atomique → dispatch OK → delete de la row → outcome publié.
+        let flusher = OutboxFlusher(
+            pool: pool,
+            dispatcher: MockOutcomeSucceedingDispatcher(),
+            onOutcome: { @Sendable outcome in
+                Task { await OfflineQueue.shared.publishOutcome(outcome) }
+            }
+        )
+        await flusher.flush()
+
+        // Laisse le Task de publishOutcome + refreshPendingCount se poser.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let received = recorder.snapshot()
+        XCTAssertEqual(received.last, stable,
+            "After the flusher drains the queue, pendingCount MUST return to baseline — otherwise the « Synchronisation… » banner never closes (item H)")
+    }
+
     // MARK: - retryItem — resets counter and status
 
     func test_retryItem_resetsCounterAndStatus() async throws {
@@ -296,6 +337,12 @@ final class OfflineQueueOutcomeTests: XCTestCase {
 }
 
 // MARK: - Test Dispatchers
+
+/// Dispatcher that always succeeds — used to exercise the happy drain path
+/// (claim → dispatch OK → row deleted → `.applied` outcome).
+actor MockOutcomeSucceedingDispatcher: OutboxDispatching {
+    func dispatch(_ record: OutboxRecord) async throws {}
+}
 
 /// Dispatcher that always fails — used to exercise the retry-budget path that
 /// flips an `OutboxRecord` from `.pending(attempts=4)` to `.exhausted`.

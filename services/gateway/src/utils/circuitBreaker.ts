@@ -19,6 +19,7 @@
  */
 
 import { enhancedLogger } from './logger-enhanced';
+import { withTimeout } from './with-timeout';
 
 export enum CircuitState {
   CLOSED = 'CLOSED',
@@ -127,15 +128,11 @@ export class CircuitBreaker {
    * Execute function with timeout
    */
   private executeWithTimeout<T>(fn: () => Promise<T>): Promise<T> {
-    return Promise.race([
+    return withTimeout(
       fn(),
-      new Promise<T>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`Operation timed out after ${this.config.timeout}ms`)),
-          this.config.timeout
-        )
-      )
-    ]);
+      this.config.timeout,
+      `Operation timed out after ${this.config.timeout}ms`
+    );
   }
 
   /**

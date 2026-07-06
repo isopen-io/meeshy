@@ -37,7 +37,7 @@ const mockGetOrCompute = jest.fn<any>().mockResolvedValue([]);
 const mockOnMessageEdited = jest.fn<any>().mockResolvedValue(undefined);
 const mockOnMessageDeleted = jest.fn<any>().mockResolvedValue(undefined);
 
-const mockAddReaction = jest.fn().mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+const mockAddReaction = jest.fn().mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
 const mockRemoveReaction = jest.fn().mockResolvedValue(true);
 const mockCreateUpdateEvent = jest.fn().mockResolvedValue({ messageId: 'msg-id', emoji: '👍' });
 
@@ -311,7 +311,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       processedContent: 'processed content',
       trackingLinks: [],
     });
-    mockAddReaction.mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+    mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
     mockRemoveReaction.mockResolvedValue(true);
     mockCreateUpdateEvent.mockResolvedValue({ messageId: MSG_ID, emoji: '👍' });
 
@@ -1228,7 +1228,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     it('returns success and broadcasts reaction on happy path', async () => {
       prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
       prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
@@ -1290,10 +1290,10 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendForbidden).toHaveBeenCalled();
     });
 
-    it('returns 400 on Maximum reactions error from service', async () => {
+    it('returns 400 when reacting to a system message', async () => {
       prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
       prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Maximum reactions limit reached'));
+      mockAddReaction.mockRejectedValue(new Error('Cannot react to a system message'));
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
@@ -1303,7 +1303,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getAddReactionHandler(fastify)(req, reply);
 
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Maximum reactions limit reached');
+      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Cannot react to a system message');
     });
 
     it('returns 500 on generic error', async () => {
@@ -2028,7 +2028,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('add reaction: socketIOHandler null at registration - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
       const f = createNullSocketFastify();
       const p = makePrisma();
       p.message.findFirst.mockResolvedValue({ id: MSG_ID });
@@ -2078,7 +2078,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('add reaction: socketIOHandler getIO returns null - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
       const f = createNullSocketFastify();
       f.socketIOHandler = { getManager: jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(null) }) };
       const p = makePrisma();

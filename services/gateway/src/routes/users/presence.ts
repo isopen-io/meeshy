@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { sendSuccess, sendBadRequest } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response';
+import { viewerFromAuthContext } from './presence-gate';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 /**
  * GET /users/presence?ids=id1,id2,id3
@@ -99,19 +101,35 @@ export async function getUsersPresence(fastify: FastifyInstance) {
       for (const u of users) lastActiveMap.set(u.id, u.lastActiveAt);
       for (const p of participants) lastActiveMap.set(p.id, p.lastActiveAt);
 
-      const responseUsers = ids.map(id => ({
-        userId: id,
-        isOnline: presenceMap.get(id) ?? false,
-        lastActiveAt: lastActiveMap.get(id) ?? null
-      }));
+      // Gate de présence sur les utilisateurs enregistrés (critère contextuel :
+      // contact OU co-participation). Les participants anonymes restent inchangés.
+      const viewer = viewerFromAuthContext(
+        (request as FastifyRequest & {
+          authContext?: { type?: string; userId?: string; registeredUser?: { role?: string } | null };
+        }).authContext,
+      );
+      const visibilityMap = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
+        viewer,
+        users.map(u => u.id),
+        { allowConversationContext: true },
+      );
+
+      const responseUsers = ids.map(id => {
+        const vis = visibilityMap.get(id);
+        if (!vis) {
+          return { userId: id, isOnline: presenceMap.get(id) ?? false, lastActiveAt: lastActiveMap.get(id) ?? null };
+        }
+        return {
+          userId: id,
+          isOnline: vis.showOnline ? (presenceMap.get(id) ?? false) : false,
+          lastActiveAt: vis.showLastSeenTimestamp ? (lastActiveMap.get(id) ?? null) : null,
+        };
+      });
 
       return sendSuccess(reply, { users: responseUsers });
     } catch (error) {
       fastify.log.error({ error }, '[users/presence] Failed to resolve presence');
-      reply.code(500).send({
-        success: false,
-        error: { code: 'INTERNAL_ERROR', message: 'Failed to resolve presence' }
-      });
+      return sendInternalError(reply, 'Failed to resolve presence');
     }
   });
 }

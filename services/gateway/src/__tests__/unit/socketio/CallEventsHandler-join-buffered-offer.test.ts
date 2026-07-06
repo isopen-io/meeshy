@@ -299,3 +299,75 @@ describe('CallEventsHandler — buffered offer sender validation (C2)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Ringing timer ownership (item F follow-up — chaos-2 re-test)
+// ---------------------------------------------------------------------------
+
+describe('CallEventsHandler — call:join leaves the ringing timer alone', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+  });
+
+  it('does NOT clear the ringing timer on join — only the SDP answer settles the ring', async () => {
+    // The callee EARLY-joins while still ringing (the offer must flow during
+    // the ring). Clearing the timer in the join handler's finally left NO
+    // server-side bound on the ring after any join, and wiped the timer the
+    // boot rehydration had just re-armed after a mid-ring restart — the call
+    // then decayed via the GC tier (~150s) instead of resolving missed at its
+    // nominal remaining budget. The answer path (call:signal answer) and the
+    // terminal paths (leave/end/service-level, item I) already own the clear.
+    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setupCallEvents(socket as any, io, () => CALLEE_ID);
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+
+    expect(mockClearRingingTimeout).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C8 — last join wins: evict stale same-user sockets from the call room
+// ---------------------------------------------------------------------------
+
+describe('CallEventsHandler — C8 same-user socket dedup on join', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+  });
+
+  function makeRemoteSocket(id: string) {
+    return { id, leave: jest.fn<any>() };
+  }
+
+  it('evicts older sockets of the SAME user from the call room on join', async () => {
+    // Prod audit C8 (callIds 6a4607a9…/6a4607bb…): a user re-joining from a
+    // NEW socket (churn, second tab) left stale sockets of the same user in
+    // the room — every targeted signal then fanned out to N sockets
+    // (targetSockets:2, glare risk, double analytics). A P2P call has exactly
+    // one signaling endpoint per user: last join wins.
+    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const staleOwn = makeRemoteSocket('stale-own-socket');
+    const peerSocket = makeRemoteSocket('peer-socket');
+    const { io } = makeIo();
+    (io as any).in = jest.fn(() => ({
+      fetchSockets: jest.fn<any>().mockResolvedValue([staleOwn, peerSocket, { id: socket.id, leave: jest.fn() }]),
+    }));
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setupCallEvents(socket as any, io, (sid: string) =>
+      sid === 'peer-socket' ? CALLER_ID : CALLEE_ID
+    );
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+
+    expect(staleOwn.leave).toHaveBeenCalledWith(`call:${CALL_ID}`);
+    expect(peerSocket.leave).not.toHaveBeenCalled();
+  });
+});

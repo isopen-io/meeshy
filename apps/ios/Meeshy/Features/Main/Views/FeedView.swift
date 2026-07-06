@@ -528,10 +528,10 @@ struct FeedView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .fill(theme.inputBackground)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                                 .stroke(theme.inputBorder, lineWidth: 1)
                         )
                 )
@@ -629,6 +629,8 @@ struct FeedView: View {
                         .shadow(color: MeeshyColors.indigo300.opacity(0.4), radius: 8, y: 4)
 
                     Image(systemName: "plus")
+                        // Doctrine 86i : glyphe du FAB dans un cercle de dimension fixe 40×40 → figé
+                        // (l'icône ne doit pas déborder du bouton flottant). Bouton déjà labellisé.
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                 }
@@ -637,10 +639,10 @@ struct FeedView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
                 )
         )
@@ -817,7 +819,11 @@ struct FeedView: View {
                 storyViewerCoordinator.present(
                     StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
                 )
-            }
+            },
+            // RF2: a POST that reposts a REEL renders inside FeedPostCard (not the
+            // immersive reel card) — hand it the shared autoplay coordinator so the
+            // embedded reel plays muted/inline, elected against the native reels.
+            reelAutoplay: reelAutoplay
         )
         .equatable()
     }
@@ -1303,40 +1309,44 @@ struct FeedView: View {
                 Spacer(minLength: 0)
 
                 // Toolbar
+                // Doctrine 82i : les 6 glyphes d'action du composer ci-dessous (photo/caméra/
+                // emoji/fichier/position/audio, 20pt) sont figés — rangée horizontale contrainte
+                // (HStack spacing 16 + Spacer) qui déborderait si les icônes scalaient en XXXL.
+                // Chaque bouton porte déjà son `.accessibilityLabel` → VoiceOver reste complet.
                 HStack(spacing: 16) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.brandPrimary)
                     }
                     .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
                     .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
                     .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.success)
                     }
                     .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.errorStrong)
                     }
                     .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
@@ -1371,9 +1381,9 @@ struct FeedView: View {
                 .background(theme.backgroundSecondary)
             }
             .background(theme.backgroundPrimary)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxl))
             .overlay(
-                RoundedRectangle(cornerRadius: 24)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                     .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
             )
             .padding(.horizontal, 16)
@@ -1408,6 +1418,7 @@ struct FeedView: View {
                 showEmojiPicker = false
             }
             .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(item: $shareableLink) { link in
             // System share sheet — paste/AirDrop/Messages/etc. all receive the
@@ -1466,7 +1477,7 @@ struct FeedView: View {
         // run-loop mode. Mirrors ProfileUserPostsList.scheduleImpressionFlush.
         impressionFlushTask?.cancel()
         impressionFlushTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
             let batch = Array(pendingImpressionIds)
             guard !batch.isEmpty else { return }

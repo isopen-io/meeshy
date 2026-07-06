@@ -59,11 +59,11 @@ extension ConversationView {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 TextField(String(localized: "conversation.view.search.placeholder", defaultValue: "Rechercher dans la conversation...", bundle: .main), text: $headerState.searchQuery)
-                    .font(.system(size: 15))
+                    .font(MeeshyFont.relative(15))
                     .foregroundColor(theme.textPrimary)
                     .focused($isSearchFocused)
                     .autocorrectionDisabled()
@@ -78,7 +78,7 @@ extension ConversationView {
                         Task { await viewModel.endSearch() }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
+                            .font(MeeshyFont.relative(16))
                             .foregroundColor(theme.textMuted)
                     }
                     .accessibilityLabel(String(localized: "conversation.view.search.clear", defaultValue: "Effacer la recherche", bundle: .main))
@@ -101,18 +101,15 @@ extension ConversationView {
                 dismissSearch()
             } label: {
                 Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "conversation.view.search.close", defaultValue: "Fermer la recherche", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-        )
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tint: Color(hex: accentColor).opacity(0.12))
+        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
         .padding(.horizontal, 8)
         .padding(.top, 4)
     }
@@ -129,9 +126,9 @@ extension ConversationView {
         let count = viewModel.searchResults.count
         HStack(spacing: 6) {
             Image(systemName: (count == 0 && !viewModel.isSearching) ? "magnifyingglass" : "text.magnifyingglass")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
             Text(searchBannerLabel(count: count, searching: viewModel.isSearching))
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .lineLimit(1)
         }
         .foregroundColor(theme.textSecondary)
@@ -168,7 +165,7 @@ extension ConversationView {
         searchDebounceTask?.cancel()
         let query = headerState.searchQuery
         searchDebounceTask = Task {
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(for: .seconds(0.4))
             guard !Task.isCancelled else { return }
             if query.count >= 2 {
                 await viewModel.searchMessages(query: query)
@@ -230,9 +227,9 @@ extension ConversationView {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.down.to.line")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(MeeshyFont.relative(12, weight: .bold))
                             Text(String(localized: "conversation.view.recent_messages", defaultValue: "Messages récents", bundle: .main))
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MeeshyFont.relative(12, weight: .semibold))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
@@ -295,8 +292,7 @@ extension ConversationView {
                 closeReactionBar()
                 guard let msg = resolved else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .react
+                    overlayState.fullReactionPickerMessage = msg
                 }
             }
         )
@@ -340,11 +336,14 @@ extension ConversationView {
     func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 3) {
+                // Doctrine 82i : icône + micro-label figés — bouton d'action compact
+                // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
+                // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundColor(Color(hex: color))
                 Text(label)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(MeeshyFont.relative(9, weight: .semibold))
                     .foregroundColor(.secondary)
             }
             .frame(width: 60, height: 44)
@@ -395,12 +394,12 @@ extension ConversationView {
     func failedMessageBar(for msg: Message) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundColor(MeeshyColors.error)
                 .accessibilityHidden(true)
 
             Text(String(localized: "conversation.view.send_failed", defaultValue: "Échec de l'envoi", bundle: .main))
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundColor(MeeshyColors.error)
 
             Text("·")
@@ -412,7 +411,7 @@ extension ConversationView {
                 Task { await viewModel.retryMessage(messageId: msg.id) }
             } label: {
                 Text(String(localized: "conversation.view.retry", defaultValue: "Réessayer", bundle: .main))
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.relative(11, weight: .bold))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "conversation.view.retry_send", defaultValue: "Reessayer l'envoi du message", bundle: .main))
@@ -423,7 +422,7 @@ extension ConversationView {
                 }
             } label: {
                 Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "conversation.view.delete_failed", defaultValue: "Supprimer le message en echec", bundle: .main))
@@ -454,9 +453,9 @@ extension ConversationView {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "arrowshape.turn.up.left.2.fill")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
             }
             .foregroundColor(accent)
             .padding(.horizontal, 10)

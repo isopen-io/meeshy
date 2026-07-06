@@ -358,6 +358,16 @@ model Conversation {
   /// Auto-translation (disabled for E2EE mode)
   autoTranslateEnabled Boolean @default(true)
 
+  /// Atomic claim on the CallSession currently "owning" this conversation's
+  /// call slot. Set only via a conditional `updateMany({ activeCallId: null })`
+  /// in CallService.initiateCall — MongoDB's single-document atomicity makes
+  /// that claim race-free without a multi-document transaction. Cleared back
+  /// to null by every call-termination path (see `releaseActiveCallClaim`).
+  /// Closes a TOCTOU window where two near-simultaneous `initiateCall` calls
+  /// for the same conversation could each pass the "no active call" read
+  /// check before either had committed its `CallSession`.
+  activeCallId String? @db.ObjectId
+
   preferences           ConversationPreference[]
   shareLinks            ConversationShareLink[]
   community             Community?               @relation(fields: [communityId], references: [id])
@@ -1108,7 +1118,12 @@ model Reaction {
   message     Message     @relation("MessageReactions", fields: [messageId], references: [id], onDelete: Cascade)
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, participantId, emoji], name: "participant_reaction_unique")
+  // Single-reaction-per-user model: the key omits `emoji` on purpose so the DB
+  // itself enforces "at most one row per (message, participant)". This makes
+  // ReactionService.addReaction's upsert atomic — two concurrent adds with
+  // different emojis now race on the SAME document instead of each inserting
+  // their own row (see 2026-07-04-reaction-single-per-user-unique-index.mongodb.js).
+  @@unique([messageId, participantId], name: "participant_reaction_unique")
   @@index([messageId])
   @@index([participantId])
   @@index([emoji])
@@ -1733,6 +1748,14 @@ model CallParticipant {
   /// Updated on every heartbeat flush (debounced every 30s). Survives gateway
   /// restarts so CallCleanupService can detect zombie calls without in-memory state.
   lastHeartbeatAt DateTime?
+
+  /// End-of-call telemetry emitted by THIS participant's client
+  /// (`call:analytics` payload, Zod-validated): setupTimeMs,
+  /// negotiationTimeMs, reconnectionCount, qualityDistribution, codec,
+  /// platform… One row per participant — concurrent end-of-call emitters
+  /// never clobber each other. Null when the client never reported
+  /// (missed call, old build, crash).
+  analytics Json?
 
   /// Media state
   isAudioEnabled Boolean @default(true)
@@ -3747,6 +3770,20 @@ model MutationLog {
   @@unique([userId, clientMutationId])
   @@index([createdAt])
   @@map("mutation_logs")
+}
+
+/// SyncEngine unifié (spec §5, sous-tâche A1) — compteur de séquence monotone
+/// PAR utilisateur. `SequenceService.nextSeq(userId)` incrémente atomiquement
+/// `lastSeq` (upsert `increment`) et retourne la nouvelle valeur, tamponnée sur
+/// chaque event Socket.IO user-scoped (`_seq`) pour la détection EXACTE des gaps
+/// (« vu 91230, serveur à 91234 → 4 events manqués ») — supérieure au gap
+/// recovery temporel actuel (watermarks `updatedSince`/`after`), notamment pour
+/// l'ordering multi-device. Une ligne par utilisateur.
+model UserEventSeq {
+  userId  String @id @map("_id") @db.ObjectId
+  lastSeq BigInt @default(0)
+
+  @@map("user_event_seq")
 }
 
 /// Mention d'un utilisateur dans un commentaire de post

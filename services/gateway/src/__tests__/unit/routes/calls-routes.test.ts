@@ -517,7 +517,13 @@ describe('callRoutes', () => {
       expect(mockEndCall).not.toHaveBeenCalled();
     });
 
-    it('returns 403 when caller is a regular member and not the initiator', async () => {
+    it('allows a regular member (not initiator/admin/moderator) to end the call — parity with socket call:end', async () => {
+      // The route must NOT re-implement a stricter initiator/admin/moderator-only
+      // gate: CallService.endCall() itself is the single source of truth for
+      // "who may end this call" (P2P: any active participant), and the socket
+      // `call:end` path already delegates to it with no extra gate. A plain
+      // conversation member who IS an active call participant must be able to
+      // end their own call via REST exactly like they can via the socket.
       const session = makeCallSession({ initiatorId: 'other-user-id' });
       const membership = makeMembership({ role: 'member' });
 
@@ -527,12 +533,34 @@ describe('callRoutes', () => {
       });
 
       mockGetCallSession.mockResolvedValueOnce(session);
+      mockEndCall.mockResolvedValueOnce(session);
 
       const req = makeRequest({ params: { callId: CALL_ID } });
       await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
 
-      expect(reply.status).toHaveBeenCalledWith(403);
-      expect(reply._body?.error).toBe('PERMISSION_DENIED');
+      expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
+      expect(reply._body).toMatchObject({ success: true, data: session });
+    });
+
+    it('surfaces NOT_A_PARTICIPANT from CallService.endCall when the member is a conversation member but not an active call participant', async () => {
+      // Authorization for "must be an active participant of THIS call" still
+      // happens — just inside CallService.endCall(), not duplicated in the route.
+      const session = makeCallSession({ initiatorId: 'other-user-id' });
+      const membership = makeMembership({ role: 'member' });
+
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+
+      mockGetCallSession.mockResolvedValueOnce(session);
+      mockEndCall.mockRejectedValueOnce(new Error('NOT_A_PARTICIPANT: You are not in this call'));
+
+      const req = makeRequest({ params: { callId: CALL_ID } });
+      await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
+
+      expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
+      expect(reply._body?.success).toBe(false);
     });
 
     it('uses membership.id for endParticipantId when authContext.participantId absent', async () => {
@@ -781,8 +809,9 @@ describe('callRoutes', () => {
       );
     });
 
-    it('uses params.participantId for leaveParticipantId when authContext.participantId absent', async () => {
+    it('resolves leaveParticipantId from the DB when authContext.participantId absent (registered self-leave)', async () => {
       const { routes, reply } = setup();
+      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockResolvedValueOnce(makeCallSession());
 
       const req = makeRequest({
@@ -795,17 +824,27 @@ describe('callRoutes', () => {
         reply
       );
 
+      // No Participant row resolves for USER_ID in this test's (empty) prisma
+      // mock, so the code falls back to the raw participantId — same
+      // behavior as before, but now reached via an explicit DB lookup
+      // instead of blindly trusting a User.id as a Participant.id.
       expect(mockLeaveCall).toHaveBeenCalledWith(
         expect.objectContaining({ participantId: USER_ID })
       );
     });
 
-    it('allows a moderator to remove another participant', async () => {
+    it('allows a moderator to remove another participant, using the TARGET participant id (not the moderator\'s own)', async () => {
       const session = makeCallSession();
       const modMembership = makeMembership({ role: 'moderator' });
+      const resolvedTargetParticipant = { id: 'resolved-target-part-id' };
+
+      const participantFindFirst = jest
+        .fn<any>()
+        .mockResolvedValueOnce(modMembership) // moderator role check (caller)
+        .mockResolvedValueOnce(resolvedTargetParticipant); // target resolution
 
       const { routes, reply } = setup({
-        participant: { findFirst: jest.fn<any>().mockResolvedValue(modMembership) },
+        participant: { findFirst: participantFindFirst },
         callSession: { findFirst: jest.fn<any>() },
       });
 
@@ -821,15 +860,29 @@ describe('callRoutes', () => {
         reply
       );
 
-      expect(mockLeaveCall).toHaveBeenCalled();
+      // Regression guard: a moderator kicking someone else must never end up
+      // marking the MODERATOR's own participation as "left" (PART_ID is the
+      // moderator's own id per `makeMembership()`/default authContext).
+      expect(mockLeaveCall).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: resolvedTargetParticipant.id })
+      );
+      expect(mockLeaveCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: PART_ID })
+      );
     });
 
-    it('allows an admin to remove another participant', async () => {
+    it('allows an admin to remove another participant, using the TARGET participant id (not the admin\'s own)', async () => {
       const session = makeCallSession();
       const adminMembership = makeMembership({ role: 'admin' });
+      const resolvedTargetParticipant = { id: 'resolved-target-part-id' };
+
+      const participantFindFirst = jest
+        .fn<any>()
+        .mockResolvedValueOnce(adminMembership) // moderator role check (caller)
+        .mockResolvedValueOnce(resolvedTargetParticipant); // target resolution
 
       const { routes, reply } = setup({
-        participant: { findFirst: jest.fn<any>().mockResolvedValue(adminMembership) },
+        participant: { findFirst: participantFindFirst },
         callSession: { findFirst: jest.fn<any>() },
       });
 
@@ -845,7 +898,12 @@ describe('callRoutes', () => {
         reply
       );
 
-      expect(mockLeaveCall).toHaveBeenCalled();
+      expect(mockLeaveCall).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: resolvedTargetParticipant.id })
+      );
+      expect(mockLeaveCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: PART_ID })
+      );
     });
 
     it('returns 403 when regular member tries to remove another participant', async () => {
@@ -1091,7 +1149,9 @@ describe('callRoutes', () => {
             participants: {
               some: {
                 participant: { userId: USER_ID },
-                leftAt: null,
+                // Audit C5 — Prisma-on-Mongo: null alone misses documents
+                // where the field is absent (historical CallParticipant).
+                OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
               },
             },
           }),

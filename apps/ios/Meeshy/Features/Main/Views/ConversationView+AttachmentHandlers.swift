@@ -76,6 +76,7 @@ extension ConversationView {
             composerState.pendingAttachments.removeAll()
             composerState.pendingMediaFiles.removeAll()
             composerState.pendingThumbnails.removeAll()
+            purgeDraftAttachmentMedia()
             composerText.text = ""
             ReplyContextCleaner(conversationId: viewModel.conversationId)
                 .clear(pendingReplyReference: &composerState.pendingReplyReference)
@@ -177,6 +178,10 @@ extension ConversationView {
                     composerState.pendingMediaFiles.removeAll()
                     composerState.uploadProgress = nil
                     composerState.isUploading = false
+                    // APRÈS l'upload : un brouillon restauré envoie depuis les
+                    // copies du dossier draft — purger avant les aurait
+                    // supprimées sous les pieds de l'upload.
+                    purgeDraftAttachmentMedia()
                 }
             }
             let serverOrigin = MeeshyConfig.shared.serverOrigin
@@ -399,6 +404,12 @@ extension ConversationView {
     // MARK: - Attachment Handlers
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        // Priming echo (strip multi-selection injected before presenting the
+        // picker) — not a user confirmation, nothing to ingest yet.
+        if composerState.photoPickerPriming {
+            composerState.photoPickerPriming = false
+            return
+        }
         composerState.selectedPhotoItems.removeAll()
         HapticFeedback.light()
         for item in items {
@@ -533,5 +544,12 @@ extension ConversationView {
         Task {
             await viewModel.sendMessage(content: text, originalLanguage: lang)
         }
+    }
+
+    /// Purge les copies durables des pièces jointes du brouillon — à l'envoi
+    /// réussi (le brouillon n'existe plus) et au clear explicite. Idempotent.
+    func purgeDraftAttachmentMedia() {
+        guard let userId = AuthManager.shared.currentUser?.id else { return }
+        MessageDraftMediaStore.purge(userId: userId, conversationId: viewModel.conversationId)
     }
 }

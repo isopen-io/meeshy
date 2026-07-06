@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -117,6 +118,9 @@ export function registerSearchRoutes(
             take: 5,
           },
           messages: {
+            where: {
+              deletedAt: null
+            },
             orderBy: { createdAt: 'desc' },
             take: 1,
             include: {
@@ -190,7 +194,7 @@ export function registerSearchRoutes(
             userId: sender.userId,
             username: sender.user?.username ?? null,
             displayName: sender.displayName ?? sender.user?.displayName ?? null,
-            avatar: sender.avatar ?? sender.user?.avatar ?? null,
+            avatar: resolveParticipantAvatar(sender),
             isOnline: sender.user?.isOnline ?? false,
           } : null,
           attachments: msg.attachments || [],

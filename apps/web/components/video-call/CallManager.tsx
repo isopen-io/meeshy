@@ -45,6 +45,11 @@ export function CallManager() {
 
   const [incomingCall, setIncomingCall] = useState<CallInitiatedEvent | null>(null);
   const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // CALL-RESILIENCE — tracks whether we've already observed this effect's
+  // first `connect`. Any subsequent `connect` is a genuine reconnect
+  // (network blip or gateway restart) that must re-enter the call room —
+  // see rejoinActiveCallAfterReconnect below.
+  const hasConnectedRef = useRef(false);
 
   /**
    * Clear call timeout
@@ -401,6 +406,45 @@ export function CallManager() {
     // Toast métier désactivé - utiliser le système de notifications v2
   }, [incomingCall, clearCallTimeout]);
 
+  /**
+   * CALL-RESILIENCE — re-enter the call room after the signaling socket
+   * reconnects (network blip or gateway restart). Call media is direct P2P
+   * (RTCPeerConnection) and survives such a drop untouched; only the
+   * signaling socket needs to rejoin the gateway's call room before its
+   * reconnect-grace window expires and force-ends an otherwise-healthy call
+   * (services/gateway CallEventsHandler DISCONNECT_GRACE_MS). Without this,
+   * the socket reconnects and its listeners re-attach, but the gateway never
+   * sees it back in the call room, so grace extensions run out and the call
+   * is ended server-side even though both peers' media is fine. Mirrors iOS
+   * CallManager.didReconnect.
+   */
+  const rejoinActiveCallAfterReconnect = useCallback((socket: unknown) => {
+    const { isInCall: activeInCall, currentCall: activeCall } = useCallStore.getState();
+    if (!socket || !activeInCall || !activeCall?.id) return;
+
+    const callId = activeCall.id;
+    logger.info('[CallManager]', 'Socket reconnected — re-joining call room', { callId });
+
+    (socket as unknown).emit(
+      CLIENT_EVENTS.CALL_JOIN,
+      { callId, settings: { audioEnabled: true, videoEnabled: true } },
+      (ack: { success?: boolean; error?: { code?: string; message?: string } }) => {
+        if (ack?.success) return;
+        if (ack?.error?.code === 'CALL_ENDED') {
+          logger.warn('[CallManager]', 'Call ended while disconnected — tearing down', { callId });
+          handleCallEndedRef.current({
+            callId,
+            duration: 0,
+            endedBy: '',
+            reason: 'completed',
+          } as CallEndedEvent);
+          return;
+        }
+        logger.warn('[CallManager]', 'Re-join after reconnect failed', { callId, error: ack?.error });
+      }
+    );
+  }, []);
+
   // Stable refs for all handlers - prevents useEffect re-fires on every render
   const handleIncomingCallRef = useRef(handleIncomingCall);
   const handleParticipantJoinedRef = useRef(handleParticipantJoined);
@@ -467,6 +511,10 @@ export function CallManager() {
 
     // Try immediately if socket already connected
     const socket = meeshySocketIOService.getSocket();
+    // This effect instance hasn't observed a connect yet; if the socket is
+    // already connected, that counts as the initial connect (nothing to
+    // rejoin — the call was joined explicitly via handleAcceptCall/initiate).
+    hasConnectedRef.current = socket?.connected === true;
     if (socket?.connected) {
       attachListeners(socket);
     }
@@ -475,6 +523,12 @@ export function CallManager() {
     const onConnect = () => {
       const s = meeshySocketIOService.getSocket();
       if (s) attachListeners(s);
+
+      if (!hasConnectedRef.current) {
+        hasConnectedRef.current = true;
+        return;
+      }
+      rejoinActiveCallAfterReconnect(s);
     };
 
     // If socket exists, listen for connect event
@@ -493,6 +547,7 @@ export function CallManager() {
           socketPollInterval = null;
           s.on('connect', onConnect);
           if (s.connected) {
+            hasConnectedRef.current = true;
             attachListeners(s);
           }
         }

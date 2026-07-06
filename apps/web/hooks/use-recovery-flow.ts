@@ -77,7 +77,7 @@ export function useRecoveryFlow({
     setGuessEmail('');
     setOtpCode('');
     setError(null);
-    toast.error(t('phoneReset.errors.tokenExpired') || 'Session expirée. Veuillez recommencer.');
+    toast.error(t('phoneReset.errors.tokenExpired', 'Session expired. Please start over.'));
   };
 
   // Reset on open/close and set initial step based on existingAccount type or conflictType

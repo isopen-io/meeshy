@@ -227,25 +227,37 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     // ── Post reaction events (Phase 3B) ─────────────────────────────────
 
     function handlePostReactionAdded(data: PostReactionUpdateEventData) {
-      patchPostInAllCaches(queryClient, data.postId, (p) => ({
-        ...p,
-        reactionCount: (p.reactionCount ?? p.likeCount) + 1,
-        likeCount: p.likeCount + 1,
-        reactionSummary: {
-          ...p.reactionSummary,
-          [data.emoji]: data.aggregation.count,
-        },
-        currentUserReactions:
-          data.userId === currentUserId
-            ? (p.currentUserReactions ?? []).includes(data.emoji)
-              ? p.currentUserReactions
-              : [...(p.currentUserReactions ?? []), data.emoji]
-            : p.currentUserReactions,
-      }));
+      patchPostInAllCaches(queryClient, data.postId, (p) => {
+        // Derive the total-count change from the AUTHORITATIVE per-emoji delta
+        // (`aggregation.count` minus the cached count for that emoji) rather than
+        // a blind `+1`. A blind `+1` double-counts the reacting user's own event:
+        // their optimistic mutation already bumped `likeCount`/`reactionSummary`,
+        // so this self-echo would add a second `+1` while `reactionSummary` (set
+        // absolutely below) self-corrects — leaving "N likes" one ahead of the
+        // emoji badges. The delta is 0 for an already-applied optimistic reaction
+        // and idempotent against duplicate echoes.
+        const delta = reactionDelta(p, data);
+        return {
+          ...p,
+          reactionCount: Math.max(0, (p.reactionCount ?? p.likeCount) + delta),
+          likeCount: Math.max(0, p.likeCount + delta),
+          reactionSummary: {
+            ...p.reactionSummary,
+            [data.emoji]: data.aggregation.count,
+          },
+          currentUserReactions:
+            data.userId === currentUserId
+              ? (p.currentUserReactions ?? []).includes(data.emoji)
+                ? p.currentUserReactions
+                : [...(p.currentUserReactions ?? []), data.emoji]
+              : p.currentUserReactions,
+        };
+      });
     }
 
     function handlePostReactionRemoved(data: PostReactionUpdateEventData) {
       patchPostInAllCaches(queryClient, data.postId, (p) => {
+        const delta = reactionDelta(p, data);
         const newSummary = { ...p.reactionSummary };
         if (data.aggregation.count === 0) {
           delete newSummary[data.emoji];
@@ -254,8 +266,8 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         }
         return {
           ...p,
-          reactionCount: Math.max(0, (p.reactionCount ?? p.likeCount) - 1),
-          likeCount: Math.max(0, p.likeCount - 1),
+          reactionCount: Math.max(0, (p.reactionCount ?? p.likeCount) + delta),
+          likeCount: Math.max(0, p.likeCount + delta),
           reactionSummary: newSummary,
           currentUserReactions:
             data.userId === currentUserId
@@ -268,24 +280,32 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     // ── Comment reaction events ─────────────────────────────────────────
 
     function handleCommentReactionAdded(data: CommentReactionUpdateEventData) {
-      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => ({
-        ...c,
-        likeCount: c.likeCount + 1,
-        reactionSummary: {
-          ...c.reactionSummary,
-          [data.emoji]: data.aggregation.count,
-        },
-        currentUserReactions:
-          data.userId === currentUserId
-            ? (c.currentUserReactions ?? []).includes(data.emoji)
-              ? c.currentUserReactions
-              : [...(c.currentUserReactions ?? []), data.emoji]
-            : c.currentUserReactions,
-      }));
+      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => {
+        // Same authoritative-delta reconciliation as `handlePostReactionAdded`.
+        // The gateway broadcasts `comment:reaction-added` for EVERY emoji (no
+        // heart-absolute shortcut like posts have), so a blind `+1` here would
+        // double-count even a plain ❤️ like against the optimistic mutation.
+        const delta = reactionDelta(c, data);
+        return {
+          ...c,
+          likeCount: Math.max(0, c.likeCount + delta),
+          reactionSummary: {
+            ...c.reactionSummary,
+            [data.emoji]: data.aggregation.count,
+          },
+          currentUserReactions:
+            data.userId === currentUserId
+              ? (c.currentUserReactions ?? []).includes(data.emoji)
+                ? c.currentUserReactions
+                : [...(c.currentUserReactions ?? []), data.emoji]
+              : c.currentUserReactions,
+        };
+      });
     }
 
     function handleCommentReactionRemoved(data: CommentReactionUpdateEventData) {
       patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => {
+        const delta = reactionDelta(c, data);
         const newSummary = { ...c.reactionSummary };
         if (data.aggregation.count === 0) {
           delete newSummary[data.emoji];
@@ -294,7 +314,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         }
         return {
           ...c,
-          likeCount: Math.max(0, c.likeCount - 1),
+          likeCount: Math.max(0, c.likeCount + delta),
           reactionSummary: newSummary,
           currentUserReactions:
             data.userId === currentUserId
@@ -475,6 +495,26 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       socket.off(SERVER_EVENTS.COMMENT_REACTION_REMOVED, handleCommentReactionRemoved);
     };
   }, [enabled, currentUserId, queryClient]);
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper: authoritative per-emoji count delta.
+//
+// A reaction event carries the AUTHORITATIVE absolute count for its emoji
+// (`aggregation.count`). Comparing it against the cached count for that same
+// emoji yields the exact change to apply to the entity's total `likeCount` —
+// which stays consistent with `reactionSummary` regardless of whether an
+// optimistic mutation already ran, whether the echo is the reactor's own, or
+// whether the same echo is delivered twice. A blind `±1` cannot make those
+// guarantees and double-counts the reactor's own optimistic update.
+// ---------------------------------------------------------------------------
+
+function reactionDelta(
+  entity: { readonly reactionSummary?: Record<string, number> | null },
+  data: { readonly emoji: string; readonly aggregation: { readonly count: number } },
+): number {
+  const previous = (entity.reactionSummary ?? {})[data.emoji] ?? 0;
+  return data.aggregation.count - previous;
 }
 
 // ---------------------------------------------------------------------------

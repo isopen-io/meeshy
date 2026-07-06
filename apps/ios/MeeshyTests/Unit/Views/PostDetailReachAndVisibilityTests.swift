@@ -48,4 +48,23 @@ final class PostDetailReachAndVisibilityTests: XCTestCase {
         XCTAssertTrue(StoryCanvasVisibility.isVisible(canvasFrame: CGRect(x: 0, y: -50, width: 300, height: 200), viewportHeight: 800))
         XCTAssertTrue(StoryCanvasVisibility.isVisible(canvasFrame: CGRect(x: 0, y: 400, width: 300, height: 200), viewportHeight: 800))
     }
+
+    // MARK: StoryDetailPlaybackPolicy.isPaused — truth table (RF3)
+    // Shared by the native story canvas AND the STORY-repost canvas so the off-screen
+    // + call-aware pause policy can't drift between the two paths.
+    func test_storyDetailPlaybackPolicy_playsWhenVisibleAndNoCall() {
+        XCTAssertFalse(StoryDetailPlaybackPolicy.isPaused(visible: true, callActive: false))
+    }
+
+    func test_storyDetailPlaybackPolicy_pausesWhenOffScreen() {
+        XCTAssertTrue(StoryDetailPlaybackPolicy.isPaused(visible: false, callActive: false))
+    }
+
+    func test_storyDetailPlaybackPolicy_pausesDuringCall_evenWhenVisible() {
+        XCTAssertTrue(StoryDetailPlaybackPolicy.isPaused(visible: true, callActive: true))
+    }
+
+    func test_storyDetailPlaybackPolicy_pausesWhenOffScreenAndCall() {
+        XCTAssertTrue(StoryDetailPlaybackPolicy.isPaused(visible: false, callActive: true))
+    }
 }

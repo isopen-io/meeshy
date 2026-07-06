@@ -200,8 +200,16 @@ struct CommentsSheetView: View {
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
+    /// True while `commentPhotoItems` is being primed with the recent-media
+    /// strip's multi-selection before presenting the PhotosPicker — swallows
+    /// the priming onChange echo so only a user confirmation ingests items.
+    @State private var commentPhotoPickerPriming: Bool = false
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
+    /// "Éditer" from the recent-media strip — the editor opens before staging;
+    /// the edited output is ingested, never the original.
+    @State private var commentRecentImageToEdit: UIImage? = nil
+    @State private var commentRecentVideoToEdit: URL? = nil
 
     /// Enregistreur vocal parent-managed — MÊME composant que les conversations
     /// (`ConversationView`). Produit un vrai fichier audio (pas un timer) déposé
@@ -360,7 +368,7 @@ struct CommentsSheetView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "feed.comments.count", defaultValue: "\(commentCount) commentaires", bundle: .main))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                 }
@@ -369,8 +377,9 @@ struct CommentsSheetView: View {
                     Button {
                         dismiss()
                     } label: {
+                        // Figé : chrome xmark dans un cadre tap fixe 32×32 (doctrine 82i).
                         Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
@@ -690,44 +699,44 @@ struct CommentsSheetView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.author)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text(RelativeTimeFormatter.shortString(for: post.timestamp))
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
                 }
             }
 
             Text(post.displayContent)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(3)
 
             HStack(spacing: 16) {
                 HStack(spacing: 4) {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                     Text("\(post.likes)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.error)
 
                 HStack(spacing: 4) {
                     Image(systemName: "bubble.right.fill")
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                     Text("\(commentCount)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(theme.border(tint: accentColor, intensity: 0.2), lineWidth: 1)
                 )
         )
@@ -743,11 +752,11 @@ struct CommentsSheetView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(reply.author)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.authorColor))
 
                 Text(reply.displayContent)
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             }
@@ -759,8 +768,9 @@ struct CommentsSheetView: View {
                     replyingTo = nil
                 }
             } label: {
+                // Figé : chrome xmark dans un cadre tap fixe 24×24 (doctrine 82i).
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
@@ -820,16 +830,22 @@ struct CommentsSheetView: View {
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
+            onRecentMediaEdit: { pick in editCommentRecentMedia(pick) },
+            onPhotoLibraryPreselecting: { ids in openCommentLibraryPreselecting(ids) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
             externalAttachments: commentAttachments,
             focusTrigger: $composerFocusTrigger
         )
+        // `photoLibrary: .shared()` est requis pour la présélection : les
+        // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
+        // matchent les assets du picker que sur la photothèque partagée.
         .photosPicker(
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]),
+            photoLibrary: .shared()
         )
         .fileImporter(
             isPresented: $showCommentFilePicker,
@@ -848,6 +864,38 @@ struct CommentsSheetView: View {
         }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
             handleCommentPhotoSelection(items)
+        }
+        // "Éditer" from the recent-media strip → edit BEFORE staging: only the
+        // edited output lands in the comment attachments.
+        .fullScreenCover(isPresented: Binding(
+            get: { commentRecentImageToEdit != nil },
+            set: { if !$0 { commentRecentImageToEdit = nil } }
+        )) {
+            if let image = commentRecentImageToEdit {
+                MeeshyImageEditorView(image: image, context: .post, accentColor: accentColor, onAccept: { edited in
+                    commentRecentImageToEdit = nil
+                    ingestCommentRecentMedia(.image(edited))
+                }, onCancel: {
+                    commentRecentImageToEdit = nil
+                })
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { commentRecentVideoToEdit != nil },
+            set: { if !$0 { commentRecentVideoToEdit = nil } }
+        )) {
+            if let url = commentRecentVideoToEdit {
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .post,
+                    accentColor: accentColor,
+                    onComplete: { result in
+                        commentRecentVideoToEdit = nil
+                        ingestCommentRecentMedia(.video(result.url))
+                    },
+                    onCancel: { commentRecentVideoToEdit = nil }
+                )
+            }
         }
     }
 
@@ -907,8 +955,32 @@ struct CommentsSheetView: View {
 
     // MARK: - Comment Attachment Pickers
 
+    /// Opens the full photo library with the strip's multi-selection already
+    /// checked (identifier-based priming — see `commentPhotoPickerPriming`).
+    /// Capped at the picker's `maxSelectionCount` (10); with no strip
+    /// selection, stale primed items from a cancelled run are dropped.
+    private func openCommentLibraryPreselecting(_ assetIds: [String]) {
+        if !assetIds.isEmpty {
+            let primed = assetIds.prefix(10).map { PhotosPickerItem(itemIdentifier: $0) }
+            // Arm the echo-swallow ONLY when priming actually mutates the
+            // binding — an unchanged binding fires no onChange, and a stale
+            // armed flag would swallow the user's real confirmation instead.
+            commentPhotoPickerPriming = primed != commentPhotoItems
+            commentPhotoItems = primed
+        } else {
+            commentPhotoItems = []
+        }
+        showCommentPhotoPicker = true
+    }
+
     private func handleCommentPhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        // Priming echo (strip multi-selection injected before presenting the
+        // picker) — not a user confirmation, nothing to ingest yet.
+        if commentPhotoPickerPriming {
+            commentPhotoPickerPriming = false
+            return
+        }
         Task {
             for item in items {
                 let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
@@ -926,6 +998,15 @@ struct CommentsSheetView: View {
                 await MainActor.run { commentAttachments.append(attachment) }
             }
             await MainActor.run { commentPhotoItems = [] }
+        }
+    }
+
+    /// "Éditer" from the strip's long-press menu: opens the media editor on the
+    /// resolved pick; the edited result is ingested like a strip tap.
+    private func editCommentRecentMedia(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image): commentRecentImageToEdit = image
+        case .video(let url): commentRecentVideoToEdit = url
         }
     }
 
@@ -1352,7 +1433,7 @@ struct CommentRowView: View, Equatable {
             VStack(alignment: .leading, spacing: isReply ? 4 : 6) {
                 HStack(spacing: 4) {
                     Text(comment.author)
-                        .font(.system(size: authorFont, weight: .semibold))
+                        .font(MeeshyFont.relative(authorFont, weight: .semibold))
                         .foregroundColor(Color(hex: comment.authorColor))
                         .onTapGesture {
                             HapticFeedback.light()
@@ -1363,11 +1444,13 @@ struct CommentRowView: View, Equatable {
                         .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
                     if hasTranslation {
-                        Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                        Text("\u{00B7}").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
 
                         let origDisplay = LanguageDisplay.from(code: comment.originalLanguage)
                         let isOrigActive = showOriginal
                         VStack(spacing: 1) {
+                            // Figé : taille 12/10 = indicateur d'état actif/inactif du
+                            // drapeau (emoji), apparié au soulignement fixe 10×1.5 dessous.
                             Text(origDisplay?.flag ?? "?")
                                 .font(.system(size: isOrigActive ? 12 : 10))
                                 .scaleEffect(isOrigActive ? 1.05 : 1.0)
@@ -1395,6 +1478,8 @@ struct CommentRowView: View, Equatable {
                         let targetDisplay = LanguageDisplay.from(code: targetLang)
                         let isTransActive = !showOriginal
                         VStack(spacing: 1) {
+                            // Figé : taille 12/10 = indicateur d'état actif/inactif du
+                            // drapeau (emoji), apparié au soulignement fixe 10×1.5 dessous.
                             Text(targetDisplay?.flag ?? "?")
                                 .font(.system(size: isTransActive ? 12 : 10))
                                 .scaleEffect(isTransActive ? 1.05 : 1.0)
@@ -1417,23 +1502,25 @@ struct CommentRowView: View, Equatable {
                         .accessibilityValue(isTransActive ? String(localized: "a11y.comment.language_shown", defaultValue: "Affichée", bundle: .main) : "")
                         .meeshyTapTarget(44)
 
+                        // Figé : indicateur décoratif (accessibilityHidden), géométrie
+                        // fixe alignée sur la rangée de drapeaux d'état ci-dessus.
                         Image(systemName: "translate")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(MeeshyFont.relative(10, weight: .medium))
                             .foregroundColor(MeeshyColors.indigo400)
                             .accessibilityHidden(true)
                     }
 
-                    Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                    Text("\u{00B7}").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
 
                     Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
                 }
 
                 Text(effectiveCommentContent)
-                    .font(.system(size: contentFont))
+                    .font(MeeshyFont.relative(contentFont))
                     .foregroundColor(theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: showOriginal)
@@ -1472,12 +1559,12 @@ struct CommentRowView: View, Equatable {
                         HStack(spacing: 4) {
                             let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
                             Image(systemName: isLiked || likeCount > 0 ? "heart.fill" : "heart")
-                                .font(.system(size: isReply ? 12 : 14))
+                                .font(MeeshyFont.relative(isReply ? 12 : 14))
                                 .foregroundColor(heartColor)
                                 .scaleEffect(isLiked ? 1.1 : 1.0)
 
                             Text("\(likeCount)")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(MeeshyFont.relative(12, weight: .medium))
                                 .foregroundColor(heartColor)
                         }
                     }
@@ -1503,13 +1590,13 @@ struct CommentRowView: View, Equatable {
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrowshape.turn.up.left")
-                                        .font(.system(size: 13))
+                                        .font(MeeshyFont.relative(13))
                                     if !isReply && comment.replies > 0 {
                                         Text("\(comment.replies)")
-                                            .font(.system(size: 12, weight: .semibold))
+                                            .font(MeeshyFont.relative(12, weight: .semibold))
                                     }
                                     Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(MeeshyFont.relative(12, weight: .medium))
                                 }
                                 .foregroundColor(theme.textMuted)
                             }
@@ -1520,7 +1607,7 @@ struct CommentRowView: View, Equatable {
 
                             if showSeeReplies {
                                 Text("\u{00B7}")
-                                    .font(.system(size: 12))
+                                    .font(MeeshyFont.relative(12))
                                     .foregroundColor(theme.textMuted)
                                     .accessibilityHidden(true)
 
@@ -1529,7 +1616,7 @@ struct CommentRowView: View, Equatable {
                                     HapticFeedback.light()
                                 } label: {
                                     Text(String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(MeeshyFont.relative(12, weight: .semibold))
                                         .foregroundColor(Color(hex: accentColor))
                                 }
                                 .frame(minHeight: 44)
@@ -1563,7 +1650,7 @@ struct CommentRowView: View, Equatable {
                             }
                         } label: {
                             Image(systemName: "ellipsis")
-                                .font(.system(size: isReply ? 12 : 14))
+                                .font(MeeshyFont.relative(isReply ? 12 : 14))
                                 .foregroundColor(theme.textMuted)
                         }
                         .accessibilityLabel(String(localized: "a11y.comment.more_options", defaultValue: "Plus d'options", bundle: .main))
