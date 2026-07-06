@@ -103,17 +103,28 @@ export class ReactionService {
       return this.mapReactionToData(existingReaction);
     }
 
-    const reaction = await this.prisma.reaction.create({
-      data: {
-        messageId,
-        participantId,
-        emoji: sanitized
+    try {
+      const reaction = await this.prisma.reaction.create({
+        data: {
+          messageId,
+          participantId,
+          emoji: sanitized
+        }
+      });
+
+      await this.updateMessageReactionSummary(messageId, sanitized, 'add');
+
+      return this.mapReactionToData(reaction);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+        // Concurrent insert race: treat as idempotent success, summary already correct.
+        const existing = await this.prisma.reaction.findFirst({
+          where: { messageId, participantId, emoji: sanitized }
+        });
+        if (existing) return this.mapReactionToData(existing);
       }
-    });
-
-    await this.updateMessageReactionSummary(messageId, sanitized, 'add');
-
-    return this.mapReactionToData(reaction);
+      throw err;
+    }
   }
 
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {
@@ -333,39 +344,41 @@ export class ReactionService {
     action: 'add' | 'remove',
     count: number = 1
   ): Promise<void> {
-    const message = await this.prisma.message.findUnique({
-      where: { id: messageId },
-      select: { reactionSummary: true, reactionCount: true }
-    });
+    await this.prisma.$transaction(async (tx) => {
+      const message = await tx.message.findUnique({
+        where: { id: messageId },
+        select: { reactionSummary: true }
+      });
 
-    if (!message) {
-      return;
-    }
+      if (!message) {
+        return;
+      }
 
-    const currentSummary = (message.reactionSummary as Record<string, number>) || {};
-    const currentCount = message.reactionCount || 0;
+      const currentSummary = (message.reactionSummary as Record<string, number>) || {};
 
-    if (action === 'add') {
-      currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
-    } else {
-      if (currentSummary[emoji]) {
+      if (action === 'add') {
+        currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
+      } else if (currentSummary[emoji]) {
         currentSummary[emoji] -= count;
         if (currentSummary[emoji] <= 0) {
           delete currentSummary[emoji];
         }
       }
-    }
 
-    const newReactionCount = action === 'add'
-      ? currentCount + count
-      : Math.max(0, currentCount - count);
+      // Compteur AUTORITAIRE depuis la table `Reaction` (la ligne add/remove a déjà
+      // été appliquée par addReaction/removeReaction avant cet appel). Re-dérivé à
+      // chaque mutation : le compteur dénormalisé `reactionCount` ne dérive jamais
+      // sous concurrence et s'auto-répare. Miroir de PostReactionService /
+      // CommentReactionService (updatePostReactionSummary / updateCommentReactionSummary).
+      const total = await tx.reaction.count({ where: { messageId } });
 
-    await this.prisma.message.update({
-      where: { id: messageId },
-      data: {
-        reactionSummary: currentSummary,
-        reactionCount: newReactionCount
-      }
+      await tx.message.update({
+        where: { id: messageId },
+        data: {
+          reactionSummary: currentSummary,
+          reactionCount: total
+        }
+      });
     });
   }
 

@@ -109,11 +109,22 @@ describe('ReactionService', () => {
         create: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
-        deleteMany: jest.fn()
+        deleteMany: jest.fn(),
+        count: jest.fn().mockResolvedValue(0)
       },
       participant: {
         findMany: jest.fn().mockResolvedValue([])
-      }
+      },
+      // $transaction executes the callback with a tx client delegating to the same mocks.
+      $transaction: jest.fn((fn: (tx: any) => Promise<unknown>) =>
+        fn({
+          message: {
+            findUnique: mockPrisma.message.findUnique,
+            update: mockPrisma.message.update
+          },
+          reaction: { count: mockPrisma.reaction.count }
+        })
+      )
     };
 
     // Create service instance
@@ -1094,6 +1105,140 @@ describe('ReactionService', () => {
 
       expect(thumbsUp?.hasCurrentUser).toBe(true);
       expect(heart?.hasCurrentUser).toBe(false);
+    });
+  });
+
+  // ==============================================
+  // SUMMARY CONSISTENCY — $transaction + authoritative reactionCount
+  // (mirror of PostReactionService / CommentReactionService hardening)
+  // ==============================================
+
+  describe('updateMessageReactionSummary — transaction + authoritative count', () => {
+    beforeEach(() => {
+      mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
+      mockPrisma.reaction.findMany.mockResolvedValue([]);
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
+      mockPrisma.reaction.create.mockResolvedValue(createMockReaction());
+    });
+
+    it('test_addReaction_callsPrismaTransaction_forSummaryUpdate', async () => {
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('test_removeReaction_callsPrismaTransaction_forSummaryUpdate', async () => {
+      mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 1 });
+
+      await service.removeReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('test_removeReaction_noDeletedRow_doesNotCallTransaction', async () => {
+      mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 0 });
+
+      await service.removeReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('test_addReaction_writesAuthoritativeReactionCountFromTable', async () => {
+      // Denormalised counter must be re-derived from Reaction.count(), NOT incremented.
+      mockPrisma.message.findUnique.mockResolvedValue(
+        createMockMessage({ reactionSummary: { '👍': 1 }, reactionCount: 1 })
+      );
+      mockPrisma.reaction.count.mockResolvedValue(7);
+
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '❤️'
+      });
+
+      expect(mockPrisma.reaction.count).toHaveBeenCalledWith({ where: { messageId: testMessageId } });
+      expect(mockPrisma.message.update).toHaveBeenCalledWith({
+        where: { id: testMessageId },
+        data: expect.objectContaining({ reactionCount: 7 })
+      });
+    });
+
+    it('test_removeReaction_writesAuthoritativeReactionCountFromTable', async () => {
+      mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.message.findUnique.mockResolvedValue(
+        createMockMessage({ reactionSummary: { '👍': 3 }, reactionCount: 3 })
+      );
+      mockPrisma.reaction.count.mockResolvedValue(2);
+
+      await service.removeReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.message.update).toHaveBeenCalledWith({
+        where: { id: testMessageId },
+        data: expect.objectContaining({ reactionCount: 2 })
+      });
+    });
+  });
+
+  // ==============================================
+  // P2002 CONCURRENT INSERT IDEMPOTENCY
+  // ==============================================
+
+  describe('addReaction — P2002 concurrent insert', () => {
+    beforeEach(() => {
+      mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
+      mockPrisma.reaction.findMany.mockResolvedValue([]);
+    });
+
+    it('test_addReaction_P2002_concurrentInsert_returnsExistingRecordWithoutThrowing', async () => {
+      const existingReaction = createMockReaction();
+      const p2002Error = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+
+      mockPrisma.reaction.findFirst
+        .mockResolvedValueOnce(null)              // pre-check: not found
+        .mockResolvedValueOnce(existingReaction); // recovery lookup after P2002
+      mockPrisma.reaction.create.mockRejectedValue(p2002Error);
+
+      const result = await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(result).toBeDefined();
+      expect(result?.id).toBe(existingReaction.id);
+      // Race winner already updated the summary — must not run it again.
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('test_addReaction_otherDbError_rethrows', async () => {
+      const dbError = Object.assign(new Error('Connection timeout'), { code: 'P1001' });
+
+      mockPrisma.reaction.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.reaction.create.mockRejectedValue(dbError);
+
+      await expect(
+        service.addReaction({
+          messageId: testMessageId,
+          participantId: testParticipantId,
+          emoji: '👍'
+        })
+      ).rejects.toThrow('Connection timeout');
     });
   });
 });
