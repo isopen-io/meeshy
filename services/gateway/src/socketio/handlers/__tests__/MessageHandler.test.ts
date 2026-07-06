@@ -2318,13 +2318,13 @@ describe('MessageHandler', () => {
       expect((handler as any).participantIdCache.has(`${OTHER_USER}:${VALID_CONV_ID}`)).toBe(true);
     });
 
-    it('never grows past its size bound, even for callers that never leave a conversation', () => {
+    it('hard-bounds memory: cache never exceeds its size cap under unbounded distinct senders', () => {
+      const cap = (handler.constructor as any).PARTICIPANT_CACHE_MAX_SIZE as number;
       const cache = (handler as any).participantIdCache;
-      for (let i = 0; i < 10_050; i++) {
+      for (let i = 0; i < cap + 500; i++) {
         cache.set(`user-${i}:${VALID_CONV_ID}`, `participant-${i}`);
       }
-
-      expect(cache.size).toBeLessThanOrEqual(10_000);
+      expect(cache.size).toBeLessThanOrEqual(cap);
     });
   });
 });
