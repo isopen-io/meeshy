@@ -96,7 +96,7 @@ class NotificationSocketIOSingleton {
       this.isConnecting = false;
     });
 
-    // Nouvelle notification (écoute 'notification:new' et 'notification' pour compatibilité)
+    // Nouvelle notification
     const handleNotification = (data: any) => {
       // Parser la notification avec la nouvelle structure groupée
       const notification: Notification = {
@@ -134,7 +134,6 @@ class NotificationSocketIOSingleton {
     };
 
     this.socket.on(SERVER_EVENTS.NOTIFICATION_NEW, handleNotification);
-    this.socket.on(SERVER_EVENTS.NOTIFICATION, handleNotification); // Legacy support
 
     // Écouter l'événement d'authentification
     this.socket.on(SERVER_EVENTS.AUTHENTICATED, (data: any) => {

@@ -37,6 +37,30 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
 /**
+ * Cap (in Unicode code points) applied to `lastMessage.content` in the GET
+ * /conversations LIST response. The clients only ever render this field as a
+ * 1–2 line row preview, yet it was shipped raw — a single long message
+ * multiplied across every list refresh inflates payloads and forces the iOS
+ * text engine to typeset the full string on every row measurement
+ * (CoreText cost is O(total length), `lineLimit` does not bound it).
+ * Truncation iterates code points, never splitting a surrogate pair.
+ * The full content still flows through GET /conversations/:id/messages.
+ */
+export const LAST_MESSAGE_PREVIEW_MAX_LENGTH = 300;
+
+export function truncateMessagePreview(content: string | null | undefined): string | null | undefined {
+  if (content == null || content.length <= LAST_MESSAGE_PREVIEW_MAX_LENGTH) return content;
+  let result = '';
+  let count = 0;
+  for (const char of content) {
+    if (count >= LAST_MESSAGE_PREVIEW_MAX_LENGTH) break;
+    result += char;
+    count += 1;
+  }
+  return result;
+}
+
+/**
  * Participant fields fetched + serialized per participant in the GET
  * /conversations LIST response (up to 5 participants × N conversations per
  * page, so per-field over-fetch multiplies).
@@ -75,6 +99,29 @@ export const conversationListParticipantSelect = {
       lastActiveAt: true
     }
   }
+} as const;
+
+/**
+ * Sélection des préférences utilisateur jointes à une conversation (liste ET
+ * détail). `customName` DOIT y figurer : c'est lui qui pilote le nom affiché
+ * d'un DM côté client (`displayName = customName ?? title ?? …`). Son absence
+ * historique créait un flip-flop de titre — la liste froide montrait le nom
+ * du participant, puis le premier pin/mute rapportait `customName` via la
+ * réponse du PATCH préférences et le titre basculait (vu « sandra raveloson »
+ * → « Sany » 2026-07-04). Le champ doit AUSSI être déclaré dans le schema
+ * wire (`userPreferences` de la conversation, api-schemas.ts), sinon
+ * fast-json-stringify le strippe silencieusement — même piège que `reaction`,
+ * sélectionné ici mais absent du wire jusqu'à ce même fix.
+ */
+export const conversationUserPreferencesSelect = {
+  isPinned: true,
+  isMuted: true,
+  isArchived: true,
+  deletedForUserAt: true,
+  tags: true,
+  categoryId: true,
+  reaction: true,
+  customName: true
 } as const;
 
 /**
@@ -347,19 +394,11 @@ export function registerCoreRoutes(
             },
             select: conversationListParticipantSelect
           },
-          // User preferences (isPinned, isMuted, isArchived, tags, categoryId)
+          // User preferences (pin/mute/archive/tags/catégorie/customName/reaction)
           userPreferences: {
             where: { userId: userId },
             take: 1,
-            select: {
-              isPinned: true,
-              isMuted: true,
-              isArchived: true,
-              deletedForUserAt: true,
-              tags: true,
-              categoryId: true,
-              reaction: true
-            }
+            select: conversationUserPreferencesSelect
           },
           messages: {
             where: {
@@ -550,6 +589,7 @@ export function registerCoreRoutes(
             const sender = msg.sender as any;
             return {
               ...msg,
+              content: truncateMessagePreview(msg.content),
               sender: sender ? {
                 ...sender,
                 username: sender.user?.username ?? sender.username ?? null,
@@ -666,15 +706,7 @@ export function registerCoreRoutes(
           userPreferences: {
             where: { userId: authRequest.authContext.userId },
             take: 1,
-            select: {
-              isPinned: true,
-              isMuted: true,
-              isArchived: true,
-              deletedForUserAt: true,
-              tags: true,
-              categoryId: true,
-              reaction: true
-            }
+            select: conversationUserPreferencesSelect
           }
         }
       });

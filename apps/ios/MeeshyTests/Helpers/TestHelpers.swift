@@ -60,12 +60,12 @@ extension XCTestCase {
 
 extension XCTestCase {
     /// Assert arrays are equal ignoring order
-    func assertArraysEqualIgnoringOrder<T: Hashable>(_ lhs: [T], _ rhs: [T], file: StaticString = #file, line: UInt = #line) {
+    func assertArraysEqualIgnoringOrder<T: Hashable>(_ lhs: [T], _ rhs: [T], file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertEqual(Set(lhs), Set(rhs), "Arrays contain different elements", file: file, line: line)
     }
 
     /// Assert dates are approximately equal (within threshold)
-    func assertDatesEqual(_ date1: Date, _ date2: Date, threshold: TimeInterval = 1.0, file: StaticString = #file, line: UInt = #line) {
+    func assertDatesEqual(_ date1: Date, _ date2: Date, threshold: TimeInterval = 1.0, file: StaticString = #filePath, line: UInt = #line) {
         let difference = abs(date1.timeIntervalSince(date2))
         XCTAssertLessThan(difference, threshold, "Dates differ by more than \(threshold) seconds", file: file, line: line)
     }
@@ -78,7 +78,7 @@ extension XCTestCase {
     func assertThrowsError<T, E: Error & Equatable>(
         _ expression: @autoclosure () async throws -> T,
         expectedError: E,
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         do {
@@ -94,7 +94,7 @@ extension XCTestCase {
     /// Assert async function throws any error
     func assertThrowsAnyError<T>(
         _ expression: @autoclosure () async throws -> T,
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         do {
@@ -108,7 +108,7 @@ extension XCTestCase {
     /// Assert async function does not throw
     func assertNoThrow<T>(
         _ expression: @autoclosure () async throws -> T,
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         do {
@@ -231,23 +231,23 @@ actor TestActor {
 
 extension XCTestCase {
     /// Assert collection is not empty
-    func assertNotEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should not be empty", file: StaticString = #file, line: UInt = #line) {
+    func assertNotEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should not be empty", file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertFalse(collection.isEmpty, message, file: file, line: line)
     }
 
     /// Assert collection is empty
-    func assertEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should be empty", file: StaticString = #file, line: UInt = #line) {
+    func assertEmpty<T: Collection>(_ collection: T, _ message: String = "Collection should be empty", file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(collection.isEmpty, message, file: file, line: line)
     }
 
     /// Assert optional is nil
-    func assertNil<T>(_ optional: T?, _ message: String = "Value should be nil", file: StaticString = #file, line: UInt = #line) {
+    func assertNil<T>(_ optional: T?, _ message: String = "Value should be nil", file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertNil(optional, message, file: file, line: line)
     }
 
     /// Assert optional is not nil and return unwrapped value
     @discardableResult
-    func assertNotNil<T>(_ optional: T?, _ message: String = "Value should not be nil", file: StaticString = #file, line: UInt = #line) -> T? {
+    func assertNotNil<T>(_ optional: T?, _ message: String = "Value should not be nil", file: StaticString = #filePath, line: UInt = #line) -> T? {
         XCTAssertNotNil(optional, message, file: file, line: line)
         return optional
     }

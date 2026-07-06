@@ -29,8 +29,17 @@ export type ResolveUserLanguageOpts = {
  *   4. deviceLocale             (locale appareil — Prisme étendu 2026-05-26)
  *   5. 'fr'                     (fallback ultime)
  *
+ * Les préférences in-app sont lowercased à la lecture — parité stricte avec
+ * {@link resolveUserLanguagesOrdered}. `isSupportedLanguage` valide les codes de
+ * manière insensible à la casse (il lowercase avant lookup) mais ne les
+ * transforme pas : un `systemLanguage: 'EN'` est donc accepté et persisté
+ * verbatim. Sans ce lowercase, `meta.userLanguage` renverrait `'EN'` alors que
+ * le pipeline de traduction stocke ses cibles en minuscules (`'en'`) — le client
+ * manquerait la traduction et retomberait sur l'original (violation du Prisme).
+ *
  * L'option `deviceLocale` est facultative — les call sites legacy qui passent
- * un seul argument restent valides.
+ * un seul argument restent valides. `normalizeLanguageCode` retourne déjà un
+ * code lowercase pour la locale appareil.
  *
  * @see resolveUserLanguagesOrdered pour la liste complète (sans fallback 'fr')
  */
@@ -42,9 +51,9 @@ export function resolveUserLanguage(
   },
   opts: ResolveUserLanguageOpts = {}
 ): string {
-  if (user.systemLanguage) return user.systemLanguage;
-  if (user.regionalLanguage) return user.regionalLanguage;
-  if (user.customDestinationLanguage) return user.customDestinationLanguage;
+  if (user.systemLanguage) return user.systemLanguage.toLowerCase();
+  if (user.regionalLanguage) return user.regionalLanguage.toLowerCase();
+  if (user.customDestinationLanguage) return user.customDestinationLanguage.toLowerCase();
   const normalized = normalizeLanguageCode(opts.deviceLocale);
   if (normalized) return normalized;
   return 'fr';
@@ -86,20 +95,6 @@ export function resolveUserLanguagesOrdered(
     out.push(lc);
   }
   return out;
-}
-
-/**
- * Collecte toutes les langues cibles pour la traduction automatique d'un utilisateur.
- * autoTranslate ON → systemLanguage (toujours) + regionalLanguage (si configurée)
- */
-export function resolveUserTranslationLanguages(user: {
-  systemLanguage?: string;
-  regionalLanguage?: string;
-}): string[] {
-  const seen = new Set<string>();
-  if (user.systemLanguage?.trim()) seen.add(user.systemLanguage.trim());
-  if (user.regionalLanguage?.trim()) seen.add(user.regionalLanguage.trim());
-  return seen.size > 0 ? Array.from(seen) : ['fr'];
 }
 
 /**
@@ -179,13 +174,14 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
   if (participant.type !== 'user' || !participant.user) {
     return participant.language
   }
-  const user = participant.user
-  if (user.systemLanguage) return user.systemLanguage
-  if (user.regionalLanguage) return user.regionalLanguage
-  if (user.customDestinationLanguage) return user.customDestinationLanguage
-  const normalizedDevice = normalizeLanguageCode(user.deviceLocale)
-  if (normalizedDevice) return normalizedDevice
-  return participant.language
+  // Délègue à la source de vérité unique (SSOT) : mêmes 4 niveaux, même
+  // normalisation de casse que resolveUserLanguage — ne PAS ré-implémenter
+  // l'échelle ici (règle CLAUDE.md). Seul le fallback diffère : la langue
+  // déclarée par le call site plutôt que la default app 'fr'.
+  const [top] = resolveUserLanguagesOrdered(participant.user, {
+    deviceLocale: participant.user.deviceLocale ?? undefined,
+  })
+  return top ?? participant.language
 }
 
 /**
@@ -292,12 +288,10 @@ export function getRequiredLanguages(
   const languages = new Set<string>();
 
   conversationMembers.forEach(user => {
-    const lang = resolveUserLanguage(user, {
-      deviceLocale: user.deviceLocale ?? undefined,
-    });
-    if (lang) {
-      languages.add(lang);
-    }
+    // resolveUserLanguage retourne toujours une string non-vide (fallback 'fr').
+    languages.add(
+      resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined })
+    );
   });
 
   return Array.from(languages);

@@ -236,6 +236,7 @@ extension ConversationListView {
         // retire réellement l'overlay après la durée du spring. Purge annulable :
         // si l'utilisateur rouvre un menu avant la fin du zoom-out, `onLongPress`
         // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
+        chipAutoScrollDriver.stop()
         contextMenuDismissWork?.cancel()
         // min() : ne jamais RE-déplier une carte repliée par le drag vers le
         // haut (0.0 → 0.7 ferait flasher l'aperçu pendant le fondu de sortie).
@@ -544,6 +545,7 @@ extension ConversationListView {
                     dragOffsetY = translation
                     dragOffsetX = value.translation.width
                     updateChipDropTarget(at: value.location)
+                    chipAutoScrollDriver.update(fingerLocation: value.location)
                 } else if translation < 0 {
                     previewScale = max(0, 1.0 + translation / 100)
                     dragOffsetY = 0
@@ -553,15 +555,22 @@ extension ConversationListView {
                     dragOffsetX = value.translation.width * dragMorphProgress
                     if dragMorphProgress >= 1 {
                         // Morph complet → verrouille le mode chip (drag n drop
-                        // engagé tant que le doigt reste posé).
+                        // engagé tant que le doigt reste posé). L'auto-scroll
+                        // de bord s'arme ici : stationner près d'un bord fait
+                        // défiler la liste vers les headers hors écran.
                         chipModeLatched = true
                         HapticFeedback.light()
                         updateChipDropTarget(at: value.location)
+                        chipAutoScrollDriver.onScrollTick = { location in
+                            updateChipDropTarget(at: location)
+                        }
+                        chipAutoScrollDriver.update(fingerLocation: value.location)
                     }
                 }
             }
             .onEnded { value in
                 if chipModeLatched {
+                    chipAutoScrollDriver.stop()
                     handleChipDrop(at: value.location)
                     return
                 }
@@ -582,14 +591,17 @@ extension ConversationListView {
 
     /// Surligne le header de section sous le doigt pendant le drag de la chip
     /// (réutilise l'affordance `isDropTarget` du `SectionDropDelegate`
-    /// historique). "pinned" n'est pas une cible (l'épinglage a son action
-    /// dédiée dans le menu). N'écrit l'état QUE sur changement — le registre
-    /// est hit-testé à chaque tick mais la liste n'est invalidée qu'aux
-    /// franchissements de frontière.
+    /// historique). "Épingles" est une cible LIVE uniquement si la
+    /// conversation n'est pas déjà épinglée (drop = épingler ; le retrait
+    /// reste l'action dédiée du menu). N'écrit l'état QUE sur changement —
+    /// le registre est hit-testé à chaque tick mais la liste n'est invalidée
+    /// qu'aux franchissements de frontière.
     private func updateChipDropTarget(at location: CGPoint) {
-        let target = sectionFrameRegistry.frames
-            .first(where: { $0.key != "pinned" && $0.value.contains(location) })?
+        let hovered = sectionFrameRegistry.frames
+            .first(where: { $0.value.contains(location) })?
             .key
+        let pinnedIsLive = contextMenuConversation?.userState.isPinned == false
+        let target = (hovered == "pinned" && !pinnedIsLive) ? nil : hovered
         if dropTargetSection != target {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                 dropTargetSection = target
@@ -598,10 +610,11 @@ extension ConversationListView {
         }
     }
 
-    /// Relâchement de la chip : si le doigt est sur un header de section,
-    /// déplace la conversation ("other" = « Mes conversations » = sectionId
-    /// vide, ids de catégorie sinon) puis ferme ; sinon ferme simplement —
-    /// la chip fond sur place (annulation, parité drag n drop natif).
+    /// Relâchement de la chip : « Épingles » épingle la conversation (no-op
+    /// si déjà épinglée), un header de section la déplace ("other" =
+    /// « Mes conversations » = sectionId vide, ids de catégorie sinon),
+    /// hors cible la chip fond sur place (annulation, parité drag n drop
+    /// natif). Décision : `ChipDropResolver`.
     private func handleChipDrop(at location: CGPoint) {
         defer {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
@@ -609,16 +622,198 @@ extension ConversationListView {
             }
             dismissContextMenu()
         }
-        guard let conversation = contextMenuConversation,
-              let sectionId = sectionFrameRegistry.frames
-                  .first(where: { $0.key != "pinned" && $0.value.contains(location) })?
-                  .key
-        else { return }
+        guard let conversation = contextMenuConversation else { return }
+        let hovered = sectionFrameRegistry.frames
+            .first(where: { $0.value.contains(location) })?
+            .key
+        switch ChipDropResolver.action(
+            droppedOn: hovered,
+            isPinned: conversation.userState.isPinned,
+            currentSectionId: conversation.userState.sectionId ?? "",
+            isAutoScrolling: chipAutoScrollDriver.isActivelyScrolling
+        ) {
+        case .none:
+            return
+        case .pin:
+            HapticFeedback.success()
+            Task { await conversationViewModel.togglePin(for: conversation.id) }
+        case .move(let targetId):
+            HapticFeedback.success()
+            conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: targetId)
+        }
+    }
+}
+
+// MARK: - Chip Drop Resolver
+
+/// Décision du drop de la chip : « Épingles » épingle la conversation si
+/// elle ne l'est pas déjà — jamais de dés-épinglage par drop, l'action
+/// dédiée Pin/Unpin du menu reste le seul chemin de retrait ; une section
+/// la déplace sauf no-op (même section) ; hors cible = annulation. Fonction
+/// pure — testée dans `ConversationChipDropResolverTests`.
+enum ChipDropAction: Equatable {
+    case pin
+    case move(sectionId: String)
+    case none
+}
+
+enum ChipDropResolver {
+    /// `isAutoScrolling` : un header qui DÉFILE sous le doigt stationnaire
+    /// (auto-scroll de bord en mouvement à l'instant du relâchement) ne doit
+    /// pas capter le drop — à 415-900 pt/s la cible attrapée est une loterie
+    /// et le relâchement en plein défilement est une intention d'abandon
+    /// (épinglage/déplacement accidentels vécus en test 2026-07-05). Au
+    /// CLAMP (liste en butée, headers au repos), le flag retombe et les
+    /// drops en zone de bord restent légitimes.
+    static func action(
+        droppedOn sectionId: String?,
+        isPinned: Bool,
+        currentSectionId: String,
+        isAutoScrolling: Bool = false
+    ) -> ChipDropAction {
+        guard !isAutoScrolling else { return .none }
+        guard let sectionId else { return .none }
+        if sectionId == "pinned" { return isPinned ? .none : .pin }
         let targetId = sectionId == "other" ? "" : sectionId
-        let currentId = conversation.userState.sectionId ?? ""
-        guard targetId != currentId else { return }
-        HapticFeedback.success()
-        conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: targetId)
+        return targetId == currentSectionId ? .none : .move(sectionId: targetId)
+    }
+}
+
+// MARK: - Chip Auto-Scroll (Phase 3 du morph drag-n-drop)
+
+/// Loi de vitesse de l'auto-scroll pendant le drag de la chip : le doigt qui
+/// stationne dans une zone de bord du viewport fait défiler la liste pour
+/// rendre atteignables les headers de section hors écran. Rampe linéaire
+/// (bord = pleine vitesse, sortie de zone = 0) et clamp de l'offset aux
+/// bornes réelles du contenu. Fonctions pures — testées dans
+/// `ConversationChipAutoScrollTests`.
+enum ChipAutoScroll {
+    /// Profondeur (pt) des zones de déclenchement en haut/bas du viewport.
+    static let zoneHeight: CGFloat = 130
+    /// Vitesse de défilement (pt/s) au bord même du viewport.
+    static let maxSpeed: CGFloat = 900
+
+    /// Vitesse signée pour une position de doigt donnée (coordonnées fenêtre) :
+    /// négative = défile vers le haut (révèle les sections au-dessus),
+    /// positive = vers le bas, 0 hors des zones de bord.
+    static func speed(fingerY: CGFloat, viewportMinY: CGFloat, viewportMaxY: CGFloat) -> CGFloat {
+        let topDepth = (viewportMinY + zoneHeight - fingerY) / zoneHeight
+        if topDepth > 0 { return -min(1, topDepth) * maxSpeed }
+        let bottomDepth = (fingerY - (viewportMaxY - zoneHeight)) / zoneHeight
+        if bottomDepth > 0 { return min(1, bottomDepth) * maxSpeed }
+        return 0
+    }
+
+    /// Offset proposé, ramené dans [-topInset, fin de contenu] — l'auto-scroll
+    /// ne doit jamais produire d'overscroll (qui armerait visuellement le
+    /// pull-to-refresh ou ferait rebondir la liste sous la chip).
+    static func clampedOffset(
+        _ proposed: CGFloat,
+        contentHeight: CGFloat,
+        viewportHeight: CGFloat,
+        topInset: CGFloat,
+        bottomInset: CGFloat
+    ) -> CGFloat {
+        let minOffset = -topInset
+        let maxOffset = max(minOffset, contentHeight + bottomInset - viewportHeight)
+        return min(max(proposed, minOffset), maxOffset)
+    }
+}
+
+/// Pilote l'auto-scroll : boîte de référence VOLONTAIREMENT hors du graphe
+/// SwiftUI (même famille que `SectionFrameRegistry`) — le tick écrit
+/// `contentOffset` directement sur l'UIScrollView hôte, donc aucune
+/// invalidation de la liste ; les GeometryReader des headers republient leurs
+/// frames dans le registre inerte à chaque frame défilée, et `onScrollTick`
+/// re-hit-teste la cible sous le doigt STATIONNAIRE (le DragGesture ne
+/// re-fire pas sans mouvement du doigt).
+@MainActor
+final class ChipAutoScrollDriver {
+    weak var scrollView: UIScrollView?
+    /// Rebranché à chaque verrouillage de la chip, relâché par `stop()` (le
+    /// closure capture la View : le garder à demeure lierait le cycle
+    /// State-box → driver → closure → View → State-box).
+    var onScrollTick: ((CGPoint) -> Void)?
+    /// true tant que le dernier tick a RÉELLEMENT déplacé l'offset — lu par
+    /// `handleChipDrop` pour rendre le drop inerte pendant le défilement
+    /// (voir `ChipDropResolver.action(isAutoScrolling:)`). Retombe à false
+    /// dès que la liste est en butée ou le doigt hors zone.
+    private(set) var isActivelyScrolling = false
+
+    private var timer: Timer?
+    private var fingerLocation: CGPoint = .zero
+
+    func update(fingerLocation location: CGPoint) {
+        fingerLocation = location
+        guard timer == nil else { return }
+        let tick = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            // Timer main-runloop → déjà sur le main thread.
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        RunLoop.main.add(tick, forMode: .common)
+        timer = tick
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        onScrollTick = nil
+        isActivelyScrolling = false
+    }
+
+    private func tick() {
+        guard let scrollView else { return }
+        let viewport = scrollView.convert(scrollView.bounds, to: nil)
+        let speed = ChipAutoScroll.speed(
+            fingerY: fingerLocation.y,
+            viewportMinY: viewport.minY,
+            viewportMaxY: viewport.maxY
+        )
+        guard speed != 0 else {
+            isActivelyScrolling = false
+            return
+        }
+        let clamped = ChipAutoScroll.clampedOffset(
+            scrollView.contentOffset.y + speed / 60.0,
+            contentHeight: scrollView.contentSize.height,
+            viewportHeight: scrollView.bounds.height,
+            topInset: scrollView.adjustedContentInset.top,
+            bottomInset: scrollView.adjustedContentInset.bottom
+        )
+        guard clamped != scrollView.contentOffset.y else {
+            isActivelyScrolling = false
+            return
+        }
+        isActivelyScrolling = true
+        scrollView.contentOffset.y = clamped
+        onScrollTick?(fingerLocation)
+    }
+}
+
+/// UIView invisible plantée dans le contenu du scroll : remonte la hiérarchie
+/// jusqu'à l'UIScrollView hôte et le confie au driver. Seul moyen sous
+/// iOS 16 de piloter l'offset en continu — `ScrollViewReader.scrollTo` ne
+/// sait pas défiler proportionnellement (et rate les ids non instanciés du
+/// LazyVStack), `scrollPosition(y:)` est iOS 17+.
+struct ChipAutoScrollGrabber: UIViewRepresentable {
+    let driver: ChipAutoScrollDriver
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // La chaîne de superviews n'est attachée qu'après le montage — hop
+        // asynchrone pour marcher jusqu'au scroll hôte une fois en place.
+        DispatchQueue.main.async { [weak driver] in
+            var candidate: UIView? = uiView.superview
+            while let current = candidate, !(current is UIScrollView) {
+                candidate = current.superview
+            }
+            driver?.scrollView = candidate as? UIScrollView
+        }
     }
 }
 
@@ -628,7 +823,12 @@ extension ConversationListView {
 // monolithic type was the root cause of a Swift type-metadata instantiation
 // crash at launch on low-memory devices (iPhone XR / iOS 17.6).
 struct ConversationListHeaderOverlay: View {
-    let scrollOffset: CGFloat
+    /// SEUL abonné au relay d'offset : chaque tick de scroll re-rend ce
+    /// header (voulu — il collapse en suivant le doigt) et RIEN d'autre.
+    /// L'ancien `let scrollOffset: CGFloat` forçait le parent à porter
+    /// l'offset dans un @State et ré-exécutait tout son body (~99 rows
+    /// reconstruites + diff Equatable) à ~120 Hz pendant le scroll.
+    @ObservedObject var scrollRelay: ScrollOffsetRelay
     let iPadFeedAction: (() -> Void)?
     let iPadNotificationCount: Int
     let onNotificationsTap: (() -> Void)?
@@ -636,15 +836,16 @@ struct ConversationListHeaderOverlay: View {
     let onNewConversation: (() -> Void)?
     @Binding var showShareLinkSheet: Bool
     /// Compact story trail injected into the header's accessory slot (rendered
-    /// below the title/actions bar, inside the same header surface).
-    var accessory: (() -> AnyView)? = nil
+    /// below the title/actions bar, inside the same header surface). Receives
+    /// the live scroll offset from this header's own render pass.
+    var accessory: ((CGFloat) -> AnyView)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         CollapsibleHeader(
             title: "Meeshy Chats",
-            scrollOffset: scrollOffset,
+            scrollOffset: scrollRelay.offset,
             showBackButton: false,
             titleColor: theme.textPrimary,
             backArrowColor: MeeshyColors.indigo500,
@@ -696,7 +897,7 @@ struct ConversationListHeaderOverlay: View {
                                 showShareLinkSheet = true
                             } label: {
                                 Image(systemName: "link.badge.plus")
-                                    .font(MeeshyFont.relative(18, weight: .semibold))
+                                    .font(.system(size: 18, weight: .semibold))
                                     .foregroundColor(MeeshyColors.indigo500)
                                     .frame(width: 40, height: 40)
                                     .adaptiveGlass(in: Circle(), interactive: true)
@@ -707,7 +908,7 @@ struct ConversationListHeaderOverlay: View {
                                 onNewConversation?()
                             } label: {
                                 Image(systemName: "plus")
-                                    .font(MeeshyFont.relative(18, weight: .bold))
+                                    .font(.system(size: 18, weight: .bold))
                                     .foregroundColor(MeeshyColors.indigo500)
                                     .frame(width: 40, height: 40)
                                     .adaptiveGlass(in: Circle(), interactive: true)
@@ -723,12 +924,12 @@ struct ConversationListHeaderOverlay: View {
                         } label: {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "bell.fill")
-                                    .font(MeeshyFont.relative(18, weight: .semibold))
+                                    .font(.system(size: 18, weight: .semibold))
                                     .foregroundColor(MeeshyColors.indigo500)
 
                                 if iPadNotificationCount > 0 {
                                     Text("\(min(iPadNotificationCount, 99))")
-                                        .font(MeeshyFont.relative(9, weight: .bold))
+                                        .font(.system(size: 9, weight: .bold))
                                         .foregroundColor(.white)
                                         .frame(width: 16, height: 16)
                                         .background(Circle().fill(MeeshyColors.error))
@@ -745,14 +946,20 @@ struct ConversationListHeaderOverlay: View {
                             onSettingsTap()
                         } label: {
                             Image(systemName: "gearshape.fill")
-                                .font(MeeshyFont.relative(18, weight: .semibold))
+                                .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(MeeshyColors.indigo500)
                         }
                         .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Reglages", bundle: .main))
                     }
                 }
             },
-            accessory: accessory
+            // Adapte la closure paramétrée à la slot sans-argument du
+            // CollapsibleHeader : l'offset capturé ici est celui du render
+            // courant du header (seul abonné au relay), donc toujours frais.
+            accessory: accessory.map { build in
+                let offset = scrollRelay.offset
+                return { build(offset) }
+            }
         )
     }
 }
@@ -794,10 +1001,10 @@ struct ConversationListBottomBar: View {
                 .padding(.top, 6)
                 .padding(.bottom, 4)
                 .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
+                    RoundedRectangle(cornerRadius: 24)
                         .fill(.ultraThinMaterial)
                         .overlay(
-                            RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
+                            RoundedRectangle(cornerRadius: 24)
                                 .stroke(theme.inputBorder, lineWidth: 1)
                         )
                         .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)

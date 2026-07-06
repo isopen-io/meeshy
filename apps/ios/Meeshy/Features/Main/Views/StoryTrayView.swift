@@ -410,7 +410,7 @@ private struct MyStoryButton: View {
                             // (cf. MeeshyAvatar.badgeSize .storyTray).
                             // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
                             Text("\u{1F4AD}")
-                                .font(MeeshyFont.relative(20))
+                                .font(.system(size: 20))
                                 .frame(width: 32, height: 32)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
@@ -430,26 +430,30 @@ private struct MyStoryButton: View {
                             viewModel.showStoryComposer = true
                             HapticFeedback.medium()
                         } label: {
-                            // x2 — user request 2026-05-27 « augmente le (+)
-                            // d'ajouter une story ». Avant : font 11 / frame
-                            // 20×20 / offset (-2,-2). Maintenant doublé pour
-                            // matcher la taille trail (avatars passés à 88pt
-                            // en ab691abaf).
-                            // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
+                            // User request 2026-07-04 : le (+) était COUPÉ en
+                            // haut du tray — l'offset négatif (-4,-4) le
+                            // faisait déborder du cadre de la cellule, et le
+                            // conteneur scrollable rognait tout dépassement.
+                            // Le badge est désormais ENTIÈREMENT contenu dans
+                            // les bounds de l'avatar (topLeading sans offset,
+                            // 34pt au lieu de 40) : plus rien ne peut être
+                            // rogné, quel que soit le clipping parent.
+                            // Glyphe dans un cercle de dimension FIXE : figé
+                            // (déborderait s'il scalait, doctrine 86i) ; le
+                            // bouton porte le libellé.
                             Image(systemName: "plus")
-                                .font(MeeshyFont.relative(22, weight: .bold))
+                                .font(.system(size: 19, weight: .bold))
                                 .foregroundStyle(Color.white)
-                                .frame(width: 40, height: 40)
+                                .frame(width: 34, height: 34)
                                 .background(
                                     Circle()
                                         .fill(MeeshyColors.brandGradient)
-                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 3))
+                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2.5))
                                 )
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(String(localized: "story.tray.addStory",
                                                    defaultValue: "Ajouter une story"))
-                        .offset(x: -4, y: -4)
                     }
                 }
                 .overlay {
@@ -521,7 +525,7 @@ private struct StoryUploadOverlay: View {
 
                 // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
-                    .font(MeeshyFont.relative(14, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
             } else {
                 Circle()
@@ -536,7 +540,7 @@ private struct StoryUploadOverlay: View {
 
                 // Texte dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Text("\(Int(upload.progress * 100))%")
-                    .font(MeeshyFont.relative(12, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
             }
         }
@@ -630,7 +634,12 @@ struct PinnedStoryTrailBand: View {
 
     private func band(groups: [StoryGroup]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 12) {
+            // `LazyHStack` — même fix que F5 sur la grande trail : un `HStack`
+            // montait TOUS les groupes (avatars `.storyTrayCompact` animés en
+            // spring repeatForever) à CHAQUE traversée du seuil de reveal du
+            // scroll, y compris hors écran. Lazy = seuls les ~8 anneaux
+            // visibles vivent (et animent).
+            LazyHStack(alignment: .top, spacing: 12) {
                 addStoryButton
                 ForEach(groups, id: \.id) { group in
                     StoryRingCell(
@@ -672,7 +681,7 @@ struct PinnedStoryTrailBand: View {
         } label: {
             // Glyphe dans un cercle de dimension fixe 44×44 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
             Image(systemName: "plus")
-                .font(MeeshyFont.relative(20, weight: .bold))
+                .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Color.white)
                 .frame(width: 44, height: 44)
                 .background(

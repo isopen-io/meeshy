@@ -215,7 +215,7 @@ struct OnboardingView: View {
                         .frame(width: 120, height: 120)
                     } else {
                         Image(systemName: page.icon)
-                            .font(MeeshyFont.relative(80, weight: .light))
+                            .font(.system(size: 80, weight: .light))
                             .foregroundStyle(iconGradient(for: page.id))
                             .accessibilityHidden(true)
                     }

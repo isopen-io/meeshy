@@ -128,8 +128,13 @@ class Synthesizer:
             if len(current_segment) + len(sentence) + 1 <= max_chars:
                 current_segment = (current_segment + " " + sentence).strip()
             else:
-                # Sauvegarder le segment actuel s'il n'est pas vide
-                if current_segment and len(current_segment) >= MIN_SEGMENT_CHARS:
+                # La phrase ne tient pas dans le segment courant. On DOIT vider ce
+                # dernier avant de l'écraser plus bas — même s'il est plus court que
+                # MIN_SEGMENT_CHARS : ne pas le sauvegarder ici le perdrait
+                # silencieusement (texte absent de l'audio synthétisé). Un segment
+                # court est un moindre mal ; la fusion du tout dernier segment court
+                # reste gérée en fin de fonction.
+                if current_segment:
                     segments.append(current_segment)
                     current_segment = ""
 
@@ -147,7 +152,9 @@ class Synthesizer:
                             if current_segment.startswith(", "):
                                 current_segment = current_segment[2:]
                         else:
-                            if current_segment and len(current_segment) >= MIN_SEGMENT_CHARS:
+                            # Idem : vider tout buffer non vide avant de l'écraser,
+                            # sinon un fragment court serait perdu.
+                            if current_segment:
                                 segments.append(current_segment)
                             current_segment = part
 

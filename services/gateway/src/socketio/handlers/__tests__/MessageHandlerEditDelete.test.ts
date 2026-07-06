@@ -151,6 +151,7 @@ function makePrisma(overrides: Record<string, unknown> = {}): jest.Mocked<Prisma
       findUnique: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     user: {
       findUnique: jest.fn(),
@@ -336,40 +337,40 @@ describe('MessageHandler — handleMessageEdit', () => {
       success: true,
       data: { messageId: VALID_MSG_ID, content: '' },
     });
-    (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({
-      id: VALID_MSG_ID, conversationId: VALID_CONV_ID, content: '',
-      isEdited: true, editedAt: new Date(), originalLanguage: 'fr',
-      sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null },
-    });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: '' }, callback);
 
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
-  it('updates message in database on success', async () => {
+  it('updates message in database on success, guarded against a concurrent delete', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
-    (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({
-      id: VALID_MSG_ID, conversationId: VALID_CONV_ID, content: 'Edited content',
-      isEdited: true, editedAt: new Date(), originalLanguage: 'fr',
-      sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null },
-    });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
 
-    expect(deps.prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: VALID_MSG_ID },
+    expect(deps.prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: VALID_MSG_ID, deletedAt: null },
       data: expect.objectContaining({ content: 'Edited content', isEdited: true, translations: null }),
     }));
   });
 
+  it('rejects the edit and does not broadcast when the message was deleted between read and write', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 0 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: expect.stringContaining('not found') })
+    );
+    expect(deps.io.to).not.toHaveBeenCalled();
+  });
+
   it('broadcasts MESSAGE_EDITED to conversation room on success', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
-    (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({
-      id: VALID_MSG_ID, conversationId: VALID_CONV_ID, content: 'Edited content',
-      isEdited: true, editedAt: new Date(), originalLanguage: 'fr',
-      sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null },
-    });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
 
@@ -384,11 +385,7 @@ describe('MessageHandler — handleMessageEdit', () => {
 
   it('calls callback with success and messageId on success', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
-    (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({
-      id: VALID_MSG_ID, conversationId: VALID_CONV_ID, content: 'Edited',
-      isEdited: true, editedAt: new Date(), originalLanguage: 'fr',
-      sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null },
-    });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited' }, callback);
 
@@ -403,11 +400,7 @@ describe('MessageHandler — handleMessageEdit', () => {
       data: { messageId: VALID_MSG_ID, content: 'Edited' },
     });
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
-    (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({
-      id: VALID_MSG_ID, conversationId: VALID_CONV_ID, content: 'Edited',
-      isEdited: true, editedAt: new Date(), originalLanguage: 'fr',
-      sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null },
-    });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited' }, callback);
 
@@ -448,11 +441,7 @@ describe('MessageHandler — handleMessageEdit', () => {
     });
 
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
-    (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({
-      id: VALID_MSG_ID, conversationId: VALID_CONV_ID, content: 'Edited content',
-      isEdited: true, editedAt: new Date(), originalLanguage: 'fr',
-      sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null },
-    });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
     (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
       { id: PARTICIPANT_ID, userId: USER_ID },
       { id: 'part-offline-edit', userId: offlineUserId },

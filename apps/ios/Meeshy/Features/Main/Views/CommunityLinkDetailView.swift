@@ -41,8 +41,8 @@ struct CommunityLinkDetailView: View {
                 .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(20).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
-            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
+            .overlay(RoundedRectangle(cornerRadius: 20)
                 .stroke(MeeshyColors.communityAccent.opacity(0.2), lineWidth: 1)))
         .accessibilityElement(children: .combine)
     }

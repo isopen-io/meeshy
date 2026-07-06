@@ -54,6 +54,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_EDITED: 'message:edited',
     MESSAGE_DELETED: 'message:deleted',
     READ_STATUS_UPDATED: 'read-status:updated',
+    MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   },
   ROOMS: {
@@ -185,6 +186,8 @@ async function buildApp(opts: {
     message: {
       findFirst: jest.fn().mockResolvedValue(opts.messageOverride ?? mockMessage),
       update: jest.fn().mockResolvedValue({ ...mockMessage, isEdited: true }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ ...mockMessage, isEdited: true }),
     },
     participant: {
       findFirst: jest.fn().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID }),
@@ -369,6 +372,7 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockEmit).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
+    expect(mockEmit).toHaveBeenCalledWith('message:read-status-updated', expect.any(Object));
   });
 });
 

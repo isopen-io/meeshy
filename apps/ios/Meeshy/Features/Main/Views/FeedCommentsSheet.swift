@@ -379,7 +379,7 @@ struct CommentsSheetView: View {
                     } label: {
                         // Figé : chrome xmark dans un cadre tap fixe 32×32 (doctrine 82i).
                         Image(systemName: "xmark")
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
@@ -733,10 +733,10 @@ struct CommentsSheetView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(theme.border(tint: accentColor, intensity: 0.2), lineWidth: 1)
                 )
         )
@@ -770,7 +770,7 @@ struct CommentsSheetView: View {
             } label: {
                 // Figé : chrome xmark dans un cadre tap fixe 24×24 (doctrine 82i).
                 Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(10, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
@@ -1505,7 +1505,7 @@ struct CommentRowView: View, Equatable {
                         // Figé : indicateur décoratif (accessibilityHidden), géométrie
                         // fixe alignée sur la rangée de drapeaux d'état ci-dessus.
                         Image(systemName: "translate")
-                            .font(MeeshyFont.relative(10, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundColor(MeeshyColors.indigo400)
                             .accessibilityHidden(true)
                     }

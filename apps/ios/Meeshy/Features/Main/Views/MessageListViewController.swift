@@ -1231,7 +1231,7 @@ private struct TypingIndicatorBubble: View {
             HStack(spacing: 6) {
                 if !label.isEmpty {
                     Text(label)
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
                         .lineLimit(1)
                 }

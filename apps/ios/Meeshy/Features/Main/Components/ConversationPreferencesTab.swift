@@ -406,10 +406,10 @@ struct ConversationPreferencesTab: View {
                 content()
             }
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(theme.surfaceGradient(tint: color))
                     .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(theme.border(tint: color), lineWidth: 1)
                     )
             )

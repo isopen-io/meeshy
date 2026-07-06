@@ -77,7 +77,7 @@ struct BubbleExpandableText: View, Equatable {
                 // 3. `.textSelection(.disabled)` explicite sur le bouton pour
                 //    qu'un tap imprécis ne déclenche pas le mode sélection.
                 Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(textColor.opacity(0.6))
                     // Hit-area élargie à 44pt (HIG) sans gonfler visuellement le texte.
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)

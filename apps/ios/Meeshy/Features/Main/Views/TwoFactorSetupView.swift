@@ -78,7 +78,7 @@ struct TwoFactorSetupView: View {
     private func secretView(_ setup: TwoFactorSetup) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "qrcode")
-                .font(MeeshyFont.relative(80))
+                .font(.system(size: 80))
                 .foregroundColor(tfaColor)
                 .padding(.top, 20)
                 .accessibilityHidden(true)
@@ -101,7 +101,7 @@ struct TwoFactorSetupView: View {
                     .cornerRadius(12)
             } else {
                 Image(systemName: "exclamationmark.triangle")
-                    .font(MeeshyFont.relative(40))
+                    .font(.system(size: 40))
                     .foregroundColor(MeeshyColors.warning)
                     .frame(width: 200, height: 200)
                     .accessibilityHidden(true)
@@ -174,7 +174,7 @@ struct TwoFactorSetupView: View {
     private func codeEntryView(_ setup: TwoFactorSetup) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "lock.shield.fill")
-                .font(MeeshyFont.relative(50))
+                .font(.system(size: 50))
                 .foregroundColor(tfaColor)
                 .padding(.top, 20)
                 .accessibilityHidden(true)
@@ -249,7 +249,7 @@ struct TwoFactorSetupView: View {
     private func backupCodesView(_ codes: [String]) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.shield.fill")
-                .font(MeeshyFont.relative(50))
+                .font(.system(size: 50))
                 .foregroundColor(MeeshyColors.success)
                 .padding(.top, 20)
                 .accessibilityHidden(true)
@@ -338,7 +338,7 @@ struct TwoFactorSetupView: View {
     private func errorView(_ message: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(MeeshyFont.relative(50))
+                .font(.system(size: 50))
                 .foregroundColor(MeeshyColors.error)
                 .padding(.top, 40)
                 .accessibilityHidden(true)
@@ -416,7 +416,7 @@ struct TwoFactorDisableView: View {
 
                 VStack(spacing: 20) {
                     Image(systemName: "shield.slash.fill")
-                        .font(MeeshyFont.relative(50))
+                        .font(.system(size: 50))
                         .foregroundColor(MeeshyColors.error)
                         .padding(.top, 40)
                         .accessibilityHidden(true)
@@ -563,7 +563,7 @@ struct TwoFactorBackupCodesView: View {
                         } else if let error = viewModel.error {
                             VStack(spacing: 12) {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(MeeshyFont.relative(40))
+                                    .font(.system(size: 40))
                                     .foregroundColor(MeeshyColors.error)
                                     .padding(.top, 40)
                                     .accessibilityHidden(true)
@@ -585,7 +585,7 @@ struct TwoFactorBackupCodesView: View {
                             }
                         } else {
                             Image(systemName: "key.fill")
-                                .font(MeeshyFont.relative(40))
+                                .font(.system(size: 40))
                                 .foregroundColor(tfaColor)
                                 .padding(.top, 20)
                                 .accessibilityHidden(true)
@@ -666,7 +666,7 @@ struct TwoFactorBackupCodesView: View {
     private var codeEntryStep: some View {
         VStack(spacing: 16) {
             Image(systemName: "lock.shield.fill")
-                .font(MeeshyFont.relative(50))
+                .font(.system(size: 50))
                 .foregroundColor(tfaColor)
                 .padding(.top, 40)
                 .accessibilityHidden(true)

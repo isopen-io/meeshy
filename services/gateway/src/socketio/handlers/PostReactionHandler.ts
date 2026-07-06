@@ -269,11 +269,12 @@ export class PostReactionHandler {
       });
 
       if (!removed) {
-        const errorResponse: SocketIOResponse<unknown> = {
-          success: false,
-          error: 'Reaction not found',
-        };
-        if (callback) callback(errorResponse);
+        // Idempotent: the reaction is already absent — the caller's desired
+        // end-state is achieved. Reply success (no broadcast, nothing changed)
+        // instead of an error, which the client would treat as a failed un-react
+        // and roll the optimistic removal back, re-showing a reaction that is
+        // gone. Mirrors ReactionHandler.handleReactionRemove (message reactions).
+        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
         return;
       }
 

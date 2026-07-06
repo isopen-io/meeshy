@@ -424,16 +424,18 @@ const CALL_LABEL: Record<NotificationLanguage, CallMap> = {
   'zh-Hans': { audio: '语音通话', video: '视频通话' },
 };
 
-// Contexte de reaction.commentVerbose : " sur le post de {author}" / " sur la story de {author}"
-const COMMENT_CONTEXT: Record<NotificationLanguage, { story: string; post: string }> = {
-  fr: { story: ' sur la story de {author}', post: ' sur le post de {author}' },
-  en: { story: ' on {author}’s story', post: ' on {author}’s post' },
-  es: { story: ' en la historia de {author}', post: ' en la publicación de {author}' },
-  pt: { story: ' na story de {author}', post: ' na publicação de {author}' },
-  de: { story: ' in der Story von {author}', post: ' im Beitrag von {author}' },
-  it: { story: ' nella storia di {author}', post: ' nel post di {author}' },
-  ar: { story: ' على قصة {author}', post: ' على منشور {author}' },
-  'zh-Hans': { story: '（在 {author} 的快拍中）', post: '（在 {author} 的帖子中）' },
+// Contexte de reaction.commentVerbose : " sur le <entité> de {author}", entité-conscient.
+// Couvre les 5 NotificationPostKind — une réaction à un commentaire sur un REEL/STATUS
+// ne s'effondre plus vers « post » (symétrie avec reaction.post qui porte déjà le postType).
+const COMMENT_CONTEXT: Record<NotificationLanguage, ObjMap> = {
+  fr: { POST: ' sur le post de {author}', STORY: ' sur la story de {author}', MOOD: ' sur l’humeur de {author}', STATUS: ' sur le statut de {author}', REEL: ' sur le réel de {author}' },
+  en: { POST: ' on {author}’s post', STORY: ' on {author}’s story', MOOD: ' on {author}’s mood', STATUS: ' on {author}’s status', REEL: ' on {author}’s reel' },
+  es: { POST: ' en la publicación de {author}', STORY: ' en la historia de {author}', MOOD: ' en el estado de ánimo de {author}', STATUS: ' en el estado de {author}', REEL: ' en el reel de {author}' },
+  pt: { POST: ' na publicação de {author}', STORY: ' na story de {author}', MOOD: ' no humor de {author}', STATUS: ' no status de {author}', REEL: ' no reel de {author}' },
+  de: { POST: ' im Beitrag von {author}', STORY: ' in der Story von {author}', MOOD: ' in der Stimmung von {author}', STATUS: ' im Status von {author}', REEL: ' im Reel von {author}' },
+  it: { POST: ' nel post di {author}', STORY: ' nella storia di {author}', MOOD: ' nello stato d’animo di {author}', STATUS: ' nello stato di {author}', REEL: ' nel reel di {author}' },
+  ar: { POST: ' على منشور {author}', STORY: ' على قصة {author}', MOOD: ' على مزاج {author}', STATUS: ' على حالة {author}', REEL: ' على ريل {author}' },
+  'zh-Hans': { POST: '（在 {author} 的帖子中）', STORY: '（在 {author} 的快拍中）', MOOD: '（在 {author} 的心情中）', STATUS: '（在 {author} 的状态中）', REEL: '（在 {author} 的短视频中）' },
 };
 
 const SUPPORTED = new Set<string>(NOTIFICATION_LANGUAGES);
@@ -484,8 +486,10 @@ export function notificationString(
   if (params.callType) tokens.callLabel = CALL_LABEL[L][params.callType];
 
   if (key === 'reaction.commentVerbose') {
+    // postType (entité réelle) prime ; `isStory` reste un repli legacy binaire.
+    const kind: NotificationPostKind = params.postType ?? (params.isStory ? 'STORY' : 'POST');
     tokens.context = params.author
-      ? interpolate(COMMENT_CONTEXT[L][params.isStory ? 'story' : 'post'], { author: params.author })
+      ? interpolate(COMMENT_CONTEXT[L][kind], { author: params.author })
       : '';
   }
 

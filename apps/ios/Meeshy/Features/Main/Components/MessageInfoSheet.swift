@@ -637,10 +637,10 @@ struct MessageInfoSheet: View {
     // MARK: - Section Background
 
     private var sectionBackground: some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
             .fill(.ultraThinMaterial)
             .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(
                         isDark
                             ? Color.white.opacity(0.03)
@@ -648,7 +648,7 @@ struct MessageInfoSheet: View {
                     )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
                         LinearGradient(
                             colors: [

@@ -250,7 +250,7 @@ struct ConversationMediaGalleryView: View {
         } else {
             // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
             Image(systemName: "photo")
-                .font(MeeshyFont.relative(48))
+                .font(.system(size: 48))
                 .foregroundColor(.white.opacity(0.3))
                 .accessibilityHidden(true)
         }
@@ -281,7 +281,7 @@ struct ConversationMediaGalleryView: View {
                     // Chrome : glyphe `xmark` figé (cadre tap = icône + padding
                     // par défaut ≈ 60pt, doctrine 82i) — ne pas scaler.
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(28))
+                        .font(.system(size: 28))
                         .foregroundColor(.white.opacity(0.8))
                         .padding()
                 }
@@ -643,17 +643,17 @@ private struct GalleryVideoPage: View {
         switch availability {
         case .ready:
             Image(systemName: "play.fill")
-                .font(MeeshyFont.relative(22, weight: .bold))
+                .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: 2)
         case .needsDownload:
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(MeeshyFont.relative(20, weight: .bold))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
                 if attachment.fileSize > 0 {
                     Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
-                        .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.9))
                 }
             }

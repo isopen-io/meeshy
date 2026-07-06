@@ -181,10 +181,10 @@ struct DataStorageView: View {
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+        RoundedRectangle(cornerRadius: 16)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }

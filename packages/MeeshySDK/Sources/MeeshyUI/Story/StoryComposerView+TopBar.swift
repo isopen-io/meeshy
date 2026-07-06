@@ -9,10 +9,19 @@ import MeeshySDK
 // MARK: - StoryComposerView + TopBar
 
 extension StoryComposerView {
-    /// Top bar hides during free canvas manipulation (zoomed, no tool/selection)
-    /// to reveal canvas controls underneath. Reappears when activating a tool or selecting media.
+    /// C-DIR2 (d)+(c) : le header suit EXACTEMENT les conditions des FABs —
+    /// visible uniquement canvas plein écran au repos (aucun panneau, aucune
+    /// édition texte/dessin, pas de zoom). L'ancienne règle le gardait affiché
+    /// pendant l'édition (`|| activeTool != nil || selectedElementId != nil`),
+    /// à rebours de « n'afficher que l'utile à l'instant t ».
     var showTopBar: Bool {
-        (!viewModel.isCanvasZoomed && areFabsVisible) || viewModel.activeTool != nil || viewModel.selectedElementId != nil
+        ComposerChromePolicy.fullChromeVisible(
+            fabsVisible: areFabsVisible,
+            bandHidden: bandStateMachine.state == .hidden,
+            isTextEditing: viewModel.textEditingMode != .inactive,
+            isDrawingActive: viewModel.drawingEditingMode.isActive,
+            isViewportZoomed: viewModel.isCanvasZoomed
+        )
     }
 
     // MARK: - Top Bar
@@ -32,11 +41,34 @@ extension StoryComposerView {
             // right of Publish.
             AdaptiveGlassContainer(spacing: 6) {
                 HStack(spacing: 6) {
+                    // C9 Inc.4 — n'afficher que l'utile : les commandes
+                    // d'annulation n'existent à l'écran QUE quand la
+                    // trajectoire le permet (canUndo/canRedo).
+                    if viewModel.canUndoGlobal {
+                        historyButton(
+                            icon: "arrow.uturn.backward",
+                            label: String(localized: "story.composer.undo",
+                                          defaultValue: "Annuler", bundle: .module),
+                            action: performUndo
+                        )
+                    }
+                    if viewModel.canRedoGlobal {
+                        historyButton(
+                            icon: "arrow.uturn.forward",
+                            label: String(localized: "story.composer.redo",
+                                          defaultValue: "Rétablir", bundle: .module),
+                            action: performRedo
+                        )
+                    }
                     visibilityMenu
                     previewButton
                     publishButton
                     overflowMenu
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                           value: viewModel.canUndoGlobal)
+                .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                           value: viewModel.canRedoGlobal)
             }
             .padding(.trailing, 16)
         }
@@ -130,6 +162,38 @@ extension StoryComposerView {
         }
     }
 
+    // MARK: - Undo/redo global (C9 Inc.4)
+
+    func historyButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .adaptiveGlass(in: Circle())
+                .contentShape(Circle())
+        }
+        .transition(.scale.combined(with: .opacity))
+        .accessibilityLabel(label)
+    }
+
+    /// L'application d'un snapshot est VM-side ; les side-effects de
+    /// présentation (état canvas local, timeline chargée) sont View-side —
+    /// même séquence que la sélection d'une vignette du strip.
+    func performUndo() {
+        guard viewModel.undoGlobal() else { return }
+        restoreCanvas(from: viewModel.currentSlide)
+        viewModel.loadCurrentSlideIntoTimeline()
+        HapticFeedback.light()
+    }
+
+    func performRedo() {
+        guard viewModel.redoGlobal() else { return }
+        restoreCanvas(from: viewModel.currentSlide)
+        viewModel.loadCurrentSlideIntoTimeline()
+        HapticFeedback.light()
+    }
+
     var overflowMenu: some View {
         Menu {
             // Slide tools — le filtre GLOBAL a été retiré : les filtres
@@ -156,7 +220,7 @@ extension StoryComposerView {
             Divider()
             Button(role: .destructive) {
                 // Bug fix: viewModel.reset() wipes ViewModel data (slides, effects,
-                // images), but composer-local @State (stickerObjects, selectedFilter,
+                // images), but composer-local @State (selectedFilter,
                 // openingEffect, closingEffect, selectedImage, audio inputs, drawing
                 // canvas, picker scratch) survives. The canvasSyncFingerprint chain
                 // (.onChange → syncCurrentSlideEffects → buildEffects) re-injects

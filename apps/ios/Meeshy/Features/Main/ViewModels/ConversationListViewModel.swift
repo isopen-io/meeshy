@@ -724,7 +724,16 @@ class ConversationListViewModel: ObservableObject {
                 // that carries lastMessageAt, so we want the row data fresh
                 // BEFORE we bump it to position 0 (otherwise the bumped
                 // row would render stale title for one frame).
-                if let title = event.title { self.conversations[index].title = title }
+                // Un DM n'est jamais renommable : son `title` client est le
+                // nom du participant, dérivé à la conversion REST
+                // (`toConversation` écarte le titre DB). Le payload socket
+                // porte le titre BRUT — le greffer sur un DM écrase le nom
+                // affiché (« sandra raveloson » → « Sany » au premier
+                // pin/mute, vu 2026-07-04). Greffe réservée aux
+                // conversations renommables.
+                if let title = event.title, self.conversations[index].type != .direct {
+                    self.conversations[index].title = title
+                }
                 if let description = event.description { self.conversations[index].description = description }
                 if let avatar = event.avatar { self.conversations[index].avatar = avatar }
                 if let banner = event.banner { self.conversations[index].banner = banner }
@@ -744,7 +753,7 @@ class ConversationListViewModel: ObservableObject {
                 // the row shows the latest message without waiting for the
                 // next full sync (lastMessageTranslations arrive separately).
                 if let msgId = event.lastMessageId { self.conversations[index].lastMessageId = msgId }
-                if let preview = event.lastMessagePreview { self.conversations[index].lastMessagePreview = preview }
+                if let preview = event.lastMessagePreview { self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated }
 
                 // Bump the row to the top when the gateway tells us a new
                 // message advanced lastMessageAt. We compare strictly

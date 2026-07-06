@@ -17,6 +17,7 @@ import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.NotificationApi
 import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
@@ -87,4 +88,7 @@ internal object NetworkModule {
 
     @Provides
     fun providesMediaApi(api: MeeshyApi): MediaApi = api.media
+
+    @Provides
+    fun providesPreferencesApi(api: MeeshyApi): PreferencesApi = api.preferences
 }

@@ -61,6 +61,7 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
+import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -102,11 +103,17 @@ export class MessageHandler {
   /**
    * Short-lived in-process cache for (userId, conversationId) → participantId lookups.
    * Avoids a DB findFirst query on every message send for active users.
-   * TTL: 5 minutes. Invalidated on conversation leave / kick events via
+   * TTL: 5 minutes, size-bounded (BoundedTtlCache) so a long-running gateway
+   * process doesn't accumulate one entry per (user, conversation) pair forever.
+   * Also invalidated on conversation leave / kick events via
    * `invalidateParticipantCache`. Key: `${userId}:${conversationId}`.
    */
-  private participantIdCache = new Map<string, { participantId: string; expiresAt: number }>();
+  private static readonly PARTICIPANT_ID_CACHE_MAX = 10_000;
   private readonly PARTICIPANT_CACHE_TTL_MS = 5 * 60 * 1000;
+  private participantIdCache = new BoundedTtlCache<string, string>({
+    maxSize: MessageHandler.PARTICIPANT_ID_CACHE_MAX,
+    ttlMs: this.PARTICIPANT_CACHE_TTL_MS,
+  });
 
   constructor(deps: MessageHandlerDependencies) {
     this.io = deps.io;
@@ -311,7 +318,7 @@ export class MessageHandler {
         });
 
         conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], null,
+          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], message.originalLanguage ?? null,
           message.messageType || 'text'
         ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
@@ -515,7 +522,7 @@ export class MessageHandler {
           return 'file';
         });
         conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, null,
+          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, message.originalLanguage ?? null,
           message.messageType || 'text'
         ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
@@ -599,24 +606,38 @@ export class MessageHandler {
         return;
       }
 
-      const updatedMessage = await this.prisma.message.update({
-        where: { id: validated.messageId },
+      // Optimistic-concurrency guard: only write while the message is still
+      // non-deleted. A `message:delete` landing between the read above and
+      // this write would otherwise resurrect the row with edited content
+      // (unconditional `update` by id succeeds regardless of `deletedAt`),
+      // and the gateway would broadcast MESSAGE_EDITED for a message clients
+      // already removed. Mirrors the guarded `updateMany` used by
+      // handleMessageDelete's lastMessageAt recompute.
+      const editedAt = new Date();
+      const editResult = await this.prisma.message.updateMany({
+        where: { id: validated.messageId, deletedAt: null },
         data: {
           content: validated.content.trim(),
           isEdited: true,
-          editedAt: new Date(),
+          editedAt,
           translations: null,
         },
-        select: {
-          id: true,
-          conversationId: true,
-          content: true,
-          isEdited: true,
-          editedAt: true,
-          originalLanguage: true,
-          sender: { select: { id: true, userId: true, displayName: true, avatar: true } },
-        },
       });
+
+      if (editResult.count === 0) {
+        this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
+        return;
+      }
+
+      const updatedMessage = {
+        id: message.id,
+        conversationId: message.conversationId,
+        content: validated.content.trim(),
+        isEdited: true,
+        editedAt,
+        originalLanguage: message.originalLanguage,
+        sender: message.sender,
+      };
 
       // Trigger async retranslation — fire-and-forget, non-blocking
       const retranslationPayload = {
@@ -1195,6 +1216,7 @@ export class MessageHandler {
       emitter = emitter.to(userRoom);
     }
     emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+    emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
     handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms: [...seen], deliveredCount: summary.deliveredCount });
   }
 
@@ -1241,8 +1263,8 @@ export class MessageHandler {
 
     const cacheKey = `${userId}:${conversationId}`;
     const cached = this.participantIdCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.participantId;
+    if (cached) {
+      return cached;
     }
 
     const result = await resolveParticipant({
@@ -1253,10 +1275,7 @@ export class MessageHandler {
     });
 
     if (result?.participantId) {
-      this.participantIdCache.set(cacheKey, {
-        participantId: result.participantId,
-        expiresAt: Date.now() + this.PARTICIPANT_CACHE_TTL_MS,
-      });
+      this.participantIdCache.set(cacheKey, result.participantId);
     }
 
     return result?.participantId ?? null;
