@@ -212,6 +212,73 @@ describe('CallStore', () => {
 
         expect(useCallStore.getState().currentCall).toBeNull();
       });
+
+      it('buffers a participant-joined event that arrives before currentCall exists, and merges it in once setCurrentCall claims that callId (initiator ack race, 2026-07-06)', () => {
+        const racingParticipant: CallParticipant = {
+          id: 'participant-racing',
+          callSessionId: 'call-123',
+          name: 'Racing Callee',
+          isAudioEnabled: true,
+          isVideoEnabled: true,
+          isSpeaking: false,
+          joinedAt: new Date(),
+        } as any;
+
+        act(() => {
+          // call:participant-joined arrives first — currentCall is still null.
+          useCallStore.getState().addParticipant(racingParticipant);
+        });
+        expect(useCallStore.getState().currentCall).toBeNull();
+
+        act(() => {
+          // The initiator's own call:initiate ack lands afterwards, with an
+          // empty participants array (use-video-call.ts's synthetic object).
+          useCallStore.getState().setCurrentCall({ ...mockCallSession, id: 'call-123', participants: [] });
+        });
+
+        const state = useCallStore.getState();
+        expect(state.currentCall?.participants).toHaveLength(1);
+        expect(state.currentCall?.participants[0].id).toBe('participant-racing');
+      });
+
+      it('does not leak a buffered participant into an unrelated call with a different id', () => {
+        const racingParticipant: CallParticipant = {
+          id: 'participant-racing',
+          callSessionId: 'call-never-claimed',
+          name: 'Racing Callee',
+          isAudioEnabled: true,
+          isVideoEnabled: true,
+          isSpeaking: false,
+          joinedAt: new Date(),
+        } as any;
+
+        act(() => {
+          useCallStore.getState().addParticipant(racingParticipant);
+          useCallStore.getState().setCurrentCall(mockCallSession); // id 'call-123' — different callId
+        });
+
+        expect(useCallStore.getState().currentCall?.participants).toEqual(mockCallSession.participants);
+      });
+
+      it('clears buffered participant-joined events on reset', () => {
+        const racingParticipant: CallParticipant = {
+          id: 'participant-racing',
+          callSessionId: 'call-123',
+          name: 'Racing Callee',
+          isAudioEnabled: true,
+          isVideoEnabled: true,
+          isSpeaking: false,
+          joinedAt: new Date(),
+        } as any;
+
+        act(() => {
+          useCallStore.getState().addParticipant(racingParticipant);
+          useCallStore.getState().reset();
+          useCallStore.getState().setCurrentCall(mockCallSession); // same id 'call-123'
+        });
+
+        expect(useCallStore.getState().currentCall?.participants).toEqual(mockCallSession.participants);
+      });
     });
 
     describe('removeParticipant', () => {

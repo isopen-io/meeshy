@@ -1,51 +1,39 @@
 # Iteration 115 — Plan d'implémentation (2026-07-06)
 
 ## Objectives
-Corriger **F85** : `Synthesizer._segment_text` (`services/translator/src/services/tts/synthesizer.py`)
-perd silencieusement une phrase/fragment court (< `MIN_SEGMENT_CHARS`) quand il précède une phrase trop
-grande pour être fusionnée → mots absents de l'audio TTS synthétisé.
+Corriger F84 : la liste de conversations V2 doit afficher le nom canonique de l'autre participant
+(`displayName` > `firstName + lastName` > `username`) via le SSOT `getUserDisplayName`, au lieu d'une
+chaîne inline qui préférait `username` et ignorait `lastName`.
 
 ## Affected modules
-- `services/translator/src/services/tts/synthesizer.py` — `_segment_text` (2 sites d'écrasement).
-- `services/translator/tests/test_20_synthesizer_segmentation.py` — 5 tests neufs.
-- Caller (hérité, inchangé) : `synthesize_with_voice` → `tts_service.py` (pipeline audio long-texte).
+- `apps/web/utils/v2/transform-conversation.ts` (import + 1 chaîne remplacée + commentaire).
+- `apps/web/utils/v2/__tests__/transform-conversation.test.ts` (5 tests neufs).
+- `docs/routine/analyses/2026-07-06-iteration-115-analyse.md`, ce plan.
 
 ## Implementation phases
-1. **RED** — repro Python verbatim : `"Hi. " + "A"*998 + "."` → `"Hi"` absent. ✅
-2. **GREEN** — sites 1 (ligne ~132) & 2 (ligne ~150) : `if current_segment:` avant l'écrasement
-   (vider tout buffer non vide) + commentaire. ✅
-3. **Test** — `test_20_synthesizer_segmentation.py` (fragment court préservé, ≤ max_chars, fragment
-   entre deux longues, texte normal sans perte, texte court). Instance via `__new__`, skip si torch
-   absent. ✅
-4. **Validation** — repro corrigé GREEN + non-régression 60-phrases ; `py_compile` OK. Test pytest via
-   CI translator. ✅
+1. **RED** — tests de priorité (`firstName+lastName` avant `username` ; `firstName` seul) échouant sur la
+   chaîne inline.
+2. **GREEN** — `getUserDisplayNameOrNull(otherUser)` en tête de la cascade, fallbacks participant préservés.
+3. **Validation** — suite `transform-conversation.test.ts`, puis suite web, puis CI.
 
 ## Dependencies
-Aucune. Aucun changement de signature/contrat.
+`bun install` (déjà fait). Test jsdom next/jest ; `Conversation` importé en `import type` (erasé).
 
 ## Estimated risks
-Très faible. Au point d'écrasement le buffer est grand en cas normal (comportement inchangé) ; court
-seulement dans le cas de bug (désormais préservé). Chaque segment reste ≤ max_chars.
+Très faibles : `getUserDisplayNameOrNull` renvoie `null` sur user vide → cascade de fallbacks intacte.
 
 ## Rollback strategy
-Réversible : restaurer la garde `and len(current_segment) >= MIN_SEGMENT_CHARS` aux deux sites.
+Revert du commit (changement isolé, sans schéma ni migration).
 
 ## Validation criteria
-- [x] RED prouvé (repro Python verbatim).
-- [x] GREEN + non-régression (repro).
-- [x] `py_compile` source + test.
-- [ ] CI « Test Python (translator) » verte (exécution du test 20).
+- 5/5 tests neufs verts ; RED prouvé (2 échecs) sur l'ancien code.
+- CI web verte.
 
 ## Completion status
-**COMPLET** (côté implémentation + repro). Validation pytest déléguée à la CI (sandbox sans torch).
-
-## Progress tracking
-- [x] Analyse (`2026-07-06-iteration-115-analyse.md`).
-- [x] Plan (ce fichier).
-- [x] Fix `synthesizer.py` (2 sites).
-- [x] Test `test_20_synthesizer_segmentation.py`.
-- [x] RED→GREEN repro + `py_compile`.
-- [ ] Commit + push + PR + CI verte.
+- [x] Fix source appliqué.
+- [x] Tests neufs écrits + RED/GREEN prouvés.
+- [ ] Push + PR.
 
 ## Future improvements
-- **F86** (LOW) : dedup traduction premium/basic ignorant le timestamp — intention produit à confirmer.
+F85 (stats incrémentales messageType), F86 (video → file), reports antérieurs.
+</content>

@@ -1,89 +1,87 @@
 # Iteration 115 — Analyse d'optimisation (2026-07-06)
 
 ## Protocole (démarrage)
-`main` @ `4fb48dc32` (post-merge PR #1557 — F84 pagination anonyme), working tree propre. Branche de
-travail `claude/brave-archimedes-fru31a` recréée depuis `origin/main`.
+`main` @ `3bfd41d5` (post-merge #1529/#1533/#1534), working tree propre. Branche `claude/brave-archimedes-howg57`
+recréée depuis `origin/main`. Itération 112 (F83 affiliate stats) mergée dans `main` via PR #1529.
 
-Numérotation : docs d'itération sur `main` jusqu'à **114** → ce cycle prend **115**.
+**PR ouvertes au démarrage** : quasi exclusivement des bumps dependabot (#1532-#1554) + 2 PR iOS (#1555, #1527).
+La cible retenue (`apps/web/utils/v2/transform-conversation.ts`) est **strictement disjointe** de toutes.
 
-### Revue d'ingénierie (constat de démarrage)
-Suite directe : le candidat reporté **F85** (identifié et documenté à l'itération 114, « next Python
-PR ») a été implémenté ce cycle. Sous-système translator (Python), disjoint de toutes les zones web/
-gateway traitées jusqu'ici.
+### Revue d'ingénierie
+Balayage très approfondi (agent d'exploration, 104 tool-uses) des helpers purs/quasi-purs de
+`services/gateway/src/services`, `services/gateway/src/utils`, `packages/shared/utils`, `apps/web/utils`,
+`apps/web/lib`, `apps/web/hooks`, hors zones déjà traitées (itérations 100-113). Vérifiés corrects et
+écartés : `resolvePresenceVisibility`, `reelAffinity`, `formatCompactNumber`, `truncateFilename`,
+`getInitials`, `calendarDayDiff`, `mention-parser`, `groupNotificationsByDate` (Sunday-start intentionnel).
+Un défaut solide remonte : violation d'un SSOT documenté par une réimplémentation inline → **F84**.
 
-## Cible : F85 — `Synthesizer._segment_text` perd une phrase/fragment court → mots absents de l'audio TTS
+## Cible : F84 — `transformToConversationItem` viole l'ordre canonique du nom (username avant le vrai nom)
 
 ### Current state
-`services/translator/src/services/tts/synthesizer.py` → `_segment_text(text, max_chars)` découpe un
-texte long (> `MAX_SEGMENT_CHARS` = 1000) en segments pour la synthèse vocale (appelé par
-`synthesize_with_voice`, chemin TTS long-texte du pipeline audio). Deux « sites d'écrasement »
-(constantes : `MIN_SEGMENT_CHARS = 50`) :
-```python
-else:  # la phrase ne tient pas dans current_segment
-    if current_segment and len(current_segment) >= MIN_SEGMENT_CHARS:   # site 1 (ligne 132)
-        segments.append(current_segment)
-        current_segment = ""
-    if len(sentence) > max_chars:
-        for part in sentence.split(','):
-            ...
-            else:
-                if current_segment and len(current_segment) >= MIN_SEGMENT_CHARS:  # site 2 (ligne 150)
-                    segments.append(current_segment)
-                current_segment = part          # ← écrase (drop si buffer court)
-    else:
-        current_segment = sentence              # ← écrase (drop si buffer court)
+`apps/web/utils/v2/transform-conversation.ts` → `transformToConversationItem` (branche conversation
+**directe**, lignes ~106-116). Le nom affiché de l'autre participant était résolu par une chaîne inline :
+```ts
+name =
+  otherUser?.displayName ||
+  otherUser?.username ||    // ← username préféré au vrai nom
+  otherUser?.firstName ||   // ← firstName seulement après username ; lastName jamais utilisé
+  otherMember?.displayName || (otherMember as any)?.nickname || conversation.title || 'Utilisateur';
 ```
 
 ### Problems identified
-- **[LIVE] Perte de texte silencieuse.** Quand `current_segment` est **non vide mais < 50 car.** et que
-  la phrase/part suivante ne peut pas y être ajoutée sans dépasser `max_chars`, la garde
-  `len(...) >= MIN_SEGMENT_CHARS` **empêche la sauvegarde** ET le buffer **n'est pas vidé** ; l'écrasement
-  (`current_segment = sentence`/`= part`) le **jette**. Trace prouvée (repro Node/Python verbatim) :
-  `text = "Hi. " + "A"*998 + "."` → segments `["A…"]` seulement ; **« Hi » absent** de l'audio produit.
-  Idem pour un fragment court entre deux phrases longues, et dans le chemin de sous-découpe par virgules.
-- Déclencheur : une phrase courte (< 50 car.) immédiatement suivie d'une phrase > ~949 car. sans
-  ponctuation interne (passages « run-on », langues/ponctuation clairsemée, URLs). Fréquence modérée,
-  perte **certaine** sur cette classe d'entrée.
+- **[LIVE] Nom d'utilisateur cryptique affiché à la place du vrai nom.** Le SSOT documenté
+  (`apps/web/utils/user-display-name.ts` `getUserDisplayName` + `apps/web/CLAUDE.md` §Single Source of
+  Truth) fixe l'ordre : **`displayName` > `firstName + lastName` > `username`**. La chaîne inline faisait
+  `displayName` > `username` > `firstName`, et **n'utilisait jamais `lastName`**.
+  Input : autre membre `{ displayName: null, firstName: "Alice", lastName: "Martin", username: "amartin_99" }`.
+  - SSOT → **"Alice Martin"** ; inline → **"amartin_99"** (handle cryptique).
+- **[LIVE]** Appelant : `transformConversations` → `apps/web/hooks/v2/use-conversations-v2.ts:199`
+  (hook de **liste de conversations** V2 — cœur de l'UI messagerie). Chaque conversation directe avec un
+  utilisateur sans `displayName` custom affichait son pseudo au lieu de son prénom/nom.
 
 ### Root cause
-La garde `MIN_SEGMENT_CHARS` sert à **éviter d'émettre des segments trop courts** (qualité audio). Mais
-au point d'écrasement, le buffer court ne peut plus grandir (la vérification de tenue vient d'échouer) :
-ne pas le sauvegarder = le perdre. La préférence « pas de segment court » ne doit jamais primer sur la
-**préservation du texte**.
+Réimplémentation inline de la résolution de nom au lieu d'appeler le helper SSOT dédié
+(`getUserDisplayName`/`getUserDisplayNameOrNull`), avec un ordre de priorité erroné. Violation directe du
+principe « Single Source of Truth » du CLAUDE.md web.
 
 ### Business impact
-Cœur produit Meeshy : le pipeline audio (transcription → traduction → **TTS**) doit restituer fidèlement
-le texte traduit en voix. Des mots manquants dans l'audio synthétisé sont une perte de fidélité directe
-et invisible (aucune erreur remontée) sur la fonctionnalité voix.
+Sur l'écran le plus vu de l'app (liste des conversations), un contact qui n'a pas défini de `displayName`
+apparaît sous son **identifiant technique** (`amartin_99`) au lieu de « Alice Martin ». Dégrade la
+lisibilité et la reconnaissance des contacts — friction produit directe.
 
 ### Technical impact
-Correctif local aux deux sites : **vider tout buffer non vide avant de l'écraser** (retirer la garde
-`and len(current_segment) >= MIN_SEGMENT_CHARS` aux sites 1 et 2). Le buffer court devient son propre
-segment (moindre mal ; la fusion du **dernier** segment court reste gérée en fin de fonction, lignes
-171-177). Chaque segment reste ≤ `max_chars`. Aucun changement de signature/contrat.
+Remplacement de la chaîne inline par `getUserDisplayNameOrNull(otherUser)` (SSOT), en **préservant** les
+fallbacks de niveau participant (member `displayName`, `nickname`, `conversation.title`, `'Utilisateur'`).
+Aucun changement de signature ni de forme de retour.
 
 ### Risk assessment
-Très faible. Au point d'écrasement, le buffer est **grand** dans le cas normal (une phrase ne « tient
-pas » quand le buffer est déjà proche de `max_chars` ≫ 50) → comportement **inchangé** ; il n'est court
-que dans le cas de bug, désormais **préservé**. Prouvé par repro verbatim (RED→GREEN) + non-régression
-sur un texte 60-phrases.
+Très faible. `getUserDisplayNameOrNull` retourne `null` (et non un fallback) quand l'objet user est vide,
+préservant exactement la cascade de fallbacks existante. Seuls les cas où `firstName`/`lastName` existent
+sans `displayName` changent — et deviennent corrects. Fonction pure.
 
 ### Proposed improvements (implémenté ce cycle)
-- Sites 1 & 2 : `if current_segment:` (au lieu de `… and len >= MIN_SEGMENT_CHARS`) avant l'écrasement,
-  + commentaire du *pourquoi* (perte silencieuse sinon).
-- Test pytest neuf `tests/test_20_synthesizer_segmentation.py` (5 cas : fragment court en tête préservé,
-  segments ≤ max_chars, fragment court entre deux phrases longues, texte normal sans perte de mots,
-  texte court renvoyé tel quel). Instance via `__new__` (méthode pure, pas de modèle chargé) ; skip
-  gracieux si la stack TTS (torch/chatterbox) est absente.
+- Import `getUserDisplayNameOrNull` + remplacement de la chaîne inline + commentaire expliquant le *pourquoi*.
+
+### Expected benefits
+- Vrai nom (prénom + nom) affiché en liste de conversations, conforme au SSOT et à iOS/Android.
+- Élimination d'une réimplémentation divergente d'un helper existant (dette technique).
+
+### Implementation complexity
+Très faible (1 import + 1 chaîne remplacée ; 5 tests neufs, dont 2 RED→GREEN de régression d'ordre).
 
 ### Validation criteria
-- [x] RED prouvé d'abord (repro Python, impl copiée verbatim) : `"Hi"` absent de la sortie.
-- [x] GREEN (repro corrigé) : `"Hi"` préservé, tous segments ≤ `max_chars`, non-régression 60-phrases.
-- [x] `py_compile` OK (source + test). Test pytest exécuté par la CI « Test Python (translator) » (la
-      stack ML n'est pas installée dans ce sandbox — parité avec le pattern « CI valide » des PR iOS).
+- [x] RED prouvé : sur l'ancien code, « firstName+lastName avant username » et « firstName seul » échouent.
+- [x] GREEN : 5/5 verts après fix.
+- [ ] Suite web complète verte + CI.
 
-## Backlog reporté (§ futur)
-- **F86** (LOW) : `use-message-translations.ts` `processMessageWithTranslations` — dedup ignorant le
-  timestamp (une premium plus ancienne peut écraser une basic plus récente). Heuristique, intention
-  produit à confirmer.
-- Antérieurs : F69, F74, F75, F78, F80, F81, F82b toujours reportés.
+## Candidats différés ce cycle
+- **F85** (MEDIUM, gateway) : `ConversationMessageStatsService.onNewMessage` classe en `text` tout message
+  sans attachement avec contenu (ignore `messageType`), alors que `recompute()` (l'autorité) exige
+  `msgType === 'text'` — les messages `system`/`location` gonflent `contentTypes.text` en incrémental
+  jusqu'au prochain recompute. Fix : passer `messageType` dans `onNewMessage`/`onMessageDeleted`.
+- **F86** (LOW, web) : `getMessageType` mappe `video/*` sur `'file'` (pas d'entrée `'video'` dans l'union
+  `ConversationItemData`) — plutôt gap de design que défaut.
+
+## Améliorations futures (report)
+Reports antérieurs : F82b (#1528), F83b (tokens non filtrés), F51b, F56b, F60b, F67b, F68b, F69, F70, F74, F75.
+</content>

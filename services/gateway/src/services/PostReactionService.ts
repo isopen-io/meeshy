@@ -133,7 +133,7 @@ export class PostReactionService {
         }
       });
 
-      await this.updatePostReactionSummary(postId, sanitized, 'add');
+      await this.updatePostReactionSummary(postId);
 
       return this.mapReactionToData(reaction);
     } catch (err: unknown) {
@@ -167,7 +167,7 @@ export class PostReactionService {
     });
 
     if (result.count > 0) {
-      await this.updatePostReactionSummary(postId, sanitized, 'remove', result.count);
+      await this.updatePostReactionSummary(postId);
     }
 
     return result.count > 0;
@@ -309,40 +309,39 @@ export class PostReactionService {
     };
   }
 
-  private async updatePostReactionSummary(
-    postId: string,
-    emoji: string,
-    action: 'add' | 'remove',
-    count: number = 1
-  ): Promise<void> {
+  private async updatePostReactionSummary(postId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const post = await tx.post.findUnique({
         where: { id: postId },
-        select: { reactionSummary: true }
+        select: { id: true }
       });
 
       if (!post) return;
 
-      const currentSummary = (post.reactionSummary as Record<string, number>) || {};
+      // Ventilation par emoji ET total recalculés depuis la table `PostReaction`
+      // (source de vérité), au lieu d'appliquer un delta add/remove sur une carte
+      // dénormalisée. Le pré-check des réactions dans addReaction/removeReaction se
+      // fait hors transaction, donc deux mutations concurrentes peuvent laisser un
+      // emoji fantôme dans reactionSummary (ligne présente, jamais reflétée dans la
+      // carte) ; recomputer depuis groupBy est auto-réparant, quel que soit l'état
+      // après la course. `reactionCount` ET `likeCount` synchronisés sur le total
+      // (parité REST/socket du like de post : `likePost` = reactions.length). Miroir
+      // de ReactionService.updateMessageReactionSummary / CommentReactionService.
+      const grouped = await tx.postReaction.groupBy({
+        by: ['emoji'],
+        where: { postId },
+        _count: { emoji: true }
+      });
 
-      if (action === 'add') {
-        currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
-      } else if (currentSummary[emoji]) {
-        currentSummary[emoji] -= count;
-        if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
-      }
-
-      // Compteur AUTORITAIRE depuis la table `PostReaction` (la ligne add/remove
-      // a déjà été appliquée par addReaction/removeReaction avant cet appel).
-      // On synchronise `reactionCount` ET `likeCount` sur ce total : ainsi le
-      // chemin SOCKET maintient `likeCount` identiquement au chemin REST
-      // (`likePost` = reactions.length), éliminant la divergence des compteurs
-      // entre surfaces. Auto-réparant (pas de dérive du compteur dénormalisé).
-      const total = await tx.postReaction.count({ where: { postId } });
+      const reactionSummary = grouped.reduce<Record<string, number>>((summary, group) => {
+        summary[group.emoji] = group._count.emoji;
+        return summary;
+      }, {});
+      const total = grouped.reduce((sum, group) => sum + group._count.emoji, 0);
 
       await tx.post.update({
         where: { id: postId },
-        data: { reactionSummary: currentSummary, reactionCount: total, likeCount: total }
+        data: { reactionSummary, reactionCount: total, likeCount: total }
       });
     });
   }
