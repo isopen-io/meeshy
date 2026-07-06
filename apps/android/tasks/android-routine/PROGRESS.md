@@ -2,7 +2,7 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
 > On 2026-07-06 the **in-conversation message search + search-highlight wiring** landed (slice
 > `chat-search-highlight-wiring`, Chat parity §C — feature-parity.md "In-conversation message search" +
@@ -559,17 +559,21 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Recommended next (2026-07-06, after `chat-search-highlight-wiring`):** the remaining highest-value Chat
-follow-ups now that rich-text + in-conversation search are live —
-1. ~~**`chat-search-highlight-wiring`**~~ ✅ shipped 2026-07-06 — see run log. Pure `:feature:chat` `ChatSearch`
-   SSOT (translation-aware `matchIds` + wraparound reducer over `ChatSearchState`) + `ChatViewModel` intents
-   (reconcile-keeps-focus on the live stream) + a search `TopAppBar` (accent cursor, `x / y` counter, up/down
-   nav, jump-to-hit) threading `highlightTerm` into every bubble. +29 tests.
-2. **`chat-mention-display-names`** — feed the conversation member roster (`username → displayName`) into
-   `MessageBubble.mentionDisplayNames` so `@John Doe` resolves in-bubble (pure resolution already tested; this is
-   the roster-source wiring in `ChatViewModel` — needs the participant list on the conversation stream).
-3. Or **`chat-mention-autocomplete`** — the composer `@`-autocomplete panel over the existing `MentionCandidate`
-   model (pure prefix-match/ranking core + a Compose suggestion strip).
+**Recommended next (2026-07-06, after `chat-mention-autocomplete`):** the remaining highest-value Chat
+follow-ups now that rich-text + in-conversation search + mentions (local roster) are live —
+1. ~~**`chat-search-highlight-wiring`**~~ ✅ shipped 2026-07-06 — see run log.
+2. ~~**`chat-mention-display-names`**~~ ✅ folded into `chat-mention-autocomplete` (2026-07-06) — `ChatViewModel`
+   builds the roster from the conversation participants via `MentionRoster` and threads `mentionDisplayNames`
+   into every `MessageBubble`, so `@username` resolves in-bubble.
+3. ~~**`chat-mention-autocomplete`**~~ ✅ shipped 2026-07-06 — see run log. Pure `:feature:chat` `ChatMention`
+   SSOT (`extractQuery`/`filterCandidates`/`insertMention` + `MentionAutocompleteState` reducer) + `MentionRoster`
+   candidate builder + `ChatViewModel` intents (`onMentionSelected`, recompute on draft change, reset on send) +
+   a neutral accent-avatar suggestion strip. +40 tests.
+4. **`chat-mention-backend-suggestions`** — the debounced `/mentions` API merge over the local roster (online
+   enrichment: author + commenters + contacts, deduped by username against the local candidates). Needs a
+   `MentionApi`/repository + a cancellation-safe debounce in `ChatViewModel`.
+5. Or **`chat-quoted-reply-preview`** — the quoted-reply preview surface (sender, snippet, thumbnail) in the
+   bubble (pure `ReplyPreview` builder + a `:sdk-ui` sub-view), parity §C "Quoted-reply previews".
 Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K; §L worker drain-list test).
 
 ---
@@ -1049,6 +1053,58 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-06 — slice `chat-mention-autocomplete` ✅ shipped
+- **Step 0 (housekeeping):** no Android slice PR was open (the board carried only unrelated dependabot PRs
+  and one non-Android `fix(calls)` PR #1579 on a `claude/loving-*` branch — out of scope, left untouched).
+  `origin/main` already contained the prior `chat-search-highlight-wiring` merge (#1577). Branched
+  `claude/apps/android/chat-mention-autocomplete` off latest `origin/main`. Env: Android SDK bootstrapped
+  (`platforms;android-35` + `build-tools;35.0.0`); Gradle **wrapper** still 403s through the proxy → built
+  with system **Gradle 8.14.3** (`/opt/gradle/bin/gradle`), per NOTES.
+- **Why this slice:** the recommended §C Chat follow-up (PROGRESS "Next" #2/#3). `MentionCandidate` existed in
+  `:core:model` but was **dead code** — no autocomplete, and `MessageBubble.mentionDisplayNames` (added by
+  `chat-rich-text-segments`) was never fed, so in-bubble `@username` never resolved to a display name. This
+  makes mentions real end-to-end and closes the "member roster → `mentionDisplayNames`" pending item.
+- **Pure core (`:feature:chat` `ChatMention.kt`):** the composer-mention SSOT ported from the pure logic of iOS
+  `MentionComposerController`. `extractQuery(text)` — trailing `@fragment` past the last `@` (bare `@` → `""`
+  = show the full roster; a space past the last `@` → `null` = inactive; no `@` → `null`). `filterCandidates` —
+  trimmed, case-insensitive substring over username **or** display name; blank query → every candidate, order
+  preserved. `insertMention` — rewrite the trailing fragment to `@username ` (trailing space), inert when there
+  is no active fragment. Plus a pure reducer over `MentionAutocompleteState(activeQuery, suggestions,
+  draftMentions)`: `onTextChange` (recompute or clear), `cleared` (**idempotent** — returns the same instance
+  when already inert; preserves draft mentions), `select` (rewrite text + record the draft mention + dismiss),
+  `reset` (full wipe, for send). `MentionRoster.fromParticipants` builds candidates from the conversation
+  participants — excludes self (`excludeUserId`), drops blank/absent usernames, degrades a blank/absent display
+  name to the username, falls back to the participant id when `userId` is absent — and `displayNames` projects
+  the `username → displayName` map.
+- **Wiring:** `ChatViewModel` builds the roster in the conversation-stream collector (self excluded via the
+  session user id), exposes `state.mentionDisplayNames` (threaded into every `MessageBubble`, so received
+  `@username` resolves in-bubble), recomputes `state.mention` on `onDraftChange`, adds `onMentionSelected`
+  (rewrites the draft + records the mention + dismisses the panel), and `reset`s the mention on send.
+  `ChatScreen` renders a **neutral** (input-assistance chrome, not accent-tinted — matches the iOS decision)
+  accent-avatar suggestion strip above the composer, capped at 200dp and scrollable.
+- **Verification:** `gradle :feature:chat:testDebugUnitTest` → **BUILD SUCCESSFUL** (`ChatMentionTest` 26,
+  `MentionRosterTest` 9, `ChatViewModelTest` +5 = **+40 tests**, 0 failures), then `gradle :app:assembleDebug`
+  → **BUILD SUCCESSFUL** (Compose glue compiles). Diff = `apps/android` only (2 new src + 2 new test +
+  `ChatViewModel.kt`/`ChatScreen.kt`/`ChatViewModelTest.kt` modified + these docs).
+- **Branches covered:** `extractQuery` no-`@`/trailing-fragment/bare-`@`/space-after/mid-space/multi-`@`/glued;
+  `filterCandidates` blank/whitespace/username-hit/displayName-hit/no-match/empty-roster; `insertMention`
+  replace/bare-`@`/no-`@`/space-inert/prefix-preserved; `onTextChange` activate/clear-keeps-draft/bare-`@`;
+  `cleared` idempotent-same-instance/clears-keeps-draft; `select` rewrite+record+dismiss/accumulate; `reset`;
+  `MentionRoster` map/exclude-self/drop-blank-username/degrade-null-name/degrade-blank-name/id-fallback/avatar/
+  empty/displayNames; VM roster-populates-display-names/at-query-activates-excluding-self/clear-deactivates/
+  select-rewrites-and-dismisses/send-resets.
+- **Reviewer gate:** PASS — diff `apps/android` only, no production logic elsewhere; behaviour-through-public-API
+  tests (drive intents/reducers, assert emitted state), no tautologies, no floor lowered; SDK purity (the pure
+  mention core + roster builder live in `:feature:chat` product-orchestration, not the SDK — they encode the
+  "don't @-mention yourself / trailing-`@`-is-active" product rules; the strip is exempt Compose glue), SSOT
+  (one `ChatMention` owns query/filter/insert, one `MentionRoster` owns candidate derivation, reuses the
+  existing `MessageBubble.mentionDisplayNames`), UDF (immutable `MentionAutocompleteState`, pure transitions),
+  instant-app (all-local, no spinner/network), colour/UX coherence (neutral strip = input chrome, accent avatar,
+  natural tap-to-insert, no dead end). No orphan code: `draftMentions` is recorded on select and cleared on send;
+  `mentionDisplayNames` is the live consumer of the roster. Surpasses iOS: the local roster is filtered instantly
+  (no artificial 300ms debounce for the on-device list; the debounced backend `/mentions` merge is the tracked
+  follow-up).
 
 ### 2026-07-06 — slice `chat-rich-text-segments` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR was open (only unrelated web/gateway/translator/dependabot PRs on

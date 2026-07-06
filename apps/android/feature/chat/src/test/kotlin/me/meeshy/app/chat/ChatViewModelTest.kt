@@ -28,6 +28,7 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ReactionSyncResponse
@@ -287,6 +288,78 @@ class ChatViewModelTest {
 
         coVerify { repo.retrySend("cmid_x") }
         coVerify { workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    private fun conversationWithRoster() = ApiConversation(
+        id = "c1",
+        type = "group",
+        title = "Squad",
+        participants = listOf(
+            ApiParticipant(id = "p0", userId = "me", username = "atabeth", displayName = "Ata Beth"),
+            ApiParticipant(id = "p1", userId = "u1", username = "bob", displayName = "Bob Martin"),
+            ApiParticipant(id = "p2", userId = "u2", username = "bobby", displayName = "Bobby Tables"),
+        ),
+    )
+
+    @Test
+    fun roster_display_names_populate_from_the_conversation_participants() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.mentionDisplayNames)
+            .containsExactlyEntriesIn(mapOf("bob" to "Bob Martin", "bobby" to "Bobby Tables"))
+    }
+
+    @Test
+    fun typing_an_at_query_activates_mention_suggestions_excluding_self() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @bo")
+
+        val mention = h.vm.state.value.mention
+        assertThat(mention.isActive).isTrue()
+        assertThat(mention.suggestions.map { it.username }).containsExactly("bob", "bobby").inOrder()
+    }
+
+    @Test
+    fun clearing_the_at_query_deactivates_the_mention_panel() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+        h.vm.onDraftChange("hey @bo")
+
+        h.vm.onDraftChange("hey there")
+
+        assertThat(h.vm.state.value.mention.isActive).isFalse()
+    }
+
+    @Test
+    fun selecting_a_mention_rewrites_the_draft_and_dismisses_the_panel() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+        h.vm.onDraftChange("hey @bo")
+        val bob = h.vm.state.value.mention.suggestions.first { it.username == "bob" }
+
+        h.vm.onMentionSelected(bob)
+
+        assertThat(h.vm.state.value.draft).isEqualTo("hey @bob ")
+        assertThat(h.vm.state.value.mention.isActive).isFalse()
+        assertThat(h.vm.state.value.mention.draftMentions).containsKey("bob")
+    }
+
+    @Test
+    fun sending_resets_the_mention_state() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+        h.vm.onDraftChange("hey @bo")
+        val bob = h.vm.state.value.mention.suggestions.first { it.username == "bob" }
+        h.vm.onMentionSelected(bob)
+
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.mention).isEqualTo(MentionAutocompleteState())
     }
 
     private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
