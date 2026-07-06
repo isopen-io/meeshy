@@ -12,6 +12,8 @@ import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.model.AppThemeMode
 import me.meeshy.sdk.model.DndDay
 import me.meeshy.sdk.model.DndWindow
+import me.meeshy.sdk.model.NotificationType
+import me.meeshy.sdk.model.NotificationTypeCatalog
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.model.next
 import me.meeshy.sdk.notification.NotificationPreferencesStore
@@ -28,6 +30,7 @@ data class SettingsUiState(
     val themeMode: AppThemeMode = AppThemeMode.AUTO,
     val interfaceLanguage: String? = null,
     val notifications: UserNotificationPreferences = UserNotificationPreferences(),
+    val notificationTypeQuery: String = "",
     val isLoading: Boolean = false,
 )
 
@@ -119,6 +122,16 @@ class SettingsViewModel @Inject constructor(
     /** Adds/removes a day from the quiet-hours schedule (empty ⇒ every day). */
     fun toggleDndDay(day: DndDay) {
         updateNotifications { it.copy(dndDays = DndWindow.toggleDay(it.dndDays, day)) }
+    }
+
+    /** Sets a single per-event notification type on/off, preserving every other toggle. */
+    fun setNotificationTypeEnabled(type: NotificationType, enabled: Boolean) {
+        updateNotifications { NotificationTypeCatalog.toggle(it, type, enabled) }
+    }
+
+    /** Updates the search query that filters the per-event notification-type list. */
+    fun setNotificationTypeQuery(query: String) {
+        _state.update { it.copy(notificationTypeQuery = query) }
     }
 
     private fun updateNotifications(edit: (UserNotificationPreferences) -> UserNotificationPreferences) {
