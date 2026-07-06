@@ -68,6 +68,19 @@ function patchPostInReelsCaches(
   });
 }
 
+function removePostFromReelsCaches(queryClient: QueryClientLike, postId: string) {
+  queryClient.setQueriesData<ReelsInfinite>({ queryKey: reelsFeedKey() }, (old) => {
+    if (!old?.pages) return old;
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({
+        ...page,
+        data: (page.data ?? []).filter((p) => p.id !== postId),
+      })),
+    };
+  });
+}
+
 function restoreReelsCaches(
   queryClient: QueryClientLike,
   snapshot: ReturnType<typeof snapshotReelsCaches>,
@@ -174,24 +187,35 @@ export function useUpdatePostMutation() {
     onMutate: async ({ postId, data }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.posts.infinite('feed') });
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
+      const reelsSnapshot = snapshotReelsCaches(queryClient);
+
+      const patcher = (p: Post): Post => ({
+        ...p,
+        ...data,
+        isEdited: true,
+        updatedAt: new Date().toISOString(),
+      } as Post);
 
       queryClient.setQueryData<InfiniteFeedData>(
         queryKeys.posts.infinite('feed'),
-        (old) => patchPostInFeed(old, postId, (p) => ({
-          ...p,
-          ...data,
-          isEdited: true,
-          updatedAt: new Date().toISOString(),
-        } as Post)),
+        (old) => patchPostInFeed(old, postId, patcher),
       );
+      // Mirror the edit onto every reels thread for instant feedback on the
+      // reel surfaces — otherwise the reel keeps the pre-edit caption until the
+      // onSettled invalidation refetches.
+      patchPostInReelsCaches(queryClient, postId, patcher);
 
-      return { previous };
+      return { previous, reelsSnapshot };
     },
 
     onError: (_err, _vars, context) => {
       /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
+      }
+      /* istanbul ignore next -- reelsSnapshot is always set alongside previous */
+      if (context?.reelsSnapshot) {
+        restoreReelsCaches(queryClient, context.reelsSnapshot);
       }
     },
 
@@ -211,19 +235,27 @@ export function useDeletePostMutation() {
     onMutate: async (postId) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.posts.infinite('feed') });
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
+      const reelsSnapshot = snapshotReelsCaches(queryClient);
 
       queryClient.setQueryData<InfiniteFeedData>(
         queryKeys.posts.infinite('feed'),
         (old) => removePostFromFeed(old, postId),
       );
+      // Remove the post from every reels thread too so a deleted reel vanishes
+      // instantly from the affinity feed, not only from the main feed.
+      removePostFromReelsCaches(queryClient, postId);
 
-      return { previous };
+      return { previous, reelsSnapshot };
     },
 
     onError: (_err, _vars, context) => {
       /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
+      }
+      /* istanbul ignore next -- reelsSnapshot is always set alongside previous */
+      if (context?.reelsSnapshot) {
+        restoreReelsCaches(queryClient, context.reelsSnapshot);
       }
     },
 

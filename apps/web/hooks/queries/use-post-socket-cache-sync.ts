@@ -89,6 +89,10 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       queryClient.setQueryData(queryKeys.posts.detail(data.post.id), (old: unknown) =>
         old ? { ...(old as Record<string, unknown>), data: data.post } : old,
       );
+      // Reels threads live under a separate key family the two patches above
+      // never reach; without this a remote edit leaves the reel surface showing
+      // the stale caption forever (this socket path has no fallback refetch).
+      patchReelCaches(queryClient, data.post.id, () => data.post);
     }
 
     function handlePostDeleted(data: PostDeletedEventData) {
@@ -105,6 +109,10 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
           };
         },
       );
+      // Drop the deleted post from every reels thread too — otherwise a reel
+      // removed by another user (or from another device) keeps playing in the
+      // affinity feed until a full refetch this path never triggers.
+      removePostFromReelCaches(queryClient, data.postId);
     }
 
     function handlePostLiked(data: PostLikedEventData) {
@@ -618,6 +626,27 @@ function patchReelCaches(
         pages: old.pages.map((page) => ({
           ...page,
           data: (page.data ?? []).map((p) => (p.id === postId ? patcher(p) : p)),
+        })),
+      };
+    },
+  );
+}
+
+function removePostFromReelCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  postId: string,
+) {
+  // Delete counterpart of `patchReelCaches` — filters the post out of every
+  // cached reels thread instead of mapping it.
+  queryClient.setQueriesData<{ pages?: Array<{ data?: Post[] }> }>(
+    { queryKey: [...queryKeys.posts.lists(), 'reels'] },
+    (old) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          data: (page.data ?? []).filter((p) => p.id !== postId),
         })),
       };
     },

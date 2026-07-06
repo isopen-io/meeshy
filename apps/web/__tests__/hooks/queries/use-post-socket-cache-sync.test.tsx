@@ -126,6 +126,20 @@ function getFeedPosts(qc: QueryClient): unknown[] {
   return data?.pages.flatMap((p) => p.data) ?? [];
 }
 
+function seedReels(qc: QueryClient, posts = [mockPost], seed = 'foryou') {
+  qc.setQueryData(['posts', 'list', 'reels', seed], {
+    pages: [{ data: posts }],
+    pageParams: [undefined],
+  });
+}
+
+function getReels(qc: QueryClient, seed = 'foryou'): Array<{ id: string; content?: string }> {
+  const data = qc.getQueryData<{ pages: { data: Array<{ id: string; content?: string }> }[] }>([
+    'posts', 'list', 'reels', seed,
+  ]);
+  return data?.pages.flatMap((p) => p.data) ?? [];
+}
+
 const mockStory = { ...mockPost, id: 'story-1', type: 'STORY' as const };
 
 function seedStories(qc: QueryClient, stories: unknown[] = [mockStory]) {
@@ -195,6 +209,17 @@ describe('usePostSocketCacheSync', () => {
       act(() => emit('post:deleted', { postId: 'post-1', authorId: 'user-1' }));
 
       expect(getFeedPosts(qc)).toHaveLength(0);
+    });
+
+    it('removes the deleted post from reels threads too', () => {
+      const qc = createQueryClient();
+      const reel2 = { ...mockPost, id: 'reel-2' };
+      seedReels(qc, [mockPost, reel2]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:deleted', { postId: 'post-1', authorId: 'user-1' }));
+
+      expect(getReels(qc).map((p) => p.id)).toEqual(['reel-2']);
     });
   });
 
@@ -457,6 +482,18 @@ describe('usePostSocketCacheSync', () => {
 
       const detail = qc.getQueryData<{ data: typeof mockPost }>(['posts', 'detail', 'post-1']);
       expect(detail?.data.content).toBe('Detail Updated');
+    });
+
+    it('replaces the edited post in reels threads too', () => {
+      const qc = createQueryClient();
+      seedReels(qc, [mockPost]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const updated = { ...mockPost, content: 'Reel Updated', isEdited: true };
+      act(() => emit('post:updated', { post: updated }));
+
+      const reels = getReels(qc);
+      expect(reels[0].content).toBe('Reel Updated');
     });
   });
 
