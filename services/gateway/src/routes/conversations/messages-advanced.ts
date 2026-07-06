@@ -757,13 +757,15 @@ export function registerMessagesAdvancedRoutes(
         }
       }
 
-      // Mettre à jour le contenu du message
+      // Mettre à jour le contenu du message (invalide aussi les traductions existantes :
+      // la retraduction ci-dessous les recalcule, parité avec PUT /conversations/:id/messages/:messageId)
       const updatedMessage = await prisma.message.update({
         where: { id: messageId },
         data: {
           content: content.trim(),
           isEdited: true,
-          editedAt: new Date()
+          editedAt: new Date(),
+          translations: null
         },
         include: {
           sender: {
@@ -779,10 +781,46 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
-      // Note: Les traductions existantes restent inchangées
-      // Le service de traduction sera notifié si nécessaire via WebSocket
+      // Déclencher la retraduction automatique du message modifié (parité avec le sibling PUT)
+      try {
+        const translationService = fastify.translationService;
 
-      return sendSuccess(reply, updatedMessage);
+        const messageForRetranslation = {
+          id: messageId,
+          content: content.trim(),
+          originalLanguage: message.originalLanguage,
+          conversationId: message.conversationId,
+          senderId: message.senderId
+        };
+
+        await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+      } catch (translationError) {
+        logger.error('Erreur lors de la retraduction', translationError);
+        // Ne pas faire échouer l'édition si la retraduction échoue
+      }
+
+      const messageResponse = {
+        ...updatedMessage,
+        conversationId: message.conversationId,
+        translations: transformTranslationsToArray(
+          messageId,
+          (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+        )
+      };
+
+      // Diffuser la mise à jour via Socket.IO (parité avec le sibling PUT)
+      try {
+        const socketIOManager = socketIOHandler.getManager();
+        if (socketIOManager) {
+          const room = ROOMS.conversation(message.conversationId);
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse as unknown as SocketIOMessage);
+        }
+      } catch (socketError) {
+        logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
+        // Ne pas faire échouer l'édition si la diffusion échoue
+      }
+
+      return sendSuccess(reply, messageResponse);
 
     } catch (error) {
       logger.error('Error updating message', error);
