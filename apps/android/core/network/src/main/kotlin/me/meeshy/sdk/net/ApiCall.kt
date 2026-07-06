@@ -1,5 +1,6 @@
 package me.meeshy.sdk.net
 
+import kotlinx.serialization.SerializationException
 import me.meeshy.sdk.model.ApiResponse
 import retrofit2.HttpException
 import java.io.IOException
@@ -29,6 +30,10 @@ suspend fun <T> apiCall(block: suspend () -> ApiResponse<T>): NetworkResult<T> =
     } catch (e: IOException) {
         NetworkResult.Failure(
             ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+        )
+    } catch (e: SerializationException) {
+        NetworkResult.Failure(
+            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
         )
     }
 
