@@ -28,6 +28,7 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
@@ -996,5 +997,84 @@ class ChatViewModelTest {
         h.vm.onSearchQueryChange("hello")
 
         assertThat(h.vm.state.value.search.matchIds).containsExactly("live")
+    }
+
+    private fun replyThread() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(ApiMessage(id = "orig", conversationId = "c1", senderId = "other", content = "the original")),
+                synced(
+                    ApiMessage(
+                        id = "answer",
+                        conversationId = "c1",
+                        senderId = "other",
+                        content = "the reply",
+                        replyTo = ApiMessageReplyPreview(id = "orig", content = "the original"),
+                    ),
+                ),
+                synced(ApiMessage(id = "plain", conversationId = "c1", senderId = "other", content = "no reply here")),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
+    @Test
+    fun tapping_a_reply_whose_original_is_loaded_requests_a_scroll_to_it() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.onReplyPreviewTap("answer")
+
+        assertThat(vm.state.value.scrollToMessageId).isEqualTo("orig")
+    }
+
+    @Test
+    fun tapping_a_reply_to_a_paged_out_original_is_inert() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(
+                        synced(
+                            ApiMessage(
+                                id = "answer",
+                                conversationId = "c1",
+                                senderId = "other",
+                                content = "the reply",
+                                replyTo = ApiMessageReplyPreview(id = "gone", content = "old"),
+                            ),
+                        ),
+                    ),
+                    ageMillis = 0,
+                ),
+            ),
+            currentUser = me,
+        )
+        advanceUntilIdle()
+
+        vm.onReplyPreviewTap("answer")
+
+        assertThat(vm.state.value.scrollToMessageId).isNull()
+    }
+
+    @Test
+    fun tapping_a_message_that_is_not_a_reply_is_inert() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.onReplyPreviewTap("plain")
+
+        assertThat(vm.state.value.scrollToMessageId).isNull()
+    }
+
+    @Test
+    fun handling_the_scroll_clears_the_pending_reply_jump() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+        vm.onReplyPreviewTap("answer")
+        assertThat(vm.state.value.scrollToMessageId).isEqualTo("orig")
+
+        vm.onScrollHandled()
+
+        assertThat(vm.state.value.scrollToMessageId).isNull()
     }
 }

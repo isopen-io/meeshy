@@ -170,6 +170,18 @@ class BubbleContentBuilderTest {
 
         assertThat(content.replyToDeleted).isFalse()
         assertThat(content.replyToText).isEqualTo("original")
+        assertThat(content.replyToId).isEqualTo("r1")
+    }
+
+    @Test
+    fun `a message with no reply carries a null replyToId`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(replyTo = null),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToId).isNull()
     }
 
     @Test

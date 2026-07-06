@@ -4,6 +4,26 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-06 the **tap-a-quoted-reply → scroll-to-original** landed (slice `chat-reply-jump-to-original`,
+> Chat parity §C — feature-parity.md "Reply … jump"). The quoted-reply preview inside a bubble was a **dead-end
+> visual**: it rendered the quoted sender + snippet but a tap did nothing, whereas iOS scrolls to the original.
+> New pure `:feature:chat` `ReplyJumpResolver.resolve(tappedMessageId, messages: List<ReplyLink>) → ReplyJump`
+> SSOT (`Scroll(targetMessageId)` | `TargetNotLoaded` | `None`): looks up the tapped message, trims/blank-guards
+> its `replyToId`, guards a self-reference, and returns `Scroll` **only when the original is currently loaded** —
+> a paged-out original is reported distinctly (`TargetNotLoaded`, inert, never an absent-index crash) rather than
+> silently mis-scrolling. `ReplyLink(id, replyToId)` is an opaque SDK-agnostic projection so the decision stays
+> fully JVM-testable. Wired: `BubbleContent`/`BubbleContentBuilder` now carry `replyToId` (from `message.replyTo
+> ?.id`); `MessageBubble.ReplyPreview` gains an optional `onClick` (clickable **only** when `replyToId != null`);
+> `ChatViewModel.onReplyPreviewTap(messageId)` resolves + sets a consumable `scrollToMessageId`, and
+> `onScrollHandled()` clears it; `ChatScreen` adds a `LaunchedEffect(scrollToMessageId)` mirroring the existing
+> search-jump (find index → `animateScrollToItem` → consume). +15 tests (`ReplyJumpResolverTest` 9 — every branch:
+> unknown-tapped / non-reply / blank / self / loaded-scroll / paged-out / trim / empty / dup-first-wins;
+> `ChatViewModelTest` +4 — loaded→scroll, paged-out inert, non-reply inert, consume clears; `BubbleContentBuilderTest`
+> +2 — replyToId carried / null when no reply). `assembleDebug` + full `testDebugUnitTest` green (system Gradle
+> 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API; SDK-purity/SSOT honoured — pure
+> decision in `:feature:chat`, data carriers in `:sdk-ui`, render/scroll orchestration in the exempt Screen glue;
+> UDF consumable state; no dead end — the preview now navigates, gracefully inert when the target is paged out).
+
 > On 2026-07-06 the **in-conversation message search + search-highlight wiring** landed (slice
 > `chat-search-highlight-wiring`, Chat parity §C — feature-parity.md "In-conversation message search" +
 > the search-highlight half of "Rich text rendering"). The bubble already accepted a `highlightTerm` and the
@@ -572,8 +592,13 @@ follow-ups now that rich-text + in-conversation search + mentions (local roster)
 4. **`chat-mention-backend-suggestions`** — the debounced `/mentions` API merge over the local roster (online
    enrichment: author + commenters + contacts, deduped by username against the local candidates). Needs a
    `MentionApi`/repository + a cancellation-safe debounce in `ChatViewModel`.
-5. Or **`chat-quoted-reply-preview`** — the quoted-reply preview surface (sender, snippet, thumbnail) in the
-   bubble (pure `ReplyPreview` builder + a `:sdk-ui` sub-view), parity §C "Quoted-reply previews".
+5. ~~**`chat-quoted-reply-preview`**~~ — the quoted-reply preview *surface* (sender + snippet + accent bar) was
+   already rendered in `MessageBubble.ReplyPreview`; the genuinely-missing half was **tap-to-jump**, shipped
+   2026-07-06 as `chat-reply-jump-to-original` (see run log). Still open under §C: the *media thumbnail* on the
+   preview (needs an attachment/media field on `ApiMessageReplyPreview` — deferred until the wire shape carries it)
+   and **swipe-to-reply** gesture.
+6. Or **`chat-quoted-reply-thumbnail`** — extend `ApiMessageReplyPreview` with the quoted message's first-image
+   thumbnail (parity §C "Quoted-reply previews … thumbnails") once the gateway payload is confirmed to carry it.
 Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K; §L worker drain-list test).
 
 ---
