@@ -823,7 +823,12 @@ struct ChipAutoScrollGrabber: UIViewRepresentable {
 // monolithic type was the root cause of a Swift type-metadata instantiation
 // crash at launch on low-memory devices (iPhone XR / iOS 17.6).
 struct ConversationListHeaderOverlay: View {
-    let scrollOffset: CGFloat
+    /// SEUL abonné au relay d'offset : chaque tick de scroll re-rend ce
+    /// header (voulu — il collapse en suivant le doigt) et RIEN d'autre.
+    /// L'ancien `let scrollOffset: CGFloat` forçait le parent à porter
+    /// l'offset dans un @State et ré-exécutait tout son body (~99 rows
+    /// reconstruites + diff Equatable) à ~120 Hz pendant le scroll.
+    @ObservedObject var scrollRelay: ScrollOffsetRelay
     let iPadFeedAction: (() -> Void)?
     let iPadNotificationCount: Int
     let onNotificationsTap: (() -> Void)?
@@ -831,15 +836,16 @@ struct ConversationListHeaderOverlay: View {
     let onNewConversation: (() -> Void)?
     @Binding var showShareLinkSheet: Bool
     /// Compact story trail injected into the header's accessory slot (rendered
-    /// below the title/actions bar, inside the same header surface).
-    var accessory: (() -> AnyView)? = nil
+    /// below the title/actions bar, inside the same header surface). Receives
+    /// the live scroll offset from this header's own render pass.
+    var accessory: ((CGFloat) -> AnyView)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         CollapsibleHeader(
             title: "Meeshy Chats",
-            scrollOffset: scrollOffset,
+            scrollOffset: scrollRelay.offset,
             showBackButton: false,
             titleColor: theme.textPrimary,
             backArrowColor: MeeshyColors.indigo500,
@@ -947,7 +953,13 @@ struct ConversationListHeaderOverlay: View {
                     }
                 }
             },
-            accessory: accessory
+            // Adapte la closure paramétrée à la slot sans-argument du
+            // CollapsibleHeader : l'offset capturé ici est celui du render
+            // courant du header (seul abonné au relay), donc toujours frais.
+            accessory: accessory.map { build in
+                let offset = scrollRelay.offset
+                return { build(offset) }
+            }
         )
     }
 }

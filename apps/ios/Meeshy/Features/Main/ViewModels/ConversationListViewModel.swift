@@ -753,7 +753,7 @@ class ConversationListViewModel: ObservableObject {
                 // the row shows the latest message without waiting for the
                 // next full sync (lastMessageTranslations arrive separately).
                 if let msgId = event.lastMessageId { self.conversations[index].lastMessageId = msgId }
-                if let preview = event.lastMessagePreview { self.conversations[index].lastMessagePreview = preview }
+                if let preview = event.lastMessagePreview { self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated }
 
                 // Bump the row to the top when the gateway tells us a new
                 // message advanced lastMessageAt. We compare strictly
