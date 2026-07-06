@@ -120,7 +120,7 @@ struct LoginView: View {
                 Spacer()
 
                 Button { showRegister = true } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(String(localized: "auth.login.no_account", bundle: .main))
                             .foregroundColor(theme.textMuted)
                         Text(String(localized: "auth.login.create_account", bundle: .main))

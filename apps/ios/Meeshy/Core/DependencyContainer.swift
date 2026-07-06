@@ -254,10 +254,10 @@ final class DependencyContainer {
         // would prevent GRDB from creating a fresh database. They never
         // carry data we can recover separately, so they're safe to remove.
         do { try fileManager.removeItem(atPath: path + "-wal") } catch {
-            containerLogger.debug("No WAL file to remove at \(path, privacy: .public)-wal: \(error.localizedDescription, privacy: .public)")
+            containerLogger.error("Failed to remove WAL file at \(path, privacy: .public)-wal: \(error.localizedDescription, privacy: .public)")
         }
         do { try fileManager.removeItem(atPath: path + "-shm") } catch {
-            containerLogger.debug("No SHM file to remove at \(path, privacy: .public)-shm: \(error.localizedDescription, privacy: .public)")
+            containerLogger.error("Failed to remove SHM file at \(path, privacy: .public)-shm: \(error.localizedDescription, privacy: .public)")
         }
 
         return (mainExists && fileManager.fileExists(atPath: quarantined)) ? quarantined : nil
