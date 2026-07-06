@@ -264,7 +264,7 @@ struct RainbowEffect: ViewModifier {
         content
             .overlay {
                 if active {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(
                             AngularGradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red], center: .center),
                             lineWidth: 2

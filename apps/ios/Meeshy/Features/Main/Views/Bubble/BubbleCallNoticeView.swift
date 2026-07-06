@@ -136,7 +136,7 @@ struct BubbleCallNoticeView: View, Equatable {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(11, weight: .semibold))
             Text(text)
-                .font(.caption.weight(.medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .lineLimit(1)
         }
         .foregroundColor(ThemeManager.shared.textMuted)
@@ -179,6 +179,7 @@ struct BubbleCallNoticeView: View, Equatable {
         ZStack {
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(tint.opacity(isDark ? 0.06 : 0.03))
+            // Thinner single border
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .stroke(tint.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
         }

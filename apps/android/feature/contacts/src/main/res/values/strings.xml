@@ -23,8 +23,6 @@
     <string name="contacts_discover_search_hint">Search Meeshy users</string>
     <string name="contacts_discover_prompt">Search for people to connect with</string>
     <string name="contacts_discover_no_results">No users found</string>
-    <string name="contacts_discover_suggestions_title">Suggestions</string>
-    <string name="contacts_discover_suggestions_empty">No suggestions right now</string>
     <string name="contacts_discover_error">Couldn\'t search users</string>
     <string name="contacts_discover_connect">Connect</string>
     <string name="contacts_discover_pending">Pending</string>

@@ -168,10 +168,10 @@ struct AffiliateView: View {
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(theme.surfaceGradient(tint: accentColor))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .stroke(theme.border(tint: accentColor), lineWidth: 1)
                         )
                 )
@@ -185,7 +185,7 @@ struct AffiliateView: View {
             // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
             // déséquilibrer l'état vide.
             Image(systemName: "link")
-                .font(.system(size: 36))
+                .font(MeeshyFont.relative(36))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
                 .accessibilityHidden(true)
 
@@ -200,10 +200,10 @@ struct AffiliateView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )

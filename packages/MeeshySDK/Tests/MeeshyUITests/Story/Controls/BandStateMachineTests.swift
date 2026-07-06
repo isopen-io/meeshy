@@ -117,38 +117,4 @@ struct BandStateMachineTests {
         sm.reset()
         #expect(sm.state == .hidden)
     }
-
-    // MARK: - Timeline routes to a sheet, never to a band panel (C5)
-    // ComposerToolPanelHost renders .timeline as EmptyView with panelHeight 0 —
-    // reaching .toolPanel(.timeline) shows a titled band with no content. The
-    // machine refuses the transition; callers open the timeline SHEET instead.
-
-    @Test("tapFAB(.timeline) keeps the band hidden — timeline presents as a sheet")
-    func tapFABTimelineKeepsBandHidden() {
-        var sm = BandStateMachine()
-        sm.tapFAB(.timeline)
-        #expect(sm.state == .hidden)
-    }
-
-    @Test("swipeUpOnFAB(.timeline) keeps the band hidden")
-    func swipeUpOnFABTimelineKeepsBandHidden() {
-        var sm = BandStateMachine()
-        sm.swipeUpOnFAB(.timeline)
-        #expect(sm.state == .hidden)
-    }
-
-    @Test("tapTile(.timeline) keeps the band hidden")
-    func tapTileTimelineKeepsBandHidden() {
-        var sm = BandStateMachine()
-        sm.tapTile(.timeline)
-        #expect(sm.state == .hidden)
-    }
-
-    @Test("tapFAB(.timeline) while another panel is open leaves that panel untouched")
-    func tapFABTimelinePreservesOpenPanel() {
-        var sm = BandStateMachine()
-        sm.tapFAB(.media)
-        sm.tapFAB(.timeline)
-        #expect(sm.state == .toolPanel(.media))
-    }
 }

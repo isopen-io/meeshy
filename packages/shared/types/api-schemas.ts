@@ -1253,9 +1253,7 @@ export const conversationMinimalSchema = {
           isArchived: { type: 'boolean', description: 'Is archived by user' },
           isDeletedForUser: { type: 'boolean', description: 'Is deleted for user' },
           tags: { type: 'array', items: { type: 'string' }, description: 'User-defined tags' },
-          categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' },
-          customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name (drives DM display name)' },
-          reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' }
+          categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' }
         }
       },
       description: 'User preferences for this conversation'

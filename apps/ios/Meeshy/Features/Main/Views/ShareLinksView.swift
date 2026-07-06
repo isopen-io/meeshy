@@ -113,9 +113,9 @@ struct ShareLinksView: View {
         .frame(maxWidth: .infinity)
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
-                .overlay(RoundedRectangle(cornerRadius: 16)
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(MeeshyColors.shareAccent.opacity(0.2), lineWidth: 1))
         )
         .accessibilityElement(children: .combine)
@@ -155,7 +155,7 @@ struct ShareLinksView: View {
             // Decorative empty-state hero glyph (≥40pt) — its meaning is carried
             // by the title below; kept fixed + hidden from VoiceOver (doctrine 84i/86i).
             Image(systemName: "link.badge.plus")
-                .font(.system(size: 40))
+                .font(MeeshyFont.relative(40))
                 .foregroundColor(MeeshyColors.shareAccent.opacity(0.6))
                 .accessibilityHidden(true)
             Text(String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main))
@@ -181,7 +181,7 @@ struct ShareLinksView: View {
                 // would overflow the frame. Kept fixed + hidden (the link name
                 // carries the meaning; doctrine 86i).
                 Image(systemName: link.isActive ? "link" : "link.badge.minus")
-                    .font(.system(size: 16))
+                    .font(MeeshyFont.relative(16))
                     .foregroundColor(link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
                     .accessibilityHidden(true)
             }

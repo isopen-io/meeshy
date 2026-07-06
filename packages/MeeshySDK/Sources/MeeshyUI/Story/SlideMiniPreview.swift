@@ -104,9 +104,10 @@ struct SlideMiniPreview: View {
         // (user 2026-06-03) : base neutre noire, le média couvre par-dessus.
         if effects.hasVisualBackgroundMedia || bgImage != nil {
             Color.black
+        } else if let bg = effects.background {
+            Color(hex: bg)
         } else {
-            // Hex OU gradient (C11) — style partagé, parité canvas.
-            Rectangle().fill(storyBackgroundStyle(effects.background))
+            Color(hex: "1A1A2E")
         }
 
         // Layer 1: User-picked background image
@@ -293,7 +294,7 @@ struct SlideMiniPreview: View {
                 Spacer()
                 HStack {
                     Circle()
-                        .fill(storyBackgroundStyle(bg))
+                        .fill(Color(hex: bg))
                         .frame(width: 8, height: 8)
                         .overlay(Circle().stroke(Color.white, lineWidth: 0.5))
                         .padding(2)

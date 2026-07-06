@@ -102,20 +102,13 @@ export class RedisDeliveryQueue {
   async drain(userId: string): Promise<QueuedMessagePayload[]> {
     const redis = this.getRedis();
 
-    // Entries stashed here predate anything Redis holds now (they were queued
-    // during a transient Redis outage, before it recovered), so they always
-    // sort first. Pulled out up front so they're never orphaned: without this,
-    // a Redis-reachable drain() would return only the Redis-backed entries and
-    // silently leave these sitting in memory forever (see enqueue()'s fallback).
-    const memoryEntries = this.memoryQueue.get(userId) ?? [];
-    this.memoryQueue.delete(userId);
-
     if (redis) {
       try {
         const key = queueKey(userId);
         const rawEntries = await redis.eval(DRAIN_LUA, 1, key);
 
-        const redisEntries = !Array.isArray(rawEntries) ? [] : (rawEntries as string[]).flatMap(raw => {
+        if (!Array.isArray(rawEntries)) return [];
+        return (rawEntries as string[]).flatMap(raw => {
           try {
             return [JSON.parse(raw) as QueuedMessagePayload];
           } catch {
@@ -123,13 +116,14 @@ export class RedisDeliveryQueue {
             return [];
           }
         });
-        return [...memoryEntries, ...redisEntries];
       } catch (error) {
         logger.warn('Redis drain failed, falling back to memory', { userId, error });
       }
     }
 
-    return memoryEntries;
+    const entries = this.memoryQueue.get(userId) ?? [];
+    this.memoryQueue.delete(userId);
+    return entries;
   }
 
   async peek(userId: string, limit?: number): Promise<QueuedMessagePayload[]> {
@@ -210,15 +204,13 @@ export class RedisDeliveryQueue {
             }
           }
         } while (cursor !== '0');
+
+        return totalRemoved;
       } catch (error) {
         logger.warn('Redis cleanup failed, falling back to memory', { error });
       }
     }
 
-    // Always sweep the memory fallback too, regardless of Redis reachability:
-    // entries land here during a transient Redis outage and must still expire
-    // on schedule even after Redis recovers (drain() reads both, but cleanup
-    // must not let them sit unbounded until then).
     for (const [userId, entries] of this.memoryQueue.entries()) {
       const fresh = entries.filter(e => new Date(e.enqueuedAt).getTime() > cutoff);
       const removed = entries.length - fresh.length;

@@ -195,10 +195,10 @@ struct DataExportView: View {
                 toggleRow(title: String(localized: "settings.data.export.content.contacts", defaultValue: "Contacts", bundle: .main), icon: "person.2.fill", color: MeeshyColors.indigo500, isOn: $includeContacts)
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: MeeshyColors.communityAccent))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: MeeshyColors.communityAccent), lineWidth: 1)
                     )
             )
@@ -210,7 +210,7 @@ struct DataExportView: View {
             // Glyphe figé : badge de dimension fixe 28×28 (doctrine 74i/86i — le scaling
             // Dynamic Type déborderait/tronquerait le glyphe hors du cadre fixe).
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(color)
                 .frame(width: 28, height: 28)
                 .background(

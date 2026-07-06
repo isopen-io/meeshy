@@ -131,7 +131,6 @@ function makeSocket() {
     }),
     emit: directEmit,
     to: jest.fn().mockReturnValue({ emit: jest.fn() }),
-    rooms: new Set<string>(['socket-retry-1']),
     data: {},
   };
   return { socket, handlers, directEmit };

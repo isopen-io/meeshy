@@ -569,7 +569,7 @@ struct RootView: View {
             },
             set: { if !$0 { callManager.displayMode = .pip } }
         )) {
-            CallView(callManager: callManager)
+            CallView()
         }
         .overlay(alignment: .top) {
             FloatingCallPillView()
@@ -1362,7 +1362,7 @@ struct RootView: View {
                     lastError = error
                     Logger.messages.error("[RootView] navigateToConversationById attempt=\(attempt) id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                     if attempt == 0 {
-                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        try? await Task.sleep(for: .seconds(0.6))
                     }
                 }
             }
@@ -1385,7 +1385,7 @@ struct RootView: View {
             PendingStoryBannerInline()
             Spacer()
         }
-        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.lg)
+        .padding(.top, 50)
         .zIndex(189)
     }
 
@@ -1518,10 +1518,18 @@ struct RootView: View {
             },
             isSearchBarVisible: !isScrollingDown,
             leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
+            leftA11yValue: showFeed ? String(localized: "a11y.floating.feed.opened", defaultValue: "Ouvert", bundle: .main) : String(localized: "a11y.floating.feed.closed", defaultValue: "Fermé", bundle: .main),
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
-            rightA11yValue: notificationManager.unreadCount > 0
-                ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
-                : nil,
+            rightA11yValue: {
+                var values: [String] = []
+                if showMenu {
+                    values.append(String(localized: "a11y.floating.menu.opened", defaultValue: "Ouvert", bundle: .main))
+                }
+                if notificationManager.unreadCount > 0 {
+                    values.append(String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount))
+                }
+                return values.isEmpty ? nil : values.joined(separator: ", ")
+            }(),
             rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
             leftContent: {
                 // Feed button content
@@ -1871,8 +1879,8 @@ private struct PendingSettingsBannerInline: View {
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
-                .padding(.horizontal, 16)
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -1932,8 +1940,8 @@ private struct PendingStoryBannerInline: View {
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
-                .padding(.horizontal, 16)
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }

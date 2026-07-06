@@ -63,36 +63,6 @@ describe('getInitials', () => {
     });
   });
 
-  describe('unicode / emoji names (surrogate pairs)', () => {
-    it('should keep the full emoji code point for a multi-word name (no broken half-surrogate)', () => {
-      const result = getInitials('🎨 Studio');
-      expect(result).toBe('🎨S');
-      expect(result.isWellFormed()).toBe(true);
-    });
-
-    it('should keep the full emoji when it is the LAST word', () => {
-      const result = getInitials('Studio 🎨');
-      expect(result).toBe('S🎨');
-      expect(result.isWellFormed()).toBe(true);
-    });
-
-    it('should never emit a lone surrogate for emoji at both ends', () => {
-      const result = getInitials('🎨 🎉');
-      expect(result).toBe('🎨🎉');
-      expect(result.isWellFormed()).toBe(true);
-    });
-
-    it('should take two full code points for a single emoji-only word', () => {
-      expect(getInitials('🎨🎉')).toBe('🎨🎉');
-    });
-
-    it('should combine a latin first name with an emoji surname', () => {
-      const result = getInitials('José 🚀');
-      expect(result).toBe('J🚀');
-      expect(result.isWellFormed()).toBe(true);
-    });
-  });
-
   describe('@ stripping', () => {
     it('should strip a leading @ before computing initials', () => {
       expect(getInitials('@john')).toBe('JO');

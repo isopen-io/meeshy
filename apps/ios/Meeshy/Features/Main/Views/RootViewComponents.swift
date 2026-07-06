@@ -45,7 +45,7 @@ struct ThemedActionButton: View {
                     .frame(width: size, height: size)
                     .shadow(
                         color: Color(hex: color).opacity(isGlowing ? 0.65 : 0.45),
-                        radius: isGlowing ? MeeshyShadow.strong.radius : MeeshyShadow.medium.radius,
+                        radius: isGlowing ? 14 : 10,
                         y: 4
                     )
 
@@ -378,7 +378,6 @@ struct ThemedFeedOverlay: View {
                         .adaptiveGlass(in: Circle(), interactive: true)
                 }
                 .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
-                .accessibilityIdentifier("feed.header.reels")
             },
             // Compact story trail integrated inside the header (accessory slot,
             // below the title/actions bar) — reveals as the full Story Tray
@@ -569,7 +568,7 @@ struct ThemedFeedOverlay: View {
                     },
                     topPadding: CollapsibleHeaderMetrics.expandedHeight
                 ) {
-                LazyVStack(spacing: MeeshySpacing.md) {
+                LazyVStack(spacing: 14) {
                     // Story Tray — lancement unifié via StoryViewerCoordinator
                     // (même chemin que la liste de conversations), pas de cover local.
                     StoryTrayView(viewModel: storyViewModel, onAddStatus: {
@@ -597,7 +596,7 @@ struct ThemedFeedOverlay: View {
                                 .font(MeeshyFont.relative(16))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
-                        .padding(MeeshySpacing.md)
+                        .padding(12)
                         .background(
                             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .fill(theme.inputBackground)
@@ -608,8 +607,7 @@ struct ThemedFeedOverlay: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .accessibilityIdentifier("feed.composer.placeholder")
+                    .padding(.horizontal, 16)
 
                     // Feed posts with infinite scroll. Les Réels (`type == REEL`)
                     // rendent plein-cadre via `reelFeedCardView` ; les autres via

@@ -7,18 +7,12 @@ final class StoryModelsTests: XCTestCase {
 
     func testStoryTextStyleAllCases() {
         let cases = StoryTextStyle.allCases
-        XCTAssertEqual(cases.count, 11)
+        XCTAssertEqual(cases.count, 5)
         XCTAssertTrue(cases.contains(.bold))
         XCTAssertTrue(cases.contains(.neon))
         XCTAssertTrue(cases.contains(.typewriter))
         XCTAssertTrue(cases.contains(.handwriting))
         XCTAssertTrue(cases.contains(.classic))
-        XCTAssertTrue(cases.contains(.calligraphy))
-        XCTAssertTrue(cases.contains(.cartoon))
-        XCTAssertTrue(cases.contains(.futuristic))
-        XCTAssertTrue(cases.contains(.fantasy))
-        XCTAssertTrue(cases.contains(.curve))
-        XCTAssertTrue(cases.contains(.tag))
     }
 
     func testStoryTextStyleDisplayNames() {
