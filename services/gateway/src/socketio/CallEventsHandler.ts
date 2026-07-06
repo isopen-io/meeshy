@@ -697,8 +697,17 @@ export class CallEventsHandler {
    * degraded leaks its entry forever — only the size-capped sweep in
    * call:quality-report ever reclaims it, and a moderate-traffic gateway can
    * run long enough to never hit that cap.
+   *
+   * Public: `CallCleanupService.forceEndCall` (GC tier — stale ringing/
+   * connecting/active/heartbeat-timeout calls) is a 4th terminal path with no
+   * reference to this handler's private map, wired in via
+   * `CallCleanupService.setQualityStreakCleanupCallback` (mirrors
+   * `setPostSummaryCallback`'s existing bridge for the same reason). GC-ended
+   * calls are actually the MOST likely to leak here — an abandoned call
+   * nobody explicitly hung up is exactly the "last report was degraded, call
+   * then ends" scenario this cleanup targets.
    */
-  private clearQualityDegradedStreaks(callId: string): void {
+  clearQualityDegradedStreaks(callId: string): void {
     const prefix = `${callId}:`;
     for (const key of this.qualityDegradedStreaks.keys()) {
       if (key.startsWith(prefix)) {
@@ -2121,7 +2130,8 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated'
+            message: 'User not authenticated',
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2148,7 +2158,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.INVALID_SIGNAL,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined
+            details: validationDetails ? { issues: validationDetails } : undefined,
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2172,7 +2183,8 @@ export class CallEventsHandler {
           if (!iceAllowed) {
             socket.emit(CALL_EVENTS.ERROR, {
               code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED,
-              message: 'Too many ICE candidates — slow down'
+              message: 'Too many ICE candidates — slow down',
+              callId: data.callId
             } as CallError);
             ack?.({ success: false });
             return;
@@ -2192,7 +2204,8 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not in this call'
+            message: 'You are not in this call',
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2206,8 +2219,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.SIGNAL_SENDER_MISMATCH,
-            message: 'Signal sender does not match authenticated user'
-          });
+            message: 'Signal sender does not match authenticated user',
+            callId: data.callId
+          } as CallError);
           return;
         }
 
@@ -2223,8 +2237,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant not found in call'
-          });
+            message: 'Target participant not found in call',
+            callId: data.callId
+          } as CallError);
           return;
         }
 
@@ -2254,8 +2269,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant has no active connection'
-          });
+            message: 'Target participant has no active connection',
+            callId: data.callId
+          } as CallError);
           ack?.({ success: false });
           return;
         }
@@ -2299,7 +2315,8 @@ export class CallEventsHandler {
 
         socket.emit(CALL_EVENTS.ERROR, {
           code: 'SIGNAL_FAILED',
-          message: 'Failed to forward WebRTC signal'
+          message: 'Failed to forward WebRTC signal',
+          callId: data.callId
         } as CallError);
       }
     });

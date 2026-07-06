@@ -194,3 +194,54 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 }
+
+// MARK: - CallSignalGlyph Reduce Motion (source inspection)
+
+/// Audit P2-iOS-9 covered every other animated element in the call chrome
+/// (pulsingAvatar, IncomingCallView's ring/bounce, IslandEmergingBanner,
+/// FloatingCallPillView's slide-in, CallWaitingBannerView's slide-in) but
+/// missed the signal glyph — its bars-changing and appear/disappear
+/// animations ran unconditionally regardless of Reduce Motion.
+@MainActor
+final class CallSignalGlyphReduceMotionTests: XCTestCase {
+
+    private func glyphSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/CallSignalGlyph.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_glyph_declaresReduceMotionEnvironment() throws {
+        let source = try glyphSource()
+        XCTAssertTrue(
+            source.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"),
+            "CallSignalGlyph and TransientCallSignalGlyph must read accessibilityReduceMotion " +
+            "like every other animated element in the call chrome."
+        )
+    }
+
+    func test_barsAnimation_isGatedByReduceMotion() throws {
+        let source = try glyphSource()
+        XCTAssertTrue(
+            source.contains(".animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: strength)"),
+            "the bars-strength-change animation must be skipped under Reduce Motion, matching " +
+            "the codebase's established `reduceMotion ? nil : .easeInOut(...)` pattern."
+        )
+    }
+
+    func test_appearDisappearAnimations_areGatedByReduceMotion() throws {
+        let source = try glyphSource()
+        XCTAssertTrue(
+            source.contains("withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { isVisible = true }"),
+            "the glyph's appear transition must be skipped under Reduce Motion."
+        )
+        XCTAssertTrue(
+            source.contains("withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) { isVisible = false }"),
+            "the glyph's disappear transition must be skipped under Reduce Motion."
+        )
+    }
+}

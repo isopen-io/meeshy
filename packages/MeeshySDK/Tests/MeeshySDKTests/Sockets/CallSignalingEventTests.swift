@@ -270,6 +270,16 @@ final class CallSignalingEventTests: XCTestCase {
         let data = try decoder.decode(CallErrorData.self, from: json)
         XCTAssertNil(data.code)
         XCTAssertNil(data.message)
+        XCTAssertNil(data.callId)
+    }
+
+    func test_callErrorData_decodingCallId_whenGatewayIncludesIt() throws {
+        let json = """
+        {"code": "TARGET_NOT_FOUND", "message": "Target participant not found in call", "callId": "call-123"}
+        """.data(using: .utf8)!
+
+        let data = try decoder.decode(CallErrorData.self, from: json)
+        XCTAssertEqual(data.callId, "call-123")
     }
 
     // MARK: - CallSignalPayload (shared by Answer and ICE)

@@ -1315,6 +1315,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         this.callCleanupService.setPostSummaryCallback(
           (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
         );
+        // Sibling-drift fix (2026-07-05) — GC-ended calls (the 4th terminal
+        // path) also release their qualityDegradedStreaks entries, matching
+        // the three paths CallEventsHandler already hooks into itself.
+        this.callCleanupService.setQualityStreakCleanupCallback(
+          (callId) => callEventsHandler.clearQualityDegradedStreaks(callId)
+        );
         // Phantom-ringing safety net — a callee whose VoIP push was
         // delivered but whose socket never joined the call room needs the
         // same `call_cancel` background push every other missed-call path

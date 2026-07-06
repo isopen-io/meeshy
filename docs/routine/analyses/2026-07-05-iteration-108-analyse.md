@@ -1,108 +1,105 @@
 # Iteration 108 — Analyse d'optimisation (2026-07-05)
 
 ## Protocole (démarrage)
-`main` @ `2e2584a9` (« Merge PR #1509 »), working tree propre après merge de l'itération 107
-(PR #1507, F76 `isUrlOnly`, mergée). Branche de travail `claude/brave-archimedes-fru31a` recréée depuis
+`main` @ `968550a` (« feat(android/settings): persisted light/dark/system theme #1504 »),
+working tree propre. Branche de travail `claude/brave-archimedes-3kjwj4` recréée depuis
 `origin/main` (`git checkout -B … origin/main`), 0 commit non-mergé à préserver.
 
-### Revue d'ingénierie (constat de démarrage)
-Suite de l'itération 107 : les candidats reportés F77/F78 ont été réévalués. F78 (`buildAttachmentUrl`)
-reste conditionnel (dépend de l'existence effective d'URLs `www.`/porteuses de query — le endpoint
-statique gateway est JWT-header, pas query-token, donc drop de query = impact faible/incertain) →
-maintenu en report. **F77 retenu** après vérification que les breakers sont réellement câblés en
-production (pas des factories mortes) :
-- `CacheStore.ts` — `createRedisBreaker()` protège **tout** l'accès Redis (get/set/del/keys/setnx/
-  expire/info) — chemin de cache chaud.
-- `PushNotificationService.ts` — deux `CircuitBreaker` (FCM + APNs) protègent l'envoi de push.
+**10 PR ouvertes au démarrage** (#1498–#1509), très concentrées :
+- iOS realtime (#1509 — typing teardown), Android settings (#1508 — interface language)
+- gateway translation `url-content.ts` / F76 (#1507), calls (#1506, #1502, #1498)
+- gateway socketio auth join-order (#1505), shared email-validator / F73 (#1503)
+- gateway reactions self-heal (#1501), gateway normalize / F72 (#1499)
 
-## Cible : F77 — `CircuitBreaker` ignore `failureWindowMs` → ouverture parasite sur échecs dispersés
+Cible retenue ce cycle **strictement disjointe** de toutes : `apps/web/utils/language-detection.ts`
+(`detectBestInterfaceLanguage`), qu'aucune PR ouverte ne touche.
+
+### Revue d'ingénierie (constat de démarrage)
+Balayage ciblé (agent d'exploration) des utilitaires **purs / quasi-purs** de `packages/shared/utils/`,
+`apps/web/utils/`, `apps/web/lib/`, `services/gateway/src/utils/`, hors zones déjà traitées (F57–F78 :
+`initials`, `truncate`, `format-number`, `calendar-date`, `mention-parser`, `conversation-helpers`,
+`duration-format`, `relative-time`, `time-remaining`, `presence-format`, `email-validator`,
+`normalize`, `url-content`, `xss-protection`, `mention-display`, `generateCommunityIdentifier`,
+`CircuitBreaker`, `buildAttachmentUrl`, `blocking`). Le code s'est révélé exceptionnellement propre
+(sweeps systématiques antérieurs). Trois candidats remontés :
+
+1. **F79 — `detectBestInterfaceLanguage` omet `es`** — RETENU (impact utilisateur réel, aligné cœur
+   produit « Prisme Linguistique », correctif d'une ligne, callers live).
+2. **`getDefaultPermissions` (`user-adapter.ts`) sensible à la casse du rôle** — écarté ce cycle :
+   hypothèse (rôle arrivant en minuscules à ce point d'adaptation) non prouvée sur le flux réel ;
+   à instruire séparément si un cas live est confirmé. Reporté (§ futur, F80).
+3. **`normalizeForDisplay` (`link-identifier.ts`) — strip `mshy_` mort (no-op)** — écarté : code mort,
+   0 impact utilisateur (le préfixe `mshy_` provient d'un autre module qui ne passe jamais par cette
+   fonction). Reporté (§ futur, F81, faible valeur).
+
+## Cible : F79 — `detectBestInterfaceLanguage` n'auto-détecte jamais l'espagnol, pourtant langue d'interface expédiée
 
 ### Current state
-`services/gateway/src/utils/circuitBreaker.ts` implémente le pattern Circuit Breaker (CLOSED/OPEN/
-HALF_OPEN). Le contrat `CircuitBreakerConfig` documente deux champs conjoints :
+`apps/web/utils/language-detection.ts` expose `detectBestInterfaceLanguage()` — **source de la sélection
+automatique de la langue de l'UI (chrome)** au premier montage. Consommée par
+`apps/web/hooks/use-language.ts:85` et `:120` (choix de la langue d'interface à l'initialisation).
+Implémentation d'origine :
 ```ts
-/** Number of failures before opening circuit */
-failureThreshold: number;
-/** Time window for counting failures (ms) */
-failureWindowMs: number;
+const interfaceLanguages = ['en', 'fr', 'pt']; // Langues d'interface supportées
+const browserLanguages = navigator.languages || [navigator.language || 'en'];
+for (const lang of browserLanguages) {
+  const languageCode = lang.split('-')[0].toLowerCase();
+  if (interfaceLanguages.includes(languageCode)) return languageCode;
+}
+return 'en';
 ```
-Sémantique standard et documentée : « ouvrir le circuit quand `failureThreshold` échecs surviennent
-**dans** `failureWindowMs` ». Toutes les factories fixent ce champ (`createSocketIOBreaker` 60 s,
-`createRedisBreaker` 30 s, `createDatabaseBreaker` 60 s, `createExternalAPIBreaker` 30 s ;
-`PushNotificationService` FCM/APNs 60 s).
 
 ### Problems identified
-- **[LIVE] `failureWindowMs` n'est référencé nulle part dans la logique de la classe.** `onFailure`
-  faisait `this.failureCount++` sans aucun vieillissement temporel ; `failureCount` ne retombait à 0
-  que sur un **succès** (`onSuccess`, état CLOSED) ou une transition. Conséquence : des échecs
-  **dispersés arbitrairement loin** dans le temps (sans succès intercalé) s'accumulent indéfiniment et
-  finissent par franchir `failureThreshold`, ouvrant le circuit alors qu'aucune **rafale** n'a eu lieu
-  dans la fenêtre prévue.
-- Scénario concret (Redis, threshold 3 / fenêtre 30 s) : échec à t=0, puis à t=10 min, puis à t=20 min
-  (trafic Redis faible, aucun succès intercalé) → `failureCount` atteint 3 → circuit OPEN → toutes les
-  lectures Redis basculent en fallback (bypass cache) pendant `resetTimeoutMs`, malgré trois échecs
-  isolés totalement bénins. Pour `createDatabaseBreaker`, le fallback **jette** « Database is currently
-  unavailable » — erreur utilisateur directe.
+- **[LIVE] UI en anglais pour tout navigateur hispanophone.** `navigator.languages = ['es-ES', 'en-US']`
+  → renvoie `'en'` (le loop ignore `es`, absent de la liste, puis matche `en`). `['es-419']`
+  (Amérique latine) → `'en'` (aucun match, fallback). Pourtant :
+  - le bundle de traduction **`apps/web/locales/es/` existe et est complet** ;
+  - `es` est une entrée **first-class** de `INTERFACE_LANGUAGES` (`apps/web/types/frontend.ts:78`),
+    **placée avant `fr`/`pt`** — qui, elles, SONT auto-détectées ;
+  - le sélecteur de langue **propose déjà** l'espagnol à l'utilisateur.
+- La fonction jumelle `getUserPreferredLanguage` (même fichier, langue de **contenu**) gère `es`
+  correctement via `isSupportedLanguage` — divergence de comportement entre les deux détecteurs
+  du même module.
 
 ### Root cause
-La fenêtre de comptage n'était jamais matérialisée : le compteur d'échecs était purement cumulatif,
-borné seulement par un succès. Le champ `failureWindowMs` — pourtant documenté et configuré partout —
-était du code mort de configuration.
+Liste blanche codée en dur `['en', 'fr', 'pt']` : l'espagnol a été oublié à l'ajout du bundle
+`locales/es`. Ce n'est **pas** le cas intentionnel de `de`/`it` (présentes dans `INTERFACE_LANGUAGES`
+mais délibérément non auto-détectées car **sans bundle** — repli gracieux sur `en` documenté dans
+`frontend.ts:63-74`). `es` a un bundle → son omission est un défaut, pas un choix.
 
 ### Business impact
-Ouverture parasite d'un disjoncteur = dégradation injustifiée : bypass du cache Redis (latence accrue,
-charge MongoDB), voire erreurs « service indisponible » côté DB, et push non délivrés (FCM/APNs) — le
-tout déclenché par des échecs transitoires épars qui n'auraient jamais dû compter ensemble. Fiabilité
-de l'infra en dessous du contrat annoncé.
+Violation directe du **Prisme Linguistique** (cœur produit Meeshy) sur la surface UI : un utilisateur
+hispanophone — la 2ᵉ population de langue maternelle au monde — reçoit une interface anglaise alors que
+Meeshy expédie et propose l'espagnol. Friction linguistique exactement là où le produit promet la
+transparence. L'état de l'art (Telegram/WhatsApp/Signal) sélectionne la locale de l'appareil sans
+configuration.
 
 ### Technical impact
-Correction locale à la classe : implémenter une **fenêtre fixe** ancrée au premier échec du cycle.
-Nouveau champ `failureWindowStart?: number`. Dans `onFailure` : si la fenêtre a expiré
-(`now - failureWindowStart > failureWindowMs`) **ou** si le compteur est à 0 (premier échec, ou après
-un reset/succès), on démarre une nouvelle fenêtre (`failureWindowStart = now`, `failureCount = 1`) ;
-sinon on incrémente. `transitionToClosed` réinitialise aussi `failureWindowStart`. Les consommateurs
-(`CacheStore`, `PushNotificationService`) héritent automatiquement du comportement correct sans
-changement d'API.
+Correctif purement local : ajout de `'es'` à la liste blanche → `['en', 'es', 'fr', 'pt']` = exactement
+les 4 langues d'interface **avec bundle complet**. Les deux callers (`use-language.ts`) héritent
+automatiquement. `de`/`it` restent volontairement exclues (repli `en` inchangé). Aucun changement de
+signature, d'import ou de contrat.
 
 ### Risk assessment
-Très faible. Tous les tests existants déclenchent leurs échecs dans le **même tick** de faux timer
-(donc dans la fenêtre) → comportement **identique** (le circuit ouvre toujours au seuil sur une
-rafale). Le seul changement observable concerne les échecs séparés de plus de `failureWindowMs` — qui
-ne s'accumulent plus. Aucune régression sur les 77 tests existants (prouvé).
+Très faible. Comportement **identique** pour en/fr/pt et pour de/it (toujours `en`), **corrigé** pour es.
+Fonction déterministe-selon-entrée (lit `navigator.languages`), entièrement testable via le harness jest
+existant (mock `navigator.languages`).
 
 ### Proposed improvements (implémenté ce cycle)
-- Champ `failureWindowStart?: number`.
-- `onFailure` : fenêtre fixe ancrée au premier échec ; reset du compteur quand la fenêtre expire.
-- `transitionToClosed` : reset de `failureWindowStart`.
-- Commentaire expliquant le *pourquoi* (accumulation sans borne temporelle → ouverture parasite).
-
-### Expected benefits
-- `failureWindowMs` honore enfin son contrat documenté sur les 6 breakers câblés.
-- Élimine les ouvertures parasites de disjoncteur sur trafic infra faible/intermittent.
-- Aucun coût : une soustraction + une comparaison par échec.
-
-### Implementation complexity
-Faible (1 champ + ~12 lignes dans `onFailure` + 1 ligne dans `transitionToClosed` ; 3 tests neufs).
-Aucun changement de signature/contrat public.
+- `interfaceLanguages = ['en', 'es', 'fr', 'pt']` + commentaire explicitant le critère (« bundle complet »)
+  et la raison de l'exclusion de/it.
+- 3 tests de régression : `['es-ES','en-US'] → 'es'`, `['es-419'] → 'es'`, `['it-IT','de-DE'] → 'en'`
+  (garde-fou anti-régression sur l'exclusion intentionnelle de/it).
 
 ### Validation criteria
-- [x] `circuitBreaker.test.ts` **80/80** (77 existants inchangés + 3 neufs : échecs dispersés au-delà
-      de la fenêtre n'ouvrent pas, échecs dans la fenêtre ouvrent, reset du compteur à l'expiration).
-- [x] Aucun changement d'API ; consommateurs héritent du fix.
+- `apps/web` : `language-detection.test.ts` 35/35 (32 existants + 3 nouveaux), `use-language.test.tsx`
+  24/24. RED prouvé d'abord (les 2 cas `es` → `'en'` avant correctif).
 
-## Candidats écartés ce cycle (documentés)
-- **F78 — `buildAttachmentUrl`** (`apps/web/utils/attachment-url.ts:54-60`) : correction limitée à
-  l'hôte exact `meeshy.me` (pas `www.meeshy.me`) + reconstruction depuis `pathname` seul (drop query/
-  hash). **Maintenu en report** : impact conditionnel à l'existence d'URLs `www.`/porteuses de query
-  en prod (le endpoint statique gateway s'authentifie par header JWT, pas par query-token → drop de
-  query probablement sans effet fonctionnel aujourd'hui).
-
-## Améliorations futures (report)
-- **F51b** (LOW) : réécriture des docs `notifications/`.
-- **F56b** (LOW) : `likeCount` absolu sur `post:reaction-added/removed`.
-- **F60b** (LOW) : parité parsing mention iOS/Android sur `MENTION_HANDLE_CHARS` (tiret).
-- **F67b** (LOW) : audit découpage jour-calendaire iOS.
-- **F69** (LOW) : `sanitizeFileName` plafond 255 sur nom sans extension (latent, 0 appelant).
-- **F70** (LOW) : `deepCleanTranslationOutput` apostrophes FR (code mort, 0 appelant).
-- **F68b** (LOW) : contrepartie iOS des initiales (parité point-de-code).
-- **F78** (LOW-MEDIUM) : `buildAttachmentUrl` hôte-spécifique + drop query — impact conditionnel.
+## Backlog reporté (§ futur)
+- **F80** — `getDefaultPermissions` (`user-adapter.ts`) sensible à la casse : `rolePermissions[role]`
+  sans normalisation ; un rôle en minuscules retomberait sur `USER` (0 permission). À confirmer sur un
+  flux live avant fix (`rolePermissions[role.toUpperCase()] || rolePermissions.USER`).
+- **F81** — `normalizeForDisplay` (`link-identifier.ts`) : `.replace('mshy_', '')` mort (branche
+  `linkId` ne contient jamais `mshy_`). Code mort, faible valeur.
+- F69, F74, F75, F77, F78 (itérations antérieures) : toujours reportés (0 caller live / décision produit
+  requise).

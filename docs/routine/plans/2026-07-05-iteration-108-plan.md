@@ -1,55 +1,48 @@
 # Iteration 108 — Plan d'implémentation (2026-07-05)
 
-## Objectives
-Corriger **F77** : `CircuitBreaker` (`services/gateway/src/utils/circuitBreaker.ts`) n'implémentait pas
-`failureWindowMs` (documenté « Time window for counting failures » et configuré par toutes les
-factories). Des échecs dispersés au-delà de la fenêtre s'accumulaient et ouvraient parasitairement le
-disjoncteur. Implémenter une fenêtre fixe ancrée au premier échec du cycle.
+## Objectifs
+Corriger **F79** : `detectBestInterfaceLanguage` (`apps/web/utils/language-detection.ts`) n'auto-détecte
+jamais l'espagnol alors que `es` est une langue d'interface expédiée (bundle `locales/es` complet, entrée
+first-class dans `INTERFACE_LANGUAGES`). Un navigateur hispanophone reçoit une UI anglaise — violation du
+Prisme Linguistique sur la surface chrome.
 
-## Affected modules
-- `services/gateway/src/utils/circuitBreaker.ts` — classe `CircuitBreaker` (`onFailure`,
-  `transitionToClosed`, nouveau champ `failureWindowStart`).
-- `services/gateway/src/__tests__/unit/utils/circuitBreaker.test.ts` — 3 tests de fenêtre.
-- Consommateurs (héritent automatiquement, non modifiés) : `services/gateway/src/services/CacheStore.ts`
-  (Redis), `services/gateway/src/services/PushNotificationService.ts` (FCM/APNs).
+## Modules affectés
+- `apps/web/utils/language-detection.ts` — `detectBestInterfaceLanguage` (liste blanche).
+- `apps/web/__tests__/utils/language-detection.test.ts` — 3 tests de régression.
+- Callers (hérités, inchangés) : `apps/web/hooks/use-language.ts:85,120`.
 
-## Implementation phases
-1. **Champ** — `private failureWindowStart?: number`. ✅
-2. **`onFailure`** — fenêtre fixe : si `failureCount === 0` ou `now - failureWindowStart >
-   failureWindowMs`, démarrer une nouvelle fenêtre (`failureWindowStart = now`, `failureCount = 1`) ;
-   sinon incrémenter. ✅
-3. **`transitionToClosed`** — reset `failureWindowStart = undefined`. ✅
-4. **Tests** — 3 cas neufs (dispersés > fenêtre ne s'accumulent pas ; dispersés < fenêtre ouvrent ;
-   compteur reset à l'expiration). ✅
-5. **Validation** — `bun run test:unit -- circuitBreaker.test.ts` : 80/80. ✅
+## Phases d'implémentation
+1. **RED** — ajouter 3 tests : `['es-ES','en-US'] → 'es'`, `['es-419'] → 'es'`, `['it-IT','de-DE'] → 'en'`.
+   Vérifier que les 2 cas `es` échouent (`Received: "en"`). ✅
+2. **GREEN** — `interfaceLanguages = ['en', 'es', 'fr', 'pt']` + commentaire (critère « bundle complet »,
+   raison exclusion de/it). ✅
+3. **REFACTOR** — commentaire aligné sur la doc `frontend.ts:63-74` ; aucune autre modification. ✅
 
-## Dependencies
-Aucune. Aucun changement d'API publique.
+## Dépendances
+Aucune (correctif local, pure liste blanche).
 
-## Estimated risks
-Très faible. Comportement identique sur rafales (tous les tests existants déclenchent dans un seul
-tick). Seul changement : échecs séparés de plus de `failureWindowMs` ne s'accumulent plus.
+## Risques estimés
+Très faible. Comportement identique en/fr/pt et de/it ; corrigé pour es. Fonction testable via mock
+`navigator.languages`.
 
-## Rollback strategy
-Trivial : retirer le champ + restaurer `this.failureCount++`. Un seul fichier de prod, aucun état
-persistant, aucune migration.
+## Stratégie de rollback
+Restaurer `['en', 'fr', 'pt']` — réversible en une ligne.
 
-## Validation criteria
-- [x] 77 tests existants inchangés + 3 neufs = 80/80 (bun/jest).
-- [x] Aucun changement de signature/contrat ; `CacheStore`/`PushNotificationService` héritent du fix.
+## Critères de validation
+- `language-detection.test.ts` 35/35, `use-language.test.tsx` 24/24. ✅
+- RED prouvé avant correctif. ✅
 
-## Completion status
-**COMPLET.** Fix + tests + docs. Prêt à commit/push.
+## Statut de complétion
+**COMPLÉTÉ** — fix + tests verts, RED→GREEN respecté.
 
-## Progress tracking
-- [x] Analyse (`2026-07-05-iteration-108-analyse.md`).
-- [x] Plan (ce fichier).
-- [x] Fix `circuitBreaker.ts`.
-- [x] Tests `circuitBreaker.test.ts`.
-- [x] `bun run test:unit` vert (80/80).
-- [ ] Commit + push branche `claude/brave-archimedes-fru31a`.
-- [ ] PR + merge.
+## Suivi de progression
+- [x] RED (3 tests, 2 rouges)
+- [x] GREEN (fix 1 ligne + commentaire)
+- [x] Suite `language-detection` 35/35
+- [x] Suite `use-language` 24/24 (callers)
+- [x] Analyse + plan + leçon
+- [ ] Commit + push + PR
 
-## Future improvements
-- **F78** (LOW-MEDIUM) : `buildAttachmentUrl` ne corrige que l'hôte exact `meeshy.me` (pas `www.`) et
-  drop query/hash — impact conditionnel à l'existence de telles URLs en prod.
+## Améliorations futures
+- **F80** `getDefaultPermissions` casse rôle (à confirmer sur flux live).
+- **F81** `normalizeForDisplay` strip `mshy_` mort (faible valeur).

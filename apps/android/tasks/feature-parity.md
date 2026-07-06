@@ -1277,8 +1277,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`:sdk-core`, hydrates on cold start, corrupt stored value → defaults), `SettingsViewModel`
       per-toggle intents (push/new-message/sound/vibration) that persist the whole block without
       clobbering the other fields, `SettingsScreen` state-driven `Switch` rows (push is the master —
-      the three sub-toggles disable when push is off). +25 tests. **Still open:** email + the remaining
-      per-event types + DND schedule editor + offline-queued backend sync (this slice is device-local only).
+      the three sub-toggles disable when push is off). +25 tests. **DND schedule editor landed**
+      (`settings-dnd-schedule`, 2026-07-05): pure `:core:model` `DndWindow` SSOT (port of iOS
+      `isInDoNotDisturbWindow`) — `isActive(prefs, weekday, minuteOfDay)`/`isActive(prefs, LocalDateTime)`
+      (enable gate · midnight-wrap · per-day gating · corrupt-`HH:mm` → never-active),
+      `parseMinuteOfDay`/`formatTimeOfDay` (range-clamped) codec, `toggleDay` (canonical Mon→Sun,
+      dedup), `DndDay`↔ISO-`DayOfWeek` mapping; `SettingsViewModel` `setDndEnabled`/`setDndStart`/
+      `setDndEnd`/`toggleDndDay` intents persisting the whole block; `SettingsScreen` DND rows
+      (master toggle + Material3 24h `TimePicker` from/until rows + Mon→Sun `FilterChip` day selector +
+      a **live "quiet hours active now" status** computed from `DndWindow.isActive`). +32 tests
+      (EN/FR/ES/PT strings). Surpasses iOS which has no live-status readout in its editor.
+      **Per-event notification type toggles landed** (`settings-notification-type-toggles`, 2026-07-06):
+      pure `:core:model` `NotificationTypeCatalog` SSOT — 17 `NotificationType`s each with a `get`/`set`
+      lens over its `UserNotificationPreferences` boolean (`toggle`/`isEnabled` edit exactly one, never
+      clobber), grouped by 5 ordered `NotificationCategory`s (Messages · Calls · Social · Groups · System)
+      via `sections(prefs, query, label)` with a locale-aware injected-label case-insensitive/trimmed search
+      that omits empty categories; `SettingsViewModel` `setNotificationTypeEnabled`/`setNotificationTypeQuery`;
+      `SettingsScreen` search field + accent category headers + push-gated per-type switches + empty-state.
+      +14 tests (22 new strings ×EN/FR/ES/PT). Surpasses iOS which lists the same toggles without an in-section
+      search filter. **Still open:** email + offline-queued backend sync of the block (still device-local only).
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync
