@@ -53,4 +53,8 @@ suspend fun <T> rawApiCall(block: suspend () -> T): NetworkResult<T> =
         NetworkResult.Failure(
             ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
         )
+    } catch (e: SerializationException) {
+        NetworkResult.Failure(
+            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+        )
     }
