@@ -59,6 +59,7 @@ data class ChatUiState(
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
     val imageViewer: ImageViewerTarget? = null,
+    val search: ChatSearchState = ChatSearchState(),
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -134,8 +135,9 @@ class ChatViewModel @Inject constructor(
             ) { result, user, own, originals -> BubbleInputs(result, user, own, originals) }
                 .collect { (result, user, own, originals) ->
                     latestMessages = result.valueOrNull() ?: latestMessages
-                    _state.update {
-                        it.applyResult(result, user, own, originals, config.socketUrl)
+                    _state.update { current ->
+                        val next = current.applyResult(result, user, own, originals, config.socketUrl)
+                        next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
                 }
         }
@@ -339,6 +341,26 @@ class ChatViewModel @Inject constructor(
 
     fun dismissImageViewer() {
         _state.update { it.copy(imageViewer = null) }
+    }
+
+    fun openSearch() {
+        _state.update { it.copy(search = it.search.activated()) }
+    }
+
+    fun closeSearch() {
+        _state.update { it.copy(search = it.search.deactivated()) }
+    }
+
+    fun onSearchQueryChange(query: String) {
+        _state.update { it.copy(search = it.search.withQuery(query, it.messages.toSearchable())) }
+    }
+
+    fun nextSearchMatch() {
+        _state.update { it.copy(search = it.search.movedToNext()) }
+    }
+
+    fun previousSearchMatch() {
+        _state.update { it.copy(search = it.search.movedToPrev()) }
     }
 
     fun toggleShowOriginal(messageId: String) {
@@ -564,6 +586,19 @@ private fun List<LocalMessage>.toBubbles(
         mediaBaseUrl = mediaBaseUrl,
     )
 }
+
+/**
+ * Project the visible bubbles into the opaque searchable model. Deleted bubbles
+ * (placeholder text) and bubbles with no textual body (image/file only) carry no
+ * searchable text and are skipped; the stored original is searched alongside the
+ * displayed translation so search stays translation-match aware.
+ */
+private fun List<BubbleContent>.toSearchable(): List<SearchableMessage> =
+    mapNotNull { bubble ->
+        if (bubble.isDeleted) return@mapNotNull null
+        val texts = listOfNotNull(bubble.text, bubble.originalText).filter { it.isNotBlank() }
+        if (texts.isEmpty()) null else SearchableMessage(bubble.messageId, texts)
+    }
 
 private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
     override val systemLanguage: String? = null

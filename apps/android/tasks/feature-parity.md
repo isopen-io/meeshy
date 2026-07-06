@@ -361,7 +361,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `resolvedLinkUrl` (tracked-link redirect). Rendered via `:sdk-ui` `RichMessageText` (`AnnotatedString`
       + `LinkAnnotation.Url`/`withLink` real taps, highlight over rendered plain text) wired into the bubble;
       `mentionDisplayNames`/`highlightTerm`/`trackedLinks` params ready for `ChatScreen` to feed. +34 tests.
-      **Pending:** ChatViewModel supplying the live search term + member roster; in-app browser / OG cards.
+      **Search-highlight half now wired** (`chat-search-highlight-wiring` 2026-07-06): `ChatViewModel` supplies
+      the live `highlightTerm` end-to-end (see the in-conversation search row below). **Pending:** member roster
+      → `mentionDisplayNames`; in-app browser / OG cards.
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
 - [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
 - [ ] Edited / pinned / forwarded indicators; edit-history viewer
@@ -380,7 +382,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] @-mention autocomplete (debounced API + local merge)
 - [ ] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral)
 - [ ] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress
-- [ ] In-conversation message search (debounced, translation-match aware) + jump-to-result
+- [◐] In-conversation message search (translation-match aware) + jump-to-result — core+wiring done
+      (`chat-search-highlight-wiring` 2026-07-06): pure `:feature:chat` `ChatSearch` SSOT over the opaque
+      `SearchableMessage` — `matchIds` (trimmed/case-insensitive `contains` across **every** text of a message,
+      so the displayed translation *and* the stored original both match → translation-aware) + a pure reducer
+      (`activated`/`deactivated`/`withQuery`/`reconciled`/`movedToNext`/`movedToPrev`) over `ChatSearchState`
+      (matches, wraparound next/prev, one-based `currentPosition`, `highlightTerm`). `ChatViewModel` intents
+      (`openSearch`/`onSearchQueryChange`/`nextSearchMatch`/`previousSearchMatch`/`closeSearch`) recompute on
+      each keystroke and **reconcile against the live message stream keeping the user's focused hit** (deleted /
+      body-less bubbles excluded); `ChatScreen` renders a search TopAppBar (accent cursor, `x / y` counter,
+      up/down nav) and jumps the list to the active hit via `animateScrollToItem`; `highlightTerm` threads into
+      every `MessageBubble` (reusing the tested `MessageTextParser.highlightRanges`). Local match is instant — no
+      debounce needed (surpasses iOS's debounced-but-online search). +29 tests (24 pure-core, 5 VM). **Pending:**
+      server-side/remote search over uncached history.
 - [ ] Scroll-to-bottom control with rich unread/typing/offline/search states
 - [ ] Typing indicators (header + inline)
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions

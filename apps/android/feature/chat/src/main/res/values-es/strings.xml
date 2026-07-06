@@ -28,4 +28,12 @@
     <string name="chat_typing_two">%1$s y %2$s están escribiendo…</string>
     <string name="chat_typing_many">%1$d personas están escribiendo…</string>
     <string name="chat_scroll_to_bottom">Ir al último mensaje</string>
+    <string name="chat_search">Buscar mensajes</string>
+    <string name="chat_search_hint">Buscar en esta conversación</string>
+    <string name="chat_search_close">Cerrar la búsqueda</string>
+    <string name="chat_search_clear">Borrar la búsqueda</string>
+    <string name="chat_search_previous">Resultado anterior</string>
+    <string name="chat_search_next">Resultado siguiente</string>
+    <string name="chat_search_count">%1$d / %2$d</string>
+    <string name="chat_search_no_results">Sin resultados</string>
 </resources>

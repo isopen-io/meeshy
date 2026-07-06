@@ -4,6 +4,33 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-06 the **in-conversation message search + search-highlight wiring** landed (slice
+> `chat-search-highlight-wiring`, Chat parity §C — feature-parity.md "In-conversation message search" +
+> the search-highlight half of "Rich text rendering"). The bubble already accepted a `highlightTerm` and the
+> pure `MessageTextParser.highlightRanges` was tested, but no `ChatViewModel` fed a live term and there was no
+> search UI. New pure `:feature:chat` `ChatSearch` SSOT over an opaque `SearchableMessage(id, texts)`:
+> `matchIds(messages, query)` is a trimmed/case-insensitive `contains` across **every** text of a message — so
+> the displayed translation *and* the stored original both match (**translation-match aware**, at iOS parity) —
+> preserving display order and de-duping a message that matches on several texts. A pure reducer over
+> `ChatSearchState(isActive, query, matchIds, activeIndex)` — `activated` (clean slate), `deactivated` (inert
+> reset), `withQuery` (recompute + focus first hit), `reconciled` (recompute on a fresh message stream, **keeping
+> the focused hit on the same message** when it survives, else falling to the first; inert while inactive),
+> `movedToNext`/`movedToPrev` (wraparound, inert on an empty match set) — plus derived `matchCount`/`hasMatches`/
+> `activeMessageId`/one-based `currentPosition`/`highlightTerm` (the trimmed query, only while active & non-blank).
+> `ChatViewModel` gains `search: ChatSearchState` in its `UiState`, five intents
+> (`openSearch`/`onSearchQueryChange`/`nextSearchMatch`/`previousSearchMatch`/`closeSearch`), and reconciles
+> search in the message collector after `applyResult` (deleted / body-less image-only bubbles carry no searchable
+> text → never matched). `ChatScreen` renders an accent-coherent search `TopAppBar` (transparent-field cursor in
+> `accentColor`, live `x / y` / "no matches" counter, up/down match nav) that replaces the normal bar while
+> active, jumps the `LazyColumn` to the focused hit via `animateScrollToItem`, and threads `highlightTerm` into
+> every `MessageBubble` (reusing the tested `highlightRanges`). EN/FR/ES/PT strings. Local match is instant — no
+> artificial debounce (surpasses iOS's debounced online-only search). +29 tests (`ChatSearchTest` 24 — every
+> match / blank / no-text / wraparound / single / empty / reconcile-keep / reconcile-fallthrough / reconcile-empty
+> branch; `ChatViewModelTest` +5 — open+query highlight, next/prev nav, close-clears, stream-reconcile-keeps-focus,
+> deleted-never-matched). `assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3). Reviewer: PASS
+> (diff apps/android only; behaviour-through-public-API; SDK-purity/SSOT honoured — pure search core + reducer in
+> `:feature:chat`, render/scroll orchestration in the exempt `ChatScreen` glue; reuses `highlightRanges` SSOT).
+
 > On 2026-07-06 the **rich-text rendering** landed (slice `chat-rich-text-segments`, Chat parity §C
 > "Rich text rendering — markdown, mentions, m+ links, URLs, search highlight"). The bubble rendered the body as
 > a plain `Text` — no markdown, no tappable mentions/links, no search highlight. New pure `:core:model`
@@ -532,13 +559,15 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Recommended next (2026-07-06, after `chat-rich-text-segments`):** the highest-value Chat follow-ups now that
-the rich-text core is live —
-1. **`chat-search-highlight-wiring`** — thread the in-conversation search term through `ChatViewModel` →
-   `ChatScreen` → `MessageBubble.highlightTerm` (§C "in-conversation message search" + the highlight half of
-   rich-text; the pure `highlightRanges` is already tested, this is VM/screen wiring + a debounced query state).
+**Recommended next (2026-07-06, after `chat-search-highlight-wiring`):** the remaining highest-value Chat
+follow-ups now that rich-text + in-conversation search are live —
+1. ~~**`chat-search-highlight-wiring`**~~ ✅ shipped 2026-07-06 — see run log. Pure `:feature:chat` `ChatSearch`
+   SSOT (translation-aware `matchIds` + wraparound reducer over `ChatSearchState`) + `ChatViewModel` intents
+   (reconcile-keeps-focus on the live stream) + a search `TopAppBar` (accent cursor, `x / y` counter, up/down
+   nav, jump-to-hit) threading `highlightTerm` into every bubble. +29 tests.
 2. **`chat-mention-display-names`** — feed the conversation member roster (`username → displayName`) into
-   `MessageBubble.mentionDisplayNames` so `@John Doe` resolves in-bubble (pure resolution already tested).
+   `MessageBubble.mentionDisplayNames` so `@John Doe` resolves in-bubble (pure resolution already tested; this is
+   the roster-source wiring in `ChatViewModel` — needs the participant list on the conversation stream).
 3. Or **`chat-mention-autocomplete`** — the composer `@`-autocomplete panel over the existing `MentionCandidate`
    model (pure prefix-match/ranking core + a Compose suggestion strip).
 Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K; §L worker drain-list test).
