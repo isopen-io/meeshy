@@ -41,6 +41,7 @@ jest.mock('../../utils/logger-enhanced', () => ({
 }));
 
 import { NotificationService } from '../../services/notifications/NotificationService';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 
 // ---------------------------------------------------------------------------
 // Shared mock factories
@@ -301,7 +302,9 @@ describe('Social Notification Methods', () => {
         emoji: '👍',
       });
 
-      expect(mockIO.to).toHaveBeenCalledWith(AUTHOR_ID);
+      // notification:new is user-scoped: it must target the `user:${id}` room
+      // registered sockets join at auth, NOT the bare id (see emitWithSeq).
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.user(AUTHOR_ID));
       expect(mockIO.emit).toHaveBeenCalled();
     });
   });
