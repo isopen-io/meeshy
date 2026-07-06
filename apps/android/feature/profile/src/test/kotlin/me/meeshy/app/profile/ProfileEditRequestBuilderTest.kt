@@ -13,6 +13,8 @@ class ProfileEditRequestBuilderTest {
     @Test
     fun `trims surrounding whitespace on text fields`() {
         val request = ProfileEditRequestBuilder.build(
+            firstName = "  Alice  ",
+            lastName = "  Liddell  ",
             displayName = "  Alice  ",
             bio = "  hi there  ",
             systemLanguage = "fr",
@@ -20,6 +22,8 @@ class ProfileEditRequestBuilderTest {
             customDestinationLanguage = null,
         )
 
+        assertThat(request.firstName).isEqualTo("Alice")
+        assertThat(request.lastName).isEqualTo("Liddell")
         assertThat(request.displayName).isEqualTo("Alice")
         assertThat(request.bio).isEqualTo("hi there")
     }
@@ -27,6 +31,8 @@ class ProfileEditRequestBuilderTest {
     @Test
     fun `a blank display name degrades to null so the gateway leaves it unchanged`() {
         val request = ProfileEditRequestBuilder.build(
+            firstName = "Alice",
+            lastName = "Liddell",
             displayName = "   ",
             bio = "keep",
             systemLanguage = null,
@@ -39,8 +45,42 @@ class ProfileEditRequestBuilderTest {
     }
 
     @Test
+    fun `a blank first name degrades to null so the gateway leaves it unchanged`() {
+        val request = ProfileEditRequestBuilder.build(
+            firstName = "   ",
+            lastName = "Liddell",
+            displayName = "Alice",
+            bio = "bio",
+            systemLanguage = null,
+            regionalLanguage = null,
+            customDestinationLanguage = null,
+        )
+
+        assertThat(request.firstName).isNull()
+        assertThat(request.lastName).isEqualTo("Liddell")
+    }
+
+    @Test
+    fun `a blank last name degrades to null`() {
+        val request = ProfileEditRequestBuilder.build(
+            firstName = "Alice",
+            lastName = "",
+            displayName = "Alice",
+            bio = "bio",
+            systemLanguage = null,
+            regionalLanguage = null,
+            customDestinationLanguage = null,
+        )
+
+        assertThat(request.firstName).isEqualTo("Alice")
+        assertThat(request.lastName).isNull()
+    }
+
+    @Test
     fun `an empty bio degrades to null`() {
         val request = ProfileEditRequestBuilder.build(
+            firstName = "Alice",
+            lastName = "Liddell",
             displayName = "Alice",
             bio = "",
             systemLanguage = null,
@@ -54,6 +94,8 @@ class ProfileEditRequestBuilderTest {
     @Test
     fun `a null language code stays null`() {
         val request = ProfileEditRequestBuilder.build(
+            firstName = "Alice",
+            lastName = "Liddell",
             displayName = "Alice",
             bio = "bio",
             systemLanguage = null,
@@ -69,6 +111,8 @@ class ProfileEditRequestBuilderTest {
     @Test
     fun `a blank language code degrades to null`() {
         val request = ProfileEditRequestBuilder.build(
+            firstName = "Alice",
+            lastName = "Liddell",
             displayName = "Alice",
             bio = "bio",
             systemLanguage = "  ",
@@ -84,6 +128,8 @@ class ProfileEditRequestBuilderTest {
     @Test
     fun `carries all three selected language codes through trimmed`() {
         val request = ProfileEditRequestBuilder.build(
+            firstName = "Alice",
+            lastName = "Liddell",
             displayName = "Alice",
             bio = "bio",
             systemLanguage = " fr ",
@@ -94,5 +140,21 @@ class ProfileEditRequestBuilderTest {
         assertThat(request.systemLanguage).isEqualTo("fr")
         assertThat(request.regionalLanguage).isEqualTo("en")
         assertThat(request.customDestinationLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun `carries genuine first and last name edits through`() {
+        val request = ProfileEditRequestBuilder.build(
+            firstName = "Alicia",
+            lastName = "Keys",
+            displayName = "Alice",
+            bio = "bio",
+            systemLanguage = null,
+            regionalLanguage = null,
+            customDestinationLanguage = null,
+        )
+
+        assertThat(request.firstName).isEqualTo("Alicia")
+        assertThat(request.lastName).isEqualTo("Keys")
     }
 }

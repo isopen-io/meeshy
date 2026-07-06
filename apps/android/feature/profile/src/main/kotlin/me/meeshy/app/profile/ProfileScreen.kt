@@ -166,6 +166,22 @@ fun ProfileScreen(
 
             if (state.isEditing) {
                 OutlinedTextField(
+                    value = state.firstName,
+                    onValueChange = viewModel::onFirstNameChange,
+                    label = { Text(stringResource(R.string.profile_first_name_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = state.lastName,
+                    onValueChange = viewModel::onLastNameChange,
+                    label = { Text(stringResource(R.string.profile_last_name_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
                     value = state.displayName,
                     onValueChange = viewModel::onDisplayNameChange,
                     label = { Text(stringResource(R.string.profile_display_name_label)) },

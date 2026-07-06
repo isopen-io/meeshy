@@ -1204,7 +1204,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       renders three `LanguageData`-backed content-language dropdowns (flag + name) in the edit form (EN/FR/ES/PT).
       +31 tests (ProfileEditApply 7, ProfileEditRequestBuilder 6, OutboxCoalescer +3, SessionRepository +2,
       UserRepository 4, ProfileViewModelEdit 9). Surpasses iOS, whose profile edit is online-only.
-      **Pending:** avatar + banner upload (media pipeline), first/last-name fields in the form.
+      **First/last-name fields shipped** (slice `edit-profile-name-fields`, 2026-07-06): the `firstName`/
+      `lastName` legs of the already-name-aware `ProfileEditApply`/`UpdateProfileRequest` are now reachable
+      from the editor. `ProfileEditRequestBuilder.build` gained `firstName`/`lastName` buffers (same trim +
+      blank→null degrade — a blank name is a server no-op, never an accidental clear); `ProfileViewModel`
+      seeds/reads them via two new `StateFlow` buffers + `onFirstNameChange`/`onLastNameChange` intents and
+      `withBuffersFrom` (a user with no names → blank buffers, not "null"); `ProfileScreen` renders First name /
+      Last name `OutlinedTextField`s above Display name (Words capitalization, EN/FR/ES/PT). +6 tests
+      (ProfileEditRequestBuilder +3, ProfileViewModelEdit +3; existing save/cancel cases hardened to assert the
+      name legs too). Reuses the whole optimistic/offline machinery — no new store, no new outbox kind.
+      **Pending:** avatar + banner upload (media pipeline).
 - [~] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges —
       **stats projection SSOT + read-only dashboard shipped** (slice `profile-stats-presentation`,
       2026-07-05): the pure `UserStatsBuilder.build(stats) → UserStatsPresentation` (`:feature:profile`,

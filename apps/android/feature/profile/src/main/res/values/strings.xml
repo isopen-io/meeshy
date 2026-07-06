@@ -4,6 +4,8 @@
     <string name="profile_edit_title">Edit Profile</string>
     <string name="profile_back">Back</string>
     <string name="profile_edit">Edit</string>
+    <string name="profile_first_name_label">First name</string>
+    <string name="profile_last_name_label">Last name</string>
     <string name="profile_display_name_label">Display name</string>
     <string name="profile_bio_label">Bio</string>
     <string name="profile_system_language_label">Primary language</string>

@@ -2,7 +2,23 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+
+> On 2026-07-06 the **first/last-name profile-edit fields** landed (slice `edit-profile-name-fields`, §K):
+> the `firstName`/`lastName` legs of the already-name-aware `ProfileEditApply`/`UpdateProfileRequest` are now
+> reachable from the editor UI (before this, only displayName/bio/languages were). `ProfileEditRequestBuilder.build`
+> gained `firstName`/`lastName` buffers with the same trim + blank→null degrade (a blank name is a `PATCH`
+> omit-null server no-op, never an accidental clear); `ProfileViewModel` seeds/reads them via two new
+> `ProfileUiState` buffers + `onFirstNameChange`/`onLastNameChange` intents, with `withBuffersFrom` mapping a
+> user that has no names to *blank* buffers (never the literal "null"); `ProfileScreen` renders First name /
+> Last name `OutlinedTextField`s (Words capitalization) above Display name. Everything else — the optimistic
+> republish, the durable `UPDATE_PROFILE` outbox row, the worker-woken-only-on-`cmid`, the mid-edit
+> buffer-clobber guard — is reused untouched; **no new store, no new outbox kind, no coalescer change**.
+> +6 tests (`ProfileEditRequestBuilderTest` +3 first/last trim·blank→null·carry-through, `ProfileViewModelEditTest`
+> +3 seed·blank-when-nameless·intents; the existing save-enqueue and cancel-restore cases were hardened to
+> assert the name legs too, not just displayName). `assembleDebug` + full `testDebugUnitTest` green (system
+> Gradle 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API; SDK-purity/SSOT/
+> optimistic-UDF/instant-app honoured). Only avatar/banner upload now remains in the §K profile-edit box.
 
 > On 2026-07-06 the **regional (secondary content) language preference** landed (slice
 > `settings-regional-content-language`, §L) — the last no-op Settings language row is now live. Unlike
@@ -491,7 +507,8 @@ into a tested list, with case-insensitive dup-language collapse; consumed by the
    sender (`updateProfile` → `adopt`) + `onExhausted` `refresh()` rollback. `ProfileViewModel` gains the three
    content-language buffers + optimistic/offline save (editor closes instantly, worker woken on a real `cmid`,
    enqueue-failure reopens the editor) + a mid-edit buffer-clobber guard; `ProfileScreen` renders three
-   `LanguageData` dropdowns. +31 tests. See run log. Avatar/banner upload + first/last-name fields remain.
+   `LanguageData` dropdowns. +31 tests. See run log. **First/last-name fields shipped** as
+   `edit-profile-name-fields` (2026-07-06, +6 tests — see run log); only avatar/banner upload now remains.
 6. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
    remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
 
