@@ -369,24 +369,40 @@ export function CallManager() {
         throw new Error('No socket connection');
       }
 
-      (socket as unknown).emit(
-        CLIENT_EVENTS.CALL_JOIN,
-        {
-          callId: incomingCall.callId,
-          settings: {
-            audioEnabled: true,
-            videoEnabled: true,
+      // Vague 19 — the join must be confirmed via its ack before the UI
+      // commits to "in call": the gateway can reject call:join at any point
+      // right up to the moment the caller hangs up (already-ended call,
+      // no-longer-a-participant, rate limit, etc.), and previously this ack
+      // was only used to opportunistically apply ICE servers while
+      // setCurrentCall/setInCall/setIncomingCall(null) ran unconditionally
+      // right after emit() — a rejected join still left the callee staring
+      // at a fully-mounted VideoCallInterface with no peer connection ever
+      // formed. Mirrors the already-correct ack check in the sibling
+      // (but unwired) `answerCall` in hooks/conversations/use-video-call.ts.
+      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve) => {
+        (socket as unknown).emit(
+          CLIENT_EVENTS.CALL_JOIN,
+          {
+            callId: incomingCall.callId,
+            settings: {
+              audioEnabled: true,
+              videoEnabled: true,
+            },
           },
-        },
-        // Apply the server-provided ICE servers (STUN + time-limited TURN) so
-        // the callee's RTCPeerConnection is built with TURN credentials before
-        // the incoming SDP offer is answered.
-        (ack: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
-          if (ack?.success && ack.data?.iceServers?.length) {
-            setIceServers(ack.data.iceServers);
-          }
-        }
-      );
+          resolve
+        );
+      });
+
+      if (!ack?.success) {
+        throw new Error('Failed to join call');
+      }
+
+      // Apply the server-provided ICE servers (STUN + time-limited TURN) so
+      // the callee's RTCPeerConnection is built with TURN credentials before
+      // the incoming SDP offer is answered.
+      if (ack.data?.iceServers?.length) {
+        setIceServers(ack.data.iceServers);
+      }
 
       // Create call session in store
       setCurrentCall({
