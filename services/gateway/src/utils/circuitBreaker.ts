@@ -76,6 +76,7 @@ export interface CircuitBreakerStats {
 export class CircuitBreaker {
   private state: CircuitState = CircuitState.CLOSED;
   private failureCount = 0;
+  private failureWindowStart?: number;
   private successCount = 0;
   private totalRequests = 0;
   private lastFailureTime?: number;
@@ -156,8 +157,25 @@ export class CircuitBreaker {
    * Handle failed execution
    */
   private onFailure(error: unknown) {
-    this.lastFailureTime = Date.now();
-    this.failureCount++;
+    const now = Date.now();
+    this.lastFailureTime = now;
+
+    // Count failures only within the configured rolling window. A failure that
+    // arrives more than failureWindowMs after the window opened (or the first
+    // failure after a reset/success) starts a fresh window instead of adding to
+    // a stale count. Without this, isolated failures spread arbitrarily far
+    // apart would accumulate forever and trip the breaker OPEN even though no
+    // burst ever occurred within failureWindowMs.
+    const windowExpired =
+      this.failureWindowStart === undefined ||
+      now - this.failureWindowStart > this.config.failureWindowMs;
+
+    if (this.failureCount === 0 || windowExpired) {
+      this.failureWindowStart = now;
+      this.failureCount = 1;
+    } else {
+      this.failureCount++;
+    }
 
     enhancedLogger.error(
       `Circuit breaker failure: ${this.config.name}`,
@@ -181,6 +199,7 @@ export class CircuitBreaker {
   private transitionToClosed() {
     this.state = CircuitState.CLOSED;
     this.failureCount = 0;
+    this.failureWindowStart = undefined;
     this.successCount = 0;
 
     enhancedLogger.info(`Circuit breaker CLOSED: ${this.config.name}`, {

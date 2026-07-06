@@ -355,7 +355,9 @@ describe('CommentReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Only registered users can react' }));
     });
 
-    it('returns error when removeReaction returns false (reaction not found)', async () => {
+    it('is idempotent when removeReaction returns false (reaction already absent)', async () => {
+      // Already gone (concurrent removal / retry / double-tap un-like) — reply
+      // success so the client doesn't roll its optimistic un-like back.
       const { handler } = buildHandler({
         commentReactionService: {
           removeReaction: jest.fn<any>().mockResolvedValue(false),
@@ -366,7 +368,7 @@ describe('CommentReactionHandler', () => {
 
       await handler.handleRemoveReaction(makeSocket(), { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Reaction not found' }));
+      expect(callback).toHaveBeenCalledWith({ success: true, data: { message: 'Reaction already absent' } });
     });
 
     it('broadcasts removal and calls callback with updateEvent on happy path', async () => {

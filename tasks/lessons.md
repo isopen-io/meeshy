@@ -448,3 +448,459 @@ avec DEUX clients générés (le `./client` + le default transitoire), ts-jest p
 suites `@ts-nocheck` hors runner par défaut (`notifications-firebase.test.ts`) — artefact du double
 client aux types divergents, JAMAIS un signal de régression du diff. Ne pas chasser cette erreur si le
 fichier concerné n'est pas dans le diff.
+
+## Leçon 62 — `MessageReadStatusService` : le curseur delivered/read pouvait régresser sous course (TOCTOU read-then-write) (2026-07-04, itération 93)
+
+Audit expert (agent Explore, 56 tool-uses) sur la synchronisation temps réel du gateway : parmi 7
+findings, celui retenu (isolé, testable, faible risque — cf. finding #1 sur `AuthHandler`, plus sévère
+mais touchant tout le cycle de vie de connexion, différé). `markMessagesAsReceived`/`markMessagesAsRead`
+(`MessageReadStatusService.ts`) lisaient le curseur (`findUnique`), décidaient "stale ou non" via
+`isStaleCursorMessageId` sur ce snapshot, puis écrivaient sans condition via `upsert` — classique
+check-then-act. Deux appels concurrents pour des messages différents (ex. burst `message:new`
+déclenchant `_autoDeliverToOnlineRecipients` pour chaque message, ou deux devices qui livrent/lisent en
+parallèle) pouvaient tous deux lire le même curseur "pas encore avancé" ; celui dont l'écriture atteint
+Mongo EN DERNIER gagne, même si son message est plus ANCIEN — régression silencieuse du curseur
+delivered/read, resurrection de messages déjà livrés/lus comme non livrés/non lus.
+
+Fix : `upsert` ne peut pas porter de condition de garde au-delà de la clé unique — impossible de rendre
+la décision atomique en gardant `upsert`. Remplacé par un `updateMany` gardé (`WHERE lastDeliveredMessageId
+IS NULL OR lastDeliveredMessageId < messageId`, exactement le motif déjà utilisé par
+`MessageHandler.handleMessageDelete` pour `lastMessageAt`) — la fraîcheur est évaluée par MongoDB AU
+MOMENT de l'écriture, jamais sur un snapshot antérieur. Si `updateMany` ne matche rien : soit aucun
+curseur n'existe encore (`create`), soit le curseur existant est déjà à jour (stale, `false`). Le
+"existe déjà" est déduit du `findUnique` best-effort déjà fait par l'appelant pour borner la fenêtre de
+gel (`prevDeliveredAt`/`prevReadAt`) — zéro requête supplémentaire dans le cas commun. Un `create` qui
+échoue en P2002 (row créée entre-temps par un appel concurrent) retente le `updateMany` gardé une fois —
+auto-guérison sans jamais faire confiance au hint d'existence pour la décision finale. Un helper privé
+partagé `_advanceCursor` (idField/atField/resetUnreadCount paramétrés) sert les deux méthodes
+symétriquement — `markMessagesAsReceived` ne remet PAS `unreadCount` à 0 sur l'`update` (contrairement à
+`markMessagesAsRead`), seule divergence intentionnelle entre les deux sinon jumelles.
+
+**Piège relevé pendant l'implémentation** : `cursorExists = prevCursor !== null` est FAUX quand le mock
+Jest de `findUnique` n'est pas configuré (retourne `undefined`, pas une Promise résolue à `null`) —
+`undefined !== null` vaut `true`, donc un curseur inexistant serait à tort traité comme existant. Fix :
+`!= null` (égalité faible, capture `undefined` ET `null`). Prouvé nécessaire par un test préexistant qui
+ne mockait pas `findUnique` du tout.
+
+**Piège de suppression** : `isStaleCursorMessageId` (+ son test associé) devient mort dans
+`MessageReadStatusService.ts` une fois les deux call sites retirés — supprimé. Une COPIE quasi-identique
+existe dans `routes/conversations/messages.ts` (endpoint `mark-unread`, commentaire explicite « mirrors
+the isStaleCursorMessageId guard ») mais avec une sémantique différente (déplace le curseur EN ARRIÈRE
+intentionnellement) — PAS touchée, hors scope, TOCTOU résiduel noté mais non corrigé cette itération
+(risque plus faible : action manuelle utilisateur, fenêtre de course étroite).
+
+**Piège de test** : changer `upsert` → `updateMany`/`create` casse ~35 assertions dispersées dans TOUT
+`MessageReadStatusService.test.ts` (pas seulement les describe blocks `markMessagesAsReceived`/
+`markMessagesAsRead` — aussi Idempotency, Concurrency, Bulk Operations, dedup cache, error paths) PLUS
+2 fichiers de tests de routes (`delivery-receipt.test.ts`, `mark-conversation-status.test.ts`) qui
+montent le vrai service derrière `app.inject()`. Toujours `grep -rn "conversationReadCursor.upsert"`
+au-delà du seul fichier de test unitaire avant de considérer un refactor de ce type terminé. Un test de
+non-régression stateful (fake `updateMany`/`create` simulant le WHERE-guard réel de Mongo) prouve le fix
+end-to-end : RED confirmé par `git stash` du fichier service seul (row reste `undefined`, l'ancien code
+n'appelle jamais le fake), GREEN après restauration.
+
+Suite `MessageReadStatusService.test.ts` : 148/148 (147 existants adaptés + 1 nouveau). Suites
+adjacentes vérifiées non régressées : `MessageHandler.core/autoDeliver`, routes messages/conversations,
+`delivery-receipt`, `mark-conversation-status` — 786/786 tous confondus. `MessagingService.test.ts`
+échoue isolément sur le TS2305 baseline documenté Leçon 61 (confirmé identique via le workaround
+`client_default` transitoire, restauré immédiatement) — non lié au diff.
+
+## Leçon 63 — `handleMessageEdit` (WS + REST) pouvait ressusciter un message supprimé avec du contenu édité (2026-07-04, itération 94)
+
+Audit expert (agent Explore, 27 tool-uses) sur la synchronisation temps réel du gateway, suite directe
+de la Leçon 62. Parmi 4 findings (le plus fort — max-1-réaction-par-user TOCTOU sur `PostReaction`/
+`CommentReaction` — nécessite une migration de schéma, différé pour un cycle isolé sans migration),
+retenu : `MessageHandler.handleMessageEdit` (socket) et la route `PUT /messages/:messageId` (REST,
+`routes/messages.ts`) lisaient le message avec `deletedAt: null`, décidaient l'autorisation sur ce
+snapshot, puis écrivaient sans condition via `prisma.message.update({ where: { id } })` — classique
+check-then-act. Un `message:delete` (ou `DELETE /messages/:messageId`) atterrissant entre la lecture et
+l'écriture de l'edit n'empêche PAS ce `update` par id de réussir (il ne filtre pas sur `deletedAt`) : la
+ligne soft-supprimée ressuscite avec le contenu édité, et le gateway diffuse quand même
+`MESSAGE_EDITED` — un client ayant déjà retiré le message de son cache le voit réapparaître édité.
+
+Fix, exactement le même motif que `handleMessageDelete`/`MessageReadStatusService` (Leçon 62) : remplacer
+le `update` inconditionnel par un `updateMany({ where: { id, deletedAt: null }, data: {...} })` gardé,
+puis brancher sur `count`. Socket handler : `count === 0` → erreur générique, aucune diffusion ; le
+payload broadcasté est reconstruit localement (`{ ...champs déjà lus, content, isEdited, editedAt }`)
+plutôt que depuis le retour d'`updateMany` (qui ne renvoie que `{ count }`), zéro requête
+supplémentaire. Route REST : même garde, mais la réponse HTTP a toujours renvoyé la ligne complète
+(toutes les colonnes scalaires, via l'`include` d'origine) — reconstruire ce payload à la main aurait
+risqué d'omettre un champ (mentions, chiffrement, view-once, etc.) et de changer silencieusement le
+contrat API. Choix plus sûr : après le `updateMany` gardé, un `findUniqueOrThrow` réhydrate la ligne à
+jour avec le même `include: { sender: {...} }` que l'ancien `.update()` — un aller-retour DB
+supplémentaire dans le cas commun, mais fidélité de contrat garantie plutôt qu'une énumération de champs
+fragile.
+
+**Piège de test répété (3 fichiers)** : chaque test qui stubait `prisma.message.update(...).mockResolvedValue(fullRow)`
+et assertait dessus a dû être réécrit en `updateMany(...).mockResolvedValue({ count: 1 })` — le retour
+n'est plus un message complet, donc les helpers `makeUpdatedMessage()` qui construisaient ce retour
+deviennent morts une fois tous les call sites migrés (supprimés dans
+`MessageHandler.core.test.ts`). Repéré par grep `prisma\.message\.update\b` scindé entre le describe
+`handleMessageEdit` (à migrer) et `handleMessageDelete` (inchangé — sa propre écriture reste
+volontairement non gardée, seul son recompute de `lastMessageAt` l'est, cf. Leçon précédente) : ne pas
+migrer tout le fichier en aveugle. RED confirmé sur les deux fixes (`git stash` du fichier prod seul) :
+le test "concurrent delete race" échoue avec `success: true`/`200` sur l'ancien code, prouvant le bug
+avant le fix.
+
+Suites vérifiées : `MessageHandlerEditDelete.test.ts` 36/36, `MessageHandler.core.test.ts` (fichier
+complet) inchangé sauf edit block, `unit/routes/messages.test.ts` 32/32 (+2), `messages-extended.test.ts`
+migré (mock prisma partagé). Suite complète gateway (bun, workaround `client_default` transitoire pour
+lever le TS2305 baseline Leçon 61, schema restauré immédiatement après, `git diff` vide) :
+506/506 suites, 13680/13681 tests (1 skip pré-existant).
+
+## Leçon 63 — F58 soldé : la notif de réaction-commentaire s'effondrait le postType vers un booléen `isStory` (2026-07-04, itération 96)
+
+Même classe de bug que le fix post-reaction déjà accepté (« Hardcoding 'POST' here dropped that
+typing on every socket-path reaction »). `createCommentReactionNotification` prenait
+`isStory?: boolean` et posait `metadata.postType: isStory ? 'STORY' : 'POST'` — un REEL/STATUS
+portant un commentaire réagi produisait `metadata.postType: 'POST'` + un corps « … sur le post de X ».
+La sœur `createPostLikeNotification`, sur le même contenu, portait déjà le vrai
+`postType?: 'POST'|'STORY'|'MOOD'|'STATUS'|'REEL'` sans collapse. Fix en 3 points miroir : (1) shared
+`COMMENT_CONTEXT` élargi de `{story, post}` à un `ObjMap` complet (5 `NotificationPostKind` × 8
+langues), en réutilisant les choix de noms des tables voisines (`INDEF_OBJ`/`LOC_OBJ`) pour la
+cohérence de genre/casse ; (2) `createCommentReactionNotification` prend `postType` (mirror de la
+sœur), body + metadata sans collapse ; (3) `CommentReactionHandler` forwarde `post?.type` au lieu de
+`isStory = post?.type === 'STORY'`. **Garde-fou legacy conservé** : la branche `reaction.commentVerbose`
+résout `kind = params.postType ?? (params.isStory ? 'STORY' : 'POST')` — `postType` prime, `isStory`
+reste un repli inerte quand `postType` est fourni → les 2 tests `isStory:true/false` existants restent
+verts sans réécriture. Zéro changement iOS/web/DB : la sœur post-reaction émettait déjà REEL/STATUS
+en `metadata.postType`, donc les clients gèrent déjà ces valeurs.
+
+**Ménage de backlog fait ce cycle (règle réutilisable)** : toujours VÉRIFIER dans le code qu'un item
+listé « parké » l'est encore avant de le retenir. Les reports it.90→94 listaient F53/F54 (HIGH) comme
+parkés alors qu'ils étaient soldés en it.89 et présents sur `main` (lecture directe de
+`PostFeedService.ts` + `attachment-validators.ts`) — un report se périme si l'itération qui solde ne
+nettoie pas la liste en aval. **Note F57** : ce cycle avait pré-évalué F57 comme inerte côté
+consommateurs de prod (`hasMentions`/`extractMentions` référencés uniquement par des tests, chemins
+d'extraction de prod sur usernames ASCII-validés `/^[a-z0-9_]{1,30}$/`) ; une itération parallèle
+(it.95 sur `main`) l'a néanmoins durci défensivement — les deux constats coexistent, F57 est clos.
+Leçon transverse : toujours grep les call-sites non-test AVANT d'inscrire (ou de clore) un item comme
+dette — et vérifier `origin/main` juste avant de statuer, un cycle parallèle peut l'avoir traité.
+
+
+## Leçon 64 — F61 soldé : le fallback `@username` de `parseMentions` gardait une frontière gauche ASCII, jumelle résiduelle de F57 (2026-07-04, itération 96)
+
+Suite de la Leçon 44 (mention par préfixe) et de F57 (it.95, `hasMentions` ASCII→Unicode). Le module
+`mention-parser.ts` déclare `NAME_BOUNDARY_LEFT = (?<![\p{L}\p{N}_])` comme **source de vérité unique**
+de la frontière de nom. Le path `@DisplayName` (l.40) la réutilise avec le flag `u` ; mais le fallback
+`@username` réimplémentait la frontière gauche à la main en ASCII (`/(?<![\w])@(\w{1,30})/g`, sans flag
+`u`). Or `\w` ASCII = `[A-Za-z0-9_]` : dès que le caractère précédant le `@` est une lettre Unicode
+(`é`, `à`, cyrillique…), le lookbehind ASCII échoue silencieusement et le `@` interne d'une adresse
+e-mail est capturé comme mention. Repro vitest : `parseMentions('écris à André@atabeth.com',
+[{username:'atabeth'}])` retournait `['u1']` (mauvais user notifié) alors que `Andre@atabeth.com`
+(ASCII) rendait `[]` — même entrée, une lettre accentuée d'écart, résultat opposé. **Fix (1 ligne) :
+réutiliser la constante — `new RegExp(\`${NAME_BOUNDARY_LEFT}@(\\w{1,30})\`, 'gu')`.** Le flag `u`
+n'upgrade que la frontière gauche en Unicode ; `\w{1,30}` reste ASCII (usernames ASCII par validation —
+intentionnel). Comportement strictement plus restrictif (rejette des faux positifs e-mail), aucun cas
+de mention légitime affecté. RED→GREEN + suite `packages/shared` 1258/1258 + `tsc` 0 erreur. **Règle :
+quand un module déclare une constante « source de vérité unique » pour une frontière/charset, AUCUN
+chemin voisin ne doit réimplémenter la même frontière à la main — auditer TOUS les paths du module
+(F57 avait unifié `hasMentions` + `@DisplayName` mais oublié le fallback `@username` : un seul path
+oublié réintroduit la dérive ASCII↔Unicode).**
+
+                                               
+## Leçon 65 — Un nouveau `NotificationType` non câblé dans `isTypeEnabled` contourne la préférence via `default:true` (F59, it.97)
+`isTypeEnabled(prefs, type)` mappe chaque `NotificationType` → son champ booléen de préférence. Son
+`default: return true` est destiné aux types système/toujours-actifs (`login_new_device`,
+`translation_ready`…). **Piège** : quand on ajoute un nouveau type gouverné par une préférence
+utilisateur existante et qu'on oublie de l'ajouter au `switch`, il tombe silencieusement sur
+`default:true` — il IGNORE l'opt-out utilisateur. C'était le cas de `comment_reaction` (chemin socket)
+alors que son sibling REST `comment_like` était bien gaté sur `commentLikeEnabled`. Résultat : couper
+« like de commentaire » n'éteignait que le REST, la réaction socket passait quand même.
+
+**Règle réutilisable** : deux chemins/transports du MÊME geste produit (ici réagir à un commentaire)
+DOIVENT honorer la même préférence. À chaque nouveau type de notif, se demander « quelle préférence
+existante le gouverne ? » et l'ajouter explicitement au `switch` — ne jamais le laisser au `default`
+sauf s'il est intentionnellement toujours-actif (sécurité/système). Audit rapide : lister l'union
+`NotificationType` et cross-check vs les `case` — les types tombant sur `default` doivent être
+soit système, soit sans champ de préférence à créer (décision produit), jamais un type qui a déjà un
+toggle câblé pour son sibling.
+
+                                               
+
+## Leçon 66 — F62 soldé : `resolveUserLanguage` renvoyait les préférences in-app en casse brute, `resolveUserLanguagesOrdered` les lowercasait — drift de casse live sur le Prisme (2026-07-04, itération 98)
+Deux résolveurs sœurs du même module (`packages/shared/utils/conversation-helpers.ts`) répondaient à
+la même question « quelle langue pour cet utilisateur ? » avec deux politiques de casse divergentes :
+`resolveUserLanguagesOrdered` lowercasait chaque préférence in-app (`c.toLowerCase()`) — c'est elle
+qui produit les **cibles de traduction** (stockées minuscules) et les `resolvedLanguages` du socket ;
+`resolveUserLanguage` renvoyait `user.systemLanguage` **verbatim** — c'est elle qui produit
+`meta.userLanguage` (l'indice de langue d'affichage du client) et la langue des notifications. Cause
+racine : `isSupportedLanguage` valide de façon insensible à la casse (`code.toLowerCase()` avant
+lookup) mais **ne transforme pas** — les écritures (`register`, `PreferencesService`) persistent
+`'EN'` verbatim, la casse n'est donc **pas garantie minuscule en base**. Conséquence live : un
+`systemLanguage: 'EN'` → `meta.userLanguage: 'EN'` → le client cherche une traduction `'EN'`, ne
+trouve que la clé `'en'` → **retombe sur l'original** (violation Prisme règle #1) ; notification dans
+la mauvaise langue ; `getRequiredLanguages` produit `['EN','en']` (doublon, requête translator
+gaspillée). **Fix (6 `.toLowerCase()`) : normaliser à la LECTURE dans les deux résolveurs** — parité
+stricte avec `resolveUserLanguagesOrdered`, répare aussi les données déjà stockées en casse mixte,
+sans migration, se propage à tous les consommateurs (dont le web qui délègue). RED→GREEN + suite
+`packages/shared` 1265/1265 + `tsc` 0 erreur. **Règle : quand la validation d'un champ est
+insensible à la casse mais ne normalise pas la valeur stockée, la casse en base n'est PAS garantie —
+le résolveur de lecture (source de vérité) DOIT normaliser, et TOUS les résolveurs sœurs du même
+champ doivent partager la même politique de casse (auditer le module entier, pas la seule fonction
+touchée).**
+
+## Leçon 67 — Le broadcast présence temps réel ignorait le blocage que `GET /users/presence` enforce (2026-07-05, itération 99)
+
+Sibling drift entre le chemin REST et le chemin socket de la présence. `GET /users/presence`
+(`routes/users/presence.ts:111`) résout la visibilité via `PresenceVisibilityService.resolveForTargets`,
+qui masque `isOnline`/`lastActiveAt` (retourne `HIDDEN`) dès que l'un des deux users a bloqué l'autre
+(`isBlockedEitherWay`, doc `2026-06-30-profile-last-seen-visibility-design.md`). Les DEUX chemins temps
+réel jumeaux ne connaissaient QUE `showOnlineStatus`/`showLastSeen` (préférences globales) et n'appelaient
+jamais cette vérification de blocage : `_applyPresencePrefs`/`_emitPresenceSnapshot`
+(`MeeshySocketIOManager.ts:563-640`, snapshot initial envoyé au socket à la connexion) et
+`_broadcastUserStatus` (`:1587-1667`, fan-out à chaque connexion/déconnexion vers toutes les rooms de
+conversation de l'utilisateur). Concrètement : A bloque B, les deux restent co-participants d'un groupe
+(bloquer ne retire jamais des conversations partagées) ; quand B se connecte, A reçoit quand même son
+`isOnline`/`lastActiveAt` réels par socket — alors que `GET /users/presence` pour la même paire les
+aurait masqués. Fuite de vie privée silencieuse sur le canal qui reste ouvert en permanence.
+
+**Fix** : nouveau helper batché `getBlockedUserIdsAmong(prisma, userId, candidateIds)` dans
+`utils/blocking.ts` (2 requêtes groupées, miroir de `PresenceVisibilityService.resolveForTargets`'s
+calcul de blocage, réutilisable). (1) `_applyPresencePrefs` prend maintenant `viewerId` et masque
+`isOnline`/`lastActiveAt` (mêmes valeurs que `HIDDEN`) pour tout contact bloqué avec le viewer — les
+deux call-sites dans `_emitPresenceSnapshot` passent le `userId` du socket qui se connecte. (2)
+`_broadcastUserStatus` calcule l'ensemble des viewers actuellement connectés (`this.connectedUsers`)
+en relation de blocage avec le broadcaster, résout leurs socket ids via `this.userSockets`, et utilise
+`io.to(rooms).except(blockedSocketIds)` — un `socket.id` est aussi une room Socket.IO auto-join, donc
+`.except(socketId)` exclut précisément ce viewer du fan-out sans affecter les autres participants de la
+même room. Pas de query DB supplémentaire quand personne d'autre n'est connecté (fast-path `[].length
+=== 0`). RED→GREEN : `utils/__tests__/blocking.test.ts` (+7 cas sur le nouveau helper) +
+`MeeshySocketIOManager.test.ts` (+3 cas : snapshot masque un contact bloqué, broadcast exclut le socket
+d'un viewer bloqué, broadcast n'appelle PAS `.except()` en l'absence de blocage). Suite gateway complète
+(workaround `client_default` transitoire Leçon 61, schema restauré immédiatement après, `git diff` vide) :
+506/506 suites, 13707/13708 tests (1 skip pré-existant).
+
+**Règle réutilisable** : quand une règle de visibilité/privacy (blocage, visibilité de post, etc.) est
+enforced sur un endpoint de lecture ponctuelle (REST), auditer SYSTÉMATIQUEMENT le canal temps réel
+jumeau (snapshot de connexion + broadcast incrémental) — un canal qui reste ouvert en permanence est
+un vecteur de fuite plus grave qu'un endpoint interrogé à la demande, et c'est précisément le genre de
+sibling que ce backlog a déjà trouvé divergent à plusieurs reprises (mentions, postType, casse de
+langue, cursor read/delivered).
+
+## Leçon 68 — Le broadcast `typing:start`/`typing:stop` ignorait aussi le blocage, alors que la présence (Leçon 67) venait d'être corrigée (2026-07-05, itération 100)
+
+Sibling drift direct de la Leçon 67, sur un canal encore plus sensible : `_broadcastUserStatus`
+(présence) enforce désormais le blocage bidirectionnel, mais `StatusHandler.handleTypingStart`/
+`handleTypingStop` (`services/gateway/src/socketio/handlers/StatusHandler.ts`) diffusaient
+`typing:start`/`typing:stop` via `socket.to(room).emit(...)` sans AUCUNE vérification de blocage —
+seule la préférence globale `shouldShowTypingIndicator` (booléen, sans notion de viewer) était
+consultée. Or bloquer ne retire jamais des conversations partagées (fait déjà établi en Leçon 67) :
+A bloque B, les deux restent co-participants d'un groupe ; quand B tape dans ce groupe, A voit
+« B est en train d'écrire… » en direct alors que `GET /users/presence` masquerait `isOnline`/
+`lastActiveAt` pour cette même paire. La frappe est un signal plus sensible que la présence
+(prouve un engagement actif, instant par instant) — c'était donc une régression de couverture
+laissée ouverte par la Leçon 67 elle-même (fix scopé à `_broadcastUserStatus`, `StatusHandler` non
+audité). Un troisième chemin jumeau avait le même trou : `handleSocketDisconnecting` (broadcast
+`typing:stop` de secours à la déconnexion, via un `broadcastFn` injecté par
+`MeeshySocketIOManager.ts`).
+
+**Fix** : nouveau helper privé `StatusHandler._getBlockedSocketIdsInRoom(userId, conversationId)` —
+requête les participants actifs et enregistrés (`userId: { not: null }`, les anonymes ne peuvent ni
+bloquer ni être bloqués) de la conversation, filtre ceux actuellement en ligne
+(`connectedUsers.has`), puis réutilise `getBlockedUserIdsAmong` (même helper que Leçon 67) pour
+résoudre l'ensemble bloqué, et `userSockets` (nouvelle dépendance optionnelle de
+`StatusHandlerDependencies`, câblée depuis `MeeshySocketIOManager`) pour mapper vers des socket
+ids. Les 3 call sites (`handleTypingStart`, `handleTypingStop`, `handleSocketDisconnecting`) font
+`socket.to(room).except(blockedSocketIds).emit(...)` quand la liste est non vide — identique au
+pattern déjà validé sur la présence. `handleSocketDisconnecting` devient `async` (await du helper) ;
+son `broadcastFn` gagne un 4e paramètre optionnel `exceptSocketIds`. RED→GREEN :
+`StatusHandler.test.ts` (×2 fichiers) +5 cas (exclusion sur start/stop/disconnect, no-op quand
+personne n'est bloqué, filtre les participants anonymes) + fixtures `makePrisma` étendues
+(`participant.findMany`/`user.findMany` par défaut vides, non-régressif). Suite complète
+StatusHandler (73/73) + blocking.ts (283/283 avec MeeshySocketIOManager) verte ; le seul échec
+tsc/jest restant (`SequenceService.ts` → `@prisma/client` sans export `PrismaClient`) est
+pré-existant sur `main`, confirmé par `git stash` avant relance — sans lien avec ce fix.
+
+**Règle réutilisable** : une correction de sibling drift (Leçon 67) doit elle-même être auditée pour
+d'autres siblings du MÊME concept produit avant d'être considérée close — ici « présence » et
+« frappe » sont deux facettes du même signal (« cet utilisateur est actif maintenant »), et corriger
+l'une sans l'autre laisse un vecteur de fuite ouvert, parfois plus grave que celui qu'on vient de
+fermer. Lister explicitement TOUS les canaux qui exposent un signal de présence/activité (présence,
+frappe, dernière vue, indicateurs de lecture en direct…) et vérifier qu'ils partagent tous la même
+politique de blocage avant de clore un correctif de ce type.
+## Leçon 68 — Un fix de sibling-drift peut lui-même en introduire un nouveau s'il ne couvre que les chemins terminaux qu'il possède (2026-07-05, itération 100, Vague 14 appels)
+
+`a813b31` (gateway/calls, plus tôt le même jour) a ajouté `CallEventsHandler.clearQualityDegradedStreaks`
+et l'a câblé sur les 3 chemins terminaux **que `CallEventsHandler` possède lui-même**
+(`broadcastCallEnded`, disconnect-leave à 0 participant, disconnect-force-cleanup). Un **4e** chemin
+terminal existe pour le même appel — `CallCleanupService.forceEndCall` (le tier GC cron 60s) — mais vit
+dans une classe séparée sans référence à l'instance `CallEventsHandler`, donc n'a reçu ni l'ancien
+bug (déjà documenté) ni son fix. Piège spécifique à ce cas : le fix a été écrit et testé en ne regardant
+QUE les call-sites internes à la classe qu'on modifie déjà — la recherche de siblings s'est arrêtée à la
+frontière de fichier au lieu de suivre "tous les chemins qui terminent un `CallSession`" (grep
+`callSession.updateMany.*status` ou équivalent, à travers TOUT `services/gateway/src`, pas juste le
+fichier en cours d'édition). Une classe séparée qui termine la même entité (ici via son propre GC/cron)
+compte comme sibling au même titre qu'une méthode sœur dans le même fichier.
+
+**Règle réutilisable** : quand on répare un sibling-drift ("chemin X était couvert, chemin Y ne l'était
+pas"), avant de committer, lister EXHAUSTIVEMENT tous les chemins qui écrivent le même état terminal
+sur la même entité — via un grep structurel sur le nom de la table/du champ concerné dans tout le
+service, pas seulement dans le fichier qu'on est en train d'éditer — et vérifier explicitement que
+chacun reçoit le fix, pas seulement ceux qui vivent dans la même classe. Un fix de sibling-drift qui
+ne couvre que 3 des 4 chemins réels n'est qu'un sibling-drift déplacé, pas résolu.
+## Leçon 68 — F71 soldé : `community-preferences.ts` était une copie figée de `conversation-preferences.ts`, sans la diffusion socket ajoutée après-coup au sibling (2026-07-05, itération 104)
+
+Nouvelle variante de la famille « deux chemins jumeaux répondant à la même question produit divergent »
+(#57/#62/Leçon 65/Leçon 67), cette fois entre deux ROUTE FACTORIES quasi identiques plutôt qu'entre deux
+fonctions pures. `conversation-preferences.ts` (`PUT`/`DELETE /user-preferences/conversations/:id`)
+diffuse `USER_PREFERENCES_UPDATED` vers `ROOMS.user(userId)` (multi-device sync, payload versionné)
+depuis un cycle antérieur. `community-preferences.ts` implémente EXACTEMENT le même pattern de route
+(mêmes champs `isPinned`/`isMuted`/`isArchived`/`customName`/`categoryId`/`orderInCategory`, plus
+`isHidden`/`notificationLevel` propres aux communautés) mais n'avait **aucun** appel `broadcastToUser`/
+`io.emit` (grep repo-wide confirmé nul) : la copie initiale du fichier a divergé du fix suivant, jamais
+rétro-porté sur son sibling. Effet live : pin/mute/archive/hide/rename d'une communauté depuis un
+onglet ou un appareil restait invisible pour toute autre session ouverte du même utilisateur jusqu'à un
+refetch manuel — exactement la classe de bug déjà corrigée côté conversation.
+
+**Fix** : nouveau type `UserPreferencesCommunityUpdatedEventData` (discriminant `communityId`, SANS
+`version` — `UserCommunityPreferences` n'a pas ce champ en base, pas de migration Prisma nécessaire ;
+le consommateur web réagit en invalidant son cache React Query plutôt qu'en réconciliant un snapshot
+optimiste versionné) ajouté à l'union `UserPreferencesUpdatedEventData`. `PUT`/`DELETE` de
+`community-preferences.ts` diffusent désormais via le même helper `broadcastToUser` que le sibling.
+Web : `use-socket-cache-sync.ts` discrimine la nouvelle branche `'communityId' in data` et invalide
+`queryKeys.communities.preferences.detail/list`. RED→GREEN : nouveau
+`community-preferences-broadcast.test.ts` (3 cas, 2/3 rouges avant fix) + 2 cas web dans
+`use-socket-cache-sync.test.tsx`. Suites ciblées vertes : gateway `preferences` 394/394,
+web `community` 70/70 ; `packages/shared` `bun run build` 0 erreur ; `tsc --noEmit` gateway/web sans
+nouvelle erreur (bruit préexistant documenté, non lié : `SequenceService.ts` TS2305, itération 86).
+
+**Règle réutilisable** : quand un fix (diffusion socket, garde de concurrence, check de blocage…) est
+ajouté à UNE route factory, grep immédiatement les routes SŒURS qui partagent la même forme
+(`grep -rn "PUT.*preferences" routes/`, ou plus généralement chercher les fichiers dont le nom suit le
+même gabarit — ici `*-preferences.ts`) — une copie de code initiale figée avant le fix ne le reçoit
+jamais automatiquement, et rien ne le signale (pas d'erreur, pas de test qui casse, juste un
+comportement silencieusement différent entre deux entités qui devraient se comporter pareil).
+                                               
+                                               
+## Leçon 69 — Une liste blanche de langues codée en dur diverge de la source de vérité des bundles (2026-07-05, itération 108)
+
+`detectBestInterfaceLanguage` (`apps/web/utils/language-detection.ts`) sélectionnait la langue de l'UI
+au montage via une liste blanche codée en dur `['en', 'fr', 'pt']`. L'espagnol y manquait alors que
+`locales/es/` est un bundle complet et que `es` est une entrée first-class de `INTERFACE_LANGUAGES`
+(`types/frontend.ts`), placée AVANT `fr`/`pt` qui, elles, étaient auto-détectées. Résultat : tout
+navigateur hispanophone recevait une UI anglaise — violation du Prisme Linguistique sur la surface
+chrome, exactement le genre de friction que le produit promet d'éliminer. La fonction jumelle
+`getUserPreferredLanguage` (même fichier, langue de contenu) gérait `es` correctement via
+`isSupportedLanguage` : divergence entre deux détecteurs du même module.
+
+**Fix** : `['en', 'es', 'fr', 'pt']` = exactement les 4 langues avec bundle complet ; `de`/`it` restent
+exclues (sans bundle, repli `en` intentionnel documenté). RED→GREEN : 3 tests (`['es-ES','en-US'] → 'es'`,
+`['es-419'] → 'es'`, garde-fou `['it-IT','de-DE'] → 'en'`). `language-detection.test.ts` 35/35,
+`use-language.test.tsx` (callers) 24/24.
+
+**Règle réutilisable** : quand une capacité produit (langue, thème, feature-flag) a une **source de
+vérité déclarative** (ici `INTERFACE_LANGUAGES` + présence du dossier `locales/<code>`), toute liste
+blanche codée en dur qui la re-liste ailleurs est un point de dérive garanti. Auditer systématiquement
+que chaque valeur « expédiée » (bundle présent, entrée dans le sélecteur) apparaît dans TOUS les chemins
+qui la filtrent — et distinguer l'omission-défaut (valeur expédiée mais absente : `es`) de
+l'omission-intentionnelle (valeur non expédiée, repli documenté : `de`/`it`). Un test garde-fou sur le
+cas intentionnel empêche un futur « fix » de casser l'exclusion voulue.
+## Leçon 68 — F72 soldé : `capitalizeName` ne re-capitalisait qu'après un espace, mutilant Jean-Pierre/O'Brien à l'inscription (2026-07-05, itération 105)
+
+**Contexte** : `services/gateway/src/utils/normalize.ts` normalise les champs d'inscription
+(`normalizeUserData` → `AuthService.registerUser`). `capitalizeName` faisait `.split(' ')` — un seul
+séparateur de segment. Or `AuthSchemas.register` autorise `[\p{L}\s'.-]` dans firstName/lastName : tout
+nom composé à tiret ou apostrophe (omniprésent en clientèle francophone) passait la validation puis se
+faisait forcer en minuscules après le séparateur : `'Jean-Pierre' → 'Jean-pierre'`, `"O'Brien" →
+"O'brien"`. Preuve d'incohérence : sur un même enregistrement, `firstName` ressortait `'Jean-pierre'`
+tandis que `displayName` (via `normalizeDisplayName`, qui ne touche pas la casse) restait
+`'Jean-Pierre'`. Jumeau du même fichier : `normalizeDisplayName` promettait un rendu mono-ligne mais sa
+classe `[\n\t]` **omettait `\r`**, laissant survivre le CR des fins de ligne Windows (`\r\n`) et Mac
+historiques.
+
+**Fix** : `capitalizeName` = `.trim().toLowerCase().replace(/(^|[\s'.-])(\p{L})/gu, (_, sep, l) => sep +
+l.toUpperCase())` — capitalise la 1ʳᵉ lettre après début-de-chaîne OU tout séparateur de nom autorisé
+(`[\s'.-]`, exactement le charset non-lettre de la validation), préserve les accents (`\p{L}`), les
+multi-espaces et les préfixes numériques (`'3john'` inchangé). `normalizeDisplayName` = `replace(/[\r\n\t]/g,
+'')`. Deux tests **codifiaient le défaut** (`'Jean-pierre'`, `'Test\rUser'`) alors que leurs intitulés
+décrivaient le comportement correct — corrigés vers l'intention. Mock `normalize` d'`AuthService.test.ts`
+réaligné sur l'impl réelle. RED→GREEN : `normalize.test.ts` 126/126 (+7 cas tiret/apostrophe/accent/`\r`
+seul + 1 assertion d'intégration corrigée), `AuthService.test.ts` 115/115, `profile-extended.test.ts`
+36/36.
+
+**Règle réutilisable** : quand un helper de normalisation/formatage découpe sur UN séparateur (`split(' ')`,
+`[\n\t]`, `lastIndexOf('.')`), vérifier l'**ensemble complet** des séparateurs que sa couche d'entrée
+autorise réellement — ici le charset de la Zod schema qui garde l'endpoint. Le charset de validation EST
+la source de vérité des séparateurs à traiter ; toute divergence entre « ce que la validation laisse
+entrer » et « ce que le normalizer sait découper » est un bug latent (même classe que F65
+`truncateFilename` sans point, F69 `sanitizeFileName`). Et un test dont l'intitulé décrit le
+comportement correct mais dont l'assertion fige la sortie buggée est un signal fort de défaut, pas
+d'intention.
+
+## Leçon 70 — F73 soldé : `PATCH /messages/:messageId` (route Android) éditait le message sans jamais diffuser `message:edited` ni retraduire (2026-07-06, itération 110)
+
+Nouvelle variante de la famille « deux routes REST jumelles répondant à la même action produit
+divergent » (Leçon 65/67/68). Trois routes gateway éditent un message par ID :
+`PUT /conversations/:id/messages/:messageId` (`messages-advanced.ts`), `PUT /messages/:messageId`
+(`messages.ts`) et `PATCH /messages/:messageId` (`messages-advanced.ts`, décrite dans son propre
+schéma OpenAPI comme « alternative to PUT /conversations/:id/messages/:messageId »). Les deux `PUT`
+invalident les traductions en base, déclenchent `_processRetranslationAsync` et diffusent
+`SERVER_EVENTS.MESSAGE_EDITED` sur `ROOMS.conversation`. Le `PATCH` — utilisé par le client Android
+(`MessageApi.kt` : `@PATCH("messages/{id}")`) — ne faisait qu'un `prisma.message.update` puis
+`sendSuccess`, avec un commentaire fantôme (« Le service de traduction sera notifié si nécessaire via
+WebSocket ») ne correspondant à aucun code. Effet live : un utilisateur Android éditant un message,
+toute autre session (web, iOS, autre appareil Android) dans la même conversation ne recevait jamais
+la mise à jour tant qu'aucun refetch complet n'était déclenché ; les traductions déjà en cache
+restaient alignées sur l'ancien contenu — violation directe du Prisme Linguistique sur ce chemin
+précis. Aucun test existant ne couvrait le socket/la retraduction pour cette route (le describe
+`PATCH /messages/:messageId` n'assertait que `sendSuccess`/`sendForbidden`/`sendNotFound`).
+
+**Fix** : le handler `PATCH` inclut désormais `translations: null` dans son unique
+`prisma.message.update` (une seule requête, pas de round-trip séparé comme le sibling
+`messages-advanced.ts`), déclenche `fastify.translationService._processRetranslationAsync` dans un
+try/catch qui n'échoue jamais l'édition, transforme `translations` en tableau via
+`transformTranslationsToArray` (contrat client), et diffuse `SERVER_EVENTS.MESSAGE_EDITED` vers
+`ROOMS.conversation(message.conversationId)` — strictement le même pattern que
+`PUT /messages/:messages.ts`. RED→GREEN : 5 nouveaux cas dans
+`conversation-messages-advanced.test.ts` (broadcast, retraduction déclenchée, retraduction en échec
+n'empêche pas le succès, `socketIOManager` null → pas de broadcast mais succès) ; suite ciblée
+95/95 verte. `tsc --noEmit` gateway : aucune nouvelle erreur (bruit préexistant inchangé :
+`SequenceService.ts` TS2305, itération 86).
+
+**Règle réutilisable** : quand TROIS routes (pas seulement deux) répondent à la même question
+produit, l'audit de parité doit comparer les trois entre elles, pas seulement la paire la plus
+visible — ici la troisième route porte dans son propre schéma OpenAPI la mention explicite d'être
+une "alternative" à une autre, ce qui est un signal fort qu'elle doit être auditée pour la même
+parité comportementale (pas seulement la même forme de payload). Un commentaire du type "sera notifié
+si nécessaire via WebSocket" sans aucun appel `emit` associé est un marqueur quasi certain de
+sibling-drift non résolu — grep `via WebSocket` / `WebSocket si nécessaire` dans les commentaires du
+repo pour trouver d'autres promesses non tenues du même genre.
+## Leçon 69 — F77 soldé : `SERVER_EVENTS.NOTIFICATION` (sans suffixe) était du code mort en miroir des deux côtés (gateway émetteurs + web listener), et masquait un vrai bug d'import Prisma qui cassait 26 suites (2026-07-05, itération 106)
+
+**Contexte** : `tasks/socketio-events-cleanup.md` item #4 demandait un audit de
+`SERVER_EVENTS.NOTIFICATION` (sans `:action`, à ne pas confondre avec `NOTIFICATION_NEW`) pour
+décider deprecate/rename/remove. Grep des émetteurs réels : `MeeshySocketIOHandler.sendNotificationToUser()`
+(définie, jamais appelée par aucun caller) et `SocketNotificationService.emitNotification()` (classe
+jamais instanciée hors de son propre fichier de test — toute diffusion réelle de notifications passe
+par `NotificationService` qui émet directement sur `this.io`). Le seul "consommateur" restant était
+un listener web `notification-socketio.singleton.ts` commenté "Legacy support" — mais comme les deux
+émetteurs étaient déjà morts, ce n'était pas un vrai chemin de compat, juste un miroir de code mort
+côté client (iOS avait déjà indépendamment choisi de ne pas s'y abonner, commentaire à l'appui).
+Classe de bug adjacente à celle de la Leçon 68/#57/#62/#67 (chemins jumeaux qui divergent) mais ici
+les DEUX jumeaux étaient morts simultanément plutôt qu'un vivant/un mort.
+
+**Fix** : suppression complète (constante + entrée `ServerToClientEvents`, méthode + import
+`SERVER_EVENTS` devenu inutile sur `MeeshySocketIOHandler`, classe `SocketNotificationService` entière
++ son export, listener + tests web). Le principe CLAUDE.md « si tu es certain que c'est inutilisé,
+supprime complètement, ne renomme pas en `_unused` » s'applique : pas de période de dépréciation
+nécessaire puisqu'aucun code vivant n'émettait ni ne dépendait de cet event.
+
+**Trouvaille annexe** : en lançant la suite complète gateway pour vérifier l'absence de régression,
+26 suites échouaient à la compilation avec `TS2305: Module '"@prisma/client"' has no exported member
+'PrismaClient'` — documenté dans plusieurs itérations précédentes comme "bruit préexistant non lié"
+(ex. Leçon 68/F72) mais jamais élucidé. Cause réelle : `schema.prisma` ne déclare qu'UN seul generator
+avec `output = "./client"` (donc `@meeshy/shared/prisma/client`) — le package `@prisma/client` par
+défaut n'a jamais de client généré à cet emplacement dans ce repo. Trois fichiers
+(`SequenceService.ts`, `__tests__/helpers/consent-test-helper.ts`, `migrations/migrate-from-legacy.ts`)
+importaient `PrismaClient` depuis `@prisma/client` au lieu de `@meeshy/shared/prisma/client` (convention
+suivie partout ailleurs dans `services/gateway/src`). Corrigé : alignement des 3 imports, suite complète
+508/508 (contre 482/508 + 26 échecs de compilation avant).
+
+**Règle réutilisable** : un item de backlog "à élucider" ne doit pas rester en l'état à chaque
+itération — l'audit demandé (`grep` des émetteurs réels) est souvent rapide et donne une réponse
+définitive (ici : mort des deux côtés → suppression, pas juste un renommage cosmétique). Et une erreur
+de compilation répétée dans plusieurs comptes-rendus d'itérations sous l'étiquette "bruit préexistant,
+non lié" mérite d'être élucidée au moins une fois plutôt que reconduite indéfiniment — le fait que ~26
+suites échouent à charger n'est jamais vraiment "sans rapport", même quand isolé du diff de la session
+en cours ; ici la cause était un import cassé trivial à corriger, pas un problème d'environnement.

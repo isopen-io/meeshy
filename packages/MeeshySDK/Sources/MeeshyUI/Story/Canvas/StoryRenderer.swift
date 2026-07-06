@@ -451,9 +451,19 @@ extension StoryRenderer {
             // product rule to avoid shadowing the solid-colour fallback).
             return .image(postMediaId: urlString, thumbHash: slide.effects.thumbHash)
         }
-        // Hex color from effects.background
-        if let hex = slide.effects.background, let color = uiColor(fromHex: hex) {
-            return .solidColor(color)
+        // Hex color OR "gradient:HEX1:HEX2" from effects.background (C11) —
+        // parsing via la source unique StoryBackgroundValue.
+        if let background = slide.effects.background {
+            switch StoryBackgroundValue.parse(background) {
+            case .gradient(let a, let b):
+                if let c1 = uiColor(fromHex: a), let c2 = uiColor(fromHex: b) {
+                    return .gradient(colors: [c1, c2], direction: .topLeftToBottomRight)
+                }
+            case .hex(let hex):
+                if let color = uiColor(fromHex: hex) {
+                    return .solidColor(color)
+                }
+            }
         }
         return .solidColor(.black)
     }

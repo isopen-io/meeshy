@@ -36,7 +36,21 @@ extension StoryComposerView {
 
     var mainContent: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            // BUG-2 (C-DIR4, user 2026-07-04) : en présentation LIBRE (chrome
+            // plein), le canvas 9:16 aspect-fit laisse des bandes letterbox
+            // haut/bas sur les écrans 19.5:9 — celle du haut se cache sous le
+            // header, celle du bas restait NOIRE et nue (« zone noire en
+            // bas »). Un 9:16 ne peut pas remplir l'écran ; le letterbox prend
+            // donc la COULEUR DU FOND du slide : le canvas paraît occuper tout
+            // l'écran. Noir conservé en carded (contraste voulu de la carte)
+            // et sur fond MÉDIA (letterbox cinéma).
+            Rectangle()
+                .fill(canvasIsCarded || viewModel.hasBackgroundImage
+                    ? AnyShapeStyle(Color.black)
+                    : storyBackgroundStyle(
+                        viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")))
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
 
             // Canvas core (CALayer) + drawing overlay + viewport modifiers,
             // extracted into `canvasComposerLayer` so the SwiftUI type-checker
@@ -88,11 +102,6 @@ extension StoryComposerView {
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.drawingEditingMode)
         .adaptiveOnChange(of: viewModel.activeTool) { _, newTool in
-            // Changer d'outil ré-affiche toujours le drawer déplié : sinon l'état
-            // replié d'un outil précédent (poignée seule) persisterait sur le
-            // nouvel outil et son panneau resterait caché (2026-06-02, le repli
-            // s'applique désormais à tous les outils).
-            bandDrawerCollapsed = false
             // Le mode dessin flottant suit l'outil actif : entrer expose les
             // contrôleurs flottants (bulles) ; quitter les masque. La liste des
             // traits vit dans le band PARTAGÉ (`ComposerBottomBand.drawingPanel`)
@@ -149,7 +158,7 @@ extension StoryComposerView {
         }
         .adaptiveOnChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
         // Real-time canvas sync — Task 2.18 migration. Toolbars + sheets
-        // mutate composer-local @State (`selectedFilter`, `stickerObjects`,
+        // mutate composer-local @State (`selectedFilter`,
         // `selectedImage`, …); the CALayer canvas reads from
         // `viewModel.currentSlide.effects` exclusively, so re-serialize on
         // each toolbar mutation. Five separate `.onChange` modifiers tipped
@@ -171,15 +180,24 @@ extension StoryComposerView {
         // Quand le canvas se carde/décarde, sa frame présentée change (post-scale) ;
         // on re-aligne l'éditeur texte inline APRÈS que la carte se soit posée
         // (ressort 0.32s) pour que `canvasEditShift` se base sur le rect final.
-        .adaptiveOnChange(of: canvasIsCarded) { _, _ in
+        .adaptiveOnChange(of: canvasIsCarded) { _, carded in
+            // BUG-4 (C-DIR4) : un zoom/pan viewport résiduel SOUS le carding
+            // compose deux transforms (interne × carte) → contenu décalé/
+            // débordant, perçu tronqué. Entrer en carding ramène le viewport
+            // à l'échelle 1 (le zoom 3 doigts est un outil d'inspection du
+            // canvas LIBRE ; le bouton reset et le double-tap C4 restent).
+            if carded, viewModel.isCanvasZoomed {
+                withAnimation(.spring(response: 0.3)) { viewModel.resetCanvasZoom() }
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) { recomputeCanvasShift() }
         }
         .granularCanvasSync(
             filter: selectedFilter?.rawValue,
             hasImage: selectedImage != nil,
-            stickersCount: stickerObjects.count,
+            stickersCount: viewModel.currentEffects.stickerObjects?.count ?? 0,
             drawingCount: viewModel.drawingData?.count ?? 0,
             bgColor: viewModel.backgroundColor,
+            opening: viewModel.openingEffect,
             action: { syncCurrentSlideEffects() }
         )
     }
@@ -202,8 +220,8 @@ extension StoryComposerView {
                     resizableBandHeight: $composerBandHeight,
                     bandMinHeight: Self.composerBandMinHeight,
                     bandMaxHeight: Self.composerBandMaxHeight,
-                    bandDrawerCollapsed: $bandDrawerCollapsed,
-                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) }
+                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
+                    onOpenStickerPicker: { showStickerPicker = true }
                 )
             }
         }
@@ -251,7 +269,6 @@ extension StoryComposerView {
                 && (slide.effects.drawingStrokes ?? []).isEmpty
         }
         return slidesEmpty
-            && stickerObjects.isEmpty
             && viewModel.drawingData == nil
             && viewModel.drawingStrokes.isEmpty
     }
@@ -441,6 +458,14 @@ extension StoryComposerView {
                 pickerSelectedTool = tool
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                // La timeline se présente en SHEET, jamais dans le band (C5) :
+                // la tuile ouvre la sheet directement, sans selectTool ni band
+                // (parité avec le chemin overflow ⋯ et les switch-chips).
+                if tool == .timeline {
+                    viewModel.isTimelineVisible = true
+                    pickerSelectedTool = nil
+                    return
+                }
                 // For the Text tile, jump straight into the inline editor :
                 // viewModel.addText() itself spawns a fresh text + sets
                 // selectedElementId + sets activeTool = .text, so calling
@@ -554,7 +579,14 @@ extension StoryComposerView {
             // La sheet (band/dessin/éditeur texte) est épinglée en bas ; le canvas
             // se rétracte au-dessus d'elle (`bottomInset = presentedSheetHeight`)
             // au lieu de la chevaucher (ancienne Option A).
-            let headerInset = max(proxy.safeAreaInsets.top, 59) + 12
+            // BUG-4 (C-DIR4) : ne réserver la hauteur du header QUE s'il est
+            // visible. Depuis C-DIR2 le header est masqué pendant l'édition —
+            // garder ses 59 pt réservés faisait démarrer la carte cardée sous
+            // un header FANTÔME (bande noire en haut, perçue « canvas coupé »,
+            // capture user). Header caché → la carte monte sous la status bar.
+            let headerInset = showTopBar
+                ? max(proxy.safeAreaInsets.top, 59) + 12
+                : proxy.safeAreaInsets.top + 12
             // Marge basse minimale même sheet repliée → la carte reste détachée du bas du
             // viewport (et de la poignée), sinon elle touchait quasi le bord en collapse.
             let bottomInset = max(presentedSheetHeight, 16) + max(proxy.safeAreaInsets.bottom, 0)
@@ -633,12 +665,12 @@ extension StoryComposerView {
     }
 
     /// Hauteur visible du drawer dessin (band partagé) — sert UNIQUEMENT à lever les
-    /// contrôleurs flottants (`StoryDrawingToolbar`) juste au-dessus du drawer. Replié
-    /// « totalement » = poignée seule ; déplié = panneau (liste des traits) + chrome.
-    /// Ne rétrécit PLUS le canvas (Option A).
+    /// contrôleurs flottants (`StoryDrawingToolbar`) juste au-dessus du drawer.
+    /// (Le repli « poignée seule » a été retiré — C-DIR2 (b) : grabber sous le
+    /// min = fermeture du band + retour des FABs.)
     var drawingDrawerHeight: CGFloat {
         guard canvasIsInset else { return 0 }
-        return bandDrawerCollapsed ? Self.drawingDrawerGrabberHeight : composerBandHeight + 40
+        return composerBandHeight + 40
     }
 
     /// Vrai dès qu'un panneau (band partagé, mode dessin, ou éditeur texte) est
@@ -665,13 +697,6 @@ extension StoryComposerView {
         let cap = cappedSheetMaxHeight(screenHeight: composerScreenHeight)
         if viewModel.textEditingMode != .inactive {
             return min(cap, keyboardHeight + 132)
-        }
-        // Drawer replié (tout outil) → seul le grabber est présenté : le canvas ne
-        // réserve que sa hauteur, au lieu de la pleine hauteur du band. Sans ça la
-        // réservation (composerBandHeight) ne matchait pas la sheet visible (poignée
-        // seule) → canvas mal cadré + écart sous le canvas (bug user 2026-06-02).
-        if bandDrawerCollapsed {
-            return Self.drawingDrawerGrabberHeight
         }
         return min(cap, composerBandHeight)
     }
@@ -774,7 +799,14 @@ extension StoryComposerView {
                 case .began, .changed:
                     viewportPinchDelta = scale
                 case .ended:
-                    let newScale = min(4.0, max(0.5, viewModel.canvasScale * scale))
+                    // Clamp + snap à l'identité (C4) : un relâcher quasi-1.0
+                    // redevient EXACTEMENT 1.0 — sans ça, isCanvasZoomed
+                    // (comparaison stricte) gardait TopBar cachée + bouton
+                    // reset affiché sur un canvas visuellement à l'échelle 1.
+                    let newScale = CanvasViewportZoomPolicy.settledScale(
+                        current: viewModel.canvasScale,
+                        gestureScale: scale
+                    )
                     withAnimation(.spring(response: 0.2)) {
                         viewModel.canvasScale = newScale
                         if newScale <= 1.0 { viewModel.canvasOffset = .zero }
@@ -800,6 +832,15 @@ extension StoryComposerView {
                     videoFitMode: transform.videoFitMode
                 )
                 viewModel.saveBackgroundTransform()
+            },
+            // C4 — sortie gestuelle du zoom : double-tap fond en état zoomé
+            // = reset viewport (même action que canvasZoomResetButton, qui
+            // reste visible — invariant « ne jamais retirer d'affordance »).
+            isViewportZoomed: viewModel.isCanvasZoomed,
+            onViewportZoomResetRequested: {
+                withAnimation(.spring(response: 0.3)) {
+                    viewModel.resetCanvasZoom()
+                }
             },
             // Quand le drawing overlay est actif, le canvas doit supprimer
             // son drawingLayer persisté — sinon double rendu (ancien drawing

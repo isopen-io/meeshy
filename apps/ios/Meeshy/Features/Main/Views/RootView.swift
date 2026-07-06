@@ -569,7 +569,7 @@ struct RootView: View {
             },
             set: { if !$0 { callManager.displayMode = .pip } }
         )) {
-            CallView()
+            CallView(callManager: callManager)
         }
         .overlay(alignment: .top) {
             FloatingCallPillView()
@@ -1385,7 +1385,7 @@ struct RootView: View {
             PendingStoryBannerInline()
             Spacer()
         }
-        .padding(.top, 50)
+        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.lg)
         .zIndex(189)
     }
 
@@ -1871,7 +1871,7 @@ private struct PendingSettingsBannerInline: View {
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -1932,7 +1932,7 @@ private struct PendingStoryBannerInline: View {
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }

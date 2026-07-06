@@ -364,12 +364,15 @@ export class PreferencesService {
     userId: string,
     data: UpdateLanguagePreferencesDTO
   ): Promise<LanguagePreferencesDTO> {
-    // Update user language fields
+    // Update user language fields. Lowercase at the write boundary so the DB only
+    // ever holds minuscule codes — the invariant the read-side resolvers
+    // (resolveUserLanguage) rely on. A code stored as 'EN' would never match the
+    // lowercase-keyed MessageTranslation store (Prisme rule #1 miss).
     const updateData: any = {};
-    if (data.systemLanguage !== undefined) updateData.systemLanguage = data.systemLanguage;
-    if (data.regionalLanguage !== undefined) updateData.regionalLanguage = data.regionalLanguage;
+    if (data.systemLanguage !== undefined) updateData.systemLanguage = data.systemLanguage.toLowerCase();
+    if (data.regionalLanguage !== undefined) updateData.regionalLanguage = data.regionalLanguage.toLowerCase();
     if (data.customDestinationLanguage !== undefined) {
-      updateData.customDestinationLanguage = data.customDestinationLanguage;
+      updateData.customDestinationLanguage = data.customDestinationLanguage.toLowerCase();
     }
 
     if (Object.keys(updateData).length > 0) {
