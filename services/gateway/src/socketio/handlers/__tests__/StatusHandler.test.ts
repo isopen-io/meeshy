@@ -57,21 +57,33 @@ function makePrisma(overrides: Record<string, any> = {}): any {
   return {
     conversation: {
       findUnique: jest.fn<any>().mockResolvedValue({ id: CONV_ID, identifier: 'test-conv' }),
+      ...(overrides.conversation ?? {}),
     },
     participant: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
+      // Backs `_getBlockedSocketIdsInRoom`'s room-membership lookup — empty by
+      // default (no other online participants → no blocking check needed).
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...(overrides.participant ?? {}),
     },
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...(overrides.user ?? {}),
     },
-    ...overrides,
   };
 }
 
 function makeSocket(overrides: Record<string, any> = {}): Socket {
+  // `socket.to(room)` returns a chainable object exposing both a direct
+  // `.emit` (no exclusions) and `.except(socketIds).emit` (blocked viewers
+  // excluded) — mirrors the real Socket.IO BroadcastOperator API.
   return {
     id: SOCKET_ID,
-    to: jest.fn<any>().mockReturnValue({ emit: jest.fn() }),
+    to: jest.fn<any>().mockReturnValue({
+      emit: jest.fn(),
+      except: jest.fn<any>().mockReturnValue({ emit: jest.fn() }),
+    }),
     emit: jest.fn(),
     ...overrides,
   } as unknown as Socket;
@@ -99,12 +111,45 @@ function makeConnectedUsers(userId = USER_ID, isAnonymous = false) {
   return users;
 }
 
+const BLOCKED_VIEWER_ID = 'blocked-viewer-id';
+const BLOCKED_SOCKET_ID = 'socket-blocked-viewer';
+
+/**
+ * A room where `BLOCKED_VIEWER_ID` is an online co-participant who has
+ * blocked (or been blocked by) the typing user `USER_ID`. Mirrors the fixture
+ * shape `getBlockedUserIdsAmong` expects: `prisma.user.findMany` simulates the
+ * "candidate blocked me" direction (viewer → typer).
+ */
+function makeBlockedScenario() {
+  const connectedUsers = makeConnectedUsers();
+  connectedUsers.set(BLOCKED_VIEWER_ID, {
+    id: BLOCKED_VIEWER_ID,
+    socketId: BLOCKED_SOCKET_ID,
+    isAnonymous: false,
+    language: 'en',
+    resolvedLanguages: ['en'],
+  });
+  const userSockets = new Map([[BLOCKED_VIEWER_ID, new Set([BLOCKED_SOCKET_ID])]]);
+  const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+  const prisma = makePrisma({
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue(dbUser),
+      findMany: jest.fn<any>().mockResolvedValue([{ id: BLOCKED_VIEWER_ID }]),
+    },
+    participant: {
+      findMany: jest.fn<any>().mockResolvedValue([{ userId: BLOCKED_VIEWER_ID }]),
+    },
+  });
+  return { connectedUsers, userSockets, prisma };
+}
+
 function makeHandler({
   prisma = makePrisma(),
   statusService = makeStatusService(),
   privacyPreferencesService = makePrivacyService(),
   connectedUsers = makeConnectedUsers(),
   socketToUser = new Map([[SOCKET_ID, USER_ID]]),
+  userSockets = new Map<string, Set<string>>(),
 } = {}) {
   return new StatusHandler({
     prisma,
@@ -112,6 +157,7 @@ function makeHandler({
     privacyPreferencesService: privacyPreferencesService as any,
     connectedUsers,
     socketToUser,
+    userSockets,
   });
 }
 
@@ -567,6 +613,81 @@ describe('StatusHandler', () => {
     });
   });
 
+  // ── blocking privacy ─────────────────────────────────────────────────────────
+  // Typing is a moment-to-moment presence signal, more sensitive than the
+  // `_broadcastUserStatus` snapshot already gated on blocking — it must not
+  // leak to a co-participant in a bidirectional block relationship either.
+
+  describe('blocking privacy', () => {
+    it('handleTypingStart excludes a blocked co-participant socket from the broadcast', async () => {
+      const { connectedUsers, userSockets, prisma } = makeBlockedScenario();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, userSockets });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const toResult = ((socket.to as jest.Mock).mock.results[0] as any).value;
+      expect(toResult.except).toHaveBeenCalledWith([BLOCKED_SOCKET_ID]);
+      expect(toResult.emit).not.toHaveBeenCalled();
+      const exceptEmit = ((toResult.except as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
+      expect(exceptEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_START,
+        expect.objectContaining({ userId: USER_ID, conversationId: CONV_ID })
+      );
+    });
+
+    it('handleTypingStop excludes a blocked co-participant socket from the broadcast', async () => {
+      const { connectedUsers, userSockets, prisma } = makeBlockedScenario();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, userSockets });
+
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      const toResult = ((socket.to as jest.Mock).mock.results[0] as any).value;
+      expect(toResult.except).toHaveBeenCalledWith([BLOCKED_SOCKET_ID]);
+      const exceptEmit = ((toResult.except as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
+      expect(exceptEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, conversationId: CONV_ID })
+      );
+    });
+
+    it('does not call except() when no online co-participant is blocked', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const toResult = ((socket.to as jest.Mock).mock.results[0] as any).value;
+      expect(toResult.except).not.toHaveBeenCalled();
+      expect(toResult.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_START,
+        expect.objectContaining({ userId: USER_ID })
+      );
+    });
+
+    it('only queries blocking for registered (non-anonymous) co-participants', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const participantFindMany = jest.fn<any>().mockResolvedValue([]);
+      const prisma = makePrisma({
+        user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) },
+        participant: { findMany: participantFindMany },
+      });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      expect(participantFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ conversationId: CONV_ID, isActive: true, userId: { not: null } }),
+        })
+      );
+    });
+  });
+
   // ── handleSocketDisconnecting ───────────────────────────────────────────────
 
   describe('handleSocketDisconnecting', () => {
@@ -588,18 +709,20 @@ describe('StatusHandler', () => {
       await handler.handleTypingStart(socket, { conversationId: CONV_ID_2 });
 
       const broadcastFn = jest.fn();
-      handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn);
+      await handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn);
 
       expect(broadcastFn).toHaveBeenCalledTimes(2);
       expect(broadcastFn).toHaveBeenCalledWith(
         ROOMS.conversation(CONV_ID),
         SERVER_EVENTS.TYPING_STOP,
-        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID })
+        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID }),
+        undefined
       );
       expect(broadcastFn).toHaveBeenCalledWith(
         ROOMS.conversation(CONV_ID_2),
         SERVER_EVENTS.TYPING_STOP,
-        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID_2 })
+        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID_2 }),
+        undefined
       );
     });
 
@@ -614,16 +737,16 @@ describe('StatusHandler', () => {
       const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
       expect(activeTypers.has(SOCKET_ID)).toBe(true);
 
-      handler.handleSocketDisconnecting(SOCKET_ID, jest.fn());
+      await handler.handleSocketDisconnecting(SOCKET_ID, jest.fn());
 
       expect(activeTypers.has(SOCKET_ID)).toBe(false);
     });
 
-    it('is a no-op when socket has no active typing', () => {
+    it('is a no-op when socket has no active typing', async () => {
       const handler = makeHandler();
       const broadcastFn = jest.fn();
 
-      expect(() => handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn)).not.toThrow();
+      await expect(handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn)).resolves.not.toThrow();
       expect(broadcastFn).not.toHaveBeenCalled();
     });
 
@@ -647,7 +770,7 @@ describe('StatusHandler', () => {
 
       // socket1 disconnects — socket2 is still typing in that conversation
       const broadcastFn = jest.fn();
-      handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
+      await handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
 
       // typing:stop must NOT be broadcast because socket2 is still typing
       expect(broadcastFn).not.toHaveBeenCalled();
@@ -667,13 +790,14 @@ describe('StatusHandler', () => {
 
       // socket2 exists but is not tracked in activeTypers (not typing)
       const broadcastFn = jest.fn();
-      handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
+      await handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
 
       // typing:stop MUST be broadcast because socket2 is not typing in this conversation
       expect(broadcastFn).toHaveBeenCalledWith(
         ROOMS.conversation(CONV_ID),
         SERVER_EVENTS.TYPING_STOP,
-        expect.objectContaining({ userId: USER_ID, isTyping: false })
+        expect.objectContaining({ userId: USER_ID, isTyping: false }),
+        undefined
       );
     });
 
@@ -687,13 +811,33 @@ describe('StatusHandler', () => {
       await handler.handleTypingStart(socket, { conversationId: CONV_ID });
 
       const broadcastFn = jest.fn();
-      handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn, undefined);
+      await handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn, undefined);
 
       expect(broadcastFn).toHaveBeenCalledTimes(1);
       expect(broadcastFn).toHaveBeenCalledWith(
         ROOMS.conversation(CONV_ID),
         SERVER_EVENTS.TYPING_STOP,
-        expect.objectContaining({ userId: USER_ID, isTyping: false })
+        expect.objectContaining({ userId: USER_ID, isTyping: false }),
+        undefined
+      );
+    });
+
+    it('passes blocked co-participant socket ids to broadcastFn on disconnect', async () => {
+      const { connectedUsers, userSockets, prisma } = makeBlockedScenario();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, userSockets });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const broadcastFn = jest.fn();
+      await handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn);
+
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false }),
+        [BLOCKED_SOCKET_ID]
       );
     });
   });

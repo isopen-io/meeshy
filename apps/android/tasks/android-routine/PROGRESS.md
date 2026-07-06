@@ -2,7 +2,7 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme + interface language + notification master toggles)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles)** → rest`
 
 > On 2026-07-05 the **persisted interface (UI chrome) language** landed (slice `settings-interface-language`,
 > §L — mirrors the theme slice one step further): the pure `:core:model` `AppLanguage` helpers are the SSOT —
@@ -453,17 +453,24 @@ into a tested list, with case-insensitive dup-language collapse; consumed by the
 6. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
    remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
 
-**Recommended next:** Settings §L theme ✅, interface-language ✅ and **notification master toggles ✅**
-shipped (`settings-theme-mode`, `settings-interface-language`, `settings-notification-prefs`, 2026-07-05 — see
-run log). The next clean pure-core §L slices, in value order:
-1. **DND schedule editor** — the `UserNotificationPreferences` block already carries `dndEnabled`/
-   `dndStartTime`/`dndEndTime`/`dndDays` and the shipped codec + `NotificationPreferencesStore` already persist
-   them losslessly. Add a pure `:core:model` `DndWindow` helper (is-now-inside-the-window, wrap-around
-   midnight, per-day gating) + the time-range + day-chip rows wired to the existing store. High-branch pure
-   core, reuses this slice's durable seam — no new store.
-2. **Per-event notification type toggles** — expose the remaining `UserNotificationPreferences` booleans
-   (mention/reaction/reply/post-like/comment/story-reaction/…) as a grouped, searchable section over the same
-   store; add a pure grouping/ordering builder. Mostly UI over the seam already shipped.
+**Recommended next:** Settings §L theme ✅, interface-language ✅, **notification master toggles ✅** and
+**DND schedule editor ✅** shipped (`settings-theme-mode`, `settings-interface-language`,
+`settings-notification-prefs`, `settings-dnd-schedule`, 2026-07-05 — see run log). The next clean pure-core §L
+slices, in value order:
+1. ~~**DND schedule editor**~~ ✅ shipped 2026-07-05 as `settings-dnd-schedule` — pure `:core:model` `DndWindow`
+   SSOT (`isActive` enable-gate/midnight-wrap/per-day-gating/corrupt-time-safe, `parseMinuteOfDay`/
+   `formatTimeOfDay`/`toggleDay`, `DndDay`↔`DayOfWeek`) + `SettingsViewModel` enable/start/end/toggle-day intents
+   + `SettingsScreen` master toggle + 24h TimePicker rows + Mon→Sun chips + a live "quiet hours active now"
+   status. +32 tests. See run log. Reused the notification store — no new store.
+2. ~~**Per-event notification type toggles**~~ ✅ shipped 2026-07-06 as `settings-notification-type-toggles` —
+   pure `:core:model` `NotificationTypeCatalog` SSOT: 17 per-event types (reply/mention/reaction/conversation,
+   missed-call/voicemail, post-like/comment/repost/story-reaction/comment-reply/comment-like,
+   contact-request/group-invite/member-joined/member-left, system) each with a `get`/`set` lens over the
+   matching `UserNotificationPreferences` boolean; `toggle`/`isEnabled` (edit exactly one, never clobber),
+   `sections(prefs, query, label)` grouping into 5 ordered `NotificationCategory` sections with a locale-aware
+   injected-label case-insensitive/trimmed search that omits empty categories. `SettingsViewModel`
+   `setNotificationTypeEnabled`/`setNotificationTypeQuery`; `SettingsScreen` search field + accent category
+   headers + push-gated per-type switches. +14 tests. See run log. Reused the notification store — no new store.
 3. **Backend sync of notification prefs** — wire the local block through a new outbox lane so the device-local
    choice debounce-syncs to the gateway (`PATCH /users/me/preferences`), mirroring `edit-profile-optimistic`.
    Closes the "online-only vs device-local" gap noted in `feature-parity.md §L`.
@@ -865,6 +872,88 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-06 — slice `settings-notification-type-toggles` ✅ shipped
+- **Step 0 (housekeeping):** the prior iteration's Android PR **#1517 (`settings-dnd-schedule`)** was still open
+  from the last run — merged it first (`mergeable_state: clean`, diff apps/android-only, reviewer PASS recorded).
+  The only red CI on `main` is the unrelated `Test Python (translator)` job (an apps/android-only diff touches
+  none of the JS/TS/Python stack; the real Android gate is local). Re-synced `origin/main` (now `1fdc4931`) and
+  branched `claude/apps/android/settings-notification-type-toggles` off it.
+- **Why this slice:** the §L "Recommended next" #2 — the `UserNotificationPreferences` block carries ~17
+  per-event booleans (reply/mention/reaction/conversation, missed-call/voicemail, the six social/feed types,
+  the four group/contact types, system) but only push/new-message/sound/vibration + DND were surfaced. This
+  slice exposes the rest as a grouped, searchable section over the existing durable store (no new store).
+- **Pure core (`:core:model` `NotificationTypeCatalog.kt`):** `NotificationType` (17) + `NotificationCategory`
+  (MESSAGES→CALLS→SOCIAL→GROUPS→SYSTEM display order). Each type has a `NotificationTypeDescriptor` carrying its
+  category + a `get`/`set` lens over the matching boolean (the toggle SSOT). `isEnabled`/`toggle` (read-modify-
+  write exactly one field, never clobber the block); `sections(prefs, query, label)` groups matching types into
+  ordered category sections, each item carrying its live enabled state — blank/whitespace query keeps all,
+  otherwise a case-insensitive/trimmed `contains` over the **injected locale-aware label** drops non-matching
+  types and omits emptied categories. Search stays pure: the label fn is injected so no string resources leak
+  into `:core:model`. RED first (`NotificationTypeCatalogTest`, 10: every-type toggle round-trip, no-clobber,
+  full grouping/order, within-category order, enabled-state derivation, blank + whitespace = no filter,
+  case-insensitive match with empty-category omission, no-match → empty, injected-label match).
+- **Wiring (`:feature:settings`):** `SettingsViewModel` gains `notificationTypeQuery` in `UiState`,
+  `setNotificationTypeEnabled(type, enabled)` (through the existing `updateNotifications { NotificationTypeCatalog
+  .toggle(...) }` read-modify-write) and `setNotificationTypeQuery(query)` (view-only, never mutates the block).
+  `SettingsScreen` renders, under the notifications section after DND, a `NotificationTypesEditor`: a titled
+  `OutlinedTextField` search (Search icon), and for each surviving section an accent-primary category header +
+  push-gated per-type `NotificationToggleRow`s (disabled when push is off), with an empty-state label when the
+  query matches nothing. Labels/headers localized EN/FR/ES/PT (22 new strings ×4). `SettingsViewModelNotification
+  TypesTest` (4: enable persists+surfaces, no-clobber of other toggles/top-level, re-enable a default-off type,
+  query updates UI state only without touching the block).
+- **Verification:** `gradle :core:model:testDebugUnitTest :feature:settings:testDebugUnitTest` green, then full
+  `gradle :app:assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (all modules, system Gradle 8.14.3). +14
+  new tests (catalog 10, VM 4). Diff = `apps/android` only (2 new + 6 modified + this doc + feature-parity).
+- **Reviewer gate:** PASS — diff `apps/android` only, no production logic elsewhere; behaviour-through-public-API
+  tests, no tautologies, no floor lowered; SDK purity (pure catalog/lens/grouping in `:core:model`; the "which
+  intent / query-in-state / label lookup" product orchestration in `:feature:settings`), SSOT (one
+  `NotificationTypeCatalog` owns the type↔boolean mapping + grouping, read by the editor and any future
+  notification-gating consumer; `.copy` merge preserves the block), UDF (immutable `StateFlow<UiState>`),
+  instant-app (edits instant + durable via the shipped store), colour/UX coherence (accent-primary category
+  headers, natural search + switch gestures, push-gated toggles, no dead end — empty-state label). No orphan
+  code: every descriptor lens has a live consumer via `toggle`/`sections`. Surpasses iOS, which lists the same
+  toggles without an in-section search filter.
+
+### 2026-07-05 — slice `settings-dnd-schedule` ✅ shipped
+- **Step 0 (housekeeping):** no open Android PR from a prior iteration — the open PRs (#1516/#1515/#1513/
+  #1510/#1498) are all non-Android gateway/web/calls fixes by other sessions. Branched
+  `claude/apps/android/settings-dnd-schedule` off the freshly-fetched `origin/main` (`930f4811`).
+- **Why this slice:** the §L "Recommended next" #1 — the `UserNotificationPreferences` block already carried
+  `dndEnabled`/`dndStartTime`/`dndEndTime`/`dndDays` (persisted losslessly by the shipped codec + store from
+  `settings-notification-prefs`), but nothing exposed them. This slice adds the pure quiet-hours SSOT + the
+  editor, reusing the existing durable seam (no new store).
+- **Pure core (`:core:model` `DndWindow.kt`):** port of iOS `UserNotificationPreferences.isInDoNotDisturbWindow`.
+  `isActive(prefs, dayOfWeek, minuteOfDay)` — enable gate → per-day gating (empty `dndDays` = every day) →
+  parse both `HH:mm` → same-day `[start, end)` **or** midnight-wrap `>= start || < end`; a corrupt time or a
+  gated-out day ⇒ never active (never crashes). `isActive(prefs, LocalDateTime)` convenience derives
+  weekday+minute. `parseMinuteOfDay` (rejects malformed shape / out-of-range → null), `formatTimeOfDay`
+  (range-clamped, zero-padded), `toggleDay` (canonical Mon→Sun order, dedup), `DndDay`↔ISO-`DayOfWeek`
+  mapping. RED first (`DndWindowTest`, 20: parse bounds/trim/malformed/out-of-range, format pad/clamp/
+  round-trip, toggle add/remove/order/dedup, day-mapping round-trip, enable gate, same-day inclusive-start/
+  exclusive-end + degenerate empty window, wrap-around both sides + midday gap, empty-days=every-day + gated-
+  out day, corrupt-time → false, LocalDateTime overload time + day gating).
+- **Wiring (`:feature:settings`):** `SettingsViewModel` gains `setDndEnabled`/`setDndStart(hour,minute)`/
+  `setDndEnd(hour,minute)`/`toggleDndDay(day)` — all through the existing `updateNotifications { copy(...) }`
+  read-modify-write so DND edits never clobber the other toggles; start/end format via `DndWindow.formatTimeOfDay`,
+  day via `DndWindow.toggleDay`. `SettingsScreen` renders the DND rows under the notifications section: a master
+  toggle (disabled when push is off), and when enabled — a **live "quiet hours active now / off right now"
+  status** computed from `DndWindow.isActive(prefs, LocalDateTime.now())`, Material3 24h `TimePicker` from/until
+  rows (seeded from the stored `HH:mm` via `parseMinuteOfDay`), and a Mon→Sun `FilterChip` day selector showing
+  "Every day" when empty. EN/FR/ES/PT strings for all new labels. `SettingsViewModelDndTest` (6: enable persists+
+  surfaces, start/end format into stored token, toggle add-then-remove, canonical multi-day order, no-clobber of
+  other toggles).
+- **Verification:** `gradle :core:model:… :feature:settings:testDebugUnitTest` green, then full
+  `gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (0 failures, system Gradle 8.14.3). +32 new
+  tests (DndWindow 20, VM 6, +the LocalDateTime/day-mapping cases). Diff = `apps/android` only (3 new + 6
+  modified: SettingsScreen/SettingsViewModel + 4 strings; feature-parity doc).
+- **Reviewer gate:** PASS — diff `apps/android` only, no production logic elsewhere; behaviour-through-public-API
+  tests, no tautologies, no floor lowered; SDK purity (pure predicate/codec in `:core:model`; the "which intent /
+  when to show the status / picker cascade" product orchestration in `:feature:settings`), SSOT (one `DndWindow`
+  read by both the editor status and future notification gating; `.copy` merge), UDF (immutable
+  `StateFlow<UiState>`), instant-app (edits are instant + durable, no flash), colour/UX coherence (accent-tinted
+  active-status label via `colorScheme.primary`, natural TimePicker + chip gestures, no dead end). No orphan code:
+  `isActive` has a live consumer in the DND status label. Surpasses iOS whose editor has no live-status readout.
 
 ### 2026-07-05 — slice `settings-notification-prefs` ✅ shipped
 - **Step 0 (housekeeping):** the prior iteration's Android PR **#1508 (`settings-interface-language`)** was

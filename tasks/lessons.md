@@ -678,6 +678,67 @@ un vecteur de fuite plus grave qu'un endpoint interrogé à la demande, et c'est
 sibling que ce backlog a déjà trouvé divergent à plusieurs reprises (mentions, postType, casse de
 langue, cursor read/delivered).
 
+## Leçon 68 — Le broadcast `typing:start`/`typing:stop` ignorait aussi le blocage, alors que la présence (Leçon 67) venait d'être corrigée (2026-07-05, itération 100)
+
+Sibling drift direct de la Leçon 67, sur un canal encore plus sensible : `_broadcastUserStatus`
+(présence) enforce désormais le blocage bidirectionnel, mais `StatusHandler.handleTypingStart`/
+`handleTypingStop` (`services/gateway/src/socketio/handlers/StatusHandler.ts`) diffusaient
+`typing:start`/`typing:stop` via `socket.to(room).emit(...)` sans AUCUNE vérification de blocage —
+seule la préférence globale `shouldShowTypingIndicator` (booléen, sans notion de viewer) était
+consultée. Or bloquer ne retire jamais des conversations partagées (fait déjà établi en Leçon 67) :
+A bloque B, les deux restent co-participants d'un groupe ; quand B tape dans ce groupe, A voit
+« B est en train d'écrire… » en direct alors que `GET /users/presence` masquerait `isOnline`/
+`lastActiveAt` pour cette même paire. La frappe est un signal plus sensible que la présence
+(prouve un engagement actif, instant par instant) — c'était donc une régression de couverture
+laissée ouverte par la Leçon 67 elle-même (fix scopé à `_broadcastUserStatus`, `StatusHandler` non
+audité). Un troisième chemin jumeau avait le même trou : `handleSocketDisconnecting` (broadcast
+`typing:stop` de secours à la déconnexion, via un `broadcastFn` injecté par
+`MeeshySocketIOManager.ts`).
+
+**Fix** : nouveau helper privé `StatusHandler._getBlockedSocketIdsInRoom(userId, conversationId)` —
+requête les participants actifs et enregistrés (`userId: { not: null }`, les anonymes ne peuvent ni
+bloquer ni être bloqués) de la conversation, filtre ceux actuellement en ligne
+(`connectedUsers.has`), puis réutilise `getBlockedUserIdsAmong` (même helper que Leçon 67) pour
+résoudre l'ensemble bloqué, et `userSockets` (nouvelle dépendance optionnelle de
+`StatusHandlerDependencies`, câblée depuis `MeeshySocketIOManager`) pour mapper vers des socket
+ids. Les 3 call sites (`handleTypingStart`, `handleTypingStop`, `handleSocketDisconnecting`) font
+`socket.to(room).except(blockedSocketIds).emit(...)` quand la liste est non vide — identique au
+pattern déjà validé sur la présence. `handleSocketDisconnecting` devient `async` (await du helper) ;
+son `broadcastFn` gagne un 4e paramètre optionnel `exceptSocketIds`. RED→GREEN :
+`StatusHandler.test.ts` (×2 fichiers) +5 cas (exclusion sur start/stop/disconnect, no-op quand
+personne n'est bloqué, filtre les participants anonymes) + fixtures `makePrisma` étendues
+(`participant.findMany`/`user.findMany` par défaut vides, non-régressif). Suite complète
+StatusHandler (73/73) + blocking.ts (283/283 avec MeeshySocketIOManager) verte ; le seul échec
+tsc/jest restant (`SequenceService.ts` → `@prisma/client` sans export `PrismaClient`) est
+pré-existant sur `main`, confirmé par `git stash` avant relance — sans lien avec ce fix.
+
+**Règle réutilisable** : une correction de sibling drift (Leçon 67) doit elle-même être auditée pour
+d'autres siblings du MÊME concept produit avant d'être considérée close — ici « présence » et
+« frappe » sont deux facettes du même signal (« cet utilisateur est actif maintenant »), et corriger
+l'une sans l'autre laisse un vecteur de fuite ouvert, parfois plus grave que celui qu'on vient de
+fermer. Lister explicitement TOUS les canaux qui exposent un signal de présence/activité (présence,
+frappe, dernière vue, indicateurs de lecture en direct…) et vérifier qu'ils partagent tous la même
+politique de blocage avant de clore un correctif de ce type.
+## Leçon 68 — Un fix de sibling-drift peut lui-même en introduire un nouveau s'il ne couvre que les chemins terminaux qu'il possède (2026-07-05, itération 100, Vague 14 appels)
+
+`a813b31` (gateway/calls, plus tôt le même jour) a ajouté `CallEventsHandler.clearQualityDegradedStreaks`
+et l'a câblé sur les 3 chemins terminaux **que `CallEventsHandler` possède lui-même**
+(`broadcastCallEnded`, disconnect-leave à 0 participant, disconnect-force-cleanup). Un **4e** chemin
+terminal existe pour le même appel — `CallCleanupService.forceEndCall` (le tier GC cron 60s) — mais vit
+dans une classe séparée sans référence à l'instance `CallEventsHandler`, donc n'a reçu ni l'ancien
+bug (déjà documenté) ni son fix. Piège spécifique à ce cas : le fix a été écrit et testé en ne regardant
+QUE les call-sites internes à la classe qu'on modifie déjà — la recherche de siblings s'est arrêtée à la
+frontière de fichier au lieu de suivre "tous les chemins qui terminent un `CallSession`" (grep
+`callSession.updateMany.*status` ou équivalent, à travers TOUT `services/gateway/src`, pas juste le
+fichier en cours d'édition). Une classe séparée qui termine la même entité (ici via son propre GC/cron)
+compte comme sibling au même titre qu'une méthode sœur dans le même fichier.
+
+**Règle réutilisable** : quand on répare un sibling-drift ("chemin X était couvert, chemin Y ne l'était
+pas"), avant de committer, lister EXHAUSTIVEMENT tous les chemins qui écrivent le même état terminal
+sur la même entité — via un grep structurel sur le nom de la table/du champ concerné dans tout le
+service, pas seulement dans le fichier qu'on est en train d'éditer — et vérifier explicitement que
+chacun reçoit le fix, pas seulement ceux qui vivent dans la même classe. Un fix de sibling-drift qui
+ne couvre que 3 des 4 chemins réels n'est qu'un sibling-drift déplacé, pas résolu.
 ## Leçon 68 — F71 soldé : `community-preferences.ts` était une copie figée de `conversation-preferences.ts`, sans la diffusion socket ajoutée après-coup au sibling (2026-07-05, itération 104)
 
 Nouvelle variante de la famille « deux chemins jumeaux répondant à la même question produit divergent »
@@ -712,6 +773,29 @@ jamais automatiquement, et rien ne le signale (pas d'erreur, pas de test qui cas
 comportement silencieusement différent entre deux entités qui devraient se comporter pareil).
                                                
                                                
+## Leçon 69 — Une liste blanche de langues codée en dur diverge de la source de vérité des bundles (2026-07-05, itération 108)
+
+`detectBestInterfaceLanguage` (`apps/web/utils/language-detection.ts`) sélectionnait la langue de l'UI
+au montage via une liste blanche codée en dur `['en', 'fr', 'pt']`. L'espagnol y manquait alors que
+`locales/es/` est un bundle complet et que `es` est une entrée first-class de `INTERFACE_LANGUAGES`
+(`types/frontend.ts`), placée AVANT `fr`/`pt` qui, elles, étaient auto-détectées. Résultat : tout
+navigateur hispanophone recevait une UI anglaise — violation du Prisme Linguistique sur la surface
+chrome, exactement le genre de friction que le produit promet d'éliminer. La fonction jumelle
+`getUserPreferredLanguage` (même fichier, langue de contenu) gérait `es` correctement via
+`isSupportedLanguage` : divergence entre deux détecteurs du même module.
+
+**Fix** : `['en', 'es', 'fr', 'pt']` = exactement les 4 langues avec bundle complet ; `de`/`it` restent
+exclues (sans bundle, repli `en` intentionnel documenté). RED→GREEN : 3 tests (`['es-ES','en-US'] → 'es'`,
+`['es-419'] → 'es'`, garde-fou `['it-IT','de-DE'] → 'en'`). `language-detection.test.ts` 35/35,
+`use-language.test.tsx` (callers) 24/24.
+
+**Règle réutilisable** : quand une capacité produit (langue, thème, feature-flag) a une **source de
+vérité déclarative** (ici `INTERFACE_LANGUAGES` + présence du dossier `locales/<code>`), toute liste
+blanche codée en dur qui la re-liste ailleurs est un point de dérive garanti. Auditer systématiquement
+que chaque valeur « expédiée » (bundle présent, entrée dans le sélecteur) apparaît dans TOUS les chemins
+qui la filtrent — et distinguer l'omission-défaut (valeur expédiée mais absente : `es`) de
+l'omission-intentionnelle (valeur non expédiée, repli documenté : `de`/`it`). Un test garde-fou sur le
+cas intentionnel empêche un futur « fix » de casser l'exclusion voulue.
 ## Leçon 68 — F72 soldé : `capitalizeName` ne re-capitalisait qu'après un espace, mutilant Jean-Pierre/O'Brien à l'inscription (2026-07-05, itération 105)
 
 **Contexte** : `services/gateway/src/utils/normalize.ts` normalise les champs d'inscription
@@ -743,3 +827,42 @@ entrer » et « ce que le normalizer sait découper » est un bug latent (même 
 `truncateFilename` sans point, F69 `sanitizeFileName`). Et un test dont l'intitulé décrit le
 comportement correct mais dont l'assertion fige la sortie buggée est un signal fort de défaut, pas
 d'intention.
+
+## Leçon 69 — F77 soldé : `SERVER_EVENTS.NOTIFICATION` (sans suffixe) était du code mort en miroir des deux côtés (gateway émetteurs + web listener), et masquait un vrai bug d'import Prisma qui cassait 26 suites (2026-07-05, itération 106)
+
+**Contexte** : `tasks/socketio-events-cleanup.md` item #4 demandait un audit de
+`SERVER_EVENTS.NOTIFICATION` (sans `:action`, à ne pas confondre avec `NOTIFICATION_NEW`) pour
+décider deprecate/rename/remove. Grep des émetteurs réels : `MeeshySocketIOHandler.sendNotificationToUser()`
+(définie, jamais appelée par aucun caller) et `SocketNotificationService.emitNotification()` (classe
+jamais instanciée hors de son propre fichier de test — toute diffusion réelle de notifications passe
+par `NotificationService` qui émet directement sur `this.io`). Le seul "consommateur" restant était
+un listener web `notification-socketio.singleton.ts` commenté "Legacy support" — mais comme les deux
+émetteurs étaient déjà morts, ce n'était pas un vrai chemin de compat, juste un miroir de code mort
+côté client (iOS avait déjà indépendamment choisi de ne pas s'y abonner, commentaire à l'appui).
+Classe de bug adjacente à celle de la Leçon 68/#57/#62/#67 (chemins jumeaux qui divergent) mais ici
+les DEUX jumeaux étaient morts simultanément plutôt qu'un vivant/un mort.
+
+**Fix** : suppression complète (constante + entrée `ServerToClientEvents`, méthode + import
+`SERVER_EVENTS` devenu inutile sur `MeeshySocketIOHandler`, classe `SocketNotificationService` entière
++ son export, listener + tests web). Le principe CLAUDE.md « si tu es certain que c'est inutilisé,
+supprime complètement, ne renomme pas en `_unused` » s'applique : pas de période de dépréciation
+nécessaire puisqu'aucun code vivant n'émettait ni ne dépendait de cet event.
+
+**Trouvaille annexe** : en lançant la suite complète gateway pour vérifier l'absence de régression,
+26 suites échouaient à la compilation avec `TS2305: Module '"@prisma/client"' has no exported member
+'PrismaClient'` — documenté dans plusieurs itérations précédentes comme "bruit préexistant non lié"
+(ex. Leçon 68/F72) mais jamais élucidé. Cause réelle : `schema.prisma` ne déclare qu'UN seul generator
+avec `output = "./client"` (donc `@meeshy/shared/prisma/client`) — le package `@prisma/client` par
+défaut n'a jamais de client généré à cet emplacement dans ce repo. Trois fichiers
+(`SequenceService.ts`, `__tests__/helpers/consent-test-helper.ts`, `migrations/migrate-from-legacy.ts`)
+importaient `PrismaClient` depuis `@prisma/client` au lieu de `@meeshy/shared/prisma/client` (convention
+suivie partout ailleurs dans `services/gateway/src`). Corrigé : alignement des 3 imports, suite complète
+508/508 (contre 482/508 + 26 échecs de compilation avant).
+
+**Règle réutilisable** : un item de backlog "à élucider" ne doit pas rester en l'état à chaque
+itération — l'audit demandé (`grep` des émetteurs réels) est souvent rapide et donne une réponse
+définitive (ici : mort des deux côtés → suppression, pas juste un renommage cosmétique). Et une erreur
+de compilation répétée dans plusieurs comptes-rendus d'itérations sous l'étiquette "bruit préexistant,
+non lié" mérite d'être élucidée au moins une fois plutôt que reconduite indéfiniment — le fait que ~26
+suites échouent à charger n'est jamais vraiment "sans rapport", même quand isolé du diff de la session
+en cours ; ici la cause était un import cassé trivial à corriger, pas un problème d'environnement.

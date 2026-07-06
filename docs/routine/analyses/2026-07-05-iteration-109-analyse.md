@@ -1,135 +1,122 @@
 # Iteration 109 — Analyse d'optimisation (2026-07-05)
 
 ## Protocole (démarrage)
-`main` @ `930f4811` (« Merge pull request #1514 … »), working tree propre. Branche de travail
-`claude/brave-archimedes-4masof` recréée depuis `origin/main` (`git checkout -B … origin/main`),
-0 commit non-mergé à préserver. `git config user.email/name` positionné (`noreply@anthropic.com` / `Claude`).
+`main` @ `968aaa0` (« Merge PR #1499 — brave-archimedes-5sc6q5 / F72 noms composés »), working tree
+propre après `git checkout -B main origin/main` (le `main` local était divergent, resynchronisé sur
+`origin/main`). Branche de travail `claude/brave-archimedes-1jtx8e` recréée depuis `origin/main`,
+0 commit non-mergé à préserver.
 
-**8 PR ouvertes au démarrage**, toutes issues de sessions parallèles et **disjointes** de la cible retenue :
-- **#1518** realtime — suppression event `NOTIFICATION` mort + fix import Prisma (F77 dans leur numérotation),
-- **#1517** Android DND schedule editor,
-- **#1516** gateway `circuitBreaker.ts` `failureWindowMs` (F77),
-- **#1515** web `phone-validator.ts` E.164 digit count (F80),
-- **#1513** gateway typing indicators blocking,
-- **#1510** web `language-detection.ts` `es` (F79),
-- **#1498** calls GC qualityDegradedStreaks + web toast.
-
-La cible retenue ici (`sanitizeText` — strip zero-width) est **strictement disjointe** de tous ces
-fichiers. Numérotée **109** (107 mergé dans `main`, 108 en vol dans #1510/#1516).
+**13 PR ouvertes au démarrage** (#1497 → #1514), majoritairement iOS/gateway calls, gateway typing,
+web i18n (`detectBestInterfaceLanguage`, F79), gateway translation (`isUrlOnly`, F76), shared email
+(`getEmailValidationError`, F73), preferences communauté (F71). **Toutes disjointes** de la cible
+retenue ici (`apps/web/utils/phone-validator.ts`) — laissées à leurs sessions.
 
 ### Revue d'ingénierie (constat de démarrage)
-Balayage ciblé (agent d'exploration, 54 tool-uses) des helpers **purs/quasi-purs** de
-`services/gateway/src/utils`, `apps/web/utils`, `apps/web/lib` et `packages/shared/utils`, **hors** les
-fichiers des 8 PR ouvertes et hors zones déjà traitées itérations 100-108. Vérifiés corrects et écartés :
-`pagination`, `response` (`validatePagination`, `buildPaginationMeta`, `buildCursorPaginationMeta`),
-`etag`, `bounded-cache`, `lru-cache`, `rate-limiter`, `normalize` (`capitalizeName`),
-`language-normalize`, `call-summary`, `notification-strings`, `lib/user-status`
-(`getUserStatus` — `return 'away'` prouvé **intentionnel** par le test `user-status.test.ts:66-71`).
-Une racine de défaut remonte, présente dans **deux** fonctions pures indépendantes à appelants **live**
-persistants → **F82** (impact réel, Unicode/i18n, cœur produit multilingue).
+Backlog F-series : plus haute étiquette observée F79 (#1510). Cette itération prend **F80**.
 
-## Cible : F82 — `sanitizeText` supprime U+200C (ZWNJ) et U+200D (ZWJ) → corruption emoji/persan/indic
+Balayage ciblé des utilitaires **purs** peu contestés d'`apps/web/utils/`, hors zones déjà traitées
+(itérations 100-105 : `truncate`, `format-number`, `initials`, `xss-protection`, `translation-cleaner`,
+`calendar-date`, `mention-parser`, `conversation-helpers`, `duration-format`, `relative-time`,
+`time-remaining`, `presence-format`, `date-format`, `normalize`) et hors fichiers des 13 PR ouvertes.
+
+Cible retenue : **F80** — `validatePhoneNumber` (validateur simple `phone-validator.ts`) compte le
+préfixe international `+`/`00` dans le budget de longueur, rejetant à tort les E.164 de 15 chiffres.
+Signalé une première fois en itération 105 (« rejet des E.164 à 15 chiffres — réel mais laissé pour un
+cycle dédié ») ; c'est ce cycle dédié. **Distinct** de la divergence de modules F25b (deux validateurs
+`phone-validator` simple vs `phone-validation-robust` libphonenumber, refactor MOYEN documenté aux
+itérations 49/69/70) — ici on corrige un bug de correction **dans** le validateur simple, sans le
+fusionner.
+
+## Cible : F80 — `validatePhoneNumber` impute le préfixe `+`/`00` au budget de longueur E.164
 
 ### Current state
-Deux fonctions de sanitisation « texte brut » partagent la **même** ligne défectueuse — strip du range
-`[​-‍﻿]` :
-- **web** : `apps/web/utils/xss-protection.ts` → `sanitizeText` (ligne 77 avant fix) ;
-- **gateway** : `services/gateway/src/utils/sanitize.ts` → `SecuritySanitizer.sanitizeText` (ligne 40).
-
-Le range `​-‍` englobe **trois** points de code : U+200B (ZWSP, réellement invisible),
-U+200C (ZWNJ) et U+200D (ZWJ). Or **ZWNJ et ZWJ sont sémantiquement significatifs** :
-- **ZWJ (U+200D)** joint les séquences emoji : famille `👨‍👩‍👧‍👦`
-  (`1F468 200D 1F469 200D 1F467 200D 1F466`), drapeaux (`🏳️‍🌈`), emoji-métier (`🧑‍💻`).
-  Strip ⇒ `👨👩👧👦` (quatre personnes distinctes), `🏳️🌈` (drapeau blanc + arc-en-ciel).
-- **ZWNJ (U+200C)** est **orthographiquement requis** en persan/farsi (langue supportée `fa`) :
-  `می‌روم` → `میروم` (mot mal orthographié).
-- ZWJ/ZWNJ pilotent la **formation des conjoints** dans les scripts indiens (hindi `hi`, bengali `bn`…).
-
-Le défaut est manifestement **non intentionnel** : la **même** fonction web a été récemment corrigée pour
-**cesser** de strip le range de contrôle C0 (commentaire `xss-protection.ts:78-80` : « Stripping the whole
-C0 range silently deleted every line break on edit ») — mais la ligne ZWNJ/ZWJ juste au-dessus a été laissée.
+`apps/web/utils/phone-validator.ts` expose `validatePhoneNumber(phone: string)` — validateur **pur**,
+sans pays, source des messages d'erreur d'inscription. Implémentation d'origine (l.19-60) :
+```ts
+const trimmed = phone.trim();
+if (trimmed.length < 8)  return { isValid: false, error: 'phoneTooShort' };
+if (trimmed.length > 15) return { isValid: false, error: 'phoneTooLong' };
+const phoneRegex = /^(\+|00)?\d+$/;
+if (!phoneRegex.test(trimmed)) return { isValid: false, error: 'phoneInvalidFormat' };
+return { isValid: true };
+```
+Contrôle de **longueur AVANT le format**, sur la longueur **totale de la chaîne** (préfixe compris).
+Consommé en production :
+- `hooks/use-register-form.ts:133-138` — validation du numéro **à la soumission de l'inscription**
+  (bloque l'inscription et affiche le toast d'erreur).
+- `hooks/use-field-validation.ts:43-44` — `getPhoneValidationError` (validation de champ live).
+- `components/auth/register-form/PhoneField.tsx`, `PhoneResetFlow.tsx` — `formatPhoneNumberInput`.
 
 ### Problems identified
-- **[LIVE — web] Corruption du contenu de message persisté à l'édition.**
-  `apps/web/hooks/conversations/useMessageActions.ts:67` (`handleEditMessage`) exécute
-  `const sanitizedContent = sanitizeText(newContent)` puis l'envoie à `messageService.editMessage(...)`
-  **et** l'applique en optimiste. Éditer un message contenant un emoji ZWJ ou du persan **persiste le
-  texte corrompu** au backend (pas seulement un preview).
-- **[LIVE — web] Corruption de tout preview de notification temps réel.**
-  `apps/web/utils/socket-validator.ts:142` → `sanitizeNotification(parsed)` appelle `sanitizeText` sur
-  `title`/`content`/`messagePreview` (`xss-protection.ts:310-312`) pour **chaque** notification entrante.
-- **[LIVE — gateway] Corruption de noms/métadonnées persistés en base (irréversible côté rendu).**
-  `SecuritySanitizer.sanitizeText` est appelé au **bord de persistance MongoDB** :
-  - `routes/anonymous.ts:219-220` — `firstName`/`lastName` d'un participant anonyme (un prénom farsi perd
-    son ZWNJ avant stockage) ;
-  - `routes/communities/core.ts:435,437` — `name`/`description` de communauté (`Pride 🏳️‍🌈` → `Pride 🏳️🌈`) ;
-  - `routes/links/creation.ts` + `links/management.ts`, `tracking-links/creation.ts`, `friends.ts` —
-    `name`/`description` de liens de partage.
-  Écrit corrompu en base ⇒ re-servi à **toutes** les plateformes (iOS/web) ⇒ non réparable au rendu.
+- **[LIVE, inscription bloquée] E.164 maximal rejeté.** La norme E.164 autorise jusqu'à **15 chiffres**
+  (hors préfixe international). Avec le préfixe `+`, `+123456789012345` fait **16 caractères** →
+  `trimmed.length > 15` → `phoneTooLong`. Un numéro international **valide de 15 chiffres** est refusé
+  à l'inscription. Avec `00`, `00` + 15 chiffres = 17 caractères → même rejet dès 15 chiffres.
+- **[LIVE, incohérence prouvée] Verdict dépendant de la graphie du préfixe.** Le **même** numéro exprimé
+  de trois façons équivalentes reçoit trois budgets de chiffres différents :
+  - sans préfixe : `\d+` → **15 chiffres** autorisés (`123456789012345`, 15 car. ✓) ;
+  - préfixe `+` : `+` + 14 chiffres max (le `+` consomme 1 car.) → **14 chiffres** ;
+  - préfixe `00` : `00` + 13 chiffres max → **13 chiffres**.
+  Un numéro devrait être jugé identiquement quelle que soit la façon dont l'utilisateur écrit le
+  préfixe international.
+- **[LIVE, message trompeur] Espaces/tirets signalés « trop long ».** Comme la longueur est contrôlée
+  avant le format, `+33 6 12 34 56 78` (17 car.) sort `phoneTooLong` — alors que le vrai problème est
+  un **format invalide** (espaces). Les tests existants documentent d'ailleurs ce contournement en
+  commentaire (« With spaces, the total length exceeds 15 chars, so it fails phoneTooLong first »),
+  signe que l'ordre longueur-avant-format est un accident et non un choix.
 
 ### Root cause
-Le range `[​-‍]` a été écrit comme si « zéro-largeur » ⟺ « à supprimer », en confondant
-l'**invisible** (ZWSP U+200B, ZWNBSP/BOM U+FEFF — aucun usage textuel légitime) avec le **fonctionnel**
-(ZWNJ/ZWJ — porteurs de sens). La norme de l'état de l'art (Unicode TR39, sanitizers modernes) ne strip
-**jamais** ZWJ/ZWNJ précisément parce qu'ils sont requis par des scripts vivants et par les emoji.
+Le budget de longueur (8-15) est appliqué à la **longueur brute de la chaîne** — qui inclut le préfixe
+international `+` (1 car.) ou `00` (2 car.) — et non au **nombre de chiffres** du numéro. E.164 borne le
+**nombre de chiffres**, pas la longueur de la représentation. De plus, contrôler la longueur avant le
+format fait remonter des erreurs de format sous l'étiquette « trop long ».
 
 ### Business impact
-Corruption **silencieuse** du contenu utilisateur sur le cœur de la proposition Meeshy (produit de
-messagerie **multilingue**, usage emoji massif, locuteurs RTL/indic). Un utilisateur persan voit son
-message ré-orthographié à l'édition ; un nom de communauté avec drapeau/famille emoji est cassé de façon
-permanente en base. Violation directe du principe de **transparence** (le contenu doit s'afficher comme
-natif, pas mutilé).
+Rejet silencieux à l'inscription pour les numéros internationaux longs (jusqu'à 15 chiffres) saisis
+avec un préfixe `+`/`00` — précisément la saisie recommandée pour un produit multi-pays. L'utilisateur
+voit « numéro trop long » sur un numéro parfaitement valide, sans recours évident. Incohérence de
+message (« trop long » sur un numéro espacé) qui dégrade la confiance dans le formulaire.
 
 ### Technical impact
-Correction **d'une seule ligne** dans **deux** fichiers SSOT, sans changement de signature/contrat :
-range `[​-‍﻿]` → `[​﻿]` (strip **uniquement** ZWSP + BOM). Tous les appelants
-(édition message, previews notif, persistance noms/communautés/liens) héritent automatiquement du correctif.
+Fichier pur, testé (`__tests__/utils/phone-validator.test.ts`). Deux tests encodent explicitement le
+bug (max « 15 caractères » et rejet « trop long » sur `+123456789012345` de 15 chiffres) et deux autres
+s'appuient sur l'ordre longueur-avant-format pour classer les espaces/tirets en `phoneTooLong` — ils
+seront corrigés pour refléter la sémantique juste (chiffres bornés 8-15, format signalé comme format).
 
 ### Risk assessment
-Très faible. Fonctions pures. La **posture de sécurité XSS est inchangée** : la défense XSS primaire reste
-le strip HTML par DOMPurify / `<[^>]*>` ; le strip zéro-largeur n'était qu'une mesure anti-obfuscation
-secondaire, et conserver ZWNJ/ZWJ est précisément le compromis retenu par l'état de l'art pour un produit
-multilingue. Aucun contenu actuellement accepté n'est nouvellement rejeté ; ZWSP (invisible, obfuscation)
-et BOM restent supprimés. Seul comportement modifié : ZWNJ/ZWJ **survivent** désormais (correct).
+**FAIBLE.** Changement local d'une fonction pure. La borne haute passe de « ≥ 16 car. » à « > 15
+chiffres » : élargit l'acceptation (aucun numéro auparavant valide n'est rejeté sur la borne haute).
+La borne basse passe de « < 8 car. » à « < 8 chiffres » : ne resserre que les cas pathologiques
+`+` / `00` + < 8 chiffres (numéros internationaux trop courts) — aucun test ni appelant n'en dépend.
+Le reclassement espaces/tirets `phoneTooLong` → `phoneInvalidFormat` n'affecte que le libellé du toast
+(plus exact). Aucun impact fonctionnel côté appelants (ils lisent `isValid` + mappent l'erreur).
 
-### Proposed improvements (implémenté ce cycle)
-- `apps/web/utils/xss-protection.ts:83` et `services/gateway/src/utils/sanitize.ts:46` : range réduit à
-  `[​﻿]` + commentaire expliquant le *pourquoi* (ZWJ emoji, ZWNJ persan, conjoints indic).
+### Proposed improvements
+1. Vérifier le **format d'abord** (`^(\+|00)?\d+$`) → `phoneInvalidFormat` (espaces/tirets/lettres).
+2. Extraire les **chiffres** (retrait du préfixe `+`/`00`) et borner **8-15 chiffres** :
+   `< 8` → `phoneTooShort`, `> 15` → `phoneTooLong`.
+3. Mettre à jour la JSDoc et les exemples pour parler de **chiffres** et non de caractères.
+4. Corriger/étendre les tests : `+123456789012345` (15 chiffres) devient **valide** ; `phoneTooLong`
+   testé avec 16 chiffres ; espaces/tirets attendus en `phoneInvalidFormat` ; ajout de cas
+   d'équivalence de préfixe (même numéro `+`/`00`/sans → même verdict).
 
 ### Expected benefits
-- Messages édités CJK/emoji/persan/indic **non corrompus** — restaure le Prisme Linguistique.
-- Noms/communautés/liens persistés intacts en base sur toutes les plateformes.
-- Aucun coût : même nombre d'opérations (un `replace` + les suivants), classe de caractères plus courte.
+- Inscription débloquée pour les E.164 longs valides.
+- Verdict prisme-cohérent indépendant de la graphie du préfixe.
+- Messages d'erreur exacts (format ≠ longueur).
 
 ### Implementation complexity
-Très faible (1 constante de range × 2 fichiers + commentaires ; 4 tests neufs + 1 test buggé corrigé).
+**FAIBLE** — un fichier de production + un fichier de test, purement Jest-testable côté web.
 
 ### Validation criteria
-- [x] RED prouvé d'abord (repro Node autonome, impls copiées verbatim) : famille emoji → 4 segments,
-      ZWNJ persan supprimé.
-- [x] GREEN Node (fix) : ZWNJ persan conservé, séquence ZWJ intacte, ZWSP + BOM toujours supprimés.
-- [ ] GREEN jest web : `xss-protection.test.ts` (existants + BOM, ZWJ emoji, ZWNJ persan).
-- [ ] GREEN jest gateway : `sanitize.test.ts` (test « remove zero-width » réécrit ZWSP+BOM,
-      + ZWJ emoji, + ZWNJ persan).
-- [ ] Suites complètes vertes après install bun + CI.
+- `bun/npx jest __tests__/utils/phone-validator.test.ts` vert.
+- `+123456789012345` (15 chiffres) → valide ; `+1234567890123456` (16) → `phoneTooLong`.
+- `+33 6 12 34 56 78` → `phoneInvalidFormat` (et non `phoneTooLong`).
+- Équivalence : `123456789012345`, `+123456789012345`, `00123456789012345`… jugés cohéremment.
+- `tsc` sans nouvelle erreur.
 
-## Candidats écartés ce cycle (documentés)
-- **`lib/user-status.ts` `getUserStatus`** : `return 'away'` pour `isOnline && >30min` — **intentionnel**
-  (assertion explicite dans `user-status.test.ts:66-71` : « away, not offline, since socket connected »).
-- **`notification-helpers.ts` `groupNotificationsByDate`** (le dimanche, `startOfWeek = startOfToday`
-  car `getDay()===0`, rendant le bucket « cette semaine » inatteignable ⇒ notifs Lun-Sam classées
-  « ce mois-ci ») : **réel mais cosmétique** (mauvais label de section 1 jour/7). Reporté (§ futur, F83).
-
-## Améliorations futures (report)
-- **F51b** (LOW) : réécriture des docs `notifications/`.
-- **F56b** (LOW) : `likeCount` absolu sur `post:reaction-added/removed`.
-- **F60b** (LOW) : parité parsing mention iOS/Android sur `MENTION_HANDLE_CHARS` (tiret).
-- **F67b** (LOW) : audit découpage jour-calendaire iOS.
-- **F68b** (LOW) : contrepartie iOS des initiales (parité point-de-code).
-- **F69** (LOW) : `sanitizeFileName` plafond 255 sur nom sans extension (latent, 0 appelant).
-- **F70** (LOW) : `deepCleanTranslationOutput` apostrophes FR (code mort, 0 appelant).
-- **F74** (LOW) : lookbehind manquant dans `resolveDisplayContent` (dead code, 0 appelant).
-- **F75** (LOW) : suffixe `generateCommunityIdentifier` non garanti à 6 car. (proba négligeable).
-- **F83** (LOW, neuf) : `groupNotificationsByDate` bucket « cette semaine » inatteignable le dimanche
-  (`getDay()===0`) — cosmétique.
-</content>
+## Candidats écartés (documentés)
+- **F25b** — fusion des deux validateurs téléphone (`phone-validator` simple ↔ `phone-validation-robust`
+  libphonenumber). Refactor comportemental MOYEN (itérations 49/69/70), hors scope d'un cycle bugfix pur.
+- **F69** — `sanitizeFileName` (255 car.) : 0 appelant production, reporté.
+- **F70** — `deepCleanTranslationOutput` : code mort, reporté.

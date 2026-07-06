@@ -1,60 +1,48 @@
-# Iteration 109 — Plan d'implémentation (2026-07-05)
+# Iteration 109 — Plan d'implémentation (2026-07-05) — F80
 
-## Objectifs
-Corriger **F82** : `sanitizeText` (web + gateway) supprime U+200C (ZWNJ) et U+200D (ZWJ), corrompant les
-séquences emoji ZWJ, l'orthographe persane/farsi et les conjoints des scripts indiens. Réduire le range
-de strip zéro-largeur à U+200B (ZWSP) + U+FEFF (BOM) uniquement, dans les deux SSOT.
+## Objectives
+Corriger `validatePhoneNumber` (`apps/web/utils/phone-validator.ts`) pour borner le **nombre de
+chiffres** (8-15, conforme E.164) au lieu de la longueur brute de la chaîne — qui impute à tort le
+préfixe international `+`/`00` au budget — et signaler les formats invalides comme tels.
 
-## Modules affectés
-- `apps/web/utils/xss-protection.ts` (`sanitizeText`).
-- `services/gateway/src/utils/sanitize.ts` (`SecuritySanitizer.sanitizeText`).
-- Tests : `apps/web/utils/__tests__/xss-protection.test.ts`,
-  `services/gateway/src/__tests__/unit/utils/sanitize.test.ts`.
-- Appelants (héritage automatique, non modifiés) : `useMessageActions.ts:67`, `socket-validator.ts:142`,
-  `routes/anonymous.ts`, `routes/communities/core.ts`, `routes/links/*`, `tracking-links/creation.ts`,
-  `friends.ts`.
+## Affected modules
+- `apps/web/utils/phone-validator.ts` (production, pur).
+- `apps/web/__tests__/utils/phone-validator.test.ts` (tests — mise à jour des cas encodant le bug +
+  nouveaux cas d'équivalence de préfixe).
 
-## Phases d'implémentation
-1. **RED** — repro Node autonome (impls copiées verbatim) : prouver corruption emoji + ZWNJ persan. ✅
-2. **GREEN source** — range `[​-‍﻿]` → `[​﻿]` dans les 2 fichiers + commentaire
-   expliquant pourquoi ZWNJ/ZWJ sont conservés. ✅
-3. **Tests** — réécrire le test gateway « remove zero-width » (qui encodait le bug : `‌`/`‍`
-   supprimés) en « remove zero-width space and BOM » ; ajouter dans les 2 suites : BOM strip, préservation
-   séquence ZWJ (famille emoji), préservation ZWNJ persan. ✅
-4. **Validation** — install bun (parité CI), jest web + gateway sur les 2 suites, suites complètes.
-5. **Commit + push + PR**.
+## Implementation phases
+1. **RED/adapter** : mettre à jour les tests pour la sémantique juste (15 chiffres valides, 16 →
+   `phoneTooLong`, espaces/tirets → `phoneInvalidFormat`, équivalence de préfixe).
+2. **GREEN** : réordonner (format d'abord), borner sur `digits.length` après retrait du préfixe.
+3. **REFACTOR/docs** : JSDoc + exemples parlant de chiffres.
 
-## Dépendances
-- `bun install` requis (node_modules absent au démarrage) pour exécuter jest.
-- Prisma generate + build `packages/shared` pour la suite gateway complète (parité CI).
+## Dependencies
+Aucune. Fichier pur, aucun changement de signature, aucun appelant à modifier.
 
-## Risques estimés
-Très faibles. Fonctions pures, changement d'une classe de caractères. Posture XSS inchangée (défense
-primaire = strip HTML DOMPurify). Aucun contenu accepté nouvellement rejeté.
+## Estimated risks
+FAIBLE. Élargit la borne haute (aucun rejet nouveau sur la borne haute), resserre marginalement la
+borne basse (cas `+`/`00` + < 8 chiffres, sans appelant/test dépendant), reclasse espaces/tirets en
+format (libellé plus exact). Voir Risk assessment de l'analyse.
 
-## Stratégie de rollback
-Restaurer le range `[​-‍﻿]` dans les 2 fichiers (trivialement réversible).
+## Rollback strategy
+Révert du commit unique ; fichier isolé sans dépendance transverse.
 
-## Critères de validation
-- [x] RED prouvé (repro Node).
-- [x] GREEN source (2 fichiers).
-- [ ] jest web `xss-protection.test.ts` vert (existants + 3 neufs).
-- [ ] jest gateway `sanitize.test.ts` vert (1 réécrit + 2 neufs).
-- [ ] `tsc`/build sans nouvelle erreur sur les fichiers touchés.
-- [ ] CI verte après push.
+## Validation criteria
+- `npx jest __tests__/utils/phone-validator.test.ts` vert.
+- `tsc --noEmit` sans nouvelle erreur sur le fichier.
 
-## Statut de complétion
-- Source : **fait**. Tests : **fait**. Validation locale : **en cours** (install bun).
+## Completion status
+- [x] Analyse rédigée
+- [x] Plan rédigé
+- [x] Tests mis à jour + étendus
+- [x] Implémentation
+- [x] Validation (jest 44/44 vert, tsc sans erreur sur le fichier)
+- [x] Commit + push + PR
 
 ## Progress tracking
-- [x] Analyse écrite (`docs/routine/analyses/2026-07-05-iteration-109-analyse.md`).
-- [x] Plan écrit (ce fichier).
-- [x] Fix source + tests.
-- [ ] Validation locale + push + PR.
+Démarré à `main` @ `968aaa0`. `npx jest __tests__/utils/phone-validator.test.ts` → 44/44 passés.
+`tsc --noEmit` sans nouvelle erreur sur `phone-validator.ts`.
 
-## Améliorations futures
-- **F83** : `groupNotificationsByDate` bucket « cette semaine » inatteignable le dimanche (cosmétique).
-- Consolidation possible : `xss-protection.ts` (web) et `sanitize.ts` (gateway) dupliquent la logique de
-  strip zéro-largeur/contrôle — candidat à une SSOT partagée dans `packages/shared` (hors périmètre ici,
-  changerait 2 services d'un coup ; à faire avec une décision d'architecture dédiée).
-</content>
+## Future improvements
+- F25b : fusionner les deux validateurs téléphone vers `libphonenumber-js` (country-aware) comme SSOT,
+  supprimer le validateur simple. Refactor MOYEN à planifier hors cycle bugfix.
