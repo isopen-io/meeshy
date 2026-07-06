@@ -362,8 +362,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + `LinkAnnotation.Url`/`withLink` real taps, highlight over rendered plain text) wired into the bubble;
       `mentionDisplayNames`/`highlightTerm`/`trackedLinks` params ready for `ChatScreen` to feed. +34 tests.
       **Search-highlight half now wired** (`chat-search-highlight-wiring` 2026-07-06): `ChatViewModel` supplies
-      the live `highlightTerm` end-to-end (see the in-conversation search row below). **Pending:** member roster
-      → `mentionDisplayNames`; in-app browser / OG cards.
+      the live `highlightTerm` end-to-end (see the in-conversation search row below). **Member-roster →
+      `mentionDisplayNames` now wired** (`chat-mention-autocomplete` 2026-07-06): `ChatViewModel` builds the
+      roster from the conversation participants via `MentionRoster` and threads `mentionDisplayNames` into every
+      `MessageBubble`, so `@username` resolves to the display name in-bubble. **Pending:** in-app browser / OG cards.
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
 - [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
 - [ ] Edited / pinned / forwarded indicators; edit-history viewer
@@ -379,7 +381,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Large-paste detection → clipboard-content attachment
 - [ ] In-app camera: photo capture + video recording (flash, front/back toggle)
 - [ ] Live sentiment + language detection ("smart context zone") with language pill/picker override
-- [ ] @-mention autocomplete (debounced API + local merge)
+- [◐] @-mention autocomplete (debounced API + local merge) — local roster done
+      (`chat-mention-autocomplete` 2026-07-06): pure `:feature:chat` `ChatMention` SSOT (port of iOS
+      `MentionComposerController` pure logic) — `extractQuery` (trailing `@fragment`, bare `@` → full roster,
+      space → inactive), `filterCandidates` (trimmed case-insensitive over username **or** display name, blank →
+      all), `insertMention` (rewrite trailing fragment → `@username `, inert without an active fragment); plus a
+      pure reducer over `MentionAutocompleteState(activeQuery, suggestions, draftMentions)` — `onTextChange`,
+      `cleared` (idempotent, keeps draft mentions), `select` (rewrite + record + dismiss), `reset`. `MentionRoster`
+      builds candidates from participants (excludes self, drops blank handles, degrades display name→username).
+      `ChatViewModel` recomputes on `onDraftChange`, exposes `onMentionSelected`, resets on send; `ChatScreen`
+      renders a neutral accent-avatar suggestion strip above the composer. +40 tests. **Pending:** debounced
+      backend `/mentions` API merge over the local roster (online enrichment).
 - [ ] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral)
 - [ ] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress
 - [◐] In-conversation message search (translation-match aware) + jump-to-result — core+wiring done

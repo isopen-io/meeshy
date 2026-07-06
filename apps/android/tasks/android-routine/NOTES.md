@@ -3,6 +3,26 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-06 (`chat-mention-autocomplete`): the monorepo CI's `services/translator` Python jobs can fail on a
+  PyTorch-CDN TLS outage that has nothing to do with an `apps/android` diff — recognise it and do NOT merge past
+  it, but also do NOT churn re-triggers.** Symptom: `Test Python (translator)` + `Voice API Tests` +
+  `TTS/STT Integration` + `Audio Pipeline Tests` all red at the **same** step "Install Python dependencies (CPU
+  backend for CI)" with `Failed to fetch torch-…whl.metadata → received fatal alert: HandshakeFailure`
+  (`download-r2.pytorch.org`). Every JS/TS job stays green. It is a global infra flake, not our code. Gotchas:
+  (1) the GitHub integration **cannot** `rerun-failed-jobs` (403 "Resource not accessible by integration") — an
+  empty-commit push re-triggers the *whole* suite instead, but if the CDN is still down it just fails again
+  (verified: two runs, same 4 reds). (2) The PR shows `mergeable_state: "unstable"` = mergeable, **no required
+  check blocks it** — so the platform *would* let you merge, but the routine hard rule "never merge past red CI"
+  says don't. Correct move: mark the slice **⚠ blocked-on-infra** in PROGRESS (impl done + reviewer PASS), leave
+  the PR open, record the one-line unblock path (re-run the 4 translator jobs once the CDN recovers → merge), and
+  report to the user. Don't loop re-triggers on a persistent outage.
+- **2026-07-06 (`chat-mention-autocomplete`): mentions are one pure `:feature:chat` core, and the roster→display-
+  name wiring is free value alongside autocomplete.** Ported iOS `MentionComposerController`'s pure logic to
+  `ChatMention` (`extractQuery`/`filterCandidates`/`insertMention` + a `MentionAutocompleteState` reducer) and
+  `MentionRoster` (participants→candidates, self-excluded). Threading `mentionDisplayNames` (from the same roster)
+  into `MessageBubble` makes received `@username` resolve in-bubble — so the autocomplete slice also lands the
+  previously-pending display-name resolution. Keep the suggestion strip **neutral** (input chrome), not accent-
+  tinted, matching the iOS decision (accent stays for message-content surfaces).
 - **2026-07-06 (`chat-rich-text-segments`): the Gradle *wrapper* download 403s through the proxy — use the
   preinstalled system Gradle 8.14.3 (`/opt/gradle/bin/gradle`) instead of `./gradlew`.** `./gradlew` tries to
   fetch `gradle-8.11.1-bin.zip` from `services.gradle.org` → `github.com/gradle/gradle-distributions`, which
