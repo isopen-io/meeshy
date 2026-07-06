@@ -596,7 +596,7 @@ struct ThemedFeedOverlay: View {
                                 .font(MeeshyFont.relative(16))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
-                        .padding(12)
+                        .padding(MeeshySpacing.md)
                         .background(
                             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .fill(theme.inputBackground)
@@ -622,7 +622,7 @@ struct ThemedFeedOverlay: View {
                                     .equatable()
                             }
                         }
-                        .staggeredAppear(index: index, baseDelay: 0.06)
+                        .staggeredAppear(index: index, baseDelay: MeeshyAnimation.staggerDelay + 0.02)
                         .onAppear {
                             Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                             viewModel.prefetchComments(post.id)

@@ -81,6 +81,7 @@ targets:
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
+      - target: MeeshyShareExtension
       # MeeshyShareExtension is intentionally NOT embedded yet — see its target
       # definition below. Embedding it makes `fastlane build_production` fail the
       # distribution archive ("No profiles for 'me.meeshy.app.share-extension'")

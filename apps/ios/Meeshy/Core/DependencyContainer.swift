@@ -243,7 +243,11 @@ final class DependencyContainer {
                 try fileManager.moveItem(atPath: path, toPath: quarantined)
             } catch {
                 containerLogger.error("Failed to quarantine corrupt DB: \(error.localizedDescription, privacy: .public) — deleting instead")
-                try? fileManager.removeItem(atPath: path)
+                do {
+                    try fileManager.removeItem(atPath: path)
+                } catch {
+                    containerLogger.error("Failed to delete corrupt DB after failed quarantine: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
         // The WAL and SHM siblings reference a now-missing main file and
