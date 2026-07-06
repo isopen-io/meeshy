@@ -56,13 +56,14 @@ function formatRelativeTime(
  */
 function getMessageType(
   message: Message
-): 'text' | 'photo' | 'file' | 'voice' {
+): 'text' | 'photo' | 'video' | 'file' | 'voice' {
   if (message.attachments?.length) {
     const firstAttachment = message.attachments[0];
     const mimeType = firstAttachment.mimeType || '';
 
     if (mimeType.startsWith('image/')) return 'photo';
     if (mimeType.startsWith('audio/')) return 'voice';
+    if (mimeType.startsWith('video/')) return 'video';
     return 'file';
   }
 

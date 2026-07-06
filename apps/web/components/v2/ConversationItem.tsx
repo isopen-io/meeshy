@@ -30,7 +30,7 @@ export interface ConversationItemData {
   unreadCount: number;
   lastMessage: {
     content: string;
-    type: 'text' | 'photo' | 'file' | 'voice';
+    type: 'text' | 'photo' | 'video' | 'file' | 'voice';
     attachmentCount?: number;
     timestamp: string;
     /** Nom de l'expéditeur (pour les groupes) */
@@ -171,6 +171,18 @@ export const ConversationItem = memo(function ConversationItem({
         <span className="flex items-center gap-1" style={{ color: 'var(--gp-text-secondary)' }}>
           <span>&#128247;</span>
           <span>{t('v2chat.photo')}</span>
+          {lastMessage.attachmentCount && lastMessage.attachmentCount > 1 && (
+            <span>+{lastMessage.attachmentCount - 1}</span>
+          )}
+        </span>
+      );
+    }
+
+    if (lastMessage.type === 'video') {
+      return (
+        <span className="flex items-center gap-1" style={{ color: 'var(--gp-text-secondary)' }}>
+          <span>&#127909;</span>
+          <span>{t('v2chat.video')}</span>
           {lastMessage.attachmentCount && lastMessage.attachmentCount > 1 && (
             <span>+{lastMessage.attachmentCount - 1}</span>
           )}
