@@ -266,7 +266,7 @@ struct LocationPickerView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
         )
@@ -306,7 +306,7 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
         selectedCoordinate = coordinate
         geocodeTask?.cancel()
         geocodeTask = Task {
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            try? await Task.sleep(for: .seconds(0.3))
             guard !Task.isCancelled else { return }
             reverseGeocode(coordinate)
         }

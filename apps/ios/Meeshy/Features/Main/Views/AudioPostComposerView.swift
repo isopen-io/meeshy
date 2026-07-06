@@ -131,10 +131,10 @@ struct AudioPostComposerView: View {
         .padding(.horizontal, 20)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                         .stroke(MeeshyColors.indigo300.opacity(isDark ? 0.25 : 0.4), lineWidth: 1)
                 )
         )
@@ -151,7 +151,7 @@ struct AudioPostComposerView: View {
                 .scaleEffect(1.6)
         } else if phase == .preview {
             Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 56))
+                .font(MeeshyFont.relative(56))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
@@ -160,7 +160,7 @@ struct AudioPostComposerView: View {
                 )
         } else {
             Image(systemName: "mic.fill")
-                .font(.system(size: 48))
+                .font(MeeshyFont.relative(48))
                 .foregroundStyle(MeeshyColors.brandGradient)
         }
     }
@@ -337,10 +337,10 @@ struct AudioPostComposerView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(MeeshyColors.indigo300.opacity(isDark ? 0.25 : 0.35), lineWidth: 1)
                 )
         )
@@ -384,10 +384,10 @@ struct AudioPostComposerView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
                 )
         )

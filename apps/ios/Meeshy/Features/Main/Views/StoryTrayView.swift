@@ -290,7 +290,7 @@ fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
         }
         if count > 5 {
             Text("+")
-                .font(.system(size: 8, weight: .bold))
+                .font(MeeshyFont.relative(8, weight: .bold))
                 .foregroundColor(.white.opacity(0.5))
         }
     }
@@ -400,7 +400,7 @@ private struct MyStoryButton: View {
                             // pour garder la parité avec l'emoji mood animé
                             // (cf. MeeshyAvatar.badgeSize .storyTray).
                             Text("\u{1F4AD}")
-                                .font(.system(size: 20))
+                                .font(MeeshyFont.relative(20))
                                 .frame(width: 32, height: 32)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
@@ -425,7 +425,7 @@ private struct MyStoryButton: View {
                             // matcher la taille trail (avatars passés à 88pt
                             // en ab691abaf).
                             Image(systemName: "plus")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(MeeshyFont.relative(22, weight: .bold))
                                 .foregroundStyle(Color.white)
                                 .frame(width: 40, height: 40)
                                 .background(
@@ -460,7 +460,7 @@ private struct MyStoryButton: View {
                         }
                         if group.stories.count > 5 {
                             Text("+")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(MeeshyFont.relative(8, weight: .bold))
                                 .foregroundColor(.white.opacity(0.5))
                         }
                     }
@@ -469,7 +469,7 @@ private struct MyStoryButton: View {
             }
 
             Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
         }
         .accessibilityLabel(hasMyStory ? String(localized: "story.tray.a11y.myStory", defaultValue: "Ma story", bundle: .main) : String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
@@ -507,7 +507,7 @@ private struct StoryUploadOverlay: View {
                     .frame(width: 50, height: 50)
 
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(.white)
             } else {
                 Circle()
@@ -521,7 +521,7 @@ private struct StoryUploadOverlay: View {
                     .animation(.linear(duration: 0.3), value: upload.progress)
 
                 Text("\(Int(upload.progress * 100))%")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(MeeshyFont.relative(12, weight: .bold))
                     .foregroundColor(.white)
             }
         }
@@ -652,7 +652,7 @@ struct PinnedStoryTrailBand: View {
             HapticFeedback.medium()
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 20, weight: .bold))
+                .font(MeeshyFont.relative(20, weight: .bold))
                 .foregroundStyle(Color.white)
                 .frame(width: 44, height: 44)
                 .background(

@@ -139,7 +139,7 @@ struct CallView: View {
                             HapticFeedback.medium()
                         } label: {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(MeeshyFont.relative(16, weight: .semibold))
                                 .foregroundColor(.white)
                                 .callControlGlass(diameter: 40, isActive: false, tint: .white)
                         }
@@ -395,7 +395,7 @@ struct CallView: View {
         // effects-open via shouldAutoHideControls.
         .task(id: showControls) {
             guard showControls, shouldAutoHideControls else { return }
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(for: .seconds(4))
             if !Task.isCancelled {
                 withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
             }
@@ -678,7 +678,7 @@ struct CallView: View {
                     .accessibilityHidden(true)
                 HStack(spacing: 6) {
                     Image(systemName: "video.slash.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .accessibilityHidden(true)
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
                         .font(.footnote.weight(.medium))
@@ -817,14 +817,14 @@ struct CallView: View {
                     )
                     .frame(width: 56, height: 56)
                 Text(initial)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
             }
             .opacity(0.45)
             // …"video paused" affordance on top.
             VStack(spacing: 6) {
                 Image(systemName: "video.slash.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(MeeshyFont.relative(18, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
                 Text(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
                     .font(.caption2.weight(.semibold))
@@ -1086,7 +1086,7 @@ struct CallView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: "camera.badge.ellipsis")
-                    .font(.system(size: 22, weight: .medium))
+                    .font(MeeshyFont.relative(22, weight: .medium))
                     .foregroundColor(.white.opacity(0.9))
                     .callControlGlass(diameter: 56, isActive: false, tint: .white)
                 Text(String(localized: "call.control.camera.caption", defaultValue: "Caméra", bundle: .main))
@@ -1162,7 +1162,7 @@ struct CallView: View {
     private var callTypeBadge: some View {
         HStack(spacing: 6) {
             Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .accessibilityHidden(true)
             Text(callManager.isVideoEnabled ? String(localized: "call.type.video", defaultValue: "Appel vidéo", bundle: .main) : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main))
                 .font(.caption2.weight(.semibold))
@@ -1189,7 +1189,7 @@ struct CallView: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
+                    .font(MeeshyFont.relative(22, weight: .medium))
                     .foregroundColor(isActive ? color : .white.opacity(0.9))
                     .callControlGlass(diameter: 56, isActive: isActive, tint: bgColor)
 
@@ -1214,7 +1214,7 @@ struct CallView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: showEffectsToolbar ? "xmark" : "camera.filters")
-                    .font(.system(size: 24, weight: .medium))
+                    .font(MeeshyFont.relative(24, weight: .medium))
                     .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(0.9))
                     .callControlGlass(diameter: 64, isActive: hasActiveEffects, tint: MeeshyColors.indigo500)
 
@@ -1233,7 +1233,7 @@ struct CallView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: "phone.down.fill")
-                    .font(.system(size: 24, weight: .medium))
+                    .font(MeeshyFont.relative(24, weight: .medium))
                     .foregroundColor(.white)
                     .endCallGlass(diameter: 56)
 

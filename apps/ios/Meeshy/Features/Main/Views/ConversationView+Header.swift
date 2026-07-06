@@ -96,7 +96,7 @@ extension ConversationView {
                     // Lock icon (encryption only, no text)
                     if isEncrypted {
                         Image(systemName: "lock.fill")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(MeeshyFont.relative(9, weight: .semibold))
                             .foregroundColor(theme.success)
                             .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Encrypted conversation", bundle: .main))
                     }
@@ -105,9 +105,9 @@ extension ConversationView {
                     if let section = conversationSection {
                         HStack(spacing: 2) {
                             Image(systemName: section.icon)
-                                .font(.system(size: 7, weight: .bold))
+                                .font(MeeshyFont.relative(7, weight: .bold))
                             Text(section.name)
-                                .font(.system(size: 8, weight: .bold))
+                                .font(MeeshyFont.relative(8, weight: .bold))
                         }
                         .foregroundColor(Color(hex: section.color))
                         .padding(.horizontal, 5)
@@ -125,7 +125,7 @@ extension ConversationView {
                     if let conv = conversation {
                         ForEach(conv.tags) { tag in
                             Text(tag.name)
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(MeeshyFont.relative(8, weight: .semibold))
                                 .foregroundColor(Color(hex: tag.color))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
@@ -208,9 +208,9 @@ private struct HeaderCallButtonsView: View {
                     .fill(MeeshyColors.success)
                     .frame(width: 7, height: 7)
                 Image(systemName: "phone.fill")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                 Text(callManager.formattedDuration)
-                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .font(MeeshyFont.relative(11, weight: .semibold).monospacedDigit())
             }
             .foregroundColor(MeeshyColors.success)
             .padding(.horizontal, 10)

@@ -59,7 +59,7 @@ struct ShareLinksView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
 
@@ -76,7 +76,7 @@ struct ShareLinksView: View {
                 showCreate = true
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22))
+                    .font(MeeshyFont.relative(22))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "share.links.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main))
@@ -98,7 +98,7 @@ struct ShareLinksView: View {
     private func shareLinkStatCard(_ value: String, label: String, icon: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(MeeshyFont.relative(20))
                 .foregroundColor(MeeshyColors.shareAccent)
             Text(value)
                 .font(.title2.weight(.bold))
@@ -110,9 +110,9 @@ struct ShareLinksView: View {
         .frame(maxWidth: .infinity)
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
-                .overlay(RoundedRectangle(cornerRadius: 16)
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(MeeshyColors.shareAccent.opacity(0.2), lineWidth: 1))
         )
     }
@@ -148,7 +148,7 @@ struct ShareLinksView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "link.badge.plus")
-                .font(.system(size: 40))
+                .font(MeeshyFont.relative(40))
                 .foregroundColor(MeeshyColors.shareAccent.opacity(0.6))
             Text(String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main))
                 .font(.subheadline.weight(.semibold))
@@ -169,7 +169,7 @@ struct ShareLinksView: View {
                     .fill((link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 40, height: 40)
                 Image(systemName: link.isActive ? "link" : "link.badge.minus")
-                    .font(.system(size: 16))
+                    .font(MeeshyFont.relative(16))
                     .foregroundColor(link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
             }
 
@@ -198,13 +198,13 @@ struct ShareLinksView: View {
                 HapticFeedback.success()
             } label: {
                 Image(systemName: "doc.on.doc")
-                    .font(.system(size: 16))
+                    .font(MeeshyFont.relative(16))
                     .foregroundColor(MeeshyColors.shareAccent)
             }
             .padding(.horizontal, 4)
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
         }
         .padding(14)

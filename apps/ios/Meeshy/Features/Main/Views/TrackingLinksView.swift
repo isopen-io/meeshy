@@ -52,7 +52,7 @@ struct TrackingLinksView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
@@ -70,7 +70,7 @@ struct TrackingLinksView: View {
                 showCreate = true
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22))
+                    .font(MeeshyFont.relative(22))
                     .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de tracking", bundle: .main))
@@ -91,7 +91,7 @@ struct TrackingLinksView: View {
     private func trackingStatCard(_ value: String, label: String, icon: String) -> some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(accent)
             Text(value)
                 .font(.title3.weight(.bold))
@@ -134,7 +134,7 @@ struct TrackingLinksView: View {
     private var trackingEmptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "chart.bar.fill")
-                .font(.system(size: 40)).foregroundColor(accent.opacity(0.6))
+                .font(MeeshyFont.relative(40)).foregroundColor(accent.opacity(0.6))
             Text(String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main)).font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
             Text(String(localized: "tracking.links.empty.subtitle", defaultValue: "Créez un lien pour suivre vos clics et campagnes", bundle: .main))
@@ -150,7 +150,7 @@ struct TrackingLinksView: View {
                 Circle().fill((link.isActive ? accent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 40, height: 40)
                 Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 16))
+                    .font(MeeshyFont.relative(16))
                     .foregroundColor(link.isActive ? accent : MeeshyColors.neutral500)
             }
 
@@ -174,12 +174,12 @@ struct TrackingLinksView: View {
                 UIPasteboard.general.string = link.shortUrl
                 HapticFeedback.success()
             } label: {
-                Image(systemName: "doc.on.doc").font(.system(size: 16))
+                Image(systemName: "doc.on.doc").font(MeeshyFont.relative(16))
                     .foregroundColor(accent)
             }.padding(.horizontal, 4)
             .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
 
-            Image(systemName: "chevron.right").font(.system(size: 12)).foregroundColor(theme.textMuted)
+            Image(systemName: "chevron.right").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
         }
         .padding(14)
         .background(

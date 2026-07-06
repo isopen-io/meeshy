@@ -79,7 +79,7 @@ struct CallWaitingBannerView: View {
             }
             .background(.ultraThinMaterial.opacity(0.9))
             .background(Color.black.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .transition(.move(edge: .top).combined(with: .opacity))

@@ -28,7 +28,7 @@ struct AchievementBadgeView: View {
                     .rotationEffect(.degrees(-90))
 
                 Image(systemName: achievement.icon)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(MeeshyFont.relative(22, weight: .semibold))
                     .foregroundColor(
                         achievement.isUnlocked
                             ? Color(hex: achievement.color)
@@ -37,14 +37,14 @@ struct AchievementBadgeView: View {
             }
 
             Text(achievement.name)
-                .font(.system(size: 11, weight: .bold))
+                .font(MeeshyFont.relative(11, weight: .bold))
                 .foregroundColor(
                     achievement.isUnlocked ? Color(hex: achievement.color) : theme.textMuted
                 )
                 .lineLimit(1)
 
             Text("\(achievement.current)/\(achievement.threshold)")
-                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .font(MeeshyFont.relative(9, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textMuted)
         }
         .padding(.vertical, 12)

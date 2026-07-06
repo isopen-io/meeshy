@@ -71,7 +71,7 @@ struct CallVideoView: View {
             Color.black
                 .overlay(
                     Image(systemName: "video.slash")
-                        .font(.system(size: 32))
+                        .font(MeeshyFont.relative(32))
                         .foregroundColor(.white.opacity(0.3))
                 )
         }
@@ -92,7 +92,7 @@ struct CallVideoView: View {
             .overlay(
                 Text(String(localized: "call.video.unavailable", defaultValue: "Video non disponible", bundle: .main))
                     .foregroundColor(.white.opacity(0.4))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
             )
     }
 }

@@ -114,14 +114,14 @@ struct NewConversationView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
             }
 
             Spacer()
 
             Text(String(localized: "Nouvelle conversation", defaultValue: "Nouvelle conversation"))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -136,7 +136,7 @@ struct NewConversationView: View {
                             .tint(MeeshyColors.indigo400)
                     } else {
                         Text(String(localized: "Creer", defaultValue: "Cr\u{00E9}er"))
-                            .font(.system(size: 14, weight: .bold))
+                            .font(MeeshyFont.relative(14, weight: .bold))
                             .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
@@ -154,11 +154,11 @@ struct NewConversationView: View {
     private var groupTitleField: some View {
         HStack(spacing: 10) {
             Image(systemName: "person.3.fill")
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo600)
 
             TextField(String(localized: "Nom du groupe", defaultValue: "Nom du groupe"), text: $groupTitle)
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, 14)
@@ -206,7 +206,7 @@ struct NewConversationView: View {
             )
 
             Text(user.displayName ?? user.username)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(1)
 
@@ -217,7 +217,7 @@ struct NewConversationView: View {
                 }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -239,11 +239,11 @@ struct NewConversationView: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
             TextField(String(localized: "Rechercher un utilisateur...", defaultValue: "Rechercher un utilisateur..."), text: $searchQuery)
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -257,7 +257,7 @@ struct NewConversationView: View {
                     viewModel.clearSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(MeeshyFont.relative(14))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -297,11 +297,11 @@ struct NewConversationView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "person.slash")
-                .font(.system(size: 36))
+                .font(MeeshyFont.relative(36))
                 .foregroundColor(theme.textMuted.opacity(0.5))
 
             Text(String(localized: "Aucun utilisateur trouve", defaultValue: "Aucun utilisateur trouv\u{00E9}"))
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -335,11 +335,11 @@ struct NewConversationView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(user.displayName ?? user.username)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(15, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text("@\(user.username)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
 
@@ -347,10 +347,10 @@ struct NewConversationView: View {
 
                 if isBlocked {
                     Text(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                         .foregroundColor(MeeshyColors.error.opacity(0.8))
                     Image(systemName: "hand.raised.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                         .foregroundColor(MeeshyColors.error.opacity(0.7))
                 } else {
                     if user.isOnline == true {
@@ -360,7 +360,7 @@ struct NewConversationView: View {
                     }
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 20))
+                        .font(MeeshyFont.relative(20))
                         .foregroundColor(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
                 }
             }

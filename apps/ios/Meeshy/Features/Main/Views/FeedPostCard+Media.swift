@@ -33,7 +33,7 @@ extension FeedPostCard {
                     .accessibilityAddTraits(.isButton)
             }
             .frame(height: 180)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         } else if count == 3 {
             // One large left, two stacked right
             HStack(spacing: spacing) {
@@ -61,7 +61,7 @@ extension FeedPostCard {
                 }
             }
             .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         } else if count == 4 {
             // 2x2 grid
             VStack(spacing: spacing) {
@@ -95,7 +95,7 @@ extension FeedPostCard {
                 }
             }
             .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         } else if count >= 5 {
             // First row: 2 images, Second row: 3 images with +N overlay
             VStack(spacing: spacing) {
@@ -131,7 +131,7 @@ extension FeedPostCard {
                         if count > 5 {
                             Color.black.opacity(0.6)
                             Text("+\(count - 5)")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(MeeshyFont.relative(22, weight: .bold))
                                 .foregroundColor(.white)
                         }
                     }
@@ -145,7 +145,7 @@ extension FeedPostCard {
                 }
             }
             .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         }
     }
 
@@ -185,13 +185,13 @@ extension FeedPostCard {
                             .fill(Color.white.opacity(0.85))
                             .frame(width: 30, height: 30)
                         Image(systemName: "play.fill")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(MeeshyFont.relative(12, weight: .bold))
                             .foregroundColor(.black.opacity(0.7))
                             .offset(x: 1)
                     }
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -201,11 +201,11 @@ extension FeedPostCard {
             } else if media.type == .audio {
                 VStack(spacing: 4) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 20))
+                        .font(MeeshyFont.relative(20))
                         .foregroundColor(.white)
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -300,21 +300,21 @@ extension FeedPostCard {
                     .frame(width: 48, height: 56)
 
                 Image(systemName: "doc.fill")
-                    .font(.system(size: 24))
+                    .font(MeeshyFont.relative(24))
                     .foregroundColor(Color(hex: media.thumbnailColor))
             }
 
             // Document info
             VStack(alignment: .leading, spacing: 4) {
                 Text(media.fileName ?? "Document")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     if let size = media.fileSize {
                         Text(size)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
 
@@ -322,7 +322,7 @@ extension FeedPostCard {
                         Text("\u{2022}")
                             .foregroundColor(theme.textMuted)
                         Text("\(pages) pages")
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -357,20 +357,20 @@ extension FeedPostCard {
                     .frame(width: 64, height: 64)
 
                 Image(systemName: "mappin.circle.fill")
-                    .font(.system(size: 28))
+                    .font(MeeshyFont.relative(28))
                     .foregroundColor(Color(hex: media.thumbnailColor))
             }
 
             // Location info
             VStack(alignment: .leading, spacing: 4) {
                 Text(media.locationName ?? "Location")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(2)
 
                 if let lat = media.latitude, let lon = media.longitude {
                     Text(String(format: "%.4f, %.4f", lat, lon))
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -379,7 +379,7 @@ extension FeedPostCard {
 
             // Open in maps
             Image(systemName: "arrow.up.right.circle.fill")
-                .font(.system(size: 28))
+                .font(MeeshyFont.relative(28))
                 .foregroundColor(Color(hex: media.thumbnailColor))
         }
         .padding(14)

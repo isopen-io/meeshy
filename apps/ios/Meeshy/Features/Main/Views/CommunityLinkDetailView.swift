@@ -31,16 +31,16 @@ struct CommunityLinkDetailView: View {
         VStack(spacing: 10) {
             ZStack {
                 Circle().fill(MeeshyColors.communityAccent.opacity(0.15)).frame(width: 60, height: 60)
-                Image(systemName: "person.3.fill").font(.system(size: 26))
+                Image(systemName: "person.3.fill").font(MeeshyFont.relative(26))
                     .foregroundColor(MeeshyColors.communityAccent)
             }
-            Text(link.name).font(.system(size: 20, weight: .bold)).foregroundColor(theme.textPrimary)
-            Text(link.joinUrl).font(.system(size: 12, design: .monospaced))
+            Text(link.name).font(MeeshyFont.relative(20, weight: .bold)).foregroundColor(theme.textPrimary)
+            Text(link.joinUrl).font(MeeshyFont.relative(12, design: .monospaced))
                 .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(20).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
-            .overlay(RoundedRectangle(cornerRadius: 20)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(MeeshyColors.communityAccent.opacity(0.2), lineWidth: 1)))
     }
 
@@ -82,9 +82,9 @@ struct CommunityLinkDetailView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
                         .frame(width: 52, height: 52)
-                    Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
+                    Image(systemName: icon).font(MeeshyFont.relative(22)).foregroundColor(color)
                 }
-                Text(label).font(.system(size: 10, weight: .medium)).foregroundColor(theme.textSecondary)
+                Text(label).font(MeeshyFont.relative(10, weight: .medium)).foregroundColor(theme.textSecondary)
             }
         }.frame(maxWidth: .infinity)
     }
@@ -105,10 +105,10 @@ struct CommunityLinkDetailView: View {
 
     private func communityStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 22)).foregroundColor(Color(hex: color))
+            Image(systemName: icon).font(MeeshyFont.relative(22)).foregroundColor(Color(hex: color))
             VStack(alignment: .leading, spacing: 2) {
-                Text(value).font(.system(size: 22, weight: .bold)).foregroundColor(theme.textPrimary)
-                Text(label).font(.system(size: 12)).foregroundColor(theme.textSecondary)
+                Text(value).font(MeeshyFont.relative(22, weight: .bold)).foregroundColor(theme.textPrimary)
+                Text(label).font(MeeshyFont.relative(12)).foregroundColor(theme.textSecondary)
             }
             Spacer()
         }
@@ -136,9 +136,9 @@ struct CommunityLinkDetailView: View {
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.system(size: 14)).foregroundColor(theme.textSecondary)
+            Text(label).font(MeeshyFont.relative(14)).foregroundColor(theme.textSecondary)
             Spacer()
-            Text(value).font(.system(size: 13, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
+            Text(value).font(MeeshyFont.relative(13, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }

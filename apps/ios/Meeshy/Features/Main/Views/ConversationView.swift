@@ -662,7 +662,7 @@ struct ConversationView: View {
 
                 if let messageId = router.pendingHighlightMessageId, !messageId.isEmpty {
                     router.pendingHighlightMessageId = nil
-                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    try? await Task.sleep(for: .seconds(0.3))
                     guard !Task.isCancelled else { return }
                     if viewModel.messages.contains(where: { $0.id == messageId }) {
                         scrollState.scrollToMessageId = messageId
@@ -670,7 +670,7 @@ struct ConversationView: View {
                     } else {
                         await viewModel.loadMessagesAround(messageId: messageId)
                         if Task.isCancelled { return }
-                        try? await Task.sleep(nanoseconds: 100_000_000)
+                        try? await Task.sleep(for: .seconds(0.1))
                         guard !Task.isCancelled else { return }
                         scrollState.scrollToMessageId = messageId
                         scrollState.scrollToMessageTrigger += 1
@@ -1424,10 +1424,10 @@ struct ConversationView: View {
     @ViewBuilder
     private var expandedHeaderBackground: some View {
         if composerState.showOptions {
-            RoundedRectangle(cornerRadius: 22)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .stroke(
                             LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)], startPoint: .leading, endPoint: .trailing),
                             lineWidth: 1

@@ -99,12 +99,12 @@ struct SharePickerView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(contentLabel)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
                     .lineLimit(1)
 
                 Text(contentPreview)
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(2)
             }
@@ -121,11 +121,11 @@ struct SharePickerView: View {
         switch sharedContent {
         case .text:
             Image(systemName: "text.bubble.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.indigo400)
         case .url:
             Image(systemName: "link.circle.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.indigo600)
         case .image(let image):
             Image(uiImage: image)
@@ -135,11 +135,11 @@ struct SharePickerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         case .message:
             Image(systemName: "arrowshape.turn.up.forward.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.warning)
         case .story:
             Image(systemName: "play.rectangle.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.indigo500)
         }
     }
@@ -177,11 +177,11 @@ struct SharePickerView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
             TextField("Rechercher une conversation...", text: $searchText)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -191,7 +191,7 @@ struct SharePickerView: View {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
@@ -253,21 +253,21 @@ struct SharePickerView: View {
                 ConversationTitleLabel(
                     name: conv.displayName,
                     favoriteEmoji: conv.userState.reaction,
-                    font: .system(size: 15, weight: .medium),
+                    font: MeeshyFont.relative(15, weight: .medium),
                     color: theme.textPrimary
                 )
 
                 HStack(spacing: 4) {
                     Text(conversationTypeLabel(conv.type))
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
 
                     if let preview = conv.lastMessagePreview, !preview.isEmpty {
                         Text("\u{2022}")
-                            .font(.system(size: 10))
+                            .font(MeeshyFont.relative(10))
                             .foregroundColor(theme.textMuted)
                         Text(preview)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
@@ -287,7 +287,7 @@ struct SharePickerView: View {
     private func shareButton(for conv: Conversation) -> some View {
         if sentToIds.contains(conv.id) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 26))
+                .font(MeeshyFont.relative(26))
                 .foregroundColor(MeeshyColors.success)
                 .transition(.scale.combined(with: .opacity))
         } else if sendingToId == conv.id {
@@ -299,7 +299,7 @@ struct SharePickerView: View {
                 shareToConversation(conv)
             } label: {
                 Image(systemName: "paperplane.circle.fill")
-                    .font(.system(size: 26))
+                    .font(MeeshyFont.relative(26))
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .disabled(sendingToId != nil)

@@ -35,7 +35,7 @@ struct StatusBarView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .glassCard(cornerRadius: 20)
+                    .glassCard(cornerRadius: MeeshyRadius.xl)
                     .accessibilityElement(children: .combine)
                     .onTapGesture {
                         Task { await viewModel.loadStatuses() }
@@ -82,7 +82,7 @@ struct StatusBarView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .glassCard(cornerRadius: 20)
+            .glassCard(cornerRadius: MeeshyRadius.xl)
             .breathingGlow(color: Color(hex: status.avatarColor), intensity: 0.4)
         }
     }
@@ -104,7 +104,7 @@ struct StatusBarView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .glassCard(cornerRadius: 20)
+            .glassCard(cornerRadius: MeeshyRadius.xl)
         }
         .breathingGlow(color: MeeshyColors.indigo500, intensity: 0.3)
     }
@@ -126,7 +126,7 @@ struct StatusBarView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .glassCard(cornerRadius: 20)
+            .glassCard(cornerRadius: MeeshyRadius.xl)
         }
     }
 
@@ -135,7 +135,7 @@ struct StatusBarView: View {
     private func statusPopover(_ entry: StatusEntry) -> some View {
         VStack(spacing: 8) {
             Text(entry.moodEmoji)
-                .font(.system(size: 36))
+                .font(MeeshyFont.relative(36))
 
             Text(entry.username)
                 .font(.subheadline.weight(.semibold))

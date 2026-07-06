@@ -268,7 +268,7 @@ struct LoginView: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textMuted.opacity(0.5))
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -298,7 +298,7 @@ struct LoginView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(
@@ -374,7 +374,7 @@ struct LoginView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
                             Text(String(localized: "auth.login.saved_accounts", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         }
@@ -556,7 +556,7 @@ struct LoginView: View {
                         }
                     } label: {
                         Text(env.label)
-                            .font(.system(size: 11, weight: selectedEnv == env ? .bold : .medium))
+                            .font(MeeshyFont.relative(11))
                             .foregroundColor(selectedEnv == env ? .white : theme.textMuted)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
@@ -575,7 +575,7 @@ struct LoginView: View {
             if showCustomInput || selectedEnv == .custom {
                 HStack(spacing: MeeshySpacing.sm) {
                     TextField("gate.example.com", text: $customHost)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($focusedField, equals: .customHost)
@@ -588,7 +588,7 @@ struct LoginView: View {
                     } label: {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(MeeshyColors.brandGradient)
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(18))
                     }
                     .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
                     .bounceOnTap(scale: 0.90)
@@ -608,7 +608,7 @@ struct LoginView: View {
             }
 
             Text(String(format: String(localized: "auth.login.server_origin", defaultValue: "Connecté à : %@", bundle: .main), MeeshyConfig.shared.serverOrigin))
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .font(MeeshyFont.relative(10, design: .monospaced))
                 .foregroundColor(theme.textMuted.opacity(0.5))
         }
     }

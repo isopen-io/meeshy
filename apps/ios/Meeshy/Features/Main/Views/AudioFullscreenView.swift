@@ -301,7 +301,7 @@ private struct AudioFullscreenPage: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.white.opacity(0.2)))
@@ -312,7 +312,7 @@ private struct AudioFullscreenPage: View {
             HStack(spacing: 6) {
                 if totalPages > 1 {
                     Text("\(pageIndex + 1) / \(totalPages)")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(13, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -322,11 +322,11 @@ private struct AudioFullscreenPage: View {
                 }
                 if let dur = attachment.durationFormatted {
                     Text(dur)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                 }
                 if let codec = attachment.codec {
                     Text(codec.uppercased())
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(10, weight: .bold, design: .monospaced))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(Color.white.opacity(0.1)))
@@ -364,12 +364,12 @@ private struct AudioFullscreenPage: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(message.senderName ?? "?")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
 
                     Text(message.createdAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(.white.opacity(0.4))
                 }
             }
@@ -378,11 +378,11 @@ private struct AudioFullscreenPage: View {
 
             HStack(spacing: 6) {
                 Image(systemName: "waveform")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
                     .foregroundColor(.white.opacity(0.4))
                 if attachment.fileSize > 0 {
                     Text(attachment.fileSizeFormatted)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(.white.opacity(0.35))
                 }
             }
@@ -405,7 +405,7 @@ private struct AudioFullscreenPage: View {
                     Image(systemName: "xmark")
                 }
             }
-            .font(.system(size: 16, weight: .semibold))
+            .font(MeeshyFont.relative(16, weight: .semibold))
             .foregroundColor(.white.opacity(0.9))
             .frame(width: 36, height: 36)
             .background(Circle().fill(Color.white.opacity(0.2)))
@@ -488,7 +488,7 @@ private struct AudioFullscreenPage: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "gobackward.10")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(MeeshyFont.relative(28, weight: .semibold))
                     .foregroundColor(.white)
             }
 
@@ -509,7 +509,7 @@ private struct AudioFullscreenPage: View {
                         ProgressView().tint(.white).scaleEffect(0.8)
                     } else {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 32, weight: .bold))
+                            .font(MeeshyFont.relative(32, weight: .bold))
                             .foregroundColor(.white)
                             .offset(x: player.isPlaying ? 0 : 3)
                     }
@@ -521,7 +521,7 @@ private struct AudioFullscreenPage: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "goforward.10")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(MeeshyFont.relative(28, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
@@ -574,13 +574,13 @@ private struct AudioFullscreenPage: View {
     private var timeRow: some View {
         HStack {
             Text(formatMediaDuration(isSeeking ? seekValue * estimatedDuration : player.currentTime))
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
                 .foregroundColor(.white.opacity(0.7))
 
             Spacer()
 
             Text(formatMediaDuration(estimatedDuration))
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
                 .foregroundColor(.white.opacity(0.7))
         }
     }
@@ -594,7 +594,7 @@ private struct AudioFullscreenPage: View {
                     player.setSpeed(speed)
                 } label: {
                     Text(speed.label)
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                         .foregroundColor(player.speed == speed ? .black : .white.opacity(0.7))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -632,11 +632,11 @@ private struct AudioFullscreenPage: View {
             Spacer(minLength: 0)
 
             Image(systemName: "text.word.spacing")
-                .font(.system(size: 28, weight: .light))
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(.white.opacity(0.25))
 
             Text(String(localized: "audio.fullscreen.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
 
             Button {
@@ -649,10 +649,10 @@ private struct AudioFullscreenPage: View {
                             .scaleEffect(0.7)
                     } else {
                         Image(systemName: "waveform.and.mic")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                     }
                     Text(String(localized: "audio.fullscreen.transcription.action", defaultValue: "Transcrire", bundle: .main))
-                        .font(.system(size: 13, weight: .bold))
+                        .font(MeeshyFont.relative(13, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 18)
@@ -674,7 +674,7 @@ private struct AudioFullscreenPage: View {
         Task {
             do {
                 try await AttachmentService.shared.requestTranscription(attachmentId: attachment.id)
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                try? await Task.sleep(for: .seconds(3))
                 await MainActor.run {
                     isRequestingTranscription = false
                 }
@@ -719,7 +719,7 @@ private struct AudioFullscreenPage: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "translate")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.white.opacity(0.08)))
@@ -746,9 +746,9 @@ private struct AudioFullscreenPage: View {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 3) {
-                Text(flag).font(.system(size: 12))
+                Text(flag).font(MeeshyFont.relative(12))
                 Text(label)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .font(MeeshyFont.relative(10))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
@@ -780,23 +780,23 @@ private struct AudioFullscreenPage: View {
                         HapticFeedback.light()
                     } label: {
                         HStack(spacing: 10) {
-                            Text(lang.flag).font(.system(size: 20))
+                            Text(lang.flag).font(MeeshyFont.relative(20))
 
                             Text(lang.name)
-                                .font(.system(size: 15, weight: isSelected ? .bold : .regular))
+                                .font(MeeshyFont.relative(15))
                                 .foregroundColor(.primary)
 
                             Spacer()
 
                             if hasAudio {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 16))
+                                    .font(MeeshyFont.relative(16))
                                     .foregroundColor(MeeshyColors.success)
                             }
 
                             if isSelected {
                                 Image(systemName: "speaker.wave.2.fill")
-                                    .font(.system(size: 14))
+                                    .font(MeeshyFont.relative(14))
                                     .foregroundColor(accent)
                             }
                         }

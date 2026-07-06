@@ -62,7 +62,7 @@ final class ConversationComposerTextModel: ObservableObject {
     private func scheduleDebouncedPersist(_ value: String) {
         debounceTask?.cancel()
         debounceTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(for: .seconds(0.4))
             guard !Task.isCancelled else { return }
             self?.onPersistNeeded?(value)
         }
@@ -357,33 +357,33 @@ extension ConversationView {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(composerReplyTitle(reply))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
 
                 HStack(spacing: 4) {
                     if let emoji = reply.moodEmoji {
                         // Réponse à un mood : emoji + contenu entier + date.
                         Text(emoji)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                         if let date = reply.storyPublishedAt {
                             Text(date, style: .relative)
-                                .font(.system(size: 11))
+                                .font(MeeshyFont.relative(11))
                                 .foregroundColor(theme.textMuted)
                         }
                         if !reply.previewText.isEmpty {
                             Text(reply.previewText)
-                                .font(.system(size: 12))
+                                .font(MeeshyFont.relative(12))
                                 .foregroundColor(theme.textSecondary)
                                 .lineLimit(1)
                         }
                     } else {
                         if let attType = reply.attachmentType {
                             Image(systemName: composerReplyAttachmentIcon(attType))
-                                .font(.system(size: 10, weight: .medium))
+                                .font(MeeshyFont.relative(10, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                         }
                         Text(reply.previewText)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(1)
                     }
@@ -404,7 +404,7 @@ extension ConversationView {
                 }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
@@ -433,16 +433,16 @@ extension ConversationView {
                 .frame(width: 3, height: 36)
 
             Image(systemName: "pencil")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "conversation.view.composer.edit_message", defaultValue: "Modifier le message", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
 
                 Text(composerState.editingOriginalContent ?? "")
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             }
@@ -453,7 +453,7 @@ extension ConversationView {
                 cancelEdit()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
@@ -543,7 +543,7 @@ extension ConversationView {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
 
                     Image(systemName: "play.circle.fill")
-                        .font(.system(size: 18))
+                        .font(MeeshyFont.relative(18))
                         .foregroundStyle(.white, .black.opacity(0.4))
                 }
                 .onTapGesture {
@@ -558,7 +558,7 @@ extension ConversationView {
         case "audio":
             HStack(spacing: 4) {
                 Image(systemName: "play.fill")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(MeeshyFont.relative(8, weight: .bold))
                     .foregroundColor(accent.opacity(0.6))
 
                 HStack(spacing: 1.5) {
@@ -605,7 +605,7 @@ extension ConversationView {
 
                 VStack(spacing: 1) {
                     Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 18))
+                        .font(MeeshyFont.relative(18))
                         .foregroundStyle(MeeshyColors.success, MeeshyColors.success.opacity(0.2))
                     Circle()
                         .fill(MeeshyColors.success.opacity(0.3))
@@ -632,7 +632,7 @@ extension ConversationView {
                         .stroke(color.opacity(0.2), lineWidth: 0.5)
                 )
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(color.opacity(0.7))
         }
     }
@@ -655,10 +655,10 @@ extension ConversationView {
         }
         .frame(height: 100)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
@@ -683,11 +683,11 @@ extension ConversationView {
 
                             if attachment.type == .video {
                                 Image(systemName: "play.circle.fill")
-                                    .font(.system(size: 20))
+                                    .font(MeeshyFont.relative(20))
                                     .foregroundStyle(.white, .black.opacity(0.4))
                             } else if attachment.type == .image {
                                 Image(systemName: "eye.fill")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(MeeshyFont.relative(10, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(4)
                                     .background(Circle().fill(.black.opacity(0.4)))
@@ -710,7 +710,7 @@ extension ConversationView {
                                 .frame(width: 56, height: 56)
 
                             Image(systemName: iconForAttachmentType(attachment.type))
-                                .font(.system(size: 22))
+                                .font(MeeshyFont.relative(22))
                                 .foregroundColor(.white)
                         }
                     }
@@ -731,7 +731,7 @@ extension ConversationView {
                     }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(MeeshyFont.relative(8, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
                         .background(
@@ -745,7 +745,7 @@ extension ConversationView {
             }
 
             Text(labelForAttachment(attachment))
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 60)
@@ -807,7 +807,7 @@ extension ConversationView {
                 .frame(height: 20)
 
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white.opacity(0.8))
             }
         }
@@ -827,7 +827,7 @@ extension ConversationView {
 
             VStack(spacing: 2) {
                 Image(systemName: "mappin.circle.fill")
-                    .font(.system(size: 22))
+                    .font(MeeshyFont.relative(22))
                     .foregroundStyle(.white, .white.opacity(0.3))
                 Circle()
                     .fill(Color.white.opacity(0.3))

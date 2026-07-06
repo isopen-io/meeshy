@@ -99,7 +99,7 @@ struct DownloadBadgeView: View {
             guard !attachment.fileUrl.hasPrefix("file://") else { return }
             let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
             while !Task.isCancelled && !downloader.isCached {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { break }
                 let cached: Bool
                 switch attachment.type {
@@ -126,14 +126,14 @@ struct DownloadBadgeView: View {
                     .fill(accent.opacity(0.85))
                     .frame(width: 48, height: 48)
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(MeeshyFont.relative(22, weight: .bold))
                     .foregroundColor(.white)
             }
             .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
 
             if !totalSizeText.isEmpty {
                 Text(totalSizeText)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -149,10 +149,10 @@ struct DownloadBadgeView: View {
                 Spacer()
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(MeeshyFont.relative(11, weight: .bold))
                     if !totalSizeText.isEmpty {
                         Text(totalSizeText)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                     }
                 }
                 .foregroundColor(.white)
@@ -183,7 +183,7 @@ struct DownloadBadgeView: View {
 
                     if downloader.progress > 0 {
                         Text("\(Int(downloader.progress * 100))")
-                            .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            .font(MeeshyFont.relative(7, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                     } else {
                         RoundedRectangle(cornerRadius: 1.5)
@@ -194,7 +194,7 @@ struct DownloadBadgeView: View {
                 .frame(width: 24, height: 24)
 
                 Text("\(AttachmentDownloader.fmt(downloader.downloadedBytes))/\(totalSizeText)")
-                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .font(MeeshyFont.relative(7, weight: .medium, design: .monospaced))
                     .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
@@ -475,7 +475,7 @@ struct CachedPlayIcon: View {
         Group {
             if isCached {
                 Image(systemName: "play.circle.fill")
-                    .font(.system(size: 36))
+                    .font(MeeshyFont.relative(36))
                     .foregroundStyle(.white, Color.black.opacity(0.4))
                     .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
@@ -490,7 +490,7 @@ struct CachedPlayIcon: View {
                     isCached = true
                     break
                 }
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                try? await Task.sleep(for: .seconds(1.5))
             }
         }
     }

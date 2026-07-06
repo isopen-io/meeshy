@@ -7,9 +7,7 @@ import Foundation
 enum PostReachFormatter {
     /// Compact count: 1.2k / 3.4M. Mirrors the per-card `compactCount` copies.
     static func compact(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
+        MeeshyNumberFormatter.formatCompact(value)
     }
 
     struct Components: Equatable {

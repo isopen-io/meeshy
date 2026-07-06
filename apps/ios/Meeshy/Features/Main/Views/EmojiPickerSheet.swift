@@ -175,11 +175,11 @@ struct EmojiPickerView: View {
             // Search bar
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(.secondary)
 
                 TextField(String(localized: "emoji.search", defaultValue: "Rechercher un emoji"), text: $searchText)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .autocorrectionDisabled()
 
                 if !searchText.isEmpty {
@@ -187,7 +187,7 @@ struct EmojiPickerView: View {
                         searchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(.secondary)
                     }
                     .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
@@ -211,7 +211,7 @@ struct EmojiPickerView: View {
                                 }
                             } label: {
                                 Image(systemName: category.icon)
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(MeeshyFont.relative(13, weight: .medium))
                                     .foregroundColor(selectedCategory == category ? .white : .primary)
                                     .frame(width: 36, height: 28)
                                     .background(
@@ -280,7 +280,7 @@ struct EmojiPickerView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .foregroundColor(.secondary)
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.semibold)

@@ -353,7 +353,7 @@ struct WidgetPreviewView: View {
                     .foregroundColor(.white)
                     .frame(width: 50, height: 50)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                             .fill(
                                 LinearGradient(
                                     colors: gradient,

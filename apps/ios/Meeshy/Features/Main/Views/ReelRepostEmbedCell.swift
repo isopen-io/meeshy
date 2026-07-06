@@ -148,7 +148,7 @@ struct ReelRepostEmbedCell: View {
             ZStack {
                 Color(hex: repost.authorColor).opacity(0.45)
                 Image(systemName: "music.note")
-                    .font(.system(size: 30, weight: .semibold))
+                    .font(MeeshyFont.relative(30, weight: .semibold))
                     .foregroundColor(.white.opacity(0.85))
             }
         }
@@ -159,7 +159,7 @@ struct ReelRepostEmbedCell: View {
     private func centerPlayButton(_ repost: RepostContent) -> some View {
         if repost.primaryReelMedia?.type == .video {
             Image(systemName: "play.fill")
-                .font(.system(size: 18, weight: .bold))
+                .font(MeeshyFont.relative(18, weight: .bold))
                 .foregroundColor(.white)
                 .padding(13)
                 .background(Circle().fill(.ultraThinMaterial))
@@ -175,7 +175,7 @@ struct ReelRepostEmbedCell: View {
             HStack {
                 Spacer()
                 Image(systemName: "play.rectangle.on.rectangle.fill")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(MeeshyFont.relative(13, weight: .bold))
                     .foregroundColor(.white)
                     .padding(6)
                     .background(Circle().fill(.ultraThinMaterial))

@@ -76,13 +76,13 @@ struct StoryExportShareSheet: View {
     private var header: some View {
         VStack(spacing: 8) {
             Image(systemName: "square.and.arrow.up.fill")
-                .font(.system(size: 36, weight: .semibold))
+                .font(MeeshyFont.relative(36, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(
                 localized: "story.export.share.subtitle",
                 defaultValue: "Bake un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."
             ))
-            .font(.system(size: 14))
+            .font(MeeshyFont.relative(14))
             .multilineTextAlignment(.center)
             .foregroundColor(.secondary)
         }
@@ -95,7 +95,7 @@ struct StoryExportShareSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(localized: "story.export.share.languageLabel",
                         defaultValue: "Langue à graver"))
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(.secondary)
 
             Menu {
@@ -116,7 +116,7 @@ struct StoryExportShareSheet: View {
                         .foregroundColor(.primary)
                     Spacer()
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(.secondary)
                 }
                 .padding(12)
@@ -153,7 +153,7 @@ struct StoryExportShareSheet: View {
                                    defaultValue: "Export en cours… %lld%%"),
                     Int(viewModel.progress * 100)
                 ))
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(.secondary)
             }
         case .idle, .failed:
@@ -163,7 +163,7 @@ struct StoryExportShareSheet: View {
             } label: {
                 Text(String(localized: "story.export.share.cta",
                             defaultValue: "Exporter en vidéo"))
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(MeeshyColors.brandGradient)

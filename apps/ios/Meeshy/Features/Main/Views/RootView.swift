@@ -1273,7 +1273,7 @@ struct RootView: View {
                     lastError = error
                     Logger.messages.error("[RootView] navigateToConversationById attempt=\(attempt) id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                     if attempt == 0 {
-                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        try? await Task.sleep(for: .seconds(0.6))
                     }
                 }
             }
@@ -1428,11 +1428,19 @@ struct RootView: View {
             isSearchBarVisible: !isScrollingDown,
             leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
             leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
+            leftA11yValue: showFeed ? String(localized: "a11y.floating.feed.opened", defaultValue: "Ouvert", bundle: .main) : String(localized: "a11y.floating.feed.closed", defaultValue: "Fermé", bundle: .main),
             rightA11yLabel: String(localized: "a11y.floating.menu", defaultValue: "Menu", bundle: .main),
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
-            rightA11yValue: notificationManager.unreadCount > 0
-                ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
-                : nil,
+            rightA11yValue: {
+                var values: [String] = []
+                if showMenu {
+                    values.append(String(localized: "a11y.floating.menu.opened", defaultValue: "Ouvert", bundle: .main))
+                }
+                if notificationManager.unreadCount > 0 {
+                    values.append(String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount))
+                }
+                return values.isEmpty ? nil : values.joined(separator: ", ")
+            }(),
             rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
             leftContent: {
                 // Feed button content
@@ -1452,7 +1460,7 @@ struct RootView: View {
                             .frame(width: 26, height: 26)
                     } else {
                         Image(systemName: "square.stack.fill")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(MeeshyFont.relative(20, weight: .semibold))
                             .foregroundColor(.white)
                     }
                 }
@@ -1755,17 +1763,17 @@ private struct PendingSettingsBannerInline: View {
             if pendingCount > 0 {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
                     Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
-                        .font(.system(size: 10, weight: .regular))
+                        .font(MeeshyFont.relative(10))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }
@@ -1781,7 +1789,7 @@ private struct PendingSettingsBannerInline: View {
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
                 .padding(.horizontal, 16)
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -1816,17 +1824,17 @@ private struct PendingStoryBannerInline: View {
             if publishService.pendingCount > 0 {
                 HStack(spacing: 8) {
                     Image(systemName: "photo.stack")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
                     Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
-                        .font(.system(size: 10, weight: .regular))
+                        .font(MeeshyFont.relative(10))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }
@@ -1842,7 +1850,7 @@ private struct PendingStoryBannerInline: View {
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
                 .padding(.horizontal, 16)
                 .transition(.move(edge: .top).combined(with: .opacity))

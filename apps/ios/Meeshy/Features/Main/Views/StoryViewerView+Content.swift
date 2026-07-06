@@ -142,7 +142,7 @@ extension StoryViewerView {
         .overlay(alignment: .center) {
             if media.type == .video {
                 Image(systemName: "play.circle.fill")
-                    .font(.system(size: 56))
+                    .font(MeeshyFont.relative(56))
                     .foregroundColor(.white.opacity(0.8))
                     .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
                     .accessibilityHidden(true)
@@ -969,7 +969,7 @@ struct StoryViewersSheet: View {
                     Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                     }
-                    .font(.system(size: 16, weight: .bold))
+                    .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundColor(accentColor)
                 }
             }
@@ -990,38 +990,38 @@ struct StoryViewersSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(viewer.displayName)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                         .foregroundColor(.primary)
 
                     if viewer.hasReshared {
                         Image(systemName: "arrow.2.squarepath")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(MeeshyFont.relative(12, weight: .bold))
                             .foregroundColor(accentColor)
                     }
 
                     Spacer()
 
                     Text(viewer.viewedAt, style: .time)
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(.secondary)
                 }
 
                 if let reply = viewer.replyContent {
                     HStack(spacing: 6) {
                         Image(systemName: "arrowshape.turn.up.left.fill")
-                            .font(.system(size: 10))
+                            .font(MeeshyFont.relative(10))
                         Text(reply)
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .lineLimit(1)
                     }
                     .foregroundColor(.secondary)
                 } else if let reaction = viewer.reactionEmoji {
                     HStack(spacing: 6) {
                         Image(systemName: "heart.fill")
-                            .font(.system(size: 10))
+                            .font(MeeshyFont.relative(10))
                             .foregroundColor(MeeshyColors.error)
                         Text(reaction)
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                     }
                 }
             }
@@ -1102,12 +1102,12 @@ struct StoryCommentThread: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(MeeshyFont.relative(9, weight: .bold))
                     let remaining = max(0, comment.replies - 2)
                     Text(isExpanded
                          ? "Masquer"
                          : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                 }
                 .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
                 .padding(.leading, 40)
@@ -1219,11 +1219,11 @@ struct StoryCommentsOverlayView: View {
     private var expiredStoryBanner: some View {
         Label {
             Text("Story expirée — les commentaires restent visibles")
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .lineLimit(1)
         } icon: {
             Image(systemName: "clock.badge.xmark")
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
         }
         .foregroundColor(.white.opacity(0.85))
         .padding(.horizontal, 12)
@@ -1370,13 +1370,13 @@ struct StoryCommentsOverlayView: View {
     private var emptyPlaceholder: some View {
         VStack(spacing: 8) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 28))
+                .font(MeeshyFont.relative(28))
                 .foregroundColor(.white.opacity(0.7))
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(.white.opacity(0.85))
             Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundColor(.white.opacity(0.65))
         }
         .frame(maxWidth: .infinity)
@@ -1719,7 +1719,7 @@ extension StoryViewerView {
             // stale-id guard mean only stories the viewer actually pauses on
             // trigger a single lightweight reconciliation.
             guard storyCommentCount == 0 else { return }
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(for: .seconds(0.4))
             if let now = currentStory?.id, now != story.id { return }
             guard let response = try? await PostService.shared.getComments(
                 postId: story.id, cursor: nil, limit: 50
@@ -1832,7 +1832,7 @@ struct StoryCommentRowView: View, Equatable {
                     .fill(bubbleColor)
                     .overlay(
                         Text(String(comment.author.prefix(1)).uppercased())
-                            .font(.system(size: 13, weight: .bold))
+                            .font(MeeshyFont.relative(13, weight: .bold))
                             .foregroundColor(.white)
                     )
             }
@@ -1847,18 +1847,18 @@ struct StoryCommentRowView: View, Equatable {
     private var headerRow: some View {
         HStack(spacing: 6) {
             Text(comment.author)
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(MeeshyFont.relative(12.5, weight: .semibold))
                 .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
 
             if hasTranslation {
-                Text("\u{00B7}").font(.system(size: 10)).foregroundColor(.white.opacity(0.55))
+                Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(.white.opacity(0.55))
                 languageSwitcher
             }
 
-            Text("\u{00B7}").font(.system(size: 10)).foregroundColor(.white.opacity(0.55))
+            Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(.white.opacity(0.55))
 
             Text(comment.timestamp, style: .relative)
-                .font(.system(size: 10))
+                .font(MeeshyFont.relative(10))
                 .foregroundColor(.white.opacity(0.75))
         }
         // Halo lisibilité (cf. StoryActionButton sidebar) — le header reste net
@@ -1897,7 +1897,7 @@ struct StoryCommentRowView: View, Equatable {
             }
 
             Image(systemName: "translate")
-                .font(.system(size: 9, weight: .medium))
+                .font(MeeshyFont.relative(9, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo400.opacity(0.85))
         }
     }
@@ -1918,7 +1918,7 @@ struct StoryCommentRowView: View, Equatable {
 
     private var contentText: some View {
         Text(displayContent)
-            .font(.system(size: 13.5))
+            .font(MeeshyFont.relative(13.5))
             .foregroundColor(.white)
             .lineLimit(6)
             .multilineTextAlignment(.leading)
@@ -1939,12 +1939,12 @@ struct StoryCommentRowView: View, Equatable {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.92))
                         .scaleEffect(isLiked ? 1.15 : 1.0)
                     if likeCount > 0 {
                         Text("\(likeCount)")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(MeeshyFont.relative(11, weight: .semibold))
                             .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.85))
                     }
                 }
@@ -1957,9 +1957,9 @@ struct StoryCommentRowView: View, Equatable {
             Button(action: onReply) {
                 HStack(spacing: 3) {
                     Image(systemName: "arrowshape.turn.up.left")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                     Text(String(localized: "story.viewer.reply", defaultValue: "R\u{00E9}pondre", bundle: .main))
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .font(MeeshyFont.relative(10.5, weight: .semibold))
                 }
                 .foregroundColor(.white.opacity(0.88))
                 .contentShape(Rectangle())
@@ -2051,13 +2051,13 @@ struct StoryActionButton: View {
                     // le cœur) sinon le glow/accent du bouton.
                     if isActive {
                         Image(systemName: icon)
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(MeeshyFont.relative(20, weight: .semibold))
                             .foregroundStyle(accentOutline != nil ? accentOutlineColor : (activeGlow ?? activeColor))
                             .scaleEffect(1.22)
                     }
 
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(MeeshyFont.relative(20, weight: .semibold))
                         .foregroundColor(.white)
                         .adaptiveSymbolBounce(value: isActive)
                 }
@@ -2073,7 +2073,7 @@ struct StoryActionButton: View {
                 )
 
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundColor(.white.opacity(isActive ? 0.98 : 0.85))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)

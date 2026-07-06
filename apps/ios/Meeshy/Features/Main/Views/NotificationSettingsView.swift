@@ -33,9 +33,9 @@ struct NotificationSettingsView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -43,7 +43,7 @@ struct NotificationSettingsView: View {
             Spacer()
 
             Text(String(localized: "settings.notifications.title", defaultValue: "Notifications", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -200,7 +200,7 @@ struct NotificationSettingsView: View {
                     get: { prefs.notification.dndStartTime },
                     set: { val in prefs.updateNotification { $0.dndStartTime = val } }
                 ))
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(Color(hex: accentColor))
                 .multilineTextAlignment(.trailing)
                 .frame(width: 60)
@@ -211,7 +211,7 @@ struct NotificationSettingsView: View {
                     get: { prefs.notification.dndEndTime },
                     set: { val in prefs.updateNotification { $0.dndEndTime = val } }
                 ))
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(Color(hex: accentColor))
                 .multilineTextAlignment(.trailing)
                 .frame(width: 60)
@@ -240,7 +240,7 @@ struct NotificationSettingsView: View {
                     }
                 } label: {
                     Text(dayLabel(day))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
                         .frame(width: 28, height: 28)
                         .background(
@@ -307,10 +307,10 @@ struct NotificationSettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: color))
                 Text(title.uppercased())
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: color))
                     .tracking(1.2)
             }
@@ -320,10 +320,10 @@ struct NotificationSettingsView: View {
                 content()
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: color))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: color), lineWidth: 1)
                     )
             )
@@ -338,7 +338,7 @@ struct NotificationSettingsView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(Color(hex: color))
                 .frame(width: 28, height: 28)
                 .background(
@@ -347,7 +347,7 @@ struct NotificationSettingsView: View {
                 )
 
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()

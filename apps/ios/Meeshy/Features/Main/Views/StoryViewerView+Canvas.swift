@@ -390,14 +390,14 @@ struct StoryComposerBarView: View {
                         VStack(alignment: .leading, spacing: 1) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .font(MeeshyFont.relative(9, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                                 Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(MeeshyFont.relative(11, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                             }
                             Text(reply.displayContent)
-                                .font(.system(size: 11))
+                                .font(MeeshyFont.relative(11))
                                 .foregroundColor(.white.opacity(0.6))
                                 .lineLimit(1)
                         }
@@ -410,7 +410,7 @@ struct StoryComposerBarView: View {
                             }
                         } label: {
                             Image(systemName: "xmark")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundColor(.white.opacity(0.6))
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Color.white.opacity(0.12)))
@@ -1003,7 +1003,7 @@ struct StoryCardView: View {
                 VStack {
                     Spacer()
                     Text(transcription)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
@@ -1265,7 +1265,7 @@ struct StoryCardView: View {
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
             if let emoji = bigReactionEmoji {
                 Text(emoji)
-                    .font(.system(size: 100))
+                    .font(MeeshyFont.relative(100))
                     .scaleEffect(bigReactionPhase == 1 ? 1.5 : (bigReactionPhase == 2 ? 0.5 : 0.05))
                     .opacity(bigReactionPhase == 2 ? 0 : (bigReactionPhase == 1 ? 1 : 0))
                     .offset(y: bigReactionPhase == 2 ? -280 : 0)
@@ -1561,14 +1561,14 @@ struct StoryCardView: View {
     private func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "music.note")
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
             Text(audio.title)
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let uploader = audio.uploaderName {
                 Text("· \(uploader)")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .opacity(0.7)
                     .lineLimit(1)
             }
@@ -1588,10 +1588,10 @@ struct StoryCardView: View {
     private var translationBadge: some View {
         HStack(spacing: 4) {
             Image(systemName: "translate")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
             if let lang = resolvedViewerLanguage {
                 Text(lang.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
             }
         }
         .foregroundColor(.white.opacity(0.8))
@@ -1704,7 +1704,7 @@ struct StoryViewerContentView: View {
                                     isPresented = false
                                 } label: {
                                     Image(systemName: "xmark")
-                                        .font(.system(size: 16, weight: .semibold))
+                                        .font(MeeshyFont.relative(16, weight: .semibold))
                                         .foregroundColor(.white)
                                         .frame(width: 36, height: 36)
                                         .background(Circle().fill(Color.black.opacity(0.5)))
@@ -1776,7 +1776,7 @@ struct NeighborGroupCubeFace: View {
                     storyState: group.hasUnviewed ? .unread : .read
                 )
                 Text(group.username)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(.white)
             }
         }

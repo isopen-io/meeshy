@@ -62,13 +62,13 @@ struct StarredMessagesView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "star.circle")
-                .font(.system(size: 56, weight: .regular))
+                .font(MeeshyFont.relative(56))
                 .foregroundStyle(MeeshyColors.indigo400)
             Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))
-                .font(.system(size: 17, weight: .semibold))
+                .font(MeeshyFont.relative(17, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
             Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -106,19 +106,19 @@ private struct StarredRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(MeeshyFont.relative(10, weight: .bold))
                         .foregroundStyle(MeeshyColors.warning)
                     Text(snapshot.senderName ?? String(localized: "starred.messages.unknown_user", defaultValue: "Utilisateur", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundStyle(accent)
                     Spacer(minLength: 4)
                     Text(snapshot.sentAt.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                 }
 
                 Text(snapshot.contentPreview)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
@@ -126,9 +126,9 @@ private struct StarredRow: View {
                 if let conversationName = snapshot.conversationName {
                     HStack(spacing: 4) {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(MeeshyFont.relative(9, weight: .semibold))
                         Text(conversationName)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MeeshyFont.relative(11, weight: .medium))
                     }
                     .foregroundStyle(accent.opacity(0.85))
                 }

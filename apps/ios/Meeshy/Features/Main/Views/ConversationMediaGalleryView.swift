@@ -126,7 +126,7 @@ struct ConversationMediaGalleryView: View {
 
     private func captionOverlay(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(14, weight: .medium))
             .foregroundColor(.white.opacity(0.85))
             .multilineTextAlignment(.leading)
             .lineLimit(4)
@@ -244,7 +244,7 @@ struct ConversationMediaGalleryView: View {
             }
         } else {
             Image(systemName: "photo")
-                .font(.system(size: 48))
+                .font(MeeshyFont.relative(48))
                 .foregroundColor(.white.opacity(0.3))
         }
     }
@@ -272,7 +272,7 @@ struct ConversationMediaGalleryView: View {
                     dismiss()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
+                        .font(MeeshyFont.relative(28))
                         .foregroundColor(.white.opacity(0.8))
                         .padding()
                 }
@@ -281,7 +281,7 @@ struct ConversationMediaGalleryView: View {
 
                 if allAttachments.count > 1 {
                     Text("\(currentIndex + 1) / \(allAttachments.count)")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(13, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -306,7 +306,7 @@ struct ConversationMediaGalleryView: View {
                                 Image(systemName: "xmark")
                             }
                         }
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(MeeshyFont.relative(18, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 40, height: 40)
                         .background(Circle().fill(Color.white.opacity(0.2)))
@@ -370,10 +370,10 @@ struct ConversationMediaGalleryView: View {
                     )
                     VStack(alignment: .leading, spacing: 2) {
                         Text(info.senderName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(.white)
                         Text(info.sentAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
                     }
                     Spacer()
@@ -381,16 +381,16 @@ struct ConversationMediaGalleryView: View {
             }
             HStack(spacing: 8) {
                 Image(systemName: att.type == .video ? "video.fill" : "photo")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(.white.opacity(0.6))
                 if let w = att.width, let h = att.height, w > 0, h > 0 {
                     Text("\(w) \u{00D7} \(h)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                         .foregroundColor(.white.opacity(0.6))
                 }
                 if att.fileSize > 0 {
                     Text(att.fileSizeFormatted)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(.white.opacity(0.5))
                 }
                 Spacer()
@@ -479,12 +479,12 @@ struct ConversationMediaGalleryView: View {
                     withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
                     saved ? HapticFeedback.success() : HapticFeedback.error()
                 }
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                try? await Task.sleep(for: .seconds(2))
                 withAnimation { saveState = .idle }
             } catch {
                 withAnimation { saveState = .failed }
                 HapticFeedback.error()
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                try? await Task.sleep(for: .seconds(2))
                 withAnimation { saveState = .idle }
             }
         }
@@ -630,17 +630,17 @@ private struct GalleryVideoPage: View {
         switch availability {
         case .ready:
             Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
+                .font(MeeshyFont.relative(22, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: 2)
         case .needsDownload:
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(MeeshyFont.relative(20, weight: .bold))
                     .foregroundColor(.white)
                 if attachment.fileSize > 0 {
                     Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.9))
                 }
             }

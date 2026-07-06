@@ -123,7 +123,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                     // direction, forward (curved arrow forward) for the
                     // opposite. Crossfade transition keeps the swap subtle.
                     Image(systemName: isReplyDir ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.right.fill")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(MeeshyFont.relative(22, weight: .semibold))
                         .foregroundStyle(MeeshyColors.brandPrimary)
                         .transition(.scale.combined(with: .opacity))
                 } else {
@@ -132,9 +132,9 @@ struct BubbleSwipeContainer<Content: View>: View {
                     // whether to commit the gesture.
                     VStack(spacing: 2) {
                         Text(swipeStampDay)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MeeshyFont.relative(11, weight: .medium))
                         Text(swipeStampTime)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                     }
                     .foregroundColor(.secondary)
                     .transition(.opacity)

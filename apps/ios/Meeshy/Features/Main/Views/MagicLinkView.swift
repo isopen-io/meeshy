@@ -81,7 +81,7 @@ struct MagicLinkView: View {
             Spacer()
 
             Image(systemName: "wand.and.stars")
-                .font(.system(size: 56, weight: .light))
+                .font(MeeshyFont.relative(56, weight: .light))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],
@@ -191,7 +191,7 @@ struct MagicLinkView: View {
                     .frame(width: 120, height: 120)
 
                 Image(systemName: "envelope.open.fill")
-                    .font(.system(size: 48, weight: .light))
+                    .font(MeeshyFont.relative(48, weight: .light))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],

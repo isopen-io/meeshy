@@ -34,14 +34,14 @@ struct UserStatsView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
 
             Spacer()
 
             Text(String(localized: "user.stats.title", defaultValue: "Statistiques", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -91,7 +91,7 @@ struct UserStatsView: View {
     private func statCard(value: String, label: String, color: String, icon: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
+                .font(MeeshyFont.relative(20, weight: .semibold))
                 .foregroundColor(Color(hex: color))
                 .frame(width: 36, height: 36)
                 .background(
@@ -101,11 +101,11 @@ struct UserStatsView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: color))
 
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -128,10 +128,10 @@ struct UserStatsView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "chart.xyaxis.line")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(MeeshyColors.info)
                 Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITE", bundle: .main))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.info)
                     .tracking(1.2)
             }
@@ -157,10 +157,10 @@ struct UserStatsView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "trophy.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
                 Text(String(localized: "user.stats.badges", defaultValue: "BADGES", bundle: .main))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.warning)
                     .tracking(1.2)
             }

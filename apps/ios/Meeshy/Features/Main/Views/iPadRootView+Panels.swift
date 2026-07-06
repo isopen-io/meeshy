@@ -164,9 +164,9 @@ struct iPadLeftColumnHeader: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "square.stack.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                         Text(String(localized: "root.ipad.feed", defaultValue: "Feed", bundle: .main))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                     }
                     .foregroundStyle(
                         LinearGradient(
@@ -182,11 +182,14 @@ struct iPadLeftColumnHeader: View {
                             .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
                     )
                 }
+                .accessibilityLabel(String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main))
+                .accessibilityHint(String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main))
             }
 
             Text(title)
-                .font(.system(size: 20, weight: .bold))
+                .font(MeeshyFont.relative(20, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -197,12 +200,12 @@ struct iPadLeftColumnHeader: View {
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "bell.fill")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(MeeshyFont.relative(16, weight: .medium))
                             .foregroundColor(theme.textSecondary)
 
                         if notificationCount > 0 {
                             Text("\(min(notificationCount, 99))")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(MeeshyColors.error))
@@ -210,6 +213,11 @@ struct iPadLeftColumnHeader: View {
                         }
                     }
                 }
+                .accessibilityLabel(String(localized: "root.menu.notifications", defaultValue: "Notifications", bundle: .main))
+                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main))
+                .accessibilityValue(notificationCount > 0
+                    ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationCount)
+                    : nil)
             }
 
             if let onSettingsTap {
@@ -218,9 +226,11 @@ struct iPadLeftColumnHeader: View {
                     onSettingsTap()
                 } label: {
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(MeeshyFont.relative(16, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                 }
+                .accessibilityLabel(String(localized: "root.menu.settings", defaultValue: "Réglages", bundle: .main))
+                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main))
             }
         }
         .padding(.horizontal, 16)
@@ -270,6 +280,13 @@ struct iPadResizableHandle: View {
                     isDragging = false
                 }
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "a11y.ipad.resize_handle", defaultValue: "Poignée de redimensionnement", bundle: .main))
+        .accessibilityHint(String(localized: "a11y.ipad.resize_handle.hint", defaultValue: "Faites glisser pour ajuster la largeur des colonnes", bundle: .main))
+        .accessibilityValue(String(format: "%.0f%%", ratio * 100))
+        .accessibilityAction(named: String(localized: "a11y.ipad.resize_handle.reset", defaultValue: "Réinitialiser la taille", bundle: .main)) {
+            withAnimation(.spring()) { ratio = 0.38 }
+        }
         .ignoresSafeArea()
     }
 }

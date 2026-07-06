@@ -15,7 +15,7 @@ struct VideoFilterControlView: View {
         }
         .padding(16)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .padding(.horizontal, 16)
     }
 
@@ -24,11 +24,11 @@ struct VideoFilterControlView: View {
     private var header: some View {
         HStack {
             Image(systemName: "camera.filters")
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
 
             Text(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
 
             Spacer()
@@ -98,12 +98,12 @@ struct VideoFilterControlView: View {
     ) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(.secondary)
                 .frame(width: 20)
 
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .leading)
 
@@ -111,7 +111,7 @@ struct VideoFilterControlView: View {
                 .tint(MeeshyColors.indigo500)
 
             Text(formatValue(value.wrappedValue, neutral: neutral))
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(width: 36, alignment: .trailing)
         }
@@ -128,9 +128,9 @@ struct VideoFilterControlView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                 Text(String(localized: "video.filter.reinit", defaultValue: "Reinitialiser", bundle: .main))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
             }
             .foregroundColor(MeeshyColors.indigo500)
         }

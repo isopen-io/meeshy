@@ -254,7 +254,7 @@ struct ReelsPlayerView: View {
         if viewModel.hasLoadedOnce {
             VStack(spacing: 14) {
                 Image(systemName: "play.rectangle.on.rectangle")
-                    .font(.system(size: 44))
+                    .font(MeeshyFont.relative(44))
                     .foregroundColor(.white.opacity(0.7))
                 Text(String(localized: "reels.empty", defaultValue: "Aucun réel pour le moment", bundle: .main))
                     .font(.headline)
@@ -293,7 +293,7 @@ struct ReelsPlayerView: View {
 
             Button(action: onClose) {
                 Image(systemName: "chevron.backward")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(MeeshyFont.relative(18, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 40, height: 40)
                     .adaptiveGlass(in: Circle(), tint: .black.opacity(0.35))
@@ -569,7 +569,7 @@ struct ReelPageView: View {
 
     private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
             Text(ReelActionButton.compact(count)).font(.caption2.weight(.medium))
         }
         .foregroundColor(.white.opacity(0.85))
@@ -748,11 +748,11 @@ private struct ReelActionButton: View {
             VStack(spacing: 5) {
                 ZStack {
                     Image(systemName: systemName)
-                        .font(.system(size: 26, weight: .semibold))
+                        .font(MeeshyFont.relative(26, weight: .semibold))
                         .foregroundColor(tint)
                     if participated, let outline {
                         Image(systemName: outline)
-                            .font(.system(size: 26, weight: .semibold))
+                            .font(MeeshyFont.relative(26, weight: .semibold))
                             .foregroundColor(Color(hex: accentHex))
                     }
                 }
@@ -770,9 +770,7 @@ private struct ReelActionButton: View {
     }
 
     fileprivate static func compact(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
+        MeeshyNumberFormatter.formatCompact(value)
     }
 }
 
@@ -1354,7 +1352,7 @@ private struct ReelAudioView: View {
 
             // Subtle large waveform watermark behind the transcript.
             Image(systemName: "waveform")
-                .font(.system(size: 220, weight: .semibold))
+                .font(MeeshyFont.relative(220, weight: .semibold))
                 .foregroundColor(.white.opacity(0.05))
                 .allowsHitTesting(false)
 
@@ -1368,7 +1366,7 @@ private struct ReelAudioView: View {
             // No transcript yet — keep a prominent waveform glyph as the hero so
             // the screen never reads as empty.
             Image(systemName: "waveform")
-                .font(.system(size: 84, weight: .semibold))
+                .font(MeeshyFont.relative(84, weight: .semibold))
                 .foregroundColor(.white.opacity(0.92))
                 .shadow(color: .black.opacity(0.35), radius: 10)
         } else {

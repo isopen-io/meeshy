@@ -331,7 +331,7 @@ struct CommentsSheetView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "feed.comments.count", defaultValue: "\(commentCount) commentaires", bundle: .main))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                 }
@@ -341,7 +341,7 @@ struct CommentsSheetView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
@@ -636,44 +636,44 @@ struct CommentsSheetView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.author)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text(RelativeTimeFormatter.shortString(for: post.timestamp))
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
                 }
             }
 
             Text(post.displayContent)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(3)
 
             HStack(spacing: 16) {
                 HStack(spacing: 4) {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                     Text("\(post.likes)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.error)
 
                 HStack(spacing: 4) {
                     Image(systemName: "bubble.right.fill")
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                     Text("\(commentCount)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(theme.border(tint: accentColor, intensity: 0.2), lineWidth: 1)
                 )
         )
@@ -689,11 +689,11 @@ struct CommentsSheetView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(reply.author)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.authorColor))
 
                 Text(reply.displayContent)
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             }
@@ -706,7 +706,7 @@ struct CommentsSheetView: View {
                 }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
@@ -1309,7 +1309,7 @@ struct CommentRowView: View, Equatable {
                         .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
                     if hasTranslation {
-                        Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                        Text("\u{00B7}").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
 
                         let origDisplay = LanguageDisplay.from(code: comment.originalLanguage)
                         let isOrigActive = showOriginal
@@ -1364,16 +1364,16 @@ struct CommentRowView: View, Equatable {
                         .meeshyTapTarget(44)
 
                         Image(systemName: "translate")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(MeeshyFont.relative(10, weight: .medium))
                             .foregroundColor(MeeshyColors.indigo400)
                             .accessibilityHidden(true)
                     }
 
-                    Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                    Text("\u{00B7}").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
 
                     Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
                 }
@@ -1423,7 +1423,7 @@ struct CommentRowView: View, Equatable {
                                 .scaleEffect(isLiked ? 1.1 : 1.0)
 
                             Text("\(likeCount)")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(MeeshyFont.relative(12, weight: .medium))
                                 .foregroundColor(heartColor)
                         }
                     }
@@ -1449,13 +1449,13 @@ struct CommentRowView: View, Equatable {
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrowshape.turn.up.left")
-                                        .font(.system(size: 13))
+                                        .font(MeeshyFont.relative(13))
                                     if !isReply && comment.replies > 0 {
                                         Text("\(comment.replies)")
-                                            .font(.system(size: 12, weight: .semibold))
+                                            .font(MeeshyFont.relative(12, weight: .semibold))
                                     }
                                     Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(MeeshyFont.relative(12, weight: .medium))
                                 }
                                 .foregroundColor(theme.textMuted)
                             }
@@ -1466,7 +1466,7 @@ struct CommentRowView: View, Equatable {
 
                             if showSeeReplies {
                                 Text("\u{00B7}")
-                                    .font(.system(size: 12))
+                                    .font(MeeshyFont.relative(12))
                                     .foregroundColor(theme.textMuted)
                                     .accessibilityHidden(true)
 
@@ -1475,7 +1475,7 @@ struct CommentRowView: View, Equatable {
                                     HapticFeedback.light()
                                 } label: {
                                     Text(String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(MeeshyFont.relative(12, weight: .semibold))
                                         .foregroundColor(Color(hex: accentColor))
                                 }
                                 .frame(minHeight: 44)

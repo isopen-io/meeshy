@@ -56,7 +56,7 @@ struct ThemedActionButton: View {
 
                 if badge > 0 {
                     Text("\(min(badge, 99))")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(MeeshyFont.relative(9, weight: .bold))
                         .foregroundColor(Color(hex: color))
                         .frame(width: 16, height: 16)
                         .background(Circle().fill(Color.white))
@@ -358,7 +358,7 @@ struct ThemedFeedOverlay: View {
             backgroundColor: theme.backgroundPrimary,
             titleView: {
                 Text("Meeshy Feed")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
@@ -369,7 +369,7 @@ struct ThemedFeedOverlay: View {
                     ReelsPresenter.shared.presentFresh()
                 } label: {
                     Image(systemName: "play.rectangle.on.rectangle.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(MeeshyFont.relative(18, weight: .semibold))
                         .foregroundColor(MeeshyColors.indigo500)
                         .frame(width: 40, height: 40)
                         .adaptiveGlass(in: Circle(), interactive: true)
@@ -590,15 +590,15 @@ struct ThemedFeedOverlay: View {
                             Spacer()
 
                             Image(systemName: "photo.on.rectangle.angled")
-                                .font(.system(size: 16))
+                                .font(MeeshyFont.relative(16))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
                         .padding(12)
                         .background(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .fill(theme.inputBackground)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                         .stroke(theme.inputBorder, lineWidth: 1)
                                 )
                         )

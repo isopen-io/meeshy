@@ -256,7 +256,7 @@ struct AnimatedStepBackground: View {
 
     private func profileAnimation(in size: CGSize) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(step.accentColor.opacity(0.1), lineWidth: 2)
                 .frame(width: 140, height: 180)
                 .scaleEffect(animate ? 1.05 : 0.95)

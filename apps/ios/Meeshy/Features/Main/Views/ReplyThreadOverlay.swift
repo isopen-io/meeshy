@@ -128,14 +128,14 @@ struct ReplyThreadOverlay: View {
         }
         .frame(maxHeight: maxHeight)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2, style: .continuous)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2, style: .continuous)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2, style: .continuous))
         .padding(.horizontal, 16)
         .shadow(color: Color(hex: accentColor).opacity(0.15), radius: 20, y: 10)
     }
