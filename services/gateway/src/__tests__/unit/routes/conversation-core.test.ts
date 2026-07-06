@@ -571,6 +571,61 @@ describe('registerCoreRoutes', () => {
       expect(mockGenerateDefaultConversationTitle).toHaveBeenCalled();
     });
 
+    const makeLastMessage = (content: string) => ({
+      id: 'msg-1',
+      content,
+      createdAt: new Date(),
+      senderId: PARTICIPANT_ID,
+      messageType: 'text',
+      isBlurred: false,
+      isViewOnce: false,
+      effectFlags: 0,
+      expiresAt: null,
+      sender: null,
+      attachments: [],
+      _count: { attachments: 0 },
+    });
+
+    it('truncates oversized lastMessage.content to the preview cap', async () => {
+      const conv = makeConversation({ messages: [makeLastMessage('x'.repeat(5000))] });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const body = reply._body;
+      expect(body.data[0].lastMessage.content.length).toBe(300);
+    });
+
+    it('keeps short lastMessage.content intact', async () => {
+      const conv = makeConversation({ messages: [makeLastMessage('salut ✋')] });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const body = reply._body;
+      expect(body.data[0].lastMessage.content).toBe('salut ✋');
+    });
+
+    it('does not split a surrogate pair at the truncation boundary', async () => {
+      const conv = makeConversation({ messages: [makeLastMessage('a'.repeat(299) + '😀😀😀')] });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const content = reply._body.data[0].lastMessage.content as string;
+      expect(content).toBe('a'.repeat(299) + '😀');
+      expect(() => encodeURIComponent(content)).not.toThrow();
+    });
+
     it('keeps null title for direct conversation', async () => {
       const conv = makeConversation({ type: 'direct', title: null });
       prisma.conversation.findMany.mockResolvedValue([conv]);
