@@ -23,6 +23,8 @@ data class ProfileUiState(
     val user: MeeshyUser? = null,
     val isLoading: Boolean = false,
     val isEditing: Boolean = false,
+    val firstName: String = "",
+    val lastName: String = "",
     val displayName: String = "",
     val bio: String = "",
     val systemLanguage: String = "",
@@ -73,6 +75,8 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun onFirstNameChange(value: String) = _state.update { it.copy(firstName = value) }
+    fun onLastNameChange(value: String) = _state.update { it.copy(lastName = value) }
     fun onDisplayNameChange(value: String) = _state.update { it.copy(displayName = value) }
     fun onBioChange(value: String) = _state.update { it.copy(bio = value) }
     fun onSystemLanguageChange(code: String) = _state.update { it.copy(systemLanguage = code) }
@@ -94,6 +98,8 @@ class ProfileViewModel @Inject constructor(
     fun saveProfile() {
         val current = _state.value
         val request = ProfileEditRequestBuilder.build(
+            firstName = current.firstName,
+            lastName = current.lastName,
             displayName = current.displayName,
             bio = current.bio,
             systemLanguage = current.systemLanguage,
@@ -199,6 +205,8 @@ class ProfileViewModel @Inject constructor(
      */
     private fun ProfileUiState.withBuffersFrom(user: MeeshyUser?): ProfileUiState = copy(
         user = user,
+        firstName = user?.firstName ?: "",
+        lastName = user?.lastName ?: "",
         displayName = user?.displayName ?: "",
         bio = user?.bio ?: "",
         systemLanguage = user?.systemLanguage ?: "",
