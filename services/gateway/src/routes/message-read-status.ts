@@ -515,6 +515,7 @@ async function broadcastReadStatusUpdate(
   }
 
   emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+  emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
 
   if (args.type === 'read') {
     io.to(ROOMS.user(args.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {

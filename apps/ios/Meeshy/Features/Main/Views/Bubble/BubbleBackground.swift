@@ -17,10 +17,10 @@ struct BubbleBackground: View, Equatable {
         // les reçus sur une teinte unie de la couleur d'accent de la conversation,
         // avec un hairline solide discret pour rester lisibles sur le fond.
         let other = Color(hex: accentHex)
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2)
+        RoundedRectangle(cornerRadius: 18)
             .fill(isMe ? MeeshyColors.brandPrimary : other.opacity(isDark ? 0.28 : 0.16))
             .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2)
+                RoundedRectangle(cornerRadius: 18)
                     .strokeBorder(
                         isMe ? Color.clear : other.opacity(isDark ? 0.34 : 0.26),
                         lineWidth: isMe ? 0 : 1

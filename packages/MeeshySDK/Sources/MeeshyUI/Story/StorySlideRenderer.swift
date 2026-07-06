@@ -43,12 +43,32 @@ public enum StorySlideRenderer {
             let hasVisualBg = (bgImage != nil) || slide.effects.hasVisualBackgroundMedia
             if hasVisualBg {
                 UIColor.black.setFill()
+                cgCtx.fill(rect)
             } else {
-                let bgHex = slide.effects.background ?? "1E1B4B"
-                let bgColor = UIColor(hex: bgHex) ?? .black
-                bgColor.setFill()
+                // Hex OU gradient (C11) — parité canvas/miniatures pour les
+                // covers composites (Prisme visuel des thumbnails).
+                switch StoryBackgroundValue.parse(slide.effects.background ?? "1E1B4B") {
+                case .gradient(let a, let b):
+                    let c1 = (UIColor(hex: a) ?? .black).cgColor
+                    let c2 = (UIColor(hex: b) ?? .black).cgColor
+                    if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                                 colors: [c1, c2] as CFArray,
+                                                 locations: [0, 1]) {
+                        cgCtx.drawLinearGradient(
+                            gradient,
+                            start: rect.origin,
+                            end: CGPoint(x: rect.maxX, y: rect.maxY),
+                            options: []
+                        )
+                    } else {
+                        UIColor.black.setFill()
+                        cgCtx.fill(rect)
+                    }
+                case .hex(let h):
+                    (UIColor(hex: h) ?? .black).setFill()
+                    cgCtx.fill(rect)
+                }
             }
-            cgCtx.fill(rect)
 
             // 2. Background image — aspect-fill (parité reader `StoryBackgroundLayer`
             //    `.resizeAspectFill`) au lieu d'un stretch. Un fond legacy non-9:16

@@ -191,7 +191,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 Task { @MainActor in
                     // Wait a bit so the connection stabilizes and any in-flight
                     // request has a chance to complete first.
-                    try? await Task.sleep(for: .seconds(2))
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
                     if case .failed = self.activeUpload?.phase {
                         self.retryUpload()
                     }

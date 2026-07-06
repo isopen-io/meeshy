@@ -352,9 +352,9 @@ struct CreateShareLinkView: View {
 
                 .background {
                     if selectedConversation == nil {
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg).fill(Color.white.opacity(0.1))
+                        RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.1))
                     } else {
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        RoundedRectangle(cornerRadius: 16)
                             .fill(LinearGradient(
                                 colors: [MeeshyColors.shareAccent, MeeshyColors.indigo300],
                                 startPoint: .leading, endPoint: .trailing

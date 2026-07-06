@@ -76,11 +76,8 @@ export class BoundedTtlCache<K, V> {
     this.store.delete(key);
   }
 
-  /**
-   * Iterate the currently-stored keys (may include not-yet-swept expired
-   * entries). Safe to `delete` from during iteration (Map semantics). Used by
-   * prefix-scoped invalidation (e.g. drop every `${userId}:*` entry).
-   */
+  /** Live keys, unfiltered by TTL (a caller doing prefix-matched bulk invalidation
+   *  may still want to delete an entry that's technically expired but not yet swept). */
   keys(): IterableIterator<K> {
     return this.store.keys();
   }

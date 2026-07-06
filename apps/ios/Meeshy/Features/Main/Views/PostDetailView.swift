@@ -1122,7 +1122,7 @@ struct PostDetailView: View {
                     .padding(.horizontal, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(langColor.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
@@ -1237,7 +1237,7 @@ struct PostDetailView: View {
                         .padding(.horizontal, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(langColor.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
@@ -1288,7 +1288,7 @@ struct PostDetailView: View {
                         onDownload: onDownload
                     )
                 }
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
             }
@@ -1314,10 +1314,10 @@ struct PostDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+            RoundedRectangle(cornerRadius: 14)
                 .fill(theme.surfaceGradient(tint: repost.authorColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    RoundedRectangle(cornerRadius: 14)
                         .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
                 )
         )
@@ -1530,7 +1530,7 @@ struct PostDetailView: View {
             .aspectRatio(9.0 / 16.0, contentMode: .fit)
             .frame(maxWidth: 460)
             .frame(maxWidth: .infinity, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             .background(
                 GeometryReader { geo in
                     Color.clear.preference(key: StoryCanvasFrameKey.self,
@@ -1609,7 +1609,7 @@ struct PostDetailView: View {
             }
             .aspectRatio(aspectRatio, contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: 400)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             .onTapGesture { openMediaFullscreen(media) }
             .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isButton)
@@ -1643,7 +1643,7 @@ struct PostDetailView: View {
                 )
             }
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
 
         case .audio:
             let audioAttachment = media.toMessageAttachment()
@@ -1657,12 +1657,12 @@ struct PostDetailView: View {
                     onDownload: onDownload
                 )
             }
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
 
         case .document:
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                    RoundedRectangle(cornerRadius: 10)
                         .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                         .frame(width: 48, height: 56)
                     Image(systemName: "doc.fill")
@@ -1688,9 +1688,9 @@ struct PostDetailView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md - 2)
+                RoundedRectangle(cornerRadius: 12)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.document", defaultValue: "Document : %@", bundle: .main), media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main)))
@@ -1698,7 +1698,7 @@ struct PostDetailView: View {
         case .location:
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                    RoundedRectangle(cornerRadius: 10)
                         .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                         .frame(width: 64, height: 64)
                     Image(systemName: "mappin.circle.fill")
@@ -1719,9 +1719,9 @@ struct PostDetailView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md - 2)
+                RoundedRectangle(cornerRadius: 12)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.location", defaultValue: "Position : %@", bundle: .main), media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main)))
@@ -1739,7 +1739,7 @@ struct PostDetailView: View {
                 detailGridCell(visualMedia[1])
             }
             .frame(height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         } else if count == 3 {
             HStack(spacing: spacing) {
                 detailGridCell(visualMedia[0])
@@ -1750,7 +1750,7 @@ struct PostDetailView: View {
                 }
             }
             .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         } else {
             VStack(spacing: spacing) {
                 HStack(spacing: spacing) {
@@ -1783,7 +1783,7 @@ struct PostDetailView: View {
                 }
             }
             .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         }
     }
 
@@ -1892,10 +1892,10 @@ struct PostDetailView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                RoundedRectangle(cornerRadius: 14)
                     .fill(theme.surfaceGradient(tint: accentColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        RoundedRectangle(cornerRadius: 14)
                             .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                     )
             )

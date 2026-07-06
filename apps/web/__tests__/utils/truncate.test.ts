@@ -10,12 +10,45 @@ describe('truncateFilename', () => {
     const out = truncateFilename('a-very-long-annual-report-name-2026.pdf', 20);
     expect(out.endsWith('.pdf')).toBe(true);
     expect(out).toContain('...');
-    expect(out.length).toBeLessThanOrEqual(20);
+    expect(out.length).toBe(20);
+    expect(out.startsWith('....')).toBe(false);
   });
 
-  it('handles a filename with no extension', () => {
+  it('never overflows maxLength for a filename with no extension', () => {
     const out = truncateFilename('averylongnamewithoutanyextensionhere', 16);
     expect(out).toContain('...');
+    // Regression: the previous impl emitted "....{wholeName}" — longer than the input.
+    expect(out.length).toBeLessThanOrEqual(16);
+    expect(out.startsWith('....')).toBe(false);
+    expect(out.endsWith('...')).toBe(true);
+  });
+
+  it('does not overflow when the extension alone exceeds the budget', () => {
+    const out = truncateFilename('abcdefghijklmnop.superlongextension', 20);
+    expect(out.length).toBeLessThanOrEqual(20);
+    expect(out).toContain('...');
+    expect(out.startsWith('....')).toBe(false);
+  });
+
+  it('treats a leading-dot dotfile as having no usable extension', () => {
+    const out = truncateFilename('.averylonghiddenconfigfilename', 12);
+    expect(out.length).toBeLessThanOrEqual(12);
+    expect(out.endsWith('...')).toBe(true);
+  });
+
+  it('never exceeds maxLength across mixed names and budgets', () => {
+    const names = ['Makefile', 'no_ext_at_all_here_very_long', 'x.tar.gz', 'déjà-vu-café.pdf', 'file.superextralongextension'];
+    for (const name of names) {
+      for (const max of [8, 12, 16, 20, 32]) {
+        const out = truncateFilename(name, max);
+        if (name.length <= max) {
+          expect(out).toBe(name);
+        } else {
+          expect(out.length).toBeLessThanOrEqual(max);
+          expect(out.startsWith('....')).toBe(false);
+        }
+      }
+    }
   });
 });
 

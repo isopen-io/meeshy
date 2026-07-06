@@ -128,10 +128,10 @@ struct DeleteAccountView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(MeeshyColors.error.opacity(0.08))
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
                 )
         )
@@ -220,7 +220,7 @@ struct DeleteAccountView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(
                         confirmationText == requiredPhrase && !isDeleting
                             ? MeeshyColors.error
@@ -265,7 +265,7 @@ struct DeleteAccountView: View {
             VStack(spacing: 16) {
                 // Héros décoratif ≥40pt : diamètre fixe, exclu du Dynamic Type (doctrine 84i/87i).
                 Image(systemName: "envelope.circle.fill")
-                    .font(MeeshyFont.relative(64))
+                    .font(.system(size: 64))
                     .foregroundStyle(
                         MeeshyColors.brandGradient
                     )
@@ -285,10 +285,10 @@ struct DeleteAccountView: View {
             .accessibilityElement(children: .combine)
             .padding(24)
             .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                RoundedRectangle(cornerRadius: 20)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                        RoundedRectangle(cornerRadius: 20)
                             .stroke(MeeshyColors.indigo500.opacity(0.2), lineWidth: 1)
                     )
             )
@@ -304,7 +304,7 @@ struct DeleteAccountView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        RoundedRectangle(cornerRadius: 16)
                             .fill(MeeshyColors.brandGradient)
                     )
             }
@@ -350,10 +350,10 @@ struct DeleteAccountView: View {
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+        RoundedRectangle(cornerRadius: 16)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }

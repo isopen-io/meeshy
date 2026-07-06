@@ -1167,28 +1167,119 @@ EOXML
 }
 
 # ─── Tests ───────────────────────────────────────────────────────────────────
+# Exécution PHASÉE (2026-07-04) : le run se termine toujours par la connexion
+# réelle au compte de test pour laisser l'app du simulateur dans un état
+# connecté (MeeshyTests est hébergé dans Meeshy.app → la session Keychain
+# écrite par la phase 3 survit au run).
+#   Phase 1 — suites isolées (infra, appels/WebRTC, médias, mocks purs)
+#   Phase 2 — connexion & manipulation de contenu : auth/session, stories,
+#             posts/feed/reels, traduction, brouillons locaux, UI/UX produit.
+#             Contient notamment AuthServiceTests (vrais logout() sur
+#             AuthManager.shared) — d'où son passage AVANT la phase 3.
+#   Phase 3 — ZZEndStateConnectedSessionTests : login réel avec les creds de
+#             test (fastlane/.env → TEST_RUNNER_DEMO_*), jamais de logout.
+# La répartition 1/2 est dérivée dynamiquement des noms de classes : toute
+# nouvelle suite matchant FINAL_PHASE_CLASS_PATTERN rejoint la phase 2.
+END_STATE_SUITE="ZZEndStateConnectedSessionTests"
+# Connexion/session : Auth|Session|TwoFactor|EmailVerification|Connection|Guest|Presence|Anonymous
+# Contenu produit   : Story|Post|Feed|Reel|Bookmark|Status|Discover|Community|Conversation|Message|Thread|Attachment|Share|Block|Contact|Request|Friend|Voice|Keypad|CallsViewModel|Engagement|Search
+# Traduction        : Language|Translat|Compose|Mention
+# Brouillons locaux : Draft|EditHistory|Starred|LocallyHidden|Outbox|Offline
+# UI/UX/navigation  : Bubble|Skeleton|Themed|Toast|Sync|Consent|Navigation|DeepLink|Router|Tab|Notification|Profile
+# État persistant hors-catégorie (wipes UserDefaults réels, cf. classification 2026-07-04) : CallQualitySummary|VoIPPush
+FINAL_PHASE_CLASS_PATTERN='Auth|Session|TwoFactor|EmailVerification|Connection|Guest|Presence|Anonymous|Story|Post|Feed|Reel|Bookmark|Status|Discover|Community|Conversation|Message|Thread|Attachment|Share|Block|Contact|Request|Friend|Voice|Keypad|CallsViewModel|Engagement|Search|Language|Translat|Compose|Mention|Draft|EditHistory|Starred|LocallyHidden|Outbox|Offline|Bubble|Skeleton|Themed|Toast|Sync|Consent|Navigation|DeepLink|Router|Tab|Notification|Profile|CallQualitySummary|VoIPPush'
+# Jamais exécutées dans les phases 1/2 : perf (opt-in), XCUITest hors target,
+# et la suite d'état final (réservée à la phase 3).
+NON_PHASE_SUITES="MessageListPerformanceTests BubbleSimpleMessagePerfTests SearchPerformanceTests BubbleExpandableTextUITests"
+
+discover_test_classes() {
+    grep -rhoE "class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*:[[:space:]]*XCTestCase" MeeshyTests --include="*.swift" \
+        | sed -E 's/.*class[[:space:]]+([A-Za-z0-9_]+).*/\1/' \
+        | sort -u
+}
+
+xcpretty_or_cat() {
+    if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
+}
+
 do_test() {
     local destination="platform=iOS Simulator,id=$DEVICE_ID"
+    local coverage_flag
+    coverage_flag=$([ "$COVERAGE" = true ] && echo YES || echo NO)
+    local common_flags=(
+        -project "$PROJECT"
+        -scheme "$SCHEME"
+        -destination "$destination"
+        -configuration Debug
+        -derivedDataPath "$DERIVED_DATA"
+        "${XCODE_PKG_FLAGS[@]}"
+        -enableCodeCoverage "$coverage_flag"
+    )
 
     mkdir -p "$TEST_OUTPUT_DIR"
+    rm -rf "$TEST_OUTPUT_DIR"/phase1-isolated.xcresult \
+           "$TEST_OUTPUT_DIR"/phase2-content.xcresult \
+           "$TEST_OUTPUT_DIR"/phase3-connected.xcresult \
+           "$TEST_OUTPUT_DIR"/unit-tests.xcresult
 
-    log "Running unit tests..."
-    xcodebuild test \
-        -project "$PROJECT" \
-        -scheme "$SCHEME" \
-        -destination "$destination" \
-        -configuration Debug \
-        -derivedDataPath "$DERIVED_DATA" \
-        "${XCODE_PKG_FLAGS[@]}" \
-        -enableCodeCoverage "$([ "$COVERAGE" = true ] && echo YES || echo NO)" \
-        -resultBundlePath "$TEST_OUTPUT_DIR/unit-tests.xcresult" \
+    log "Building for testing..."
+    xcodebuild build-for-testing "${common_flags[@]}" \
+        2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --color; else cat; fi
+
+    # Répartition dynamique des classes entre phase 1 (skip) et phase 2 (only)
+    local phase1_skip=() phase2_only=() cls
+    while IFS= read -r cls; do
+        [ -z "$cls" ] && continue
+        [[ " $NON_PHASE_SUITES $END_STATE_SUITE " == *" $cls "* ]] && continue
+        if [[ "$cls" =~ $FINAL_PHASE_CLASS_PATTERN ]]; then
+            phase1_skip+=( "-skip-testing:MeeshyTests/$cls" )
+            phase2_only+=( "-only-testing:MeeshyTests/$cls" )
+        fi
+    done < <(discover_test_classes)
+
+    local skip_always=()
+    for cls in $NON_PHASE_SUITES; do
+        skip_always+=( "-skip-testing:MeeshyTests/$cls" )
+    done
+
+    local p1=0 p2=0 p3=0
+
+    log "Phase 1/3 — suites isolées (infra, mocks purs)..."
+    xcodebuild test-without-building "${common_flags[@]}" \
+        -resultBundlePath "$TEST_OUTPUT_DIR/phase1-isolated.xcresult" \
         -only-testing:MeeshyTests \
-        -skip-testing:MeeshyTests/MessageListPerformanceTests \
-        -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
-        -skip-testing:MeeshyTests/SearchPerformanceTests \
-        2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
+        "${skip_always[@]}" \
+        -skip-testing:MeeshyTests/$END_STATE_SUITE \
+        "${phase1_skip[@]}" \
+        2>&1 | xcpretty_or_cat || p1=$?
 
-    ok "Unit tests completed"
+    log "Phase 2/3 — connexion & manipulation de contenu (${#phase2_only[@]} suites : auth, story, post, traduction, drafts, UI/UX)..."
+    xcodebuild test-without-building "${common_flags[@]}" \
+        -resultBundlePath "$TEST_OUTPUT_DIR/phase2-content.xcresult" \
+        "${phase2_only[@]}" \
+        2>&1 | xcpretty_or_cat || p2=$?
+
+    # Phase 3 — connexion finale : les creds passent par l'environnement du
+    # runner (préfixe TEST_RUNNER_ → visible du process hôte Meeshy.app).
+    local demo_user="${DEMO_USER:-}" demo_password="${DEMO_PASSWORD:-}"
+    if [ -z "$demo_user" ] && [ -f fastlane/.env ]; then
+        demo_user=$(grep -m1 '^DEMO_USER=' fastlane/.env | cut -d= -f2-)
+        demo_password=$(grep -m1 '^DEMO_PASSWORD=' fastlane/.env | cut -d= -f2-)
+    fi
+    if [ -z "$demo_user" ] || [ -z "$demo_password" ]; then
+        warn "DEMO_USER/DEMO_PASSWORD introuvables (fastlane/.env) — phase 3 sautée côté test (XCTSkip), l'app restera déconnectée"
+    fi
+
+    log "Phase 3/3 — connexion finale au compte de test (laisse l'app connectée)..."
+    TEST_RUNNER_DEMO_USER="$demo_user" TEST_RUNNER_DEMO_PASSWORD="$demo_password" \
+    xcodebuild test-without-building "${common_flags[@]}" \
+        -resultBundlePath "$TEST_OUTPUT_DIR/phase3-connected.xcresult" \
+        -only-testing:MeeshyTests/$END_STATE_SUITE \
+        2>&1 | xcpretty_or_cat || p3=$?
+
+    [ "$p1" -eq 0 ] && ok "Phase 1 (isolées) : verte" || err "Phase 1 (isolées) : échec (exit $p1) — voir $TEST_OUTPUT_DIR/phase1-isolated.xcresult"
+    [ "$p2" -eq 0 ] && ok "Phase 2 (connexion & contenu) : verte" || err "Phase 2 (connexion & contenu) : échec (exit $p2) — voir $TEST_OUTPUT_DIR/phase2-content.xcresult"
+    [ "$p3" -eq 0 ] && ok "Phase 3 (état connecté) : verte — l'app est connectée au compte de test" || err "Phase 3 (état connecté) : échec (exit $p3) — voir $TEST_OUTPUT_DIR/phase3-connected.xcresult"
 
     if [ "$UI_TESTS" = true ]; then
         log "Running UI tests..."
@@ -1207,10 +1298,19 @@ do_test() {
 
     if [ "$COVERAGE" = true ]; then
         log "Generating coverage report..."
-        xcrun xccov view --report "$TEST_OUTPUT_DIR/unit-tests.xcresult" > "$TEST_OUTPUT_DIR/coverage.txt"
+        : > "$TEST_OUTPUT_DIR/coverage.txt"
+        local bundle
+        for bundle in phase1-isolated phase2-content phase3-connected; do
+            if [ -d "$TEST_OUTPUT_DIR/$bundle.xcresult" ]; then
+                echo "━━━ $bundle ━━━" >> "$TEST_OUTPUT_DIR/coverage.txt"
+                xcrun xccov view --report "$TEST_OUTPUT_DIR/$bundle.xcresult" >> "$TEST_OUTPUT_DIR/coverage.txt" 2>/dev/null || true
+            fi
+        done
         ok "Coverage report: $TEST_OUTPUT_DIR/coverage.txt"
         head -20 "$TEST_OUTPUT_DIR/coverage.txt"
     fi
+
+    return $(( p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────────────

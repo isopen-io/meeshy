@@ -1808,7 +1808,7 @@ class ConversationViewModel: ObservableObject {
             Task { [weak self] in
                 // Small delay to let the current batch render and the
                 // scroll position stabilize before we start the next fetch.
-                try? await Task.sleep(for: .seconds(0.15))
+                try? await Task.sleep(nanoseconds: 150_000_000)
                 guard let self, !self.isLoadingOlder else { return }
                 await self.loadOlderMessages()
             }
@@ -3574,7 +3574,7 @@ class ConversationViewModel: ObservableObject {
             // Small delay to let the diffable datasource apply the new snapshot
             // before the caller triggers scroll — otherwise the index path
             // won't exist yet.
-            try? await Task.sleep(for: .seconds(0.15))
+            try? await Task.sleep(nanoseconds: 150_000_000)
 
             return .loadedFromServer
         } catch {
@@ -3883,7 +3883,7 @@ class ConversationViewModel: ObservableObject {
         Logger.messages.info("[TranscriptionRetry] Scheduling retry for \(msgIds.count) audio message(s) missing transcription")
 
         Task { [weak self, messageService] in
-            try? await Task.sleep(for: .seconds(5)) // 5 seconds
+            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
             guard let self, !Task.isCancelled else { return }
 
             // Re-fetch the same messages from REST; by now Whisper should have

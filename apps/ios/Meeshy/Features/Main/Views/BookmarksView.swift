@@ -87,7 +87,7 @@ struct BookmarksView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "bookmark")
-                .font(MeeshyFont.relative(48))
+                .font(.system(size: 48))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
             Text(String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main))

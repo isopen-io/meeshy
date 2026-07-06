@@ -246,4 +246,52 @@ class ContactListTest {
         assertThat(result.friends).isEmpty()
         assertThat(result.needsRefetch).isFalse()
     }
+
+    // MARK: - counts (per-filter chip badges)
+
+    @Test
+    fun `counts reports the total, online and offline sizes of the roster`() {
+        val counts = ContactList.counts(roster, query = "")
+        assertThat(counts.all).isEqualTo(3)
+        assertThat(counts.online).isEqualTo(1)
+        assertThat(counts.offline).isEqualTo(2)
+    }
+
+    @Test
+    fun `online and offline counts always partition the all count under any query`() {
+        val counts = ContactList.counts(roster, query = "o")
+        assertThat(counts.online + counts.offline).isEqualTo(counts.all)
+    }
+
+    @Test
+    fun `counts respect the active search query`() {
+        // only "bob" (username bobby / Bob B) matches, and bob is offline
+        val counts = ContactList.counts(roster, query = "bob")
+        assertThat(counts.all).isEqualTo(1)
+        assertThat(counts.online).isEqualTo(0)
+        assertThat(counts.offline).isEqualTo(1)
+    }
+
+    @Test
+    fun `counts over an empty roster are all zero`() {
+        val counts = ContactList.counts(emptyList(), query = "")
+        assertThat(counts.all).isEqualTo(0)
+        assertThat(counts.online).isEqualTo(0)
+        assertThat(counts.offline).isEqualTo(0)
+    }
+
+    @Test
+    fun `forFilter returns the matching count for a selectable filter`() {
+        val counts = ContactList.counts(roster, query = "")
+        assertThat(counts.forFilter(ContactFilter.All)).isEqualTo(3)
+        assertThat(counts.forFilter(ContactFilter.Online)).isEqualTo(1)
+        assertThat(counts.forFilter(ContactFilter.Offline)).isEqualTo(2)
+    }
+
+    @Test
+    fun `forFilter treats the pass-through filters as the whole roster`() {
+        val counts = ContactList.counts(roster, query = "")
+        assertThat(counts.forFilter(ContactFilter.Phonebook)).isEqualTo(3)
+        assertThat(counts.forFilter(ContactFilter.Affiliates)).isEqualTo(3)
+    }
 }

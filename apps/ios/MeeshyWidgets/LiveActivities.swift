@@ -2,9 +2,39 @@ import ActivityKit
 import WidgetKit
 import SwiftUI
 import os
-import MeeshySDK
 
 private let logger = Logger(subsystem: "me.meeshy.app", category: "live-activity")
+
+// MARK: - Live Activity Attributes
+struct MeeshyActivityAttributes: ActivityAttributes {
+    public struct ContentState: Codable, Hashable {
+        var activityType: ActivityType
+        var contactName: String
+        var contactAvatar: String?
+        var duration: TimeInterval
+        var messageStatus: MessageStatus?
+        var translationProgress: Double?
+        var sourceLanguage: String?
+        var targetLanguage: String?
+    }
+
+    enum ActivityType: String, Codable {
+        case call
+        case messageDelivery
+        case translation
+    }
+
+    enum MessageStatus: String, Codable {
+        case sending
+        case sent
+        case delivered
+        case read
+        case failed
+    }
+
+    var conversationId: String
+    var contactName: String
+}
 
 // MARK: - Live Activity Widget
 @available(iOS 16.2, *)

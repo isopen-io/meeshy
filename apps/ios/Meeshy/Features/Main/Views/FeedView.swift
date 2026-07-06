@@ -528,10 +528,10 @@ struct FeedView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                    RoundedRectangle(cornerRadius: 20)
                         .fill(theme.inputBackground)
                         .overlay(
-                            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                            RoundedRectangle(cornerRadius: 20)
                                 .stroke(theme.inputBorder, lineWidth: 1)
                         )
                 )
@@ -639,10 +639,10 @@ struct FeedView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+            RoundedRectangle(cornerRadius: 20)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                    RoundedRectangle(cornerRadius: 20)
                         .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
                 )
         )
@@ -1316,37 +1316,37 @@ struct FeedView: View {
                 HStack(spacing: 16) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
-                            .font(MeeshyFont.relative(20))
+                            .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.brandPrimary)
                     }
                     .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
-                            .font(MeeshyFont.relative(20))
+                            .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
-                            .font(MeeshyFont.relative(20))
+                            .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
                     .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
-                            .font(MeeshyFont.relative(20))
+                            .font(.system(size: 20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
                     .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
-                            .font(MeeshyFont.relative(20))
+                            .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.success)
                     }
                     .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
-                            .font(MeeshyFont.relative(20))
+                            .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.errorStrong)
                     }
                     .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
@@ -1381,9 +1381,9 @@ struct FeedView: View {
                 .background(theme.backgroundSecondary)
             }
             .background(theme.backgroundPrimary)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxl))
+            .clipShape(RoundedRectangle(cornerRadius: 24))
             .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
+                RoundedRectangle(cornerRadius: 24)
                     .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
             )
             .padding(.horizontal, 16)
@@ -1477,7 +1477,7 @@ struct FeedView: View {
         // run-loop mode. Mirrors ProfileUserPostsList.scheduleImpressionFlush.
         impressionFlushTask?.cancel()
         impressionFlushTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
             let batch = Array(pendingImpressionIds)
             guard !batch.isEmpty else { return }

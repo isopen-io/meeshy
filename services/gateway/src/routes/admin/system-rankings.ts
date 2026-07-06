@@ -106,6 +106,32 @@ function dateWhere(startDate: Date | null, field = 'createdAt') {
   return startDate ? { [field]: { gte: startDate } } : {};
 }
 
+// Message.senderId, Reaction.participantId, Mention.mentionedParticipantId and
+// CallParticipant.participantId all reference Participant.id, and a user holds one
+// Participant per conversation. Counts keyed by those columns must be folded back
+// to the owning userId — summing a user's per-conversation counts — before ranking.
+// Otherwise the same user surfaces once per conversation (duplicated and
+// undercounted), and counts keyed by a raw participant id never resolve to a user
+// (rendered "Unknown"). An orphan participant id with no user keeps its own key so
+// its activity stays visible rather than silently vanishing.
+async function foldParticipantCountsToUsers(
+  fastify: FastifyInstance,
+  participantCounts: Map<string, number>
+): Promise<Map<string, number>> {
+  if (participantCounts.size === 0) return new Map();
+  const participants = await fastify.prisma.participant.findMany({
+    where: { id: { in: [...participantCounts.keys()] } },
+    select: { id: true, userId: true }
+  });
+  const partToUser = new Map(participants.map(p => [p.id, p.userId]));
+  const userCounts = new Map<string, number>();
+  for (const [participantId, count] of participantCounts) {
+    const key = partToUser.get(participantId) || participantId;
+    userCounts.set(key, (userCounts.get(key) || 0) + count);
+  }
+  return userCounts;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // RANK USERS
 // ═══════════════════════════════════════════════════════════════════
@@ -123,18 +149,14 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const senderParticipantIds = topSenders.map(s => s.senderId!).filter(Boolean);
-      const senderParticipants = await fastify.prisma.participant.findMany({
-        where: { id: { in: senderParticipantIds } },
-        select: { id: true, userId: true }
-      });
-      const senderPartToUser = new Map(senderParticipants.map(p => [p.id, p.userId]));
-      const senderUserIds = [...new Set(senderParticipants.map(p => p.userId).filter(Boolean))] as string[];
-      const userMap = await fetchUserDetails(fastify, senderUserIds);
-      return buildUserRankings(
-        topSenders.map(s => [senderPartToUser.get(s.senderId!) || s.senderId!, s._count.id] as [string, number]),
-        userMap
-      );
+      const participantCounts = new Map<string, number>();
+      for (const s of topSenders) {
+        if (s.senderId) participantCounts.set(s.senderId, (participantCounts.get(s.senderId) || 0) + s._count.id);
+      }
+      const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
+      const sorted = sortAndLimit(userCounts, limit);
+      const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
+      return buildUserRankings(sorted, userMap);
     }
 
     case 'reactions_given':
@@ -146,18 +168,14 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const participantIds = topReactors.map(r => r.participantId);
-      const participants = await fastify.prisma.participant.findMany({
-        where: { id: { in: participantIds }, userId: { not: null } },
-        select: { id: true, userId: true }
-      });
-      const partToUser = new Map(participants.map(p => [p.id, p.userId!]));
-      const userIds = [...new Set(participants.map(p => p.userId!).filter(Boolean))];
-      const userMap = await fetchUserDetails(fastify, userIds);
-      return buildUserRankings(
-        topReactors.map(r => [partToUser.get(r.participantId) || r.participantId, r._count.id] as [string, number]).filter(([id]) => id),
-        userMap
-      );
+      const participantCounts = new Map<string, number>();
+      for (const r of topReactors) {
+        if (r.participantId) participantCounts.set(r.participantId, (participantCounts.get(r.participantId) || 0) + r._count.id);
+      }
+      const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
+      const sorted = sortAndLimit(userCounts, limit);
+      const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
+      return buildUserRankings(sorted, userMap);
     }
 
     case 'reactions_received': {
@@ -179,7 +197,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
           senderCounts.set(senderId, (senderCounts.get(senderId) || 0) + r._count.id);
         }
       }
-      const sorted = sortAndLimit(senderCounts, limit);
+      const userCounts = await foldParticipantCountsToUsers(fastify, senderCounts);
+      const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
       return buildUserRankings(sorted, userMap);
     }
@@ -205,7 +224,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
           senderCounts.set(senderId, (senderCounts.get(senderId) || 0) + r._count.id);
         }
       }
-      const sorted = sortAndLimit(senderCounts, limit);
+      const userCounts = await foldParticipantCountsToUsers(fastify, senderCounts);
+      const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
       return buildUserRankings(sorted, userMap);
     }
@@ -218,18 +238,14 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const mentionedParticipantIds = topMentioned.map(m => m.mentionedParticipantId);
-      const mentionedParticipants = await fastify.prisma.participant.findMany({
-        where: { id: { in: mentionedParticipantIds }, userId: { not: null } },
-        select: { id: true, userId: true }
-      });
-      const mentPartToUser = new Map(mentionedParticipants.map(p => [p.id, p.userId!]));
-      const mentUserIds = [...new Set(mentionedParticipants.map(p => p.userId!).filter(Boolean))];
-      const userMap = await fetchUserDetails(fastify, mentUserIds);
-      return buildUserRankings(
-        topMentioned.map(m => [mentPartToUser.get(m.mentionedParticipantId) || m.mentionedParticipantId, m._count.id] as [string, number]).filter(([id]) => id),
-        userMap
-      );
+      const participantCounts = new Map<string, number>();
+      for (const m of topMentioned) {
+        if (m.mentionedParticipantId) participantCounts.set(m.mentionedParticipantId, (participantCounts.get(m.mentionedParticipantId) || 0) + m._count.id);
+      }
+      const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
+      const sorted = sortAndLimit(userCounts, limit);
+      const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
+      return buildUserRankings(sorted, userMap);
     }
 
     case 'mentions_sent': {
@@ -244,7 +260,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
           senderCounts.set(senderId, (senderCounts.get(senderId) || 0) + 1);
         }
       }
-      const sorted = sortAndLimit(senderCounts, limit);
+      const userCounts = await foldParticipantCountsToUsers(fastify, senderCounts);
+      const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
       return buildUserRankings(sorted, userMap);
     }
@@ -319,18 +336,14 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const filePartIds = topSenders.map(s => s.senderId!).filter(Boolean);
-      const fileParticipants = await fastify.prisma.participant.findMany({
-        where: { id: { in: filePartIds } },
-        select: { id: true, userId: true }
-      });
-      const filePartToUser = new Map(fileParticipants.map(p => [p.id, p.userId]));
-      const fileUserIds = [...new Set(fileParticipants.map(p => p.userId).filter(Boolean))] as string[];
-      const userMap = await fetchUserDetails(fastify, fileUserIds);
-      return buildUserRankings(
-        topSenders.map(s => [filePartToUser.get(s.senderId!) || s.senderId!, s._count.id] as [string, number]),
-        userMap
-      );
+      const participantCounts = new Map<string, number>();
+      for (const s of topSenders) {
+        if (s.senderId) participantCounts.set(s.senderId, (participantCounts.get(s.senderId) || 0) + s._count.id);
+      }
+      const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
+      const sorted = sortAndLimit(userCounts, limit);
+      const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
+      return buildUserRankings(sorted, userMap);
     }
 
     case 'reports_sent': {
@@ -421,18 +434,14 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const callPartIds = topCallParticipants.map(p => p.participantId);
-      const callParts = await fastify.prisma.participant.findMany({
-        where: { id: { in: callPartIds }, userId: { not: null } },
-        select: { id: true, userId: true }
-      });
-      const callPartToUser = new Map(callParts.map(p => [p.id, p.userId!]));
-      const callUserIds = [...new Set(callParts.map(p => p.userId!).filter(Boolean))];
-      const userMap = await fetchUserDetails(fastify, callUserIds);
-      return buildUserRankings(
-        topCallParticipants.map(p => [callPartToUser.get(p.participantId) || p.participantId, p._count.id] as [string, number]).filter(([id]) => id),
-        userMap
-      );
+      const participantCounts = new Map<string, number>();
+      for (const p of topCallParticipants) {
+        if (p.participantId) participantCounts.set(p.participantId, (participantCounts.get(p.participantId) || 0) + p._count.id);
+      }
+      const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
+      const sorted = sortAndLimit(userCounts, limit);
+      const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
+      return buildUserRankings(sorted, userMap);
     }
 
     case 'most_referrals_via_affiliate': {

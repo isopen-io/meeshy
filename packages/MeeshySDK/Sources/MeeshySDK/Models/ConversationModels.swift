@@ -1,5 +1,24 @@
 import Foundation
 
+// MARK: - List Preview Truncation
+
+public extension String {
+    /// Cap (in grapheme clusters) for list-row message previews
+    /// (`lastMessagePreview` and its translations). Rows render at most
+    /// 2 lines, but CoreText typesets the FULL string on every measurement
+    /// (cost is O(total length); `lineLimit` does not bound it) — an
+    /// unbounded preview multiplied across rows starves the main thread.
+    /// Mirrors the gateway-side `LAST_MESSAGE_PREVIEW_MAX_LENGTH`
+    /// (`services/gateway/src/routes/conversations/core.ts`).
+    static let meeshyPreviewMaxLength = 300
+
+    /// `prefix` walks Characters (grapheme clusters), so the cut never
+    /// splits an emoji or a combining sequence.
+    var meeshyPreviewTruncated: String {
+        String(prefix(Self.meeshyPreviewMaxLength))
+    }
+}
+
 // MARK: - API Conversation Models
 
 public struct APIConversationUserNested: Decodable, Sendable {
@@ -303,7 +322,7 @@ extension APIConversation {
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
             encryptionMode: encryptionMode ?? (convType == .direct ? "e2ee" : nil),
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
-            unreadCount: unreadCount ?? 0, lastMessagePreview: lastMessage?.content,
+            unreadCount: unreadCount ?? 0, lastMessagePreview: lastMessage?.content?.meeshyPreviewTruncated,
             lastMessageAttachments: lastMsgAttachments,
             lastMessageAttachmentCount: lastMsgAttCount,
             lastMessageId: lastMessage?.id,

@@ -106,7 +106,7 @@ struct StoryViewerContainer: View {
         ZStack {
             VStack(spacing: 16) {
                 Image(systemName: "exclamationmark.circle")
-                    .font(MeeshyFont.relative(38))
+                    .font(.system(size: 38, weight: .regular))
                     .foregroundColor(.white.opacity(0.8))
 
                 Text(String(localized: "story.viewer.notFound.title", defaultValue: "Story introuvable", bundle: .main))
@@ -156,7 +156,7 @@ struct StoryViewerContainer: View {
                 Spacer()
                 Button { isPresented = false } label: {
                     Image(systemName: "xmark")
-                        .font(MeeshyFont.relative(16, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(Color.white.opacity(0.2)))
@@ -210,7 +210,7 @@ struct StoryViewerContainer: View {
         if viewModel.groupIndex(forUserId: uid) != nil { return }
 
         // Give the view a moment for published updates to settle, then give up.
-        try? await Task.sleep(for: .seconds(2.5)) // 2.5s
+        try? await Task.sleep(nanoseconds: 2_500_000_000) // 2.5s
         if !Task.isCancelled, viewModel.groupIndex(forUserId: uid) == nil {
             Logger.messages.error("[StoryViewerContainer] Group still missing after reload uid=\(uid, privacy: .public) availableIds=\(viewModel.storyGroups.map(\.id).joined(separator: ","), privacy: .public)")
             timedOut = true

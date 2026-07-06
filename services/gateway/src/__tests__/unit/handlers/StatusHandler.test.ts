@@ -71,6 +71,9 @@ function makePrisma(overrides: Partial<{
               displayName: 'Alice Smith',
             }
       ),
+      // Backs `getBlockedUserIdsAmong`'s "who did I block" lookup — empty by
+      // default (no `blockedUserIds` on the default user fixture).
+      findMany: jest.fn().mockResolvedValue([]),
     },
     participant: {
       findUnique: jest.fn().mockResolvedValue(
@@ -87,6 +90,9 @@ function makePrisma(overrides: Partial<{
           ? overrides.participantFindFirst
           : { id: 'participant-1', displayName: 'Alice Smith', nickname: null }
       ),
+      // Backs `_getBlockedSocketIdsInRoom`'s room-membership lookup — empty by
+      // default (no other online participants → no blocking check needed).
+      findMany: jest.fn().mockResolvedValue([]),
     },
   } as any;
 }

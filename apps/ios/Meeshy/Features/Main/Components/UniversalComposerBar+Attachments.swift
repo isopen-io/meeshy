@@ -393,6 +393,8 @@ extension UniversalComposerBar {
     }
 
     func formatFileSize(_ bytes: Int) -> String {
-        AttachmentDownloader.fmt(Int64(bytes))
+        if bytes < 1024 { return "\(bytes) B" }
+        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
+        return String(format: "%.1f MB", Double(bytes) / Double(1024 * 1024))
     }
 }

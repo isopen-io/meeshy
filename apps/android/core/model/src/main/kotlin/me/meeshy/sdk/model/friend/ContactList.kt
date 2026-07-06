@@ -2,6 +2,8 @@ package me.meeshy.sdk.model.friend
 
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.UserPresence
 
 /**
  * The filter a Contacts-list surface applies over the friend list. Port of the
@@ -31,6 +33,41 @@ val FriendRequestUser.resolvedName: String
         if (full.isNotBlank()) return full
         return username
     }
+
+/**
+ * The three-state presence dot for a friend row at the caller's reference clock
+ * [nowEpochMillis]. Bridges the roster record (whose `isOnline` is a nullable flag)
+ * to the pure [UserPresence.state] SSOT: a null flag is treated as offline, so an
+ * unknown-presence friend shows no dot rather than a false green one.
+ */
+fun FriendRequestUser.presenceState(nowEpochMillis: Long): PresenceState =
+    UserPresence(isOnline = isOnline == true, lastActiveAt = lastActiveAt).state(nowEpochMillis)
+
+/**
+ * The friend counts shown as a badge on each selectable Contacts filter chip
+ * (port of the iOS chip counts). Computed over the roster with the active search
+ * query applied, so each count reflects exactly how many friends that chip would
+ * reveal right now. [online] and [offline] always partition [all].
+ */
+data class ContactFilterCounts(
+    val all: Int,
+    val online: Int,
+    val offline: Int,
+) {
+    /**
+     * The count a filter chip displays. The pass-through filters ([ContactFilter.Phonebook]/
+     * [ContactFilter.Affiliates]) mirror [ContactFilter.All] since they narrow nothing yet.
+     */
+    fun forFilter(filter: ContactFilter): Int = when (filter) {
+        ContactFilter.Online -> online
+        ContactFilter.Offline -> offline
+        ContactFilter.All, ContactFilter.Phonebook, ContactFilter.Affiliates -> all
+    }
+
+    companion object {
+        val Zero = ContactFilterCounts(all = 0, online = 0, offline = 0)
+    }
+}
 
 /** Result of reconciling the shown friend list against the live friendship cache. */
 data class ContactReconcile(
@@ -97,6 +134,23 @@ object ContactList {
         return byFilter.filter {
             it.username.lowercase().contains(needle) || it.resolvedName.lowercase().contains(needle)
         }
+    }
+
+    /**
+     * The per-filter friend counts for the chip badges. Each count is the size of
+     * the roster that the corresponding [ContactFilter] would reveal under the
+     * current search [query] — so `counts(friends, query).online` equals
+     * `visible(friends, Online, query).size`. [online] and [offline] partition
+     * [all] by construction (Offline is exactly "not online").
+     */
+    fun counts(friends: List<FriendRequestUser>, query: String): ContactFilterCounts {
+        val matching = visible(friends, ContactFilter.All, query)
+        val online = matching.count { it.isOnline == true }
+        return ContactFilterCounts(
+            all = matching.size,
+            online = online,
+            offline = matching.size - online,
+        )
     }
 
     /**

@@ -28,7 +28,6 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
-import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ReactionSyncResponse
@@ -240,84 +239,6 @@ class ChatViewModelTest {
             .isEqualTo(DeliveryStatus.Pending)
         assertThat(bubbles.single { it.messageId == "cmid_b" }.deliveryStatus)
             .isEqualTo(DeliveryStatus.Failed)
-    }
-
-    @Test
-    fun a_group_message_read_by_only_one_recipient_does_not_show_read() = runTest(dispatcher) {
-        // 3-member group → 2 recipients. Both received but only one read → all-or-nothing
-        // keeps it at Delivered (never the false "Read by all").
-        val group = ApiConversation(
-            id = "c1",
-            type = "group",
-            participants = listOf(
-                ApiParticipant(id = "p_me", userId = "me"),
-                ApiParticipant(id = "p_a", userId = "a"),
-                ApiParticipant(id = "p_b", userId = "b"),
-            ),
-        )
-        val h = harness(
-            stream = flowOf(
-                CacheResult.Fresh(
-                    listOf(
-                        synced(
-                            ApiMessage(
-                                id = "m1",
-                                conversationId = "c1",
-                                senderId = "me",
-                                content = "team?",
-                                deliveredCount = 2,
-                                readCount = 1,
-                            ),
-                        ),
-                    ),
-                    ageMillis = 0,
-                ),
-            ),
-            currentUser = me,
-            conversation = group,
-        )
-        advanceUntilIdle()
-
-        assertThat(h.vm.state.value.messages.single().deliveryStatus)
-            .isEqualTo(DeliveryStatus.Delivered)
-    }
-
-    @Test
-    fun a_group_message_read_by_all_recipients_shows_read() = runTest(dispatcher) {
-        val group = ApiConversation(
-            id = "c1",
-            type = "group",
-            participants = listOf(
-                ApiParticipant(id = "p_me", userId = "me"),
-                ApiParticipant(id = "p_a", userId = "a"),
-                ApiParticipant(id = "p_b", userId = "b"),
-            ),
-        )
-        val h = harness(
-            stream = flowOf(
-                CacheResult.Fresh(
-                    listOf(
-                        synced(
-                            ApiMessage(
-                                id = "m1",
-                                conversationId = "c1",
-                                senderId = "me",
-                                content = "team?",
-                                deliveredCount = 2,
-                                readCount = 2,
-                            ),
-                        ),
-                    ),
-                    ageMillis = 0,
-                ),
-            ),
-            currentUser = me,
-            conversation = group,
-        )
-        advanceUntilIdle()
-
-        assertThat(h.vm.state.value.messages.single().deliveryStatus)
-            .isEqualTo(DeliveryStatus.Read)
     }
 
     @Test

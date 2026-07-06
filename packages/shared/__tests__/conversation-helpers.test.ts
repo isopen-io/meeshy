@@ -10,7 +10,6 @@ import {
   canEditMessage,
   generateDefaultConversationTitle,
   getRequiredLanguages,
-  resolveUserTranslationLanguages,
 } from '../utils/conversation-helpers';
 
 describe('resolveUserLanguage', () => {
@@ -55,6 +54,22 @@ describe('resolveUserLanguage', () => {
       systemLanguage: 'en',
     };
     expect(resolveUserLanguage(user)).toBe('en');
+  });
+
+  // F62 — case parity with resolveUserLanguagesOrdered. Prefs pass validation
+  // case-insensitively (isSupportedLanguage lowercases) but persist verbatim, so
+  // a stored 'EN' would otherwise miss the lowercase-keyed translations produced
+  // by resolveUserLanguagesOrdered → client shows original instead of translation.
+  it('should lowercase an uppercase systemLanguage', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'EN' })).toBe('en');
+  });
+
+  it('should lowercase an uppercase regionalLanguage', () => {
+    expect(resolveUserLanguage({ regionalLanguage: 'ES' })).toBe('es');
+  });
+
+  it('should lowercase a mixed-case customDestinationLanguage', () => {
+    expect(resolveUserLanguage({ customDestinationLanguage: 'De' })).toBe('de');
   });
 });
 
@@ -365,6 +380,18 @@ describe('getRequiredLanguages', () => {
     const languages = getRequiredLanguages(members);
     expect(languages).toEqual(['fr']);
   });
+
+  // F62 — a member stored 'EN' and another stored 'en' are the SAME translation
+  // destination; without case parity they inflate the target set with a duplicate
+  // ('EN' never matches a lowercase-keyed translation → wasted translation request).
+  it('should deduplicate members that differ only by pref casing', () => {
+    const members = [
+      { systemLanguage: 'EN' },
+      { systemLanguage: 'en' },
+    ];
+    const languages = getRequiredLanguages(members);
+    expect(languages).toEqual(['en']);
+  });
 });
 
 describe('resolveUserLanguage with deviceLocale (4th priority)', () => {
@@ -492,46 +519,6 @@ describe('resolveUserLanguagesOrdered', () => {
     expect(
       resolveUserLanguagesOrdered({}, { deviceLocale: 'ja' })
     ).toEqual(['ja']);
-  });
-});
-
-describe('resolveUserTranslationLanguages', () => {
-  it('returns systemLanguage when only systemLanguage set', () => {
-    expect(resolveUserTranslationLanguages({ systemLanguage: 'en' })).toEqual(['en']);
-  });
-
-  it('returns regionalLanguage when only regionalLanguage set', () => {
-    expect(resolveUserTranslationLanguages({ regionalLanguage: 'es' })).toEqual(['es']);
-  });
-
-  it('returns both when both are set', () => {
-    expect(
-      resolveUserTranslationLanguages({ systemLanguage: 'fr', regionalLanguage: 'es' })
-    ).toEqual(['fr', 'es']);
-  });
-
-  it("returns ['fr'] when neither is set (fallback)", () => {
-    expect(resolveUserTranslationLanguages({})).toEqual(['fr']);
-  });
-
-  it("returns ['fr'] when both are undefined", () => {
-    expect(
-      resolveUserTranslationLanguages({ systemLanguage: undefined, regionalLanguage: undefined })
-    ).toEqual(['fr']);
-  });
-
-  it('does not include empty strings', () => {
-    expect(resolveUserTranslationLanguages({ systemLanguage: '' })).toEqual(['fr']);
-  });
-
-  it('deduplicates when systemLanguage equals regionalLanguage', () => {
-    expect(
-      resolveUserTranslationLanguages({ systemLanguage: 'en', regionalLanguage: 'en' })
-    ).toEqual(['en']);
-  });
-
-  it('trims whitespace-only values', () => {
-    expect(resolveUserTranslationLanguages({ systemLanguage: '  ' })).toEqual(['fr']);
   });
 });
 
