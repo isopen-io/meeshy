@@ -324,6 +324,12 @@ export class StatusHandler {
       const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
       this._untrackTyping(socket.id, normalizedId);
+      // Clear the start-throttle for this (user, conversation): an explicit stop
+      // ends the typing burst, so a subsequent typing:start begins a NEW burst
+      // and must emit immediately. Leaving the timestamp in place would swallow a
+      // restart that lands inside the 2s throttle window — peers would see no
+      // indicator even though the user resumed typing.
+      this.typingThrottleMap.delete(`${userId}:${normalizedId}`);
     } catch (error) {
       logger.error('typing:stop failed', { error });
     }

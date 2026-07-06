@@ -565,6 +565,36 @@ describe('StatusHandler', () => {
 
       expect(statusService.updateLastSeen).not.toHaveBeenCalled();
     });
+
+    it('clears the start-throttle so a restart within the throttle window re-emits typing:start', async () => {
+      jest.useFakeTimers();
+      const now = 1_000_000;
+      jest.setSystemTime(now);
+
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+      const emitFn = () => ((socket.to as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
+      const startCount = () =>
+        emitFn().mock.calls.filter((c: unknown[]) => c[0] === SERVER_EVENTS.TYPING_START).length;
+
+      // Burst 1: user starts typing → one typing:start.
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      expect(startCount()).toBe(1);
+
+      // User pauses and the client sends typing:stop 500ms in.
+      jest.setSystemTime(now + 500);
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      // Burst 2: user resumes typing 300ms later — still INSIDE the 2s throttle
+      // window relative to the first start. The explicit stop must have reset the
+      // throttle so this restart emits a fresh typing:start instead of being
+      // swallowed (which would leave peers with no indicator).
+      jest.setSystemTime(now + 800);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      expect(startCount()).toBe(2);
+    });
   });
 
   // ── handleSocketDisconnecting ───────────────────────────────────────────────

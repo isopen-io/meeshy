@@ -36,6 +36,7 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
+import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
   MessageRequest,
   MessageResponse
@@ -104,9 +105,19 @@ export class MessageHandler {
    * Avoids a DB findFirst query on every message send for active users.
    * TTL: 5 minutes. Invalidated on conversation leave / kick events via
    * `invalidateParticipantCache`. Key: `${userId}:${conversationId}`.
+   *
+   * Uses `BoundedTtlCache` (size cap + lazy/bulk TTL eviction) rather than a raw
+   * `Map`: a lazily-checked TTL only reclaims a key when the SAME key is read
+   * again, so a one-shot (user, conversation) sender that never sends again would
+   * leak its entry forever on a long-lived gateway. The size cap hard-bounds the
+   * heap regardless of read patterns, matching `StatusHandler.identityCache`.
    */
-  private participantIdCache = new Map<string, { participantId: string; expiresAt: number }>();
+  private static readonly PARTICIPANT_CACHE_MAX_SIZE = 50_000;
   private readonly PARTICIPANT_CACHE_TTL_MS = 5 * 60 * 1000;
+  private participantIdCache = new BoundedTtlCache<string, string>({
+    maxSize: MessageHandler.PARTICIPANT_CACHE_MAX_SIZE,
+    ttlMs: this.PARTICIPANT_CACHE_TTL_MS,
+  });
 
   constructor(deps: MessageHandlerDependencies) {
     this.io = deps.io;
@@ -1239,8 +1250,8 @@ export class MessageHandler {
 
     const cacheKey = `${userId}:${conversationId}`;
     const cached = this.participantIdCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.participantId;
+    if (cached !== undefined) {
+      return cached;
     }
 
     const result = await resolveParticipant({
@@ -1251,10 +1262,7 @@ export class MessageHandler {
     });
 
     if (result?.participantId) {
-      this.participantIdCache.set(cacheKey, {
-        participantId: result.participantId,
-        expiresAt: Date.now() + this.PARTICIPANT_CACHE_TTL_MS,
-      });
+      this.participantIdCache.set(cacheKey, result.participantId);
     }
 
     return result?.participantId ?? null;
