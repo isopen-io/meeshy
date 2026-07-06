@@ -1054,7 +1054,24 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
-### 2026-07-06 — slice `chat-mention-autocomplete` ✅ shipped
+### 2026-07-06 — slice `chat-mention-autocomplete` ⚠ blocked-on-infra (impl done, reviewer PASS, PR #1580 open)
+- **Status:** implementation complete, locally green (+40 tests, `:feature:chat:testDebugUnitTest` +
+  `:app:assembleDebug` BUILD SUCCESSFUL), diff `apps/android`-only, reviewer PASS. **NOT merged** — held at the
+  routine hard gate "never merge past red CI".
+- **CI blocker (external, unrelated to the diff):** the monorepo `ci.yml`'s four `services/translator` Python
+  jobs — `Test Python (translator)`, `Voice API Tests`, `TTS/STT Integration`, `Audio Pipeline Tests` — all fail
+  at the identical step **"Install Python dependencies (CPU backend for CI)"** with
+  `error: Failed to fetch torch-2.6.0+cpu…whl.metadata → received fatal alert: HandshakeFailure` (a PyTorch wheel
+  CDN `download-r2.pytorch.org` TLS outage). **Deterministic across two runs** (SHA `4a070870` run #6176 and the
+  empty-commit re-trigger SHA `6f035fe8` run 28814248914). Every JS/TS job is green on both runs (Security,
+  Quality-bun, Prisma, Test agent, Test shared, Test web). The GitHub integration lacks `rerun-failed-jobs`
+  permission (403), and an `apps/android`-only diff cannot touch the translator deps, so this is unfixable from
+  here — it clears when the PyTorch CDN recovers.
+- **Unblock path (one action):** once the CDN is back, re-run the 4 failed translator jobs (or re-trigger CI) on
+  PR #1580; when they go green, squash-merge to `main`. No code change is needed — the slice itself is complete
+  and reviewer-approved. Mark this entry ✅ shipped after the merge.
+
+### 2026-07-06 — slice `chat-mention-autocomplete` (implementation detail; ⚠ merge pending CI — see above)
 - **Step 0 (housekeeping):** no Android slice PR was open (the board carried only unrelated dependabot PRs
   and one non-Android `fix(calls)` PR #1579 on a `claude/loving-*` branch — out of scope, left untouched).
   `origin/main` already contained the prior `chat-search-highlight-wiring` merge (#1577). Branched
