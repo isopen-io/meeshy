@@ -540,6 +540,73 @@ describe('AuthHandler', () => {
       expect(joinCompleted).toContain('conversation:conv-bbb');
     });
 
+    it('registers the JWT user in connectedUsers only after all conversation room joins resolve', async () => {
+      // Regression test: delivery code (MessageHandler, MeeshySocketIOManager)
+      // gates the offline-delivery queue purely on connectedUsers.has(userId).
+      // If registration happened before the awaited room joins completed, a
+      // message could land in that gap, be skipped from the offline queue
+      // (recipient looks online) and never reach the room broadcast either —
+      // permanently lost. See AuthHandler.ts _authenticateJWTUser comment.
+      const order: string[] = [];
+      const asyncJoin = jest.fn().mockImplementation(async (room: string) => {
+        await new Promise(resolve => process.nextTick(resolve));
+        order.push(`join:${room}`);
+      });
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } },
+        join: asyncJoin,
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123', systemLanguage: 'en',
+        regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+      } as any);
+      jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
+        { conversationId: 'conv-aaa' },
+      ]);
+      jest.spyOn(connectedUsers, 'set').mockImplementation(((key: string, value: any) => {
+        order.push('registered');
+        return Map.prototype.set.call(connectedUsers, key, value);
+      }) as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      const registeredIndex = order.indexOf('registered');
+      const conversationJoinIndex = order.indexOf('join:conversation:conv-aaa');
+      expect(registeredIndex).toBeGreaterThan(-1);
+      expect(conversationJoinIndex).toBeGreaterThan(-1);
+      expect(conversationJoinIndex).toBeLessThan(registeredIndex);
+    });
+
+    it('registers the anonymous participant in connectedUsers only after the conversation room join resolves', async () => {
+      const order: string[] = [];
+      const asyncJoin = jest.fn().mockImplementation(async (room: string) => {
+        await new Promise(resolve => process.nextTick(resolve));
+        order.push(`join:${room}`);
+      });
+      const mockSocket = createMockSocket({
+        handshake: { auth: { sessionToken: 'anon-session-123' } },
+        join: asyncJoin,
+      });
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
+        id: 'anon-123',
+        displayName: 'Anonymous',
+        language: 'en',
+        conversationId: 'conv-123'
+      } as any);
+      jest.spyOn(connectedUsers, 'set').mockImplementation(((key: string, value: any) => {
+        order.push('registered');
+        return Map.prototype.set.call(connectedUsers, key, value);
+      }) as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      const registeredIndex = order.indexOf('registered');
+      const conversationJoinIndex = order.indexOf('join:conversation:conv-123');
+      expect(registeredIndex).toBeGreaterThan(-1);
+      expect(conversationJoinIndex).toBeGreaterThan(-1);
+      expect(conversationJoinIndex).toBeLessThan(registeredIndex);
+    });
+
     it('should not throw when participant.findMany fails in _joinUserConversations', async () => {
       const mockSocket = createMockSocket({
         handshake: { auth: { token: 'valid-jwt-token' } }

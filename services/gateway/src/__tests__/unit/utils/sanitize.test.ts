@@ -150,9 +150,22 @@ describe('SecuritySanitizer', () => {
       expect(result).toContain('Text');
     });
 
-    it('should remove zero-width characters', () => {
-      const input = 'Hello\u200BWorld\u200CTest\u200D';
+    it('should remove zero-width space and BOM', () => {
+      const input = 'Hello\u200BWorld\uFEFFTest';
       expect(SecuritySanitizer.sanitizeText(input)).toBe('HelloWorldTest');
+    });
+
+    it('should preserve ZWJ in emoji sequences (family emoji stays intact)', () => {
+      const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}';
+      const result = SecuritySanitizer.sanitizeText(`Hello ${family}`);
+      expect(result).toBe(`Hello ${family}`);
+      expect(result).toContain('\u200D');
+    });
+
+    it('should preserve ZWNJ required by Persian/Farsi orthography', () => {
+      const persian = 'mi\u200Cravam';
+      expect(SecuritySanitizer.sanitizeText(persian)).toBe(persian);
+      expect(SecuritySanitizer.sanitizeText(persian)).toContain('\u200C');
     });
 
     it('should remove control characters', () => {

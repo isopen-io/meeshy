@@ -634,7 +634,12 @@ struct PinnedStoryTrailBand: View {
 
     private func band(groups: [StoryGroup]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 12) {
+            // `LazyHStack` — même fix que F5 sur la grande trail : un `HStack`
+            // montait TOUS les groupes (avatars `.storyTrayCompact` animés en
+            // spring repeatForever) à CHAQUE traversée du seuil de reveal du
+            // scroll, y compris hors écran. Lazy = seuls les ~8 anneaux
+            // visibles vivent (et animent).
+            LazyHStack(alignment: .top, spacing: 12) {
                 addStoryButton
                 ForEach(groups, id: \.id) { group in
                     StoryRingCell(

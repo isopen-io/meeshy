@@ -119,12 +119,7 @@ export class ReactionService {
       ? [previousReaction.emoji]
       : [];
 
-    if (replacedEmojis.length > 0) {
-      for (const removed of replacedEmojis) {
-        await this.updateMessageReactionSummary(messageId, removed, 'remove', 1);
-      }
-    }
-    await this.updateMessageReactionSummary(messageId, sanitized, 'add');
+    await this.updateMessageReactionSummary(messageId);
 
     return { reaction: this.mapReactionToData(reaction), replacedEmojis };
   }
@@ -148,7 +143,7 @@ export class ReactionService {
     });
 
     if (result.count > 0) {
-      await this.updateMessageReactionSummary(messageId, sanitized, 'remove', result.count);
+      await this.updateMessageReactionSummary(messageId);
     }
 
     return result.count > 0;
@@ -340,38 +335,38 @@ export class ReactionService {
     };
   }
 
-  private async updateMessageReactionSummary(
-    messageId: string,
-    emoji: string,
-    action: 'add' | 'remove',
-    count: number = 1
-  ): Promise<void> {
+  private async updateMessageReactionSummary(messageId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const message = await tx.message.findUnique({
         where: { id: messageId },
-        select: { reactionSummary: true }
+        select: { id: true }
       });
 
       if (!message) return;
 
-      const currentSummary = (message.reactionSummary as Record<string, number>) || {};
+      // Ventilation par emoji ET total recalculés depuis la table `Reaction`
+      // (source de vérité), au lieu d'appliquer un delta add/remove sur une carte
+      // dénormalisée. La lecture du "previousReaction" dans addReaction se fait hors
+      // transaction, donc deux addReaction concurrents pour le même participant avec
+      // des emojis différents peuvent tous deux la croire absente et incrémenter
+      // chacun leur propre delta — laissant un emoji fantôme dans reactionSummary
+      // sans ligne `Reaction` derrière. Recalculer depuis groupBy est auto-réparant,
+      // quel que soit l'état après la course.
+      const grouped = await tx.reaction.groupBy({
+        by: ['emoji'],
+        where: { messageId },
+        _count: { emoji: true }
+      });
 
-      if (action === 'add') {
-        currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
-      } else if (currentSummary[emoji]) {
-        currentSummary[emoji] -= count;
-        if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
-      }
-
-      // Compteur AUTORITAIRE depuis la table `Reaction` (la ligne add/remove a déjà
-      // été appliquée par addReaction/removeReaction avant cet appel). Auto-réparant
-      // (pas de dérive du compteur dénormalisé) — miroir de
-      // PostReactionService.updatePostReactionSummary / CommentReactionService.updateCommentReactionSummary.
-      const total = await tx.reaction.count({ where: { messageId } });
+      const reactionSummary = grouped.reduce<Record<string, number>>((summary, group) => {
+        summary[group.emoji] = group._count.emoji;
+        return summary;
+      }, {});
+      const total = grouped.reduce((sum, group) => sum + group._count.emoji, 0);
 
       await tx.message.update({
         where: { id: messageId },
-        data: { reactionSummary: currentSummary, reactionCount: total }
+        data: { reactionSummary, reactionCount: total }
       });
     });
   }

@@ -2,6 +2,99 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lessons
+- **2026-07-06 (`settings-regional-content-language`): `:sdk-core` `ThemeStoreTest` (and other DataStore
+  tests) flake under the FULL parallel run, not in isolation.** They use a real `Dispatchers.IO` DataStore
+  with `withTimeout(5_000)`; when `gradle :app:assembleDebug testDebugUnitTest` compiles+tests every module
+  at once, IO contention can push a single `store.themeMode.first { … }` past 5s → a *different* test fails
+  each run (`dataStore_setThemeMode_…` one run, `dataStore_hydrates…` the next). It is environmental, not a
+  regression: run the same test 3× in isolation (`--tests "*ThemeStoreTest*" --rerun-tasks`) — green every
+  time — then re-run the full check on the warm cache (compilation already done → no IO storm) and it passes.
+  Don't "fix" it by touching sdk-core; a warm-cache re-run is the gate evidence. (Candidate future hardening:
+  bump the timeout or pin these to a test dispatcher — a separate sdk-core slice, out of scope here.)
+- **2026-07-06 (`settings-regional-content-language`): reuse the `edit-profile-optimistic` outbox path for
+  any single-field backend content preference — no new store.** The regional (content) language is just a
+  `regionalLanguage` profile field, so the whole slice was a pure picker SSOT (`RegionalLanguageSelection`)
+  + a 3-line VM intent delegating to `UserRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage=…))`
+  (optimistic session repaint + durable `UPDATE_PROFILE` + wake-worker-on-`cmid`). Contrast the *interface*
+  language, which is device-local UI chrome → its own `InterfaceLanguageStore`. The test for "does it hit the
+  right seam" asserts on the captured `UpdateProfileRequest`: `regionalLanguage == picked` AND every other
+  field (`systemLanguage`/`customDestinationLanguage`/`displayName`) stays `null` (edits exactly one field).
+- **2026-07-06 (`settings-regional-content-language`): `LanguageData.info(code)` is case-SENSITIVE (codes are
+  lowercase).** If you clean a stored code to upper/mixed case (`" ES "` → `"ES"`) and feed it to `info()`,
+  you get `null` and lose the label — even though your `equals(ignoreCase=true)` selection-marking still
+  works. Resolve the display label with `allLanguages.firstOrNull { it.code.equals(code, ignoreCase=true) }`,
+  not `info()`, whenever the code may not be canonically lowercase. Caught by a `" ES "` test that asserted
+  the `selectedLabel` equals the native name.
+- **2026-07-06 (`settings-notification-prefs-sync`): a literal `/*` inside a KDoc `/** */` is an "Unclosed comment".**
+  Writing `` `/api/v1/me/preferences/*` `` in a KDoc line makes the Kotlin lexer open a *nested* block comment at
+  the `/*` that never closes → `error: Unclosed comment`, and the whole file fails to compile (which cascaded into
+  a misleading Hilt/KSP `error.NonExistentClass` on the class the KDoc documented). Never put a bare `/*` (glob,
+  path wildcard, C-comment) in a doc comment — reword to `{category}`/`…`. Same trap applies to `*/` inside a KDoc.
+- **2026-07-06 (`settings-notification-prefs-sync`): wiring a *dead declaration* is a clean, high-value slice.**
+  `OutboxKind.UPDATE_SETTINGS` + `OutboxLanes.SETTINGS` existed with no coalescer rule and no worker sender (an
+  `else -> Enqueue` fall-through). The whole slice was: pure wire-body SSOT in `:core:model` (mirrors the gateway
+  Zod schema field-for-field, drops the local-only `extras`), a session-gated `enqueueSync` repo (mirrors
+  `enqueueProfileEdit` but with **no optimistic session flip** — the device DataStore store already holds the
+  value, and the PATCH is idempotent so no exhaust-rollback is needed), the explicit `UPDATE_SETTINGS` coalescer
+  arm, and the sender. Grep for enum values that have a lane mapping but no sender/coalescer arm — they are
+  latent "declared but never delivered" features. The `updateNotifications` single-funnel in the VM meant *one*
+  edit (persist-then-`enqueueSync`-then-wake-worker-on-`cmid`) covered **every** notification toggle at once.
+- **2026-07-06 (`settings-notification-type-toggles`): keep locale-aware search pure by injecting the label fn.**
+  A "searchable" list needs to match localized labels, but string resources must not leak into `:core:model`
+  (that would break SDK purity and force a Robolectric/Context dependency into a pure test). Solution:
+  `sections(prefs, query, label: (T)->String)` takes the label lookup as a parameter — the pure builder owns
+  grouping/ordering/`contains` matching and is tested with a fake label map; the Composable builds the real
+  `Map<T,String>` via `stringResource` (once, `NotificationType.entries.associateWith { stringResource(res(it)) }`)
+  and passes `label = { map.getValue(it) }`. Also: model per-event toggles as a **catalog of descriptors**
+  (`type → category + get/set lens`) rather than a giant `when` per field — one `associateBy`-backed map gives
+  total `toggle`/`isEnabled` and the `.copy` lens keeps every edit non-clobbering, and adding a type is one
+  list entry. `byType.getValue` is total because every enum value has a descriptor (guarded by the
+  round-trip-over-`entries` test).
+- **2026-07-06 (housekeeping): main CI red ≠ block for an apps/android-only PR.** `main`'s push CI is currently
+  failing only on the `Test Python (translator)` job (unrelated flake/pre-existing); an `apps/android`-only diff
+  touches none of the JS/TS/Python stack, so its PR CI can only ever inherit that same unrelated red as
+  `mergeable_state: unstable`. The real Android gate is the local `gradle :app:assembleDebug testDebugUnitTest`.
+  Confirm the *only* failing check is that pre-existing non-android job before merging; never merge if the
+  android diff itself introduced a failing check.
+- **2026-07-05 (`settings-interface-language`): re-localise a pure-Compose app app-wide with no AppCompat.**
+  minSdk 26 and the app is a `ComponentActivity` (not `AppCompatActivity`), so `AppCompatDelegate.setApplicationLocales`
+  isn't the free path (needs appcompat + the metadata service, and would become a *second* persistence SSOT next to
+  our DataStore). Instead: keep DataStore as the single persisted SSOT, and *apply* the locale by wrapping the whole
+  Compose tree — `CompositionLocalProvider(LocalContext provides base.createConfigurationContext(cfg.apply{setLocale}), LocalConfiguration provides cfg)` — so every `stringResource` re-resolves. Works on every API ≥17, no new
+  dependency, and the *decision* (`resolveInterfaceLocaleTag` → tag or null) stays a pure tested function; the
+  wrapper is the only (coverage-exempt) glue. Also: `null` = "follow the device locale" (System) is a cleaner model
+  than a magic sentinel — the pure codec maps corrupt/unsupported/`"system"`/blank all to `null`, and the applier
+  no-ops on `null` so an untranslated device locale still falls through Android's own resource resolution.
+  Distinguish **interface** language (app UI chrome → app locale, this slice) from **regional/content** language
+  (Prisme `ContentLanguagePreferences` → `LanguageResolver`, backend profile) — they are different stores; don't
+  wire the content row to the interface store.
+- **2026-07-05 (`settings-theme-mode`): DataStore allows only one active instance per file per process.**
+  A test that writes through one `DataStore`, cancels its scope, then opens a *second* `DataStore` over the
+  same file to prove persistence will hang/`TimeoutCancellationException` — cancelling the scope doesn't
+  reliably release the file from DataStore's internal `activeFiles` registry within the same JVM. To test
+  cold-start hydration, share ONE `DataStore` instance across two store wrappers and assert the freshly
+  constructed wrapper's `stateIn` reads the already-persisted value. That's the real unit under test
+  (the wrapper's hydration), not androidx's file persistence. Also: back a DataStore-backed `StateFlow`
+  with `stateIn(scope, SharingStarted.Eagerly, default)` so cold start has no flash of the default before
+  the persisted value loads; decode the stored token through a pure codec that maps garbage → the safe
+  default so a corrupt/legacy value can never brick the surface.
+- **2026-07-05 (`edit-profile-optimistic`): outbox kinds can be pre-declared but wired only partway.**
+  `OutboxKind.UPDATE_PROFILE` already existed with a lane (`OutboxLanes.PROFILE`, in `sharedDrainLanes`)
+  but no `OutboxFlushWorker` sender and no `OutboxCoalescer` rule — an enqueued row would drain, find no
+  sender, and `markExhausted("No sender registered…")`. When a slice "just needs an outbox mutation," grep
+  `buildSenders()` + `OutboxCoalescer.decide` for the kind first; a lane assignment alone is not a live path.
+- **2026-07-05: PATCH omit-null is the optimistic-merge contract.** kotlinx serialization omits null fields
+  (`encodeDefaults=false`), so the gateway `PATCH /users/me` never receives a null field → it's "leave
+  unchanged," not "clear." The optimistic local merge (`ProfileEditApply`) must use the exact same rule
+  (null → keep existing, non-null → overwrite) or the optimistic paint and the server result diverge. This
+  also means a blank editor field must degrade to `null` in the request builder (a blank edit = no-op),
+  never an empty string (which would clear the field server-side).
+- **2026-07-05: guard editor buffers against background state emissions.** The own-profile VM collects
+  `SessionRepository.currentUser`; naively re-seeding the editable buffers on every emission clobbers a
+  user's in-flight typing when a background `refresh()` fires. Fix: only re-seed the buffers when
+  `!isEditing`; while editing, advance only the read-only `user` reference.
+
 ## Environment
 - **The Gradle wrapper's 8.11.1 distribution zip is blocked in the web container (403 from
   github.com/gradle releases via the agent proxy).** `./gradlew` / `./apps/android/meeshy.sh check`
@@ -214,6 +307,13 @@ Append-only log of gotchas and decisions that save time next run.
   is an **infix member of `MockKStubScope`** (the receiver `coEvery {…}` returns) — do **not**
   `import io.mockk.coAnswers` (there is no such top-level symbol; it fails to resolve). Used in
   `contacts-friends-room-cache`.
+- **A `relaxed = true` MockK returns a NON-null fabricated instance even for a `T?` return type**
+  (e.g. `suspend fun cachedStats(id): UserStats?` → a mock `UserStats`, not `null`). (2026-07-05, slice
+  `profile-stats-room-cache`.) This silently defeats a "cache is cold → paints nothing" assumption: the
+  relaxed cache mock hands back data, so a network-failure test that expected an empty state suddenly sees
+  a painted one and fails. When a test needs a **cold** collaborator, stub it explicitly —
+  `coEvery { cache.cachedStats(any()) } returns null` (a small `coldStatsCache()` factory) — rather than
+  trusting `relaxed` to yield null. Only trust `relaxed` for values you don't assert on.
 - **Dagger `@Inject constructor` ignores Kotlin default args:** a param like
   `clock: CacheClock = SystemCacheClock` still demands a binding and there is none for
   `CacheClock`. For `@Singleton` repos that need `now`, call `SystemCacheClock.nowMillis()`
@@ -1066,3 +1166,18 @@ Append-only log of gotchas and decisions that save time next run.
   are allowed, so **do NOT pass `--offline`** (the AGP plugin marker isn't pre-cached → resolution
   fails). `meeshy.sh` calls `./gradlew`, so invoke `gradle` directly for `assembleDebug`/
   `testDebugUnitTest` until a full wrapper dist can be primed.
+
+## 2026-07-05 — durable-preference codec: record-token (JSON) vs enum-token variant
+- The theme/language stores persist a **single enum token** with a pure `when`-based codec. The
+  notification block (`settings-notification-prefs`) persists a **whole record**
+  (`UserNotificationPreferences`, 30+ fields), so the codec round-trips as **JSON**, not an enum
+  string. Kept the same corruption-proof contract: `notificationPreferencesFromStorage(raw)` wraps
+  `decodeFromString` in `runCatching` → blank/absent/malformed/wrong-shape all degrade to
+  `UserNotificationPreferences()` defaults; `ignoreUnknownKeys` drops legacy fields; `encodeDefaults`
+  makes every field survive the round-trip. Same `:core:model` purity (private `Json` instance,
+  precedent `CallSignalMapper`) + `:sdk-core` DataStore store + `stateIn(Eagerly)` hydration pattern.
+- **ViewModel intent shape for a multi-field record:** don't add 30 setters. One private
+  `updateNotifications { copy(field = value) }` read-modify-writes the whole block from
+  `store.preferences.value`, so a single toggle never clobbers the others (tested by the
+  successive-toggles-compose case). Screen: push is the **master** — sub-toggles `enabled = pushEnabled`
+  so a coherent parent/child relationship, no dead ends.

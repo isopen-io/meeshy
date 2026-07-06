@@ -4,7 +4,53 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Contacts / outbox hardening) — slice `outbox-lane-map-ssot` ✅
+## This loop (Phase: Settings §L) — slice `settings-regional-content-language` ✅
+**Regional (secondary content) language preference** — the last no-op Settings language row is now live. A
+Prisme *content* preference (resolved via `LanguageResolver`, stored on the backend profile
+`User.regionalLanguage`), NOT the device-local UI locale. Pure `:feature:settings`
+`RegionalLanguageSelection.build(regionalCode, systemCode, query)` SSOT (options = full
+`LanguageData.allLanguages`; primary/system language hidden unless it is the stored choice;
+trimmed/case-insensitive marking + label lookup + name/nativeName/code search; empty query → all; unknown
+code → no label, no crash). Wiring reuses `edit-profile-optimistic` — **no new store**:
+`SettingsViewModel.setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(
+UpdateProfileRequest(regionalLanguage=…))` (optimistic session repaint + durable `UPDATE_PROFILE` + wake
+worker on real `cmid`) + UI-only `setRegionalLanguageQuery`; `SettingsScreen` searchable flag+native-name
+dialog (EN/FR/ES/PT). +24 tests, `assembleDebug`+`testDebugUnitTest` green, diff = `apps/android` only.
+Next: the worker drain-list Robolectric test (PROGRESS.md "Next" #5).
+
+## Prior loop (Phase: Settings §L) — slice `settings-notification-prefs-sync` ✅
+**Offline-queued notification-preference backend sync** — wires the dead `OutboxKind.UPDATE_SETTINGS`/
+`OutboxLanes.SETTINGS` end-to-end (mirrors `edit-profile-optimistic`). Pure `:core:model`
+`NotificationPreferenceSyncBody.from(prefs)` (gateway `PATCH /me/preferences/notification` contract SSOT — all
+30 fields, drops `extras`, `dndDays` as lowercase tokens); `core/network` `PreferencesApi`; `:sdk-core`
+`NotificationPreferencesSyncRepository.enqueueSync` (session-gated, no optimistic flip — store is truth);
+`OutboxCoalescer` `UPDATE_SETTINGS` latest-snapshot rule + `OutboxFlushWorker` sender; `SettingsViewModel`
+local-first-then-sync funnel (persist → enqueue → wake worker on real `cmid`). +15 tests, `meeshy.sh check`
+green, diff = `apps/android` only.
+
+## Prior loop (Phase: Settings §L) — slice `settings-interface-language` ✅
+**Persisted interface (UI chrome) language** — mirrors the theme slice one step further. Pure `:core:model`
+`AppLanguage` SSOT (`supportedCodes` from `LanguageData.interfaceLanguages` fr/en/es/ar; `fromStorage`/
+`storageValue` codec + `resolveInterfaceLocaleTag`; `"system"`/blank/absent/unsupported → `null` = follow
+device). Durable DataStore-backed `InterfaceLanguageStore` (`:sdk-core`: `InMemoryInterfaceLanguageStore` +
+`DataStoreInterfaceLanguageStore`, hydrates on cold start via `stateIn(Eagerly)`, `@Singleton` in `SdkModule`).
+`SettingsViewModel` `setInterfaceLanguage` intent + `SettingsScreen` display-language dialog picker (System +
+flags/native names, EN/FR/ES/PT); `MainActivity` re-localises the whole Compose tree live via `LanguageViewModel`
++ a `createConfigurationContext` provider (minSdk-26 safe, no AppCompat). Regional-language row left no-op on
+purpose (Prisme content-preference, not app locale). +32 tests (`AppLanguageTest` 18, `InterfaceLanguageStoreTest`
+9, `SettingsViewModelLanguageTest` 5). Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle
+8.14.3). Diff = `apps/android` only. See PROGRESS.md run log.
+
+### Next
+1. **Notification-preference toggles** (§L) — back the `settings_push_notifications` switch (today ephemeral
+   `remember` state) with the local-first user-preference store; `UserNotificationPreferences` already exists.
+   Same pure-codec + DataStore-store + ViewModel-intent shape.
+2. **Regional (content) language preference** (§L) — the still-no-op `settings_regional_language` row; wire it
+   through the Prisme *content*-preference / profile path (`LanguageResolver`, optimistic+offline), NOT the
+   interface `InterfaceLanguageStore`.
+3. Or the tracked **worker drain-list Robolectric test**, or pivot back to **Calls §H** platform-glue.
+
+## Prior loop (Phase: Contacts / outbox hardening) — slice `outbox-lane-map-ssot` ✅
 Structural close of the **lane-in-drain-list gotcha** (NOTES 2026-07-04). The `OutboxFlushWorker`
 kept a hand-maintained `listOf(...)` of shared lanes to drain, disjoint from the `buildSenders()`
 kind→sender registry — a kind could have a sender yet be stranded off the drain list (the BLOCK/FRIEND

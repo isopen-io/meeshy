@@ -2,6 +2,7 @@ package me.meeshy.app.profile
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,10 +20,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,11 +42,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
@@ -53,6 +62,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.profile.R
+import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshySpacing
@@ -156,6 +166,22 @@ fun ProfileScreen(
 
             if (state.isEditing) {
                 OutlinedTextField(
+                    value = state.firstName,
+                    onValueChange = viewModel::onFirstNameChange,
+                    label = { Text(stringResource(R.string.profile_first_name_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = state.lastName,
+                    onValueChange = viewModel::onLastNameChange,
+                    label = { Text(stringResource(R.string.profile_last_name_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
                     value = state.displayName,
                     onValueChange = viewModel::onDisplayNameChange,
                     label = { Text(stringResource(R.string.profile_display_name_label)) },
@@ -170,6 +196,21 @@ fun ProfileScreen(
                     minLines = 3,
                     maxLines = 5,
                     modifier = Modifier.fillMaxWidth(),
+                )
+                ContentLanguageField(
+                    label = stringResource(R.string.profile_system_language_label),
+                    selectedCode = state.systemLanguage,
+                    onSelect = viewModel::onSystemLanguageChange,
+                )
+                ContentLanguageField(
+                    label = stringResource(R.string.profile_regional_language_label),
+                    selectedCode = state.regionalLanguage,
+                    onSelect = viewModel::onRegionalLanguageChange,
+                )
+                ContentLanguageField(
+                    label = stringResource(R.string.profile_custom_language_label),
+                    selectedCode = state.customDestinationLanguage,
+                    onSelect = viewModel::onCustomDestinationLanguageChange,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -237,6 +278,7 @@ fun ProfileScreen(
                 }
                 header?.let { ProfileDetailsSection(it) }
                 state.stats?.let { ProfileStatsSection(it) }
+                state.timeline?.let { ProfileTimelineSection(it) }
             }
         }
     }
@@ -294,6 +336,99 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
             }
             stats.badges.forEach { AchievementBadgeView(it) }
         }
+    }
+}
+
+/** The read-only 30-day activity sparkline — accent-coherent line + area chart. */
+@Composable
+private fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
+    if (timeline.bars.isEmpty()) return
+    val accent = MaterialTheme.colorScheme.primary
+    Spacer(Modifier.height(MeeshySpacing.md))
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.profile_activity_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.profile_activity_average, timeline.averagePerDay),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (timeline.hasActivity) {
+            ActivitySparkline(
+                bars = timeline.bars,
+                color = accent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp),
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.profile_activity_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * A fixed-height sparkline over the per-day normalized activity. Draws a subtle
+ * top-to-bottom area fill under an accent line. Pure rendering — every decision
+ * (normalization, ordering, activity gating) is made upstream in
+ * [StatsTimelineBuilder], so this Composable only maps `0f..1f` heights to pixels.
+ */
+@Composable
+private fun ActivitySparkline(
+    bars: List<TimelineBar>,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val count = bars.size
+        val stepX = if (count > 1) size.width / (count - 1) else 0f
+        val usableHeight = size.height - 4.dp.toPx()
+
+        fun pointAt(index: Int): Offset {
+            val x = if (count > 1) stepX * index else size.width / 2f
+            val y = 2.dp.toPx() + usableHeight * (1f - bars[index].normalized)
+            return Offset(x, y)
+        }
+
+        val linePath = Path().apply {
+            moveTo(pointAt(0).x, pointAt(0).y)
+            for (i in 1 until count) lineTo(pointAt(i).x, pointAt(i).y)
+        }
+        val areaPath = Path().apply {
+            addPath(linePath)
+            lineTo(pointAt(count - 1).x, size.height)
+            lineTo(pointAt(0).x, size.height)
+            close()
+        }
+
+        drawPath(
+            path = areaPath,
+            brush = Brush.verticalGradient(
+                colors = listOf(color.copy(alpha = 0.28f), color.copy(alpha = 0f)),
+            ),
+        )
+        drawPath(
+            path = linePath,
+            color = color,
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
+        )
     }
 }
 
@@ -446,5 +581,53 @@ private fun ProfileCompletionRing(
             size = arcSize,
             style = stroke,
         )
+    }
+}
+
+/**
+ * A content-language slot in the edit form. Renders the current selection as a
+ * flag + name (via the `LanguageData` SSOT) in a read-only field that opens a
+ * dropdown of every supported language; an unset slot shows the empty label.
+ * The selected code is reported back through [onSelect] — the ViewModel owns the
+ * buffer, keeping this composable a stateless projection of its argument.
+ */
+@Composable
+private fun ContentLanguageField(
+    label: String,
+    selectedCode: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = LanguageData.info(selectedCode)
+    val display = selected?.let { "${it.flag} ${it.name}" }
+        ?: stringResource(R.string.profile_language_unset)
+    Box(modifier = modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = display,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        // Transparent overlay so a tap anywhere on the field opens the menu — a
+        // read-only OutlinedTextField does not emit clicks on its own.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clickable { expanded = true },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LanguageData.allLanguages.forEach { lang ->
+                DropdownMenuItem(
+                    text = { Text("${lang.flag} ${lang.name}") },
+                    onClick = {
+                        onSelect(lang.code)
+                        expanded = false
+                    },
+                )
+            }
+        }
     }
 }

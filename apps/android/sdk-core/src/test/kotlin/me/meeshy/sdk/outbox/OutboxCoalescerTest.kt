@@ -168,4 +168,59 @@ class OutboxCoalescerTest {
         assertThat(OutboxCoalescer.decide(toU2, listOf(toU1)))
             .isEqualTo(CoalesceDecision.Enqueue(toU2))
     }
+
+    @Test
+    fun `a first profile edit is enqueued`() {
+        val edit = row("p1", OutboxKind.UPDATE_PROFILE, "me")
+
+        assertThat(OutboxCoalescer.decide(edit, emptyList()))
+            .isEqualTo(CoalesceDecision.Enqueue(edit))
+    }
+
+    @Test
+    fun `a repeated profile edit keeps only the latest snapshot`() {
+        val first = row("p1", OutboxKind.UPDATE_PROFILE, "me")
+        val second = row("p2", OutboxKind.UPDATE_PROFILE, "me")
+
+        // Each edit carries the full PATCH body — the newest subsumes the pending one.
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("p1"), second))
+    }
+
+    @Test
+    fun `a profile edit for a different user id is not coalesced`() {
+        val mine = row("p1", OutboxKind.UPDATE_PROFILE, "me")
+        val theirs = row("p2", OutboxKind.UPDATE_PROFILE, "someone-else")
+
+        assertThat(OutboxCoalescer.decide(theirs, listOf(mine)))
+            .isEqualTo(CoalesceDecision.Enqueue(theirs))
+    }
+
+    @Test
+    fun `a first settings update is enqueued`() {
+        val update = row("s1", OutboxKind.UPDATE_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(update, emptyList()))
+            .isEqualTo(CoalesceDecision.Enqueue(update))
+    }
+
+    @Test
+    fun `a repeated settings update keeps only the latest snapshot`() {
+        val first = row("s1", OutboxKind.UPDATE_SETTINGS, "me")
+        val second = row("s2", OutboxKind.UPDATE_SETTINGS, "me")
+
+        // Each settings write carries the full preference snapshot — the newest
+        // subsumes the pending one so an offline burst of toggles collapses to one PATCH.
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("s1"), second))
+    }
+
+    @Test
+    fun `a settings update for a different user id is not coalesced`() {
+        val mine = row("s1", OutboxKind.UPDATE_SETTINGS, "me")
+        val theirs = row("s2", OutboxKind.UPDATE_SETTINGS, "someone-else")
+
+        assertThat(OutboxCoalescer.decide(theirs, listOf(mine)))
+            .isEqualTo(CoalesceDecision.Enqueue(theirs))
+    }
 }

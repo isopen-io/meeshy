@@ -337,6 +337,7 @@ export class MeeshySocketIOManager {
       privacyPreferencesService: this.privacyPreferencesService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
+      userSockets: this.userSockets,
     });
 
     this.reactionHandler = new ReactionHandler({
@@ -983,11 +984,14 @@ export class MeeshySocketIOManager {
           // flicker when a user has multiple active sessions.
           const allUserSockets = this.userSockets.get(disconnectingUserId) ?? new Set<string>();
           const otherSocketIds = new Set([...allUserSockets].filter(sid => sid !== socket.id));
-          this.statusHandler.handleSocketDisconnecting(
+          void this.statusHandler.handleSocketDisconnecting(
             socket.id,
-            (room, event, data) => {
+            (room, event, data, exceptSocketIds) => {
               // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
-              this.io.to(room).emit(event as keyof ServerToClientEvents, data as any);
+              const emitter = exceptSocketIds && exceptSocketIds.length > 0
+                ? this.io.to(room).except(exceptSocketIds)
+                : this.io.to(room);
+              emitter.emit(event as keyof ServerToClientEvents, data as any);
             },
             otherSocketIds.size > 0 ? otherSocketIds : undefined
           );

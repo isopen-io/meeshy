@@ -246,7 +246,7 @@ final class DependencyContainer {
                 do {
                     try fileManager.removeItem(atPath: path)
                 } catch {
-                    containerLogger.error("Failed to delete corrupt DB after failed quarantine: \(error.localizedDescription, privacy: .public)")
+                    containerLogger.error("Failed to delete corrupt DB at \(path, privacy: .public) after quarantine failure: \(error.localizedDescription, privacy: .public)")
                 }
             }
         }

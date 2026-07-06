@@ -629,7 +629,8 @@ extension ConversationListView {
         switch ChipDropResolver.action(
             droppedOn: hovered,
             isPinned: conversation.userState.isPinned,
-            currentSectionId: conversation.userState.sectionId ?? ""
+            currentSectionId: conversation.userState.sectionId ?? "",
+            isAutoScrolling: chipAutoScrollDriver.isActivelyScrolling
         ) {
         case .none:
             return
@@ -657,7 +658,20 @@ enum ChipDropAction: Equatable {
 }
 
 enum ChipDropResolver {
-    static func action(droppedOn sectionId: String?, isPinned: Bool, currentSectionId: String) -> ChipDropAction {
+    /// `isAutoScrolling` : un header qui DÉFILE sous le doigt stationnaire
+    /// (auto-scroll de bord en mouvement à l'instant du relâchement) ne doit
+    /// pas capter le drop — à 415-900 pt/s la cible attrapée est une loterie
+    /// et le relâchement en plein défilement est une intention d'abandon
+    /// (épinglage/déplacement accidentels vécus en test 2026-07-05). Au
+    /// CLAMP (liste en butée, headers au repos), le flag retombe et les
+    /// drops en zone de bord restent légitimes.
+    static func action(
+        droppedOn sectionId: String?,
+        isPinned: Bool,
+        currentSectionId: String,
+        isAutoScrolling: Bool = false
+    ) -> ChipDropAction {
+        guard !isAutoScrolling else { return .none }
         guard let sectionId else { return .none }
         if sectionId == "pinned" { return isPinned ? .none : .pin }
         let targetId = sectionId == "other" ? "" : sectionId
@@ -720,6 +734,11 @@ final class ChipAutoScrollDriver {
     /// closure capture la View : le garder à demeure lierait le cycle
     /// State-box → driver → closure → View → State-box).
     var onScrollTick: ((CGPoint) -> Void)?
+    /// true tant que le dernier tick a RÉELLEMENT déplacé l'offset — lu par
+    /// `handleChipDrop` pour rendre le drop inerte pendant le défilement
+    /// (voir `ChipDropResolver.action(isAutoScrolling:)`). Retombe à false
+    /// dès que la liste est en butée ou le doigt hors zone.
+    private(set) var isActivelyScrolling = false
 
     private var timer: Timer?
     private var fingerLocation: CGPoint = .zero
@@ -739,6 +758,7 @@ final class ChipAutoScrollDriver {
         timer?.invalidate()
         timer = nil
         onScrollTick = nil
+        isActivelyScrolling = false
     }
 
     private func tick() {
@@ -749,7 +769,10 @@ final class ChipAutoScrollDriver {
             viewportMinY: viewport.minY,
             viewportMaxY: viewport.maxY
         )
-        guard speed != 0 else { return }
+        guard speed != 0 else {
+            isActivelyScrolling = false
+            return
+        }
         let clamped = ChipAutoScroll.clampedOffset(
             scrollView.contentOffset.y + speed / 60.0,
             contentHeight: scrollView.contentSize.height,
@@ -757,7 +780,11 @@ final class ChipAutoScrollDriver {
             topInset: scrollView.adjustedContentInset.top,
             bottomInset: scrollView.adjustedContentInset.bottom
         )
-        guard clamped != scrollView.contentOffset.y else { return }
+        guard clamped != scrollView.contentOffset.y else {
+            isActivelyScrolling = false
+            return
+        }
+        isActivelyScrolling = true
         scrollView.contentOffset.y = clamped
         onScrollTick?(fingerLocation)
     }
@@ -796,7 +823,12 @@ struct ChipAutoScrollGrabber: UIViewRepresentable {
 // monolithic type was the root cause of a Swift type-metadata instantiation
 // crash at launch on low-memory devices (iPhone XR / iOS 17.6).
 struct ConversationListHeaderOverlay: View {
-    let scrollOffset: CGFloat
+    /// SEUL abonné au relay d'offset : chaque tick de scroll re-rend ce
+    /// header (voulu — il collapse en suivant le doigt) et RIEN d'autre.
+    /// L'ancien `let scrollOffset: CGFloat` forçait le parent à porter
+    /// l'offset dans un @State et ré-exécutait tout son body (~99 rows
+    /// reconstruites + diff Equatable) à ~120 Hz pendant le scroll.
+    @ObservedObject var scrollRelay: ScrollOffsetRelay
     let iPadFeedAction: (() -> Void)?
     let iPadNotificationCount: Int
     let onNotificationsTap: (() -> Void)?
@@ -804,15 +836,16 @@ struct ConversationListHeaderOverlay: View {
     let onNewConversation: (() -> Void)?
     @Binding var showShareLinkSheet: Bool
     /// Compact story trail injected into the header's accessory slot (rendered
-    /// below the title/actions bar, inside the same header surface).
-    var accessory: (() -> AnyView)? = nil
+    /// below the title/actions bar, inside the same header surface). Receives
+    /// the live scroll offset from this header's own render pass.
+    var accessory: ((CGFloat) -> AnyView)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         CollapsibleHeader(
             title: "Meeshy Chats",
-            scrollOffset: scrollOffset,
+            scrollOffset: scrollRelay.offset,
             showBackButton: false,
             titleColor: theme.textPrimary,
             backArrowColor: MeeshyColors.indigo500,
@@ -920,7 +953,13 @@ struct ConversationListHeaderOverlay: View {
                     }
                 }
             },
-            accessory: accessory
+            // Adapte la closure paramétrée à la slot sans-argument du
+            // CollapsibleHeader : l'offset capturé ici est celui du render
+            // courant du header (seul abonné au relay), donc toujours frais.
+            accessory: accessory.map { build in
+                let offset = scrollRelay.offset
+                return { build(offset) }
+            }
         )
     }
 }

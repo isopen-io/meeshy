@@ -2,7 +2,147 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+
+> On 2026-07-06 the **first/last-name profile-edit fields** landed (slice `edit-profile-name-fields`, §K):
+> the `firstName`/`lastName` legs of the already-name-aware `ProfileEditApply`/`UpdateProfileRequest` are now
+> reachable from the editor UI (before this, only displayName/bio/languages were). `ProfileEditRequestBuilder.build`
+> gained `firstName`/`lastName` buffers with the same trim + blank→null degrade (a blank name is a `PATCH`
+> omit-null server no-op, never an accidental clear); `ProfileViewModel` seeds/reads them via two new
+> `ProfileUiState` buffers + `onFirstNameChange`/`onLastNameChange` intents, with `withBuffersFrom` mapping a
+> user that has no names to *blank* buffers (never the literal "null"); `ProfileScreen` renders First name /
+> Last name `OutlinedTextField`s (Words capitalization) above Display name. Everything else — the optimistic
+> republish, the durable `UPDATE_PROFILE` outbox row, the worker-woken-only-on-`cmid`, the mid-edit
+> buffer-clobber guard — is reused untouched; **no new store, no new outbox kind, no coalescer change**.
+> +6 tests (`ProfileEditRequestBuilderTest` +3 first/last trim·blank→null·carry-through, `ProfileViewModelEditTest`
+> +3 seed·blank-when-nameless·intents; the existing save-enqueue and cancel-restore cases were hardened to
+> assert the name legs too, not just displayName). `assembleDebug` + full `testDebugUnitTest` green (system
+> Gradle 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API; SDK-purity/SSOT/
+> optimistic-UDF/instant-app honoured). Only avatar/banner upload now remains in the §K profile-edit box.
+
+> On 2026-07-06 the **regional (secondary content) language preference** landed (slice
+> `settings-regional-content-language`, §L) — the last no-op Settings language row is now live. Unlike
+> the interface language (device-local UI chrome), the regional language is a **Prisme content preference**
+> resolved via `LanguageResolver`, stored on the backend profile (`User.regionalLanguage`). Pure core:
+> `:feature:settings` `RegionalLanguageSelection.build(regionalCode, systemCode, query) →
+> RegionalLanguagePresentation` — the picker SSOT. Options are the full content-language set
+> (`LanguageData.allLanguages`, NOT the 4 interface languages); the current choice is marked
+> (trimmed/case-insensitive), with a robust case-insensitive `selectedLabel` lookup (blank/absent/unknown →
+> no label, no crash); the **primary (system) language is hidden** so a user can never pick their primary as
+> their secondary — *unless* it is the stored choice (a `regional == system` data inconsistency never hides
+> the active selection); a trimmed case-insensitive search spans English name / native name / code
+> (empty/whitespace → every option; no match → empty list). Wiring reuses the `edit-profile-optimistic`
+> machinery with **no new store**: `SettingsViewModel.setRegionalLanguage(code)` →
+> `UserRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage=code))` — the session repaints
+> instantly (optimistic), a durable `UPDATE_PROFILE` row survives offline, and the flush worker is woken only
+> on a real `cmid` (a sessionless/superseded enqueue is inert). A UI-only `setRegionalLanguageQuery` drives
+> the search and never writes. `SettingsScreen` renders a searchable flag+native-name Material3 dialog
+> (mirrors the notification-type search) with the current native name as the row detail (EN/FR/ES/PT).
+> +24 tests (18 `RegionalLanguageSelectionTest` pure-core, 6 `SettingsViewModelRegionalLanguageTest`).
+> `:app:assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses iOS, whose
+> regional-language write is online-only. Reviewer: PASS (diff apps/android only; behaviour-through-public-API;
+> SDK-purity/SSOT/optimistic-UDF/instant-app honoured).
+
+> On 2026-07-06 the **offline-queued notification-preference backend sync** landed (slice
+> `settings-notification-prefs-sync`, §L): the previously-declared-but-dead `OutboxKind.UPDATE_SETTINGS` /
+> `OutboxLanes.SETTINGS` are now wired end-to-end so a device-local notification toggle debounce-syncs to the
+> gateway (`PATCH /me/preferences/notification`), offline-durable, mirroring `edit-profile-optimistic`. Pure
+> core: `:core:model` `NotificationPreferenceSyncBody.from(prefs)` — the gateway-contract SSOT projecting the
+> block into the wire body (all 30 `NotificationPreferenceSchema` fields, the local-only `extras` map dropped,
+> `dndDays` riding as the lowercase enum tokens). Seams: `core/network` `PreferencesApi.updateNotification`
+> (idempotent PATCH → `ApiResponse<Unit>`, the device store stays UI-authoritative so the response is ignored);
+> `:sdk-core` `NotificationPreferencesSyncRepository.enqueueSync` (session-gated durable enqueue keyed by own
+> user id — inert `null` with no session / blank id, no optimistic session flip since the store already holds
+> the value); an `OutboxCoalescer` `UPDATE_SETTINGS` latest-snapshot rule (an offline toggle burst collapses to
+> one PATCH) + an `OutboxFlushWorker` `UPDATE_SETTINGS` sender (bad payload → permanent, network fail →
+> transient/retry; no rollback on exhaust — the PATCH is idempotent and the local store is truth). Wiring:
+> `SettingsViewModel.updateNotifications` — the single funnel every persisted toggle flows through — now paints
+> the local store instantly (UI SSOT) **then** enqueues the sync and wakes the flush worker only on a real
+> `cmid`; the UI-only search query never syncs. +15 tests (4 body, +3 coalescer, 4 repo, 4 VM). `assembleDebug`
+> + full `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses iOS, whose preference write is online-only.
+> Reviewer: PASS (diff apps/android only; behaviour-through-public-API; SDK-purity/SSOT/instant-app honoured).
+
+> On 2026-07-05 the **persisted interface (UI chrome) language** landed (slice `settings-interface-language`,
+> §L — mirrors the theme slice one step further): the pure `:core:model` `AppLanguage` helpers are the SSOT —
+> `supportedCodes`/`supportedLanguages` derived from `LanguageData.interfaceLanguages` (fr/en/es/ar),
+> `fromStorage`/`storageValue` (trim/case-insensitive codec; `"system"` token, blank, absent, unsupported →
+> `null` = follow device), and `resolveInterfaceLocaleTag` (the effective tag to force, or `null` to leave the
+> device locale). Durable seam: DataStore-backed `InterfaceLanguageStore` (`:sdk-core` — `InMemoryInterfaceLanguageStore`
+> for tests + `DataStoreInterfaceLanguageStore` decoding through the pure codec, hydrating on cold start via
+> `stateIn(Eagerly)`, `@Singleton` in `SdkModule` over `preferencesDataStoreFile("meeshy_language")`). Wiring:
+> `SettingsViewModel` mirrors the store into `SettingsUiState.interfaceLanguage` + a `setInterfaceLanguage`
+> intent; `SettingsScreen`'s display-language row now shows the current choice and opens a Material3 dialog
+> (System + flags/native names, EN/FR/ES/PT strings); `MainActivity` re-localises the *whole Compose tree* live
+> via a `LanguageViewModel` + a `LocalizedContent` wrapper that provides a `createConfigurationContext`-localised
+> `LocalContext`/`LocalConfiguration` (minSdk-26 safe, no AppCompat dependency, works on every supported API).
+> The **regional** language row stays a no-op on purpose — it is a Prisme *content*-preference (backend profile /
+> content store), not the app UI locale. +32 tests (`AppLanguageTest` 18, `InterfaceLanguageStoreTest` 9,
+> `SettingsViewModelLanguageTest` 5). `assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3).
+> Reviewer: PASS (diff apps/android only; behaviour-through-public-API; SDK-purity/SSOT/UDF/instant-app honoured).
+
+> On 2026-07-05 the **persisted light/dark/system theme** landed (slice `settings-theme-mode`, §L — the
+> first Settings §L slice, opening the area): the pure `:core:model` `AppTheme` helpers are the SSOT —
+> `AppThemeMode.resolveDarkMode(systemInDark)` (LIGHT→false, DARK→true, AUTO→system), `storageValue`
+> (stable `@SerialName` token), `next()` (tap-to-cycle AUTO→LIGHT→DARK→wrap), and `appThemeModeFromStorage`
+> (trim/case-insensitive, `"system"` alias, corrupt/blank/unknown → AUTO so a legacy value never breaks the
+> appearance). The durable seam is a DataStore-backed `ThemeStore` (`:sdk-core` — `InMemoryThemeStore` for
+> tests + `DataStoreThemeStore` that decodes through the pure codec, hydrates the persisted choice on cold
+> start via `stateIn(Eagerly)` so there's no flash of the wrong theme, provided as a `@Singleton` in
+> `SdkModule` over `preferencesDataStoreFile("meeshy_theme")`). Wiring: `SettingsViewModel` mirrors the store
+> into `SettingsUiState.themeMode` and drives it through `setThemeMode`/`cycleTheme`; `SettingsScreen` renders
+> an Appearance section with a Material3 segmented System/Light/Dark picker (EN/FR/ES/PT); `MainActivity`
+> re-themes the whole app live via a `ThemeViewModel` that folds `resolveDarkMode(isSystemInDarkTheme())` into
+> `MeeshyTheme(darkTheme=…)`. No dead ends — every derived value has a live consumer. +23 tests
+> (`AppThemeTest` 12, `ThemeStoreTest` 6, `SettingsViewModelThemeTest` 5). `assembleDebug` + full
+> `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses iOS whose theme is a plain enum toggle — here the
+> codec is corruption-proof and the store is a reusable durable building block. Reviewer: PASS (diff
+> apps/android only; behaviour-through-public-API tests; SDK-purity/UDF/instant-app honoured).
+
+> On 2026-07-05 the **optimistic + offline profile edit** landed (slice `edit-profile-optimistic`, §K): the
+> already-declared `OutboxKind.UPDATE_PROFILE` (lane `PROFILE`, drained but with no sender) is now wired
+> end-to-end. Pure cores: `:core:model` `ProfileEditApply.apply(user, request)` — the edit-merge SSOT with
+> `PATCH /users/me` omit-null parity (null field = absent → unchanged, non-null overwrites) so the optimistic
+> paint equals the server result; `:feature:profile` `ProfileEditRequestBuilder.build(...)` — trims the
+> editor buffers and degrades blank→null (a blank edit is a server no-op, never an accidental clear); and the
+> `OutboxCoalescer` `UPDATE_PROFILE` rule (latest full-snapshot wins, keyed by the own user id). Wiring:
+> `SessionRepository.applyProfileEdit` (optimistic republish of the merged identity, inert with no session),
+> `UserRepository.enqueueProfileEdit` (optimistic flip + durable profile-lane enqueue, `null`/blank session
+> inert — mirrors `BlockRepository.setBlockedDurably`), an `OutboxFlushWorker` `UPDATE_PROFILE` sender
+> (decode → `updateProfile` → `adopt(server user)`) + an `onExhausted` `sessionRepository.refresh()` revert to
+> server truth. `ProfileViewModel` carries the three content-language buffers, saves through the
+> optimistic/offline path (editor closes instantly, worker woken only on a real `cmid`, a local-enqueue
+> failure reopens the editor + surfaces the error), and guards the editor buffers from a background session
+> emission mid-edit; `ProfileScreen` renders three `LanguageData`-backed content-language dropdowns
+> (flag + name) in the edit form (EN/FR/ES/PT). +31 tests (`ProfileEditApplyTest` 7, `ProfileEditRequestBuilderTest`
+> 6, `OutboxCoalescerTest` +3, `SessionRepositoryTest` +2, `UserRepositoryTest` 4, `ProfileViewModelEditTest` 9).
+> `assembleDebug` + `testDebugUnitTest` (full) green. Surpasses iOS, whose profile edit is online-only.
+> Reviewer: PASS (diff apps/android only; behaviour-through-public-API tests; optimistic/UDF/SDK-purity honoured).
+
+> On 2026-07-05 the **profile stats/timeline Room cache** landed (slice `profile-stats-room-cache`, §K): the
+> profile dashboard now paints instantly from Room on cold start / offline, closing the last cache gap in
+> §K (iOS `CacheCoordinator.stats`/`.timeline`). New `:core:database` `ProfileStatsCacheEntity`
+> (`profile_stats_cache`, keyed JSON store) + `ProfileStatsCacheDao` (DB **v9→v10**, destructive fallback) +
+> `DatabaseModule` provider; new `:sdk-core` `ProfileStatsCacheRepository` (stateless Room building block) —
+> `cachedStats(userId)`/`persistStats` (keyed per-user, isolated) and `cachedTimeline()`/`persistTimeline`
+> (me-only constant key). Cold vs synced-empty is carried by **row presence** (absent → `null` cold; present
+> `[]` → `emptyList` synced-empty, so an empty 30-day window never re-reads as cold — no `sync_meta` needed);
+> a payload that fails to decode is a cache **miss** (`null`), never a crash. `ProfileViewModel` rewired
+> cache-first for both surfaces: paint the cached projection immediately, then revalidate over the network and
+> write-through on success (network is truth — it overwrites the cached paint; a failed fetch keeps the cached
+> paint; no write-through on failure). SDK purity kept — the projection SSOT stays in the `:feature:profile`
+> builders, the repo holds no projection logic. +20 tests (11 Robolectric repo, 6 VM cache-first behaviour,
+> +3 existing VM tests hardened to cold-cache). `assembleDebug` + all `testDebugUnitTest` green (system Gradle
+> 8.14.3). Diff = `apps/android` only (5 prod + 4 test + docs).
+
+> On 2026-07-05 the **30-day activity timeline** landed (slice `profile-stats-timeline`, §K): the me-only
+> `UserApi`/`UserRepository` `getUserStatsTimeline(days=30)` (`/users/me/stats/timeline`, `days` clamped to
+> the gateway `7..90` window) feeds the pure `:feature:profile` `StatsTimelineBuilder.build(points) →
+> StatsTimelinePresentation?` (precedent `UserStatsBuilder`) — empty→`null` (nothing to chart), non-empty
+> all-zero→a flat inactive presentation (no divide-by-zero), negative counts floored, peak-normalized
+> `0f..1f` bars, input order preserved (oldest→newest), `DD/MM` labels ported from iOS `shortDate`, plus
+> total/rounded-average/active-days. `ProfileViewModel` fetches it once for the **own** profile only
+> (me-only endpoint), failure-inert; `ProfileScreen` renders an accent-coherent line+area sparkline (Canvas)
+> with an empty-state label (EN/FR/ES/PT). +17 tests. `assembleDebug`+`testDebugUnitTest` green.
 
 > On 2026-07-05 the **stats projection SSOT** landed (slice `profile-stats-presentation`, §K): the pure
 > `:feature:profile` `UserStatsBuilder.build(stats) → UserStatsPresentation` (precedent `ProfileHeaderBuilder`)
@@ -347,15 +487,71 @@ into a tested list, with case-insensitive dup-language collapse; consumed by the
    defensively-reconciled achievement badges + boundary-safe `formatCompactCount`), wired into
    `ProfileViewModel` (fetch-once per resolved user, failure-inert) and rendered as a read-only
    dashboard section in `ProfileScreen`. +35 tests. See run log.
-3. **`profile-stats-timeline`** (next §K pure core) — the 30-day activity timeline: `TimelinePoint`
-   model already exists; add `getUserStatsTimeline(days)` to `UserApi`/`UserRepository` + a pure
-   `StatsTimeline` reducer (bucket/normalize/max-scale for a sparkline) the dashboard chart renders.
-   Consider a durable **Room stats cache** (cache-first cold paint, iOS `CacheCoordinator.stats`) as a
-   sibling follow-up so the dashboard paints instantly.
-4. **`edit-profile-optimistic`** — richer `ProfileViewModel` edit path (content-language selection,
-   optimistic + offline-queued save via the outbox), building on the existing display-name/bio edit.
-5. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
+3. ~~**`profile-stats-timeline`**~~ ✅ shipped 2026-07-05 — see run log. `UserApi`/`UserRepository`
+   `getUserStatsTimeline(days=30)` (me-only) + the pure `StatsTimelineBuilder → StatsTimelinePresentation?`
+   (empty→null, all-zero flat, negative-floor, peak-normalized bars, order-preserved, `DD/MM` labels,
+   total/average/active-days) wired into `ProfileViewModel` (own-profile-only, failure-inert) and rendered
+   as an accent-coherent line+area sparkline in `ProfileScreen`. +17 tests.
+4. ~~**`profile-stats-room-cache`**~~ ✅ shipped 2026-07-05 — the durable **Room stats/timeline cache**
+   (cache-first cold paint, iOS `CacheCoordinator.stats`/`.timeline`). New `:core:database`
+   `ProfileStatsCacheEntity`/`Dao` (DB v9→v10) + `:sdk-core` `ProfileStatsCacheRepository` (per-user stats
+   key + me-only timeline key; cold-vs-synced-empty by row presence; undecodable payload → miss), and
+   `ProfileViewModel` rewired cache-first (paint cached → revalidate → write-through). +20 tests. See run log.
+   This closes the last §K cache gap.
+5. ~~**`edit-profile-optimistic`**~~ ✅ shipped 2026-07-05 — the `UPDATE_PROFILE` outbox kind (already
+   declared, lane `PROFILE`, drained but senderless) wired end-to-end. Pure cores: `ProfileEditApply`
+   (`:core:model` edit-merge SSOT, `PATCH` omit-null parity), `ProfileEditRequestBuilder` (`:feature:profile`
+   trim/blank→null), and the `OutboxCoalescer` `UPDATE_PROFILE` latest-snapshot rule. Wiring:
+   `SessionRepository.applyProfileEdit` (optimistic republish), `UserRepository.enqueueProfileEdit`
+   (optimistic flip + durable enqueue, mirrors `setBlockedDurably`), `OutboxFlushWorker` `UPDATE_PROFILE`
+   sender (`updateProfile` → `adopt`) + `onExhausted` `refresh()` rollback. `ProfileViewModel` gains the three
+   content-language buffers + optimistic/offline save (editor closes instantly, worker woken on a real `cmid`,
+   enqueue-failure reopens the editor) + a mid-edit buffer-clobber guard; `ProfileScreen` renders three
+   `LanguageData` dropdowns. +31 tests. See run log. **First/last-name fields shipped** as
+   `edit-profile-name-fields` (2026-07-06, +6 tests — see run log); only avatar/banner upload now remains.
+6. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
    remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
+
+**Recommended next:** Settings §L theme ✅, interface-language ✅, **notification master toggles ✅** and
+**DND schedule editor ✅** shipped (`settings-theme-mode`, `settings-interface-language`,
+`settings-notification-prefs`, `settings-dnd-schedule`, 2026-07-05 — see run log). The next clean pure-core §L
+slices, in value order:
+1. ~~**DND schedule editor**~~ ✅ shipped 2026-07-05 as `settings-dnd-schedule` — pure `:core:model` `DndWindow`
+   SSOT (`isActive` enable-gate/midnight-wrap/per-day-gating/corrupt-time-safe, `parseMinuteOfDay`/
+   `formatTimeOfDay`/`toggleDay`, `DndDay`↔`DayOfWeek`) + `SettingsViewModel` enable/start/end/toggle-day intents
+   + `SettingsScreen` master toggle + 24h TimePicker rows + Mon→Sun chips + a live "quiet hours active now"
+   status. +32 tests. See run log. Reused the notification store — no new store.
+2. ~~**Per-event notification type toggles**~~ ✅ shipped 2026-07-06 as `settings-notification-type-toggles` —
+   pure `:core:model` `NotificationTypeCatalog` SSOT: 17 per-event types (reply/mention/reaction/conversation,
+   missed-call/voicemail, post-like/comment/repost/story-reaction/comment-reply/comment-like,
+   contact-request/group-invite/member-joined/member-left, system) each with a `get`/`set` lens over the
+   matching `UserNotificationPreferences` boolean; `toggle`/`isEnabled` (edit exactly one, never clobber),
+   `sections(prefs, query, label)` grouping into 5 ordered `NotificationCategory` sections with a locale-aware
+   injected-label case-insensitive/trimmed search that omits empty categories. `SettingsViewModel`
+   `setNotificationTypeEnabled`/`setNotificationTypeQuery`; `SettingsScreen` search field + accent category
+   headers + push-gated per-type switches. +14 tests. See run log. Reused the notification store — no new store.
+3. ~~**Backend sync of notification prefs**~~ ✅ shipped 2026-07-06 as `settings-notification-prefs-sync` —
+   the dead `OutboxKind.UPDATE_SETTINGS`/`OutboxLanes.SETTINGS` wired end-to-end: pure
+   `NotificationPreferenceSyncBody` (gateway `PATCH /me/preferences/notification` contract SSOT, drops `extras`),
+   `PreferencesApi`, session-gated `NotificationPreferencesSyncRepository`, an `UPDATE_SETTINGS` coalescer
+   latest-snapshot rule + `OutboxFlushWorker` sender, and `SettingsViewModel` local-first-then-sync wiring.
+   +15 tests. See run log. Closes the "online-only vs device-local" gap. **Next up (highest value):** #4 regional
+   (content) language preference — the last no-op Settings row.
+4. ~~**Regional (content) language preference**~~ ✅ shipped 2026-07-06 as
+   `settings-regional-content-language` — the last no-op Settings language row is now live. Pure
+   `:feature:settings` `RegionalLanguageSelection.build(regionalCode, systemCode, query)` SSOT (options =
+   full `LanguageData.allLanguages`; primary/system language hidden — you can't pick your primary as your
+   secondary — unless it *is* the stored choice; trimmed case-insensitive selection-marking + label lookup;
+   trimmed case-insensitive search over name/nativeName/code; empty/whitespace query → all; blank/absent/
+   unknown code → no label + no crash). Wired through the existing `edit-profile-optimistic` machinery — NO
+   new store: `SettingsViewModel.setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(
+   UpdateProfileRequest(regionalLanguage=…))` (optimistic session repaint, durable `UPDATE_PROFILE`, worker
+   woken only on a real `cmid`; sessionless/superseded enqueue inert) + a UI-only `setRegionalLanguageQuery`;
+   `SettingsScreen` renders a searchable flag+native-name dialog (mirrors the notification-type search) with
+   the current native name as the row detail (EN/FR/ES/PT). +24 tests (18 pure-core, 6 VM). See run log.
+   Surpasses iOS, whose regional-language write is online-only. **Next up:** #5 the worker drain-list test.
+5. Or the tracked **worker drain-list Robolectric test** (asserts every `OutboxLanes.*` with a registered
+   sender is drained — would have caught the historic BLOCK/FRIEND omission, now also covers `PROFILE`).
 
 ---
 _Historical Contacts/Calls backlog below._
@@ -747,6 +943,240 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-06 — slice `settings-notification-type-toggles` ✅ shipped
+- **Step 0 (housekeeping):** the prior iteration's Android PR **#1517 (`settings-dnd-schedule`)** was still open
+  from the last run — merged it first (`mergeable_state: clean`, diff apps/android-only, reviewer PASS recorded).
+  The only red CI on `main` is the unrelated `Test Python (translator)` job (an apps/android-only diff touches
+  none of the JS/TS/Python stack; the real Android gate is local). Re-synced `origin/main` (now `1fdc4931`) and
+  branched `claude/apps/android/settings-notification-type-toggles` off it.
+- **Why this slice:** the §L "Recommended next" #2 — the `UserNotificationPreferences` block carries ~17
+  per-event booleans (reply/mention/reaction/conversation, missed-call/voicemail, the six social/feed types,
+  the four group/contact types, system) but only push/new-message/sound/vibration + DND were surfaced. This
+  slice exposes the rest as a grouped, searchable section over the existing durable store (no new store).
+- **Pure core (`:core:model` `NotificationTypeCatalog.kt`):** `NotificationType` (17) + `NotificationCategory`
+  (MESSAGES→CALLS→SOCIAL→GROUPS→SYSTEM display order). Each type has a `NotificationTypeDescriptor` carrying its
+  category + a `get`/`set` lens over the matching boolean (the toggle SSOT). `isEnabled`/`toggle` (read-modify-
+  write exactly one field, never clobber the block); `sections(prefs, query, label)` groups matching types into
+  ordered category sections, each item carrying its live enabled state — blank/whitespace query keeps all,
+  otherwise a case-insensitive/trimmed `contains` over the **injected locale-aware label** drops non-matching
+  types and omits emptied categories. Search stays pure: the label fn is injected so no string resources leak
+  into `:core:model`. RED first (`NotificationTypeCatalogTest`, 10: every-type toggle round-trip, no-clobber,
+  full grouping/order, within-category order, enabled-state derivation, blank + whitespace = no filter,
+  case-insensitive match with empty-category omission, no-match → empty, injected-label match).
+- **Wiring (`:feature:settings`):** `SettingsViewModel` gains `notificationTypeQuery` in `UiState`,
+  `setNotificationTypeEnabled(type, enabled)` (through the existing `updateNotifications { NotificationTypeCatalog
+  .toggle(...) }` read-modify-write) and `setNotificationTypeQuery(query)` (view-only, never mutates the block).
+  `SettingsScreen` renders, under the notifications section after DND, a `NotificationTypesEditor`: a titled
+  `OutlinedTextField` search (Search icon), and for each surviving section an accent-primary category header +
+  push-gated per-type `NotificationToggleRow`s (disabled when push is off), with an empty-state label when the
+  query matches nothing. Labels/headers localized EN/FR/ES/PT (22 new strings ×4). `SettingsViewModelNotification
+  TypesTest` (4: enable persists+surfaces, no-clobber of other toggles/top-level, re-enable a default-off type,
+  query updates UI state only without touching the block).
+- **Verification:** `gradle :core:model:testDebugUnitTest :feature:settings:testDebugUnitTest` green, then full
+  `gradle :app:assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (all modules, system Gradle 8.14.3). +14
+  new tests (catalog 10, VM 4). Diff = `apps/android` only (2 new + 6 modified + this doc + feature-parity).
+- **Reviewer gate:** PASS — diff `apps/android` only, no production logic elsewhere; behaviour-through-public-API
+  tests, no tautologies, no floor lowered; SDK purity (pure catalog/lens/grouping in `:core:model`; the "which
+  intent / query-in-state / label lookup" product orchestration in `:feature:settings`), SSOT (one
+  `NotificationTypeCatalog` owns the type↔boolean mapping + grouping, read by the editor and any future
+  notification-gating consumer; `.copy` merge preserves the block), UDF (immutable `StateFlow<UiState>`),
+  instant-app (edits instant + durable via the shipped store), colour/UX coherence (accent-primary category
+  headers, natural search + switch gestures, push-gated toggles, no dead end — empty-state label). No orphan
+  code: every descriptor lens has a live consumer via `toggle`/`sections`. Surpasses iOS, which lists the same
+  toggles without an in-section search filter.
+
+### 2026-07-05 — slice `settings-dnd-schedule` ✅ shipped
+- **Step 0 (housekeeping):** no open Android PR from a prior iteration — the open PRs (#1516/#1515/#1513/
+  #1510/#1498) are all non-Android gateway/web/calls fixes by other sessions. Branched
+  `claude/apps/android/settings-dnd-schedule` off the freshly-fetched `origin/main` (`930f4811`).
+- **Why this slice:** the §L "Recommended next" #1 — the `UserNotificationPreferences` block already carried
+  `dndEnabled`/`dndStartTime`/`dndEndTime`/`dndDays` (persisted losslessly by the shipped codec + store from
+  `settings-notification-prefs`), but nothing exposed them. This slice adds the pure quiet-hours SSOT + the
+  editor, reusing the existing durable seam (no new store).
+- **Pure core (`:core:model` `DndWindow.kt`):** port of iOS `UserNotificationPreferences.isInDoNotDisturbWindow`.
+  `isActive(prefs, dayOfWeek, minuteOfDay)` — enable gate → per-day gating (empty `dndDays` = every day) →
+  parse both `HH:mm` → same-day `[start, end)` **or** midnight-wrap `>= start || < end`; a corrupt time or a
+  gated-out day ⇒ never active (never crashes). `isActive(prefs, LocalDateTime)` convenience derives
+  weekday+minute. `parseMinuteOfDay` (rejects malformed shape / out-of-range → null), `formatTimeOfDay`
+  (range-clamped, zero-padded), `toggleDay` (canonical Mon→Sun order, dedup), `DndDay`↔ISO-`DayOfWeek`
+  mapping. RED first (`DndWindowTest`, 20: parse bounds/trim/malformed/out-of-range, format pad/clamp/
+  round-trip, toggle add/remove/order/dedup, day-mapping round-trip, enable gate, same-day inclusive-start/
+  exclusive-end + degenerate empty window, wrap-around both sides + midday gap, empty-days=every-day + gated-
+  out day, corrupt-time → false, LocalDateTime overload time + day gating).
+- **Wiring (`:feature:settings`):** `SettingsViewModel` gains `setDndEnabled`/`setDndStart(hour,minute)`/
+  `setDndEnd(hour,minute)`/`toggleDndDay(day)` — all through the existing `updateNotifications { copy(...) }`
+  read-modify-write so DND edits never clobber the other toggles; start/end format via `DndWindow.formatTimeOfDay`,
+  day via `DndWindow.toggleDay`. `SettingsScreen` renders the DND rows under the notifications section: a master
+  toggle (disabled when push is off), and when enabled — a **live "quiet hours active now / off right now"
+  status** computed from `DndWindow.isActive(prefs, LocalDateTime.now())`, Material3 24h `TimePicker` from/until
+  rows (seeded from the stored `HH:mm` via `parseMinuteOfDay`), and a Mon→Sun `FilterChip` day selector showing
+  "Every day" when empty. EN/FR/ES/PT strings for all new labels. `SettingsViewModelDndTest` (6: enable persists+
+  surfaces, start/end format into stored token, toggle add-then-remove, canonical multi-day order, no-clobber of
+  other toggles).
+- **Verification:** `gradle :core:model:… :feature:settings:testDebugUnitTest` green, then full
+  `gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (0 failures, system Gradle 8.14.3). +32 new
+  tests (DndWindow 20, VM 6, +the LocalDateTime/day-mapping cases). Diff = `apps/android` only (3 new + 6
+  modified: SettingsScreen/SettingsViewModel + 4 strings; feature-parity doc).
+- **Reviewer gate:** PASS — diff `apps/android` only, no production logic elsewhere; behaviour-through-public-API
+  tests, no tautologies, no floor lowered; SDK purity (pure predicate/codec in `:core:model`; the "which intent /
+  when to show the status / picker cascade" product orchestration in `:feature:settings`), SSOT (one `DndWindow`
+  read by both the editor status and future notification gating; `.copy` merge), UDF (immutable
+  `StateFlow<UiState>`), instant-app (edits are instant + durable, no flash), colour/UX coherence (accent-tinted
+  active-status label via `colorScheme.primary`, natural TimePicker + chip gestures, no dead end). No orphan code:
+  `isActive` has a live consumer in the DND status label. Surpasses iOS whose editor has no live-status readout.
+
+### 2026-07-05 — slice `settings-notification-prefs` ✅ shipped
+- **Step 0 (housekeeping):** the prior iteration's Android PR **#1508 (`settings-interface-language`)** was
+  still open from the last run — merged it first (`mergeable_state: clean`, diff apps/android-only, reviewer
+  PASS documented), squash → `main` `7e7b554`. The other open PRs are non-Android gateway/web/calls fixes.
+  Then branched `claude/apps/android/settings-notification-prefs` off the freshly-merged `origin/main`.
+- **Why this slice:** the §L "Recommended next" #2 — the `settings_push_notifications` switch was ephemeral
+  `remember { mutableStateOf(true) }` (lost on recompose/relaunch). Backing it with a durable store closes a
+  visible data-loss gap and mirrors the theme/language pattern. The `UserNotificationPreferences` model
+  already existed in `:core:model` (30+ fields, untested, unused) — this slice makes it real.
+- **Pure core (`:core:model` `NotificationPreferencesCodec.kt`):** since the block is a whole record (not an
+  enum token), it round-trips as JSON. `UserNotificationPreferences.storageValue` (`encodeDefaults` so every
+  field survives) + `notificationPreferencesFromStorage(raw)` (blank/absent/malformed/wrong-shape → safe
+  defaults via `runCatching`, partial token fills missing with defaults, unknown keys ignored). RED first
+  (`NotificationPreferencesCodecTest`, 10: full-toggle round-trip, defaults round-trip, non-empty-JSON token,
+  null/blank/whitespace/corrupt/wrong-shape → defaults, partial-fill, unknown-keys-ignored).
+- **Durable store (`:sdk-core` `notification/NotificationPreferencesStore.kt`):** interface +
+  `InMemoryNotificationPreferencesStore` (tests/previews) + `DataStoreNotificationPreferencesStore` (decodes
+  through the pure codec, hydrates on cold start via `stateIn(Eagerly)`). `@Singleton` in `SdkModule` over
+  `preferencesDataStoreFile("meeshy_notifications")`. `NotificationPreferencesStoreTest` (7: in-memory
+  default/seed/update; DataStore default-empty, set-reflected, hydrate-already-persisted, **corrupt-stored-
+  value → defaults**). Reused the one-DataStore-per-file-per-process hydration pattern (see NOTES).
+- **Wiring:** `SettingsViewModel` mirrors `notificationPreferencesStore.preferences` into
+  `SettingsUiState.notifications` + four per-toggle intents (`setPushEnabled`/`setSoundEnabled`/
+  `setVibrationEnabled`/`setNewMessageEnabled`) that read-modify-write the whole block through a private
+  `updateNotifications { copy(...) }` — a single toggle never clobbers the others.
+  `SettingsScreen` replaces the ephemeral switch with a reusable `NotificationToggleRow` driven by state; push
+  is the **master** toggle (the three sub-toggles disable + dim when push is off — coherent UX, no dead end).
+  EN/FR/ES/PT strings added for the three new rows. The two existing VM test factories got the new ctor arg
+  (no assertion touched). `SettingsViewModelNotificationTest` (8: default-block, reflects-persisted,
+  set-push-persists+surfaces, set-sound-preserves-others, set-vibration, set-new-message, successive-toggles-
+  compose-without-clobber, toggle-streams-into-state).
+- **Verification:** `gradle :core:model:… :sdk-core:… :feature:settings:testDebugUnitTest` green, then full
+  `gradle assembleDebug testDebugUnitTest` → BUILD SUCCESSFUL (0 failures, system Gradle 8.14.3). +25 new tests
+  (codec 10, store 7, VM 8).
+- **Reviewer gate:** PASS — diff `apps/android` only (14 files); behaviour-through-public-API tests, no
+  tautologies, no floor lowered (two theme/language test factories only gained the required ctor arg); SDK
+  purity (pure codec in `:core:model`, stateless store in `:sdk-core`, the "which toggle / master-gates-subs"
+  product orchestration in `:feature:settings`), SSOT (one codec, `.copy` merge), UDF (immutable
+  `StateFlow<UiState>`), instant-app (cold-start hydration, no wrong-config flash), no dead ends (every toggle
+  has a live consumer). Surpasses iOS, whose notification prefs are online-only server round-trips — here the
+  toggle is instant + durable device-side (backend sync is a tracked follow-up).
+
+### 2026-07-05 — slice `settings-interface-language` ✅ shipped
+- **Step 0 (housekeeping):** the prior iteration's Android PR **#1504 (`settings-theme-mode`)** was still open
+  from the last run — merged it first (CI all-green, diff apps/android-only, reviewer PASS documented, clean),
+  squash → `main` `968550a`. The other open PRs are non-Android gateway/web/shared fixes. Then branched
+  `claude/apps/android/settings-interface-language` off the freshly-merged `origin/main`.
+- **Why this slice:** the §L "Recommended next" #1 — persisted interface (UI chrome) language. Mirrors the
+  theme slice one step further (a picker dialog + an app-wide locale application), still a clean high-branch
+  pure core with no media/upload dependency.
+- **Pure core (`:core:model` `AppLanguage.kt`):** `supportedCodes`/`supportedLanguages` (from
+  `LanguageData.interfaceLanguages` — the SSOT, fr/en/es/ar), `isSupported`, `fromStorage`/`storageValue`
+  (trim+lowercase codec; `"system"`/blank/absent/unsupported → `null` = System), `resolveInterfaceLocaleTag`
+  (effective tag or `null`), `info`. RED first (`AppLanguageTest`, 18 cases: supported set + order, codec both
+  directions incl. round-trip, null/blank/system/unsupported/garbage arms, case/whitespace, resolver, info).
+- **Durable store (`:sdk-core` `language/InterfaceLanguageStore.kt`):** `InterfaceLanguageStore` interface +
+  `InMemoryInterfaceLanguageStore` (normalises seeds through the codec) + `DataStoreInterfaceLanguageStore`
+  (decodes via the pure codec, hydrates on cold start with `stateIn(Eagerly)`). `@Singleton` in `SdkModule`
+  over `preferencesDataStoreFile("meeshy_language")`. `InterfaceLanguageStoreTest` (9: in-memory default/seed/
+  garbage-seed/update/unsupported-set; DataStore default-empty, set-reflected, hydrate-already-persisted,
+  **corrupt-raw-token → System**). Reused the theme slice's one-DataStore-per-file-per-process hydration
+  pattern (see NOTES).
+- **Wiring:** `SettingsViewModel` mirrors `interfaceLanguageStore.languageCode` into
+  `SettingsUiState.interfaceLanguage` + `setInterfaceLanguage` intent (`SettingsViewModelLanguageTest`, 5:
+  default-System, reflects-persisted, set-persists-and-surfaces, set-null-returns-to-System, streams-into-state;
+  the existing `SettingsViewModelThemeTest` factory got the new constructor arg, no assertion touched).
+  `SettingsScreen` display-language row shows the current choice and opens a Material3 `AlertDialog`
+  (System + flag/native-name radio options); EN/FR/ES/PT strings added. `MainActivity` + new `:app`
+  `LanguageViewModel` re-localise the whole Compose tree live via `LocalizedContent` — a
+  `createConfigurationContext`-localised `LocalContext`/`LocalConfiguration` provider gated by the pure
+  `resolveInterfaceLocaleTag` (minSdk-26 safe, no AppCompat). **Regional** language row deliberately left
+  no-op (it's a Prisme content-preference, not the app locale — tracked as next-slice #2).
+- **Verification:** `gradle :core:model:… :sdk-core:… :feature:settings:testDebugUnitTest` green, then full
+  `gradle assembleDebug testDebugUnitTest` green (0 failures, system Gradle 8.14.3). +32 new tests.
+- **Reviewer gate:** PASS — diff `apps/android` only (15 files: 5 new + 10 modified, incl. docs/tests);
+  behaviour-through-public-API tests, no tautologies, no floor lowered (theme test only gained the required
+  ctor arg); SDK-purity (pure codec in model, stateless store in sdk-core, orchestration in app/feature), SSOT
+  (one `resolveInterfaceLocaleTag`/`LanguageData.interfaceLanguages`, no re-implementation), UDF (immutable
+  `StateFlow<UiState>`), instant-app (cold-start hydration, no wrong-language flash), no dead ends.
+
+### 2026-07-05 — slice `settings-theme-mode` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (`list_pull_requests state=open` → the
+  five open PRs are all non-Android gateway/web/shared fixes; none `claude/apps/android/*`). Branched
+  `claude/apps/android/settings-theme-mode` off latest `origin/main` (`73f5201`).
+- **Why this slice:** the §L "Recommended next" — persisted light/dark/system theme. Opens the Settings §L
+  area with a clean, high-branch pure core (no media/upload dependency).
+- **Pure core (`:core:model` `AppTheme.kt`):** `resolveDarkMode(systemInDark)`, `storageValue`, `next()`,
+  `appThemeModeFromStorage(raw)` — all total over the enum, corrupt/blank/unknown/`"system"` → AUTO. RED
+  first (`AppThemeTest`, 12 cases: every resolver arm, round-trip codec, null/blank/unknown/case/alias, cycle
+  wrap ×3).
+- **Durable store (`:sdk-core` `theme/ThemeStore.kt`):** `ThemeStore` interface + `InMemoryThemeStore`
+  (tests/previews) + `DataStoreThemeStore` (Preferences DataStore, decodes via the pure codec, hydrates on
+  cold start with `stateIn(Eagerly)`). Added `libs.datastore.preferences` to `:sdk-core`; `@Singleton`
+  provider in `SdkModule` over `preferencesDataStoreFile("meeshy_theme")`. `ThemeStoreTest` (6: in-memory
+  default/seed/update, DataStore default-on-empty, set-reflected, hydrate-already-persisted). Note: DataStore
+  enforces one active instance per file per process — the hydration test shares one DataStore across two
+  wrappers rather than reopening the file (see NOTES).
+- **Wiring:** `SettingsViewModel` mirrors `themeStore.themeMode` into `SettingsUiState.themeMode` + `setThemeMode`/
+  `cycleTheme` intents (`SettingsViewModelThemeTest`, 5: default, reflects-persisted, set-persists-and-surfaces,
+  cycle-wrap, streams-into-state). `SettingsScreen` Appearance section = Material3 segmented System/Light/Dark
+  picker (EN/FR/ES/PT strings). `MainActivity` + new `:app` `ThemeViewModel` re-theme live via
+  `MeeshyTheme(darkTheme = mode.resolveDarkMode(isSystemInDarkTheme()))`.
+- **Verification:** `gradle :app:assembleDebug` green; full `gradle testDebugUnitTest` green (0 failures;
+  touched-module totals: core/model 461, sdk-core 426, feature/settings 5, app 34). +23 new tests.
+- **Reviewer gate:** PASS — diff `apps/android` only (9 modified + 6 new, incl. docs/tests); behaviour-through-
+  public-API tests, no tautologies, no floor lowered; SDK-purity (pure codec in model, stateless store in
+  sdk-core, orchestration in app/feature), SSOT (one `resolveDarkMode`, reused by MainActivity), UDF (immutable
+  `StateFlow<UiState>`), instant-app (cold-start hydration, no wrong-theme flash), no dead ends.
+
+### 2026-07-05 — slice `profile-stats-timeline` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (`list_pull_requests state=open` → `[]`).
+  Branched `claude/apps/android/profile-stats-timeline` off latest `origin/main` (`d94be65`).
+- **Why this slice:** the §K "Next #3" (`profile-stats-timeline`) — the 30-day activity timeline. The
+  `TimelinePoint` model already existed; the genuinely additive, pure, richly-coverable work was the
+  timeline projection SSOT + the me-only fetch wiring + the sparkline.
+- **Added / changed (production, `apps/android` only):**
+  - `core/network` `UserApi.kt` — `getUserStatsTimeline(days) → ApiResponse<List<TimelinePoint>>`
+    (`GET users/me/stats/timeline`, the me-only gateway route; the only per-user stats route is
+    `/users/:id/stats`, so the timeline is never keyed by a viewed id).
+  - `sdk-core` `UserRepository.kt` — `getUserStatsTimeline(days = 30)`, `days` clamped to the
+    gateway-accepted `7..90` window.
+  - `feature/profile` `StatsTimeline.kt` (new) — pure `StatsTimelineBuilder.build(points) →
+    StatsTimelinePresentation?` (precedent `UserStatsBuilder`): **empty → `null`** (nothing to chart,
+    mirrors iOS `if !timeline.isEmpty`); non-empty **all-zero → a flat presentation** with
+    `hasActivity=false` (no divide-by-zero on a zero peak); **negative counts floored** so a malformed
+    payload can't invert a bar/peak; each `TimelineBar.normalized` = count/peak (`0f..1f`); **input order
+    preserved** (gateway emits oldest→newest); a `DD/MM` axis label via the internal `shortDate` ported
+    from the iOS `StatsTimelineChart` (malformed date → raw string); plus `total`, rounded `averagePerDay`
+    over every day (incl. silent ones), `activeDays`, `hasActivity`.
+  - `ProfileViewModel.kt` — `ProfileUiState.timeline: StatsTimelinePresentation?`; `loadTimelineOnce()`
+    fetches the timeline **once, own-profile only** (me-only endpoint — the other-profile branch never
+    calls it), failure-inert exactly like `loadStatsOnce` (Cancellation rethrown; Failure/throw swallowed).
+  - `ProfileScreen.kt` — a read-only `ProfileTimelineSection`: an "Activity" header + "N / day" average,
+    then an accent-coherent **line + area sparkline** (Canvas, `colorScheme.primary`) when `hasActivity`,
+    else a localized empty-state label. Pure rendering — every decision is upstream in the builder. 3 new
+    strings × 4 locales (EN/FR/ES/PT). Compose glue only (coverage-exempt).
+- **Tests (red → green):** +11 `StatsTimelineBuilderTest` (empty→null, single full-height bar, peak
+  normalizes to 1 + proportional shorter days, all-zero flat/inactive no-divide-by-zero, negative floor,
+  total+activeDays count only active days, average round-down 3.33→3, average round-half-up 2.5→3, order
+  preserved, ISO→`DD/MM`, malformed date→raw) + 6 `ProfileViewModelTimelineTest` (own-profile success
+  projection, Failure keeps timeline null + profile intact + no error, throw swallowed, loads exactly once
+  across repeated session emissions, no load while session user absent, other-profile never loads). All
+  behavioural through the public API (`build()` result, VM `state`); every `when`/`if` arm exercised.
+- **Verification:** full `gradle assembleDebug testDebugUnitTest` (`meeshy.sh check`) **green** (system
+  Gradle 8.14.3; wrapper dist still 403-blocked — see NOTES). Diff = `apps/android` only (3 prod edits +
+  1 new prod + 4 res + 2 test).
+- **Reviewer verdict:** **PASS** — pure projector in `:feature:profile` (product-side, consumes the
+  existing `TimelinePoint` SSOT, no re-implementation), UDF VM + immutable `StateFlow`, cancellation-safe,
+  me-only endpoint correctly gated, near-total branch coverage incl. empty/all-zero/negative/rounding
+  boundaries + failure paths, UI kept dumb, colour via `MaterialTheme.primary` accent. No prod logic
+  outside android.
 
 ### 2026-07-05 — slice `profile-stats-presentation` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The two open PRs (#1488 gateway/iOS

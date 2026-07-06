@@ -2611,6 +2611,37 @@ final class CallManagerHoldTests: XCTestCase {
             "in CallManager, not in the delegate proxy")
     }
 
+    /// Bug: unlike CXAnswerCallAction/CXEndCallAction (which this file explicitly
+    /// documents as calling `action.fulfill()` synchronously BEFORE creating a
+    /// Task, per CallKit's contract), CXSetHeldCallAction fulfilled from
+    /// *inside* its Task — after hopping to MainActor. That violates the same
+    /// documented contract: fulfill() must be called synchronously before the
+    /// delegate method returns, not after an async hop that isn't guaranteed
+    /// to run before the method returns.
+    func test_callKitDelegateProxy_fulfillsHeldActionSynchronously() throws {
+        let source = try callManagerSource()
+        guard let methodRange = source.range(of: "func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction)") else {
+            XCTFail("CXSetHeldCallAction handler not found"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate CXSetHeldCallAction handler body"); return
+        }
+        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
+        guard let fulfillRange = body.range(of: "action.fulfill()") else {
+            XCTFail("CXSetHeldCallAction handler must call action.fulfill()"); return
+        }
+        guard let taskRange = body.range(of: "Task {") else {
+            XCTFail("CXSetHeldCallAction handler must dispatch a Task"); return
+        }
+        XCTAssertTrue(
+            fulfillRange.lowerBound < taskRange.lowerBound,
+            "CXSetHeldCallAction must call action.fulfill() BEFORE creating its Task — " +
+            "fulfilling from inside the Task hops through an async MainActor boundary " +
+            "that CallKit does not guarantee completes before the delegate method " +
+            "returns, exactly the violation this file documents for CXAnswerCallAction " +
+            "and CXEndCallAction")
+    }
+
     /// isVideoSuspendedByHold must be reset in endCallInternal so hold state
     /// never leaks into the next call.
     func test_endCallInternal_resetsIsVideoSuspendedByHold() throws {
@@ -2673,6 +2704,64 @@ final class CallManagerHoldTests: XCTestCase {
             "CallKit requires synchronous settlement before the delegate method returns. " +
             "Fulfilling inside Task delays it to the next run-loop tick and can cause " +
             "CallKit to time out the action.")
+    }
+
+    /// Bug: `handleHold(true)` calls `downgradeFromVideo()` and discards the
+    /// returned `needsRenegotiation` flag, unlike every other call site
+    /// (toggleVideo, applySurvivalVideoSend, thermalStateDidChange) which all
+    /// follow up with createOffer()+emitCallOffer() when renegotiation is
+    /// needed. Without it, `RTCRtpTransceiver.direction` is flipped to
+    /// recvOnly locally but never actually renegotiated with the peer. If an
+    /// ICE restart (WiFi/cellular handoff, exactly what a GSM call causes)
+    /// fires while on hold, it bakes the stale recvOnly direction into the
+    /// SDP and permanently negotiates it — unhold flips direction back
+    /// locally but (before this fix) never re-offers, so outbound video
+    /// stays silently broken for the rest of the call.
+    func test_handleHold_renegotiatesAfterVideoDowngradeOnHold() throws {
+        let source = try callManagerSource()
+        guard let holdFuncRange = source.range(of: "func handleHold(_ isOnHold: Bool)") else {
+            XCTFail("handleHold not found in CallManager"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    // MARK:", range: holdFuncRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate handleHold body"); return
+        }
+        let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("let needsRenegotiation = await self.webRTCService.downgradeFromVideo()") ||
+            body.contains("let needsRenegotiation = await self?.webRTCService.downgradeFromVideo()"),
+            "handleHold's hold path must capture downgradeFromVideo()'s needsRenegotiation " +
+            "return value instead of discarding it with `_ =`")
+        XCTAssertTrue(
+            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)"),
+            "handleHold's hold path must follow a needed renegotiation with " +
+            "createOffer()+emitCallOffer(isVideo: false) — mirroring toggleVideo/" +
+            "applySurvivalVideoSend — so the peer's negotiated SDP direction " +
+            "actually matches the locally suspended video track")
+    }
+
+    /// Companion to the hold-side fix above: `handleHold(false)` must also
+    /// renegotiate after `upgradeToVideo()` when needed, or the unhold never
+    /// actually restores outbound video at the negotiated-SDP level (only
+    /// the local track/direction flip back, which the peer never sees).
+    func test_handleHold_renegotiatesAfterVideoUpgradeOnUnhold() throws {
+        let source = try callManagerSource()
+        guard let holdFuncRange = source.range(of: "func handleHold(_ isOnHold: Bool)") else {
+            XCTFail("handleHold not found in CallManager"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    // MARK:", range: holdFuncRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate handleHold body"); return
+        }
+        let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("try? await self.webRTCService.upgradeToVideo()") ||
+            body.contains("try? await self?.webRTCService.upgradeToVideo()"),
+            "handleHold's unhold path must capture upgradeToVideo()'s needsRenegotiation " +
+            "return value instead of discarding it with `_ =`")
+        XCTAssertTrue(
+            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)"),
+            "handleHold's unhold path must follow a needed renegotiation with " +
+            "createOffer()+emitCallOffer(isVideo: true) so outbound video is actually " +
+            "restored at the negotiated-SDP level, not just the local track/direction")
     }
 }
 

@@ -178,13 +178,6 @@ final class CallManager: ObservableObject {
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
     /// masquée pour éviter le doublon visuel au retour au premier plan.
     @Published private(set) var isSystemPiPActive: Bool = false
-    @Published private(set) var activeAudioEffect: AudioEffectConfig? {
-        didSet {
-            if let effect = activeAudioEffect {
-                analyticsEffectsUsed.insert(effect.effectType.rawValue)
-            }
-        }
-    }
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
     /// Outbound video auto-suspended by the graceful-degradation survival layer
@@ -435,9 +428,16 @@ final class CallManager: ObservableObject {
     /// Tracks the in-flight toggleVideo Task. Cancelled when a rapid second tap arrives
     /// so the later intent always wins and `isVideoEnabled` stays consistent with WebRTC.
     private var videoToggleTask: Task<Void, Never>?
-    /// Tracks the in-flight hold/unhold video Task so a rapid hold→unhold sequence
-    /// cancels the previous operation rather than running both concurrently.
+    /// Tracks the in-flight hold/unhold video Task. Chained onto (not cancelled) so a
+    /// rapid hold→unhold sequence serializes rather than running both concurrently.
     private var holdVideoTask: Task<Void, Never>?
+    /// Tracks the in-flight network-survival video suspend/resume Task (see
+    /// `applySurvivalVideoSend`). `videoToggleTask`, `holdVideoTask`, and this one all
+    /// actuate the same camera/transceiver via `webRTCService.upgradeToVideo()` /
+    /// `downgradeFromVideo()`, which never checks `Task.isCancelled` mid-flight — every
+    /// one of the three chains onto the other two's `.value` before proceeding so at
+    /// most one video-transition actuation ever runs at a time.
+    private var survivalVideoTask: Task<Bool, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
     /// In-flight ICE restart task. Tracked so overlapping `attemptReconnection`
     /// calls (e.g. watchdog fires while backoff is sleeping) cancel the previous
@@ -1829,7 +1829,9 @@ final class CallManager: ObservableObject {
     /// case). Replaces the old track.enabled flip, which left the upgrade
     /// invisible to the peer (no transceiver / no renegotiation).
     func toggleVideo() {
-        let previousTask = videoToggleTask
+        let previousToggle = videoToggleTask
+        let previousHold = holdVideoTask
+        let previousSurvival = survivalVideoTask
         videoToggleTask?.cancel()
         let target = !isVideoEnabled
         // Optimistic update: reflect intent immediately so rapid double-taps
@@ -1839,13 +1841,16 @@ final class CallManager: ObservableObject {
         // any state — the second Task's result is authoritative.
         isVideoEnabled = target
         videoToggleTask = Task { @MainActor [weak self] in
-            // Serialize on the previous toggle's actuation before starting ours:
-            // `cancel()` above is cooperative and upgradeToVideo/downgradeFromVideo
-            // never observe it mid-flight (they await stopCapture/startCapture), so
-            // without this a rapid double-tap could run two camera/transceiver
-            // actuations concurrently and corrupt state. Mirrors the identical fix
-            // already shipped in handleHold (CallKit hold path).
-            await previousTask?.value
+            // Serialize on every other in-flight video-transition path before
+            // starting ours: `cancel()` above only replaces a same-kind toggle and
+            // is cooperative — upgradeToVideo/downgradeFromVideo never observe it
+            // mid-flight (they await stopCapture/startCapture) — so without waiting
+            // on hold and survival too, a manual toggle landing mid-hold or
+            // mid-survival-recovery could run two camera/transceiver actuations
+            // concurrently and corrupt state.
+            await previousToggle?.value
+            await previousHold?.value
+            _ = await previousSurvival?.value
             guard let self, !Task.isCancelled else { return }
             do {
                 let needsRenegotiation: Bool
@@ -1978,40 +1983,6 @@ final class CallManager: ObservableObject {
     var videoFilters: VideoFilterPipeline { webRTCService.videoFilters }
     var localVideoTrack: Any? { webRTCService.localVideoTrack }
     var remoteVideoTrack: Any? { webRTCService.remoteVideoTrack }
-
-    // MARK: - Audio Effects
-
-    // Audit 2026-07-05: `CallEffectsOverlay` dropped its voice-effects UI entry
-    // point on 2026-07-02 (no production capture hook feeds `processAudioBuffer`),
-    // but this API stayed reachable. `CallAudioEffectsService` builds an
-    // independent `AVAudioEngine` tapping the live mic input node — starting it
-    // while a call's WebRTC `RTCAudioSession` (`.voiceChat`) already owns the
-    // hardware input is two AU-HAL clients contending for the same input, which
-    // iOS does not reliably support (silent capture loss or a broken mic).
-    // Refuse to engage a non-nil effect until a real capture hook exists; `nil`
-    // (clear/teardown) always passes through since it never touches the engine.
-    func setAudioEffect(_ effect: AudioEffectConfig?) {
-        guard effect == nil else {
-            Logger.calls.warning("setAudioEffect ignored — no production capture hook wired yet (see CallEffectsOverlay 2026-07-02)")
-            return
-        }
-        webRTCService.setAudioEffect(nil)
-        activeAudioEffect = nil
-        HapticFeedback.light()
-    }
-
-    func updateAudioEffectParams(_ config: AudioEffectConfig) {
-        guard activeAudioEffect != nil else {
-            Logger.calls.warning("updateAudioEffectParams ignored — no active effect (setAudioEffect is currently a no-op, see 2026-07-05 audit)")
-            return
-        }
-        webRTCService.updateAudioEffectParams(config)
-        activeAudioEffect = config
-    }
-
-    func clearAudioEffect() {
-        setAudioEffect(nil)
-    }
 
     // MARK: - Call Waiting (§11.15)
 
@@ -2686,10 +2657,37 @@ final class CallManager: ObservableObject {
                 // capturer/transceiver concurrently, leaving video stuck broken.
                 // Awaiting the prior task's `.value` first serializes every hold
                 // transition without relying on cancellation to stop in-flight work.
-                let previousTask = holdVideoTask
+                //
+                // Mirrors toggleVideo/applySurvivalVideoSend: a direction flip alone
+                // (inside downgradeFromVideo) never reaches the peer. If ANY other
+                // renegotiation fires while on hold (e.g. an ICE restart from a
+                // WiFi↔cellular handoff — exactly what a GSM call causes), it would
+                // otherwise bake the stale recvOnly direction into the SDP and
+                // permanently negotiate it, breaking outbound video for the rest of
+                // the call even after unhold. Renegotiating immediately keeps the
+                // locally-flipped direction and the negotiated SDP state in sync.
+                let previousToggle = videoToggleTask
+                let previousHold = holdVideoTask
+                let previousSurvival = survivalVideoTask
                 holdVideoTask = Task { [weak self] in
-                    await previousTask?.value
-                    _ = await self?.webRTCService.downgradeFromVideo()
+                    // Serialize with every other in-flight video-transition path
+                    // (manual toggle, prior hold/unhold, survival suspend/resume) —
+                    // see the doc-comment on `survivalVideoTask`.
+                    await previousHold?.value
+                    await previousToggle?.value
+                    _ = await previousSurvival?.value
+                    guard let self, !Task.isCancelled else { return }
+                    let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
+                    guard !Task.isCancelled else { return }
+                    self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                    if needsRenegotiation,
+                       let callId = self.currentCallId,
+                       let userId = self.remoteUserId,
+                       let offer = await self.webRTCService.createOffer(),
+                       self.currentCallId == callId {
+                        self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)
+                        Logger.calls.info("[CALL] hold renegotiation offer sent (video=false)")
+                    }
                 }
                 MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                 Logger.calls.info("CallKit hold — video suspended, peer notified (callId=\(callId))")
@@ -2698,10 +2696,34 @@ final class CallManager: ObservableObject {
             if isVideoSuspendedByHold {
                 isVideoSuspendedByHold = false
                 if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
-                    let previousTask = holdVideoTask
+                    // Companion fix: without renegotiating here, unhold only flips
+                    // the local track/direction back — the peer's negotiated SDP
+                    // state (possibly stuck at recvOnly from a hold-time ICE
+                    // restart) never actually gets corrected, leaving outbound
+                    // video silently broken for the rest of the call. Chains onto
+                    // the previous task rather than cancelling it for the same
+                    // reason as the hold path above.
+                    let previousToggle = videoToggleTask
+                    let previousHold = holdVideoTask
+                    let previousSurvival = survivalVideoTask
                     holdVideoTask = Task { [weak self] in
-                        await previousTask?.value
-                        _ = try? await self?.webRTCService.upgradeToVideo()
+                        // Serialize with every other in-flight video-transition path —
+                        // see the doc-comment on `survivalVideoTask`.
+                        await previousHold?.value
+                        await previousToggle?.value
+                        _ = await previousSurvival?.value
+                        guard let self, !Task.isCancelled else { return }
+                        guard let needsRenegotiation = try? await self.webRTCService.upgradeToVideo() else { return }
+                        guard !Task.isCancelled else { return }
+                        self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                        if needsRenegotiation,
+                           let callId = self.currentCallId,
+                           let userId = self.remoteUserId,
+                           let offer = await self.webRTCService.createOffer(),
+                           self.currentCallId == callId {
+                            self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)
+                            Logger.calls.info("[CALL] unhold renegotiation offer sent (video=true)")
+                        }
                     }
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
                     Logger.calls.info("CallKit unhold — video restored, peer notified (callId=\(callId))")
@@ -2717,13 +2739,6 @@ final class CallManager: ObservableObject {
         let validCharacters = CharacterSet(charactersIn: "0123456789*#ABCD")
         guard !digits.isEmpty, digits.unicodeScalars.allSatisfy({ validCharacters.contains($0) }) else { return }
         webRTCService.sendDTMF(digits: digits)
-    }
-
-    // MARK: - Metered Connection Check (M4)
-
-    func isOnMeteredConnection() -> Bool {
-        let path = networkMonitor.currentPath
-        return path.isExpensive
     }
 
     // MARK: - Network Monitoring
@@ -2985,6 +3000,8 @@ final class CallManager: ObservableObject {
         videoToggleTask = nil
         holdVideoTask?.cancel()
         holdVideoTask = nil
+        survivalVideoTask?.cancel()
+        survivalVideoTask = nil
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = nil
         iceRestartTask?.cancel()
@@ -3002,9 +3019,8 @@ final class CallManager: ObservableObject {
         pendingIceCandidates = []
         thermalMonitor.stopMonitoring()
         // Snapshot analytics before state is torn down so the payload has access
-        // to callId, callDuration, callStartDate, activeAudioEffect, etc.
+        // to callId, callDuration, callStartDate, etc.
         emitCallAnalyticsIfNeeded(reason: reason)
-        activeAudioEffect = nil
         hasLocalVideoTrack = false
         hasRemoteVideoTrack = false
         callStartDate = nil
@@ -3249,10 +3265,17 @@ final class CallManager: ObservableObject {
     /// NOTE: exercised in simulator only so far — needs a real-device pass
     /// (CallKit timing differs on hardware).
     private func scheduleStuckMutedFallback() {
+        let armedForCallId = currentCallId
         audioActivationFallbackTask?.cancel()
         audioActivationFallbackTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(QualityThresholds.stuckMutedFallbackDelaySeconds))
             guard !Task.isCancelled, let self else { return }
+            // Défensif : si l'appel qui a armé ce fallback s'est terminé et qu'un
+            // autre a démarré entre-temps, ce timer ne parle plus pour personne —
+            // sans ce guard il forcerait l'activation audio du NOUVEL appel avant
+            // que CallKit n'ait eu la chance de le faire lui-même (cf. commentaire
+            // ci-dessus sur le risque de casser l'audio device module).
+            guard self.currentCallId == armedForCallId else { return }
             guard CallReliabilityPolicy.shouldForceAudioSessionActivation(
                 usesCallKit: self.callUsesCallKit,
                 didActivateFired: CallManager.callKitDidActivateFired,
@@ -3439,6 +3462,19 @@ final class CallManager: ObservableObject {
                 let message = event.message
                     ?? String(localized: "call.error.generic", defaultValue: "Erreur lors de l'appel", bundle: .main)
                 Logger.calls.error("call:error received: code=\(event.code ?? "?") message=\(message)")
+                // Call-scoping guard: RATE_LIMIT_EXCEEDED/TARGET_NOT_FOUND/etc. below
+                // were each hardened one prod incident at a time, but none of them
+                // (nor any future code) can be call-scoped without this — `CallError`
+                // carries no callId at all until now. An error naming a DIFFERENT call
+                // than the one currently active must never affect this device's
+                // healthy call (e.g. a stale relay failure from a call that already
+                // ended, or cross-talk from a duplicate-device session). Errors with
+                // no callId (emit sites not yet call-scoped server-side, or pre-call
+                // failures like auth) fall through to the existing per-code handling.
+                if let errorCallId = event.callId, errorCallId != self.currentCallId {
+                    Logger.calls.warning("call:error for a different call (\(errorCallId, privacy: .public) vs current \(self.currentCallId ?? "nil", privacy: .public)) — ignoring")
+                    return
+                }
                 // INVALID_SIGNAL is a per-message relay rejection (a malformed or
                 // non-WebRTC signal type), NOT a call-fatal operation error. It
                 // must never tear down a healthy WebRTC call nor surface a user
@@ -3945,9 +3981,7 @@ extension CallManager: ThermalStateMonitorDelegate {
             self.pip.setMaxFrameRate(self.pipFrameRate(for: state))
             if state == .critical {
                 self.webRTCService.videoFilters.reset()
-                self.activeAudioEffect = nil
-                self.webRTCService.setAudioEffect(nil)
-                Logger.calls.warning("Thermal critical — disabled all filters (video + audio)")
+                Logger.calls.warning("Thermal critical — disabled all filters (video)")
                 if self.isVideoEnabled {
                     self.isVideoEnabled = false
                     // §5.4 — use downgradeFromVideo (sets transceiver direction +
@@ -4664,6 +4698,29 @@ extension CallManager: VideoSurvivalActuating {
         // — the peer would see a false "camera active" even though iOS is either
         // blocking camera access or has suspended capture for the held call.
         if enabled && (isVideoSuspendedByHold || isVideoSuspendedByBackground) { return false }
+
+        let previousToggle = videoToggleTask
+        let previousHold = holdVideoTask
+        let previousSurvival = survivalVideoTask
+        let task = Task<Bool, Never> { @MainActor [weak self] in
+            // Serialize with every other in-flight video-transition path (manual
+            // toggle, CallKit hold/unhold) — see the doc-comment on `survivalVideoTask`.
+            await previousToggle?.value
+            await previousHold?.value
+            _ = await previousSurvival?.value
+            guard let self, !Task.isCancelled else { return false }
+            // Re-validate every guard: state may have changed while this transition
+            // was queued behind a concurrent manual toggle or CallKit hold.
+            guard self.isVideoEnabled, self.currentCallId == callId else { return false }
+            if case .reconnecting = self.callState { return false }
+            if enabled && (self.isVideoSuspendedByHold || self.isVideoSuspendedByBackground) { return false }
+            return await self.actuateSurvivalVideoSend(enabled: enabled, callId: callId)
+        }
+        survivalVideoTask = task
+        return await task.value
+    }
+
+    private func actuateSurvivalVideoSend(enabled: Bool, callId: String) async -> Bool {
         do {
             let needsRenegotiation: Bool
             if enabled {

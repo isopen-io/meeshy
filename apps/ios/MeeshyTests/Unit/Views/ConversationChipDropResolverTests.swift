@@ -66,4 +66,33 @@ final class ConversationChipDropResolverTests: XCTestCase {
             .pin
         )
     }
+
+    // MARK: - Auto-scroll actif au relâchement
+
+    func test_action_whileAutoScrolling_isNone_evenOverAValidHeader() {
+        // Un header qui DÉFILE sous le doigt stationnaire (auto-scroll de
+        // bord actif) ne doit pas capter le drop : le relâchement en plein
+        // défilement est une intention d'abandon, pas de dépôt (deux
+        // mutations accidentelles vécues en test le 2026-07-05).
+        XCTAssertEqual(
+            ChipDropResolver.action(
+                droppedOn: "pinned", isPinned: false, currentSectionId: "", isAutoScrolling: true),
+            .none
+        )
+        XCTAssertEqual(
+            ChipDropResolver.action(
+                droppedOn: "abc", isPinned: false, currentSectionId: "", isAutoScrolling: true),
+            .none
+        )
+    }
+
+    func test_action_atRestInEdgeZone_stillDrops() {
+        // Liste au clamp (plus de défilement possible) : un header au repos
+        // dans la zone de bord reste une cible légitime.
+        XCTAssertEqual(
+            ChipDropResolver.action(
+                droppedOn: "pinned", isPinned: false, currentSectionId: "", isAutoScrolling: false),
+            .pin
+        )
+    }
 }

@@ -4,8 +4,14 @@
     <string name="profile_edit_title">Editar perfil</string>
     <string name="profile_back">Voltar</string>
     <string name="profile_edit">Editar</string>
+    <string name="profile_first_name_label">Nome próprio</string>
+    <string name="profile_last_name_label">Sobrenome</string>
     <string name="profile_display_name_label">Nome de exibição</string>
     <string name="profile_bio_label">Bio</string>
+    <string name="profile_system_language_label">Idioma principal</string>
+    <string name="profile_regional_language_label">Idioma secundário</string>
+    <string name="profile_custom_language_label">Idioma de tradução personalizado</string>
+    <string name="profile_language_unset">Não definido</string>
     <string name="profile_cancel">Cancelar</string>
     <string name="profile_save">Salvar</string>
     <string name="profile_unknown">Desconhecido</string>
@@ -28,4 +34,7 @@
     <string name="profile_stat_member_days">Dias como membro</string>
     <string name="profile_achievements_title">Conquistas</string>
     <string name="profile_achievements_unlocked">%1$d de %2$d desbloqueados</string>
+    <string name="profile_activity_title">Atividade</string>
+    <string name="profile_activity_average">%1$d / dia</string>
+    <string name="profile_activity_empty">Sem atividade nos últimos 30 dias</string>
 </resources>

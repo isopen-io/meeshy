@@ -697,8 +697,17 @@ export class CallEventsHandler {
    * degraded leaks its entry forever — only the size-capped sweep in
    * call:quality-report ever reclaims it, and a moderate-traffic gateway can
    * run long enough to never hit that cap.
+   *
+   * Public: `CallCleanupService.forceEndCall` (GC tier — stale ringing/
+   * connecting/active/heartbeat-timeout calls) is a 4th terminal path with no
+   * reference to this handler's private map, wired in via
+   * `CallCleanupService.setQualityStreakCleanupCallback` (mirrors
+   * `setPostSummaryCallback`'s existing bridge for the same reason). GC-ended
+   * calls are actually the MOST likely to leak here — an abandoned call
+   * nobody explicitly hung up is exactly the "last report was degraded, call
+   * then ends" scenario this cleanup targets.
    */
-  private clearQualityDegradedStreaks(callId: string): void {
+  clearQualityDegradedStreaks(callId: string): void {
     const prefix = `${callId}:`;
     for (const key of this.qualityDegradedStreaks.keys()) {
       if (key.startsWith(prefix)) {
@@ -787,6 +796,29 @@ export class CallEventsHandler {
   }
 
   /**
+   * CallService throws plain `Error`s formatted as `"<CODE>: <description>"`
+   * (e.g. getCallSession's `CALL_NOT_FOUND: Call session not found`, thrown
+   * when the peer ends the call in the same instant a toggle is in flight).
+   * Relay the real code/message when it matches a known CALL_ERROR_CODES
+   * value so the client can react appropriately (e.g. silently clean up on
+   * CALL_NOT_FOUND instead of surfacing a generic toggle-failed toast);
+   * fall back to the generic code for anything unrecognized (DB errors,
+   * etc.) so raw internals are never leaked to the client.
+   */
+  private mapMediaToggleError(error: unknown, fallbackMessage: string): CallError {
+    const message = error instanceof Error ? error.message : undefined;
+    if (!message) {
+      return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
+    }
+    const match = message.match(/^([A-Z_]+):\s*(.+)$/);
+    const knownCodes = new Set<string>(Object.values(CALL_ERROR_CODES));
+    if (match && knownCodes.has(match[1])) {
+      return { code: match[1], message: match[2] } as CallError;
+    }
+    return { code: message, message } as CallError;
+  }
+
+  /**
    * Resolve target userId to their socket IDs within a call room
    */
   private async resolveTargetSockets(
@@ -842,6 +874,32 @@ export class CallEventsHandler {
    */
   async postCallSummaryForTerminatedCall(callId: string): Promise<void> {
     return this.postCallSummary(callId);
+  }
+
+  /**
+   * Public entry point for `CallCleanupService`'s GC tier 1 (initiated/
+   * ringing > 120s → missed) — the safety net that fires when the
+   * in-process ringing timer (`buildRingingTimeoutHandler`) never runs, e.g.
+   * a crash before `rehydrateActiveCalls` re-armed it, or the timer callback
+   * itself threw. That normal path already reaches `sendCallCancellationPushes`
+   * via `broadcastCallEnded`, sending the silent `call_cancel` APNs push that
+   * stops CallKit ringing for a phantom-ringing callee — one whose VoIP push
+   * was delivered but whose socket never joined the call room, so the
+   * socket-fanout `call:ended` in `resolveCallEndedRooms` never reaches them.
+   * Without this wrapper, the GC-tier fallback silently skipped that push and
+   * such a callee's CallKit screen would ring until its own client-side
+   * timeout.
+   */
+  async sendMissedCallCancellationPushForTerminatedCall(
+    callId: string,
+    conversationId: string | undefined,
+    duration: number
+  ): Promise<void> {
+    return this.sendCallCancellationPushes(callId, conversationId, {
+      callId,
+      duration,
+      reason: CallEndReason.missed
+    });
   }
 
   /**
@@ -1081,6 +1139,16 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
+
+        // Calling-stack audit 2026-07-05 (2) — this was the last call:*
+        // handler with no rate limit at all; it fans out into 2-4 Prisma
+        // queries plus a TURN-secret HMAC mint per matching call, with no
+        // client payload required to trigger it (see SOCKET_RATE_LIMITS.CALL_CHECK_ACTIVE).
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_CHECK_ACTIVE, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
         const myConvs = await this.prisma.participant.findMany({
           where: { userId, isActive: true },
           select: { conversationId: true }
@@ -2062,7 +2130,8 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated'
+            message: 'User not authenticated',
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2089,7 +2158,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.INVALID_SIGNAL,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined
+            details: validationDetails ? { issues: validationDetails } : undefined,
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2113,7 +2183,8 @@ export class CallEventsHandler {
           if (!iceAllowed) {
             socket.emit(CALL_EVENTS.ERROR, {
               code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED,
-              message: 'Too many ICE candidates — slow down'
+              message: 'Too many ICE candidates — slow down',
+              callId: data.callId
             } as CallError);
             ack?.({ success: false });
             return;
@@ -2133,7 +2204,8 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not in this call'
+            message: 'You are not in this call',
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2147,8 +2219,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.SIGNAL_SENDER_MISMATCH,
-            message: 'Signal sender does not match authenticated user'
-          });
+            message: 'Signal sender does not match authenticated user',
+            callId: data.callId
+          } as CallError);
           return;
         }
 
@@ -2164,8 +2237,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant not found in call'
-          });
+            message: 'Target participant not found in call',
+            callId: data.callId
+          } as CallError);
           return;
         }
 
@@ -2195,8 +2269,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant has no active connection'
-          });
+            message: 'Target participant has no active connection',
+            callId: data.callId
+          } as CallError);
           ack?.({ success: false });
           return;
         }
@@ -2240,7 +2315,8 @@ export class CallEventsHandler {
 
         socket.emit(CALL_EVENTS.ERROR, {
           code: 'SIGNAL_FAILED',
-          message: 'Failed to forward WebRTC signal'
+          message: 'Failed to forward WebRTC signal',
+          callId: data.callId
         } as CallError);
       }
     });
@@ -2335,13 +2411,7 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling audio', error);
 
-        const errorMessage = error.message || 'Failed to toggle audio';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
-
-        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
+        socket.emit(CALL_EVENTS.ERROR, this.mapMediaToggleError(error, 'Failed to toggle audio'));
       }
     });
 
@@ -2431,13 +2501,7 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling video', error);
 
-        const errorMessage = error.message || 'Failed to toggle video';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
-
-        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
+        socket.emit(CALL_EVENTS.ERROR, this.mapMediaToggleError(error, 'Failed to toggle video'));
       }
     });
 

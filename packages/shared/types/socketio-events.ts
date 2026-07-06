@@ -125,7 +125,6 @@ export const SERVER_EVENTS = {
   AUTH_TOKEN_EXPIRED: 'auth:token-expired',
   AUTH_SESSION_REVOKED: 'auth:session-revoked',
   ERROR: 'error',
-  NOTIFICATION: 'notification',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',
   NOTIFICATION_DELETED: 'notification:deleted',
@@ -1122,12 +1121,47 @@ export interface UserPreferencesConversationUpdatedEventData {
 }
 
 /**
- * Union des deux scopes possibles. La présence de `conversationId`
- * discrimine côté client.
+ * Snapshot complet des préférences user/communauté envoyé dans les
+ * événements `USER_PREFERENCES_UPDATED` (scope communauté). Reflète
+ * `UserCommunityPreferences` côté Prisma.
+ *
+ * @see schema.prisma model UserCommunityPreferences
+ */
+export interface CommunityPreferencesPayload {
+  readonly isPinned: boolean;
+  readonly isMuted: boolean;
+  readonly isArchived: boolean;
+  readonly isHidden: boolean;
+  readonly notificationLevel: 'all' | 'mentions' | 'none';
+  readonly customName: string | null;
+  readonly categoryId: string | null;
+  readonly orderInCategory: number | null;
+}
+
+/**
+ * Variante "préférences scope communauté" : émis par
+ * `PUT/DELETE /user-preferences/communities/:id`. Sibling de
+ * `UserPreferencesConversationUpdatedEventData` (pas de `version` :
+ * `UserCommunityPreferences` n'a pas ce champ — le client réagit en
+ * invalidant son cache plutôt qu'en réconciliant un snapshot optimiste).
+ */
+export interface UserPreferencesCommunityUpdatedEventData {
+  readonly userId: string;
+  readonly communityId: string;
+  /** true si l'événement résulte d'un DELETE (reset aux defaults). */
+  readonly reset: boolean;
+  /** null si reset === true (le client applique ses defaults locaux). */
+  readonly preferences: CommunityPreferencesPayload | null;
+}
+
+/**
+ * Union des trois scopes possibles. La présence de `conversationId` /
+ * `communityId` discrimine côté client (sinon c'est le scope `category`).
  */
 export type UserPreferencesUpdatedEventData =
   | UserPreferencesCategoryUpdatedEventData
-  | UserPreferencesConversationUpdatedEventData;
+  | UserPreferencesConversationUpdatedEventData
+  | UserPreferencesCommunityUpdatedEventData;
 
 /**
  * Émis par `POST /user-preferences/conversations/reorder` après mise
@@ -1282,7 +1316,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
-  [SERVER_EVENTS.NOTIFICATION]: (data: NotificationEventData) => void;
   [SERVER_EVENTS.SYSTEM_MESSAGE]: (data: SystemMessageEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;
   [SERVER_EVENTS.CONVERSATION_ONLINE_STATS]: (data: ConversationOnlineStatsEventData) => void;
