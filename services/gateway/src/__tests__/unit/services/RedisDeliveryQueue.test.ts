@@ -148,6 +148,19 @@ describe('RedisDeliveryQueue (memory fallback)', () => {
     }
   });
 
+  test('peek with a limit of 0 returns nothing (not the whole backlog)', async () => {
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
+
+      const peeked = await queue.peek('user-1', 0);
+      expect(peeked).toHaveLength(0);
+    } finally {
+      await cacheStore.close();
+    }
+  });
+
   test('cleanup removes expired entries', async () => {
     const { cacheStore, queue } = makeMemoryQueue();
     try {
