@@ -353,7 +353,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       emoji-only oversized done (`EmojiDetector` port iOS 90/60/45, free-floating
       sans bulle, dans la bulle centré si reply) ;
       carousel / audio / location / contact pending
-- [ ] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight)
+- [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
+      (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
+      `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
+      `__underline__` (recursive nesting), `@username` (+ display-name resolution), `m+TOKEN`, `http(s)`
+      URLs; plus `highlightRanges` (case-insensitive/non-overlapping), `extractUrls` (meeshy→mention→http),
+      `resolvedLinkUrl` (tracked-link redirect). Rendered via `:sdk-ui` `RichMessageText` (`AnnotatedString`
+      + `LinkAnnotation.Url`/`withLink` real taps, highlight over rendered plain text) wired into the bubble;
+      `mentionDisplayNames`/`highlightTerm`/`trackedLinks` params ready for `ChatScreen` to feed. +34 tests.
+      **Pending:** ChatViewModel supplying the live search term + member roster; in-app browser / OG cards.
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
 - [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
 - [ ] Edited / pinned / forwarded indicators; edit-history viewer
