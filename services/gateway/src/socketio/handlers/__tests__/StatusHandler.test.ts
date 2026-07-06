@@ -566,7 +566,7 @@ describe('StatusHandler', () => {
       expect(statusService.updateLastSeen).not.toHaveBeenCalled();
     });
 
-    it('clears the start-throttle so a restart within the throttle window re-emits typing:start', async () => {
+    it('clears the throttle so a fresh typing:start after stop re-emits within the throttle window', async () => {
       jest.useFakeTimers();
       const now = 1_000_000;
       jest.setSystemTime(now);
@@ -575,25 +575,20 @@ describe('StatusHandler', () => {
       const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
       const socket = makeSocket();
       const handler = makeHandler({ prisma });
-      const emitFn = () => ((socket.to as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
-      const startCount = () =>
-        emitFn().mock.calls.filter((c: unknown[]) => c[0] === SERVER_EVENTS.TYPING_START).length;
 
-      // Burst 1: user starts typing → one typing:start.
+      // 1. start → emits typing:start, arms the throttle
       await handler.handleTypingStart(socket, { conversationId: CONV_ID });
-      expect(startCount()).toBe(1);
-
-      // User pauses and the client sends typing:stop 500ms in.
+      // 2. stop 0.5s later → emits typing:stop, MUST clear the throttle entry
       jest.setSystemTime(now + 500);
       await handler.handleTypingStop(socket, { conversationId: CONV_ID });
-
-      // Burst 2: user resumes typing 300ms later — still INSIDE the 2s throttle
-      // window relative to the first start. The explicit stop must have reset the
-      // throttle so this restart emits a fresh typing:start instead of being
-      // swallowed (which would leave peers with no indicator).
-      jest.setSystemTime(now + 800);
+      // 3. start again 1s after the first start (< 2s throttle window) → the
+      //    explicit stop ended the burst, so this new burst MUST re-emit.
+      jest.setSystemTime(now + 1_000);
       await handler.handleTypingStart(socket, { conversationId: CONV_ID });
-      expect(startCount()).toBe(2);
+
+      // start + stop + start = 3 room broadcasts. Without the throttle clear the
+      // second start is swallowed and only 2 broadcasts occur.
+      expect((socket.to as jest.Mock).mock.calls.length).toBe(3);
     });
   });
 
