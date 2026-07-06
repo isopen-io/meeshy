@@ -32,6 +32,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +49,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -114,6 +119,13 @@ fun ChatScreen(
         }
     }
 
+    // Jump to the focused search hit whenever it changes (new query, next/prev).
+    LaunchedEffect(state.search.activeMessageId) {
+        val target = state.search.activeMessageId ?: return@LaunchedEffect
+        val index = listItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
+        if (index >= 0) listState.animateScrollToItem(index)
+    }
+
     val showScrollToBottom by remember(listItems.lastIndex) {
         derivedStateOf { !listState.isNearBottom(listItems.lastIndex) }
     }
@@ -134,39 +146,53 @@ fun ChatScreen(
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(accentColor),
-                        )
-                        Text(
-                            text = state.conversationTitle ?: stringResource(R.string.chat_title),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = MeeshySpacing.sm),
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_back))
-                    }
-                },
-                actions = {
-                    val peerName = state.conversationTitle.orEmpty()
-                    IconButton(onClick = { onStartCall(peerName, false) }) {
-                        Icon(Icons.Filled.Call, contentDescription = stringResource(R.string.chat_call_audio))
-                    }
-                    IconButton(onClick = { onStartCall(peerName, true) }) {
-                        Icon(Icons.Filled.Videocam, contentDescription = stringResource(R.string.chat_call_video))
-                    }
-                },
-            )
+            if (state.search.isActive) {
+                ChatSearchBar(
+                    search = state.search,
+                    accentColor = accentColor,
+                    onQueryChange = viewModel::onSearchQueryChange,
+                    onPrevious = viewModel::previousSearchMatch,
+                    onNext = viewModel::nextSearchMatch,
+                    onClose = viewModel::closeSearch,
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(accentColor),
+                            )
+                            Text(
+                                text = state.conversationTitle ?: stringResource(R.string.chat_title),
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = MeeshySpacing.sm),
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_back))
+                        }
+                    },
+                    actions = {
+                        val peerName = state.conversationTitle.orEmpty()
+                        IconButton(onClick = viewModel::openSearch) {
+                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.chat_search))
+                        }
+                        IconButton(onClick = { onStartCall(peerName, false) }) {
+                            Icon(Icons.Filled.Call, contentDescription = stringResource(R.string.chat_call_audio))
+                        }
+                        IconButton(onClick = { onStartCall(peerName, true) }) {
+                            Icon(Icons.Filled.Videocam, contentDescription = stringResource(R.string.chat_call_video))
+                        }
+                    },
+                )
+            }
         },
         bottomBar = {
             val replyTarget = state.replyingToMessageId?.let { id ->
@@ -226,6 +252,7 @@ fun ChatScreen(
                                     MessageBubble(
                                         content = bubble,
                                         outgoingColor = accentColor,
+                                        highlightTerm = state.search.highlightTerm,
                                         onLongPress = {
                                             viewModel.onMessageLongPress(bubble.messageId)
                                         },
@@ -366,6 +393,62 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatSearchBar(
+    search: ChatSearchState,
+    accentColor: Color,
+    onQueryChange: (String) -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onClose: () -> Unit,
+) {
+    TopAppBar(
+        navigationIcon = {
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_search_close))
+            }
+        },
+        title = {
+            TextField(
+                value = search.query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.chat_search_hint)) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = accentColor,
+                ),
+            )
+        },
+        actions = {
+            val term = search.query.isNotBlank()
+            if (term) {
+                Text(
+                    text = if (search.hasMatches) {
+                        stringResource(R.string.chat_search_count, search.currentPosition, search.matchCount)
+                    } else {
+                        stringResource(R.string.chat_search_no_results)
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    modifier = Modifier.padding(horizontal = MeeshySpacing.xs),
+                )
+                IconButton(onClick = onPrevious, enabled = search.hasMatches) {
+                    Icon(Icons.Filled.KeyboardArrowUp, contentDescription = stringResource(R.string.chat_search_previous))
+                }
+                IconButton(onClick = onNext, enabled = search.hasMatches) {
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.chat_search_next))
+                }
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

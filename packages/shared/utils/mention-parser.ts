@@ -79,9 +79,15 @@ export function parseMentions(
  * `@DisplayName` de `parseMentions` : un `@Éric` / `@André` / `@Владимир` est bien reconnu,
  * là où l'ancien `/@\w/` ASCII les manquait. Un `@` suivi d'un espace (adresse e-mail
  * `test@ domain`) n'est PAS une mention.
+ *
+ * `NAME_BOUNDARY_LEFT` — même frontière gauche que les DEUX chemins de
+ * `parseMentions` (@DisplayName ligne 50, @username ligne 59) : un `@` précédé
+ * d'un caractère de nom appartient à une adresse e-mail (`contact@marie.com`) et
+ * n'est PAS une mention. Sans ce lookbehind, `hasMentions` signalait une mention
+ * que `parseMentions` ne résout jamais — un drift que le docstring interdit.
  */
 export function hasMentions(content: string): boolean {
-  return new RegExp(`@${NAME_CHAR}`, 'u').test(content);
+  return new RegExp(`${NAME_BOUNDARY_LEFT}@${NAME_CHAR}`, 'u').test(content);
 }
 
 function escapeRegex(str: string): string {

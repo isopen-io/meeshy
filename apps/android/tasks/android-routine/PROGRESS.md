@@ -2,7 +2,98 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+
+> On 2026-07-06 the **in-conversation message search + search-highlight wiring** landed (slice
+> `chat-search-highlight-wiring`, Chat parity §C — feature-parity.md "In-conversation message search" +
+> the search-highlight half of "Rich text rendering"). The bubble already accepted a `highlightTerm` and the
+> pure `MessageTextParser.highlightRanges` was tested, but no `ChatViewModel` fed a live term and there was no
+> search UI. New pure `:feature:chat` `ChatSearch` SSOT over an opaque `SearchableMessage(id, texts)`:
+> `matchIds(messages, query)` is a trimmed/case-insensitive `contains` across **every** text of a message — so
+> the displayed translation *and* the stored original both match (**translation-match aware**, at iOS parity) —
+> preserving display order and de-duping a message that matches on several texts. A pure reducer over
+> `ChatSearchState(isActive, query, matchIds, activeIndex)` — `activated` (clean slate), `deactivated` (inert
+> reset), `withQuery` (recompute + focus first hit), `reconciled` (recompute on a fresh message stream, **keeping
+> the focused hit on the same message** when it survives, else falling to the first; inert while inactive),
+> `movedToNext`/`movedToPrev` (wraparound, inert on an empty match set) — plus derived `matchCount`/`hasMatches`/
+> `activeMessageId`/one-based `currentPosition`/`highlightTerm` (the trimmed query, only while active & non-blank).
+> `ChatViewModel` gains `search: ChatSearchState` in its `UiState`, five intents
+> (`openSearch`/`onSearchQueryChange`/`nextSearchMatch`/`previousSearchMatch`/`closeSearch`), and reconciles
+> search in the message collector after `applyResult` (deleted / body-less image-only bubbles carry no searchable
+> text → never matched). `ChatScreen` renders an accent-coherent search `TopAppBar` (transparent-field cursor in
+> `accentColor`, live `x / y` / "no matches" counter, up/down match nav) that replaces the normal bar while
+> active, jumps the `LazyColumn` to the focused hit via `animateScrollToItem`, and threads `highlightTerm` into
+> every `MessageBubble` (reusing the tested `highlightRanges`). EN/FR/ES/PT strings. Local match is instant — no
+> artificial debounce (surpasses iOS's debounced online-only search). +29 tests (`ChatSearchTest` 24 — every
+> match / blank / no-text / wraparound / single / empty / reconcile-keep / reconcile-fallthrough / reconcile-empty
+> branch; `ChatViewModelTest` +5 — open+query highlight, next/prev nav, close-clears, stream-reconcile-keeps-focus,
+> deleted-never-matched). `assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3). Reviewer: PASS
+> (diff apps/android only; behaviour-through-public-API; SDK-purity/SSOT honoured — pure search core + reducer in
+> `:feature:chat`, render/scroll orchestration in the exempt `ChatScreen` glue; reuses `highlightRanges` SSOT).
+
+> On 2026-07-06 the **rich-text rendering** landed (slice `chat-rich-text-segments`, Chat parity §C
+> "Rich text rendering — markdown, mentions, m+ links, URLs, search highlight"). The bubble rendered the body as
+> a plain `Text` — no markdown, no tappable mentions/links, no search highlight. New pure `:core:model`
+> `MessageTextParser` (port of the iOS `MessageTextRenderer` SSOT): `parse(text, mentionDisplayNames?) →
+> List<MessageSegment>` runs one **earliest-match-wins** pass over a priority rule pipeline — markdown
+> **bold**/*italic*/~~strike~~/`__underline__` (recursive nesting unions `TextStyles`), `@username` mentions with
+> optional **display-name resolution** that wins over the bare-username fallback, `m+TOKEN` share links, and a
+> pure O(n) `http(s)` URL matcher — plus `highlightRanges` (case-insensitive, non-overlapping), `extractUrls`
+> (meeshy→mention→http order), and `resolvedLinkUrl` (tracked-link gateway redirect with trailing-punctuation
+> trim; display stays the raw URL). Rendered via a new `:sdk-ui` `RichMessageText` composable (exempt glue) that
+> maps segments → `AnnotatedString` with `LinkAnnotation.Url`/`withLink` (real taps via `LocalUriHandler`, no
+> extra plumbing) and washes the highlight against the **rendered** plain text (no marker-drift — surpasses iOS).
+> Wired into `MessageBubble`'s non-emoji text path; three optional params (`mentionDisplayNames`/`highlightTerm`/
+> `trackedLinks`) thread through for `ChatScreen` to feed later. +34 tests. `:app:assembleDebug` + full
+> `testDebugUnitTest` green (system Gradle 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-
+> public-API; SDK-purity/SSOT honoured — pure segmenter in `:core:model`, render orchestration in `:sdk-ui`).
+
+> On 2026-07-06 the **honest all-or-nothing delivery indicator** landed (slice `delivery-status-resolver`,
+> Chat parity — `feature-parity.md` "Delivery status checkmarks"). The sender-side 1→2→2-check indicator was
+> **lying in groups**: `BubbleContentBuilder` classified `readCount > 0 → Read` / `deliveredCount > 0 →
+> Delivered` with **no recipient denominator**, so one reader in a group of five showed "read by all". New pure
+> `:core:model` `DeliveryStatusResolver` (port of the iOS SSOT of the same name): `resolve(base, deliveredCount,
+> readCount, recipientCount, deliveredToAllAt?, readByAllAt?) → DeliveryState` applies the **WhatsApp-style
+> all-or-nothing** rule — Delivered/Read only when **every** recipient received/read; `recipientCount <= 1`
+> trusts the `> 0` threshold (1:1 / unknown denominator); the unambiguous `deliveredToAllAt`/`readByAllAt`
+> markers **win** over the counts (denominator-independent, race-free live signal, `readByAll` > `deliveredToAll`);
+> negative counts clamped; the send cycle (Pending/Failed) returned verbatim. It **never over-reports** — an
+> upstream Read is honestly downgraded to Delivered/Sent when the group counts are only partial. Wired with **no
+> DB migration** (`ApiMessage.deliveredToAllAt` rides the JSON payload, mirroring `readByAllAt`):
+> `BubbleContentBuilder` gains a `recipientCount` param (default 1 = backward-compatible 1:1) and re-resolves via
+> the SSOT (mapping `DeliveryState → DeliveryStatus`); `ChatViewModel` threads `memberCount - 1` from the
+> conversation stream into the bubble `combine` (reactive `MutableStateFlow` — the check refreshes when either the
+> counts or the member list arrives). **Also restored `isoToEpochMillisOrNull` in `:core:model` `IsoTime.kt`** —
+> the `main` force-reset (see NOTES 2026-07-06) had dropped the slice that added it, but the just-merged
+> message-effects `ChatScreen.kt` references it, so `main` was **uncompilable for Android** (the monorepo CI does
+> not build Android, so it went undetected). +24 tests (`DeliveryStatusResolverTest` 18 — every group boundary /
+> 1:1 / marker / clamp / downgrade branch; `BubbleContentBuilderTest` +4; `ChatViewModelTest` +2 group
+> threading). `assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses the previous
+> Android behaviour and matches iOS's honest indicator. Reviewer: PASS (diff `apps/android` only;
+> behaviour-through-public-API; SDK-purity/SSOT honoured — pure decision in `:core:model`, render orchestration in
+> `:sdk-ui`/`:feature:chat`).
+
+> On 2026-07-06 the **message-effects lifecycle** landed (slice `message-effects-lifecycle`, Chat
+> parity — ephemeral / blurred / view-once messages, feature-parity.md §"Rich message features"): the rich
+> `MessageEffects` model was dead code (decoded nowhere, rendered nowhere). This slice makes it live and
+> centralises — as an Android SSOT — the lifecycle logic iOS scatters across its message views. Pure `:core:model`
+> `MessageLifecyclePresentation.of(effects, createdAtMillis, nowMillis, revealed, viewCount) → MessageLifecycle`
+> is the total, side-effect-free decision over three independent axes: **ephemeral** (`Inactive` when not
+> ephemeral / no-or-non-positive duration; `Counting(remainingMillis,totalMillis)` counting down from send time,
+> clamping future/skewed send times to the full window and an unknown send time to just-started; `Expired` at or
+> past the deadline), **blur** (`None`/`Concealed`/`Revealed` — tap-to-reveal), and **view-once** (`None`/
+> `Available(remaining)`/`Consumed`, default max 1, non-positive max coerced to 1, over-consumed → `Consumed`,
+> negative view counts clamped) plus stable-bit-order `appearance`/`persistent` effect lists. Ported the 3
+> missing iOS `MessageEffects` accessors (`hasLifecycleEffect`/`hasAppearanceEffect`/`hasPersistentEffect` +
+> `isEphemeral`/`isBlurred`/`isViewOnce`/`has`). Wired end-to-end with **no DB migration** (`ApiMessage.effects`
+> rides the existing JSON `MessageEntity.payload`): `BubbleContentBuilder` carries `effects` onto `BubbleContent`
+> (dropped on a deleted message, mirroring attachments); `ChatScreen` renders a compact accent-coherent lifecycle
+> badge under the bubble — a 1 Hz clock that ticks **only while an ephemeral message is on screen**, a natural
+> tap-to-reveal for blurred/view-once (local `mutableStateList` reveal set), and EN/FR/ES/PT strings. +35 tests
+> (`MessageLifecyclePresentationTest` 25, `MessageEffectsTest` 8, `BubbleContentBuilderTest` +2 carry/deleted-drop).
+> `:app:assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses iOS, which recomputes
+> these states ad hoc per view. Reviewer: PASS (diff apps/android only; behaviour-through-public-API; SDK-purity/
+> SSOT honoured — pure decision in `:core:model`, render orchestration in `:feature:chat`).
 
 > On 2026-07-06 the **first/last-name profile-edit fields** landed (slice `edit-profile-name-fields`, §K):
 > the `firstName`/`lastName` legs of the already-name-aware `ProfileEditApply`/`UpdateProfileRequest` are now
@@ -467,6 +558,21 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 (prunes the preview pools + cancels its durable rows). Surpasses iOS, which drops an offline pick.
 
 ## Next slice (pick one for the next run)
+
+**Recommended next (2026-07-06, after `chat-search-highlight-wiring`):** the remaining highest-value Chat
+follow-ups now that rich-text + in-conversation search are live —
+1. ~~**`chat-search-highlight-wiring`**~~ ✅ shipped 2026-07-06 — see run log. Pure `:feature:chat` `ChatSearch`
+   SSOT (translation-aware `matchIds` + wraparound reducer over `ChatSearchState`) + `ChatViewModel` intents
+   (reconcile-keeps-focus on the live stream) + a search `TopAppBar` (accent cursor, `x / y` counter, up/down
+   nav, jump-to-hit) threading `highlightTerm` into every bubble. +29 tests.
+2. **`chat-mention-display-names`** — feed the conversation member roster (`username → displayName`) into
+   `MessageBubble.mentionDisplayNames` so `@John Doe` resolves in-bubble (pure resolution already tested; this is
+   the roster-source wiring in `ChatViewModel` — needs the participant list on the conversation stream).
+3. Or **`chat-mention-autocomplete`** — the composer `@`-autocomplete panel over the existing `MentionCandidate`
+   model (pure prefix-match/ranking core + a Compose suggestion strip).
+Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K; §L worker drain-list test).
+
+---
 
 **Pivoted to Profile/Account (`feature-parity.md §K`) 2026-07-05.** Contacts (§J) is now
 cache-complete + mutation-complete + list-display-complete (only mood-emoji presence remains, which
@@ -943,6 +1049,54 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-06 — slice `chat-rich-text-segments` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR was open (only unrelated web/gateway/translator/dependabot PRs on
+  the board). `origin/main` = `7cc5a627` (last Android merge, the delivery-status indicator #1568). Branched
+  `claude/apps/android/chat-rich-text-segments` off it. Environment: bootstrapped the Android SDK
+  (`platforms;android-35` + `build-tools;35.0.0`) per ROUTINE; the Gradle **wrapper** download 403s through the
+  proxy, so built with the preinstalled **system Gradle 8.14.3** (`/opt/gradle/bin/gradle`) — recorded in NOTES.
+- **Why this slice:** Chat parity §C "Rich text rendering (markdown, mentions, m+ links, URLs, search
+  highlight)". The message bubble rendered the body as a **plain `Text`** — no markdown, no tappable mentions/
+  links, no search highlight. iOS centralises this in `MessageTextRenderer` (a single-pass, priority-rule
+  segmenter). Android had **no rich-text core at all**. This ports the pure segmentation SSOT and renders it.
+- **Pure core (`:core:model` `MessageTextParser.kt`):** the Android SSOT ported from iOS `MessageTextRenderer`.
+  `parse(text, mentionDisplayNames?) → List<MessageSegment>` — one earliest-match-wins pass over a priority-
+  ordered rule pipeline: markdown **bold** (`**`) / *italic* (`*`, `(?<!\*)…(?!\*)` so `**` is consumed first) /
+  ~~strike~~ (`~~`) / underline (`__`) with **recursive nesting** (inner emphasis unions the outer `TextStyles`);
+  `@username` mentions (`(?<![a-zA-Z0-9])@…`) → `meeshy.me/u/<user>`, with **display-name resolution** (`@John
+  Doe` when a `username→"John Doe"` map is supplied — sorted longest-first, skips names equal-to-username / empty
+  / whitespace-less, and **wins over the bare-username fallback at the same position** since it registers first
+  and ties keep the earlier rule); `m+TOKEN` share links → `meeshy.me/l/<token>`; and a pure O(n) `http(s)` URL
+  regex (no `NSDataDetector` analogue — same trade-off iOS took to dodge its recursion crash). Plus
+  `highlightRanges(text, term)` (case-insensitive, non-overlapping, bounds-guarded), `extractUrls` (meeshy →
+  mentions → http order, for future OG/link-preview), and `resolvedLinkUrl(raw, trackedLinks)` (gateway redirect
+  with trailing-punctuation-trimmed key fallback; the DISPLAY stays the raw URL). Markdown recursion drops
+  display-name resolution (mirrors iOS) but still linkifies `@username`. RED-first (`MessageTextParserTest`, 34):
+  every rule, nesting/style-union, both lookbehind rejections (`foo@bar`, `xhttps://…`, `xm+…`), earliest-match
+  priority, all three display-name filter branches + the recursion fallback, every highlight branch (empty/
+  absent/single/case-insensitive/multi-non-overlapping), extract order + empties, and all five `resolvedLinkUrl`
+  branches (null/empty/exact/trim/no-match/no-trailing-punct).
+- **Render glue (`:sdk-ui` `RichMessageText.kt`, exempt per TDD-COVERAGE):** a `@Composable` that `remember`s the
+  parse and maps segments → `AnnotatedString` — `SpanStyle` for emphasis, `LinkAnnotation.Url` + `withLink`
+  (Compose 1.7 → real taps via `LocalUriHandler`, **zero extra plumbing**), and a highlight wash applied against
+  the **rendered plain text** (markers already stripped, so it never drifts off the visible chars — strictly
+  better than iOS's raw-offset approach). Wired into `MessageBubble`: the non-emoji text path now renders
+  `RichMessageText` (emoji-only path unchanged); three optional params (`mentionDisplayNames`/`highlightTerm`/
+  `trackedLinks`, all null-default) thread through, so the search-highlight + display-name-mention surface is
+  ready for `ChatScreen`/`ChatViewModel` to feed a term/roster later without a re-plumb.
+- **Verification:** `gradle :sdk-ui:assembleDebug :app:assembleDebug` → **BUILD SUCCESSFUL**, then full
+  `gradle testDebugUnitTest` → **BUILD SUCCESSFUL** (all modules, system Gradle 8.14.3). +34 new tests. Diff =
+  `apps/android` only (2 new src + 1 new test + `MessageBubble.kt` modified + these docs).
+- **Reviewer gate:** PASS — diff `apps/android` only, no production logic elsewhere; behaviour-through-public-API
+  tests, no tautologies, no floor lowered; SDK purity (pure segmenter/highlight/extract/resolve in `:core:model`;
+  the AnnotatedString mapping + tap wiring is `:sdk-ui` render glue — no product orchestration in the SDK), SSOT
+  (one `MessageTextParser` owns every text treatment, read by the bubble and any future search/preview consumer),
+  UDF unaffected, instant-app (parse is pure + `remember`-memoized, no I/O), colour/UX coherence (link runs use
+  the bubble's on-colour + underline, highlight uses the amber warning wash, real gesture = tap-to-open via the
+  platform handler, no dead end). No orphan code: the renderer is the live consumer of every segment kind, and
+  the three bubble params feed straight into it. Surpasses iOS: highlight aligns to visible chars (no
+  marker-drift), and the whole treatment vocabulary is one tested pure core instead of a view-embedded renderer.
 
 ### 2026-07-06 — slice `settings-notification-type-toggles` ✅ shipped
 - **Step 0 (housekeeping):** the prior iteration's Android PR **#1517 (`settings-dnd-schedule`)** was still open

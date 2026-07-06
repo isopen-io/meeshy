@@ -611,6 +611,31 @@ describe('StatusHandler', () => {
 
       expect(statusService.updateLastSeen).not.toHaveBeenCalled();
     });
+
+    it('clears the throttle so a fresh typing:start after stop re-emits within the throttle window', async () => {
+      jest.useFakeTimers();
+      const now = 1_000_000;
+      jest.setSystemTime(now);
+
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      // 1. start → emits typing:start, arms the throttle
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      // 2. stop 0.5s later → emits typing:stop, MUST clear the throttle entry
+      jest.setSystemTime(now + 500);
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+      // 3. start again 1s after the first start (< 2s throttle window) → the
+      //    explicit stop ended the burst, so this new burst MUST re-emit.
+      jest.setSystemTime(now + 1_000);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      // start + stop + start = 3 room broadcasts. Without the throttle clear the
+      // second start is swallowed and only 2 broadcasts occur.
+      expect((socket.to as jest.Mock).mock.calls.length).toBe(3);
+    });
   });
 
   // ── blocking privacy ─────────────────────────────────────────────────────────

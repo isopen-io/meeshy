@@ -36,6 +36,7 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
+import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
   MessageRequest,
   MessageResponse
@@ -61,7 +62,6 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
-import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -107,11 +107,17 @@ export class MessageHandler {
    * process doesn't accumulate one entry per (user, conversation) pair forever.
    * Also invalidated on conversation leave / kick events via
    * `invalidateParticipantCache`. Key: `${userId}:${conversationId}`.
+   *
+   * Uses `BoundedTtlCache` (size cap + lazy/bulk TTL eviction) rather than a raw
+   * `Map`: a lazily-checked TTL only reclaims a key when the SAME key is read
+   * again, so a one-shot (user, conversation) sender that never sends again would
+   * leak its entry forever on a long-lived gateway. The size cap hard-bounds the
+   * heap regardless of read patterns, matching `StatusHandler.identityCache`.
    */
-  private static readonly PARTICIPANT_ID_CACHE_MAX = 10_000;
+  private static readonly PARTICIPANT_CACHE_MAX_SIZE = 50_000;
   private readonly PARTICIPANT_CACHE_TTL_MS = 5 * 60 * 1000;
   private participantIdCache = new BoundedTtlCache<string, string>({
-    maxSize: MessageHandler.PARTICIPANT_ID_CACHE_MAX,
+    maxSize: MessageHandler.PARTICIPANT_CACHE_MAX_SIZE,
     ttlMs: this.PARTICIPANT_CACHE_TTL_MS,
   });
 
@@ -318,7 +324,8 @@ export class MessageHandler {
         });
 
         conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], message.originalLanguage ?? null
+          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], message.originalLanguage ?? null,
+          message.messageType || 'text'
         ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
@@ -521,7 +528,8 @@ export class MessageHandler {
           return 'file';
         });
         conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, message.originalLanguage ?? null
+          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, message.originalLanguage ?? null,
+          message.messageType || 'text'
         ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
@@ -1261,7 +1269,7 @@ export class MessageHandler {
 
     const cacheKey = `${userId}:${conversationId}`;
     const cached = this.participantIdCache.get(cacheKey);
-    if (cached) {
+    if (cached !== undefined) {
       return cached;
     }
 

@@ -3,6 +3,54 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-06 (`chat-rich-text-segments`): the Gradle *wrapper* download 403s through the proxy — use the
+  preinstalled system Gradle 8.14.3 (`/opt/gradle/bin/gradle`) instead of `./gradlew`.** `./gradlew` tries to
+  fetch `gradle-8.11.1-bin.zip` from `services.gradle.org` → `github.com/gradle/gradle-distributions`, which
+  returns HTTP 403 via the agent proxy. `gradle` is on PATH at 8.14.3 and builds every module fine (`gradle
+  :app:assembleDebug testDebugUnitTest`). ROUTINE's `meeshy.sh` wrappers assume `./gradlew`; when the wrapper is
+  unavailable just call `gradle` directly with the same tasks. (Recorded so future runs skip the wrapper dead end.)
+- **2026-07-06 (`chat-rich-text-segments`): rich-text is one pure segmenter, not a view concern — and Compose 1.7
+  gives real link taps for free.** Ported iOS `MessageTextRenderer` to a pure `:core:model` `MessageTextParser`
+  (`parse`/`highlightRanges`/`extractUrls`/`resolvedLinkUrl`) so every treatment decision is JVM-testable
+  (earliest-match-wins over a priority rule list, recursive markdown nesting, lookbehind-guarded mention/`m+`/URL,
+  display-name mentions winning ties by registering first). Kotlin `Regex.find(text, startIndex)` keeps full-input
+  lookbehind visibility (unlike a bounded `Matcher.region`), so `(?<![a-zA-Z0-9])` still sees the char before the
+  cursor — the direct analogue of `NSRegularExpression.firstMatch(in:range:)`. The `:sdk-ui` render glue uses
+  `LinkAnnotation.Url` + `withLink` (Compose 1.7+, BOM 2024.10.01) so taps open via `LocalUriHandler` with **zero
+  callback plumbing**. Apply highlight over the **rendered** plain text (markers stripped), never the raw source
+  offsets — iOS's raw-offset highlight drifts once markdown is present; ours can't.
+- **2026-07-06 (`delivery-status-resolver`): `main` was force-reset and lost merged Android work — and the
+  monorepo CI does NOT build Android, so a broken `main` compiles "green".** On this run `origin/main` had been
+  force-updated (`6cd1a3c4…→5ee31e52`, a forced push) to a state whose `apps/android/tasks/*` docs had regressed
+  ~21 slices AND whose `:core:model` `IsoTime.kt` was missing `isoToEpochMillisOrNull` — yet the just-merged
+  message-effects `ChatScreen.kt` references it, so `main` was **uncompilable for Android**. `ci.yml` only tests
+  JS/TS/Python, so it never caught it. **Takeaways:** (1) after a step-0 rebase onto `main`, run `meeshy.sh check`
+  locally before trusting — CI green ≠ Android compiles; (2) when resolving doc conflicts from a force-reset, the
+  feature-branch side is the superset (verified: 0 `main`-unique slices) so keep it; (3) restoring a
+  force-dropped helper that a merged file needs is legitimate in-scope work (`apps/android` only) and required to
+  leave `main` green; (4) a dedicated Android CI job (`.github/`, its own run) would have flagged this — still a
+  tracked follow-up.
+- **2026-07-06 (`delivery-status-resolver`): the delivery indicator must be honest — resolve at the display point
+  with an all-or-nothing rule, never a `> 0` count threshold.** iOS centralises this in a pure
+  `DeliveryStatusResolver`; Android now mirrors it: `resolve(base, deliveredCount, readCount, recipientCount,
+  deliveredToAllAt?, readByAllAt?)` returns Delivered/Read only when the count `>= recipientCount` (recipients =
+  `memberCount - 1`), trusts `> 0` when `recipientCount <= 1` (1:1 / unknown denominator), and lets unambiguous
+  "all" markers win denominator-independent. **Under-report, never over-report** — an upstream Read downgrades
+  honestly when group counts are partial. Thread `recipientCount` as a reactive `MutableStateFlow` in the
+  ViewModel (from the conversation stream) into the bubble `combine`, so the check refreshes when *either* the
+  counts or the member list arrives — not a one-shot read.
+- **2026-07-06 (`message-effects-lifecycle`): a new nullable field on `ApiMessage` needs NO DB migration.**
+  `MessageEntity.payload` stores the serialized `ApiMessage` JSON (not columns), so `val effects: MessageEffects?
+  = null` decodes from the wire, persists in the payload, and reloads for free — kotlinx lenient decode tolerates
+  the older payloads that lack it. Adding message-shaped optional fields is a pure `:core:model` change; reserve
+  DB-version bumps for genuinely new tables/columns (stats cache, friends cache).
+- **2026-07-06 (`message-effects-lifecycle`): centralise per-message "lifecycle state" as a pure `:core:model`
+  SSOT, not scattered in Compose.** iOS recomputes ephemeral-expiry / view-once-consumed / blur-revealed ad hoc
+  inside its message views. On Android, `MessageLifecyclePresentation.of(effects, createdAtMillis, nowMillis,
+  revealed, viewCount)` is one total, side-effect-free decision the bubble just draws — trivially 90%+ covered
+  (25 cases) and reusable by any surface (story reply). Runtime inputs (`now`/`revealed`/`viewCount`) are pushed
+  in by the UI each frame; the core owns no state. Gate the 1 Hz countdown clock on `messages.any { it.effects
+  ?.isEphemeral == true }` so there are no idle wake-ups when no ephemeral message is on screen.
 - **2026-07-06 (`settings-regional-content-language`): `:sdk-core` `ThemeStoreTest` (and other DataStore
   tests) flake under the FULL parallel run, not in isolation.** They use a real `Dispatchers.IO` DataStore
   with `withTimeout(5_000)`; when `gradle :app:assembleDebug testDebugUnitTest` compiles+tests every module

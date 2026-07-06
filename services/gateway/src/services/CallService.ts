@@ -197,7 +197,17 @@ export class CallService {
   private readonly PHANTOM_CONNECTING_GRACE_MS = 90 * 1000;
   private readonly PHANTOM_HEARTBEAT_GRACE_MS = 120 * 1000;
 
-  constructor(private prisma: PrismaClient) {
+  constructor(
+    private prisma: PrismaClient,
+    // CALL-RESILIENCE (item H bug class, re-opened by the 2026-07-06 P0 fix)
+    // — liveness floor for `isPhantomCallStale`'s no-heartbeat-data fallback:
+    // `this.heartbeats` is always empty right after a restart, so without
+    // this floor a real, healthy, long-running call reads as instantly stale
+    // (its DB `startedAt` is old) the moment ANY user's phantom-cleanup sweep
+    // touches it, before clients have had a chance to reconnect and re-beat.
+    // Mirrors `CallCleanupService`'s own `bootedAt` floor. Injectable for tests.
+    private readonly bootedAt: Date = new Date()
+  ) {
     this.turnCredentialService = new TURNCredentialService();
   }
 
@@ -439,6 +449,9 @@ export class CallService {
    * timeout, a connecting call gets the GC's connecting budget anchored on
    * `answeredAt`, and an active/reconnecting call is stale only when there is
    * no evidence — in memory or otherwise — that anyone is still beating.
+   *
+   * The no-heartbeat-data fallback additionally floors its anchor at
+   * `this.bootedAt` (CALL-RESILIENCE item H) — see constructor comment.
    */
   private isPhantomCallStale(
     session: { id: string; status?: CallStatus; startedAt: Date | null; answeredAt?: Date | null },
@@ -461,7 +474,12 @@ export class CallService {
       const staleCount = this.getStaleHeartbeats(session.id, this.PHANTOM_HEARTBEAT_GRACE_MS).length;
       return staleCount >= this.getHeartbeatParticipantCount(session.id);
     }
-    return now.getTime() - startedAtMs > this.PHANTOM_HEARTBEAT_GRACE_MS;
+    // Floored at `bootedAt` (CALL-RESILIENCE item H) — right after a restart
+    // `this.heartbeats` is empty for every call regardless of true age, so an
+    // anchor on `startedAt` alone would misclassify a real, long-running call
+    // as stale the instant any sweep touches it, before clients re-beat.
+    const anchorMs = Math.max(startedAtMs, this.bootedAt.getTime());
+    return now.getTime() - anchorMs > this.PHANTOM_HEARTBEAT_GRACE_MS;
   }
 
   /**

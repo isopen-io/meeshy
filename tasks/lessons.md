@@ -449,6 +449,24 @@ suites `@ts-nocheck` hors runner par défaut (`notifications-firebase.test.ts`) 
 client aux types divergents, JAMAIS un signal de régression du diff. Ne pas chasser cette erreur si le
 fichier concerné n'est pas dans le diff.
 
+## Leçon 63 — une entrée de backlog "FIXED" n'est une preuve de rien sans grep contre `HEAD` (2026-07-06, routine calling-feature)
+
+`tasks/calls-fonctionnel-todo.md` documentait (Vagues 13-16) plusieurs fixes calling comme "CONFIRMÉ +
+CORRIGÉ", tests inclus — mais ces sections du fichier avaient elles-mêmes été effacées de `main` par la
+régression `8ebd497b` (même commit qui avait aussi silencieusement supprimé le code qu'elles décrivaient),
+et ne survivaient que dans deux PR ouvertes non mergées (#1558, #1563). Une session qui aurait fait
+confiance au fichier tel qu'il existait sur sa propre branche (avant divergence) sans re-vérifier `HEAD`
+aurait pu croire ces fixes présents alors qu'ils ne l'étaient pas. Pire : la PR #1558 elle-même a bâti un
+nouveau fix (web, `call-store.ts` + `CallManager.tsx` initiator-timeout) sur l'hypothèse que le P0 du jour
+(`682c35279`, "l'initiateur voit sa propre UI d'appel") était déjà sur `main` — il ne l'était pas (supprimé
+par la même régression) — donnant une **couverture de test illusoire** : les tests de #1558 passent
+(ils posent l'état directement via un helper de test) mais le vrai chemin de production qu'ils sont censés
+protéger était cassé d'une façon différente et plus grave, jamais exercée par ces tests.
+**Règle** : avant de s'appuyer sur une entrée de backlog pour décider qu'une zone du code est "déjà
+traitée", `grep` la primitive technique citée (nom de fonction/champ/constante) directement dans le
+fichier source sur `HEAD` — jamais seulement dans les docs. Avant de construire un nouveau fix par-dessus
+un fix antérieur documenté, vérifier par lecture du code réel (pas de la doc, pas du diff de la PR qui le
+cite) que ce fix antérieur est bien présent sur la base de travail actuelle.
 ## Leçon 62 — `MessageReadStatusService` : le curseur delivered/read pouvait régresser sous course (TOCTOU read-then-write) (2026-07-04, itération 93)
 
 Audit expert (agent Explore, 56 tool-uses) sur la synchronisation temps réel du gateway : parmi 7
@@ -598,6 +616,7 @@ chemin voisin ne doit réimplémenter la même frontière à la main — auditer
 (F57 avait unifié `hasMentions` + `@DisplayName` mais oublié le fallback `@username` : un seul path
 oublié réintroduit la dérive ASCII↔Unicode).**
 
+
                                                
 ## Leçon 65 — Un nouveau `NotificationType` non câblé dans `isTypeEnabled` contourne la préférence via `default:true` (F59, it.97)
 `isTypeEnabled(prefs, type)` mappe chaque `NotificationType` → son champ booléen de préférence. Son
@@ -615,6 +634,7 @@ sauf s'il est intentionnellement toujours-actif (sécurité/système). Audit rap
 `NotificationType` et cross-check vs les `case` — les types tombant sur `default` doivent être
 soit système, soit sans champ de préférence à créer (décision produit), jamais un type qui a déjà un
 toggle câblé pour son sibling.
+
 
                                                
 
@@ -771,6 +791,8 @@ ajouté à UNE route factory, grep immédiatement les routes SŒURS qui partagen
 même gabarit — ici `*-preferences.ts`) — une copie de code initiale figée avant le fix ne le reçoit
 jamais automatiquement, et rien ne le signale (pas d'erreur, pas de test qui casse, juste un
 comportement silencieusement différent entre deux entités qui devraient se comporter pareil).
+
+
                                                
                                                
 ## Leçon 69 — Une liste blanche de langues codée en dur diverge de la source de vérité des bundles (2026-07-05, itération 108)
@@ -904,3 +926,30 @@ de compilation répétée dans plusieurs comptes-rendus d'itérations sous l'ét
 non lié" mérite d'être élucidée au moins une fois plutôt que reconduite indéfiniment — le fait que ~26
 suites échouent à charger n'est jamais vraiment "sans rapport", même quand isolé du diff de la session
 en cours ; ici la cause était un import cassé trivial à corriger, pas un problème d'environnement.
+
+## Leçon 70 — F84c soldé : le durcissement `reactionSummary` était asymétrique entre les 3 services de réaction — vérifier l'état RÉEL de chaque jumeau avant de « propager » (2026-07-06, itération 115)
+
+**Contexte** : F84c (reporté par l'itération 113) décrivait la carte `reactionSummary` des posts/commentaires
+comme maintenue par delta read-modify-write et proposait de « propager le durcissement groupBy déjà
+appliqué aux réactions de message ». En vérifiant l'état réel de `main`, les trois services étaient dans
+**trois états différents** : `ReactionService` (message) recompute carte+total depuis `groupBy`
+(le plus dur) ; `PostReactionService`/`CommentReactionService` recomputent le **total** via `count()`
+(autoritaire) mais laissent la **carte par emoji** en delta. La PR ouverte #1560 (même numéro d'itération
+114, session parallèle) « durcissait » au contraire `ReactionService` en le RAMENANT à un delta + `count()`
+— soit une régression vis-à-vis du `groupBy` déjà présent sur `main` (patch écrit contre un `main` plus
+ancien). **Règle** : ne jamais faire confiance à la description d'un backlog reporté sur « quel jumeau est
+déjà durci » — `grep`/lire les 3 implémentations avant de choisir la cible et la direction. Ici la bonne
+direction était d'aligner post/commentaire sur le `groupBy` du message (le meilleur patron), pas l'inverse.
+
+**Fix** : `updatePostReactionSummary`/`updateCommentReactionSummary` réécrites sur
+`groupBy({ by:['emoji'], where, _count:{emoji:true} })` → carte ET total autoritaires ; `likeCount`
+conservé synchronisé sur le total. Signature privée simplifiée `(id)` (drop `emoji/action/count`), 4 sites
+d'appel adaptés. Une requête de MOINS par mutation (`groupBy` remplace `findUnique + count`). 142/142 sur
+les 2 suites, 352/352 sur 7 suites voisines, tsc vert. RED prouvé par `git stash` du seul source.
+
+**Trouvaille annexe (env)** : `bun install` déclenche un postinstall `turbo run generate --filter=@meeshy/shared`
+qui est resté **bloqué >35 min** sans jamais produire le client Prisma. `prisma generate --generator client`
+lancé **directement** dans `packages/shared` a réussi en **643 ms**. Le blocage venait du daemon/orchestration
+turbo, pas de Prisma. **Règle** : si le `generate` via turbo/bun postinstall traîne anormalement, le tuer et
+lancer `npx prisma generate` + `bun run build` directement dans `packages/shared` (les 2 prérequis de parité
+CI documentés dans CLAUDE.md) — beaucoup plus rapide et observable.

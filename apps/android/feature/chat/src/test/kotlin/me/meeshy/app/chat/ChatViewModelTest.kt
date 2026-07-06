@@ -805,4 +805,123 @@ class ChatViewModelTest {
         verify(exactly = 0) { h.socket.emitTypingStop(any()) }
         verify(exactly = 0) { h.socket.emitTypingStart(any()) }
     }
+
+    private fun chatMessages(vararg contents: Pair<String, String>) = flowOf(
+        CacheResult.Fresh(
+            contents.map { (id, text) ->
+                synced(ApiMessage(id = id, conversationId = "c1", senderId = "other", content = text))
+            },
+            ageMillis = 0,
+        ),
+    )
+
+    @Test
+    fun opening_search_and_typing_a_query_highlights_the_matching_bubbles() = runTest(dispatcher) {
+        val h = harness(chatMessages("m1" to "Hello world", "m2" to "goodbye", "m3" to "hello again"), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.openSearch()
+        h.vm.onSearchQueryChange("hello")
+
+        val search = h.vm.state.value.search
+        assertThat(search.isActive).isTrue()
+        assertThat(search.matchIds).containsExactly("m1", "m3").inOrder()
+        assertThat(search.activeMessageId).isEqualTo("m1")
+        assertThat(search.currentPosition).isEqualTo(1)
+        assertThat(search.matchCount).isEqualTo(2)
+        assertThat(search.highlightTerm).isEqualTo("hello")
+    }
+
+    @Test
+    fun next_and_previous_navigate_between_matches() = runTest(dispatcher) {
+        val h = harness(chatMessages("m1" to "hello world", "m3" to "hello again"), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openSearch()
+        h.vm.onSearchQueryChange("hello")
+
+        h.vm.nextSearchMatch()
+        assertThat(h.vm.state.value.search.activeMessageId).isEqualTo("m3")
+
+        h.vm.previousSearchMatch()
+        assertThat(h.vm.state.value.search.activeMessageId).isEqualTo("m1")
+    }
+
+    @Test
+    fun closing_search_clears_the_query_and_highlight() = runTest(dispatcher) {
+        val h = harness(chatMessages("m1" to "hello"), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openSearch()
+        h.vm.onSearchQueryChange("hello")
+
+        h.vm.closeSearch()
+
+        val search = h.vm.state.value.search
+        assertThat(search.isActive).isFalse()
+        assertThat(search.query).isEmpty()
+        assertThat(search.matchIds).isEmpty()
+        assertThat(search.highlightTerm).isNull()
+    }
+
+    @Test
+    fun search_reconciles_and_keeps_focus_when_a_new_matching_message_streams_in() = runTest(dispatcher) {
+        val stream = MutableStateFlow<CacheResult<List<LocalMessage>>>(
+            CacheResult.Fresh(
+                listOf(
+                    synced(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "hello world")),
+                    synced(ApiMessage(id = "m3", conversationId = "c1", senderId = "other", content = "hello again")),
+                ),
+                ageMillis = 0,
+            ),
+        )
+        val h = harness(stream, currentUser = me)
+        advanceUntilIdle()
+        h.vm.openSearch()
+        h.vm.onSearchQueryChange("hello")
+        h.vm.nextSearchMatch()
+        assertThat(h.vm.state.value.search.activeMessageId).isEqualTo("m3")
+
+        stream.value = CacheResult.Fresh(
+            listOf(
+                synced(ApiMessage(id = "m0", conversationId = "c1", senderId = "other", content = "hello newest")),
+                synced(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "hello world")),
+                synced(ApiMessage(id = "m3", conversationId = "c1", senderId = "other", content = "hello again")),
+            ),
+            ageMillis = 0,
+        )
+        advanceUntilIdle()
+
+        val search = h.vm.state.value.search
+        assertThat(search.matchIds).containsExactly("m0", "m1", "m3").inOrder()
+        assertThat(search.activeMessageId).isEqualTo("m3")
+    }
+
+    @Test
+    fun search_never_matches_deleted_messages() = runTest(dispatcher) {
+        val h = harness(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(
+                        synced(
+                            ApiMessage(
+                                id = "gone",
+                                conversationId = "c1",
+                                senderId = "other",
+                                content = "hello secret",
+                                deletedAt = "2026-07-06T00:00:00Z",
+                            ),
+                        ),
+                        synced(ApiMessage(id = "live", conversationId = "c1", senderId = "other", content = "hello there")),
+                    ),
+                    ageMillis = 0,
+                ),
+            ),
+            currentUser = me,
+        )
+        advanceUntilIdle()
+        h.vm.openSearch()
+
+        h.vm.onSearchQueryChange("hello")
+
+        assertThat(h.vm.state.value.search.matchIds).containsExactly("live")
+    }
 }

@@ -675,6 +675,64 @@ describe('MessageReadStatusService', () => {
   });
 
   // ==============================================
+  // DEDUP KEY REFLECTS THE RESOLVED MESSAGE (regression)
+  // ==============================================
+  //
+  // The 2s dedup gate must key on the ACTUAL newest message, not the constant
+  // string "latest". When a caller omits latestMessageId, resolving the newest
+  // message has to happen BEFORE the dedup check — otherwise two argument-less
+  // calls that resolve to DIFFERENT newest messages collide on one key and the
+  // second is silently dropped, stalling the read/delivery advance for up to
+  // the full TTL even though a genuinely newer message arrived in between.
+
+  describe('dedup key reflects the resolved latest message (regression)', () => {
+    it('markMessagesAsRead advances to a newer message after an argument-less mark deduped, when a newer message arrived', async () => {
+      // 1st argument-less mark resolves latest = testMessageId and advances.
+      mockPrisma.message.findFirst.mockResolvedValueOnce({ id: testMessageId, createdAt: new Date('2025-01-01') });
+      await service.markMessagesAsRead(testParticipantId, testConversationId);
+
+      // A newer message arrives; a 2nd argument-less mark (well within the 2s
+      // TTL) now resolves latest = testMessageId2. It MUST NOT be swallowed by
+      // the dedup gate, because its resolved key differs from the first call's.
+      mockPrisma.message.findFirst.mockResolvedValueOnce({ id: testMessageId2, createdAt: new Date('2025-01-02') });
+      await service.markMessagesAsRead(testParticipantId, testConversationId);
+
+      expect(mockPrisma.message.findFirst).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lastReadMessageId: testMessageId2 })
+        })
+      );
+    });
+
+    it('markMessagesAsRead still dedups a repeat argument-less mark that resolves the SAME latest message', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01') });
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId);
+
+      // Second call resolves the same newest message → same key → deduped: the
+      // cursor advance runs exactly once.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('markMessagesAsReceived advances to a newer message after an argument-less mark deduped, when a newer message arrived', async () => {
+      mockPrisma.message.findFirst.mockResolvedValueOnce({ id: testMessageId, createdAt: new Date('2025-01-01') });
+      await service.markMessagesAsReceived(testParticipantId, testConversationId);
+
+      mockPrisma.message.findFirst.mockResolvedValueOnce({ id: testMessageId2, createdAt: new Date('2025-01-02') });
+      await service.markMessagesAsReceived(testParticipantId, testConversationId);
+
+      expect(mockPrisma.message.findFirst).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lastDeliveredMessageId: testMessageId2 })
+        })
+      );
+    });
+  });
+
+  // ==============================================
   // GET MESSAGE READ STATUS TESTS
   // ==============================================
 

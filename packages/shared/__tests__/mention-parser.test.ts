@@ -171,5 +171,14 @@ describe('parseMentions', () => {
     it('ne confond pas une adresse e-mail (@ suivi d\'espace) avec une mention', () => {
       expect(hasMentions('Email: test@ domain.com')).toBe(false);
     });
+
+    it('ne confond pas une adresse e-mail collée (word@name) avec une mention — parité parseMentions', () => {
+      // parseMentions applique NAME_BOUNDARY_LEFT sur ses deux chemins, donc
+      // `contact@marie.com` ne résout AUCUNE mention. hasMentions doit être
+      // cohérent : le `@` précédé d'un caractère de nom fait partie d'un e-mail.
+      expect(parseMentions('écris à contact@marie.com', [])).toEqual([]);
+      expect(hasMentions('écris à contact@marie.com')).toBe(false);
+      expect(hasMentions('reply to jean.dupont@example.org please')).toBe(false);
+    });
   });
 });
