@@ -117,6 +117,9 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: MeeshyWidgets
+    dependencies:
+      - package: MeeshySDK
+        product: MeeshySDK
     settings:
       INFOPLIST_FILE: MeeshyWidgets/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.widgets
