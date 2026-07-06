@@ -826,7 +826,7 @@ struct BubbleStandardLayout: View {
                 // Emoji-only intentionally renders the ORIGINAL `message.content`,
                 // not the translated text — emoji bubbles are not translated.
                 Text(message.content)
-                    .font(.system(size: emojiFontSize))
+                    .font(MeeshyFont.relative(emojiFontSize, design: .default))
                     .fixedSize(horizontal: false, vertical: true)
                     .overlay(alignment: .topLeading) {
                         if content.editedAt != nil {
@@ -902,7 +902,7 @@ struct BubbleStandardLayout: View {
                         // card), pas s'etirer sur 70% de la largeur d'ecran. Le
                         // VStack parent gere deja l'alignement naturel a gauche.
                         Text(message.content)
-                            .font(.system(size: emojiFontSize))
+                            .font(MeeshyFont.relative(emojiFontSize, design: .default))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         expandableTextView

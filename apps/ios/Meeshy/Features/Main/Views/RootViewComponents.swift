@@ -622,7 +622,7 @@ struct ThemedFeedOverlay: View {
                                     .equatable()
                             }
                         }
-                        .staggeredAppear(index: index, baseDelay: 0.06)
+                        .staggeredAppear(index: index, baseDelay: MeeshyAnimation.staggerDelay + 0.02)
                         .onAppear {
                             Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                             viewModel.prefetchComments(post.id)

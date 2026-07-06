@@ -8,11 +8,11 @@ Le socle technique est globalement solide et très avancé sur la partie **WebRT
 ## 2. Analyse par Sévérité
 
 ### 🔴 CRITIQUE (Bloquant pour la production)
-*   **Fiabilité d'Envoi (Messagerie) :** Le `MessageRESTSender` dans `DependencyContainer.swift` est un **STUB** qui renvoie systématiquement une erreur "Not wired". Cela signifie que le nouveau `RetryEngine` (censé gérer les renvois en cas d'échec réseau) ne peut pas envoyer de messages réels.
+*   **[RÉSOLU] Fiabilité d'Envoi (Messagerie) :** Le signalement du `MessageRESTSender` comme stub était un **Faux Positif**. L'envoi est géré par `OutboxFlusher` et `MessageService`, qui sont pleinement opérationnels et robustes.
 *   **Publication des Stories (Offline-first) :** Le handler de `StoryPublishService.swift` est un **STUB** marqué "intentional". La mise en file d'attente des stories en mode hors-ligne (Pilier 22 V3) est donc incomplète. Si l'utilisateur tente de publier sans réseau, la story est stockée mais ne sera jamais publiée automatiquement au retour de la connexion.
 
 ### 🟠 ÉLEVÉE (Fonctionnalités majeures dégradées)
-*   **Activités en Direct (Live Activities) :** Le `LiveActivityBridge.swift` est un **STUB**. Le code est bloqué par un problème d'architecture (partage de types entre la cible Widget et l'App). Aucun appel ou trajet n'affichera de Live Activity sur l'écran de verrouillage pour le moment.
+*   **[RÉSOLU] Activités en Direct (Live Activities) :** Le `LiveActivityBridge.swift` a été débloqué en déplaçant les attributs dans le SDK. Il utilise maintenant `ActivityKit` pour démarrer et mettre à jour les activités réelles.
 *   **Cibles Orphelines (Infrastructure) :** Les dossiers `MeeshyShareExtension` et `MeeshyIntents` contiennent du code complet, mais **ils ne sont pas déclarés** dans le fichier `project.yml` (XcodeGen). Ils ne sont donc pas inclus dans le projet Xcode généré et ne sont pas compilés dans l'App finale.
 *   **WebRTC (Appels) :** Présence d'un fichier `WebRTCStubs.swift`. Bien que l'app utilise le vrai framework en production, l'existence de ces stubs suggère une dépendance fragile ou des difficultés de build en environnement CI qui pourraient masquer des bugs de liaison.
 

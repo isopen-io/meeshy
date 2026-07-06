@@ -237,6 +237,7 @@
 		5DCA66C59287D0C2FA522A6C /* PendingStatusQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6318D1AEA754DF54C107EA18 /* PendingStatusQueueTests.swift */; };
 		5E0ACA1781F34E266EA83D59 /* BubbleExpandableTextStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF369EF6EC2EF7B49A43D751 /* BubbleExpandableTextStateTests.swift */; };
 		5E3CB75677975EBC91647542 /* FeedbackToastManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 169D604ED22CAFDF88B1CE33 /* FeedbackToastManagerTests.swift */; };
+		5E89DF9ABA71576115D36491 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = 7DFC85568883582F16D79C59 /* MeeshySDK */; };
 		5F3BB9F326238EE2E2624A4D /* DataExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535F8ED5D7564ABA1A854258 /* DataExportView.swift */; };
 		60217B38DF603F4206000ADB /* AffiliateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5683953E8A118D806C26F400 /* AffiliateView.swift */; };
 		60B2F7A2E0749C34A3242AF9 /* DarkFrameDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62FD9669B8E2B44A00E72257 /* DarkFrameDetectorTests.swift */; };
@@ -308,6 +309,7 @@
 		7C2970BA6A204EDE37202704 /* MessageActionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BBF3392D5B55ED9E17E68A8 /* MessageActionResolver.swift */; };
 		7C2D606243CDC3349C64D957 /* MeeshyWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B2E8E44274BFD31F63D9A6C5 /* MeeshyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		7C4F0C328A1257D3B815766A /* MockProfileCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582C70987BB37E1029AD33FB /* MockProfileCache.swift */; };
+		7CC2FB542ED6553801896E5F /* WebRTCVideoViewAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1F576B18B60C6835C40D4AE /* WebRTCVideoViewAccessibilityTests.swift */; };
 		7CE5593DFA6DF14D59B62CC1 /* RequestsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A184E0CDF5AA08E498EDD05 /* RequestsViewModelTests.swift */; };
 		7D0703B42A7362E2CF1F50F5 /* AdaptiveRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DE232F8ADAE39199D778806 /* AdaptiveRootView.swift */; };
 		7D6FB68FB50AEB4C41096ACC /* BubbleSecondaryContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC5625A3FFF7FFD71902EC57 /* BubbleSecondaryContent.swift */; };
@@ -535,6 +537,7 @@
 		CED021E29315A3D1A3795C52 /* ConversationInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6516EE29BF060C0909FAA39 /* ConversationInfoSheet.swift */; };
 		CEF2D19144F83D020B73344F /* BubbleSystemViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FED7DB1863271ED8DD5E7F80 /* BubbleSystemViews.swift */; };
 		CF12F2974D5A8817B0FB5B04 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = A2EA1255277DE18035F0BAFF /* MeeshySDK */; };
+		CF74D0A9DCC4FECCCBF36180 /* MeeshyShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F737DB4E37AC47B134665F21 /* MeeshyShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CFA066F1C233118A246E5596 /* VoiceProfileWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D4DAF5DC5215EC48A978EAE /* VoiceProfileWizardView.swift */; };
 		CFC63171F11D174DEE6EE93B /* VoIPPushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92754C2E4AD519D9E779BF75 /* VoIPPushManager.swift */; };
 		CFCA7E77F15FD710284A318D /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3225C64F1DBE72267E5C6B32 /* AboutView.swift */; };
@@ -653,6 +656,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		82310C121728213D748521ED /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 520FF232375591D2444919CD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E92CA5A0623E606BD619670E;
+			remoteInfo = MeeshyShareExtension;
+		};
 		8CCA30BF877C4AB27CA2D50A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 520FF232375591D2444919CD /* Project object */;
@@ -685,6 +695,7 @@
 			files = (
 				7C2D606243CDC3349C64D957 /* MeeshyWidgets.appex in Embed Foundation Extensions */,
 				983331C0366D2E304EA716A6 /* MeeshyNotificationExtension.appex in Embed Foundation Extensions */,
+				CF74D0A9DCC4FECCCBF36180 /* MeeshyShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1301,6 +1312,7 @@
 		F0D8961BD0F9A91E71EAEA92 /* ConversationViewModelOtherUnreadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelOtherUnreadTests.swift; sourceTree = "<group>"; };
 		F194D9E935A7863E52C68758 /* VideoFrameConverterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameConverterTests.swift; sourceTree = "<group>"; };
 		F1E073DF0767D8B30C28394A /* BlockedViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedViewModelTests.swift; sourceTree = "<group>"; };
+		F1F576B18B60C6835C40D4AE /* WebRTCVideoViewAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCVideoViewAccessibilityTests.swift; sourceTree = "<group>"; };
 		F2ACE6D54686C6E01278905B /* VideoEmbedContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEmbedContainer.swift; sourceTree = "<group>"; };
 		F2E7DECEDA656D5B7175A602 /* MeeshyWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MeeshyWidgets.entitlements; sourceTree = "<group>"; };
 		F32020DBA8C778D5742E506D /* MeeshyNotificationExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MeeshyNotificationExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1342,6 +1354,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		7D66EC407B5921ACA5F59F8E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E89DF9ABA71576115D36491 /* MeeshySDK in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		96CA0693122208C62051E7A0 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -1476,6 +1496,7 @@
 				DD04554E079BCF486746DF23 /* ThemedBackButtonTests.swift */,
 				7CF88D77784E5BC14FA89555 /* TrackEngagementModifierTests.swift */,
 				A1818AAE8A2DC7E2A58C434F /* VoiceProfileViewTests.swift */,
+				F1F576B18B60C6835C40D4AE /* WebRTCVideoViewAccessibilityTests.swift */,
 				DF6AB4035994D69B52CA660D /* Bubble */,
 				E6E5C770D05C221CA421E8B3 /* Helpers */,
 				9CEC712D41366B98FCF1CAC1 /* Skeletons */,
@@ -2479,6 +2500,7 @@
 			dependencies = (
 				D72CFCB3D6A026BE007381F4 /* PBXTargetDependency */,
 				59CBDD851575E0D006834FC0 /* PBXTargetDependency */,
+				8273C48817CEAD5DB838485A /* PBXTargetDependency */,
 			);
 			name = Meeshy;
 			packageProductDependencies = (
@@ -2499,6 +2521,7 @@
 			buildConfigurationList = E095CB0A69B4A806BFDC4CC8 /* Build configuration list for PBXNativeTarget "MeeshyWidgets" */;
 			buildPhases = (
 				1061B63B37DD9632AD57AE22 /* Sources */,
+				7D66EC407B5921ACA5F59F8E /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -2506,6 +2529,7 @@
 			);
 			name = MeeshyWidgets;
 			packageProductDependencies = (
+				7DFC85568883582F16D79C59 /* MeeshySDK */,
 			);
 			productName = MeeshyWidgets;
 			productReference = B2E8E44274BFD31F63D9A6C5 /* MeeshyWidgets.appex */;
@@ -3295,6 +3319,7 @@
 				8A7D01A8A40D5A72B2924032 /* WebRTCErrorTests.swift in Sources */,
 				8902D33AC4FA76FE86188301 /* WebRTCServiceTests.swift in Sources */,
 				390674BE9B35FB5D5AADB6B9 /* WebRTCTypesTests.swift in Sources */,
+				7CC2FB542ED6553801896E5F /* WebRTCVideoViewAccessibilityTests.swift in Sources */,
 				0CFCC644A0E8FE2BF91C0D8D /* WidgetDataManagerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -3311,6 +3336,11 @@
 			isa = PBXTargetDependency;
 			target = 9999AD8C50CACBF85DF613CF /* Meeshy */;
 			targetProxy = ABDACD2C6212EAE6DE5B9DFF /* PBXContainerItemProxy */;
+		};
+		8273C48817CEAD5DB838485A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E92CA5A0623E606BD619670E /* MeeshyShareExtension */;
+			targetProxy = 82310C121728213D748521ED /* PBXContainerItemProxy */;
 		};
 		D72CFCB3D6A026BE007381F4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -3444,6 +3474,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = me.meeshy.app.widgets;
 				SDKROOT = iphoneos;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -3480,6 +3511,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = me.meeshy.app.widgets;
 				SDKROOT = iphoneos;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -3737,6 +3769,10 @@
 		52A8D6C05F60D2E8F5BFDC9F /* MeeshyUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MeeshyUI;
+		};
+		7DFC85568883582F16D79C59 /* MeeshySDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MeeshySDK;
 		};
 		910E167730EA890761AF5B9D /* FirebaseMessaging */ = {
 			isa = XCSwiftPackageProductDependency;
