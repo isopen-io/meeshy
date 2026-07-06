@@ -11,6 +11,7 @@ import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.NotificationApi
 import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
@@ -38,6 +39,7 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
     val callHistory: CallHistoryApi = retrofit.create()
     val translation: TranslationApi = retrofit.create()
     val media: MediaApi = retrofit.create()
+    val preferences: PreferencesApi = retrofit.create()
 
     companion object {
         val json: Json = Json {

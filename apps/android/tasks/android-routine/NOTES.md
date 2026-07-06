@@ -3,6 +3,20 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-06 (`settings-notification-prefs-sync`): a literal `/*` inside a KDoc `/** */` is an "Unclosed comment".**
+  Writing `` `/api/v1/me/preferences/*` `` in a KDoc line makes the Kotlin lexer open a *nested* block comment at
+  the `/*` that never closes → `error: Unclosed comment`, and the whole file fails to compile (which cascaded into
+  a misleading Hilt/KSP `error.NonExistentClass` on the class the KDoc documented). Never put a bare `/*` (glob,
+  path wildcard, C-comment) in a doc comment — reword to `{category}`/`…`. Same trap applies to `*/` inside a KDoc.
+- **2026-07-06 (`settings-notification-prefs-sync`): wiring a *dead declaration* is a clean, high-value slice.**
+  `OutboxKind.UPDATE_SETTINGS` + `OutboxLanes.SETTINGS` existed with no coalescer rule and no worker sender (an
+  `else -> Enqueue` fall-through). The whole slice was: pure wire-body SSOT in `:core:model` (mirrors the gateway
+  Zod schema field-for-field, drops the local-only `extras`), a session-gated `enqueueSync` repo (mirrors
+  `enqueueProfileEdit` but with **no optimistic session flip** — the device DataStore store already holds the
+  value, and the PATCH is idempotent so no exhaust-rollback is needed), the explicit `UPDATE_SETTINGS` coalescer
+  arm, and the sender. Grep for enum values that have a lane mapping but no sender/coalescer arm — they are
+  latent "declared but never delivered" features. The `updateNotifications` single-funnel in the VM meant *one*
+  edit (persist-then-`enqueueSync`-then-wake-worker-on-`cmid`) covered **every** notification toggle at once.
 - **2026-07-06 (`settings-notification-type-toggles`): keep locale-aware search pure by injecting the label fn.**
   A "searchable" list needs to match localized labels, but string resources must not leak into `:core:model`
   (that would break SDK purity and force a Robolectric/Context dependency into a pure test). Solution:

@@ -2,7 +2,26 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync)** → rest`
+
+> On 2026-07-06 the **offline-queued notification-preference backend sync** landed (slice
+> `settings-notification-prefs-sync`, §L): the previously-declared-but-dead `OutboxKind.UPDATE_SETTINGS` /
+> `OutboxLanes.SETTINGS` are now wired end-to-end so a device-local notification toggle debounce-syncs to the
+> gateway (`PATCH /me/preferences/notification`), offline-durable, mirroring `edit-profile-optimistic`. Pure
+> core: `:core:model` `NotificationPreferenceSyncBody.from(prefs)` — the gateway-contract SSOT projecting the
+> block into the wire body (all 30 `NotificationPreferenceSchema` fields, the local-only `extras` map dropped,
+> `dndDays` riding as the lowercase enum tokens). Seams: `core/network` `PreferencesApi.updateNotification`
+> (idempotent PATCH → `ApiResponse<Unit>`, the device store stays UI-authoritative so the response is ignored);
+> `:sdk-core` `NotificationPreferencesSyncRepository.enqueueSync` (session-gated durable enqueue keyed by own
+> user id — inert `null` with no session / blank id, no optimistic session flip since the store already holds
+> the value); an `OutboxCoalescer` `UPDATE_SETTINGS` latest-snapshot rule (an offline toggle burst collapses to
+> one PATCH) + an `OutboxFlushWorker` `UPDATE_SETTINGS` sender (bad payload → permanent, network fail →
+> transient/retry; no rollback on exhaust — the PATCH is idempotent and the local store is truth). Wiring:
+> `SettingsViewModel.updateNotifications` — the single funnel every persisted toggle flows through — now paints
+> the local store instantly (UI SSOT) **then** enqueues the sync and wakes the flush worker only on a real
+> `cmid`; the UI-only search query never syncs. +15 tests (4 body, +3 coalescer, 4 repo, 4 VM). `assembleDebug`
+> + full `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses iOS, whose preference write is online-only.
+> Reviewer: PASS (diff apps/android only; behaviour-through-public-API; SDK-purity/SSOT/instant-app honoured).
 
 > On 2026-07-05 the **persisted interface (UI chrome) language** landed (slice `settings-interface-language`,
 > §L — mirrors the theme slice one step further): the pure `:core:model` `AppLanguage` helpers are the SSOT —
@@ -471,9 +490,13 @@ slices, in value order:
    injected-label case-insensitive/trimmed search that omits empty categories. `SettingsViewModel`
    `setNotificationTypeEnabled`/`setNotificationTypeQuery`; `SettingsScreen` search field + accent category
    headers + push-gated per-type switches. +14 tests. See run log. Reused the notification store — no new store.
-3. **Backend sync of notification prefs** — wire the local block through a new outbox lane so the device-local
-   choice debounce-syncs to the gateway (`PATCH /users/me/preferences`), mirroring `edit-profile-optimistic`.
-   Closes the "online-only vs device-local" gap noted in `feature-parity.md §L`.
+3. ~~**Backend sync of notification prefs**~~ ✅ shipped 2026-07-06 as `settings-notification-prefs-sync` —
+   the dead `OutboxKind.UPDATE_SETTINGS`/`OutboxLanes.SETTINGS` wired end-to-end: pure
+   `NotificationPreferenceSyncBody` (gateway `PATCH /me/preferences/notification` contract SSOT, drops `extras`),
+   `PreferencesApi`, session-gated `NotificationPreferencesSyncRepository`, an `UPDATE_SETTINGS` coalescer
+   latest-snapshot rule + `OutboxFlushWorker` sender, and `SettingsViewModel` local-first-then-sync wiring.
+   +15 tests. See run log. Closes the "online-only vs device-local" gap. **Next up (highest value):** #4 regional
+   (content) language preference — the last no-op Settings row.
 4. **Regional (content) language preference** — the still-no-op `settings_regional_language` row. Distinct
    from the interface language just shipped: this is a *Prisme content*-preference (`ContentLanguagePreferences`
    / backend profile), resolved via `LanguageResolver`, NOT the app UI locale. Wire it through the
