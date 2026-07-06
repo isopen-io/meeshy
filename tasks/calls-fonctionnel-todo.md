@@ -899,3 +899,93 @@ trouvé quelque chose de bien plus grave.
   test existant (`use-webrtc-p2p.test.tsx:478-520`) ne couvre que le cas SDP identique
   (`'offer-sdp-dup'`), pas une offre distincte qui course. Non corrigé cette session (portée
   volontairement limitée à la régression critique ci-dessus) — candidat pour la prochaine session.
+
+## Vague 18 — la régression `8ebd497b` (Vague 17) avait aussi supprimé le P0 initiateur web lui-même : un appelant web ne voyait JAMAIS sa propre UI d'appel (2026-07-06)
+
+Point d'entrée : routine calling-feature. La Vague 17 documentait avoir restauré "le sous-ensemble
+calling" de la régression `8ebd497b` (97 fichiers gateway touchés au total par ce commit), en listant
+explicitement une portée limitée au gateway. Avant de considérer cette régression close, cette session a
+vérifié l'état réel du code (pas seulement les docs) pour tout le périmètre calling, y compris web/iOS —
+et a croisé les diffs des 2 PR ouvertes non mergées (#1558, #1563) contre `main` pour éviter tout doublon.
+Ce croisement a révélé que les docs de `main` (Vagues 13-16, mentionnant des fixes déjà "vérifiés") avaient
+elles-mêmes été effacées par `8ebd497b` et ne survivaient que dans les branches de #1558/#1563 — les fixes
+correspondants n'étaient PAS tous sur `main`.
+
+- **[RÉGRESSION CRITIQUE, web, CONFIRMÉE + CORRIGÉE]** `8ebd497b` (`git diff cc9380a5 8ebd497b -- apps/web/hooks/conversations/use-video-call.ts apps/web/components/video-call/CallManager.tsx`)
+  a supprimé silencieusement le P0 fix du jour lui-même (commit `682c35279`, documenté Vague 16 mais jamais
+  vérifié contre le code réel de `main` avant cette session) : `useVideoCall.startCall` ne pose plus
+  `currentCall`/`isInCall` depuis l'ack `call:initiate` — la gateway ne réémettant JAMAIS `call:initiated`
+  vers le socket de l'initiateur lui-même, **un appelant web ne voyait plus aucune UI d'appel sortant**
+  (ni écran de sonnerie, ni contrôles) alors que le callee était correctement sonné. Bug maximal :
+  fonctionnalité d'appel sortant web totalement invisible pour son propre auteur, en production, depuis le
+  merge de `8ebd497b` (PR #1525, 2026-07-06) — aucun test ne l'a attrapé car les tests couvrant exactement
+  ce chemin (`use-video-call.test.tsx`, section P0, `CallManager.initiatorTimeout.test.tsx` inexistant à
+  l'époque) ont été supprimés/tronqués DANS LE MÊME COMMIT, donc la CI est restée verte. Fix : restauration
+  du bloc `setCurrentCall` (ack handler) + import `useAuth` dans `use-video-call.ts`, à l'identique du code
+  d'avant régression (diff vérifié nul entre `cc9380a5` et l'état restauré).
+- **[RÉGRESSION RÉELLE, web, CONFIRMÉE + CORRIGÉE]** Même commit, mêmes fichiers : la fonction
+  `checkForActiveCall` (Vague 14 — replay `call:check-active` à chaque connexion, pour qu'un callee web
+  dont l'onglet recharge/se réveille pendant la sonnerie voie quand même la bannière d'appel entrant) et le
+  whitelist `call:error` transitoire (Vague 15 — `RATE_LIMIT_EXCEEDED`/`TARGET_NOT_FOUND`/`INVALID_SIGNAL`
+  non-fatals, chacun avec un incident prod daté) ont aussi disparu de `CallManager.tsx`, sans jamais être
+  restaurés par la Vague 17 (portée gateway-only de cette session-là). Fix : restauration à l'identique
+  (mêmes 2 blocs, mêmes commentaires) + les 3 fichiers de test associés (`CallManager.callError.test.tsx`
+  entièrement supprimé par `8ebd497b`, recréé à l'identique ; `CallManager.reconnect.test.tsx` et
+  `use-video-call.test.tsx` : hunks manquants réappliqués).
+- **[RÉGRESSION MINEURE, types, CORRIGÉE]** `CallError.callId` (champ optionnel documenté pour un futur
+  filtrage client "ignorer une erreur dont le callId ne correspond pas à l'appel courant") supprimé de
+  `packages/shared/types/video-call.ts` par le même commit. Vérifié inerte des deux côtés (gateway ne le
+  peuple encore nulle part dans ses émissions `call:error`, aucun client ne le lit) — restauré par hygiène
+  de type/documentation, aucun comportement affecté.
+- **[PR #1558 auditée, absorbée]** La PR ouverte `#1558` ("boot-floor gap in phantom-cleanup + web
+  initiator race/dead-timeout regressions") ajoute 2 fixes complémentaires, réels et non redondants avec ce
+  qui précède : (1) gateway — `CallService.isPhantomCallStale` n'avait AUCUN plancher `bootedAt` pour sa
+  branche sans données de heartbeat (`this.heartbeats` toujours vide juste après un restart), rouvrant la
+  classe de bug "item H" pour un appel réel cross-conversation démarré peu avant un restart gateway
+  (mêmes symptômes que le fix `682c35279` documenté Vague 16, réouverts par le timing du restart) ; (2) web
+  — `call-store.ts` : un `call:participant-joined` gagnant la course contre l'ack `call:initiate` de
+  l'initiateur (latence asymétrique, callee très rapide) était perdu silencieusement par `addParticipant`
+  (no-op tant que `currentCall` est `null`), puis l'ack écrasait `currentCall` avec un tableau de
+  participants vide — bloquant l'appel en silence (aucune offre SDP jamais créée pour un participant
+  "invisible"). **Mais ces 2 fixes, tels que commités sur la branche de #1558, sont construits sur l'état
+  DÉJÀ RÉGRESSÉ de `use-video-call.ts`** (vérifié : `git show origin/claude/loving-thompson-tcsohg:apps/web/hooks/conversations/use-video-call.ts`
+  ne contient PAS le bloc `setCurrentCall`) — le nouvel effet `startCallTimeout` de cette PR (gate
+  `currentCall.initiatorId !== user.id`) et le buffer `pendingParticipantsByCallId` ne pouvaient donc
+  JAMAIS s'exécuter en usage réel sur `main`, seulement dans leurs propres tests (qui posent `currentCall`
+  directement via un helper de test, court-circuitant le vrai chemin de production cassé). Autrement dit,
+  la PR #1558 avait une **couverture de test illusoire** sur son propre correctif — ses tests passent mais
+  le bug qu'elle cible ne pouvait pas se produire tel quel tant que le P0 restait absent (un symptôme
+  totalement différent — pas d'UI du tout — masquait le sien). Les 2 fixes de #1558 sont réels et de valeur
+  une fois le P0 restauré (cette session) : absorbés ici avec leurs tests (`CallService.test.ts` boot-floor,
+  `call-store.test.ts` buffer ×3, `CallManager.initiatorTimeout.test.tsx` ×2). #1558 et #1563 (note
+  d'audit, documentation seule, déjà supersédée par cette Vague) seront fermées avec un commentaire pointant
+  vers ce merge.
+- **Portée non traitée (inchangée du principe Vague 17)** : `8ebd497b` touche 97 fichiers gateway au total
+  et un nombre significatif de fichiers iOS (Swift) — `CallSignalGlyph.swift`, `CallTypeBadgeView.swift`,
+  plusieurs suites de tests iOS (`CallSignalIndicatorTests`, `CallViewLayoutGuardTests`,
+  `CallViewObservedObjectInjectionTests`, `CallQualityIndicatorsUITests`, `FloatingCallPillViewTests`
+  partiellement) supprimées dans le même commit, ainsi qu'un remaniement substantiel de `CallManager.swift`/
+  `CallAudioEffectsService.swift` (ce dernier semble être un remplacement de service plutôt qu'une pure
+  perte — nécessite une lecture approfondie avec compilateur Swift pour distinguer refactor légitime de
+  régression, cf. `docs/audit-calls-2026-05-11.md` et `scripts/call-reliability-report.sh` également tronqués/
+  supprimés côté docs/scripts, non restaurés — impact nul sur le runtime, priorité basse). **Non traité
+  cette session** (environnement Linux sans toolchain Xcode/Swift — cf. discipline établie vagues 11/15/17) —
+  candidat prioritaire pour une session avec accès macOS : auditer `git diff cc9380a5 8ebd497b8 --
+  'apps/ios/**'` fichier par fichier avant de restaurer quoi que ce soit (certains fichiers ont légitimement
+  évolué depuis et un `checkout` naïf écraserait ce travail).
+- **Tests** : suite gateway filtrée `*[Cc]all*` : 30/30 suites, 844/844 tests verts (dont le nouveau test
+  boot-floor). Suite web filtrée `*[Cc]all*` : 17/17 suites, 227/227 tests verts (dont les 2 fichiers de
+  test restaurés/recréés + le nouveau `CallManager.initiatorTimeout.test.tsx`). `tsc --noEmit` gateway :
+  327 erreurs avant/après diff, identiques (toutes `@prisma/client` non généré, limitation sandbox connue,
+  aucune nouvelle). `tsc --noEmit` web : 1512→1513 erreurs, diff textuel confirmé — le +1 est une occurrence
+  supplémentaire de la même catégorie pré-existante (`socket` typé faiblement dans ce fichier, 27
+  occurrences déjà tolérées) sur le site `checkForActiveCall` restauré, pas une nouvelle classe d'erreur.
+  Suite web complète (non filtrée) : 413/436 suites vertes, les 23 échecs sont TOUS la même cause
+  pré-existante documentée dans `CLAUDE.md` (`packages/shared` non buildé dans ce sandbox — résolution de
+  module `@meeshy/shared/dist/*` échoue), zéro suite `*call*` parmi les échecs, zéro nouvelle régression.
+- **Leçon pour la prochaine session** : une entrée de backlog documentant un fix ("Vague N: FIXED") n'est
+  une preuve de RIEN si elle n'a pas été vérifiée contre le code réel de `main` au moment de la lecture —
+  ce fichier lui-même a été partiellement effacé par la régression qu'il aurait dû aider à détecter. Avant
+  de faire confiance à une entrée de ce backlog pour "passer" une zone du code, `grep` la primitive
+  technique citée (nom de fonction, champ, constante) directement dans le fichier source sur `HEAD` — ne
+  jamais supposer qu'une doc présente sur `main` implique que le code l'est aussi.
