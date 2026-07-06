@@ -78,6 +78,17 @@ export class CallCleanupService {
   // background push that tears it down.
   private missedCallCancelPush: ((callId: string, conversationId: string | undefined, duration: number) => Promise<void>) | null = null;
 
+  // Persisted missed-call notification (Notification row + push) — mirrors
+  // every other terminal `missed` path (ringing-timeout, call:leave,
+  // call:end), which all call CallEventsHandler's own
+  // `createMissedCallNotifications`. GC tier 1 (initiated/ringing > 120s) is
+  // the one terminal `missed` path that bypasses CallEventsHandler entirely
+  // (see `forceEndCall`), so without this hook a callee reaped only by this
+  // backstop (the in-process ringing timer AND boot rehydration both missed
+  // it) never gets a notification-center entry or missed-call badge — only
+  // the CallKit-teardown cancel push above.
+  private missedCallNotify: ((callId: string) => Promise<void>) | null = null;
+
   constructor(
     private prisma: PrismaClient,
     private callService?: CallService,
@@ -128,6 +139,14 @@ export class CallCleanupService {
   ): void {
     this.missedCallCancelPush = cancelPush;
     logger.info('[CallCleanupService] Missed-call cancel-push callback attached — phantom-ringing callees will be released on GC tier 1');
+  }
+
+  // Mirrors `setMissedCallCancelPushCallback` — injected from server startup
+  // once CallEventsHandler exists, so GC tier 1's `missed` calls also get a
+  // persisted notification (see the field doc above).
+  setMissedCallNotifyCallback(notify: (callId: string) => Promise<void>): void {
+    this.missedCallNotify = notify;
+    logger.info('[CallCleanupService] Missed-call notify callback attached — GC tier 1 missed calls will get a notification');
   }
 
   start(): void {
@@ -482,6 +501,15 @@ export class CallCleanupService {
     if (this.missedCallCancelPush && endReason === CallEndReason.missed) {
       this.missedCallCancelPush(callId, session?.conversationId ?? undefined, duration).catch((error) => {
         logger.error('[CallCleanupService] Failed to send missed-call cancel push for GC-ended call', { callId, error });
+      });
+    }
+
+    // Persisted missed-call notification — see the field doc on
+    // `missedCallNotify`. Best-effort, mirrors the cancel-push handling
+    // above: a notification failure must never break GC.
+    if (this.missedCallNotify && endReason === CallEndReason.missed) {
+      this.missedCallNotify(callId).catch((error) => {
+        logger.error('[CallCleanupService] Failed to create missed-call notifications for GC-ended call', { callId, error });
       });
     }
 

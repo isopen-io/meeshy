@@ -436,6 +436,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         removeRemoteStream(participantId);
         removePeerConnection(participantId);
 
+        // Allow a fresh offer to be created if this participant rejoins the
+        // same call (network blip, tab reload) while we stay mounted —
+        // otherwise the initiator's offer-creation effect sees this id as
+        // already handled and silently skips it forever, permanently
+        // stranding the rejoining peer with no video/audio.
+        offersCreatedFor.current.delete(participantId);
+
         // Remove from disconnected set
         setDisconnectedParticipants((prev) => {
           const newSet = new Set(prev);

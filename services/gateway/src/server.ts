@@ -1330,6 +1330,13 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
           (callId, conversationId, duration) =>
             callEventsHandler.sendMissedCallCancellationPushForTerminatedCall(callId, conversationId, duration)
         );
+        // GC tier 1 is the one terminal `missed` path that bypasses
+        // CallEventsHandler's own missed-call flow entirely, so without this
+        // it never creates the persisted Notification/badge every other
+        // missed-call path (ringing-timeout, call:leave, call:end) does.
+        this.callCleanupService.setMissedCallNotifyCallback(
+          (callId) => callEventsHandler.createMissedCallNotifications(callId)
+        );
         // CALL-RESILIENCE (item H) — re-arm the in-process ringing timers a
         // crash/restart wiped, so pre-answer calls interrupted by the restart
         // resolve to `missed` (with their push notification) on the nominal
