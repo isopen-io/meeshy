@@ -60,6 +60,7 @@ data class ChatUiState(
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
     val imageViewer: ImageViewerTarget? = null,
+    val scrollToMessageId: String? = null,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
@@ -358,6 +359,23 @@ class ChatViewModel @Inject constructor(
 
     fun openImageViewer(messageId: String, imageIndex: Int) {
         _state.update { it.copy(imageViewer = ImageViewerTarget(messageId, imageIndex)) }
+    }
+
+    /**
+     * A quoted-reply preview was tapped on the bubble [messageId]. When the quoted
+     * original is currently loaded, request a scroll to it; a paged-out original or a
+     * non-reply is inert (never a crash on an absent target). See [ReplyJumpResolver].
+     */
+    fun onReplyPreviewTap(messageId: String) {
+        val links = _state.value.messages.map { ReplyLink(it.messageId, it.replyToId) }
+        val target = (ReplyJumpResolver.resolve(messageId, links) as? ReplyJump.Scroll)?.targetMessageId
+            ?: return
+        _state.update { it.copy(scrollToMessageId = target) }
+    }
+
+    /** The pending reply-jump scroll has been performed by the screen. */
+    fun onScrollHandled() {
+        _state.update { it.copy(scrollToMessageId = null) }
     }
 
     fun dismissImageViewer() {

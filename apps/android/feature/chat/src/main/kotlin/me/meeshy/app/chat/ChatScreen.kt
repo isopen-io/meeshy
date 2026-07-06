@@ -128,6 +128,14 @@ fun ChatScreen(
         if (index >= 0) listState.animateScrollToItem(index)
     }
 
+    // Jump to the quoted original when a reply-preview tap requests it, then consume.
+    LaunchedEffect(state.scrollToMessageId) {
+        val target = state.scrollToMessageId ?: return@LaunchedEffect
+        val index = listItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
+        if (index >= 0) listState.animateScrollToItem(index)
+        viewModel.onScrollHandled()
+    }
+
     val showScrollToBottom by remember(listItems.lastIndex) {
         derivedStateOf { !listState.isNearBottom(listItems.lastIndex) }
     }
@@ -271,6 +279,9 @@ fun ChatScreen(
                                         },
                                         onImageClick = { index ->
                                             viewModel.openImageViewer(bubble.messageId, index)
+                                        },
+                                        onReplyPreviewClick = {
+                                            viewModel.onReplyPreviewTap(bubble.messageId)
                                         },
                                     )
                                     if (bubble.deliveryStatus == DeliveryStatus.Failed) {

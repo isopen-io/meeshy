@@ -78,6 +78,7 @@ public object BubbleContentBuilder {
             createdAtIso = message.createdAt,
             deliveryStatus = deliveryStatus,
             reactions = reactions,
+            replyToId = message.replyTo?.id,
             replyToText = replyToText,
             replyToDeleted = replyToDeleted,
             replyToSenderName = message.replyTo?.senderDisplayName,

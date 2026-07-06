@@ -49,6 +49,7 @@ public data class BubbleContent(
     val createdAtIso: String?,
     val deliveryStatus: DeliveryStatus = DeliveryStatus.Sent,
     val reactions: List<ReactionEntry> = emptyList(),
+    val replyToId: String? = null,
     val replyToText: String? = null,
     val replyToSenderName: String? = null,
     val replyToDeleted: Boolean = false,
