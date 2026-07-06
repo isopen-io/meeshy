@@ -66,7 +66,7 @@ struct ThemedBackButton: View {
                 // Chevron — always visible, in a fixed 40-pt slot so the
                 // back affordance stays anchored regardless of pill width
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundStyle(gradientFill)
                     .frame(width: 40, height: 40)
 
@@ -86,7 +86,7 @@ struct ThemedBackButton: View {
                     // affordance. Dark/light parity with the conversation
                     // list row badge via MeeshyColors.unreadBadgeBackground.
                     Text(Self.displayedUnread(unreadCount))
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)

@@ -337,6 +337,49 @@ describe('useConversationMessagesRQ', () => {
         expect(mockGetMessages).toHaveBeenCalledWith('conv-1', 1, 50, null, expect.anything());
       });
     });
+
+    it('anonymous loadMore advances the offset (does not refetch page 1)', async () => {
+      // Anonymous path paginates by offset and never returns a cursor. loadMore
+      // must request the next page (offset = limit), not re-request offset 0 —
+      // otherwise older history is unreachable and page 1 duplicates.
+      mockLoadMessages.mockResolvedValueOnce({
+        messages: [
+          createMockMessage('a-1', 'p1-a', new Date('2024-01-03')),
+          createMockMessage('a-2', 'p1-b', new Date('2024-01-02')),
+        ],
+        hasMore: true,
+        total: 3,
+      });
+      mockLoadMessages.mockResolvedValueOnce({
+        messages: [createMockMessage('a-3', 'p2-a', new Date('2024-01-01'))],
+        hasMore: false,
+        total: 3,
+      });
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ('conv-1', null, { linkId: 'link-123', limit: 20 }),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+      // First page requested at offset 0.
+      expect(mockLoadMessages).toHaveBeenNthCalledWith(1, 20, 0);
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      await waitFor(() => {
+        expect(mockLoadMessages).toHaveBeenCalledTimes(2);
+      });
+      // Second page must advance to offset = limit (page 2), not offset 0.
+      expect(mockLoadMessages).toHaveBeenNthCalledWith(2, 20, 20);
+      // All three distinct messages are present with no duplicates.
+      const ids = result.current.messages.map((m) => m.id).sort();
+      expect(ids).toEqual(['a-1', 'a-2', 'a-3']);
+    });
   });
 
   describe('Cache Manipulation', () => {

@@ -344,7 +344,7 @@ jobs:
           echo "$CHANGELOG" > /tmp/changelog.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         env:
           RELEASE_TAG: ${{ needs.version.outputs.tag }}
         with:

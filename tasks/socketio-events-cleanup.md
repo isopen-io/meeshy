@@ -25,91 +25,51 @@ Le reste des items audités est documenté ici pour traitement séparé (impact 
 
 ---
 
-## 2. `STORY_TRANSLATION_UPDATED` mauvais namespace — ✅ Résolu (2026-07-05)
+## 2. `STORY_TRANSLATION_UPDATED` mauvais namespace
 
-**Problème (historique)** :
+**Problème** :
 ```typescript
 STORY_TRANSLATION_UPDATED: 'post:story-translation-updated',
 ```
-Le préfixe `post:` était incorrect — toutes les autres clés `STORY_*` utilisent `'story:...'`. Vraisemblablement une coquille issue d'un copy-paste de `POST_TRANSLATION_UPDATED`.
+Le préfixe `post:` est incorrect — toutes les autres clés `STORY_*` utilisent `'story:...'`. Vraisemblablement une coquille issue d'un copy-paste de `POST_TRANSLATION_UPDATED`.
 
-**Fix appliqué** : `STORY_TRANSLATION_UPDATED` vaut maintenant `'story:translation-updated'`
-(`packages/shared/types/socketio-events.ts:345`). iOS (`SocialSocketManager.swift:1078`)
-souscrit à `"story:translation-updated"` avec un commentaire documentant l'ancien nom
-`post:story-translation-updated` (retiré depuis le 2026-06-01, période de coexistence
-écoulée). Web (`use-social-socket.ts`) et gateway (`StoryTextObjectTranslationService.ts`)
-utilisent déjà la constante partagée `SERVER_EVENTS.STORY_TRANSLATION_UPDATED`, donc aucun
-risque de désynchronisation string littérale. Rien à reprendre ici.
+**Action proposée** :
+- Renommer en `'story:translation-updated'`
+- Garder l'ancien event émis en parallèle ~3 mois pour compat
+- Migrer web + iOS pour subscribe au nouveau nom
+
+**Impact** : breaking pour les clients qui écoutent `'post:story-translation-updated'`. Vérifier la liste des abonnés via `grep`.
 
 ---
 
-## 3. `READ_STATUS_UPDATED` namespace hyphené hors convention — ✅ Résolu (2026-07-05)
+## 3. `READ_STATUS_UPDATED` namespace hyphené hors convention
 
-**Problème (historique)** :
+**Problème** :
 ```typescript
 READ_STATUS_UPDATED: 'read-status:updated',
 ```
 La convention partout ailleurs : `entity:action-word` avec entity en mot unique (`message`, `conversation`, `call`, etc.). Ici `read-status` introduit un hyphen dans le namespace.
 
-**Fix appliqué** : `MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated'` ajouté dans
-`packages/shared/types/socketio-events.ts` (même `ReadStatusUpdatedEventData`), **dual-émis**
-en parallèle du legacy `READ_STATUS_UPDATED` (même pattern que `CONVERSATION_NEW`/
-`FRIEND_REQUEST_*` — coexistence ~3 mois) aux 5 points d'émission : `routes/messages.ts`,
-`routes/conversations/messages.ts`, `routes/message-read-status.ts`,
-`socketio/MeeshySocketIOManager.ts` (`_emitDeliveryForDrainedMessages`),
-`socketio/handlers/MessageHandler.ts` (`_autoDeliverToOnlineRecipients`). Purement additif —
-aucun consommateur (web `presence.service.ts`, iOS `MessageSocketManager`, Android
-`MessageSocketManager.kt`) n'a besoin d'être modifié dans cette passe puisque le nom legacy
-continue de fonctionner à l'identique ; migrer les clients vers le nouveau nom reste un
-suivi séparé, non bloquant.
-
-Tests : `packages/shared/__tests__/types/socketio-events.test.ts` (convention),
-`delivery-receipt.test.ts`, `MessageHandler.autoDeliver.test.ts`,
-`MeeshySocketIOManager.test.ts`, `messages-routes.test.ts`, `messages-extended.test.ts`,
-`mark-conversation-status.test.ts` (dual-emit + suppression symétrique quand
-`showReadReceipts=false`). Suite gateway ciblée (16 fichiers touchés par le changement) :
-847/847 tests verts.
+**Action proposée** :
+- Renommer en `'message:read-status-updated'` (sémantiquement c'est un changement sur un message)
+- Ou `'reading:status-updated'` si on veut un domaine dédié
+- Migration coordonnée
 
 ---
 
-## 4. `NOTIFICATION` (sans suffixe) — usage flou — ✅ Résolu (2026-07-05, retiré)
+## 4. `NOTIFICATION` (sans suffixe) — usage flou
 
-**Problème (historique)** :
+**Problème** :
 ```typescript
 NOTIFICATION: 'notification',
 NOTIFICATION_NEW: 'notification:new',
 ```
-Le générique `NOTIFICATION` (sans `:action`) était inhabituel — quel sens vs `NOTIFICATION_NEW` ?
+Le générique `NOTIFICATION` (sans `:action`) est inhabituel — quel sens vs `NOTIFICATION_NEW` ?
 
-**Audit (2026-07-05)** : `grep -rn "SERVER_EVENTS.NOTIFICATION\b"` (hors `NOTIFICATION_*`) a trouvé
-exactement 2 émetteurs côté gateway, tous les deux morts en production :
-- `MeeshySocketIOHandler.sendNotificationToUser()` — méthode définie mais **jamais appelée** par
-  aucun caller (grep repo-wide sur `sendNotificationToUser` ne remonte que sa propre définition et
-  ses tests unitaires).
-- `SocketNotificationService.emitNotification()` — classe **jamais instanciée** en dehors de son
-  propre fichier de test (`new SocketNotificationService()` n'apparaît nulle part dans
-  `server.ts`/`NotificationService.ts`) ; la diffusion réelle des notifications passe entièrement par
-  `NotificationService` qui émet directement sur `this.io` (ex. `NOTIFICATION_NEW`,
-  `FRIEND_REQUEST_*`, `USER_UPDATED`) sans jamais passer par ce service.
-
-Côté web, `notification-socketio.singleton.ts` gardait un listener `this.socket.on(SERVER_EVENTS.NOTIFICATION, ...)` commenté "Legacy support" — mais comme rien ne l'a jamais émis en production (les deux seuls émetteurs étaient déjà morts), ce n'était pas un vrai chemin de compat, juste du code mort en miroir. Côté iOS, `MessageSocketManager.swift` documentait déjà explicitement ne PAS écouter cet event legacy — même conclusion atteinte indépendamment.
-
-**Fix appliqué** : suppression complète — constante `SERVER_EVENTS.NOTIFICATION` et son entrée dans
-`ServerToClientEvents`, méthode `sendNotificationToUser` (+ import `SERVER_EVENTS` devenu inutile) sur
-`MeeshySocketIOHandler`, classe `SocketNotificationService` entière (fichier + export
-`services/notifications/index.ts`), listener legacy web + tests associés. Tests mis à jour en
-conséquence (suppression des cas qui exerçaient exclusivement le code mort). Suites complètes vertes :
-gateway 508/508, web 434/434, shared 45/45 (1284 tests).
-
-**Bonus trouvé au passage** : `SequenceService.ts`, `consent-test-helper.ts` et
-`migrate-from-legacy.ts` importaient `PrismaClient` depuis le package `@prisma/client` par défaut au
-lieu de `@meeshy/shared/prisma/client` (seul generator configuré dans `schema.prisma`, output custom
-`./client`) — `@prisma/client` n'a jamais de client généré à cet emplacement dans ce repo, donc
-`import type { PrismaClient } from '@prisma/client'` ne résout à rien (`TS2305`). Ce bruit de compilation
-cassait 26 suites de test gateway (répertorié comme "bruit préexistant" dans plusieurs itérations
-précédentes, jamais corrigé). Corrigé en alignant les 3 imports sur la convention `@meeshy/shared/prisma/client`
-déjà utilisée partout ailleurs dans `services/gateway/src` — root-cause fix, aucune régression
-(suite complète 508/508 après correction, contre 482/508 + 26 suites en échec de compilation avant).
+**Action proposée** :
+- Auditer `grep -rn "SERVER_EVENTS.NOTIFICATION[^_]" services/gateway` pour voir s'il est encore émis
+- Si non utilisé → deprecate puis remove
+- Si utilisé → renommer en `NOTIFICATION_GENERIC` ou `NOTIFICATION_PUSH` selon sémantique
 
 ---
 
@@ -220,13 +180,13 @@ demande avait été acceptée/refusée, seulement au prochain refetch complet.
 
 | Priorité | Item | Raison |
 |---|------|--------|
-| ~~P1~~ | ~~#2 STORY_TRANSLATION namespace~~ | ✅ Résolu 2026-07-05 |
-| ~~P1~~ | ~~#5 CONVERSATION_CLOSED docstring~~ | ✅ Résolu 2026-06-30 |
+| P1 | #2 STORY_TRANSLATION namespace | Bug bloquant pour story translations en prod si filtres mal câblés |
+| P1 | #5 CONVERSATION_CLOSED docstring | 30min — ambiguïté coûte plus cher qu'un fix |
 | P2 | #1 NOTIFICATION_NEW audit complet | Pattern récurrent qui pourrira chaque domaine ajouté |
-| ~~P2~~ | ~~#7 FRIEND_REQUEST events~~ | ✅ Résolu 2026-07-01 (CANCELLED + NEW/ACCEPTED/REJECTED) |
+| P2 | #7 FRIEND_REQUEST events | Visibility équivalente au bug de conv créateur, juste pas remonté yet |
 | ~~P3~~ | ~~#6 USER_UPDATED~~ | ✅ Résolu 2026-07-02 |
-| ~~P3~~ | ~~#3 READ_STATUS namespace~~ | ✅ Résolu 2026-07-05 |
-| ~~P3~~ | ~~#4 NOTIFICATION générique~~ | ✅ Résolu 2026-07-05 (code mort retiré, pas juste renommé) |
+| P3 | #3 READ_STATUS namespace | Cosmétique, faible blast radius |
+| P3 | #4 NOTIFICATION générique | À élucider d'abord |
 
 ## Conventions à inscrire dans `socketio-events.ts`
 

@@ -3,7 +3,7 @@
  * Facilite les tests E2E de validation de consentement
  */
 
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 export interface ConsentLevel {
   name: string;

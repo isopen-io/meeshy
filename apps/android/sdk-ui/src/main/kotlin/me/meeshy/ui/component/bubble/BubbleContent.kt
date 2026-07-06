@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.MessageEffects
 
 @Immutable
 sealed class DeliveryStatus {
@@ -57,4 +58,5 @@ public data class BubbleContent(
     val images: List<BubbleImage> = emptyList(),
     val files: List<BubbleFile> = emptyList(),
     val emojiOnlyCount: Int = 0,
+    val effects: MessageEffects? = null,
 )

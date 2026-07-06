@@ -8,19 +8,12 @@ import os
 // MARK: - Call View
 
 struct CallView: View {
-    // Audit P1-16 — injected by the caller (RootView/iPadRootView already
-    // hold their own @ObservedObject callManager to gate presentation), NOT
-    // a `= CallManager.shared` default. A defaulted @ObservedObject is
-    // reassigned — and its objectWillChange subscription torn down and
-    // rebuilt — every time the parent's body re-evaluates and reconstructs
-    // this struct, even for churn unrelated to the call (unread counts,
-    // presence, navigation). Threading the parent's existing instance down
-    // avoids that redundant resubscription during an active call.
-    @ObservedObject var callManager: CallManager
+    @ObservedObject var callManager = CallManager.shared
     // Audit P2-iOS-9 — respect the user's Reduce Motion preference. Without
     // this check, the continuous pulse/ring animations ran indefinitely
     // even for motion-sensitive users (and burned battery).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var theme: ThemeManager { ThemeManager.shared }
     // Instance du CallManager (et non un `@StateObject` local) : les segments
     // distants (DataChannel) et `toggleTranscription` opèrent sur CELLE-CI —
     // l'ancienne instance locale orpheline ne transcrivait jamais rien et
@@ -48,15 +41,6 @@ struct CallView: View {
     // so the user knows the call is ringing, not stuck.
     @State private var sdpOfferSlow = false
     private let sdpOfferSlowSeconds: UInt64 = 6
-    // 2026-07-04 — les alertes qualité (« réseau faible chez votre contact »,
-    // « connexion au serveur perdue ») sont PONCTUELLES : la pill s'affiche
-    // quelques secondes à chaque bascule en dégradé puis se retire — l'état
-    // persistant est porté par le glyphe signal / les status pills, pas par
-    // une bannière permanente (retour user : la pill orange qui ne disparaît
-    // jamais est problématique en plein appel).
-    @State private var showRemoteQualityAlertPill = false
-    @State private var showSignalingAlertPill = false
-    private let qualityAlertPillSeconds: UInt64 = 5
     // Profil du correspondant (avatar + bannière) — résolu cache-first dès que
     // `remoteUserId` est connu, refresh API silencieux (Instant App). Sert
     // l'avatar des cercles d'appel et le fond pleine page.
@@ -160,11 +144,9 @@ struct CallView: View {
 
             // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
             // when the remote end reports sustained poor stats; CallManager sets
-            // `isRemoteQualityDegraded`. La pill est TRANSITOIRE (auto-retrait
-            // après `qualityAlertPillSeconds`) — l'état qui persiste vit dans le
-            // glyphe signal + la status pill « Réseau faible (contact) ».
-            // Stacked below the reconnecting banner so both can coexist.
-            if showRemoteQualityAlertPill {
+            // `isRemoteQualityDegraded`. Stacked below the reconnecting banner
+            // (extra top padding) so both can be visible simultaneously.
+            if callManager.isRemoteQualityDegraded {
                 remoteQualityDegradedBanner
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -172,12 +154,11 @@ struct CallView: View {
             }
 
             // EXIGENCE №1 — signaling dégradé : le socket est tombé pendant un
-            // appel établi. Le média P2P continue ; annonce ponctuelle, empilée
-            // sous les bannières reconnexion/qualité éventuelles — l'état
-            // persistant est porté par la status pill dédiée.
-            if showSignalingAlertPill {
+            // appel établi. Le média P2P continue ; indicateur discret, empilé
+            // sous les bannières reconnexion/qualité éventuelles.
+            if callManager.isSignalingDegraded {
                 let stackedOffset: CGFloat = (showsReconnectingBanner ? 52 : 0)
-                    + (showRemoteQualityAlertPill ? 44 : 0)
+                    + (callManager.isRemoteQualityDegraded ? 44 : 0)
                 signalingDegradedBanner
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -292,10 +273,6 @@ struct CallView: View {
             }
         }
         .adaptiveOnChange(of: callManager.isRemoteQualityDegraded) { _, isDegraded in
-            // Pill ponctuelle : levée à chaque bascule en dégradé, retirée
-            // sitôt le lien rétabli (le retrait anticipé est le comportement
-            // attendu — plus de « réseau faible » affiché sur un lien sain).
-            showRemoteQualityAlertPill = isDegraded
             guard isDegraded else { return }
             UIAccessibility.post(
                 notification: .announcement,
@@ -304,27 +281,12 @@ struct CallView: View {
                                 bundle: .main))
         }
         .adaptiveOnChange(of: callManager.isSignalingDegraded) { _, isDegraded in
-            showSignalingAlertPill = isDegraded
             guard isDegraded else { return }
             UIAccessibility.post(
                 notification: .announcement,
                 argument: String(localized: "call.a11y.signaling.degraded",
                                 defaultValue: "Connexion au serveur perdue, l'appel continue",
                                 bundle: .main))
-        }
-        // Auto-retrait des pills d'alerte : visibles `qualityAlertPillSeconds`
-        // puis retour dans l'île, MÊME si l'état reste dégradé (chaque nouvelle
-        // bascule false→true du flag les re-présente). SwiftUI annule le Task
-        // au retrait anticipé (lien rétabli) — pas de timer orphelin.
-        .task(id: showRemoteQualityAlertPill) {
-            guard showRemoteQualityAlertPill else { return }
-            try? await Task.sleep(nanoseconds: qualityAlertPillSeconds * 1_000_000_000)
-            if !Task.isCancelled { showRemoteQualityAlertPill = false }
-        }
-        .task(id: showSignalingAlertPill) {
-            guard showSignalingAlertPill else { return }
-            try? await Task.sleep(nanoseconds: qualityAlertPillSeconds * 1_000_000_000)
-            if !Task.isCancelled { showSignalingAlertPill = false }
         }
     }
 
@@ -654,7 +616,7 @@ struct CallView: View {
         // effects-open via shouldAutoHideControls.
         .task(id: showControls) {
             guard showControls, shouldAutoHideControls else { return }
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(for: .seconds(4))
             if !Task.isCancelled {
                 withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
             }
@@ -716,14 +678,11 @@ struct CallView: View {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(theme.textPrimary)
 
-            // Duration + glyphe signal code couleur (P2-iOS-10 → 2026-07-04) :
-            // invisible sur lien sain, apparaît à la dégradation, persiste en
-            // vert `recoveryLingerSeconds` après récupération puis se retire
-            // (cycle de vie dans TransientCallSignalGlyph).
+            // Duration + audit P2-iOS-10 connection quality indicator
             HStack(spacing: 6) {
-                TransientCallSignalGlyph(strength: signalStrength)
+                connectionQualityDot
                 Text(callManager.formattedDuration)
                     .font(.body.weight(.medium).monospacedDigit())
                     .foregroundColor(durationColor)
@@ -754,29 +713,20 @@ struct CallView: View {
                 if isConnectionDegraded {
                     statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.unstable", defaultValue: "Connexion instable", bundle: .main), color: MeeshyColors.warning)
                 }
-                // État persistant des alertes ponctuelles : tant que le lien du
-                // contact / le signaling restent dégradés, une status pill
-                // discrète le rappelle (la bannière, elle, s'est retirée).
-                if callManager.isRemoteQualityDegraded {
-                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main), color: MeeshyColors.warning)
-                }
-                if callManager.isSignalingDegraded {
-                    statusPill(icon: "antenna.radiowaves.left.and.right.slash", text: String(localized: "call.status.signaling", defaultValue: "Serveur déconnecté", bundle: .main), color: MeeshyColors.warning)
-                }
             }
         }
     }
 
-    // MARK: - Connection Quality (P2-iOS-10 → glyphe signal 2026-07-04)
+    // MARK: - Connection Quality (P2-iOS-10)
 
-    /// Niveau du glyphe signal — priorité aux stats RTT+perte (mises à jour
-    /// chaque `statsIntervalSeconds`), état ICE binaire en repli. Le mapping
-    /// niveaux→barres/couleur vit dans `CallSignalStrength` (pur, testé).
-    private var signalStrength: CallSignalStrength {
-        CallSignalStrength.from(
-            level: callManager.liveVideoQualityLevel,
-            connection: callManager.connectionQuality
-        )
+    /// Audit P2-iOS-10 — `CallManager.connectionQuality` was tracked but
+    /// never surfaced in the UI. Without this dot the user has no feedback
+    /// when the call degrades (disconnected/failed), until it actually drops.
+    private var connectionQualityDot: some View {
+        Circle()
+            .fill(connectionQualityColor)
+            .frame(width: 8, height: 8)
+            .accessibilityLabel(connectionQualityAccessibilityLabel)
     }
 
     /// §4.3 — reconnecting banner shown over the frozen call layout while an
@@ -800,10 +750,8 @@ struct CallView: View {
         .accessibilityLabel(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
     }
 
-    /// §4.4 — remote peer quality alert. Présentée PONCTUELLEMENT (flag
-    /// `showRemoteQualityAlertPill`, auto-expirant) quand `call:quality-alert`
-    /// fait basculer `isRemoteQualityDegraded` ; l'état persistant vit dans la
-    /// status pill « Réseau faible (contact) » + le glyphe du badge vidéo.
+    /// §4.4 — remote peer quality alert. Appears when `callManager.isRemoteQualityDegraded`
+    /// is set by the `call:quality-alert` socket event emitted by the gateway.
     /// Mirrors FaceTime's "Contact has a poor connection" indicator.
     private var remoteQualityDegradedBanner: some View {
         IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
@@ -829,9 +777,8 @@ struct CallView: View {
     }
 
     /// EXIGENCE №1 — the signaling socket dropped while the call is connected.
-    /// The P2P media keeps flowing; annonce PONCTUELLE (flag
-    /// `showSignalingAlertPill` auto-expirant), l'état persistant vit dans la
-    /// status pill « Serveur déconnecté ». Never implies the call is at risk.
+    /// The P2P media keeps flowing; this discreet hint mirrors the
+    /// quality-degraded capsule and never implies the call is at risk.
     private var signalingDegradedBanner: some View {
         IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
             HStack(spacing: 6) {
@@ -853,6 +800,40 @@ struct CallView: View {
         .accessibilityLabel(String(localized: "call.signaling.degraded",
                                    defaultValue: "Connexion au serveur perdue — l'appel continue",
                                    bundle: .main))
+    }
+
+    private var connectionQualityColor: Color {
+        // Prefer the RTT+packet-loss stats level (updated every statsIntervalSeconds)
+        // over the binary ICE state for a more accurate real-time quality indicator.
+        if let level = callManager.liveVideoQualityLevel {
+            switch level {
+            case .excellent, .good: return MeeshyColors.success
+            case .fair: return MeeshyColors.warning
+            case .poor, .critical: return MeeshyColors.error
+            }
+        }
+        switch callManager.connectionQuality {
+        case .connected: return MeeshyColors.success
+        case .reconnecting, .checking, .new: return MeeshyColors.warning
+        case .disconnected, .failed, .closed: return MeeshyColors.error
+        case .connecting: return MeeshyColors.indigo400
+        }
+    }
+
+    private var connectionQualityAccessibilityLabel: String {
+        if let level = callManager.liveVideoQualityLevel {
+            switch level {
+            case .excellent, .good: return String(localized: "call.quality.good", defaultValue: "Connexion bonne", bundle: .main)
+            case .fair: return String(localized: "call.quality.reconnecting", defaultValue: "Reconnexion", bundle: .main)
+            case .poor, .critical: return String(localized: "call.quality.lost", defaultValue: "Connexion perdue", bundle: .main)
+            }
+        }
+        switch callManager.connectionQuality {
+        case .connected: return String(localized: "call.quality.good", defaultValue: "Connexion bonne", bundle: .main)
+        case .reconnecting, .checking, .new: return String(localized: "call.quality.reconnecting", defaultValue: "Reconnexion", bundle: .main)
+        case .disconnected, .failed, .closed: return String(localized: "call.quality.lost", defaultValue: "Connexion perdue", bundle: .main)
+        case .connecting: return String(localized: "call.quality.inProgress", defaultValue: "Connexion en cours", bundle: .main)
+        }
     }
 
     private var isConnectionDegraded: Bool {
@@ -885,34 +866,20 @@ struct CallView: View {
 
             VStack {
                 HStack {
-                    // Durée + glyphe signal (visible pendant/30 s après une
-                    // dégradation — TransientCallSignalGlyph) ; un
-                    // `wifi.exclamationmark` ambre s'y ajoute tant que le
-                    // RÉSEAU DU CONTACT reste dégradé (l'alerte pill, elle, est
-                    // ponctuelle) — le layout vidéo n'a pas de status row.
-                    HStack(spacing: 6) {
-                        TransientCallSignalGlyph(strength: signalStrength)
-                        Text(callManager.formattedDuration)
-                            .font(.caption2.weight(.medium).monospacedDigit())
-                            .foregroundColor(.white)
-                        if callManager.isRemoteQualityDegraded {
-                            Image(systemName: "wifi.exclamationmark")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(MeeshyColors.warning)
-                                .accessibilityLabel(String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main))
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    // iOS 26 Liquid Glass — floating duration badge over the
-                    // full-bleed video stream (SDK Compatibility wrapper gates
-                    // the native effect / `.ultraThinMaterial` fallback).
-                    .adaptiveGlass(in: Capsule())
-                    .clipShape(Capsule())
-                    .padding(12)
-                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                    .accessibilityValue(callManager.formattedDuration)
-                    .accessibilityAddTraits(.updatesFrequently)
+                    Text(callManager.formattedDuration)
+                        .font(.caption2.weight(.medium).monospacedDigit())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        // iOS 26 Liquid Glass — floating duration badge over the
+                        // full-bleed video stream (SDK Compatibility wrapper gates
+                        // the native effect / `.ultraThinMaterial` fallback).
+                        .adaptiveGlass(in: Capsule())
+                        .clipShape(Capsule())
+                        .padding(12)
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(callManager.formattedDuration)
+                        .accessibilityAddTraits(.updatesFrequently)
                     Spacer()
                 }
                 Spacer()
@@ -1263,16 +1230,16 @@ struct CallView: View {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title3, design: .rounded).weight(.semibold))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(theme.textPrimary.opacity(0.7))
 
             Text(endReasonText(reason))
                 .font(.callout.weight(.medium))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(theme.textMuted)
 
             if callManager.callDuration > 0 {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
-                    .foregroundColor(.white.opacity(0.45))
+                    .foregroundColor(theme.textMuted.opacity(0.6))
             }
 
             Spacer()
@@ -1450,7 +1417,7 @@ struct CallView: View {
                     .callControlGlass(diameter: 56, isActive: false, tint: .white)
                 Text(String(localized: "call.control.camera.caption", defaultValue: "Caméra", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(theme.textMuted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -1585,11 +1552,23 @@ struct CallView: View {
     }
 
     private var callTypeBadge: some View {
-        CallTypeBadgeView(
-            isVideo: callManager.isVideoEnabled,
-            label: callManager.isVideoEnabled
-                ? String(localized: "call.type.video", defaultValue: "Appel vidéo", bundle: .main)
-                : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main)
+        HStack(spacing: 6) {
+            Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
+                .font(MeeshyFont.relative(12, weight: .semibold))
+                .accessibilityHidden(true)
+            Text(callManager.isVideoEnabled ? String(localized: "call.type.video", defaultValue: "Appel vidéo", bundle: .main) : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main))
+                .font(.caption2.weight(.semibold))
+        }
+        .foregroundColor(MeeshyColors.indigo400)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(MeeshyColors.indigo400.opacity(0.15))
+                .overlay(
+                    Capsule()
+                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 0.5)
+                )
         )
     }
 
@@ -1610,7 +1589,7 @@ struct CallView: View {
 
                 Text(caption)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(theme.textMuted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -1658,7 +1637,7 @@ struct CallView: View {
 
                 Text(String(localized: "call.end.caption", defaultValue: "Raccrocher", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(theme.textMuted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

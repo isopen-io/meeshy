@@ -79,11 +79,11 @@ struct MemberManagementSection: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary.opacity(0.5))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .strokeBorder(sectionColor.opacity(0.2), lineWidth: 1)
         )
     }

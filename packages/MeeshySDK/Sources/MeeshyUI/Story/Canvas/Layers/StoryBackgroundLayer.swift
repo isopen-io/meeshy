@@ -732,35 +732,17 @@ extension StoryBackgroundLayer {
     /// pour décider si on peut garder le `contentLayer` actuel (même contenu)
     /// ou s'il faut tout reconstruire (changement réel de slide bg).
     ///
-    /// On ignore les paramètres dynamiques (mute) car leur changement n'impose
-    /// pas de recréer le layer (mute = property AVPlayer). Pour les fonds
-    /// COULEUR/GRADIENT, la valeur fait partie de l'identité (BUG-1 user
-    /// 2026-07-04) : « color » constant faisait passer un changement de
-    /// pastille par le no-op diff (`hasVisibleContent` satisfait par
-    /// l'ANCIENNE couleur) → la nouvelle couleur n'atterrissait jamais sur le
-    /// canvas (la mini-preview SwiftUI, elle, se mettait à jour). La
-    /// reconstruction d'un fond couleur est SYNCHRONE — aucun risque de flash,
-    /// le fast-path ne protège que les fetchs async image/vidéo.
-    /// `internal` (pas private) : seam de test du contrat d'identité.
-    nonisolated static func contentIdentity(for kind: Kind) -> String {
+    /// On ignore les paramètres dynamiques (mute, color associé) car leur
+    /// changement n'impose pas de recréer le layer (mute = property AVPlayer,
+    /// color = backgroundColor du layer). Seule l'IDENTITÉ du média compte.
+    nonisolated private static func contentIdentity(for kind: Kind) -> String {
         switch kind {
-        case .solidColor(let color):
-            return "color:\(Self.colorKey(color))"
-        case .gradient(let colors, let direction):
-            let key = colors.map(Self.colorKey).joined(separator: "|")
-            return "gradient:\(key):\(String(describing: direction))"
+        case .solidColor:                       return "color"
+        case .gradient:                         return "gradient"
         case .image(let postMediaId, _):        return "image:\(postMediaId)"
         case .video(let postMediaId, let looping, _, _):
             return "video:\(postMediaId):\(looping)"
         }
-    }
-
-    nonisolated private static func colorKey(_ color: UIColor) -> String {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        if color.getRed(&r, green: &g, blue: &b, alpha: &a) {
-            return String(format: "%.3f,%.3f,%.3f,%.3f", r, g, b, a)
-        }
-        return String(describing: color)
     }
 }
 

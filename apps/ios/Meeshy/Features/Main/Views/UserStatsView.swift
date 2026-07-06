@@ -97,7 +97,7 @@ struct UserStatsView: View {
             // Icône figée : glyphe décoratif verrouillé dans une puce 36×36 à géométrie fixe
             // (doctrine 74i/83i — la valeur/label scalent, le chip ne bouge pas). Masqué VoiceOver.
             Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
+                .font(MeeshyFont.relative(20, weight: .semibold))
                 .foregroundColor(Color(hex: color))
                 .frame(width: 36, height: 36)
                 .background(

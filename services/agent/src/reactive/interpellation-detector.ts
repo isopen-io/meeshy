@@ -14,7 +14,7 @@ const GREETING_PATTERNS = [
 ];
 
 function isGreetingContent(content: string): boolean {
-  const trimmed = content.replace(/@[\w-]+/g, '').trim();
+  const trimmed = content.replace(/@\w+/g, '').trim();
   const stripped = trimmed.replace(/[!?.,:;]+$/g, '').trim();
   if (stripped.split(/\s+/).length > 4) return false;
   return GREETING_PATTERNS.some((p) => p.test(trimmed));
@@ -38,8 +38,7 @@ export function detectInterpellation(input: {
   }
 
   if (targets.size === 0 && input.controlledUsernames) {
-    // Tiret inclus (charset username /^[a-zA-Z0-9_-]+$/) : un bot @my-bot doit être interpellable.
-    const mentionRegex = /@([\w-]+)/g;
+    const mentionRegex = /@(\w+)/g;
     let match: RegExpExecArray | null;
     while ((match = mentionRegex.exec(input.content)) !== null) {
       const userId = input.controlledUsernames.get(match[1].toLowerCase());

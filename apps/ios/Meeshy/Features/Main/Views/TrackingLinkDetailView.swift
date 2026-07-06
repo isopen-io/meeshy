@@ -65,8 +65,8 @@ struct TrackingLinkDetailView: View {
             }
         }
         .padding(20).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccentHex))
-            .overlay(RoundedRectangle(cornerRadius: 20)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccentHex))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(MeeshyColors.trackingAccent.opacity(0.2), lineWidth: 1)))
     }
 
@@ -183,9 +183,9 @@ struct TrackingLinkDetailView: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 1)))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg).stroke(Color.white.opacity(0.08), lineWidth: 1)))
     }
 
     private func breakdownRow(_ label: String, count: Int, total: Int, color: Color) -> some View {

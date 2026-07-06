@@ -13,7 +13,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     /// it with, so the downstream audio editor (transcription) opens pre-set.
     public var onRecordComplete: (URL, String) -> Void
 
-    // `@StateObject` (et non `@ObservedObject`) : le call site (sheet +Media)
+    // `@StateObject` (et non `@ObservedObject`) : le call site (StoryAudioPanel)
     // crée le recorder inline via l'init de convenance — en observed, chaque
     // ré-évaluation du panel remplaçait l'instance observée mid-recording et
     // orphelinait un AVAudioRecorder live (micro chaud, enregistrement perdu).

@@ -12,7 +12,6 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
-import { useAuth } from '@/hooks/use-auth';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Conversation } from '@meeshy/shared/types';
 import type { CallInitiateAck, CallJoinAck } from '@meeshy/shared/types/video-call';
@@ -59,7 +58,6 @@ const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
 export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCallReturn {
   const [error, setError] = useState<string | null>(null);
   const callStore = useCallStore();
-  const { user } = useAuth();
 
   // Les appels ne sont supportés que pour les conversations directes
   const isCallSupported = conversation?.type === 'direct';
@@ -117,36 +115,13 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         if (ack?.success && ack.data?.iceServers?.length) {
           useCallStore.getState().setIceServers(ack.data.iceServers);
         }
-
-        // P0 fix (2026-07-06) — the gateway deliberately never re-emits
-        // `call:initiated` back to the initiator's own socket(s) (it only
-        // notifies the OTHER conversation members); `CallManager`'s
-        // `isInitiator` branch that would set `currentCall`/`isInCall` is
-        // therefore unreachable for the caller on web. Without this, the
-        // callee gets rung correctly but the caller's own screen never shows
-        // the call UI. Set the call as current directly from the ack — the
-        // only data the caller actually needs to start rendering; the
-        // participants list is populated as callees join via the existing
-        // `call:participant-joined` handler (a no-op until `currentCall`
-        // exists, so this is the step that unblocks it).
-        if (ack?.success && ack.data?.callId && user) {
-          useCallStore.getState().setCurrentCall({
-            id: ack.data.callId,
-            conversationId: conversation.id,
-            mode: ack.data.mode,
-            status: 'initiated',
-            initiatorId: user.id,
-            startedAt: new Date(),
-            participants: [],
-          });
-        }
       });
       toast.success('Starting call...');
     } catch (error: unknown) {
       cleanupStream(stream);
       handleMediaError(error);
     }
-  }, [conversation, user]);
+  }, [conversation]);
 
   const answerCall = useCallback(async (callId: string) => {
     const socket = meeshySocketIOService.getSocket();

@@ -26,17 +26,6 @@ jest.mock('sonner', () => ({
   },
 }));
 
-// Mock auth — startCall's ack handler reads the current user id to build the
-// initiator's CallSession (P0 fix, 2026-07-06). The user object/return value
-// must be a STABLE reference across renders (matching the real hook's
-// selector-based memoization) — recreating it per call would make
-// `startCall`'s useCallback identity churn every render.
-const mockAuthUser = { id: 'user-caller-1' };
-const mockAuthReturn = { user: mockAuthUser, isChecking: false };
-jest.mock('@/hooks/use-auth', () => ({
-  useAuth: () => mockAuthReturn,
-}));
-
 // Mock socket service
 const mockGetSocket = jest.fn();
 const mockEmit = jest.fn();
@@ -817,74 +806,6 @@ describe('useVideoCall', () => {
       });
 
       expect(storeModule.getState().iceServers).toBeNull();
-    });
-  });
-
-  describe('startCall sets currentCall for the initiator (P0 fix, 2026-07-06)', () => {
-    beforeEach(async () => {
-      const { useCallStore: storeModule } = await import('@/stores/call-store');
-      storeModule.setState({ currentCall: null, isInCall: false });
-    });
-
-    it('sets currentCall + isInCall from the ack — gateway never re-emits call:initiated to the initiator', async () => {
-      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
-        cb({ success: true, data: { callId: 'call-999', mode: 'p2p', iceServers: [] } });
-      });
-
-      const { result } = renderHook(() =>
-        useVideoCall({ conversation: mockDirectConversation })
-      );
-
-      await act(async () => {
-        await result.current.startCall('video');
-      });
-
-      const { useCallStore: storeModule } = await import('@/stores/call-store');
-      const { currentCall, isInCall } = storeModule.getState();
-      expect(isInCall).toBe(true);
-      expect(currentCall).toMatchObject({
-        id: 'call-999',
-        conversationId: mockDirectConversation.id,
-        mode: 'p2p',
-        status: 'initiated',
-        initiatorId: 'user-caller-1',
-        participants: [],
-      });
-    });
-
-    it('does not set currentCall when the ack is unsuccessful', async () => {
-      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
-        cb({ success: false });
-      });
-
-      const { result } = renderHook(() =>
-        useVideoCall({ conversation: mockDirectConversation })
-      );
-
-      await act(async () => {
-        await result.current.startCall('video');
-      });
-
-      const { useCallStore: storeModule } = await import('@/stores/call-store');
-      expect(storeModule.getState().currentCall).toBeNull();
-      expect(storeModule.getState().isInCall).toBe(false);
-    });
-
-    it('does not set currentCall when the ack carries no callId', async () => {
-      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
-        cb({ success: true, data: { iceServers: [] } });
-      });
-
-      const { result } = renderHook(() =>
-        useVideoCall({ conversation: mockDirectConversation })
-      );
-
-      await act(async () => {
-        await result.current.startCall('video');
-      });
-
-      const { useCallStore: storeModule } = await import('@/stores/call-store');
-      expect(storeModule.getState().currentCall).toBeNull();
     });
   });
 });
