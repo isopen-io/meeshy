@@ -2,7 +2,30 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+
+> On 2026-07-06 the **regional (secondary content) language preference** landed (slice
+> `settings-regional-content-language`, §L) — the last no-op Settings language row is now live. Unlike
+> the interface language (device-local UI chrome), the regional language is a **Prisme content preference**
+> resolved via `LanguageResolver`, stored on the backend profile (`User.regionalLanguage`). Pure core:
+> `:feature:settings` `RegionalLanguageSelection.build(regionalCode, systemCode, query) →
+> RegionalLanguagePresentation` — the picker SSOT. Options are the full content-language set
+> (`LanguageData.allLanguages`, NOT the 4 interface languages); the current choice is marked
+> (trimmed/case-insensitive), with a robust case-insensitive `selectedLabel` lookup (blank/absent/unknown →
+> no label, no crash); the **primary (system) language is hidden** so a user can never pick their primary as
+> their secondary — *unless* it is the stored choice (a `regional == system` data inconsistency never hides
+> the active selection); a trimmed case-insensitive search spans English name / native name / code
+> (empty/whitespace → every option; no match → empty list). Wiring reuses the `edit-profile-optimistic`
+> machinery with **no new store**: `SettingsViewModel.setRegionalLanguage(code)` →
+> `UserRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage=code))` — the session repaints
+> instantly (optimistic), a durable `UPDATE_PROFILE` row survives offline, and the flush worker is woken only
+> on a real `cmid` (a sessionless/superseded enqueue is inert). A UI-only `setRegionalLanguageQuery` drives
+> the search and never writes. `SettingsScreen` renders a searchable flag+native-name Material3 dialog
+> (mirrors the notification-type search) with the current native name as the row detail (EN/FR/ES/PT).
+> +24 tests (18 `RegionalLanguageSelectionTest` pure-core, 6 `SettingsViewModelRegionalLanguageTest`).
+> `:app:assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3). Surpasses iOS, whose
+> regional-language write is online-only. Reviewer: PASS (diff apps/android only; behaviour-through-public-API;
+> SDK-purity/SSOT/optimistic-UDF/instant-app honoured).
 
 > On 2026-07-06 the **offline-queued notification-preference backend sync** landed (slice
 > `settings-notification-prefs-sync`, §L): the previously-declared-but-dead `OutboxKind.UPDATE_SETTINGS` /
@@ -497,11 +520,19 @@ slices, in value order:
    latest-snapshot rule + `OutboxFlushWorker` sender, and `SettingsViewModel` local-first-then-sync wiring.
    +15 tests. See run log. Closes the "online-only vs device-local" gap. **Next up (highest value):** #4 regional
    (content) language preference — the last no-op Settings row.
-4. **Regional (content) language preference** — the still-no-op `settings_regional_language` row. Distinct
-   from the interface language just shipped: this is a *Prisme content*-preference (`ContentLanguagePreferences`
-   / backend profile), resolved via `LanguageResolver`, NOT the app UI locale. Wire it through the
-   content-preference/profile path (optimistic + offline-queued, like `edit-profile-optimistic`), not the
-   `InterfaceLanguageStore`.
+4. ~~**Regional (content) language preference**~~ ✅ shipped 2026-07-06 as
+   `settings-regional-content-language` — the last no-op Settings language row is now live. Pure
+   `:feature:settings` `RegionalLanguageSelection.build(regionalCode, systemCode, query)` SSOT (options =
+   full `LanguageData.allLanguages`; primary/system language hidden — you can't pick your primary as your
+   secondary — unless it *is* the stored choice; trimmed case-insensitive selection-marking + label lookup;
+   trimmed case-insensitive search over name/nativeName/code; empty/whitespace query → all; blank/absent/
+   unknown code → no label + no crash). Wired through the existing `edit-profile-optimistic` machinery — NO
+   new store: `SettingsViewModel.setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(
+   UpdateProfileRequest(regionalLanguage=…))` (optimistic session repaint, durable `UPDATE_PROFILE`, worker
+   woken only on a real `cmid`; sessionless/superseded enqueue inert) + a UI-only `setRegionalLanguageQuery`;
+   `SettingsScreen` renders a searchable flag+native-name dialog (mirrors the notification-type search) with
+   the current native name as the row detail (EN/FR/ES/PT). +24 tests (18 pure-core, 6 VM). See run log.
+   Surpasses iOS, whose regional-language write is online-only. **Next up:** #5 the worker drain-list test.
 5. Or the tracked **worker drain-list Robolectric test** (asserts every `OutboxLanes.*` with a registered
    sender is drained — would have caught the historic BLOCK/FRIEND omission, now also covers `PROFILE`).
 
