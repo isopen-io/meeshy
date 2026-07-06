@@ -41,7 +41,6 @@ let conversationJoinErrorCallback: ((data: { conversationId: string; reason: str
 let messagePinnedCallback: ((data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void) | null = null;
 let messageUnpinnedCallback: ((data: { messageId: string; conversationId: string }) => void) | null = null;
 let userUpdatedCallback: ((data: { userId: string; changes: Record<string, unknown> }) => void) | null = null;
-let preferencesUpdatedCallback: ((data: { category: string } | { conversationId: string } | { communityId: string; reset: boolean; preferences: unknown }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -86,10 +85,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onAudioTranslation: jest.fn(() => jest.fn()),
     onAttachmentStatusUpdated: jest.fn(() => jest.fn()),
     onParticipantRoleUpdated: jest.fn(() => jest.fn()),
-    onPreferencesUpdated: (callback: (data: { category: string } | { conversationId: string } | { communityId: string; reset: boolean; preferences: unknown }) => void) => {
-      preferencesUpdatedCallback = callback;
-      return jest.fn();
-    },
+    onPreferencesUpdated: jest.fn(() => jest.fn()),
     onConversationJoined: jest.fn(() => jest.fn()),
     onConversationLeft: jest.fn(() => jest.fn()),
     onConversationNew: jest.fn(() => jest.fn()),
@@ -176,14 +172,7 @@ jest.mock('@/lib/react-query/query-keys', () => ({
     },
     preferences: {
       all: ['user-preferences'],
-      category: (category: string) => ['user-preferences', category],
       categories: () => ['user-preferences', 'categories'],
-    },
-    communities: {
-      preferences: {
-        detail: (communityId: string) => ['communities', 'preferences', communityId],
-        list: () => ['communities', 'preferences', 'list'],
-      },
     },
     users: {
       all: ['users'],
@@ -302,7 +291,6 @@ describe('useSocketCacheSync', () => {
     messagePinnedCallback = null;
     messageUnpinnedCallback = null;
     userUpdatedCallback = null;
-    preferencesUpdatedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -878,41 +866,6 @@ describe('useSocketCacheSync', () => {
       });
 
       expect(queryClient.getQueryData(['conversations', 'detail', 'conv-1'])).toBeUndefined();
-    });
-  });
-
-  describe('Preferences Updated Handler — community scope (F71)', () => {
-    it('invalidates the community preferences detail and list queries', () => {
-      const { wrapper, queryClient } = createWrapperWithClient();
-      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
-
-      renderHook(() => useSocketCacheSync(), { wrapper });
-
-      act(() => {
-        preferencesUpdatedCallback?.({ communityId: 'community-1', reset: false, preferences: {} });
-      });
-
-      expect(invalidateSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ queryKey: ['communities', 'preferences', 'community-1'] })
-      );
-      expect(invalidateSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ queryKey: ['communities', 'preferences', 'list'] })
-      );
-    });
-
-    it('does not touch community queries for the category-scoped variant', () => {
-      const { wrapper, queryClient } = createWrapperWithClient();
-      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
-
-      renderHook(() => useSocketCacheSync(), { wrapper });
-
-      act(() => {
-        preferencesUpdatedCallback?.({ category: 'notifications' } as any);
-      });
-
-      expect(invalidateSpy).not.toHaveBeenCalledWith(
-        expect.objectContaining({ queryKey: expect.arrayContaining(['communities']) })
-      );
     });
   });
 

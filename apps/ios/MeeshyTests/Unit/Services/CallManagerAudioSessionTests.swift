@@ -1734,8 +1734,8 @@ final class CallManagerDurationReconnectTests: XCTestCase {
 ///    reconnect with stale candidates that belong to a superseded ICE generation.
 ///
 /// 2. **TURN refresh on socket reconnect** — the periodic scheduler fires at
-///    80% of the TTL. If the socket was down for the remaining 20% of the
-///    window, TURN credentials approach expiry before a refresh can fire.
+///    80% of the 480 s TTL (384 s).  If the socket was down for the remaining
+///    20% (96 s), TURN credentials approach expiry before a refresh can fire.
 ///    After reconnect, proactively requesting fresh credentials ensures the
 ///    next ICE restart uses valid relay paths.
 @MainActor
@@ -1793,8 +1793,9 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             afterReconnect.contains("emitRequestIceServers"),
             "socket.didReconnect sink must call emitRequestIceServers after rejoining " +
             "the call room — the socket may have been down long enough for TURN " +
-            "credentials to approach expiry before the periodic 80%-of-TTL refresh " +
-            "fires. Proactive refresh keeps relay paths valid for the next ICE restart.")
+            "credentials to approach expiry (TTL=480s, refresh fires at 384s, " +
+            "leaving a 96s vulnerability window). Proactive refresh keeps relay " +
+            "paths valid for the next ICE restart.")
     }
 }
 
@@ -2294,66 +2295,6 @@ final class CallManagerHardeningTests: XCTestCase {
             "causes the first offer to unnecessarily request an ICE restart")
     }
 
-    private func webRTCServiceSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    /// `WebRTCService.close()` must tear down via `disconnectAfterFlushingPendingSend()`,
-    /// not `client.disconnect()` directly. `CallManager.endCall()` sends the P2P
-    /// hangup `bye` on the DataChannel immediately before this runs; `sendData`
-    /// only enqueues onto libwebrtc's SCTP thread, so closing the peer connection
-    /// synchronously right after can silently drop the just-enqueued `bye` —
-    /// degrading the "instant hangup" fast path back to the slower socket
-    /// `call:end` fanout it exists to bypass.
-    func test_webRTCService_close_usesFlushAwareDisconnect() throws {
-        let source = try webRTCServiceSource()
-        guard let closeRange = source.range(of: "func close()") else {
-            XCTFail("close() not found in WebRTCService"); return
-        }
-        guard let closingBrace = source.range(of: "\n    }", range: closeRange.upperBound..<source.endIndex) else {
-            XCTFail("Could not isolate close() body"); return
-        }
-        let body = String(source[closeRange.upperBound..<closingBrace.lowerBound])
-        XCTAssertTrue(
-            body.contains("client.disconnectAfterFlushingPendingSend()"),
-            "close() must call client.disconnectAfterFlushingPendingSend() so a just-sent " +
-            "hangup `bye` gets a chance to flush before the transport is torn down")
-        XCTAssertFalse(
-            body.contains("client.disconnect()"),
-            "close() must not call client.disconnect() directly — that races the hangup " +
-            "`bye` send against the peer connection teardown")
-    }
-
-    /// `disconnectAfterFlushingPendingSend()` must be a no-op difference from
-    /// `disconnect()` when nothing is buffered on the DataChannel — it should not
-    /// add latency to the overwhelming majority of hangups (remote hangup, error
-    /// paths, or a `bye` that already flushed before this runs).
-    func test_p2pWebRTCClient_disconnectAfterFlushingPendingSend_earlyReturnsWhenNothingBuffered() throws {
-        let source = try p2pClientSource()
-        guard let methodRange = source.range(of: "func disconnectAfterFlushingPendingSend()") else {
-            XCTFail("disconnectAfterFlushingPendingSend() not found in P2PWebRTCClient"); return
-        }
-        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
-            XCTFail("Could not isolate disconnectAfterFlushingPendingSend() body"); return
-        }
-        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
-        XCTAssertTrue(
-            body.contains("bufferedAmount > 0"),
-            "disconnectAfterFlushingPendingSend() must guard on bufferedAmount > 0 and fall " +
-            "through to an immediate disconnect() otherwise")
-        XCTAssertTrue(
-            body.contains("sessionGeneration"),
-            "disconnectAfterFlushingPendingSend() must capture sessionGeneration before " +
-            "waiting so a fresh call reconfiguring this same client instance during the " +
-            "flush window isn't torn down by this stale wait")
-    }
-
     /// scheduleTURNCredentialRefresh must clamp TTL to at least
     /// turnMinRefreshDelaySeconds so a malformed TTL=0 from the gateway never
     /// schedules an immediate refresh that would hammer the signalling server.
@@ -2611,37 +2552,6 @@ final class CallManagerHoldTests: XCTestCase {
             "in CallManager, not in the delegate proxy")
     }
 
-    /// Bug: unlike CXAnswerCallAction/CXEndCallAction (which this file explicitly
-    /// documents as calling `action.fulfill()` synchronously BEFORE creating a
-    /// Task, per CallKit's contract), CXSetHeldCallAction fulfilled from
-    /// *inside* its Task — after hopping to MainActor. That violates the same
-    /// documented contract: fulfill() must be called synchronously before the
-    /// delegate method returns, not after an async hop that isn't guaranteed
-    /// to run before the method returns.
-    func test_callKitDelegateProxy_fulfillsHeldActionSynchronously() throws {
-        let source = try callManagerSource()
-        guard let methodRange = source.range(of: "func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction)") else {
-            XCTFail("CXSetHeldCallAction handler not found"); return
-        }
-        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
-            XCTFail("Could not isolate CXSetHeldCallAction handler body"); return
-        }
-        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
-        guard let fulfillRange = body.range(of: "action.fulfill()") else {
-            XCTFail("CXSetHeldCallAction handler must call action.fulfill()"); return
-        }
-        guard let taskRange = body.range(of: "Task {") else {
-            XCTFail("CXSetHeldCallAction handler must dispatch a Task"); return
-        }
-        XCTAssertTrue(
-            fulfillRange.lowerBound < taskRange.lowerBound,
-            "CXSetHeldCallAction must call action.fulfill() BEFORE creating its Task — " +
-            "fulfilling from inside the Task hops through an async MainActor boundary " +
-            "that CallKit does not guarantee completes before the delegate method " +
-            "returns, exactly the violation this file documents for CXAnswerCallAction " +
-            "and CXEndCallAction")
-    }
-
     /// isVideoSuspendedByHold must be reset in endCallInternal so hold state
     /// never leaks into the next call.
     func test_endCallInternal_resetsIsVideoSuspendedByHold() throws {
@@ -2704,64 +2614,6 @@ final class CallManagerHoldTests: XCTestCase {
             "CallKit requires synchronous settlement before the delegate method returns. " +
             "Fulfilling inside Task delays it to the next run-loop tick and can cause " +
             "CallKit to time out the action.")
-    }
-
-    /// Bug: `handleHold(true)` calls `downgradeFromVideo()` and discards the
-    /// returned `needsRenegotiation` flag, unlike every other call site
-    /// (toggleVideo, applySurvivalVideoSend, thermalStateDidChange) which all
-    /// follow up with createOffer()+emitCallOffer() when renegotiation is
-    /// needed. Without it, `RTCRtpTransceiver.direction` is flipped to
-    /// recvOnly locally but never actually renegotiated with the peer. If an
-    /// ICE restart (WiFi/cellular handoff, exactly what a GSM call causes)
-    /// fires while on hold, it bakes the stale recvOnly direction into the
-    /// SDP and permanently negotiates it — unhold flips direction back
-    /// locally but (before this fix) never re-offers, so outbound video
-    /// stays silently broken for the rest of the call.
-    func test_handleHold_renegotiatesAfterVideoDowngradeOnHold() throws {
-        let source = try callManagerSource()
-        guard let holdFuncRange = source.range(of: "func handleHold(_ isOnHold: Bool)") else {
-            XCTFail("handleHold not found in CallManager"); return
-        }
-        guard let nextFuncRange = source.range(of: "\n    // MARK:", range: holdFuncRange.upperBound..<source.endIndex) else {
-            XCTFail("Could not isolate handleHold body"); return
-        }
-        let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
-        XCTAssertTrue(
-            body.contains("let needsRenegotiation = await self.webRTCService.downgradeFromVideo()") ||
-            body.contains("let needsRenegotiation = await self?.webRTCService.downgradeFromVideo()"),
-            "handleHold's hold path must capture downgradeFromVideo()'s needsRenegotiation " +
-            "return value instead of discarding it with `_ =`")
-        XCTAssertTrue(
-            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)"),
-            "handleHold's hold path must follow a needed renegotiation with " +
-            "createOffer()+emitCallOffer(isVideo: false) — mirroring toggleVideo/" +
-            "applySurvivalVideoSend — so the peer's negotiated SDP direction " +
-            "actually matches the locally suspended video track")
-    }
-
-    /// Companion to the hold-side fix above: `handleHold(false)` must also
-    /// renegotiate after `upgradeToVideo()` when needed, or the unhold never
-    /// actually restores outbound video at the negotiated-SDP level (only
-    /// the local track/direction flip back, which the peer never sees).
-    func test_handleHold_renegotiatesAfterVideoUpgradeOnUnhold() throws {
-        let source = try callManagerSource()
-        guard let holdFuncRange = source.range(of: "func handleHold(_ isOnHold: Bool)") else {
-            XCTFail("handleHold not found in CallManager"); return
-        }
-        guard let nextFuncRange = source.range(of: "\n    // MARK:", range: holdFuncRange.upperBound..<source.endIndex) else {
-            XCTFail("Could not isolate handleHold body"); return
-        }
-        let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
-        XCTAssertTrue(
-            body.contains("try? await self.webRTCService.upgradeToVideo()") ||
-            body.contains("try? await self?.webRTCService.upgradeToVideo()"),
-            "handleHold's unhold path must capture upgradeToVideo()'s needsRenegotiation " +
-            "return value instead of discarding it with `_ =`")
-        XCTAssertTrue(
-            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)"),
-            "handleHold's unhold path must follow a needed renegotiation with " +
-            "createOffer()+emitCallOffer(isVideo: true) so outbound video is actually " +
-            "restored at the negotiated-SDP level, not just the local track/direction")
     }
 }
 
@@ -3949,48 +3801,6 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
             fnBody.contains("notification.object"),
             "startScreenCaptureMonitoring() must not reference notification.object inside the " +
             "Task { @MainActor } closure — Notification is not Sendable in Swift 6."
-        )
-    }
-
-    // MARK: - Regression 2026-07-05: AVAudioSession mode must track isVideoEnabled mid-call
-
-    /// `configureAudioSession()` only runs once at call setup and picks
-    /// `.videoChat`/`.voiceChat` from `isVideoEnabled` at that moment. A manual
-    /// `toggleVideo()` mid-call flips the WebRTC transceiver/track but must also
-    /// re-apply the AVAudioSession mode — otherwise the session stays tuned for
-    /// the acoustic path (loudspeaker + camera framing vs. near-field/earpiece
-    /// AEC) of whichever A/V type the call STARTED as, not what it is now.
-    func test_toggleVideo_reappliesAudioSessionMode() throws {
-        let source = try callManagerSource()
-        guard let range = source.range(of: "func toggleVideo() {") else {
-            XCTFail("toggleVideo() not found"); return
-        }
-        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let body = String(source[range.lowerBound..<end])
-
-        XCTAssertTrue(
-            body.contains("updateAudioSessionModeForCurrentVideoState()"),
-            "toggleVideo() must re-apply the AVAudioSession mode after the media switch " +
-            "succeeds — otherwise a mid-call A/V switch leaves the session tuned for the " +
-            "wrong acoustic path (.videoChat vs .voiceChat) for the rest of the call."
-        )
-    }
-
-    /// The thermal-critical branch forces a one-way video→audio-only downgrade
-    /// (distinct from the user-initiated, bidirectional `toggleVideo()`), and
-    /// flips `isVideoEnabled` itself — so it needs the same mode re-application.
-    func test_thermalCriticalVideoDowngrade_reappliesAudioSessionMode() throws {
-        let source = try callManagerSource()
-        guard let range = source.range(of: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {") else {
-            XCTFail("thermalStateDidChange(to:) not found"); return
-        }
-        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let body = String(source[range.lowerBound..<end])
-
-        XCTAssertTrue(
-            body.contains("updateAudioSessionModeForCurrentVideoState()"),
-            "thermalStateDidChange's critical-state video downgrade must re-apply the " +
-            "AVAudioSession mode after flipping isVideoEnabled to false, mirroring toggleVideo()."
         )
     }
 }

@@ -28,4 +28,9 @@
     <string name="chat_typing_two">%1$s e %2$s estão digitando…</string>
     <string name="chat_typing_many">%1$d pessoas estão digitando…</string>
     <string name="chat_scroll_to_bottom">Ir para a última mensagem</string>
+    <string name="chat_effect_reveal">Toque para revelar</string>
+    <string name="chat_effect_seconds_left">%1$d s restantes</string>
+    <string name="chat_effect_expired">Expirado</string>
+    <string name="chat_effect_view_once">Ver uma vez</string>
+    <string name="chat_effect_viewed">Visto</string>
 </resources>

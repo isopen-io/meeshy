@@ -821,11 +821,11 @@ struct ConversationDashboardView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(isDark ? Color.white.opacity(0.035) : Color.white.opacity(0.9))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .strokeBorder(
                     LinearGradient(
                         colors: [accent.opacity(0.2), accent.opacity(0.05)],
@@ -1118,8 +1118,8 @@ struct ConversationDashboardView: View {
     // MARK: - Helpers
 
     private func formatNumber(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
-        if n >= 10_000 { return String(format: "%.1fk", Double(n) / 1_000) }
+        if n >= 1_000_000 { return MeeshyNumberFormatter.formatCompact(n) }
+        if n >= 10_000 { return MeeshyNumberFormatter.formatCompact(n) }
         if n >= 1_000 {
             return n.formatted()
         }
@@ -1144,10 +1144,7 @@ private struct StatRing: View {
     }
 
     private var displayValue: String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 10_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
+        MeeshyNumberFormatter.formatCompact(value)
     }
 
     var body: some View {

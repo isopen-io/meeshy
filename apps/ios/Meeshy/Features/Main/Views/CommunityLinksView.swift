@@ -90,9 +90,9 @@ struct CommunityLinksView: View {
         }
         .frame(maxWidth: .infinity).padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentHex))
-                .overlay(RoundedRectangle(cornerRadius: 16)
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(accent.opacity(0.2), lineWidth: 1))
         )
         .accessibilityElement(children: .combine)

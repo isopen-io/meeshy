@@ -800,7 +800,7 @@ struct BubbleStandardLayout: View {
                 content
                     .blur(radius: shouldBlur ? 20 : 0)
                     .mask(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2, style: .continuous)
                             .blur(radius: shouldBlur ? 5 : 0)
                     )
             } else {
@@ -826,7 +826,7 @@ struct BubbleStandardLayout: View {
                 // Emoji-only intentionally renders the ORIGINAL `message.content`,
                 // not the translated text — emoji bubbles are not translated.
                 Text(message.content)
-                    .font(.system(size: emojiFontSize))
+                    .font(MeeshyFont.relative(emojiFontSize, design: .default))
                     .fixedSize(horizontal: false, vertical: true)
                     .overlay(alignment: .topLeading) {
                         if content.editedAt != nil {
@@ -902,7 +902,7 @@ struct BubbleStandardLayout: View {
                         // card), pas s'etirer sur 70% de la largeur d'ecran. Le
                         // VStack parent gere deja l'alignement naturel a gauche.
                         Text(message.content)
-                            .font(.system(size: emojiFontSize))
+                            .font(MeeshyFont.relative(emojiFontSize, design: .default))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         expandableTextView
@@ -973,7 +973,7 @@ struct BubbleStandardLayout: View {
                     .frame(width: Self.retryBandWidth)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2))
         // Simplification forte : plus d'ombre portée par bulle. Une `.shadow`
         // teintée par cellule force un rendu offscreen à chaque frame de scroll
         // (classique tueur de FPS). Les bulles sont désormais plates et nettes.
@@ -1291,7 +1291,7 @@ struct BubbleStandardLayout: View {
                 .offset(x: 20, y: 12)
         }
         .opacity(blurController.fogOpacity)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2))
         .allowsHitTesting(false)
     }
 

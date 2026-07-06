@@ -46,6 +46,8 @@ export class ZmqConnectionManager {
     try {
       logger.debug('Initializing ZMQ Connection Manager');
 
+      this.context = new zmq.Context();
+
       this.pushSocket = new zmq.Push();
       await this.pushSocket.connect(`tcp://${this.config.host}:${this.config.pushPort}`);
 
@@ -125,31 +127,6 @@ export class ZmqConnectionManager {
 
     // Retourner simple ou multipart
     return frames.length === 1 ? frames[0] : frames;
-  }
-
-  /**
-   * Ferme et recrée le socket SUB (connexion + abonnement). PUB/SUB est
-   * sans état de session : recréer l'abonné est toujours sûr. Utilisé par
-   * le watchdog de silence du client quand le socket devient zombie
-   * (TCP établi mais plus aucun message délivré — incident 2026-07-04).
-   */
-  async recreateSubSocket(): Promise<void> {
-    if (this.subSocket) {
-      try {
-        await this.subSocket.close();
-      } catch (closeError) {
-        logger.warn('ZMQ SUB close failed during recreate (continuing)', closeError as Error);
-      }
-      this.subSocket = null;
-    }
-
-    this.subSocket = new zmq.Subscriber();
-    await this.subSocket.connect(`tcp://${this.config.host}:${this.config.subPort}`);
-    await this.subSocket.subscribe('');
-    logger.info('ZMQ SUB socket recreated', {
-      host: this.config.host,
-      subPort: this.config.subPort,
-    });
   }
 
   /**

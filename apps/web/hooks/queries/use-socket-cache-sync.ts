@@ -842,22 +842,12 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeAttachmentStatus = meeshySocketIOService.onAttachmentStatusUpdated(handleAttachmentStatusUpdated);
     const unsubscribePreferences = meeshySocketIOService.onPreferencesUpdated((data) => {
       // The event is a union: user-level (has `category`) vs conversation-scoped
-      // (has `conversationId`) vs community-scoped (has `communityId`). Web cache
-      // invalidation here handles the user-level and community-scoped variants;
-      // the conversation-scoped variant is consumed by the new ConversationStore
-      // (iOS first; web wiring lands in a later phase).
+      // (has `conversationId`). Web cache invalidation here only cares about the
+      // user-level variant; the conversation-scoped variant is consumed by the
+      // new ConversationStore (iOS first; web wiring lands in a later phase).
       if ('category' in data) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.preferences.category(data.category),
-        });
-        return;
-      }
-      if ('communityId' in data) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.communities.preferences.detail(data.communityId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.communities.preferences.list(),
         });
       }
     });

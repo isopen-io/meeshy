@@ -9,12 +9,6 @@ public enum StoryTextStyle: String, Codable, CaseIterable, Sendable {
     case typewriter
     case handwriting
     case classic
-    case calligraphy
-    case cartoon
-    case futuristic
-    case fantasy
-    case curve
-    case tag
 
     public var displayName: String {
         switch self {
@@ -23,12 +17,6 @@ public enum StoryTextStyle: String, Codable, CaseIterable, Sendable {
         case .typewriter: return "Typewriter"
         case .handwriting: return "Handwriting"
         case .classic: return "Classic"
-        case .calligraphy: return "Calligraphie"
-        case .cartoon: return "Cartoon"
-        case .futuristic: return "Futuriste"
-        case .fantasy: return "Fantaisie"
-        case .curve: return "Curve"
-        case .tag: return "Tag"
         }
     }
 
@@ -39,12 +27,6 @@ public enum StoryTextStyle: String, Codable, CaseIterable, Sendable {
         case .typewriter: return "Courier"
         case .handwriting: return "SnellRoundhand"
         case .classic: return "Georgia"
-        case .calligraphy: return "Zapfino"
-        case .cartoon: return "ChalkboardSE-Bold"
-        case .futuristic: return "Futura-CondensedExtraBold"
-        case .fantasy: return "Papyrus"
-        case .curve: return "SavoyeLetPlain"
-        case .tag: return "MarkerFelt-Wide"
         }
     }
 
@@ -55,12 +37,6 @@ public enum StoryTextStyle: String, Codable, CaseIterable, Sendable {
         case .typewriter: return 400
         case .handwriting: return 400
         case .classic: return 500
-        case .calligraphy: return 400
-        case .cartoon: return 700
-        case .futuristic: return 800
-        case .fantasy: return 400
-        case .curve: return 400
-        case .tag: return 700
         }
     }
 }
@@ -254,29 +230,12 @@ public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
     case rounded     // cornerRadius ≈ 15% of height (default)
     case pill        // full capsule (cornerRadius = 50% of height)
     case rectangle   // near-square corners
-    case diamond     // losange (path-based)
-    case cloud       // bulle de pensée nuage (path-based)
-    case speech      // bulle de conversation BD avec queue (path-based)
 
     public var displayName: String {
         switch self {
         case .rounded: return "Arrondi"
         case .pill: return "Pilule"
         case .rectangle: return "Carré"
-        case .diamond: return "Losange"
-        case .cloud: return "Nuage"
-        case .speech: return "Bulle BD"
-        }
-    }
-
-    /// Les formes historiques se rendent par `cornerRadius` sur la calque ;
-    /// les nouvelles formes passent par un tracé `CGPath` dédié (losange,
-    /// nuage, bulle BD). Le renderer et l'export s'appuient sur ce flag pour
-    /// choisir le pipeline.
-    public var usesCustomPath: Bool {
-        switch self {
-        case .rounded, .pill, .rectangle: return false
-        case .diamond, .cloud, .speech: return true
         }
     }
 }

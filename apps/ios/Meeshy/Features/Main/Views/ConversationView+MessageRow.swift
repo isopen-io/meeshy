@@ -108,7 +108,7 @@ extension ConversationView {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 16), tint: Color(hex: accentColor).opacity(0.12))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tint: Color(hex: accentColor).opacity(0.12))
         .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
         .padding(.horizontal, 8)
         .padding(.top, 4)
@@ -165,7 +165,7 @@ extension ConversationView {
         searchDebounceTask?.cancel()
         let query = headerState.searchQuery
         searchDebounceTask = Task {
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(for: .seconds(0.4))
             guard !Task.isCancelled else { return }
             if query.count >= 2 {
                 await viewModel.searchMessages(query: query)
@@ -340,10 +340,10 @@ extension ConversationView {
                 // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
                 // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundColor(Color(hex: color))
                 Text(label)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(MeeshyFont.relative(9, weight: .semibold))
                     .foregroundColor(.secondary)
             }
             .frame(width: 60, height: 44)

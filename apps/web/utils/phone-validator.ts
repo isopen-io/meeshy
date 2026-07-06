@@ -1,11 +1,11 @@
 /**
  * Validation des numéros de téléphone
  *
- * Règles (alignées E.164):
+ * Règles:
  * - Obligatoire
- * - Peut commencer par + ou 00 (préfixe international optionnel)
+ * - Peut commencer par + ou 00 (optionnel)
  * - Contient uniquement des chiffres (après préfixe optionnel)
- * - Longueur: 8-15 chiffres (le préfixe international +/00 n'entre PAS dans le budget)
+ * - Longueur totale: 8-15 caractères
  */
 
 export interface PhoneValidationResult {
@@ -15,10 +15,6 @@ export interface PhoneValidationResult {
 
 /**
  * Valide un numéro de téléphone selon les règles définies
- *
- * Le format est vérifié avant la longueur, et la longueur porte sur le nombre de
- * chiffres (hors préfixe international +/00) — conforme E.164 (max 15 chiffres),
- * de sorte que le même numéro reçoit le même verdict quelle que soit la graphie du préfixe.
  */
 export function validatePhoneNumber(phone: string): PhoneValidationResult {
   // Vérifier si vide
@@ -31,7 +27,22 @@ export function validatePhoneNumber(phone: string): PhoneValidationResult {
 
   const trimmed = phone.trim();
 
-  // Vérifier le format d'abord
+  // Vérifier la longueur totale
+  if (trimmed.length < 8) {
+    return {
+      isValid: false,
+      error: 'phoneTooShort' // Clé de traduction
+    };
+  }
+
+  if (trimmed.length > 15) {
+    return {
+      isValid: false,
+      error: 'phoneTooLong' // Clé de traduction
+    };
+  }
+
+  // Vérifier le format
   // Peut commencer par + ou 00 (optionnel), suivi uniquement de chiffres
   // Accepte aussi les numéros sans préfixe
   const phoneRegex = /^(\+|00)?\d+$/;
@@ -40,23 +51,6 @@ export function validatePhoneNumber(phone: string): PhoneValidationResult {
     return {
       isValid: false,
       error: 'phoneInvalidFormat' // Clé de traduction
-    };
-  }
-
-  // Vérifier la longueur sur les chiffres uniquement (hors préfixe international +/00)
-  const digits = trimmed.replace(/^(\+|00)/, '');
-
-  if (digits.length < 8) {
-    return {
-      isValid: false,
-      error: 'phoneTooShort' // Clé de traduction
-    };
-  }
-
-  if (digits.length > 15) {
-    return {
-      isValid: false,
-      error: 'phoneTooLong' // Clé de traduction
     };
   }
 
@@ -126,17 +120,17 @@ export function isValidPhoneNumber(phone: string): boolean {
 }
 
 /**
- * Exemples de numéros valides (longueur mesurée sur les chiffres, hors préfixe +/00):
- * - +33612345678 (10 chiffres, avec préfixe +)
- * - 0033612345678 (11 chiffres, avec préfixe 00)
- * - 612345678 (9 chiffres, sans préfixe)
- * - +123456789012345 (15 chiffres, maximum E.164 avec préfixe +)
- * - 12345678901 (11 chiffres, sans préfixe)
+ * Exemples de numéros valides:
+ * - +33612345678 (11 caractères, avec préfixe +)
+ * - 0033612345678 (13 caractères, avec préfixe 00)
+ * - 612345678 (9 caractères, sans préfixe)
+ * - +1234567890 (11 caractères)
+ * - 12345678901 (11 caractères, sans préfixe)
  *
  * Exemples de numéros invalides:
- * - 123456 (trop court, < 8 chiffres)
- * - +1234567890123456 (trop long, > 15 chiffres)
- * - +33 6 12 34 56 78 (espaces non autorisés → format invalide)
- * - +33-6-12-34-56-78 (tirets non autorisés → format invalide)
- * - abc123456789 (lettres non autorisées → format invalide)
+ * - 123456 (trop court, < 8 caractères)
+ * - +123456789012345678 (trop long, > 15 caractères)
+ * - +33 6 12 34 56 78 (espaces non autorisés)
+ * - +33-6-12-34-56-78 (tirets non autorisés)
+ * - abc123456789 (lettres non autorisées)
  */

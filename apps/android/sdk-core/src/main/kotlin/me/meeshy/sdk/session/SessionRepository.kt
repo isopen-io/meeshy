@@ -4,8 +4,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.ProfileEditApply
-import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
@@ -37,17 +35,6 @@ class SessionRepository @Inject constructor(
     /** Adopt the identity returned by a fresh login or register. */
     fun adopt(user: MeeshyUser) {
         _currentUser.value = user
-    }
-
-    /**
-     * Applies a profile edit onto the signed-in identity for an instant optimistic
-     * paint (ARCHITECTURE.md §4). Merges via [ProfileEditApply] so the local result
-     * matches the gateway `PATCH /users/me` exactly, then republishes so every
-     * surface observing [currentUser] re-renders. Inert when no session is active.
-     */
-    fun applyProfileEdit(request: UpdateProfileRequest) {
-        val current = _currentUser.value ?: return
-        _currentUser.value = ProfileEditApply.apply(current, request)
     }
 
     /**

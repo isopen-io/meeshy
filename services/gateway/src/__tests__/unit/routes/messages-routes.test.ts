@@ -170,7 +170,6 @@ jest.mock('@meeshy/shared/utils/validation', () => {
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     READ_STATUS_UPDATED: 'read-status:updated',
-    MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
     CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
     MESSAGE_PINNED: 'message:pinned',
     MESSAGE_UNPINNED: 'message:unpinned',
@@ -1846,10 +1845,6 @@ describe('POST /conversations/:id/mark-read — coverage extension', () => {
       'read-status:updated',
       expect.objectContaining({ conversationId: 'resolved-conv-id', type: 'read' }),
     );
-    expect(fastify._mockEmit).toHaveBeenCalledWith(
-      'message:read-status-updated',
-      expect.objectContaining({ conversationId: 'resolved-conv-id', type: 'read' }),
-    );
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 2 });
   });
 });
@@ -2850,9 +2845,7 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
       conversationId: 'resolved-conv-id',
       unreadCount: 0,
     });
-    // READ_STATUS_UPDATED (peer disclosure) must be suppressed — both the legacy and the
-    // dual-emitted `message:read-status-updated` name carry the same peer disclosure.
+    // READ_STATUS_UPDATED (peer disclosure) must be suppressed.
     expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
-    expect(fastify._mockEmit).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
   });
 });

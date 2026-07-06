@@ -3,8 +3,6 @@
  * @module shared/types/mention
  */
 
-import { hasMentions as hasMentionsCore, MENTION_HANDLE_CHARS } from '../utils/mention-parser.js';
-
 /**
  * Utilisateur mentionné résolu par le serveur.
  * Inclus dans les réponses API (messages, posts, comments) pour permettre
@@ -220,11 +218,10 @@ export function extractMentions(
     maxUsernameLength = 30
   } = config;
 
-  // Regex: @ suivi de lettres, chiffres, underscore, tiret (et optionnellement espaces).
-  // Le tiret fait partie du charset username (/^[a-zA-Z0-9_-]+$/) — cf. MENTION_HANDLE_CHARS.
+  // Regex: @ suivi de lettres, chiffres, underscore (et optionnellement espaces)
   const pattern = allowSpaces
-    ? new RegExp(`@([${MENTION_HANDLE_CHARS} ]{1,${maxUsernameLength}})`, 'g')
-    : new RegExp(`@([${MENTION_HANDLE_CHARS}]{1,${maxUsernameLength}})`, 'g');
+    ? new RegExp(`@([\\w ]{1,${maxUsernameLength}})`, 'g')
+    : new RegExp(`@(\\w{1,${maxUsernameLength}})`, 'g');
 
   const mentions = new Set<string>();
   const matches = content.matchAll(pattern);
@@ -240,16 +237,12 @@ export function extractMentions(
 }
 
 /**
- * Vérifie si un texte contient des mentions.
- *
- * Délègue à `hasMentions` de `mention-parser` (source de vérité unique, Unicode-aware) pour
- * rester cohérent avec la détection de `@DisplayName` accentué de `parseMentions`.
- *
+ * Vérifie si un texte contient des mentions
  * @param content - Le contenu à vérifier
  * @returns true si au moins une mention est présente
  */
 export function hasMentions(content: string): boolean {
-  return hasMentionsCore(content);
+  return /@\w+/.test(content);
 }
 
 /**
@@ -270,7 +263,7 @@ export function mentionsToLinks(
   linkTemplate: string = '/u/{username}',
   validUsernames?: string[]
 ): string {
-  return content.replace(new RegExp(`@([${MENTION_HANDLE_CHARS}]+)`, 'g'), (_match, username) => {
+  return content.replace(/@(\w+)/g, (_match, username) => {
     // Vérifier si le username est dans la liste validée
     if (!validUsernames || !validUsernames.includes(username)) {
       // Username pas validé → texte plain
@@ -322,8 +315,8 @@ export function detectMentionAtCursor(
  * @returns true si le username est valide
  */
 export function isValidMentionUsername(username: string): boolean {
-  // Lettres, chiffres, underscore, tiret, 1-30 caractères — parité charset username.
-  return new RegExp(`^[${MENTION_HANDLE_CHARS}]{1,30}$`).test(username);
+  // Lettres, chiffres, underscore, 1-30 caractères
+  return /^\w{1,30}$/.test(username);
 }
 
 /**
@@ -357,7 +350,7 @@ export const MENTION_CONSTANTS = {
   AUTOCOMPLETE_DEBOUNCE_MS: 300,
   NOTIFICATION_WORD_LIMIT: 20,
   MENTION_TRIGGER: '@',
-  MENTION_REGEX: new RegExp(`@([${MENTION_HANDLE_CHARS}]+)`, 'g'),
+  MENTION_REGEX: /@(\w+)/g,
   MENTION_DISPLAY_REGEX: /@([\w][\w\s'-]{0,49})(?=[!?,;:.@\n]|\s{2,}|$)/g
 } as const;
 
