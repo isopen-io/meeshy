@@ -897,7 +897,7 @@ struct ConversationListHeaderOverlay: View {
                                 showShareLinkSheet = true
                             } label: {
                                 Image(systemName: "link.badge.plus")
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(MeeshyFont.relative(18, weight: .semibold))
                                     .foregroundColor(MeeshyColors.indigo500)
                                     .frame(width: 40, height: 40)
                                     .adaptiveGlass(in: Circle(), interactive: true)
@@ -908,7 +908,7 @@ struct ConversationListHeaderOverlay: View {
                                 onNewConversation?()
                             } label: {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 18, weight: .bold))
+                                    .font(MeeshyFont.relative(18, weight: .bold))
                                     .foregroundColor(MeeshyColors.indigo500)
                                     .frame(width: 40, height: 40)
                                     .adaptiveGlass(in: Circle(), interactive: true)
@@ -924,12 +924,12 @@ struct ConversationListHeaderOverlay: View {
                         } label: {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "bell.fill")
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(MeeshyFont.relative(18, weight: .semibold))
                                     .foregroundColor(MeeshyColors.indigo500)
 
                                 if iPadNotificationCount > 0 {
                                     Text("\(min(iPadNotificationCount, 99))")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(MeeshyFont.relative(9, weight: .bold))
                                         .foregroundColor(.white)
                                         .frame(width: 16, height: 16)
                                         .background(Circle().fill(MeeshyColors.error))
@@ -946,7 +946,7 @@ struct ConversationListHeaderOverlay: View {
                             onSettingsTap()
                         } label: {
                             Image(systemName: "gearshape.fill")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(MeeshyFont.relative(18, weight: .semibold))
                                 .foregroundColor(MeeshyColors.indigo500)
                         }
                         .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Reglages", bundle: .main))
@@ -1001,10 +1001,10 @@ struct ConversationListBottomBar: View {
                 .padding(.top, 6)
                 .padding(.bottom, 4)
                 .background(
-                    RoundedRectangle(cornerRadius: 24)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                         .fill(.ultraThinMaterial)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 24)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                                 .stroke(theme.inputBorder, lineWidth: 1)
                         )
                         .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)

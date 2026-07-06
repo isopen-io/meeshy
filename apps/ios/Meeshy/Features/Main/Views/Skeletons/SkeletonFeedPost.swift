@@ -31,10 +31,10 @@ struct SkeletonFeedPost: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2)
                 .fill(cardBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2)
                         .stroke(borderColor, lineWidth: 1)
                 )
         )

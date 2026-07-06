@@ -406,7 +406,7 @@ extension FeedView {
             } label: {
                 // Glyphe chrome dans un cadre de tap fixe 28×28 : figé (doctrine 82i) ; le libellé porte le sens
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(MeeshyFont.relative(12, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 28, height: 28)
                     .background(
@@ -429,7 +429,7 @@ extension FeedView {
 
                         if attachment.type == .video {
                             Image(systemName: "play.circle.fill")
-                                .font(.system(size: 20))
+                                .font(MeeshyFont.relative(20))
                                 .foregroundStyle(.white, .black.opacity(0.4))
                                 .accessibilityHidden(true)
                         }
@@ -446,7 +446,7 @@ extension FeedView {
                                 .frame(width: 56, height: 56)
                             VStack(spacing: 2) {
                                 Image(systemName: "mappin.circle.fill")
-                                    .font(.system(size: 22))
+                                    .font(MeeshyFont.relative(22))
                                     .foregroundStyle(.white, .white.opacity(0.3))
                                     .accessibilityHidden(true)
                                 Circle()
@@ -467,7 +467,7 @@ extension FeedView {
                             .frame(width: 56, height: 56)
 
                         Image(systemName: feedIconForType(attachment.type))
-                            .font(.system(size: 22))
+                            .font(MeeshyFont.relative(22))
                             .foregroundColor(.white)
                             .accessibilityHidden(true)
                     }
@@ -766,37 +766,37 @@ struct FeedComposerSheet: View {
                 HStack(spacing: 16) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.brandPrimary)
                     }
                     .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
                     .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
                     .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.success)
                     }
                     .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
-                            .font(.system(size: 20))
+                            .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.errorStrong)
                     }
                     .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
@@ -1008,7 +1008,7 @@ struct FeedComposerSheet: View {
 
                     if attachment.type == .video {
                         Image(systemName: "play.circle.fill")
-                            .font(.system(size: 22))
+                            .font(MeeshyFont.relative(22))
                             .foregroundStyle(.white, .black.opacity(0.4))
                             .accessibilityHidden(true)
                     }
@@ -1018,7 +1018,7 @@ struct FeedComposerSheet: View {
                         .frame(width: 72, height: 72)
                         .overlay(
                             Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 26))
+                                .font(MeeshyFont.relative(26))
                                 .foregroundStyle(.white, .white.opacity(0.3))
                                 .accessibilityHidden(true)
                         )
@@ -1028,7 +1028,7 @@ struct FeedComposerSheet: View {
                         .frame(width: 72, height: 72)
                         .overlay(
                             Image(systemName: sheetIconForType(attachment.type))
-                                .font(.system(size: 26))
+                                .font(MeeshyFont.relative(26))
                                 .foregroundColor(.white)
                                 .accessibilityHidden(true)
                         )
@@ -1049,7 +1049,7 @@ struct FeedComposerSheet: View {
                 } label: {
                     // Glyphe chrome dans un cadre de tap fixe 20×20 : figé (doctrine 82i) ; le libellé porte le sens
                     Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(MeeshyFont.relative(9, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 20, height: 20)
                         .background(

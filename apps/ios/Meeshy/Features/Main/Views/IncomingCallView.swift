@@ -147,7 +147,7 @@ struct IncomingCallView: View {
                 .frame(width: 110, height: 110)
 
             Text(initial)
-                .font(.system(size: 44, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(44, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
         .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)
@@ -178,7 +178,7 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: "phone.down.fill")
-                            .font(.system(size: 28, weight: .medium))
+                            .font(MeeshyFont.relative(28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
@@ -198,7 +198,7 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                            .font(.system(size: 28, weight: .medium))
+                            .font(MeeshyFont.relative(28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.success)

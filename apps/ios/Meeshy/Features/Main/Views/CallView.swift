@@ -654,7 +654,7 @@ struct CallView: View {
         // effects-open via shouldAutoHideControls.
         .task(id: showControls) {
             guard showControls, shouldAutoHideControls else { return }
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(for: .seconds(4))
             if !Task.isCancelled {
                 withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
             }

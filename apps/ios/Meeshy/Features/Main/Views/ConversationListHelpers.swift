@@ -252,9 +252,9 @@ struct ConversationPreviewView: View {
         // Largeur pilotée par le call site (overlay) — source de vérité unique.
         // La carte remplit la largeur proposée ; le conteneur la fixe à 340.
         .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(
                     LinearGradient(
                         colors: [Color(hex: accentColor).opacity(0.5), Color(hex: secondaryColor).opacity(0.3)],
@@ -490,12 +490,7 @@ struct ThemedCommunityCard: View, Equatable {
     }
 
     private func formatCount(_ count: Int) -> String {
-        if count >= 1000000 {
-            return String(format: "%.1fM", Double(count) / 1000000.0)
-        } else if count >= 1000 {
-            return String(format: "%.1fk", Double(count) / 1000.0)
-        }
-        return "\(count)"
+        MeeshyNumberFormatter.formatCompact(count)
     }
 }
 

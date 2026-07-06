@@ -132,7 +132,7 @@ struct CallEffectsOverlay: View {
                         )
 
                     Image(systemName: icon)
-                        .font(.system(size: 18, weight: .medium))
+                        .font(MeeshyFont.relative(18, weight: .medium))
                         .foregroundColor(isActive ? MeeshyColors.indigo500 : .white.opacity(0.9))
                 }
 

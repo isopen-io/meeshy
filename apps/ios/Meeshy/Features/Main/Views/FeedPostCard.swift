@@ -91,9 +91,7 @@ struct FeedPostCard: View {
 
     /// Compact count (1.2k / 3.4M).
     static func compactCount(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
+        MeeshyNumberFormatter.formatCompact(value)
     }
 
     /// Compact preview descriptor for the media carried by a reposted POST/STATUS
@@ -423,10 +421,10 @@ struct FeedPostCard: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .stroke(theme.border(tint: accentColor, intensity: 0.25), lineWidth: 1)
                 )
         )

@@ -800,7 +800,7 @@ struct BubbleStandardLayout: View {
                 content
                     .blur(radius: shouldBlur ? 20 : 0)
                     .mask(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2, style: .continuous)
                             .blur(radius: shouldBlur ? 5 : 0)
                     )
             } else {
@@ -973,7 +973,7 @@ struct BubbleStandardLayout: View {
                     .frame(width: Self.retryBandWidth)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2))
         // Simplification forte : plus d'ombre portée par bulle. Une `.shadow`
         // teintée par cellule force un rendu offscreen à chaque frame de scroll
         // (classique tueur de FPS). Les bulles sont désormais plates et nettes.
@@ -1291,7 +1291,7 @@ struct BubbleStandardLayout: View {
                 .offset(x: 20, y: 12)
         }
         .opacity(blurController.fogOpacity)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg + 2))
         .allowsHitTesting(false)
     }
 

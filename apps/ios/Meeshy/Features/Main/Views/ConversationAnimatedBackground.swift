@@ -351,7 +351,7 @@ struct ConversationAnimatedBackground: View {
             // Floating hearts
             ForEach(0..<6, id: \.self) { i in
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 12 + CGFloat(i % 3) * 4))
+                    .font(MeeshyFont.relative(12 + CGFloat(i % 3) * 4))
                     .foregroundColor(
                         i % 2 == 0 ? leftColor.opacity(0.20) : rightColor.opacity(0.20)
                     )
@@ -365,11 +365,11 @@ struct ConversationAnimatedBackground: View {
             // User icons inside circles
             HStack(spacing: circleSpacing) {
                 Image(systemName: "person.fill")
-                    .font(.system(size: 36))
+                    .font(MeeshyFont.relative(36))
                     .foregroundColor(leftColor.opacity(0.35))
 
                 Image(systemName: "person.fill")
-                    .font(.system(size: 36))
+                    .font(MeeshyFont.relative(36))
                     .foregroundColor(rightColor.opacity(0.35))
             }
             .position(x: centerX, y: centerY)
@@ -431,7 +431,7 @@ struct ConversationAnimatedBackground: View {
                 .animation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true), value: animate)
 
             Image(systemName: "person.3.fill")
-                .font(.system(size: 24))
+                .font(MeeshyFont.relative(24))
                 .foregroundColor(currentGroupColor.opacity(0.40))
         }
     }
@@ -454,7 +454,7 @@ struct ConversationAnimatedBackground: View {
         return Group {
             if config.memberCount > avatarCount {
                 Text("+\(config.memberCount - avatarCount)")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(currentGroupColor.opacity(0.50))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -482,7 +482,7 @@ struct ConversationAnimatedBackground: View {
             }
 
             Image(systemName: "person.3.fill")
-                .font(.system(size: 35))
+                .font(MeeshyFont.relative(35))
                 .foregroundColor(config.accentColor.opacity(0.25))
                 .scaleEffect(animate ? 1.1 : 0.9)
         }
@@ -529,7 +529,7 @@ struct ConversationAnimatedBackground: View {
                 .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: animate)
 
             Image(systemName: "globe.europe.africa.fill")
-                .font(.system(size: 90))
+                .font(MeeshyFont.relative(90))
                 .foregroundColor(config.accentColor.opacity(0.30))
                 .rotationEffect(.degrees(animate ? 5 : -5))
                 .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: animate)
@@ -544,7 +544,7 @@ struct ConversationAnimatedBackground: View {
         return ZStack {
             ForEach(0..<6, id: \.self) { i in
                 Image(systemName: isE2EE ? "lock.shield.fill" : "lock.fill")
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(config.accentColor.opacity(0.35))
                     .offset(
                         x: cos(CGFloat(i) * .pi / 3 + orbitPhase * 0.2) * (animate ? 110 : 90),
@@ -557,7 +557,7 @@ struct ConversationAnimatedBackground: View {
                     HStack {
                         Spacer()
                         Image(systemName: "shield.checkered")
-                            .font(.system(size: 40))
+                            .font(MeeshyFont.relative(40))
                             .foregroundColor(config.accentColor.opacity(0.18))
                             .scaleEffect(animate ? 1.1 : 0.95)
                     }
@@ -570,7 +570,7 @@ struct ConversationAnimatedBackground: View {
                 ForEach(0..<4, id: \.self) { i in
                     ZStack {
                         Image(systemName: "envelope.fill")
-                            .font(.system(size: 16))
+                            .font(MeeshyFont.relative(16))
                             .foregroundColor(config.accentColor.opacity(0.20))
                         Circle()
                             .fill(config.accentColor.opacity(0.30))
@@ -598,7 +598,7 @@ struct ConversationAnimatedBackground: View {
         return ZStack {
             ForEach(0..<flagCount, id: \.self) { i in
                 Text(flags[i])
-                    .font(.system(size: 24))
+                    .font(MeeshyFont.relative(24))
                     .shadow(color: .black.opacity(0.15), radius: 2)
                     .offset(
                         x: cos(CGFloat(i) * .pi * 2 / CGFloat(flagCount) + orbitPhase) * (size.width * 0.35),
@@ -612,7 +612,7 @@ struct ConversationAnimatedBackground: View {
                 HStack {
                     Spacer()
                     Image(systemName: "character.bubble")
-                        .font(.system(size: 25))
+                        .font(MeeshyFont.relative(25))
                         .foregroundColor(config.accentColor.opacity(0.25))
                         .scaleEffect(animate ? 1.1 : 0.9)
                 }
