@@ -3,6 +3,23 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-06 (`settings-notification-type-toggles`): keep locale-aware search pure by injecting the label fn.**
+  A "searchable" list needs to match localized labels, but string resources must not leak into `:core:model`
+  (that would break SDK purity and force a Robolectric/Context dependency into a pure test). Solution:
+  `sections(prefs, query, label: (T)->String)` takes the label lookup as a parameter — the pure builder owns
+  grouping/ordering/`contains` matching and is tested with a fake label map; the Composable builds the real
+  `Map<T,String>` via `stringResource` (once, `NotificationType.entries.associateWith { stringResource(res(it)) }`)
+  and passes `label = { map.getValue(it) }`. Also: model per-event toggles as a **catalog of descriptors**
+  (`type → category + get/set lens`) rather than a giant `when` per field — one `associateBy`-backed map gives
+  total `toggle`/`isEnabled` and the `.copy` lens keeps every edit non-clobbering, and adding a type is one
+  list entry. `byType.getValue` is total because every enum value has a descriptor (guarded by the
+  round-trip-over-`entries` test).
+- **2026-07-06 (housekeeping): main CI red ≠ block for an apps/android-only PR.** `main`'s push CI is currently
+  failing only on the `Test Python (translator)` job (unrelated flake/pre-existing); an `apps/android`-only diff
+  touches none of the JS/TS/Python stack, so its PR CI can only ever inherit that same unrelated red as
+  `mergeable_state: unstable`. The real Android gate is the local `gradle :app:assembleDebug testDebugUnitTest`.
+  Confirm the *only* failing check is that pre-existing non-android job before merging; never merge if the
+  android diff itself introduced a failing check.
 - **2026-07-05 (`settings-interface-language`): re-localise a pure-Compose app app-wide with no AppCompat.**
   minSdk 26 and the app is a `ComponentActivity` (not `AppCompatActivity`), so `AppCompatDelegate.setApplicationLocales`
   isn't the free path (needs appcompat + the metadata service, and would become a *second* persistence SSOT next to
