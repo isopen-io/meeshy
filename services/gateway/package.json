@@ -39,7 +39,7 @@
     "@meeshy/shared": "workspace:*",
     "@parse/node-apn": "^7.1.0",
     "@prisma/client": "^6.19.3",
-    "@signalapp/libsignal-client": "^0.86.16",
+    "@signalapp/libsignal-client": "^0.96.4",
     "@tus/file-store": "^2.1.0",
     "@tus/server": "^2.4.0",
     "axios": "^1.18.0",
