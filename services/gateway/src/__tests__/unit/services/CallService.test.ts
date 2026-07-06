@@ -2525,7 +2525,12 @@ describe('CallService - initiateCall phantom cleanup & transaction', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPrisma = createMockPrisma();
-    callService = new CallService(mockPrisma as any);
+    // bootedAt far in the past — most tests in this describe block simulate a
+    // long-running gateway (steady state), NOT the instant-after-restart
+    // scenario. The boot-floor grace period (see `isPhantomCallStale`) must
+    // not mask genuine staleness here; the dedicated boot-floor test below
+    // constructs its own CallService with a fresh `bootedAt` instead.
+    callService = new CallService(mockPrisma as any, new Date(Date.now() - 24 * 60 * 60 * 1000));
   });
 
   afterEach(() => {
@@ -2768,6 +2773,63 @@ describe('CallService - initiateCall phantom cleanup & transaction', () => {
 
     const findManyCall = mockPrisma.callParticipant.findMany.mock.calls[0] as any;
     expect(findManyCall[0].where.callSession.conversationId).toEqual({ not: 'conv-123' });
+  });
+
+  it('boot-floor regression: does NOT force-end a real long-running call right after a gateway restart with no heartbeat resumption yet', async () => {
+    // CALL-RESILIENCE item H, re-opened by the 682c35279 P0 fix and closed
+    // again here: right after a restart `this.heartbeats` is empty for every
+    // call regardless of how long it has actually been running. Without a
+    // `bootedAt` floor, `isPhantomCallStale`'s no-heartbeat-data fallback
+    // reads `startedAt` (minutes/hours old for a real call) as ancient and
+    // force-ends it the instant ANY user's phantom-cleanup sweep touches it —
+    // before reconnecting clients have had a chance to re-beat.
+    const freshlyBootedCallService = new CallService(mockPrisma as any, new Date());
+    const liveCallId = 'live-call-post-restart';
+    const liveParticipation = {
+      id: 'live-part-post-restart',
+      callSessionId: liveCallId,
+      leftAt: null,
+      callSession: {
+        id: liveCallId,
+        startedAt: new Date(Date.now() - 10 * 60_000),
+        conversationId: 'conv-other',
+        status: CallStatus.active,
+        answeredAt: new Date(Date.now() - 10 * 60_000)
+      }
+    };
+    const mockConversation = createMockConversation();
+    const newCall = createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([liveParticipation]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    let createTxCalled = false;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      createTxCalled = true;
+      const tx = {
+        callSession: { create: jest.fn().mockResolvedValue({ id: 'call-123' }) },
+        callParticipant: { create: jest.fn().mockResolvedValue({}) }
+      };
+      return cb(tx);
+    });
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+
+    // No heartbeat recorded yet on `freshlyBootedCallService` — mirrors the
+    // real post-restart state (in-memory heartbeats always start empty).
+    await freshlyBootedCallService.initiateCall(validInitiateData);
+
+    // The ONLY $transaction call must be the new-call creation — the phantom
+    // cleanup's own transaction must never fire within the boot grace window.
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(createTxCalled).toBe(true);
   });
 
   it('session creation transaction: creates callSession and callParticipant', async () => {

@@ -1016,6 +1016,96 @@ sessions gateway-only précédentes). Gateway et web audités en profondeur.
 - **Reste ouvert** (inchangé) : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non
   vidée (piste basse-priorité, toujours pas de scénario d'exploitation concret).
 
+## Vague 16 — le P0 fix du jour (682c35279) a rouvert le bug de floor-boot ET introduit une race d'initiateur côté web (2026-07-06)
+
+Point d'entrée : routine calling-feature. Le seul commit calling non-documenté depuis la Vague 15 était
+`682c35279` (même jour, quelques heures plus tôt) — deux bugs P0 corrigés (l'initiateur web n'entrait
+jamais dans son propre appel ; le phantom-cleanup gateway tuait des appels cross-conversation vivants).
+Trois agents d'exploration dédiés (gateway, web, iOS — lecture seule, mandatés à croiser tout candidat
+contre ce fichier + lessons.md avant de rapporter) ont audité ce diff et son voisinage en profondeur.
+iOS n'a rien trouvé de nouveau (le bug de classe "initiateur jamais notifié" n'existe pas côté iOS —
+`CallManager.startCall` ne dépend jamais de recevoir `call:initiated` en retour, il pose son état
+directement depuis l'ACK locale ; confirmé par lecture complète du chemin sortant). Gateway et web ont
+chacun trouvé un bug réel, tous deux des régressions introduites par le fix du jour lui-même.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `isPhantomCallStale` rouvrait exactement le bug de
+  classe "item H" qu'il était censé éviter** — `services/gateway/src/services/CallService.ts`. La
+  branche `active`/`reconnecting` sans données de heartbeat en mémoire (`this.heartbeats` toujours vide
+  juste après un restart) retombait sur `now - startedAtMs > PHANTOM_HEARTBEAT_GRACE_MS` — un ancrage
+  purement basé sur `startedAt` (l'ancienneté RÉELLE de l'appel), sans aucun plancher lié au moment du
+  boot du process. Le commentaire de la méthode prétendait "mirror CallCleanupService's tiered liveness
+  semantics" mais omettait précisément le morceau de sémantique tier-4 qui existe pour survivre à un
+  restart (`CallCleanupService.bootedAt`, item H, déjà documenté vagues précédentes). Scénario concret :
+  gateway redémarre pendant qu'un appel réel de 10+ minutes est en cours (`startedAt` ancien) ; juste
+  après boot, `hasHeartbeatData` est faux pour TOUS les appels (personne n'a encore eu le temps de
+  re-battre) ; si N'IMPORTE QUEL utilisateur (potentiellement le même que celui de l'appel, sur un 2e
+  appareil/onglet) initie un appel dans une AUTRE conversation dans cette fenêtre, le sweep phantom lit
+  l'appel réel comme "stale" (startedAt vieux de plusieurs minutes) et le force-end silencieusement —
+  `CallService` n'a pas de référence Socket.IO, donc l'autre partie ne reçoit jamais `call:ended` et
+  reste "connecté" indéfiniment. Exactement le symptôme que `682c35279` visait à corriger, réouvert par
+  le timing de restart au lieu du cas cross-conversation en régime permanent. Fix : `CallService` reçoit
+  désormais un 2e paramètre constructeur `bootedAt: Date = new Date()` (miroir exact du pattern déjà
+  utilisé par `CallCleanupService`, injectable pour les tests) ; la branche sans heartbeat ancre
+  maintenant sur `Math.max(startedAtMs, bootedAtMs)` au lieu de `startedAtMs` seul — un appel réel garde
+  sa fenêtre de grâce complète (120s) après CHAQUE boot avant d'être jugé stale, même si `startedAt` est
+  ancien. 3 tests dans `CallService.test.ts` : `beforeEach` de la describe passé à un `bootedAt` vieux de
+  24h (la plupart des tests de ce bloc simulent un régime permanent, pas l'instant post-restart — sinon
+  le défaut `new Date()` du constructeur aurait rendu TOUT candidat "frais" au moment du test) + nouveau
+  test dédié `boot-floor regression` avec un `CallService` fraîchement construit (`bootedAt = new Date()`)
+  reproduisant exactement le scénario post-restart. RED confirmé manuellement (revert de la seule ligne
+  `Math.max` → le nouveau test échoue, les 174 autres restent verts) puis GREEN restauré. Suite
+  `CallService.test.ts` : 175/175. Suite gateway filtrée `*[Cc]all*` : 30/30 suites, 844/844 tests verts.
+  `tsc --noEmit` gateway : propre (aucune erreur, y compris la `SequenceService.ts` pré-existante des
+  sessions précédentes — absente de cette exécution).
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ] Le nouveau `currentCall` synthétique de l'initiateur (fix du
+  jour) pouvait être définitivement écrasé par un `call:participant-joined` gagnant la course, bloquant
+  l'appel en silence** — `apps/web/hooks/conversations/use-video-call.ts` + `apps/web/stores/
+  call-store.ts`. `startCall`'s ack handler pose `currentCall` de façon asynchrone (aller-retour réseau
+  vers le propre serveur) avec `participants: []` codé en dur. `addParticipant` (appelé par
+  `CallManager.handleParticipantJoined` sur `call:participant-joined`) était un no-op garde par
+  `if (currentCall)` — si l'événement de jointure du callee arrive AVANT l'ACK de l'initiateur (callee
+  rapide/latence asymétrique, plausible sans être le cas nominal), la jointure est perdue silencieusement,
+  puis l'ACK écrase `currentCall` avec un tableau vide, effaçant définitivement la trace que le callee a
+  rejoint. `VideoCallInterface` ne crée jamais l'offre SDP pour un participant absent de ce tableau — les
+  deux côtés se croient "en appel", personne ne progresse, aucune erreur ne le distingue d'une sonnerie
+  normale. Fix (store, source de vérité unique) : nouveau buffer module-level
+  `pendingParticipantsByCallId` (miroir du style déjà utilisé par `heartbeatInterval`/
+  `beforeUnloadHandler` dans ce même fichier) — `addParticipant` bufferise par `callSessionId` au lieu de
+  no-op silencieux quand `currentCall` est encore null ; `setCurrentCall` réclame et fusionne le buffer
+  correspondant au `call.id` qu'il pose, AVANT de committer l'état (donc `use-video-call.ts` n'a besoin
+  d'aucun changement — le fix est entièrement contenu dans le store, cohérent avec le principe "single
+  source of truth"). Buffer vidé sur `reset()` (hygiène : un appel annulé avant que son ACK n'arrive
+  jamais ne doit pas fuiter indéfiniment). 3 nouveaux tests `call-store.test.ts` (bufferise + fusionne au
+  bon callId ; ne fuite pas vers un callId différent jamais réclamé ; `reset()` vide le buffer). RED
+  confirmé (revert du store seul → le test de fusion échoue, les 57 autres restent verts) puis GREEN.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ] Le timeout 30s "pas de réponse" de l'initiateur était devenu du
+  code mort** — `apps/web/components/video-call/CallManager.tsx`. `startCallTimeout` n'était appelé que
+  depuis les 2 branches de `handleIncomingCall` (le gestionnaire de l'événement socket
+  `call:initiated`) — or la branche `isInitiator` de cette fonction est, par construction du fix du jour,
+  définitivement inatteignable pour l'appelant (le gateway ne réémet jamais `call:initiated` vers son
+  propre socket). Le nouveau chemin `setCurrentCall` direct de `startCall` n'arme aucun timeout. Avant ce
+  fix, l'écran de sonnerie de l'appelant restait affiché indéfiniment si le callee ne répond jamais,
+  dépendant à 100 % du timeout serveur de 60s (2x plus long que prévu) et de la réception effective du
+  broadcast `call:ended` correspondant. Fix : nouveau `useEffect` dans `CallManager.tsx`, réactif aux
+  primitives `currentCall?.id`/`status`/`initiatorId`/`user?.id` — arme `startCallTimeout(currentCall.id)`
+  dès que le propre appel sortant de l'utilisateur devient courant en statut `initiated` (mirroir de la
+  branche `isInitiator` qu'il rend redondante, conservée pour défense en profondeur si le comportement
+  gateway change un jour). Nouveau fichier `CallManager.initiatorTimeout.test.tsx` (2 cas : le timeout
+  s'arme et émet `call:leave` + reset après 30s sans réponse ; ne se déclenche pas si le callee a rejoint
+  avant l'expiration — le guard de statut interne à `startCallTimeout` protège même sans clear explicite).
+  RED confirmé (revert de `CallManager.tsx` seul → le 1er test échoue, le 2e reste vert) puis GREEN. Suite
+  web filtrée `*[Cc]all*` : 17/17 suites, 227/227 tests verts (+5 vs baseline 222). `tsc --noEmit` web :
+  même 29 erreurs pré-existantes avant/après (aucune nouvelle, confirmé par diff textuel de la sortie
+  filtrée sur les 3 fichiers touchés).
+- **iOS (lecture seule, aucun changement)** : audit dédié confirmant que la classe de bug "initiateur
+  jamais notifié" n'affecte pas iOS (état posé localement depuis l'ACK `call:initiate`, jamais depuis un
+  event `call:initiated` reçu) et qu'aucune implication côté iOS de la staleness gate cross-conversation
+  du gateway n'a été trouvée (le preflight `emitCallForceLeave` d'iOS est déjà scopé à la conversation
+  cible, indépendant du sweep cross-conversation). Audit élargi (commits `4eb6fcdbb`/`98a447c5a` du
+  2026-07-05 non encore documentés) : rien de nouveau, tout vérifié correct par lecture complète.
+- **Reste ouvert** (inchangé) : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non
+  vidée.
+
 ## Note d'audit — couverture de test illusoire sur `CallManager.swift` (2026-07-06)
 
 Point d'entrée : routine calling-feature, audit dédié (agent d'exploration, lecture seule, environnement
