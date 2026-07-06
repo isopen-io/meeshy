@@ -1,42 +1,46 @@
 # Iteration 119 — Plan d'implémentation (2026-07-06)
 
 ## Objectives
-Restaurer le correctif **F84** (pagination « load more » anonyme via lien partagé), annulé sur `main`
-par un écrasement de merge collatéral (commit iOS `06687928a` remettant `getNextPageParam` en version
-pré-F84).
+Corriger F85 : aligner la classification « message texte » du chemin incrémental
+(`ConversationMessageStatsService.onNewMessage` / `onMessageDeleted`) sur l'autorité `recompute()`
+(`(messageType || 'text') === 'text'`), pour que `contentTypes.text` soit stable entre incrémental et
+recompute. (Renuméroté depuis 116 après collision de docs avec une itération parallèle mergée.)
 
 ## Affected modules
-- `apps/web/hooks/queries/use-conversation-messages-rq.ts` — `getNextPageParam` (restauration).
-- `apps/web/__tests__/hooks/queries/use-conversation-messages-rq.test.tsx` — test de régression restauré.
+- `services/gateway/src/services/ConversationMessageStatsService.ts` (helper + 2 signatures).
+- `services/gateway/src/socketio/handlers/MessageHandler.ts` (2 sites `onNewMessage`).
+- `services/gateway/src/routes/conversations/messages-advanced.ts` (site `onMessageDeleted`).
+- Tests : `ConversationMessageStatsService.test.ts` (+4), assertions étendues dans
+  `MessageHandler.test.ts` et `conversation-messages-advanced.test.ts`.
+- `docs/routine/analyses|plans/2026-07-06-iteration-119-*`.
 
 ## Implementation phases
-1. **Constat** — vérifier que `main` a bien perdu le correctif (diff de `06687928a`). ✅
-2. **Restauration** — ré-appliquer verbatim `getNextPageParam: (lastPage, allPages) => { … if (linkId)
-   return allPages.length + 1; … }` + ré-ajout du test « anonymous loadMore advances the offset ». ✅
-3. **Validation** — `npx jest use-conversation-messages-rq.test.tsx` : 19/19. ✅
+1. **RED** — tests non-texte (new + delete) : un `messageType: 'location'` avec légende ne doit pas
+   (dé)compter `textMessages`. Échouent sur le code actuel.
+2. **GREEN** — helper `isTextMessageStat` + threading `messageType` (défaut `'text'`) + 3 sites.
+3. **Compat** — étendre les assertions d'appelants existantes au nouvel argument (`expect.anything()`).
+4. **Rebase** — sur `origin/main` (conflit limité aux docs routine → renumérotés 117).
+5. **Validation** — suites service + handlers + route, puis suite gateway, puis CI.
 
 ## Dependencies
-Aucune. Restauration d'un correctif déjà revu/mergé.
+`bun install` + `prisma generate` (refaits après redémarrage conteneur).
 
 ## Estimated risks
-Très faible. Verbatim d'un correctif mergé ; chemin authentifié inchangé.
+Faibles : param optionnel rétro-compatible ; défaut `'text'` préserve tout comportement 6-args.
 
 ## Rollback strategy
-Revert du commit (isolé).
+Revert du commit (pas de schéma/migration).
 
 ## Validation criteria
-- [x] 18 tests existants + 1 restauré = 19/19 (jest).
-- [x] `getNextPageParam` = version F84 (2ᵉ arg `allPages`, branche `if (linkId)`).
+- 64/64 service ; 405/405 + 35/35 appelants ; RED prouvé (2 échecs sans le gate).
+- CI gateway verte.
 
 ## Completion status
-**COMPLET.** Restauration + test + docs. Prêt à commit/push/PR.
-
-## Progress tracking
-- [x] Analyse + plan.
-- [x] Restauration source + test.
-- [x] `npx jest` vert (19/19).
-- [ ] Commit + push + PR.
+- [x] Fix + threading appliqués.
+- [x] Tests neufs + assertions étendues, RED/GREEN prouvés.
+- [x] Rebasé sur main, docs renumérotées 117.
+- [ ] Push + CI verte.
 
 ## Future improvements
-- **F86** (LOW) : dedup traduction premium/basic ignorant le timestamp — intention produit à confirmer.
-- **Process** : contrôle systématique en début d'itération que les correctifs récents survivent sur `main`.
+F85b (message texte vide), F86 (video→file), reports antérieurs.
+</content>

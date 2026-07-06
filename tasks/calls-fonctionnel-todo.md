@@ -1298,3 +1298,35 @@ sessions gateway-only précédentes). Gateway et web audités en profondeur.
   socket, seuls les numéros de ligne décalent — confirmé par diff textuel, aucune nouvelle erreur).
 - **Reste ouvert** (inchangé) : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non
   vidée (piste basse-priorité, toujours pas de scénario d'exploitation concret).
+
+## Vague 18 — restauration du reste du web calling (currentCall initiateur, check-active replay, transient-error whitelist) touché par 8ebd497b (2026-07-06)
+
+- **Portée non traitée (inchangée du principe Vague 17)** : `8ebd497b` touche 97 fichiers gateway au total
+  et un nombre significatif de fichiers iOS (Swift) — `CallSignalGlyph.swift`, `CallTypeBadgeView.swift`,
+  plusieurs suites de tests iOS (`CallSignalIndicatorTests`, `CallViewLayoutGuardTests`,
+  `CallViewObservedObjectInjectionTests`, `CallQualityIndicatorsUITests`, `FloatingCallPillViewTests`
+  partiellement) supprimées dans le même commit, ainsi qu'un remaniement substantiel de `CallManager.swift`/
+  `CallAudioEffectsService.swift` (ce dernier semble être un remplacement de service plutôt qu'une pure
+  perte — nécessite une lecture approfondie avec compilateur Swift pour distinguer refactor légitime de
+  régression, cf. `docs/audit-calls-2026-05-11.md` et `scripts/call-reliability-report.sh` également tronqués/
+  supprimés côté docs/scripts, non restaurés — impact nul sur le runtime, priorité basse). **Non traité
+  cette session** (environnement Linux sans toolchain Xcode/Swift — cf. discipline établie vagues 11/15/17) —
+  candidat prioritaire pour une session avec accès macOS : auditer `git diff cc9380a5 8ebd497b8 --
+  'apps/ios/**'` fichier par fichier avant de restaurer quoi que ce soit (certains fichiers ont légitimement
+  évolué depuis et un `checkout` naïf écraserait ce travail).
+- **Tests** : suite gateway filtrée `*[Cc]all*` : 30/30 suites, 844/844 tests verts (dont le nouveau test
+  boot-floor). Suite web filtrée `*[Cc]all*` : 17/17 suites, 227/227 tests verts (dont les 2 fichiers de
+  test restaurés/recréés + le nouveau `CallManager.initiatorTimeout.test.tsx`). `tsc --noEmit` gateway :
+  327 erreurs avant/après diff, identiques (toutes `@prisma/client` non généré, limitation sandbox connue,
+  aucune nouvelle). `tsc --noEmit` web : 1512→1513 erreurs, diff textuel confirmé — le +1 est une occurrence
+  supplémentaire de la même catégorie pré-existante (`socket` typé faiblement dans ce fichier, 27
+  occurrences déjà tolérées) sur le site `checkForActiveCall` restauré, pas une nouvelle classe d'erreur.
+  Suite web complète (non filtrée) : 413/436 suites vertes, les 23 échecs sont TOUS la même cause
+  pré-existante documentée dans `CLAUDE.md` (`packages/shared` non buildé dans ce sandbox — résolution de
+  module `@meeshy/shared/dist/*` échoue), zéro suite `*call*` parmi les échecs, zéro nouvelle régression.
+- **Leçon pour la prochaine session** : une entrée de backlog documentant un fix ("Vague N: FIXED") n'est
+  une preuve de RIEN si elle n'a pas été vérifiée contre le code réel de `main` au moment de la lecture —
+  ce fichier lui-même a été partiellement effacé par la régression qu'il aurait dû aider à détecter. Avant
+  de faire confiance à une entrée de ce backlog pour "passer" une zone du code, `grep` la primitive
+  technique citée (nom de fonction, champ, constante) directement dans le fichier source sur `HEAD` — ne
+  jamais supposer qu'une doc présente sur `main` implique que le code l'est aussi.

@@ -158,4 +158,23 @@ describe('BoundedTtlCache', () => {
       expect(cache.get('c')).toBe(3);
     });
   });
+
+  describe('keys()', () => {
+    it('test_keys_enumeratesStoredKeys_forPrefixInvalidation', () => {
+      const cache = new BoundedTtlCache<string, number>({ maxSize: 10 });
+      cache.set('u1:a', 1);
+      cache.set('u1:b', 2);
+      cache.set('u2:a', 3);
+
+      // Simulate prefix-scoped invalidation (drop every `u1:*` entry) while
+      // iterating — deleting during iteration must be safe (Map semantics).
+      for (const key of cache.keys()) {
+        if (key.startsWith('u1:')) cache.delete(key);
+      }
+
+      expect(cache.size).toBe(1);
+      expect(cache.get('u2:a')).toBe(3);
+      expect([...cache.keys()]).toEqual(['u2:a']);
+    });
+  });
 });

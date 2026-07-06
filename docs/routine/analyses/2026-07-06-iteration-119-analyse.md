@@ -1,65 +1,89 @@
 # Iteration 119 — Analyse d'optimisation (2026-07-06)
 
 ## Protocole (démarrage)
-`main` @ `45ced6258`, working tree propre. Branche `claude/brave-archimedes-fru31a` recréée depuis
-`origin/main`. Numérotation : docs `main` jusqu'à **118** (itérations/F-numbers réutilisés par plusieurs
-sessions parallèles) → ce cycle prend **119**.
+`main` @ `e4977ae0` puis rebase sur `cfc5fb7c` (post-merge #1559, #1560, #1561). Branche
+`claude/brave-archimedes-howg57` recréée depuis `origin/main`. Itérations 112 (F83) et 114 (F84) mergées
+via PR #1529 / #1559. (Une itération « 116 » parallèle — ReactionService — a été mergée dans `main`
+indépendamment ; ce cycle est donc renuméroté **117** pour éviter la collision de docs.)
 
-### Constat de démarrage : régression d'un correctif déjà mergé (F84)
-En reprenant le backlog (après merge de F85 — PR #1570), la revue de l'état de `main` a détecté que
-**le correctif F84 (pagination anonyme, PR #1557, déjà mergé)** avait été **annulé** sur `main`.
+**PR ouvertes** : bumps dependabot + PR iOS. La cible retenue
+(`services/gateway/src/services/ConversationMessageStatsService.ts`) est **strictement disjointe**.
 
-- Correctif F84 : commit `6fc44fa35` (présent dans l'historique de `main`).
-- Commit fautif : `06687928a` « feat: improve iOS quality, accessibility and fix CI flakiness »
-  (`google-labs-jules[bot]`), dont le message ne concerne **que iOS/Swift/A11Y**. Son diff sur
-  `apps/web/hooks/queries/use-conversation-messages-rq.ts` **remet `getNextPageParam` dans sa version
-  pré-F84** (retour à `(lastPage) =>`, sans le 2ᵉ argument `allPages` ni la branche `if (linkId)`), et le
-  test de régression associé a lui aussi disparu.
-- Cause : merge sur une base périmée de ce fichier → **écrasement collatéral non intentionnel** du
-  correctif web par une PR iOS.
+## Cible : F85 — les stats incrémentales comptent les messages non-texte comme « texte »
 
-## Cible : F84 (ré-application) — restaurer la pagination « load more » anonyme
+### Current state
+`ConversationMessageStatsService` maintient `ConversationMessageStats` par deux chemins :
+- **incrémental** : `onNewMessage` / `onMessageDeleted` (atomic `{ increment }` / `{ decrement }`),
+- **autorité** : `recompute()` — le commentaire du service (ligne 84-91) le désigne comme la source qui
+  « corrige la dérive » des compteurs.
 
-### Current state (régressé sur `main`)
+`recompute()` classe un message comme texte ainsi (ligne ~387) :
 ```ts
-getNextPageParam: (lastPage) => {
-  if (!lastPage.hasMore) return undefined;
-  if (lastPage.nextCursor) return lastPage.nextCursor;   // jamais défini en anonyme
-  const lastMessage = lastPage.messages[lastPage.messages.length - 1];
-  if (lastMessage?.id) return lastMessage.id;            // ← string → collapse page 1 en anonyme
-  return undefined;
-},
+const msgType = msg.messageType || 'text';
+if (msgType === 'text' && msg.attachments.length === 0) { textMessages += 1; }
 ```
-Le bug F84 est **de retour** : pour tout participant anonyme (lien partagé), « load more » renvoie l'ID
-du dernier message (string) → `fetchMessagesFromService` (branche anonyme) le retransforme en page 1
-(`offset 0`) → re-charge la page 1 en boucle → doublons (flatMap sans dédup) + historique ancien
-inaccessible.
+Mais `onNewMessage` (et `onMessageDeleted`) le classait **en ignorant `messageType`** :
+```ts
+const isTextMessage = attachmentTypes.length === 0 && hasTextContent;
+```
 
-### Problems / Root cause / Business impact
-Identiques à l'itération 114 (voir `2026-07-06-iteration-114-analyse.md`) : une seule voie `pageParam`
-sert deux stratégies (cursor authentifié / offset anonyme) ; le fallback `lastMessage.id` (string) n'est
-valide qu'en cursor. Surface impactée : **chat par lien partagé** (invités anonymes). Ici la cause
-immédiate est un **écrasement de merge**, pas un nouveau défaut logique.
+### Problems identified
+- **[LIVE] `contentTypes.text` gonflé pour les messages non-texte avec légende.** Le handler
+  `message:send` accepte un `messageType` **fourni par le client** (`MessageHandler.ts:253` :
+  `messageType: validated.messageType || 'text'`), puis appelle `onNewMessage(..., [], null)`
+  (`MessageHandler.ts:313`) **sans** transmettre ce type. Un message `messageType: 'location'`
+  (ou `'system'`) avec du texte et **sans** attachement est donc compté comme `text` en incrémental,
+  alors que `recompute()` ne le compte pas.
+  - Répro : 3 messages `location` avec légende → incrémental `text: 3` ; recompute ultérieur → `text: 0`.
+- **[LIVE] Endpoint impacté** : `GET /conversations/:id/stats` (`routes/conversations/stats.ts` →
+  `conversationMessageStatsService.getStats`) renvoie une valeur `contentTypes.text` **différente avant
+  vs après** un recompute — incohérence observable par le client.
+- Asymétrie miroir dans `onMessageDeleted` (`messages-advanced.ts:619`) : la suppression décrémentait
+  `textMessages` pour un message non-texte qui n'avait jamais été compté.
 
-### Proposed improvements (implémenté ce cycle)
-Ré-application **verbatim** du correctif mergé F84 (contenu exact de `6fc44fa35` sur les deux fichiers) :
-- `getNextPageParam: (lastPage, allPages) => { … if (linkId) return allPages.length + 1; … }` + commentaire.
-- Ré-ajout du test « anonymous loadMore advances the offset » (1ᵉʳ appel `(20,0)`, 2ᵉ appel `(20,20)`,
-  3 messages distincts sans doublon).
+### Root cause
+La classification « texte » incrémentale a été écrite sans le champ `messageType`, divergeant de l'autorité
+`recompute()`. Deux définitions du même concept dans le même service.
+
+### Business impact
+Statistiques de conversation (écran analytics) affichant un nombre de messages texte erroné et
+**instable** (change silencieusement au prochain recompute). Perte de confiance dans un écran chiffré.
+
+### Technical impact
+- Helper partagé `isTextMessageStat(attachmentTypes, content, messageType)` alignant l'incrémental sur
+  `recompute()` (`(messageType || 'text') === 'text'`).
+- `onNewMessage` / `onMessageDeleted` reçoivent `messageType` (param optionnel `= 'text'`,
+  **rétro-compatible** : tous les appels 6-args existants restent inchangés).
+- 3 sites d'appel live transmettent le type : `MessageHandler.ts:313/516` (`message.messageType`),
+  `messages-advanced.ts:619` (`existingMessage.messageType`).
 
 ### Risk assessment
-Très faible. Restauration verbatim d'un correctif déjà revu et mergé ; chemin authentifié inchangé.
+Faible. Param optionnel défaut `'text'` → aucun appelant/test 6-args ne change de comportement. Seuls les
+messages **non-texte** (nouveau) cessent d'être comptés comme texte — comportement correct, aligné sur
+l'autorité. `hasTextContent` conservé (le micro-écart « message texte vide » reste hors périmètre, F85b).
+
+### Proposed improvements (implémenté ce cycle)
+- Helper `isTextMessageStat` + threading `messageType` + mise à jour des 3 sites d'appel.
+
+### Expected benefits
+- `contentTypes.text` **stable** entre incrémental et recompute pour les types non-texte.
+- Élimination d'une double-définition du concept « message texte » (dette).
+
+### Implementation complexity
+Faible-moyenne (1 helper + 2 signatures + 3 sites ; 4 tests neufs dont 2 RED→GREEN ; 11 assertions
+d'appelants existantes étendues du 7e/6e argument `messageType`).
 
 ### Validation criteria
-- [x] `use-conversation-messages-rq.test.tsx` **19/19** (18 existants + 1 restauré).
-- [x] Diff = exactement le contenu de `6fc44fa35` sur `use-conversation-messages-rq.ts` + le test.
+- [x] RED prouvé : sans le gate `messageType`, les 2 tests non-texte (new + delete) échouent.
+- [x] GREEN : `ConversationMessageStatsService.test.ts` 64/64 ; suites appelantes 405/405 + 35/35.
+- [x] Rebasé proprement sur `main` (conflit limité aux docs routine, renumérotés 117).
+- [ ] Suite gateway complète verte + CI.
 
-### Leçon (à retenir)
-Un correctif mergé peut être **silencieusement écrasé** par une PR ultérieure mergée sur une base
-périmée — surtout **inter-domaines** (une PR iOS touchant un fichier web). Vérifier, en début de chaque
-itération, que les correctifs récents de la session sont **toujours présents** sur `main` avant de
-poursuivre le backlog.
+## Candidats différés ce cycle
+- **F85b** (LOW) : `recompute()` compte un message `text` **sans contenu** ni attachement comme texte,
+  alors que l'incrémental exige `hasTextContent` — micro-dérive sur un message texte vide (rare).
+- **F86** (LOW, web) : `getMessageType` mappe `video/*` sur `'file'` (union sans `'video'`).
 
-## Backlog reporté (§ futur)
-- **F86** (LOW) : `use-message-translations.ts` dedup ignorant le timestamp — intention produit à confirmer.
-- Antérieurs : F69, F74, F75, F78, F80, F81, F82b toujours reportés.
+## Améliorations futures (report)
+Reports antérieurs : F82b (#1528), F83b, F51b, F56b, F60b, F67b, F68b, F69, F70, F74, F75.
+</content>
