@@ -1,50 +1,68 @@
 # Iteration 117 — Plan d'implémentation (2026-07-06)
 
 ## Objectifs
-Éliminer la réimplémentation locale du résolveur de nom dans `apps/web/utils/participant-helpers.ts`
-(F85) en la déléguant au SSOT `getUserDisplayName`, corrigeant l'affichage de noms blancs/non-trimmés
-et l'incohérence nom↔initiales dans les vues de participants.
+Aligner la reconstruction de la carte `reactionSummary` des **posts** et **commentaires** sur le patron
+`groupBy` autoritaire déjà utilisé par les réactions de **message** (`ReactionService`) :
+1. `PostReactionService.updatePostReactionSummary(postId)` → `$transaction` + `groupBy` (carte + total
+   autoritaires) ; `likeCount` conservé synchronisé sur le total.
+2. `CommentReactionService.updateCommentReactionSummary(commentId)` → idem.
+3. Simplifier la signature privée (drop des paramètres `emoji`/`action`/`count`) et les 4 sites d'appel.
 
 ## Modules affectés
-- `apps/web/utils/participant-helpers.ts` (production — délégation).
-- `apps/web/utils/__tests__/participant-helpers.test.ts` (nouveau — tests).
+- `services/gateway/src/services/PostReactionService.ts` (méthode `updatePostReactionSummary` + 2 appelants).
+- `services/gateway/src/services/CommentReactionService.ts` (méthode `updateCommentReactionSummary` + 2 appelants).
+- Tests : `PostReactionService.test.ts`, `CommentReactionService.test.ts` (mocks tx enrichis de `groupBy`,
+  nouveaux tests d'autorité de la carte).
+- Aucun changement de schéma, de route, de forme de réponse ni de signature **publique**.
 
 ## Phases d'implémentation
-1. **RED/verify** — Confirmer la divergence (input `{displayName:'   ', username:'bob'}` → ancien `'   '`,
-   canonique `'bob'`) et l'usage côte-à-côte nom/initiales dans les deux composants. ✅ Fait.
-2. **GREEN** — Importer `getUserDisplayName` depuis `@/utils/user-display-name` ; remplacer le corps de
-   `getParticipantDisplayName` par `return getUserDisplayName(user, user.username);`. ✅ Fait.
-3. **Tests** — Ajouter `participant-helpers.test.ts` (7 cas : préférence displayName, trim, fallback
-   blanc, firstName+lastName, firstName seul, username, cohérence nom↔initiales). ✅ Fait.
-4. **Validation** — jest ciblé + suite utils complète + tsc. ✅ Fait.
+1. **RED** — tests : `updateXReactionSummary` appelle `groupBy` ; la carte écrite provient du `groupBy`
+   (multi-emoji), `reactionCount`/`likeCount == somme(groupBy)`, indépendamment de la valeur préalable de
+   `reactionSummary`.
+2. **GREEN source** — réécrire les 2 méthodes sur `groupBy`, adapter les 4 sites d'appel.
+3. **Refactor** — vérifier le miroir exact avec `ReactionService.updateMessageReactionSummary`
+   (commentaires FR alignés, `select: { id: true }`).
+4. **Validation** — bun install (parité CI), Prisma generate + build shared, jest gateway sur les 2 suites
+   + suites réactions voisines, typecheck, puis suite complète si le temps le permet.
+5. **Commit + push + PR (ne pas merger sans CI verte)**.
 
 ## Dépendances
-- `packages/shared/dist` buildé (pour les imports de types) — présent.
-- Client Prisma généré (non requis pour cette cible web, mais généré dans l'environnement).
+- `bun install` (node_modules absent au démarrage — lancé).
+- `npx prisma generate --generator client` + `bun run build` dans `packages/shared` (parité CI gateway).
 
 ## Risques estimés
-Très faible. Délégation vers un résolveur en production et testé ; aucun changement d'API ni de forme
-de retour. Fallback final `user.username` préservé via le 2e argument.
+Faibles. Alignement sur un patron déjà en production et testé (message ReactionService,
+`PostCommentService.syncCommentLikeCounters`). Le `groupBy` remplace `findUnique + count` → une requête de
+moins par mutation. `reactionCount`/`likeCount` restent le total autoritaire (somme du groupBy == count()
+précédent).
 
 ## Stratégie de rollback
-`git revert` du commit unique ; 2 fichiers, aucune migration ni changement de schéma/contrat.
+Restaurer les 2 méthodes à leur forme delta + `count()` précédente et les 4 sites d'appel (diff localisé à
+2 fichiers source).
 
 ## Critères de validation
-- [x] `participant-helpers.test.ts` : 7/7 vert.
-- [x] `apps/web/utils/__tests__/` : 118/118 vert (aucune régression).
-- [x] `tsc --noEmit` : aucune nouvelle erreur dans les fichiers touchés (erreurs préexistantes
-      dans `lazy-components`, `link-parser`, `z-index-validator`, `push-token`, `connection.service`
-      — indépendantes de ce changement).
+- [x] RED prouvé (contre le code d'origine via `git stash` : 4 tests `writesReactionSummaryFromGroupBy`
+      échouent — `reactionCount: 1` du `count()` mock au lieu de `2` du `groupBy`).
+- [x] GREEN source (2 méthodes + 4 appelants).
+- [x] jest `PostReactionService.test.ts` + `CommentReactionService.test.ts` verts (**142/142**).
+- [x] suites réactions voisines vertes (**7 suites / 352 tests** : PostReactionHandler,
+      AttachmentReactionHandler, reactions-routes, SocialEventsHandler, ReactionService, PostFeedService,
+      PostService).
+- [x] typecheck gateway `tsc --noEmit` sans erreur.
+- [ ] CI verte après push.
 
 ## Statut de complétion
-**COMPLÉTÉ.** Prêt à commit/push/merge.
+- Source : **fait**. Tests : **fait**. Validation locale : **fait** (jest + tsc verts). CI : **en attente**.
 
 ## Progress tracking
-- F85 : DONE.
+- [x] Analyse écrite (`docs/routine/analyses/2026-07-06-iteration-117-analyse.md`).
+- [x] Plan écrit (ce fichier).
+- [x] Fix source + tests.
+- [x] Validation locale (jest + tsc verts).
+- [ ] Push + CI verte + merge main + suppression branche.
 
-## Améliorations futures (backlog)
-- **Convergence `contacts-utils.formatLastSeen`** vers `presence-format.formatPresenceLabel` (contrat
-  last-seen partagé iOS) — confirmer d'abord la reachability des callers ; touche potentiellement 3
-  fichiers (contacts-utils, users.service.formatLastSeenLabel, contacts/page.tsx local copy).
-- **`translation-cleaner.deepCleanTranslationOutput`** : soit supprimer (code mort), soit corriger la
-  regex apostrophe et la regex ponctuation avant tout usage.
+## Améliorations futures
+- **#1560** — signaler la régression `reactionSummary` (delta au lieu du `groupBy` déjà sur `main`).
+- **F84b** — `locationCount` incrémental (nécessite `messageType` au handler) — inchangé.
+- Helper partagé de recompte autoritaire pour les 3 services de réaction (dé-duplication) — cycle dédié.
+</content>

@@ -1,95 +1,144 @@
-# Iteration 117 — Analyse (2026-07-06)
+# Iteration 117 — Analyse d'optimisation (2026-07-06)
 
-## Contexte / priorité
-`main` @ `cfc5fb7c` (post-merge #1561), working tree propre. Branche `claude/brave-archimedes-a3vrtu`
-recréée depuis `origin/main`. Itération 116 (durcissement `ReactionService.updateMessageReactionSummary`,
-transaction + recompte autoritaire) est **déjà mergée** dans `main` — vérifié dans le code.
+## Protocole (démarrage)
+`main` @ `beaa28f0` (« chore(release): version packages [skip ci] »), working tree propre. Branche de
+travail `claude/brave-archimedes-2nvv6v` recréée depuis `origin/main` (`git checkout -B … origin/main`),
+0 commit non-mergé à préserver. `git config user.email/name` positionné (`noreply@anthropic.com` / `Claude`).
 
-PR ouvertes au démarrage (13) : essentiellement des bumps dependabot (#1532-#1549) + PR fonctionnelles
-disjointes (#1572 realtime participantId cache, #1570 tts `_segment_text`, #1566 reactions groupBy
-post/commentaire, #1564 audit Apple, #1563 docs calls). La cible retenue est **strictement disjointe**
-de toutes.
+**18 PR ouvertes au démarrage.** La cible retenue est **strictement disjointe** des zones touchées :
+- **#1560** (`claude/brave-archimedes-t6mxsx`) durcit **uniquement** `ReactionService`
+  (réactions de *message*) — patch obsolète d'ailleurs vis-à-vis de `main` (voir ci-dessous).
+- **#1559 / #1557** web conversations/anonymous-chat (F84 dans leur numérotation) — disjoint.
+- **#1561 / #1558 / #1563** realtime/calls — disjoint.
+- iOS/Android/dependabot — disjoint.
 
-### Revue d'ingénierie
-Balayage medium-thorough (agent d'exploration parallèle, 57 tool-uses) des helpers purs/quasi-purs de
-`services/gateway/src/utils`, `services/gateway/src/services`, `packages/shared/utils`, `apps/web/utils`,
-`apps/web/lib`, hors zones déjà traitées et hors PR en vol. Vérifiés corrects et écartés :
-`duration-format`, `relative-time`, `time-remaining`, `language-normalize`, `object-id`,
-`safe-redirect`, `user-language-preferences`, `pagination`, `normalize`, `sanitize`, `bounded-cache`,
-`conversation-id-cache`, `participant-lookup-cache`, `etag`, `callHistory`, `translation-transformer`,
-`date-format`, ports `story-transforms`. Trois défauts remontent ; **F85** est le seul simultanément réel,
-atteignable en production, violation de SSOT documentée, et auto-incohérent.
+Aucune PR ouverte ne touche `PostReactionService.ts` ni `CommentReactionService.ts`.
 
-## Cible : F85 — `getParticipantDisplayName` viole le résolveur canonique de nom (pas de `trim`)
+Cette itération solde **F84c**, explicitement reporté par l'itération 113
+(« reactionSummary des posts/commentaires maintenu par delta read-modify-write non atomique alors que le
+total reactionCount est recomputé autoritairement ; dérive d'emoji fantôme possible en concurrence »).
+
+## Constat de démarrage — l'inversion de F84c
+
+L'analyse d'origine de F84c (itération 113) supposait que les réactions de message étaient le service
+*déjà durci* et proposait de propager son durcissement `groupBy` aux posts/commentaires. **La réalité de
+`main` est plus nuancée** — les trois services de réaction sont dans **trois états de cohérence
+différents** :
+
+| Service | `reactionCount` (total) | `reactionSummary` (carte emoji→count) |
+|---|---|---|
+| `ReactionService` (message) | **autoritaire** — `groupBy(...).reduce(sum)` | **autoritaire** — `groupBy(...).reduce()` |
+| `PostReactionService` | **autoritaire** — `postReaction.count(...)` | **delta read-modify-write** ❌ |
+| `CommentReactionService` | **autoritaire** — `commentReaction.count(...)` | **delta read-modify-write** ❌ |
+
+`ReactionService.updateMessageReactionSummary` (l.338-372) recompte **et** le total **et** la carte
+par emoji depuis un `groupBy` sur la table `Reaction` (source de vérité) — pleinement auto-réparant. Les
+services post/commentaire recomptent le **total** de façon autoritaire (`count()`), mais maintiennent
+encore la carte **par emoji** par delta `currentSummary[emoji] += count` sur une lecture préalable.
+
+> Note : la PR ouverte **#1560** propose de « durcir » `ReactionService` en le ramenant à un delta
+> read-modify-write + `count()` — soit **strictement moins** correct que l'état actuel de `main` (qui a
+> déjà le `groupBy`). Elle a été écrite contre un `main` plus ancien. La présente itération ne la touche
+> pas ; elle aligne au contraire post/commentaire sur le **meilleur** patron (`groupBy`), ce qui rend la
+> régression de #1560 encore plus visible si elle est mergée telle quelle (à signaler séparément).
+
+## Cible : F84c — `reactionSummary` des posts/commentaires par delta → dérive d'emoji fantôme
 
 ### Current state
-`apps/web/utils/participant-helpers.ts` → `getParticipantDisplayName` (l.9-13, avant fix) :
+`PostReactionService.updatePostReactionSummary(postId, emoji, action, count)`
+(`services/gateway/src/services/PostReactionService.ts:312-347`) et son jumeau
+`CommentReactionService.updateCommentReactionSummary(commentId, emoji, action, count)`
+(`CommentReactionService.ts:371-401`) :
+
 ```ts
-export function getParticipantDisplayName(user: {...}): string {
-  return user.displayName ||                                  // truthiness brute, jamais trimmée
-    `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
-    user.username;
-}
+await this.prisma.$transaction(async (tx) => {
+  const post = await tx.post.findUnique({ where: { id: postId }, select: { reactionSummary: true } });
+  if (!post) return;
+  const currentSummary = (post.reactionSummary as Record<string, number>) || {};
+  if (action === 'add') currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
+  else if (currentSummary[emoji]) { currentSummary[emoji] -= count; if (currentSummary[emoji] <= 0) delete currentSummary[emoji]; }
+  const total = await tx.postReaction.count({ where: { postId } });   // total AUTORITAIRE
+  await tx.post.update({ where: { id: postId }, data: { reactionSummary: currentSummary, reactionCount: total, likeCount: total } });
+});
 ```
-Réimplémentation locale du SSOT documenté `getUserDisplayName` (`apps/web/utils/user-display-name.ts`,
-l.24-48) qui résout `displayName (trimmé) > firstName+lastName > username` **et trimme la valeur**.
+
+Le pré-check des réactions (`findMany`/`findFirst` sur les lignes existantes) **et** le `create`/`deleteMany`
+se font **hors** de cette transaction ; seule la mise à jour du résumé est transactionnelle. La carte
+`reactionSummary` est donc reconstruite par delta sur une lecture qui n'est **pas** synchronisée avec
+l'insertion/suppression de ligne.
 
 ### Problems identified
-1. **[LIVE] `displayName` blanc/espacé fuit dans l'UI.**
-   - `getParticipantDisplayName({ displayName: '   ', username: 'bob' })` → `'   '` (rend un libellé
-     vide) ; canonique → `'bob'`.
-   - `getParticipantDisplayName({ displayName: 'John ', username: 'bob' })` → `'John '` (espace
-     traîlant) ; canonique → `'John'`.
-2. **[LIVE] Incohérence interne nom ↔ initiales.** Dans le **même module**, `getParticipantInitials`
-   (l.15-17) délègue à `getUserInitials` → `avatar-utils` → le résolveur **canonique trimmé**
-   (`resolveDisplayName`). Pour un `displayName` blanc, les initiales sont calculées sur le nom
-   *trimmé/fallback* alors que le libellé nom est calculé sur le nom *non trimmé* → ils divergent.
-   Les deux sont rendus **côte à côte** (avatar + nom) dans `conversation-participants.tsx` (l.179/187)
-   et `conversation-participants-drawer.tsx` (l.405/428) : l'avatar peut afficher `BO` pendant que le
-   libellé rend blanc/décalé.
+- **[LIVE] Dérive d'emoji fantôme dans la carte `reactionSummary`.** Le total `reactionCount`/`likeCount`
+  est autoritaire (`count()`), mais la **ventilation par emoji** reste delta. Deux mutations concurrentes
+  (ex. deux ajouts d'emojis différents sur le même post) reconstruisent chacune la carte à partir d'une
+  lecture qui peut manquer l'effet de l'autre ; en cas de `WriteConflict` MongoDB sur le document `post`,
+  la transaction perdante **échoue sans réappliquer son delta** — la ligne `PostReaction` existe mais son
+  emoji n'apparaît jamais dans `reactionSummary`. **Aucun chemin auto-réparateur** : le résumé reste
+  incohérent en permanence.
+- **[LIVE] `sum(reactionSummary) ≠ reactionCount`.** Le total étant recomputé et la carte non, la somme
+  des valeurs de la carte peut diverger du total autoritaire — l'UI affiche « ❤️ 2 · 👍 1 » (somme 3)
+  sous un badge total « 4 ». Incohérence visible directement.
+- **[CONSISTENCY] Trois contrats de cohérence pour une même primitive.** Message = `groupBy` (carte +
+  total autoritaires), post/commentaire = `count()` (total autoritaire) + delta (carte). Divergence de
+  comportement inter-surfaces pour « réaction emoji dénormalisée ».
 
 ### Root cause
-Convergence de l'itération 49 (`avatar-utils`/`contacts-utils` alignés sur le résolveur canonique
-trimmé) : `participant-helpers` a été **laissé de côté**. Réimplémentation inline jamais rétro-portée.
+Lors de l'unification `likeCount` (post puis commentaire), seul le **compteur total** a été rendu
+autoritaire (`count()`) ; la reconstruction de la **carte par emoji** est restée en delta, alors que le
+service message a par la suite adopté le patron `groupBy` qui rend **carte ET total** autoritaires en une
+seule requête. Le durcissement n'a jamais été propagé jusqu'à la carte.
 
 ### Business impact
-Sur les vues de participants d'une conversation (liste + drawer), un utilisateur ayant un `displayName`
-constitué uniquement d'espaces (ou avec espaces parasites) affiche un nom vide/mal aligné à côté d'un
-avatar aux initiales correctes.
+La ventilation emoji d'un post ou d'un commentaire (fil social — cœur de l'engagement) peut afficher un
+emoji manquant ou une somme incohérente avec le total, sans jamais se corriger. Perte de confiance dans un
+compteur visible en permanence sur chaque carte de post.
 
 ### Technical impact
-Deux résolveurs de nom pour la même primitive dans le même fichier ; violation de la règle Single Source
-of Truth (`apps/web/CLAUDE.md` §Single Source of Truth). Fragile : toute évolution du contrat de nom
-devait être dupliquée.
+- `reactionSummary` (JSON emoji→count) peut diverger de l'ensemble réel des lignes `PostReaction` /
+  `CommentReaction` de façon **définitive**. Fiabilité des agrégats sociaux sapée.
+- Un `groupBy` remplace un `count()` : **même nombre de round-trips** dans la transaction (1 lecture
+  d'agrégat au lieu de 1 `findUnique` + 1 `count`) → en réalité **une requête de moins**.
 
 ### Risk assessment
-Très faible. On délègue à un résolveur **déjà en production et testé** (`getUserDisplayName`). Aucun
-changement de signature publique ni de forme de retour. Le fallback final `user.username` est préservé
-en le passant en 2e argument (`getUserDisplayName(user, user.username)`).
+Très faible. On aligne exactement sur un patron **déjà en production et testé** (message
+`ReactionService.updateMessageReactionSummary`, `PostCommentService.syncCommentLikeCounters` utilise déjà
+le même `commentReaction.groupBy`). `reactionCount`/`likeCount` restent le **total autoritaire** (somme
+du `groupBy`, strictement égale au `count()` précédent). Aucun changement de signature publique, de forme
+de réponse, ni de schéma. La signature **privée** `updateXReactionSummary` est simplifiée
+(`(id)` au lieu de `(id, emoji, action, count)`) — les paramètres delta deviennent inutiles.
 
-## Proposed improvements
-Déléguer `getParticipantDisplayName` à `getUserDisplayName(user, user.username)`. Le nom et les
-initiales dérivent désormais d'une seule source. Ajouter un fichier de tests unitaires couvrant :
-displayName préféré, trim d'espace traîlant, fallback au-delà d'un displayName blanc, fallback
-firstName+lastName, firstName seul, fallback username, et cohérence nom↔initiales.
+### Proposed improvements
+1. `PostReactionService.updatePostReactionSummary(postId)` → `$transaction` : existence du post
+   (`select: { id: true }`), `postReaction.groupBy({ by:['emoji'], where:{postId}, _count:{emoji:true} })`,
+   reconstruire `reactionSummary` + `total` depuis le `groupBy`, écrire
+   `{ reactionSummary, reactionCount: total, likeCount: total }`. Miroir exact de `ReactionService`
+   (+ `likeCount` conservé). Adapter les 2 appelants (drop des args delta).
+2. `CommentReactionService.updateCommentReactionSummary(commentId)` → idem sur `commentReaction` /
+   `postComment`.
 
-## Expected benefits
-- Correction d'un affichage de nom vide/mal trimmé sur le chemin des vues de participants.
-- Cohérence garantie nom ↔ initiales (source unique).
-- Suppression d'une réimplémentation de SSOT (dette technique).
+### Expected benefits
+- Carte `reactionSummary` **auto-réparante** — recomputée depuis la table à chaque mutation, jamais
+  d'emoji fantôme ni de somme incohérente avec le total.
+- Les trois services de réaction convergent vers **un seul** contrat de cohérence (`groupBy` autoritaire).
+- Code simplifié (suppression de la branche delta + de 3 paramètres par méthode) ; une requête de moins
+  par mutation.
 
-## Implementation complexity
-Triviale — 1 fichier de production modifié (délégation), 1 fichier de test ajouté.
+### Implementation complexity
+Faible (2 méthodes privées + 4 sites d'appel, 2 fichiers ; patron copié d'un service voisin déjà validé).
 
-## Validation criteria
-- `participant-helpers.test.ts` vert (7/7).
-- Suite `apps/web/utils/__tests__/` sans régression (118/118).
-- `tsc --noEmit` sans nouvelle erreur sur `participant-helpers.ts` / `user-display-name.ts`.
+### Validation criteria
+- RED→GREEN : `updateXReactionSummary` appelle `groupBy` ; `reactionSummary` écrit provient du `groupBy`
+  (ex. `[{emoji:'👍',_count:{emoji:3}},{emoji:'❤️',_count:{emoji:2}}]` → `{'👍':3,'❤️':2}`,
+  `reactionCount === 5`, `likeCount === 5`) et non d'un delta sur la lecture préalable.
+- Suites `PostReactionService.test.ts` + `CommentReactionService.test.ts` vertes (existants préservés /
+  mocks tx enrichis de `groupBy`).
+- Suites voisines réactions vertes ; typecheck gateway vert ; CI verte.
 
-## Candidats écartés cette itération (documentés pour éviter re-travail)
-- **`contacts-utils.formatLastSeen`** : divergence réelle du contrat last-seen (>24h relatif vs
-  calendaire canonique de `presence-format`), MAIS aucun import de production trouvé (l'UI passe par
-  `users.service.formatLastSeenLabel` / copie locale `contacts/page.tsx`). Convergence complète = 3
-  fichiers ; à traiter comme nettoyage/unification dédiée, reachability à confirmer d'abord.
-- **`translation-cleaner.deepCleanTranslationOutput`** : bug réel (regex apostrophe casse les
-  contractions `l'homme` → `l"homme`), MAIS code mort (aucun caller de production). Impact ~0.
+## Améliorations futures (reportées)
+- **#1560** — à signaler : sa réécriture de `ReactionService` en delta + `count()` régresse la carte
+  `reactionSummary` (perte du `groupBy` déjà présent sur `main`). Ne pas merger tel quel.
+- **F84b** — `locationCount` incrémental des stats de conversation (nécessite `messageType` au handler) —
+  inchangé.
+- Envisager un helper partagé de recompte autoritaire pour les 3 services de réaction (dé-duplication) —
+  la structure diffère (participantId vs userId ; `likeCount` présent/absent) → cycle dédié.
+</content>
