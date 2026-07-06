@@ -269,6 +269,12 @@ describe('GET /mentions/me', () => {
     expect(mockGetRecentMentionsForUser).toHaveBeenCalledWith(USER_ID, 20);
   });
 
+  it('falls back to limit=50 when limit=0 is provided (falsy guard)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/mentions/me?limit=0', headers: AUTH_HEADER });
+    expect(res.statusCode).toBe(200);
+    expect(mockGetRecentMentionsForUser).toHaveBeenCalledWith(USER_ID, 50);
+  });
+
   it('maps sender=null correctly when no sender participant', async () => {
     const mention = makeMention();
     (mention as any).message.sender = null;
@@ -301,6 +307,19 @@ describe('GET /mentions/suggestions — internal server error path', () => {
 
   it('returns 500 when service throws non-access-denied error', async () => {
     mockGetSuggestionsForConversation.mockRejectedValue(new Error('redis timeout'));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/mentions/suggestions?conversationId=${VALID_CONV_ID}`,
+      headers: AUTH_HEADER,
+    });
+    expect(res.statusCode).toBe(500);
+  });
+
+  it('returns 500 when service throws a non-Error value (string)', async () => {
+    // Covers the `error instanceof Error ? ... : String(error)` false branches
+    // in fastify.log.error object literal (lines 104-105 in mentions.ts)
+    mockGetSuggestionsForConversation.mockRejectedValue('string error, not an Error instance');
 
     const res = await app.inject({
       method: 'GET',

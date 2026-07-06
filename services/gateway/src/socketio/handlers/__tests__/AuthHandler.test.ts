@@ -284,10 +284,18 @@ describe('AuthHandler', () => {
       expect(userSockets.size).toBe(0);
     });
 
-    it('should still delete from connectedUsers when call leaveCall throws', async () => {
-      mockCallService.leaveCall.mockRejectedValue(new Error('call service down'));
+    it('does not auto-leave calls for a registered user on last-socket disconnect', async () => {
+      // CALL-RESILIENCE — call lifecycle on disconnect is owned by
+      // CallEventsHandler (grace window for answered calls, immediate leave
+      // pre-answer, shutdown guard). Auto-leaving here ended answered calls in
+      // DB while their P2P media was still alive (socket blip / gateway
+      // restart on a single-device user), defeating the grace window.
       (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
-        { callSessionId: 'call-99', participantId: 'p-1' }
+        {
+          callSessionId: 'call-1',
+          participantId: 'participant-a',
+          callSession: { id: 'call-1', status: 'active', type: 'direct' }
+        }
       ]);
 
       socketToUser.set('socket-123', 'user-123');
@@ -301,60 +309,99 @@ describe('AuthHandler', () => {
 
       await authHandler.handleDisconnection(createMockSocket());
 
-      // Even though leaveCall threw, maps must be fully cleaned to avoid orphaned presence
+      expect(mockCallService.leaveCall).not.toHaveBeenCalled();
+      expect(mockPrisma.callParticipant.findMany).not.toHaveBeenCalled();
+      // Presence cleanup still fully applied
       expect(connectedUsers.has('user-123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
       expect(userSockets.has('user-123')).toBe(false);
     });
 
-    it('should still clean maps when callParticipant.findMany throws', async () => {
-      (mockPrisma.callParticipant.findMany as jest.Mock).mockRejectedValue(new Error('db timeout'));
+    it('should still delete from connectedUsers when call leaveCall throws (anonymous)', async () => {
+      mockCallService.leaveCall.mockRejectedValue(new Error('call service down'));
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { callSessionId: 'call-99', participantId: 'p-1' }
+      ]);
 
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
         socketId: 'socket-123',
-        isAnonymous: false,
+        isAnonymous: true,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123']));
+      userSockets.set('anon-123', new Set(['socket-123']));
 
       await authHandler.handleDisconnection(createMockSocket());
 
-      expect(connectedUsers.has('user-123')).toBe(false);
+      // Even though leaveCall threw, maps must be fully cleaned to avoid orphaned presence
+      expect(connectedUsers.has('anon-123')).toBe(false);
+      expect(socketToUser.has('socket-123')).toBe(false);
+      expect(userSockets.has('anon-123')).toBe(false);
+    });
+
+    it('should still clean maps when callParticipant.findMany throws (anonymous)', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockRejectedValue(new Error('db timeout'));
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(connectedUsers.has('anon-123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
     });
 
-    it('should call leaveCall with correct args for each active call participation', async () => {
+    it('should auto-leave calls with correct args for an anonymous participant', async () => {
+      // Anonymous participants are the one case CallEventsHandler's disconnect
+      // handler cannot resolve (its lookup is keyed on participant.userId) and
+      // they get no reconnect grace (ADR-6) — immediate auto-leave stays here.
       (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
         { callSessionId: 'call-1', participantId: 'participant-a' },
         { callSessionId: 'call-2', participantId: 'participant-b' }
       ]);
 
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
         socketId: 'socket-123',
-        isAnonymous: false,
+        isAnonymous: true,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123']));
+      userSockets.set('anon-123', new Set(['socket-123']));
 
       await authHandler.handleDisconnection(createMockSocket());
 
+      // Audit C5 (2026-07-02) — Prisma-on-Mongo `{leftAt: null}` does NOT match
+      // documents whose leftAt field was never written; the filter must cover
+      // both shapes or historical participations are invisible to the cleanup.
+      expect(mockPrisma.callParticipant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+            participant: { id: 'anon-123' }
+          })
+        })
+      );
       expect(mockCallService.leaveCall).toHaveBeenCalledTimes(2);
       expect(mockCallService.leaveCall).toHaveBeenCalledWith({
         callId: 'call-1',
-        userId: 'user-123',
+        userId: 'anon-123',
         participantId: 'participant-a'
       });
       expect(mockCallService.leaveCall).toHaveBeenCalledWith({
         callId: 'call-2',
-        userId: 'user-123',
+        userId: 'anon-123',
         participantId: 'participant-b'
       });
       // Maps cleaned despite leaving calls
-      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(connectedUsers.has('anon-123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
     });
 
@@ -391,6 +438,40 @@ describe('AuthHandler', () => {
       expect(mockMaintenanceService.updateAnonymousOnlineStatus).toHaveBeenCalledWith('anon-123', false, true);
       expect(mockMaintenanceService.updateUserOnlineStatus).not.toHaveBeenCalled();
       expect(connectedUsers.has('anon-123')).toBe(false);
+    });
+
+    it('should skip the stale offline broadcast when the user reconnects during anonymous call-cleanup await (race)', async () => {
+      // The anonymous branch awaits callParticipant.findMany before reaching the
+      // offline broadcast. If the client reconnects during that await (flaky
+      // network / app foreground), the new socket's own auth flow already
+      // broadcast isOnline:true — a subsequent unconditional isOnline:false here
+      // would be a stale last-write-wins clobber of both the room broadcast and
+      // the DB flag.
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockImplementation(async () => {
+        userSockets.set('anon-123', new Set(['socket-456']));
+        connectedUsers.set('anon-123', {
+          id: 'anon-123',
+          socketId: 'socket-456',
+          isAnonymous: true,
+          language: 'en'
+        });
+        return [];
+      });
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-123' }));
+
+      expect(mockMaintenanceService.updateAnonymousOnlineStatus).not.toHaveBeenCalled();
+      // The reconnect's own connectedUsers entry must survive untouched
+      expect(connectedUsers.get('anon-123')?.socketId).toBe('socket-456');
     });
 
     it('should still clean maps when updateUserOnlineStatus throws', async () => {
@@ -457,6 +538,73 @@ describe('AuthHandler', () => {
 
       expect(joinCompleted).toContain('conversation:conv-aaa');
       expect(joinCompleted).toContain('conversation:conv-bbb');
+    });
+
+    it('registers the JWT user in connectedUsers only after all conversation room joins resolve', async () => {
+      // Regression test: delivery code (MessageHandler, MeeshySocketIOManager)
+      // gates the offline-delivery queue purely on connectedUsers.has(userId).
+      // If registration happened before the awaited room joins completed, a
+      // message could land in that gap, be skipped from the offline queue
+      // (recipient looks online) and never reach the room broadcast either —
+      // permanently lost. See AuthHandler.ts _authenticateJWTUser comment.
+      const order: string[] = [];
+      const asyncJoin = jest.fn().mockImplementation(async (room: string) => {
+        await new Promise(resolve => process.nextTick(resolve));
+        order.push(`join:${room}`);
+      });
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } },
+        join: asyncJoin,
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123', systemLanguage: 'en',
+        regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+      } as any);
+      jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
+        { conversationId: 'conv-aaa' },
+      ]);
+      jest.spyOn(connectedUsers, 'set').mockImplementation(((key: string, value: any) => {
+        order.push('registered');
+        return Map.prototype.set.call(connectedUsers, key, value);
+      }) as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      const registeredIndex = order.indexOf('registered');
+      const conversationJoinIndex = order.indexOf('join:conversation:conv-aaa');
+      expect(registeredIndex).toBeGreaterThan(-1);
+      expect(conversationJoinIndex).toBeGreaterThan(-1);
+      expect(conversationJoinIndex).toBeLessThan(registeredIndex);
+    });
+
+    it('registers the anonymous participant in connectedUsers only after the conversation room join resolves', async () => {
+      const order: string[] = [];
+      const asyncJoin = jest.fn().mockImplementation(async (room: string) => {
+        await new Promise(resolve => process.nextTick(resolve));
+        order.push(`join:${room}`);
+      });
+      const mockSocket = createMockSocket({
+        handshake: { auth: { sessionToken: 'anon-session-123' } },
+        join: asyncJoin,
+      });
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
+        id: 'anon-123',
+        displayName: 'Anonymous',
+        language: 'en',
+        conversationId: 'conv-123'
+      } as any);
+      jest.spyOn(connectedUsers, 'set').mockImplementation(((key: string, value: any) => {
+        order.push('registered');
+        return Map.prototype.set.call(connectedUsers, key, value);
+      }) as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      const registeredIndex = order.indexOf('registered');
+      const conversationJoinIndex = order.indexOf('join:conversation:conv-123');
+      expect(registeredIndex).toBeGreaterThan(-1);
+      expect(conversationJoinIndex).toBeGreaterThan(-1);
+      expect(conversationJoinIndex).toBeLessThan(registeredIndex);
     });
 
     it('should not throw when participant.findMany fails in _joinUserConversations', async () => {
@@ -676,7 +824,7 @@ describe('AuthHandler', () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
         id: 'user-123',
-        systemLanguage: 'es',
+        systemLanguage: 'en',
         regionalLanguage: null,
         customDestinationLanguage: null,
         deviceLocale: null
@@ -686,6 +834,9 @@ describe('AuthHandler', () => {
       // 'language' must NOT override identity-bound data.
       await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token', language: 'fr' } as any);
 
+      // systemLanguage is the highest-priority source in resolveUserLanguage, so
+      // the resolved language is 'en' (the user's systemLanguage), NOT the
+      // client-supplied 'fr'.
       expect(connectedUsers.get('user-123')?.language).toBe('en');
     });
 
@@ -785,6 +936,65 @@ describe('AuthHandler', () => {
 
       await expect(authHandler.handleHeartbeat(createMockSocket())).resolves.toBeUndefined();
       expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('user-123', false);
+    });
+
+    it('should emit heartbeat:ack immediately with serverTime', async () => {
+      const mockSocket = createMockSocket();
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      await authHandler.handleHeartbeat(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'heartbeat:ack',
+        expect.objectContaining({ serverTime: expect.any(String) })
+      );
+    });
+
+    it('should include latencyHintMs in heartbeat:ack when clientTime provided', async () => {
+      const mockSocket = createMockSocket();
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      const clientTime = Date.now() - 50; // 50ms ago
+      await authHandler.handleHeartbeat(mockSocket, { clientTime });
+
+      const emitCall = (mockSocket.emit as jest.Mock).mock.calls.find(
+        (c) => c[0] === 'heartbeat:ack'
+      );
+      expect(emitCall).toBeDefined();
+      const payload = emitCall![1];
+      expect(typeof payload.latencyHintMs).toBe('number');
+      expect(payload.latencyHintMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should not include latencyHintMs when clientTime not provided', async () => {
+      const mockSocket = createMockSocket();
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      await authHandler.handleHeartbeat(mockSocket, {});
+
+      const emitCall = (mockSocket.emit as jest.Mock).mock.calls.find(
+        (c) => c[0] === 'heartbeat:ack'
+      );
+      expect(emitCall).toBeDefined();
+      expect(emitCall![1].latencyHintMs).toBeUndefined();
     });
   });
 });

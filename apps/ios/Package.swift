@@ -43,10 +43,10 @@ let package = Package(
         ),
 
         // WebRTC for video/audio calls and peer-to-peer communication
-        // M141 (Oct 2025) — branch-heads/7390, compiled from official WebRTC source
+        // Pinned to match packages/MeeshySDK/Package.swift for deterministic resolution.
         .package(
             url: "https://github.com/stasel/WebRTC.git",
-            from: "141.0.0"
+            exact: "146.0.0"
         ),
 
         // WhisperKit for on-device speech recognition (OpenAI Whisper)

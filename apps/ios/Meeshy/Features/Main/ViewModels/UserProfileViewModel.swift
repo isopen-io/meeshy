@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -14,6 +15,8 @@ final class UserProfileViewModel: ObservableObject {
     @Published var userStats: UserStats?
     @Published var isLoadingStats = false
     @Published var statsError: String?
+
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
 
     // MARK: - Dependencies
 
@@ -76,7 +79,9 @@ final class UserProfileViewModel: ObservableObject {
             hydrateProfileUserIfNeeded(from: user)
         } catch let APIError.serverError(code, _) where code == 403 {
             isBlockedByTarget = true
-        } catch {}
+        } catch {
+            UserProfileViewModel.logger.error("profile refresh failed: \(error.localizedDescription)")
+        }
     }
 
     private func hydrateProfileUserIfNeeded(from user: MeeshyUser?) {
@@ -139,9 +144,17 @@ final class UserProfileViewModel: ObservableObject {
         let cmid = ClientMutationId.generate()
         let snapshot = isBlocked
         isBlocked = true
+        // R6-4 — flip the CANONICAL blocklist too, not just this VM's local
+        // `isBlocked`. The swipe labels / row affordances read
+        // `BlockService.isBlocked(userId:)`, so without this the list stayed
+        // stale until the next network refresh. Rolled back on `.exhausted`.
+        blockService.setBlockedOptimistic(userId: userId, blocked: true)
         observeOutcome(
             cmid: cmid,
-            rollback: { [weak self] in self?.isBlocked = snapshot },
+            rollback: { [weak self] in
+                self?.isBlocked = snapshot
+                self?.blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
+            },
             toast: "Impossible de bloquer cet utilisateur"
         )
         let payload = BlockUserPayload(clientMutationId: cmid, targetUserId: userId)
@@ -149,6 +162,7 @@ final class UserProfileViewModel: ObservableObject {
             try await OfflineQueue.shared.enqueue(.blockUser, payload: payload)
         } catch {
             isBlocked = snapshot
+            blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
         }
     }
 
@@ -157,9 +171,13 @@ final class UserProfileViewModel: ObservableObject {
         let cmid = ClientMutationId.generate()
         let snapshot = isBlocked
         isBlocked = false
+        blockService.setBlockedOptimistic(userId: userId, blocked: false)
         observeOutcome(
             cmid: cmid,
-            rollback: { [weak self] in self?.isBlocked = snapshot },
+            rollback: { [weak self] in
+                self?.isBlocked = snapshot
+                self?.blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
+            },
             toast: "Impossible de debloquer cet utilisateur"
         )
         let payload = UnblockUserPayload(clientMutationId: cmid, targetUserId: userId)
@@ -167,6 +185,7 @@ final class UserProfileViewModel: ObservableObject {
             try await OfflineQueue.shared.enqueue(.unblockUser, payload: payload)
         } catch {
             isBlocked = snapshot
+            blockService.setBlockedOptimistic(userId: userId, blocked: snapshot)
         }
     }
 

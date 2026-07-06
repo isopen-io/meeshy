@@ -83,6 +83,23 @@ describe('notificationString — interpolation', () => {
     expect(result).toContain('❤️');
     expect(result).toContain('Bob');
   });
+  it('résout le contexte de reaction.commentVerbose par postType (REEL / STATUS)', () => {
+    expect(notificationString('fr', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'REEL' }))
+      .toBe('Alice a réagi ❤️ à votre commentaire sur le réel de Bob');
+    expect(notificationString('fr', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'STATUS' }))
+      .toBe('Alice a réagi ❤️ à votre commentaire sur le statut de Bob');
+    expect(notificationString('en', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'REEL' }))
+      .toBe('Alice reacted ❤️ to your comment on Bob’s reel');
+  });
+  it('postType a priorité sur isStory dans reaction.commentVerbose', () => {
+    // Un REEL ne doit jamais s’effondrer vers « post » — postType gagne sur le booléen legacy.
+    expect(notificationString('fr', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'REEL', isStory: false }))
+      .toBe('Alice a réagi ❤️ à votre commentaire sur le réel de Bob');
+  });
   it('remplace les tokens manquants par une chaîne vide (branche v===undefined)', () => {
     // A key that uses {possObj} tokens without providing postType → token undefined → ''
     const result = notificationString('en', 'reaction.post', { emoji: '👍' });

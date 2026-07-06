@@ -43,16 +43,39 @@ public enum StorySlideRenderer {
             let hasVisualBg = (bgImage != nil) || slide.effects.hasVisualBackgroundMedia
             if hasVisualBg {
                 UIColor.black.setFill()
+                cgCtx.fill(rect)
             } else {
-                let bgHex = slide.effects.background ?? "1E1B4B"
-                let bgColor = UIColor(hex: bgHex) ?? .black
-                bgColor.setFill()
+                // Hex OU gradient (C11) — parité canvas/miniatures pour les
+                // covers composites (Prisme visuel des thumbnails).
+                switch StoryBackgroundValue.parse(slide.effects.background ?? "1E1B4B") {
+                case .gradient(let a, let b):
+                    let c1 = (UIColor(hex: a) ?? .black).cgColor
+                    let c2 = (UIColor(hex: b) ?? .black).cgColor
+                    if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                                 colors: [c1, c2] as CFArray,
+                                                 locations: [0, 1]) {
+                        cgCtx.drawLinearGradient(
+                            gradient,
+                            start: rect.origin,
+                            end: CGPoint(x: rect.maxX, y: rect.maxY),
+                            options: []
+                        )
+                    } else {
+                        UIColor.black.setFill()
+                        cgCtx.fill(rect)
+                    }
+                case .hex(let h):
+                    (UIColor(hex: h) ?? .black).setFill()
+                    cgCtx.fill(rect)
+                }
             }
-            cgCtx.fill(rect)
 
-            // 2. Background image (fill, respecting aspect ratio)
+            // 2. Background image — aspect-fill (parité reader `StoryBackgroundLayer`
+            //    `.resizeAspectFill`) au lieu d'un stretch. Un fond legacy non-9:16
+            //    était squishé dans le cover/thumbHash alors que le reader le recadre
+            //    en préservant ses proportions.
             if let bgImage {
-                bgImage.draw(in: rect)
+                drawAspectFill(bgImage, in: rect, ctx: cgCtx)
             }
 
             // 2b. Background MEDIA object (story moderne) — rempli PLEIN CADRE, à
@@ -90,10 +113,10 @@ public enum StorySlideRenderer {
                     cgCtx.rotate(by: CGFloat(bgMedia.rotation) * .pi / 180)
                     cgCtx.scaleBy(x: CGFloat(bgMedia.scale), y: CGFloat(bgMedia.scale))
                     cgCtx.translateBy(x: -cx, y: -cy)
-                    bgMediaImage.draw(in: rect)
+                    drawAspectFill(bgMediaImage, in: rect, ctx: cgCtx)
                     cgCtx.restoreGState()
                 } else {
-                    bgMediaImage.draw(in: rect)
+                    drawAspectFill(bgMediaImage, in: rect, ctx: cgCtx)
                 }
             }
 
@@ -140,7 +163,7 @@ public enum StorySlideRenderer {
 
         // 7. Filter — applied over the WHOLE composite, mirroring the canvas which
         //    runs its kernel on the captured (background + items) texture. Gated on
-        //    the SAME `StoryFilteredLayer.Kind(storyFilter:)` bridge the canvas uses,
+        //    the SAME `StoryFilterKind(storyFilter:)` bridge the canvas uses,
         //    so the thumbHash reflects exactly what the viewer renders: vintage/bw
         //    (the only kernels that exist) are applied; kernel-less filters
         //    (warm/cool/…) leave the composite untouched, just as the viewer leaves
@@ -152,11 +175,11 @@ public enum StorySlideRenderer {
     }
 
     /// Applies the active story filter to the rendered composite, gated on the same
-    /// `StoryFilteredLayer.Kind` bridge the canvas/viewer use so coverage stays in
+    /// `StoryFilterKind` bridge the canvas/viewer use so coverage stays in
     /// lock-step (today: vintage + bw; the six kernel-less filters return the image
     /// unchanged). Returns the input untouched on any CoreImage failure.
     static func applyActiveFilter(to image: UIImage, effects: StoryEffects) -> UIImage {
-        guard let kind = StoryFilteredLayer.Kind(storyFilter: effects.filter),
+        guard let kind = StoryFilterKind(storyFilter: effects.filter),
               let input = CIImage(image: image) else { return image }
         let intensity = Float(max(0.0, min(1.0, effects.filterIntensity ?? 1.0)))
 
@@ -276,15 +299,69 @@ public enum StorySlideRenderer {
         }
     }
 
+    /// Dessine un média foreground à PARITÉ avec le reader (`StoryMediaLayer`).
+    ///
+    /// Enveloppe = `StoryMediaLayer.baseMediaDesignSize(aspectRatio:) × scale`,
+    /// projetée par le MÊME facteur largeur (`size.width / CanvasGeometry.designWidth`)
+    /// que `CanvasGeometry` — réutilise la source de vérité unique, sans constante
+    /// dupliquée. L'ancien `0.6×width` + aspect de l'image décodée divergeait du
+    /// canvas (0.65×, carré 0.5×) → média ~8 % plus petit (non carré) / ~20 % plus
+    /// grand (carré) dans le cover/thumbHash. L'image est ensuite **aspect-fill**
+    /// (jamais étirée) et clippée aux coins arrondis (`cornerRadiusFraction`), avec
+    /// un bord blanc 2px comme `applyForegroundFrames` du canvas.
     private static func drawMediaObject(_ obj: StoryMediaObject, image: UIImage, in size: CGSize, ctx: CGContext) {
-        let imgW = size.width * obj.scale * 0.6
-        let imgH = imgW * (image.size.height / max(1, image.size.width))
-        let x = size.width * obj.x - imgW / 2
-        let y = size.height * obj.y - imgH / 2
-        let center = CGPoint(x: size.width * obj.x, y: size.height * obj.y)
+        let designBox = StoryMediaLayer.baseMediaDesignSize(aspectRatio: obj.aspectRatio)
+        let projection = size.width / CanvasGeometry.designWidth
+        let boxW = designBox.width * CGFloat(obj.scale) * projection
+        let boxH = designBox.height * CGFloat(obj.scale) * projection
+        let boxRect = CGRect(
+            x: size.width * CGFloat(obj.x) - boxW / 2,
+            y: size.height * CGFloat(obj.y) - boxH / 2,
+            width: boxW,
+            height: boxH
+        )
+        let center = CGPoint(x: size.width * CGFloat(obj.x), y: size.height * CGFloat(obj.y))
         drawRotated(obj.rotation, around: center, in: ctx) {
-            image.draw(in: CGRect(x: x, y: y, width: imgW, height: imgH))
+            let radius = min(boxW, boxH) * StoryMediaLayer.cornerRadiusFraction
+            let framePath = UIBezierPath(roundedRect: boxRect, cornerRadius: radius)
+            ctx.saveGState()
+            framePath.addClip()
+            drawAspectFill(image, in: boxRect, ctx: ctx)
+            ctx.restoreGState()
+            // Bord blanc 2px (parité reader). Gardé sur les boîtes assez grandes :
+            // sur le thumbHash ~100px la bordure serait sur-représentée (et le hash
+            // ~28 octets la moyenne de toute façon) ; le cover (270×480) en profite.
+            if min(boxW, boxH) >= 24 {
+                UIColor.white.setStroke()
+                framePath.lineWidth = 2
+                framePath.stroke()
+            }
         }
+    }
+
+    /// Dessine `image` en **aspect-fill** dans `rect` (recadré, jamais étiré),
+    /// clippé à `rect` — équivalent raster de `contentsGravity = .resizeAspectFill`
+    /// utilisé par `StoryBackgroundLayer` / `StoryMediaLayer` du reader.
+    private static func drawAspectFill(_ image: UIImage, in rect: CGRect, ctx: CGContext) {
+        let imgSize = image.size
+        guard imgSize.width > 0, imgSize.height > 0, rect.width > 0, rect.height > 0 else {
+            image.draw(in: rect)
+            return
+        }
+        let scale = max(rect.width / imgSize.width, rect.height / imgSize.height)
+        let drawW = imgSize.width * scale
+        let drawH = imgSize.height * scale
+        let drawRect = CGRect(
+            x: rect.midX - drawW / 2,
+            y: rect.midY - drawH / 2,
+            width: drawW,
+            height: drawH
+        )
+        ctx.saveGState()
+        ctx.addRect(rect)
+        ctx.clip()
+        image.draw(in: drawRect)
+        ctx.restoreGState()
     }
 
     private static func drawSticker(_ sticker: StorySticker, in size: CGSize, ctx: CGContext) {

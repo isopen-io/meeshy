@@ -19,14 +19,15 @@ interface TypingIndicatorProps {
   className?: string;
 }
 
-export function TypingIndicator({ 
+export function TypingIndicator({
   typingUsers,
-  chatId, 
-  currentUserId, 
-  users = [], 
-  className = "" 
+  chatId,
+  currentUserId,
+  users = [],
+  className = ""
 }: TypingIndicatorProps) {
   const [dots, setDots] = useState('');
+  const { t } = useI18n('typingIndicator');
 
   // Animation des points
   useEffect(() => {
@@ -41,8 +42,8 @@ export function TypingIndicator({
   }, []);
 
   // Filtrer les utilisateurs qui tapent dans ce chat (exclure l'utilisateur actuel)
-  const usersTypingInChat = typingUsers.filter(typingUser => 
-    typingUser.conversationId === chatId && 
+  const usersTypingInChat = typingUsers.filter(typingUser =>
+    typingUser.conversationId === chatId &&
     typingUser.userId !== currentUserId
   );
 
@@ -58,11 +59,11 @@ export function TypingIndicator({
 
   const renderTypingMessage = () => {
     if (typingUserNames.length === 1) {
-      return `${typingUserNames[0]} écrit${dots}`;
+      return t('single', { name: typingUserNames[0] }) + dots;
     } else if (typingUserNames.length === 2) {
-      return `${typingUserNames[0]} et ${typingUserNames[1]} écrivent${dots}`;
+      return t('double', { name1: typingUserNames[0], name2: typingUserNames[1] }) + dots;
     } else {
-      return `${typingUserNames.length} personnes écrivent${dots}`;
+      return t('multiple', { name: typingUserNames[0], count: String(typingUserNames.length - 1) }) + dots;
     }
   };
 

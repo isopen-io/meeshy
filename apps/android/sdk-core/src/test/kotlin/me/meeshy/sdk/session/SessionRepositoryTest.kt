@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.LoginRequest
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import org.junit.Test
@@ -62,6 +63,29 @@ class SessionRepositoryTest {
         repo.refresh()
 
         assertThat(repo.currentUser.value?.id).isEqualTo("u9")
+    }
+
+    @Test
+    fun `applyProfileEdit republishes the merged identity`() {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore())
+        repo.adopt(user("u1").copy(displayName = "Old", bio = "old bio", systemLanguage = "fr"))
+
+        repo.applyProfileEdit(UpdateProfileRequest(displayName = "New", systemLanguage = "de"))
+
+        val published = repo.currentUser.value
+        assertThat(published?.displayName).isEqualTo("New")
+        assertThat(published?.systemLanguage).isEqualTo("de")
+        // an absent field is left untouched
+        assertThat(published?.bio).isEqualTo("old bio")
+    }
+
+    @Test
+    fun `applyProfileEdit is inert when no session is active`() {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore())
+
+        repo.applyProfileEdit(UpdateProfileRequest(displayName = "New"))
+
+        assertThat(repo.currentUser.value).isNull()
     }
 
     @Test

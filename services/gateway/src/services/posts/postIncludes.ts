@@ -154,6 +154,40 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
 });
 
 /**
+ * G1(b) — lean tray projection for `GET /posts/feed/stories?projection=tray`.
+ *
+ * The story TRAY renders rings + author + latest thumbnail + viewed state:
+ * it needs ids, timestamps, the author and the media rows (thumbnailUrl /
+ * thumbHash), NOT the canvas (`storyEffects`), the content translations or
+ * the comments preview — which dominate the full-body payload (50 stories
+ * shipped whole). Opt-in per request; the full body stays the default so
+ * every existing client keeps decoding unchanged. Reposted stories keep a
+ * minimal `repostOf` (the shell's own media is empty — the thumbnail lives
+ * on the original, same resolution as `toStoryGroups` client-side).
+ */
+export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
+  id: true,
+  type: true,
+  visibility: true,
+  createdAt: true,
+  updatedAt: true,
+  expiresAt: true,
+  originalRepostOfId: true,
+  viewCount: true,
+  author: { select: authorSelect },
+  media: mediaInclude,
+  repostOf: {
+    select: {
+      id: true,
+      type: true,
+      createdAt: true,
+      author: { select: authorSelect },
+      media: mediaInclude,
+    },
+  },
+});
+
+/**
  * Canonical post include — single source of truth used by every service that
  * needs a fully-hydrated Post (PostService, PostFeedService, PostAudioService,
  * etc.). DO NOT redeclare a local copy: drift between copies is what caused

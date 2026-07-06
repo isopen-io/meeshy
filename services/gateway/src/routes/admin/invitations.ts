@@ -225,10 +225,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         });
     } catch (error) {
       logError(fastify.log, 'Get invitation details error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de l\'invitation'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération de l\'invitation');
     }
   });
 
@@ -273,17 +270,10 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       // Note: Le modèle Friend n'existe pas dans le schéma Prisma actuel
       // La logique d'amitié est gérée uniquement via FriendRequest avec status 'accepted'
 
-      return reply.send({
-        success: true,
-        data: invitation,
-        message: `Invitation ${status === 'accepted' ? 'acceptée' : status === 'rejected' ? 'rejetée' : 'mise à jour'}`
-      });
+      return sendSuccess(reply, invitation, { message: `Invitation ${status === 'accepted' ? 'acceptée' : status === 'rejected' ? 'rejetée' : 'mise à jour'}` });
     } catch (error) {
       logError(fastify.log, 'Update invitation error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la mise à jour de l\'invitation'
-      });
+      return sendInternalError(reply, 'Erreur lors de la mise à jour de l\'invitation');
     }
   });
 

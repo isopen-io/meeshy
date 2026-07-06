@@ -52,6 +52,15 @@ struct VoIPDedupRing {
         }
     }
 
+    /// Evicts `callId` so a subsequent push for the same id is not treated as
+    /// a duplicate. Used when `reportNewIncomingCall` genuinely fails (e.g.
+    /// CallKit refuses the transaction) and the call is torn down locally —
+    /// without eviction, a legitimate APNs retry within `ttl` would be
+    /// silently phantom-acked instead of re-ringing.
+    mutating func remove(_ callId: String) {
+        entries.removeAll { $0.callId == callId }
+    }
+
     /// Internal testing helper — number of live (non-expired) entries.
     var count: Int { entries.count }
 

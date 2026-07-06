@@ -877,7 +877,7 @@ export const conversationParticipantSchema = {
     lastName: { type: 'string', nullable: true, description: 'Last name' },
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
-    email: { type: 'string', nullable: true, description: 'Email address' },
+    banner: { type: 'string', nullable: true, description: 'Profile banner URL' },
     role: {
       type: 'string',
       enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
@@ -1158,6 +1158,7 @@ export const conversationParticipantMinimalSchema = {
     type: { type: 'string', nullable: true, description: 'Participant type (registered/anonymous)' },
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+    banner: { type: 'string', nullable: true, description: 'Profile banner URL (flattened top-level for DM surfacing)' },
     role: { type: 'string', description: 'Member role' },
     language: { type: 'string', nullable: true, description: 'Preferred language' },
     nickname: { type: 'string', nullable: true, description: 'Nickname in conversation' },
@@ -1204,6 +1205,7 @@ export const conversationParticipantMinimalSchema = {
         firstName: { type: 'string', nullable: true, description: 'First name' },
         lastName: { type: 'string', nullable: true, description: 'Last name' },
         avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+        banner: { type: 'string', nullable: true, description: 'Profile banner URL' },
         isOnline: { type: 'boolean', description: 'Online status' },
         lastActiveAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last active timestamp' }
       }
@@ -1251,7 +1253,9 @@ export const conversationMinimalSchema = {
           isArchived: { type: 'boolean', description: 'Is archived by user' },
           isDeletedForUser: { type: 'boolean', description: 'Is deleted for user' },
           tags: { type: 'array', items: { type: 'string' }, description: 'User-defined tags' },
-          categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' }
+          categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' },
+          customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name (drives DM display name)' },
+          reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' }
         }
       },
       description: 'User preferences for this conversation'

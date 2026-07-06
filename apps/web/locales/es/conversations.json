@@ -211,6 +211,7 @@
       "participantRemoved": "Participante eliminado",
       "removeParticipantError": "Error al eliminar el participante",
       "searchParticipants": "Buscar participantes...",
+      "searchOrAddParticipants": "Buscar o añadir un miembro...",
       "noOneOnline": "Nadie en línea",
       "you": "usted",
       "removeFromGroup": "Eliminar del grupo",
@@ -228,6 +229,9 @@
       "noDescription": "Sin descripción",
       "editDescription": "Editar la descripción",
       "clickToChangeImage": "Haga clic para cambiar la imagen",
+      "changeImage": "Cambiar la imagen",
+      "editCustomName": "Editar el nombre personalizado",
+      "editReaction": "Editar la reacción",
       "imageUpdated": "Imagen de la conversación actualizada",
       "imageUploadError": "Error al subir la imagen",
       "personalTags": "Etiquetas personales",
@@ -549,7 +553,10 @@
       "add": "Añadir",
       "cancel": "Cancelar",
       "inviting": "Invitando...",
-      "inviteButton": "Invitar a {count} usuario(s)"
+      "inviteButton": "Invitar a {count} usuario(s)",
+      "addUserAria": "Añadir a {name}",
+      "selectedUserAria": "{name} ya seleccionado",
+      "removeUserAria": "Quitar a {name}"
     },
     "drawer": {
       "title": "Opciones",

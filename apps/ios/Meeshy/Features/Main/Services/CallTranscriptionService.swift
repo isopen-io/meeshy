@@ -54,7 +54,7 @@ enum TranscriptionPermission: Equatable {
 
 // MARK: - Transcription Error
 
-enum TranscriptionError: LocalizedError {
+enum TranscriptionError: LocalizedError, Equatable {
     case permissionDenied
     case recognizerUnavailable(language: String)
     case onDeviceNotSupported(language: String)
@@ -155,6 +155,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private enum Constants {
         static let maxDisplayedSegments = 5
         static let segmentRetentionLimit = 50
+        /// Segments received before role negotiation completes are buffered up to
+        /// this cap and replayed if we resolve to `.follower`. Prevents silent data
+        /// loss when the leader pushes segments via DataChannel before the
+        /// capability exchange message arrives on the signalling channel.
+        static let pendingSegmentsBufferCap = 10
     }
 
     // MARK: - Published State
@@ -184,6 +189,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var localUserId = ""
     private var remoteUserId = ""
     private var allSegments: [TranscriptionSegment] = []
+    /// Segments buffered while `role == .undecided`. Replayed when role resolves
+    /// to `.follower`; discarded when role resolves to `.leader` or on call end.
+    private var pendingRemoteSegments: [TranscriptionSegment] = []
 
     // MARK: - Permission
 
@@ -203,6 +211,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     func startTranscribing(localLanguage: String, remoteLanguage: String, localUserId: String, remoteUserId: String) {
         guard !isTranscribing else {
             callsLogger.warning("startTranscribing called while already transcribing")
+            return
+        }
+
+        guard permission == .authorized else {
+            lastError = .permissionDenied
+            callsLogger.warning("startTranscribing: speech recognition not authorized — permission=\(String(describing: self.permission))")
             return
         }
 
@@ -239,6 +253,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         allSegments.removeAll()
         segments.removeAll()
+        pendingRemoteSegments.removeAll()
         isTranscribing = false
         lastError = nil
 
@@ -367,12 +382,23 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// PERF-005: MainActor-isolated apply step. Skips partial work while the
     /// overlay is hidden so the cost of partial recognition becomes nearly
     /// zero when the user has dismissed the transcription panel.
-    private func applyRecognitionResult(
+    /// Internal (not `private`) so `CallTranscriptionServiceTests` can drive the
+    /// stale-callback-after-teardown guard directly.
+    func applyRecognitionResult(
         segments newSegments: [TranscriptionSegment],
         speakerId: String,
         isFinal: Bool,
         boundaryText: String?
     ) {
+        // Guards against the same hazard `resetForCallEnd` documents: the
+        // recognizer callback runs on its own queue and hops to MainActor via
+        // `Task.detached`, so a result can still be in flight when
+        // `stopTranscribing()`/`resetForCallEnd()` clears `allSegments`/`segments`
+        // for a call that just ended. Without this check, a stale callback would
+        // repopulate the transcript with the *previous* call's data right after
+        // the reset — the error-handling branch above already guards on
+        // `isTranscribing` for this exact reason.
+        guard isTranscribing else { return }
         guard isFinal || isShowingOverlay else { return }
         replaceSegments(for: speakerId, with: newSegments, isFinal: isFinal)
         if isFinal, let boundaryText {
@@ -405,23 +431,16 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         let language = stream.language
 
         // PERF-005: same nonisolated-callback hop as startRecognitionTask.
+        // `recognitionTask(with:)` returns a non-optional SFSpeechRecognitionTask —
+        // it never fails synchronously, failures surface later via the `error`
+        // param of the completion handler, which handleRecognizerCallback already
+        // routes into `lastError` on every occurrence (not just after N rotations).
         stream.task = stream.recognizer.recognitionTask(with: newRequest) { [weak self] result, error in
             self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language)
         }
 
-        if stream.task == nil {
-            let consecutiveFailures = stream.rotationCount
-            if consecutiveFailures >= 3 {
-                lastError = .recognitionFailed(underlying: NSError(
-                    domain: "CallTranscriptionService",
-                    code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "Recognition rotation failed 3 times consecutively"]
-                ))
-                callsLogger.error("Recognition rotation failed 3 times for speaker \(speakerId) — fallback needed")
-            }
-        }
-
-        callsLogger.info("Rotated recognition request for speaker \(speakerId) (rotation #\(stream.rotationCount)), boundary: \(boundaryText.prefix(50))")
+        // Never log transcript content: it's the verbatim spoken words of the call.
+        callsLogger.info("Rotated recognition request for speaker \(speakerId) (rotation #\(stream.rotationCount)), boundary: \(boundaryText.count) chars")
     }
 
     private func replaceSegments(for speakerId: String, with newSegments: [TranscriptionSegment], isFinal: Bool) {
@@ -487,12 +506,14 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     ) {
         if localCapability == .none && remoteCapability == .none {
             role = .undecided
+            pendingRemoteSegments.removeAll()
             callsLogger.info("Neither peer can transcribe")
             return
         }
 
         if remoteCapability == .none {
             role = .leader
+            pendingRemoteSegments.removeAll()
             callsLogger.info("Local is only capable peer → leader")
             return
         }
@@ -500,29 +521,62 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         if localCapability == .none {
             role = .follower
             callsLogger.info("Remote is only capable peer → follower")
+            flushPendingSegments()
             return
         }
 
         if localCapability > remoteCapability {
             role = .leader
+            pendingRemoteSegments.removeAll()
             callsLogger.info("Local has higher capability → leader")
         } else if remoteCapability > localCapability {
             role = .follower
             callsLogger.info("Remote has higher capability → follower")
+            flushPendingSegments()
         } else {
-            role = isInitiator ? .leader : .follower
-            callsLogger.info("Tie broken by initiator role → \(isInitiator ? "leader" : "follower")")
+            let becomeLeader = isInitiator
+            role = becomeLeader ? .leader : .follower
+            callsLogger.info("Tie broken by initiator role → \(becomeLeader ? "leader" : "follower")")
+            if becomeLeader {
+                pendingRemoteSegments.removeAll()
+            } else {
+                flushPendingSegments()
+            }
         }
     }
 
-    // MARK: - Follower Mode: Receive segments from leader
+    private func flushPendingSegments() {
+        guard !pendingRemoteSegments.isEmpty else { return }
+        let buffered = pendingRemoteSegments
+        pendingRemoteSegments.removeAll()
+        callsLogger.info("Replaying \(buffered.count) buffered segment(s) after role resolved to follower")
+        for segment in buffered {
+            appendSegmentAsFollower(segment)
+        }
+    }
 
-    func receiveRemoteSegment(_ segment: TranscriptionSegment) {
-        guard role == .follower else { return }
+    private func appendSegmentAsFollower(_ segment: TranscriptionSegment) {
         allSegments.append(segment)
         if allSegments.count > Constants.segmentRetentionLimit {
             allSegments = Array(allSegments.suffix(Constants.segmentRetentionLimit))
         }
         segments = allSegments.sorted { $0.startTime < $1.startTime }
+    }
+
+    // MARK: - Follower Mode: Receive segments from leader
+
+    func receiveRemoteSegment(_ segment: TranscriptionSegment) {
+        switch role {
+        case .follower:
+            appendSegmentAsFollower(segment)
+        case .undecided:
+            if pendingRemoteSegments.count < Constants.pendingSegmentsBufferCap {
+                pendingRemoteSegments.append(segment)
+            } else {
+                callsLogger.warning("Transcription pending buffer full (\(Constants.pendingSegmentsBufferCap)) — dropping segment id=\(segment.id) speaker=\(segment.speakerId)")
+            }
+        case .leader:
+            break
+        }
     }
 }

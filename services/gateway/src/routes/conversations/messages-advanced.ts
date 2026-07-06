@@ -414,11 +414,14 @@ export function registerMessagesAdvancedRoutes(
         // Utiliser les instances déjà disponibles dans le contexte Fastify
         const translationService = fastify.translationService;
 
-        // Invalider les traductions existantes (vider le JSON translations)
+        // Invalider les traductions en base ET dans le cache mémoire LRU avant
+        // de lancer la retraduction — sinon _processRetranslationAsync peut
+        // servir l'ancien résultat caché au lieu de calculer le nouveau.
         await prisma.message.update({
           where: { id: messageId },
           data: { translations: null }
         });
+        translationService.invalidateCacheForMessage(messageId);
 
         // Créer un objet message pour la retraduction (avec contenu traité incluant tracking links)
         const messageForRetranslation = {
@@ -754,13 +757,15 @@ export function registerMessagesAdvancedRoutes(
         }
       }
 
-      // Mettre à jour le contenu du message
+      // Mettre à jour le contenu du message (invalide aussi les traductions existantes :
+      // la retraduction ci-dessous les recalcule, parité avec PUT /conversations/:id/messages/:messageId)
       const updatedMessage = await prisma.message.update({
         where: { id: messageId },
         data: {
           content: content.trim(),
           isEdited: true,
-          editedAt: new Date()
+          editedAt: new Date(),
+          translations: null
         },
         include: {
           sender: {
@@ -776,10 +781,46 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
-      // Note: Les traductions existantes restent inchangées
-      // Le service de traduction sera notifié si nécessaire via WebSocket
+      // Déclencher la retraduction automatique du message modifié (parité avec le sibling PUT)
+      try {
+        const translationService = fastify.translationService;
 
-      return sendSuccess(reply, updatedMessage);
+        const messageForRetranslation = {
+          id: messageId,
+          content: content.trim(),
+          originalLanguage: message.originalLanguage,
+          conversationId: message.conversationId,
+          senderId: message.senderId
+        };
+
+        await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+      } catch (translationError) {
+        logger.error('Erreur lors de la retraduction', translationError);
+        // Ne pas faire échouer l'édition si la retraduction échoue
+      }
+
+      const messageResponse = {
+        ...updatedMessage,
+        conversationId: message.conversationId,
+        translations: transformTranslationsToArray(
+          messageId,
+          (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+        )
+      };
+
+      // Diffuser la mise à jour via Socket.IO (parité avec le sibling PUT)
+      try {
+        const socketIOManager = socketIOHandler.getManager();
+        if (socketIOManager) {
+          const room = ROOMS.conversation(message.conversationId);
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse as unknown as SocketIOMessage);
+        }
+      } catch (socketError) {
+        logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
+        // Ne pas faire échouer l'édition si la diffusion échoue
+      }
+
+      return sendSuccess(reply, messageResponse);
 
     } catch (error) {
       logger.error('Error updating message', error);
@@ -1012,13 +1053,13 @@ export function registerMessagesAdvancedRoutes(
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(prisma);
 
-      const reaction = await reactionService.addReaction({
+      const addResult = await reactionService.addReaction({
         messageId,
         emoji,
         participantId: currentParticipant.id,
       });
 
-      if (!reaction) {
+      if (!addResult) {
         return sendInternalError(reply, 'Failed to add reaction');
       }
 
@@ -1036,6 +1077,18 @@ export function registerMessagesAdvancedRoutes(
           const socketIOManager = socketIOHandler.getManager?.();
           const io = socketIOHandler.getManager()?.getIO();
           if (io) {
+            // Swap 1-réaction-par-user : l'ancien emoji part avant que le
+            // nouveau arrive (agrégations recalculées par event).
+            for (const removedEmoji of addResult.replacedEmojis) {
+              const removeEvent = await reactionService.createUpdateEvent(
+                messageId,
+                removedEmoji,
+                'remove',
+                currentParticipant.id,
+                conversationId,
+              );
+              io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
+            }
             io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
           }
         }
@@ -1059,8 +1112,8 @@ export function registerMessagesAdvancedRoutes(
       if (error.message?.includes('not a member') || error.message?.includes('not a participant')) {
         return sendForbidden(reply, 'Access denied to this conversation');
       }
-      if (error.message?.includes('Maximum')) {
-        return sendBadRequest(reply, error.message);
+      if (error.message === 'Cannot react to a system message') {
+        return sendBadRequest(reply, 'Cannot react to a system message');
       }
 
       return sendInternalError(reply, 'Failed to add reaction');

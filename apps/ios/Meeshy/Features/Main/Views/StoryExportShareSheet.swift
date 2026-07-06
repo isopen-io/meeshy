@@ -76,8 +76,12 @@ struct StoryExportShareSheet: View {
     private var header: some View {
         VStack(spacing: 8) {
             Image(systemName: "square.and.arrow.up.fill")
-                .font(MeeshyFont.relative(36, weight: .semibold))
+                // Doctrine 84i : hero décoratif de la sheet (~36pt) → taille figée
+                // (un glyphe hero qui grossit en XXXL déséquilibrerait l'en-tête) ;
+                // masqué du rotor car le sous-titre adjacent porte le sens.
+                .font(.system(size: 36, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
+                .accessibilityHidden(true)
             Text(String(
                 localized: "story.export.share.subtitle",
                 defaultValue: "Bake un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."
@@ -118,6 +122,7 @@ struct StoryExportShareSheet: View {
                     Image(systemName: "chevron.up.chevron.down")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(.secondary)
+                        .accessibilityHidden(true)
                 }
                 .padding(12)
                 .background(

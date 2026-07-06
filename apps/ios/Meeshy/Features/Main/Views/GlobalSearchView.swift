@@ -112,19 +112,19 @@ struct GlobalSearchView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(
+            // iOS 26+ : champ de recherche en Liquid Glass natif (chrome de
+            // contrôle interactif). iOS < 26 : repli `.ultraThinMaterial`. Le
+            // liséré dégradé de marque est conservé en overlay au-dessus du verre.
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl))
+            .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [MeeshyColors.error.opacity(0.4), MeeshyColors.indigo300.opacity(0.4)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1
-                            )
+                    .stroke(
+                        LinearGradient(
+                            colors: [MeeshyColors.error.opacity(0.4), MeeshyColors.indigo300.opacity(0.4)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
                     )
             )
         }
@@ -170,7 +170,10 @@ struct GlobalSearchView: View {
                         .overlay(alignment: .topTrailing) {
                             if count > 0 {
                                 Text(count > 99 ? "99+" : "\(count)")
-                                    .font(MeeshyFont.relative(9, weight: .bold))
+                                    // Fixed: micro count-badge positioned via absolute
+                                    // .offset/.fixedSize — must not scale with Dynamic Type
+                                    // or it clips out of its overlay anchor.
+                                    .font(.system(size: 9, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 1)
@@ -189,7 +192,7 @@ struct GlobalSearchView: View {
                             }
                         }
                     Text(tab.localizedName)
-                        .font(MeeshyFont.relative(13))
+                        .font(MeeshyFont.relative(13, weight: isSelected ? .bold : .medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                 }
@@ -475,7 +478,9 @@ struct GlobalSearchView: View {
 
                     if result.unreadCount > 0 {
                         Text("\(result.unreadCount)")
-                            .font(MeeshyFont.relative(11, weight: .bold))
+                            // Fixed: compact numeric unread badge (iOS convention) —
+                            // kept off Dynamic Type so the capsule stays pill-tight.
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)

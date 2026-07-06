@@ -60,6 +60,12 @@ struct FeedPostCard: View {
     var authorStoryRing: StoryRingState = .none
     var onViewAuthorStory: (() -> Void)? = nil
 
+    /// Feed autoplay coordinator (RF2). Passed as a plain `let` — NOT observed —
+    /// so election changes never invalidate this leaf card; the inner
+    /// `ReelRepostEmbedContainer` observes it. `nil` keeps the static-poster
+    /// fallback (e.g. profile lists with no feed-level autoplay).
+    var reelAutoplay: ReelFeedAutoplayCoordinator? = nil
+
     // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
     // évite que chaque changement de thème force un re-render de toutes les cards.
     private var theme: ThemeManager { ThemeManager.shared }
@@ -87,6 +93,31 @@ struct FeedPostCard: View {
     static func compactCount(_ value: Int) -> String {
         MeeshyNumberFormatter.formatCompact(value)
     }
+
+    /// Compact preview descriptor for the media carried by a reposted POST/STATUS
+    /// (RF1). Holds the first media (rendered as a thumbnail) and the total count
+    /// (drives a "+N" badge).
+    struct RepostMediaPreview: Equatable {
+        let primary: FeedMedia
+        let count: Int
+        static func == (lhs: RepostMediaPreview, rhs: RepostMediaPreview) -> Bool {
+            lhs.primary.id == rhs.primary.id && lhs.count == rhs.count
+        }
+    }
+
+    /// Resolver for the reposted POST/STATUS quote-block media preview. Returns
+    /// `nil` when the repost carries no media — text-only reposts then keep their
+    /// byte-identical layout (the preview block is skipped). Otherwise the first
+    /// media + total count. Pure; unit-tested.
+    static func repostMediaPreviewModel(for repost: RepostContent) -> RepostMediaPreview? {
+        guard let primary = repost.media.first else { return nil }
+        return RepostMediaPreview(primary: primary, count: repost.media.count)
+    }
+
+    /// Tap target for the reposted quote block (incl. its media preview): ALWAYS
+    /// the original reposted post (`repost.id`), never the reposter's outer card
+    /// (`post.id`). Routed through the enclosing repost Button. Pure; unit-tested.
+    static func repostTapTargetId(for repost: RepostContent) -> String { repost.id }
 
     /// VoiceOver label for the tappable media preview. Distinguishes a video
     /// from an image (and falls back to a generic "media" wording for mixed or
@@ -349,11 +380,21 @@ struct FeedPostCard: View {
                 } else if isReelRepost {
                     // Repost-of-REEL: a reel's content lives in media/caption, never
                     // in `content`, so the legacy quote block rendered blank (and the
-                    // POST card drops the reel badge). Render a rich reel preview.
-                    ReelRepostEmbedCell(
-                        post: post,
-                        onTap: { post.repost.map { onTapRepost?($0.id) } }
-                    )
+                    // POST card drops the reel badge). Render a rich reel preview with
+                    // inline muted autoplay (RF2) when a feed coordinator is provided;
+                    // otherwise the static-poster cell.
+                    if let reelAutoplay {
+                        ReelRepostEmbedContainer(
+                            coordinator: reelAutoplay,
+                            post: post,
+                            onTap: { post.repost.map { onTapRepost?($0.id) } }
+                        )
+                    } else {
+                        ReelRepostEmbedCell(
+                            post: post,
+                            onTap: { post.repost.map { onTapRepost?($0.id) } }
+                        )
+                    }
                 } else {
                     // Media preview (outside nav tap target — has its own fullscreen gesture)
                     if post.hasMedia {
@@ -515,7 +556,7 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.accentText(accentColor))
 
                     let flags = buildAvailableFlags()
-                    if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                    if !flags.isEmpty || post.translations?.isEmpty == false {
                         Text("·")
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
@@ -539,7 +580,7 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                         }
 
-                        if post.translations != nil, !post.translations!.isEmpty {
+                        if post.translations?.isEmpty == false {
                             Image(systemName: "translate")
                                 .font(.caption2.weight(.medium))
                                 .foregroundColor(MeeshyColors.indigo400)
@@ -643,7 +684,7 @@ struct FeedPostCard: View {
     private func repostView(_ repost: RepostContent) -> some View {
         Button {
             HapticFeedback.light()
-            onTapRepost?(repost.id)
+            onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 // Original author
@@ -679,6 +720,14 @@ struct FeedPostCard: View {
                         .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
+                }
+
+                // Reposted media (RF1) — a reposted POST/STATUS carrying images or
+                // video rendered text-only before this; show a compact thumbnail
+                // preview reusing the own-media building blocks. No AVPlayer: the
+                // surrounding Button routes the tap to the ORIGINAL reposted post.
+                if let mediaModel = Self.repostMediaPreviewModel(for: repost) {
+                    repostMediaPreview(mediaModel)
                 }
 
                 // Original stats
@@ -831,7 +880,7 @@ struct FeedPostCard: View {
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), displayRepostCount ?? post.repostCount))
             .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
             .accessibilityAddTraits(isReposted ? .isSelected : [])
-            .confirmationDialog(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
+            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
                 Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(post.id) }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
@@ -1016,11 +1065,30 @@ struct FeedPostCard: View {
                         }
                     }
 
-                    // Content (Prisme Linguistique)
-                    Text(comment.displayContent)
-                        .font(.footnote)
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(2)
+                    // Content (Prisme Linguistique) — masqué pour un commentaire
+                    // média-seul (displayContent vide) : évite une ligne fantôme.
+                    if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(comment.displayContent)
+                            .font(.footnote)
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(2)
+                    }
+
+                    // Média unique (image/vidéo/audio) — rendu inline dans l'aperçu
+                    // du feed avec les MÊMES building blocks que la sheet. L'audio est
+                    // ainsi lisible/arrêtable directement (le player porte son propre
+                    // bouton, qui capte le tap sans ouvrir la sheet).
+                    if let media = comment.media.first {
+                        CommentMediaView(
+                            media: media,
+                            accentColor: accentColor,
+                            authorName: comment.author,
+                            authorAvatarURL: comment.authorAvatarURL,
+                            authorColor: comment.authorColor,
+                            sentAt: comment.timestamp
+                        )
+                        .padding(.top, 2)
+                    }
 
                     // Stats row: likes and replies
                     HStack(spacing: 16) {

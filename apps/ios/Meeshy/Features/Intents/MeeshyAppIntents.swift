@@ -103,8 +103,10 @@ struct SendMessageIntent: AppIntent {
 
         // Build deep link
         let urlString = "meeshy://send?contactId=\(selectedContact.id)&message=\(messageText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
-
-        return .result(opensIntent: OpenURLIntent(URL(string:urlString)!))
+        guard let url = URL(string: urlString) else {
+            throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
+        }
+        return .result(opensIntent: OpenURLIntent(url))
     }
 }
 
@@ -147,8 +149,10 @@ struct CallContactIntent: AppIntent {
 
         let type = callType == .video ? "video" : "audio"
         let urlString = "meeshy://call?contactId=\(selectedContact.id)&type=\(type)"
-
-        return .result(opensIntent: OpenURLIntent(URL(string:urlString)!))
+        guard let url = URL(string: urlString) else {
+            throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
+        }
+        return .result(opensIntent: OpenURLIntent(url))
     }
 }
 
@@ -206,8 +210,10 @@ struct TranslateTextIntent: AppIntent {
         }
 
         let urlString = "meeshy://translate?text=\(textToTranslate.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&target=\(targetLanguage.rawValue)"
-
-        return .result(opensIntent: OpenURLIntent(URL(string:urlString)!))
+        guard let url = URL(string: urlString) else {
+            throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
+        }
+        return .result(opensIntent: OpenURLIntent(url))
     }
 }
 
@@ -314,7 +320,7 @@ struct ContactEntity: AppEntity {
         DisplayRepresentation(
             title: "\(name)",
             subtitle: "",
-            image: avatar != nil ? DisplayRepresentation.Image(url: URL(string: avatar!)!) : nil
+            image: avatar.flatMap { URL(string: $0) }.map { DisplayRepresentation.Image(url: $0) }
         )
     }
 }

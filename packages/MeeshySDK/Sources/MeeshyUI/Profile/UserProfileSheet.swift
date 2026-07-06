@@ -502,19 +502,19 @@ public struct UserProfileSheet: View {
         HStack(spacing: 8) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(hex: "2ECC71"))
+                .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "2ECC71"))
+                .foregroundColor(MeeshyColors.success)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color(hex: "2ECC71").opacity(0.12))
+        .background(MeeshyColors.success.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(hex: "2ECC71").opacity(0.3), lineWidth: 1.5)
+                .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1.5)
         )
     }
 

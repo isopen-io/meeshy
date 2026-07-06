@@ -16,6 +16,16 @@ final class CallsViewModel: ObservableObject {
     private let networkMonitor: any NetworkMonitorProviding
     private var revalidationTask: Task<Void, Never>?
 
+    /// Bumped on every `loadCalls()` invocation. `CacheFirstLoader.load` awaits
+    /// (cache read, then network fetch) before ever touching `calls`/
+    /// `loadState`, so two overlapping invocations — e.g. the initial
+    /// `.task` load still in flight when `setFilter` fires a second one — can
+    /// resolve out of order. Without this guard, an older invocation for a
+    /// filter the user has already navigated away from can complete AFTER the
+    /// current one and clobber `calls` with stale-filter results. Mirrors the
+    /// `generation` pattern in `VideoSurvivalController`.
+    private var loadGeneration = 0
+
     private var cacheKey: String { "calls:list:\(filter.rawValue)" }
 
     init(
@@ -31,6 +41,8 @@ final class CallsViewModel: ObservableObject {
     }
 
     func loadCalls() async {
+        loadGeneration += 1
+        let generation = loadGeneration
         let service = self.service
         let filter = self.filter
         let store = await CacheCoordinator.shared.callHistory
@@ -42,7 +54,7 @@ final class CallsViewModel: ObservableObject {
                 return page.records
             },
             setLoadState: { [weak self] state in
-                guard let self else { return }
+                guard let self, self.loadGeneration == generation else { return }
                 switch state {
                 case .cachedFresh, .cachedStale, .loaded:
                     self.loadState = .loaded
@@ -57,7 +69,8 @@ final class CallsViewModel: ObservableObject {
                 }
             },
             apply: { [weak self] records in
-                self?.calls = records
+                guard let self, self.loadGeneration == generation else { return }
+                self.calls = records
             }
         )
     }
@@ -65,8 +78,10 @@ final class CallsViewModel: ObservableObject {
     func setFilter(_ newFilter: CallHistoryFilter) {
         guard newFilter != filter else { return }
         filter = newFilter
-        calls = []
-        loadState = .idle
+        // No synchronous `calls = []` here: loadCalls() is cache-first and
+        // its `apply` closure replaces `calls` once the new filter's
+        // cache/network result is ready — clearing eagerly would flash the
+        // list to empty even when a cached page for the new filter exists.
         Task { await loadCalls() }
     }
 }

@@ -1098,6 +1098,30 @@ describe('ConversationStatsService', () => {
       });
     });
 
+    it('should not lose an increment when two updateOnNewMessage calls race for the same conversation', async () => {
+      // Seed the cache with a known base count
+      mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
+      mockPrisma.message.groupBy.mockResolvedValue([
+        { originalLanguage: 'en', _count: { _all: 10 } }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.user.findMany.mockResolvedValue([]);
+
+      const getConnectedUserIds = () => [];
+      await service.getOrCompute(mockPrisma as PrismaClient, testConversationId, getConnectedUserIds);
+
+      // Two messages in the same language land for the same conversation at
+      // (near) the same time — both calls read the cache before either write
+      // lands unless updates are serialized per conversation.
+      await Promise.all([
+        service.updateOnNewMessage(mockPrisma as PrismaClient, testConversationId, 'en', getConnectedUserIds),
+        service.updateOnNewMessage(mockPrisma as PrismaClient, testConversationId, 'en', getConnectedUserIds)
+      ]);
+
+      const finalStats = await service.getOrCompute(mockPrisma as PrismaClient, testConversationId, getConnectedUserIds);
+      expect(finalStats.messagesPerLanguage['en']).toBe(12);
+    });
+
     it('should handle multiple different conversations concurrently', async () => {
       const conv1 = '507f1f77bcf86cd799439001';
       const conv2 = '507f1f77bcf86cd799439002';

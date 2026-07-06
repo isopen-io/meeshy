@@ -17,6 +17,7 @@ import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface TextViewerProps {
   attachment: UploadedAttachmentResponse;
@@ -74,13 +75,12 @@ export const TextViewer: React.FC<TextViewerProps> = ({
   }, [attachmentFileUrl]);
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
+    const { success } = await copyToClipboard(content);
+    if (success) {
       setIsCopied(true);
       toast.success(t('text.copied'));
       setTimeout(() => setIsCopied(false), 2000);
-    } catch (error) {
-      console.error('Erreur copie:', error);
+    } else {
       toast.error(t('text.copyError'));
     }
   };

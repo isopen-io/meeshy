@@ -2,11 +2,13 @@ package me.meeshy.app.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
@@ -18,6 +20,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -32,8 +35,11 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.R
+import android.net.Uri
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoginScreen
+import me.meeshy.app.calls.CallHistoryScreen
+import me.meeshy.app.calls.CallScreen
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
@@ -60,6 +66,7 @@ object Routes {
     const val CONVERSATION_SINGULAR_DEEP_LINK = "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
+    const val CALLS = "calls"
     const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
@@ -68,10 +75,13 @@ object Routes {
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
     const val STORY_COMPOSER = "story_composer"
+    val CALL = CallRoute.PATTERN
 
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
     fun story(userId: String): String = "story/$userId"
+    fun call(conversationId: String, peerName: String, isVideo: Boolean): String =
+        CallRoute.path(conversationId, peerName, isVideo)
 }
 
 private data class TabItem(
@@ -85,9 +95,10 @@ private data class TabItem(
 private fun rememberTabs(): List<TabItem> {
     val messages = stringResource(R.string.tab_messages)
     val feed = stringResource(R.string.tab_feed)
+    val calls = stringResource(R.string.tab_calls)
     val activity = stringResource(R.string.tab_activity)
     val profile = stringResource(R.string.tab_profile)
-    return remember(messages, feed, activity, profile) {
+    return remember(messages, feed, calls, activity, profile) {
         listOf(
             TabItem(
                 route = Routes.CONVERSATIONS,
@@ -100,6 +111,12 @@ private fun rememberTabs(): List<TabItem> {
                 label = feed,
                 selectedIcon = { Icon(Icons.Filled.Home, contentDescription = feed) },
                 unselectedIcon = { Icon(Icons.Outlined.Home, contentDescription = feed) },
+            ),
+            TabItem(
+                route = Routes.CALLS,
+                label = calls,
+                selectedIcon = { Icon(Icons.Filled.Call, contentDescription = calls) },
+                unselectedIcon = { Icon(Icons.Outlined.Call, contentDescription = calls) },
             ),
             TabItem(
                 route = Routes.NOTIFICATIONS,
@@ -117,10 +134,13 @@ private fun rememberTabs(): List<TabItem> {
     }
 }
 
-private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.NOTIFICATIONS, Routes.SETTINGS)
+private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.CALLS, Routes.NOTIFICATIONS, Routes.SETTINGS)
 
 @Composable
-fun MeeshyApp() {
+fun MeeshyApp(
+    launchRoute: String? = null,
+    onLaunchRouteConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.state.collectAsStateWithLifecycle()
@@ -131,6 +151,17 @@ fun MeeshyApp() {
 
     val startDestination = remember(authState.isAuthenticated) { if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN }
     val tabs = rememberTabs()
+
+    // Deep-link from a notification tap / full-screen call intent: navigate once
+    // the graph is live and the user is authenticated, then mark it consumed so a
+    // recomposition never re-navigates. An unauthenticated launch defers until
+    // sign-in resolves (the route survives in Activity state across the login gate).
+    LaunchedEffect(launchRoute, authState.isAuthenticated) {
+        if (launchRoute != null && authState.isAuthenticated) {
+            navController.navigate(launchRoute)
+            onLaunchRouteConsumed()
+        }
+    }
 
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -220,12 +251,27 @@ fun MeeshyApp() {
                     navDeepLink { uriPattern = Routes.CONVERSATION_SINGULAR_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_SHORT_DEEP_LINK },
                 ),
-            ) {
-                ChatScreen(onBack = { navController.popBackStack() })
+            ) { entry ->
+                val conversationId = entry.arguments
+                    ?.getString(ChatViewModel.CONVERSATION_ID_ARG)
+                    .orEmpty()
+                ChatScreen(
+                    onBack = { navController.popBackStack() },
+                    onStartCall = { peerName, isVideo ->
+                        navController.navigate(Routes.call(conversationId, peerName, isVideo))
+                    },
+                )
             }
             composable(Routes.FEED) {
                 FeedScreen(
                     onPostClick = { },
+                )
+            }
+            composable(Routes.CALLS) {
+                CallHistoryScreen(
+                    onOpenCall = { record ->
+                        navController.navigate(CallRoute.redial(record))
+                    },
                 )
             }
             composable(Routes.CONTACTS) {
@@ -266,6 +312,28 @@ fun MeeshyApp() {
             }
             composable(Routes.STORY_COMPOSER) {
                 StoryComposerScreen(onClose = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.CALL,
+                arguments = listOf(
+                    navArgument(CallRoute.CONVERSATION_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(CallRoute.PEER_NAME_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(CallRoute.VIDEO_ARG) { type = NavType.BoolType; defaultValue = false },
+                    navArgument(CallRoute.CALL_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(CallRoute.INCOMING_ARG) { type = NavType.BoolType; defaultValue = false },
+                ),
+            ) { entry ->
+                val args = entry.arguments
+                CallScreen(
+                    config = CallRoute.config(
+                        conversationId = args?.getString(CallRoute.CONVERSATION_ID_ARG)?.let(Uri::decode),
+                        peerName = args?.getString(CallRoute.PEER_NAME_ARG)?.let(Uri::decode),
+                        isVideo = args?.getBoolean(CallRoute.VIDEO_ARG),
+                        callId = args?.getString(CallRoute.CALL_ID_ARG)?.let(Uri::decode),
+                        incoming = args?.getBoolean(CallRoute.INCOMING_ARG) ?: false,
+                    ),
+                    onClose = { navController.popBackStack() },
+                )
             }
         }
     }

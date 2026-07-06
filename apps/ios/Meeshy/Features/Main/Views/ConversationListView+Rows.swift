@@ -19,7 +19,7 @@ import MeeshyUI
 /// + hard-press preview. Extracted from `ConversationListView.conversationRow`.
 /// All inputs are plain values / closures so the row re-evaluates only when
 /// its own inputs change, not on every ConversationListView body pass.
-struct ConversationRowItem<Menu: View>: View {
+struct ConversationRowItem: View {
     let conversation: Conversation
     let community: MeeshyCommunity?
     let rowWidth: CGFloat
@@ -45,9 +45,14 @@ struct ConversationRowItem<Menu: View>: View {
     let onMoodBadgeTap: (CGPoint) -> Void
     let onCreateShareLink: (() -> Void)?
     let onTap: () -> Void
-    let onDragStart: () -> Void
     let onLoadPreview: () async -> Void
-    @ViewBuilder let contextMenu: () -> Menu
+    /// Appui long → overlay de menu custom (dessine ses icônes ; le
+    /// `.contextMenu` natif ne les affiche pas sur iOS 26). Reçoit la frame
+    /// GLOBALE de la ligne pressée — point de départ de l'émergence de
+    /// l'aperçu (+Overlays). `.zero` quand la frame n'est pas connue
+    /// (action de rotor accessibilité) : l'overlay retombe sur le zoom
+    /// centré 0.7 → 1.0.
+    let onLongPress: (CGRect) -> Void
 
     var body: some View {
         SwipeableRow(
@@ -82,23 +87,132 @@ struct ConversationRowItem<Menu: View>: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
-            .onDrag {
-                onDragStart()
-                return NSItemProvider(object: conversation.id as NSString)
+            // Le menu custom n'est plus un `.contextMenu` natif (auto-exposé
+            // à VoiceOver) : cette action de rotor reste le seul accès non-visuel
+            // à épingler/sourdine/archiver/verrouiller depuis la ligne.
+            .accessibilityAction(named: String(
+                localized: "conversation.row.menu_action",
+                defaultValue: "Ouvrir le menu",
+                bundle: .main
+            )) {
+                onLongPress(.zero)
             }
-            .contextMenu {
-                contextMenu()
-            } preview: {
-                ConversationPreviewView(
-                    conversation: conversation,
-                    cachedMessages: cachedPreviewMessages
-                )
-            }
+            // Appui long → overlay custom (icônes garanties iOS 26). Le
+            // drag-to-reorder natif (`.onDrag`) a été retiré : il installe une
+            // UIDragInteraction UIKit qui capte le long-press système et
+            // empêchait la gesture SwiftUI d'ouvrir le menu (le `.contextMenu`
+            // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
+            // accessible via « Déplacer vers » dans le menu.
+            //
+            // AUCUN DragGesture custom ici — jamais. Un `highPriorityGesture(
+            // DragGesture())` plein-ligne (régression ff5d5649) capturait le
+            // pan vertical du ScrollView parent et figeait le scroll de la
+            // liste sous le doigt. Le LongPressGesture (distance max 10 pt)
+            // s'annule de lui-même dès que le scroll démarre : le pan reste
+            // la propriété exclusive du ScrollView. Le geste « replier
+            // l'aperçu » vit dans l'overlay du menu (+Overlays), hors de tout
+            // contexte scrollable.
+            .modifier(RowPressBounceModifier(onTrigger: onLongPress))
             .task {
                 await onLoadPreview()
             }
         }
     }
+}
+
+// MARK: - Press feedback (réduction pendant l'appui + rebond au trigger)
+
+/// Feedback d'appui de la ligne : réduction à 0.90 dès le toucher (easeOut
+/// ≈ 0.2 s), puis rebond élastique visible quand le long-press aboutit à
+/// 0.4 s — le spring peu amorti (0.25) donne ≈ 1.05 à ~0.6 s, ≈ 0.98 à
+/// ~0.9 s, repos à ~1.5 s, pendant que l'overlay preview jaillit (zoom
+/// 0.7 → 1.0, +Overlays). Relâcher (ou scroller > 10 pt) avant les 0.4 s
+/// ANNULE : `onPressingChanged(false)` arrive à l'échec du geste et la
+/// ligne remonte élastiquement, sans ouvrir le menu.
+///
+/// `onPressingChanged` (et PAS `LongPressGesture.updating`) : le callback
+/// `updating`/@GestureState ne fire qu'à la RECONNAISSANCE du long-press,
+/// pas au touch-down (vérifié frame par frame sur simulateur 2026-07-03 —
+/// aucune réduction pendant l'appui) ; `onPressingChanged(true)` arrive,
+/// lui, dès le toucher. Le @State vit dans ce ViewModifier, PAS dans
+/// `ConversationRowItem` : une View conformée manuellement à Equatable avec
+/// du state interne perd ses invalidations @State sur iOS 18+ (footgun
+/// BubbleExpandableText). Le modifier est un nœud enfant du gate
+/// `.equatable()` — son state s'invalide indépendamment, comme le drag
+/// interne de `SwipeableRow`.
+private struct RowPressBounceModifier: ViewModifier {
+    let onTrigger: (CGRect) -> Void
+
+    @State private var isPressing = false
+    /// true quand le long-press a ABOUTI (menu ouvert) : le retour de scale
+    /// rebondit alors visiblement (damping 0.25). Tout autre relâchement —
+    /// début de swipe d'actions, départ de scroll, tap — retombe sur un
+    /// retour discret quasi sans rebond (damping 0.85) : le rebond appartient
+    /// au long-press/preview, PAS au swipe des lignes (feedback user
+    /// 2026-07-03).
+    @State private var triggered = false
+    @State private var frameBox = RowFrameBox()
+
+    func body(content: Content) -> some View {
+        content
+            // Frame globale de la ligne, tenue à jour à chaque layout (scroll
+            // compris) dans une boîte INERTE : écrire dans la classe ne
+            // déclenche aucune invalidation SwiftUI — une @State CGRect
+            // invaliderait la ligne à chaque tick de scroll. `onTrigger` la
+            // lit au déclenchement : point de départ de l'émergence.
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { frameBox.rect = geo.frame(in: .global) }
+                        .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                            frameBox.rect = frame
+                        }
+                }
+            )
+            .scaleEffect(isPressing ? 0.90 : 1.0)
+            // Appui : réduction nette, atteinte vers ~0.2 s (léger delay pour
+            // que les débuts de scroll/swipe ne fassent pas flasher la ligne).
+            // Relâchement : rebond visible UNIQUEMENT si le menu s'est ouvert ;
+            // annulation (swipe, scroll, tap) = retour discret.
+            .animation(
+                isPressing
+                    ? .easeOut(duration: 0.15).delay(0.05)
+                    : (triggered
+                        ? .spring(response: 0.55, dampingFraction: 0.25)
+                        : .spring(response: 0.35, dampingFraction: 0.85)),
+                value: isPressing
+            )
+            // Détecteur d'état d'appui PUR : minimumDuration inatteignable,
+            // seul `onPressingChanged` sert (true au touch-down, false au
+            // relâchement/échec). Sa variante `perform:` composée avec le
+            // `.onTapGesture` de la ligne ne fire qu'au RELÂCHEMENT (vérifié
+            // frame par frame 2026-07-03) — d'où le déclencheur séparé.
+            .onLongPressGesture(
+                minimumDuration: 3600,
+                maximumDistance: 10,
+                perform: {},
+                onPressingChanged: { pressing in
+                    if pressing { triggered = false }
+                    isPressing = pressing
+                }
+            )
+            // Déclencheur du menu : la variante simultanée fire à
+            // minimumDuration PENDANT l'appui (0.4 s), pas au relâchement.
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.4)
+                    .onEnded { _ in
+                        triggered = true
+                        HapticFeedback.medium()
+                        onTrigger(frameBox.rect)
+                    }
+            )
+    }
+}
+
+/// Boîte mutable inerte pour la frame globale de la ligne — voir le
+/// commentaire du `background` dans `RowPressBounceModifier`.
+private final class RowFrameBox {
+    var rect: CGRect = .zero
 }
 
 // MARK: - Equatable re-render gate (list rows)

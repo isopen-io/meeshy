@@ -33,6 +33,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuthStore } from '@/stores/auth-store';
 import { postsService, recordAnonymousView } from '@/services/posts.service';
 import { getOrCreateWebSessionKey } from '@/lib/anonymous-session';
+import { copyToClipboard } from '@/lib/clipboard';
 
 /**
  * Post detail page (v1 canonical path).
@@ -54,6 +55,19 @@ export default function PostDetailPage() {
   const currentUser = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userLanguage = usePreferredLanguage();
+
+  // Notification → comment navigation: the gateway link builder appends a
+  // `#comment-<id>` anchor (or a `?comment=<id>` query) so a tapped comment /
+  // reply / comment-like notification lands on the exact comment. Read it once
+  // on mount and hand it to PostDetail → CommentList for scroll + highlight.
+  const [targetCommentId, setTargetCommentId] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const fromHash = window.location.hash.match(/^#comment-(.+)$/)?.[1];
+    const fromQuery = new URLSearchParams(window.location.search).get('comment');
+    const target = fromHash ?? fromQuery;
+    if (target) setTargetCommentId(target);
+  }, []);
 
   const postQuery = usePostQuery(postId);
   const commentsQuery = useCommentsInfiniteQuery({ postId, enabled: !!postId });
@@ -127,13 +141,12 @@ export default function PostDetailPage() {
   const isAuthor = post.authorId === currentUser?.id;
 
   const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${post.id}`);
+    const { success } = await copyToClipboard(`${window.location.origin}/feeds/post/${post.id}`);
+    if (success) {
       shareMutation.mutate({ postId: post.id });
       showToast('Link copied!', 'success');
-    } catch {
-      /* clipboard denied / unavailable — silent */
     }
+    /* else: clipboard denied / unavailable — silent */
   };
 
   const handleDeletePost = () => {
@@ -239,6 +252,7 @@ export default function PostDetailPage() {
             onLikeComment={(commentId) => likeCommentMutation.mutate({ postId: post.id, commentId })}
             onUnlikeComment={(commentId) => unlikeCommentMutation.mutate({ postId: post.id, commentId })}
             onDeleteComment={(commentId) => deleteCommentMutation.mutate({ postId: post.id, commentId })}
+            targetCommentId={targetCommentId}
           />
         </main>
 

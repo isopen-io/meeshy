@@ -240,7 +240,9 @@ struct NotificationSettingsView: View {
                     }
                 } label: {
                     Text(dayLabel(day))
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        // Fixed size: single-letter label constrained inside a fixed
+                        // 28×28 capsule — a scalable font would overflow the pill (doctrine 86i/93i).
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
                         .frame(width: 28, height: 28)
                         .background(
@@ -293,6 +295,7 @@ struct NotificationSettingsView: View {
             ))
             .labelsHidden()
             .tint(Color(hex: accentColor))
+            .accessibilityLabel(title)
         }
     }
 
@@ -309,12 +312,15 @@ struct NotificationSettingsView: View {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: color))
+                    .accessibilityHidden(true)
                 Text(title.uppercased())
                     .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: color))
                     .tracking(1.2)
             }
             .padding(.leading, 4)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
 
             VStack(spacing: 0) {
                 content()
@@ -338,13 +344,16 @@ struct NotificationSettingsView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                // Fixed size: decorative glyph constrained inside a fixed 28×28 badge —
+                // a scalable font would overflow the tinted square (doctrine 74i/86i).
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(Color(hex: color))
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(hex: color).opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             Text(title)
                 .font(MeeshyFont.relative(14, weight: .medium))

@@ -55,11 +55,11 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
     public var isSearchBarVisible: Bool = true
-    public var leftA11yLabel: String? = nil
+    public var leftA11yLabel: String
     public var leftA11yHint: String? = nil
     public var leftA11yValue: String? = nil
     public var leftA11yActionName: String? = nil
-    public var rightA11yLabel: String? = nil
+    public var rightA11yLabel: String
     public var rightA11yHint: String? = nil
     public var rightA11yValue: String? = nil
     public var rightA11yActionName: String? = nil
@@ -73,16 +73,16 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public init(
         leftPosition: Binding<String>,
         rightPosition: Binding<String>,
+        leftA11yLabel: String,
+        rightA11yLabel: String,
         onLeftTap: @escaping () -> Void,
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
         isSearchBarVisible: Bool = true,
-        leftA11yLabel: String? = nil,
         leftA11yHint: String? = nil,
         leftA11yValue: String? = nil,
         leftA11yActionName: String? = nil,
-        rightA11yLabel: String? = nil,
         rightA11yHint: String? = nil,
         rightA11yValue: String? = nil,
         rightA11yActionName: String? = nil,
@@ -394,11 +394,11 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
     public var isSearchBarVisible: Bool = true
-    public var leftA11yLabel: String? = nil
+    public var leftA11yLabel: String
     public var leftA11yHint: String? = nil
     public var leftA11yValue: String? = nil
     public var leftA11yActionName: String? = nil
-    public var rightA11yLabel: String? = nil
+    public var rightA11yLabel: String
     public var rightA11yHint: String? = nil
     public var rightA11yValue: String? = nil
     public var rightA11yActionName: String? = nil
@@ -412,16 +412,16 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
     public init(
         leftCorner: Binding<ButtonCorner>,
         rightCorner: Binding<ButtonCorner>,
+        leftA11yLabel: String,
+        rightA11yLabel: String,
         onLeftTap: @escaping () -> Void,
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
         isSearchBarVisible: Bool = true,
-        leftA11yLabel: String? = nil,
         leftA11yHint: String? = nil,
         leftA11yValue: String? = nil,
         leftA11yActionName: String? = nil,
-        rightA11yLabel: String? = nil,
         rightA11yHint: String? = nil,
         rightA11yValue: String? = nil,
         rightA11yActionName: String? = nil,
@@ -672,8 +672,13 @@ public struct NotificationBadge: View {
                     .frame(width: isPulsing ? 28 : 18, height: isPulsing ? 28 : 18)
 
                 Text("\(min(count, 99))")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
+                    // Dynamic Type exception : le compteur vit dans une pastille
+                    // fixe 18×18. Sans shrink-to-fit, une police relative agrandie
+                    // tronque « 51 » en « .. » — on force une ligne qui rétrécit.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                     .frame(width: 18, height: 18)
                     .background(
                         Circle()

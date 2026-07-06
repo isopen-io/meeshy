@@ -227,15 +227,15 @@ describe('MentionService', () => {
       expect(mentions).toHaveLength(3);
     });
 
-    it('should reject invalid username formats (special characters)', () => {
-      // Usernames with special chars should be ignored
+    it('should extract hyphenated usernames and truncate at genuinely invalid chars', () => {
+      // Hyphen is a valid username char (/^[a-zA-Z0-9_-]+$/) → @john-doe is a full handle.
+      // Dot is not part of the charset → @jane.smith truncates to `jane`.
       const content = 'Hey @john-doe and @jane.smith';
       const mentions = service.extractMentions(content);
 
-      // The regex @(\w+) will match john and jane (stopping at - and .)
-      expect(mentions).toContain('john');
+      expect(mentions).toContain('john-doe');
+      expect(mentions).not.toContain('john');
       expect(mentions).toContain('jane');
-      expect(mentions).not.toContain('john-doe');
       expect(mentions).not.toContain('jane.smith');
     });
 

@@ -161,6 +161,33 @@ public enum StoryRenderer {
                 }
             }
 
+            // R14 — crossfade intra-slide (`clipTransitions`) au playback :
+            // opacité ABSOLUE posée en POST-PASSE par tick, HORS ItemSignature
+            // (l'y intégrer invaliderait le cache à chaque frame de transition
+            // → rebuild du layer complet, re-création d'AVPlayer pour les
+            // clips vidéo). Pour un média IMPLIQUÉ dans une transition on
+            // repose TOUJOURS base × facteur — jamais de multiplication en
+            // place (le layer caché garde l'opacité du tick précédent) et le
+            // facteur 1.0 hors fenêtre restaure la base. Base fidèle à l'ordre
+            // du build : fade envelope (écrase) > opacité keyframes > 1.
+            if mode == .play,
+               let media = item as? StoryMediaObject,
+               let transitions = slide.effects.clipTransitions,
+               transitions.contains(where: { $0.fromClipId == media.id || $0.toClipId == media.id }) {
+                let factor = ReaderTransitionResolver.opacity(
+                    for: media,
+                    transitions: transitions,
+                    currentTime: Float(time.seconds)
+                )
+                let kfOverrides = applyKeyframes(
+                    keyframes: media.keyframes ?? [],
+                    at: time.seconds,
+                    startTime: media.startTime ?? 0
+                )
+                let base = fadeOpacity(item: media, at: time.seconds) ?? kfOverrides.opacity ?? 1.0
+                layer.opacity = Float(base * Double(factor))
+            }
+
             // A cached layer might still be attached to the previous frame's
             // root layer. addSublayer auto-detaches before re-attaching, so
             // this is safe and cheap (CALayer parenting is O(1) bookkeeping).
@@ -412,11 +439,31 @@ extension StoryRenderer {
                           thumbHash: slide.effects.thumbHash)
         }
         if let urlString = slide.mediaURL, !urlString.isEmpty {
-            return .image(postMediaId: slide.id, thumbHash: slide.effects.thumbHash)
+            // Legacy background (StorySlide.mediaURL, set only for pre-mediaObjects
+            // stories). Route the direct URL through the postMediaId field so
+            // `StoryBackgroundLayer.configure` resolves it via `directURLIfAny`
+            // (file:// / http(s)://) — the same path the isBackground image branch
+            // uses for composer file URLs. Passing `slide.id` fed a NON-media key
+            // to the resolver (`mediaList.first { $0.id == postId }`, keyed by
+            // FeedMedia.id), which never matched → legacy background rendered
+            // blank/black (WS5.4 fix a). The modern "unflagged media[0] as static
+            // background" case stays a documented deferred limitation (needs a
+            // product rule to avoid shadowing the solid-colour fallback).
+            return .image(postMediaId: urlString, thumbHash: slide.effects.thumbHash)
         }
-        // Hex color from effects.background
-        if let hex = slide.effects.background, let color = uiColor(fromHex: hex) {
-            return .solidColor(color)
+        // Hex color OR "gradient:HEX1:HEX2" from effects.background (C11) —
+        // parsing via la source unique StoryBackgroundValue.
+        if let background = slide.effects.background {
+            switch StoryBackgroundValue.parse(background) {
+            case .gradient(let a, let b):
+                if let c1 = uiColor(fromHex: a), let c2 = uiColor(fromHex: b) {
+                    return .gradient(colors: [c1, c2], direction: .topLeftToBottomRight)
+                }
+            case .hex(let hex):
+                if let color = uiColor(fromHex: hex) {
+                    return .solidColor(color)
+                }
+            }
         }
         return .solidColor(.black)
     }

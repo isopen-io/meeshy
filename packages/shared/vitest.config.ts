@@ -17,6 +17,7 @@ export default defineConfig({
         'encryption/encryption-service.ts',
         'encryption/signal/signal-types.ts',
         'types/encryption.ts',
+        'types/role-types.ts',
         'types/status-types.ts',
         'types/conversation.ts',
         'types/delivery-queue.ts',
@@ -27,10 +28,17 @@ export default defineConfig({
         'types/translated-audio.ts',
         'types/notification.ts',
         'types/preferences/notification.ts',
+        'types/preferences/video.ts',
+        'types/preferences/audio.ts',
+        'types/preferences/privacy.ts',
+        'types/preferences/message.ts',
+        'types/preferences/document.ts',
+        'types/preferences/application.ts',
         // types/post.ts intentionally excluded: file contains only TypeScript interfaces/type aliases
         // which emit no executable JavaScript. Coverage would show 0/0 (no lines to cover).
         // The smoke test in __tests__/types/post.test.ts verifies the module loads without error.
         'types/reaction.ts',
+        'types/attachment.ts',
       ],
       exclude: ['**/*.d.ts', '**/index.ts', '**/signal-store-interface.ts'],
       thresholds: {

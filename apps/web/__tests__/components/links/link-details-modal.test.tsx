@@ -501,7 +501,7 @@ describe('LinkDetailsModal', () => {
 
       if (openConvButton) {
         fireEvent.click(openConvButton);
-        expect(openSpy).toHaveBeenCalledWith('/conversations/conv-123', '_blank');
+        expect(openSpy).toHaveBeenCalledWith('/conversations/conv-123', '_blank', 'noopener,noreferrer');
       }
 
       openSpy.mockRestore();

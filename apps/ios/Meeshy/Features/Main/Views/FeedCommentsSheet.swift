@@ -147,6 +147,11 @@ struct ThreadedCommentSection: View {
 struct CommentsSheetView: View {
     let post: FeedPost
     let accentColor: String
+    /// Comment targeted by a notification — the sheet scrolls to and highlights it
+    /// once loaded (for a reply, expands the parent thread first).
+    var targetCommentId: String? = nil
+    /// Parent comment when `targetCommentId` is a reply.
+    var targetParentCommentId: String? = nil
     var onSendComment: ((String, String, String?) -> Void)? = nil
     /// Fired with the post id AFTER a comment was successfully sent — lets a host
     /// (e.g. the reels viewer) bump its own comment counter. Optional; nil = no-op.
@@ -165,6 +170,10 @@ struct CommentsSheetView: View {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var liveComments: [FeedComment]?
     @State private var liveCommentCount: Int?
+    /// Section de commentaire surlignée (cible d'une notification).
+    @State private var highlightedCommentId: String? = nil
+    /// Garde-fou : ne défile vers la cible qu'une seule fois.
+    @State private var didScrollToTargetComment: Bool = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
@@ -191,8 +200,16 @@ struct CommentsSheetView: View {
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
+    /// True while `commentPhotoItems` is being primed with the recent-media
+    /// strip's multi-selection before presenting the PhotosPicker — swallows
+    /// the priming onChange echo so only a user confirmation ingests items.
+    @State private var commentPhotoPickerPriming: Bool = false
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
+    /// "Éditer" from the recent-media strip — the editor opens before staging;
+    /// the edited output is ingested, never the original.
+    @State private var commentRecentImageToEdit: UIImage? = nil
+    @State private var commentRecentVideoToEdit: URL? = nil
 
     /// Enregistreur vocal parent-managed — MÊME composant que les conversations
     /// (`ConversationView`). Produit un vrai fichier audio (pas un timer) déposé
@@ -204,11 +221,15 @@ struct CommentsSheetView: View {
     init(
         post: FeedPost,
         accentColor: String,
+        targetCommentId: String? = nil,
+        targetParentCommentId: String? = nil,
         onSendComment: ((String, String, String?) -> Void)? = nil,
         onCommentSent: ((_ postId: String) -> Void)? = nil
     ) {
         self.post = post
         self.accentColor = accentColor
+        self.targetCommentId = targetCommentId
+        self.targetParentCommentId = targetParentCommentId
         self.onSendComment = onSendComment
         self.onCommentSent = onCommentSent
         _mentionController = StateObject(wrappedValue: MentionComposerController(
@@ -271,6 +292,7 @@ struct CommentsSheetView: View {
                 .ignoresSafeArea()
 
                 VStack(spacing: 0) {
+                    ScrollViewReader { commentsProxy in
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
                             ForEach(topLevelComments) { comment in
@@ -302,11 +324,26 @@ struct CommentsSheetView: View {
                                     replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
                                     replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
                                 )
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
+                                )
+                                .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
+                                .id("comment-\(comment.id)")
                             }
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 100)
                     }
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            attemptScrollToTargetComment(using: commentsProxy)
+                        }
+                    }
+                    .adaptiveOnChange(of: topLevelComments.count) { _, _ in
+                        attemptScrollToTargetComment(using: commentsProxy)
+                    }
+                    } // ScrollViewReader
 
                     VStack(spacing: 0) {
                         if mentionController.activeQuery != nil {
@@ -340,6 +377,7 @@ struct CommentsSheetView: View {
                     Button {
                         dismiss()
                     } label: {
+                        // Figé : chrome xmark dans un cadre tap fixe 32×32 (doctrine 82i).
                         Image(systemName: "xmark")
                             .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(theme.textSecondary)
@@ -496,6 +534,31 @@ struct CommentsSheetView: View {
                 }
                 await loadReplies(commentId: comment.id)
             }
+        }
+    }
+
+    // MARK: - Notification → comment scroll
+
+    /// Scrolls to (and briefly highlights) the comment targeted by a notification
+    /// once it's loaded. For a reply, scrolls to the parent section and expands its
+    /// thread so the reply is revealed. Runs once; re-invoked as comments load in.
+    private func attemptScrollToTargetComment(using proxy: ScrollViewProxy) {
+        guard let target = targetCommentId, !target.isEmpty, !didScrollToTargetComment else { return }
+
+        // Only top-level sections carry a scroll anchor. For a reply, that's the
+        // parent comment; otherwise the comment itself.
+        let sectionId = targetParentCommentId.flatMap { $0.isEmpty ? nil : $0 } ?? target
+        guard topLevelComments.contains(where: { $0.id == sectionId }) else { return }
+        didScrollToTargetComment = true
+
+        if let parentId = targetParentCommentId, !parentId.isEmpty, !expandedThreads.contains(parentId) {
+            Task { await toggleThread(parentId) }
+        }
+
+        withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+        highlightedCommentId = sectionId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+            if highlightedCommentId == sectionId { highlightedCommentId = nil }
         }
     }
 
@@ -705,6 +768,7 @@ struct CommentsSheetView: View {
                     replyingTo = nil
                 }
             } label: {
+                // Figé : chrome xmark dans un cadre tap fixe 24×24 (doctrine 82i).
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(theme.textMuted)
@@ -766,16 +830,22 @@ struct CommentsSheetView: View {
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
+            onRecentMediaEdit: { pick in editCommentRecentMedia(pick) },
+            onPhotoLibraryPreselecting: { ids in openCommentLibraryPreselecting(ids) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
             externalAttachments: commentAttachments,
             focusTrigger: $composerFocusTrigger
         )
+        // `photoLibrary: .shared()` est requis pour la présélection : les
+        // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
+        // matchent les assets du picker que sur la photothèque partagée.
         .photosPicker(
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]),
+            photoLibrary: .shared()
         )
         .fileImporter(
             isPresented: $showCommentFilePicker,
@@ -794,6 +864,38 @@ struct CommentsSheetView: View {
         }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
             handleCommentPhotoSelection(items)
+        }
+        // "Éditer" from the recent-media strip → edit BEFORE staging: only the
+        // edited output lands in the comment attachments.
+        .fullScreenCover(isPresented: Binding(
+            get: { commentRecentImageToEdit != nil },
+            set: { if !$0 { commentRecentImageToEdit = nil } }
+        )) {
+            if let image = commentRecentImageToEdit {
+                MeeshyImageEditorView(image: image, context: .post, accentColor: accentColor, onAccept: { edited in
+                    commentRecentImageToEdit = nil
+                    ingestCommentRecentMedia(.image(edited))
+                }, onCancel: {
+                    commentRecentImageToEdit = nil
+                })
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { commentRecentVideoToEdit != nil },
+            set: { if !$0 { commentRecentVideoToEdit = nil } }
+        )) {
+            if let url = commentRecentVideoToEdit {
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .post,
+                    accentColor: accentColor,
+                    onComplete: { result in
+                        commentRecentVideoToEdit = nil
+                        ingestCommentRecentMedia(.video(result.url))
+                    },
+                    onCancel: { commentRecentVideoToEdit = nil }
+                )
+            }
         }
     }
 
@@ -853,8 +955,32 @@ struct CommentsSheetView: View {
 
     // MARK: - Comment Attachment Pickers
 
+    /// Opens the full photo library with the strip's multi-selection already
+    /// checked (identifier-based priming — see `commentPhotoPickerPriming`).
+    /// Capped at the picker's `maxSelectionCount` (10); with no strip
+    /// selection, stale primed items from a cancelled run are dropped.
+    private func openCommentLibraryPreselecting(_ assetIds: [String]) {
+        if !assetIds.isEmpty {
+            let primed = assetIds.prefix(10).map { PhotosPickerItem(itemIdentifier: $0) }
+            // Arm the echo-swallow ONLY when priming actually mutates the
+            // binding — an unchanged binding fires no onChange, and a stale
+            // armed flag would swallow the user's real confirmation instead.
+            commentPhotoPickerPriming = primed != commentPhotoItems
+            commentPhotoItems = primed
+        } else {
+            commentPhotoItems = []
+        }
+        showCommentPhotoPicker = true
+    }
+
     private func handleCommentPhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        // Priming echo (strip multi-selection injected before presenting the
+        // picker) — not a user confirmation, nothing to ingest yet.
+        if commentPhotoPickerPriming {
+            commentPhotoPickerPriming = false
+            return
+        }
         Task {
             for item in items {
                 let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
@@ -872,6 +998,15 @@ struct CommentsSheetView: View {
                 await MainActor.run { commentAttachments.append(attachment) }
             }
             await MainActor.run { commentPhotoItems = [] }
+        }
+    }
+
+    /// "Éditer" from the strip's long-press menu: opens the media editor on the
+    /// resolved pick; the edited result is ingested like a strip tap.
+    private func editCommentRecentMedia(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image): commentRecentImageToEdit = image
+        case .video(let url): commentRecentVideoToEdit = url
         }
     }
 
@@ -1298,7 +1433,7 @@ struct CommentRowView: View, Equatable {
             VStack(alignment: .leading, spacing: isReply ? 4 : 6) {
                 HStack(spacing: 4) {
                     Text(comment.author)
-                        .font(.system(size: authorFont, weight: .semibold))
+                        .font(MeeshyFont.relative(authorFont, weight: .semibold))
                         .foregroundColor(Color(hex: comment.authorColor))
                         .onTapGesture {
                             HapticFeedback.light()
@@ -1314,6 +1449,8 @@ struct CommentRowView: View, Equatable {
                         let origDisplay = LanguageDisplay.from(code: comment.originalLanguage)
                         let isOrigActive = showOriginal
                         VStack(spacing: 1) {
+                            // Figé : taille 12/10 = indicateur d'état actif/inactif du
+                            // drapeau (emoji), apparié au soulignement fixe 10×1.5 dessous.
                             Text(origDisplay?.flag ?? "?")
                                 .font(.system(size: isOrigActive ? 12 : 10))
                                 .scaleEffect(isOrigActive ? 1.05 : 1.0)
@@ -1341,6 +1478,8 @@ struct CommentRowView: View, Equatable {
                         let targetDisplay = LanguageDisplay.from(code: targetLang)
                         let isTransActive = !showOriginal
                         VStack(spacing: 1) {
+                            // Figé : taille 12/10 = indicateur d'état actif/inactif du
+                            // drapeau (emoji), apparié au soulignement fixe 10×1.5 dessous.
                             Text(targetDisplay?.flag ?? "?")
                                 .font(.system(size: isTransActive ? 12 : 10))
                                 .scaleEffect(isTransActive ? 1.05 : 1.0)
@@ -1363,6 +1502,8 @@ struct CommentRowView: View, Equatable {
                         .accessibilityValue(isTransActive ? String(localized: "a11y.comment.language_shown", defaultValue: "Affichée", bundle: .main) : "")
                         .meeshyTapTarget(44)
 
+                        // Figé : indicateur décoratif (accessibilityHidden), géométrie
+                        // fixe alignée sur la rangée de drapeaux d'état ci-dessus.
                         Image(systemName: "translate")
                             .font(MeeshyFont.relative(10, weight: .medium))
                             .foregroundColor(MeeshyColors.indigo400)
@@ -1379,7 +1520,7 @@ struct CommentRowView: View, Equatable {
                 }
 
                 Text(effectiveCommentContent)
-                    .font(.system(size: contentFont))
+                    .font(MeeshyFont.relative(contentFont))
                     .foregroundColor(theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: showOriginal)
@@ -1418,7 +1559,7 @@ struct CommentRowView: View, Equatable {
                         HStack(spacing: 4) {
                             let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
                             Image(systemName: isLiked || likeCount > 0 ? "heart.fill" : "heart")
-                                .font(.system(size: isReply ? 12 : 14))
+                                .font(MeeshyFont.relative(isReply ? 12 : 14))
                                 .foregroundColor(heartColor)
                                 .scaleEffect(isLiked ? 1.1 : 1.0)
 
@@ -1509,7 +1650,7 @@ struct CommentRowView: View, Equatable {
                             }
                         } label: {
                             Image(systemName: "ellipsis")
-                                .font(.system(size: isReply ? 12 : 14))
+                                .font(MeeshyFont.relative(isReply ? 12 : 14))
                                 .foregroundColor(theme.textMuted)
                         }
                         .accessibilityLabel(String(localized: "a11y.comment.more_options", defaultValue: "Plus d'options", bundle: .main))

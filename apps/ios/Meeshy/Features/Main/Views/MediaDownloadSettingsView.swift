@@ -109,13 +109,14 @@ struct MediaDownloadSettingsView: View {
                             .foregroundColor(theme.textPrimary)
 
                         Text(String(localized: "settings.media.download.auto_subtitle", defaultValue: "Choisissez quand telecharger automatiquement chaque type de media selon votre connexion.", bundle: .main))
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(12, weight: .regular))
                             .foregroundColor(theme.textMuted)
                             .lineSpacing(2)
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                .accessibilityElement(children: .combine)
             }
             .background(sectionBackground(tint: "6B7280"))
         }
@@ -157,7 +158,7 @@ struct MediaDownloadSettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(title), \(policy.shortLabel)")
-                    .accessibilityValue(binding.wrappedValue == policy ? String(localized: "common.selected", defaultValue: "selectionne", bundle: .main) : "")
+                    .accessibilityAddTraits(binding.wrappedValue == policy ? .isSelected : [])
 
                     if index != AutoDownloadPolicy.allCases.count - 1 {
                         Divider().padding(.leading, 54)

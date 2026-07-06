@@ -28,6 +28,32 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// `providerDidReset` fires when CallKit resets ALL calls (crash recovery,
+    /// force-quit during a call) — per Apple's guidance the app must behave as
+    /// if no calls had ever occurred. `endCall()` alone is insufficient: it
+    /// no-ops when `callState` isn't active, which would skip
+    /// `deactivateAudioSession()` and leave `RTCAudioSession` stale with no
+    /// matching `didDeactivate` callback. The reset handler must disable the
+    /// audio session directly, independent of local call state.
+    func test_providerDidReset_disablesRTCAudioSession_independentOfCallState() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "func providerDidReset(_ provider: CXProvider) {") else {
+            XCTFail("providerDidReset not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("RTCAudioSession.sharedInstance()"),
+            "providerDidReset must reach into RTCAudioSession directly rather than relying solely on endCall()"
+        )
+        XCTAssertTrue(
+            body.contains("rtc.isAudioEnabled = false"),
+            "providerDidReset must unconditionally disable RTCAudioSession, matching Apple's " +
+            "\"treat as if no calls had ever occurred\" guidance for a full provider reset"
+        )
+    }
+
     func test_callManager_toggleTranscription_doesNotHardcodeLanguage() throws {
         // Regression guard: toggleTranscription() must not hardcode language strings.
         // Language resolution is delegated to CallManager.preferredCallLanguage(for:)
@@ -522,6 +548,16 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "byte counters must accumulate through ICE restart for the call summary."
         )
     }
+
+    func test_didCollectStats_propagatesJitterMsToQualityReport() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("jitterMs: stats.jitterMs"),
+            "webRTCService(_:didCollectStats:) must pass stats.jitterMs to emitCallQualityReport " +
+            "so the gateway call:quality-report event carries audio jitter data for diagnostics " +
+            "and the call-summary can surface Opus PLC degradation events."
+        )
+    }
 }
 
 // MARK: - P2PWebRTCClient — Perfect Negotiation Source Guards (W3C §3.4)
@@ -895,6 +931,63 @@ final class CallEffectsOverlayAccessibilityTests: XCTestCase {
             "toolbarButton must declare .accessibilityHint so VoiceOver describes what the button will do"
         )
     }
+
+    func test_toolbarButton_hasExplicitAccessibilityLabel() throws {
+        let source = try callEffectsSource()
+        guard let range = source.range(of: "private func toolbarButton") else {
+            XCTFail("toolbarButton must exist")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains(".accessibilityLabel(label)"),
+            "toolbarButton must set an explicit .accessibilityLabel(label) rather than relying " +
+            "on the visible caption Text being auto-combined into the button's label."
+        )
+    }
+
+    func test_backdrop_isExposedAsDismissButtonToVoiceOver() throws {
+        let source = try callEffectsSource()
+        guard let range = source.range(of: "onTapGesture { dismiss() }") else {
+            XCTFail("Backdrop tap-to-dismiss gesture must exist")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 400, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityAddTraits(.isButton)"),
+            "The tap-outside-to-dismiss backdrop must be exposed as a button trait so " +
+            "VoiceOver users can discover and trigger it."
+        )
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityLabel("),
+            "The backdrop must have an explicit accessibility label describing the dismiss action."
+        )
+    }
+
+    func test_overlay_pinsColorSchemeDark() throws {
+        let source = try callEffectsSource()
+        XCTAssertTrue(
+            source.contains(".environment(\\.colorScheme, .dark)"),
+            "CallEffectsOverlay must pin .dark colorScheme like its sibling call chrome " +
+            "(CallWaitingBannerView, FloatingCallPillView) so it renders correctly even if " +
+            "ever presented outside CallView's forced-dark subtree."
+        )
+    }
+
+    func test_filtersPanel_heightIsResponsiveNotHardcoded() throws {
+        let source = try callEffectsSource()
+        XCTAssertFalse(
+            source.contains(".frame(maxHeight: 360)"),
+            "The filters panel must not hardcode a fixed maxHeight — it must derive from " +
+            "available geometry so it doesn't clip content on short/landscape viewports."
+        )
+        XCTAssertTrue(
+            source.contains("proxy.size.height"),
+            "The filters panel height must be derived from a GeometryReader proxy."
+        )
+    }
 }
 
 // MARK: - Idle timer + proximity sensor management
@@ -1000,7 +1093,7 @@ final class CallManagerIdleTimerProximityTests: XCTestCase {
 /// digits to WebRTC via `sendDTMF`. Without this, the CallKit keypad appears but
 /// pressing digits has no effect — conference PINs and IVR navigation are broken.
 @MainActor
-final class CallManagerDTMFTests: XCTestCase {
+final class CallManagerCallKitDTMFTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
@@ -1029,24 +1122,37 @@ final class CallManagerDTMFTests: XCTestCase {
             "CXPlayDTMFCallAction must be handled — without it the CallKit keypad sends no tones")
     }
 
+    private func dtmfHandlerBody(in source: String) throws -> String {
+        let handlerRange = try XCTUnwrap(source.range(of: "perform action: CXPlayDTMFCallAction"))
+        let afterHandler = String(source[handlerRange.upperBound...])
+        let nextHandlerBoundary = afterHandler.range(of: "func provider")?.lowerBound
+            ?? afterHandler.endIndex
+        return String(afterHandler[..<nextHandlerBoundary])
+    }
+
     func test_dtmfHandler_forwardsDigitsToWebRTCService() throws {
-        let source = try callManagerSource()
+        let handlerBody = try dtmfHandlerBody(in: try callManagerSource())
         XCTAssertTrue(
-            source.contains("sendDTMF(digits: action.digits)"),
+            handlerBody.contains("sendDTMF(digits: digits)"),
             "CXPlayDTMFCallAction handler must forward action.digits to webRTCService.sendDTMF")
     }
 
     func test_dtmfHandler_fulfillsAction() throws {
-        let source = try callManagerSource()
-        let handlerRange = source.range(of: "perform action: CXPlayDTMFCallAction")
-        XCTAssertNotNil(handlerRange)
-        let afterHandler = String(source[handlerRange!.upperBound...])
-        let nextHandlerBoundary = afterHandler.range(of: "func provider")?.lowerBound
-            ?? afterHandler.endIndex
-        let handlerBody = String(afterHandler[..<nextHandlerBoundary])
+        let handlerBody = try dtmfHandlerBody(in: try callManagerSource())
         XCTAssertTrue(
             handlerBody.contains("action.fulfill()"),
             "CXPlayDTMFCallAction handler must call action.fulfill() so CallKit does not timeout")
+    }
+
+    /// Regression guard for the actor-isolation bug fixed 2026-07-04: `CXProvider.setDelegate(_:queue:
+    /// nil)` dispatches this callback on CallKit's own private serial queue, not main, so calling straight
+    /// into the @MainActor-isolated `sendDTMF` raced with other MainActor call-state work. Every sibling
+    /// delegate method (answer/end/mute/hold) hops via `Task { @MainActor [weak self] in ... }`; DTMF must too.
+    func test_dtmfHandler_hopsToMainActorBeforeForwarding() throws {
+        let handlerBody = try dtmfHandlerBody(in: try callManagerSource())
+        XCTAssertTrue(
+            handlerBody.contains("Task { @MainActor [weak self] in"),
+            "CXPlayDTMFCallAction handler must hop to the MainActor (matching every sibling CXProvider delegate method) instead of calling the @MainActor-isolated sendDTMF directly from CallKit's private queue")
     }
 
     func test_sendDTMF_isInWebRTCClientProvidingProtocol() throws {
@@ -1174,9 +1280,10 @@ final class CallViewVoiceOverAnnouncementTests: XCTestCase {
     func test_voiceOver_usesAdaptiveOnChange_forQualityLevel() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("adaptiveOnChange(of: callManager.liveVideoQualityLevel)"),
-            "Quality VoiceOver announcement must use adaptiveOnChange so it " +
-            "only fires when the quality tier actually changes")
+            source.contains("adaptiveOnChange(of: callManager.isLinkQualityDegraded)"),
+            "Quality VoiceOver announcement must use adaptiveOnChange on the " +
+            "SUSTAINED degradation flag so it only fires when the link is " +
+            "genuinely degraded (2+ consecutive ticks), not on transient spikes")
     }
 }
 
@@ -1239,6 +1346,57 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             bgBlock.contains("isVideoSuspendedByBackground = true"),
             "didEnterBackground handler must set isVideoSuspendedByBackground = true so the " +
             "foreground handler can distinguish a background-caused suspension from a user toggle")
+    }
+
+    func test_backgroundObserver_promotesStillRingingCallToCallKit() throws {
+        let source = try callManagerSource()
+        guard let bgRange = source.range(of: "didEnterBackgroundNotification") else {
+            XCTFail("didEnterBackgroundNotification observer not found in CallManager.swift"); return
+        }
+        let afterBg = String(source[bgRange.upperBound...])
+        guard let blockEnd = afterBg.range(of: "foregroundObserver = NotificationCenter")?.lowerBound else {
+            XCTFail("Could not find foregroundObserver boundary"); return
+        }
+        let bgBlock = String(afterBg[..<blockEnd])
+        XCTAssertTrue(
+            bgBlock.contains("promoteRingingCallToCallKitIfNeeded"),
+            "didEnterBackground handler must call promoteRingingCallToCallKitIfNeeded() — a call " +
+            "that rang in while the app was foreground (CallKit skipped) has NO system-level " +
+            "backing; backgrounding before answering must promote it or iOS can suspend the app " +
+            "mid-ring with no lock-screen call card, silently dropping the inbound call")
+    }
+
+    func test_promoteRingingCallToCallKitIfNeeded_guardsOnRingingIncomingNotYetOnCallKit() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func promoteRingingCallToCallKitIfNeeded()") else {
+            XCTFail("promoteRingingCallToCallKitIfNeeded not found in CallManager.swift"); return
+        }
+        let afterFn = String(source[fnRange.upperBound...])
+        guard let fnEnd = afterFn.range(of: "private func startBackgroundMonitoring")?.lowerBound else {
+            XCTFail("Could not find promoteRingingCallToCallKitIfNeeded boundary"); return
+        }
+        let fnBody = String(afterFn[..<fnEnd])
+        XCTAssertTrue(
+            fnBody.contains("case .ringing(isOutgoing: false) = callState"),
+            "must only promote a still-ringing INCOMING call — an outgoing call or an already " +
+            "answered/connected call must never be re-reported to CallKit")
+        XCTAssertTrue(
+            fnBody.contains("!callUsesCallKit"),
+            "must skip promotion when the call already has a CallKit registration — re-reporting " +
+            "an already-registered call would be a duplicate CXProvider call")
+        XCTAssertTrue(
+            fnBody.contains("platformSupportsCallKit"),
+            "must never attempt CallKit where the platform stack is broken — iOS-app-on-Mac " +
+            "(reportNewIncomingCall fails, CXErrorCodeIncomingCallError 3, cf. CALL-FIX 2026-06-06) " +
+            "and the simulator (callservicesd autonomous CXEndCallAction ~3s after start) — " +
+            "gate via CallManager.platformSupportsCallKit")
+        XCTAssertTrue(
+            fnBody.contains("callProvider.reportNewIncomingCall"),
+            "must actually register the call with CXProvider, not just flip local flags")
+        XCTAssertTrue(
+            fnBody.contains("callUsesCallKit = false") && fnBody.contains("error"),
+            "on reportNewIncomingCall failure, must roll back callUsesCallKit so the app doesn't " +
+            "believe it has system backing it never actually got")
     }
 
     func test_foregroundObserver_emitsToggleVideoTrue_whenVideoStillEnabled() throws {
@@ -1441,8 +1599,8 @@ final class CallManagerCameraPermissionTests: XCTestCase {
 
     func test_cameraPermissionDenied_handledIn_socketIncoming() throws {
         let source = try callManagerSource()
-        // Socket-based incoming calls arrive via handleIncomingCallNotification
-        // (called from handleIncomingOffer, which is the socket:notification path)
+        // Socket-based incoming calls arrive via handleIncomingCallNotification,
+        // invoked from the callOfferReceived sink (socket "call:signal" offer path).
         guard let socketRange = source.range(of: "func handleIncomingCallNotification(") else {
             XCTFail("handleIncomingCallNotification not found in CallManager.swift"); return
         }
@@ -1530,14 +1688,23 @@ final class CallManagerDurationReconnectTests: XCTestCase {
         guard let assignRange = source[fnRange.upperBound...].range(of: "callStartDate = Date()") else {
             XCTFail("callStartDate = Date() not found after transitionToConnected()"); return
         }
-        // The assignment must be inside a !wasReconnecting guard
-        let contextStart = source.index(assignRange.lowerBound, offsetBy: -200, limitedBy: source.startIndex) ?? source.startIndex
+        // The assignment must be gated by the pure clock-reset policy: reset on
+        // a fresh connect AND on a first-ever connect that transited through
+        // `.reconnecting` (nil clock — else the timer froze at 00:00 forever),
+        // but NEVER on a genuine mid-call reconnect with a running clock (else
+        // the timer jumps back to 0:00 after a successful ICE restart). The
+        // decision semantics are unit-tested in CallClockPolicyTests.
+        let contextStart = source.index(assignRange.lowerBound, offsetBy: -300, limitedBy: source.startIndex) ?? source.startIndex
         let contextStr = String(source[contextStart ..< assignRange.upperBound])
         XCTAssertTrue(
-            contextStr.contains("!wasReconnecting") || contextStr.contains("wasReconnecting == false"),
-            "callStartDate must only be reset when !wasReconnecting — resetting it " +
-            "on every transitionToConnected call causes the timer to jump back to 0:00 " +
+            contextStr.contains("shouldResetCallClock"),
+            "callStartDate must only be reset when CallReliabilityPolicy.shouldResetCallClock " +
+            "allows it (fresh connect or nil clock) — resetting it on every " +
+            "transitionToConnected call causes the timer to jump back to 0:00 " +
             "after a successful ICE restart, which is a jarring mid-call UX regression")
+        XCTAssertTrue(
+            contextStr.contains("wasReconnecting: wasReconnecting"),
+            "the clock-reset decision must receive the real wasReconnecting flag")
     }
 
     func test_transitionToConnected_doesNotPlayConnectCueOnReconnect() throws {
@@ -1567,8 +1734,8 @@ final class CallManagerDurationReconnectTests: XCTestCase {
 ///    reconnect with stale candidates that belong to a superseded ICE generation.
 ///
 /// 2. **TURN refresh on socket reconnect** — the periodic scheduler fires at
-///    80% of the 480 s TTL (384 s).  If the socket was down for the remaining
-///    20% (96 s), TURN credentials approach expiry before a refresh can fire.
+///    80% of the TTL. If the socket was down for the remaining 20% of the
+///    window, TURN credentials approach expiry before a refresh can fire.
 ///    After reconnect, proactively requesting fresh credentials ensures the
 ///    next ICE restart uses valid relay paths.
 @MainActor
@@ -1626,9 +1793,8 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             afterReconnect.contains("emitRequestIceServers"),
             "socket.didReconnect sink must call emitRequestIceServers after rejoining " +
             "the call room — the socket may have been down long enough for TURN " +
-            "credentials to approach expiry (TTL=480s, refresh fires at 384s, " +
-            "leaving a 96s vulnerability window). Proactive refresh keeps relay " +
-            "paths valid for the next ICE restart.")
+            "credentials to approach expiry before the periodic 80%-of-TTL refresh " +
+            "fires. Proactive refresh keeps relay paths valid for the next ICE restart.")
     }
 }
 
@@ -2128,9 +2294,73 @@ final class CallManagerHardeningTests: XCTestCase {
             "causes the first offer to unnecessarily request an ICE restart")
     }
 
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `WebRTCService.close()` must tear down via `disconnectAfterFlushingPendingSend()`,
+    /// not `client.disconnect()` directly. `CallManager.endCall()` sends the P2P
+    /// hangup `bye` on the DataChannel immediately before this runs; `sendData`
+    /// only enqueues onto libwebrtc's SCTP thread, so closing the peer connection
+    /// synchronously right after can silently drop the just-enqueued `bye` —
+    /// degrading the "instant hangup" fast path back to the slower socket
+    /// `call:end` fanout it exists to bypass.
+    func test_webRTCService_close_usesFlushAwareDisconnect() throws {
+        let source = try webRTCServiceSource()
+        guard let closeRange = source.range(of: "func close()") else {
+            XCTFail("close() not found in WebRTCService"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: closeRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate close() body"); return
+        }
+        let body = String(source[closeRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("client.disconnectAfterFlushingPendingSend()"),
+            "close() must call client.disconnectAfterFlushingPendingSend() so a just-sent " +
+            "hangup `bye` gets a chance to flush before the transport is torn down")
+        XCTAssertFalse(
+            body.contains("client.disconnect()"),
+            "close() must not call client.disconnect() directly — that races the hangup " +
+            "`bye` send against the peer connection teardown")
+    }
+
+    /// `disconnectAfterFlushingPendingSend()` must be a no-op difference from
+    /// `disconnect()` when nothing is buffered on the DataChannel — it should not
+    /// add latency to the overwhelming majority of hangups (remote hangup, error
+    /// paths, or a `bye` that already flushed before this runs).
+    func test_p2pWebRTCClient_disconnectAfterFlushingPendingSend_earlyReturnsWhenNothingBuffered() throws {
+        let source = try p2pClientSource()
+        guard let methodRange = source.range(of: "func disconnectAfterFlushingPendingSend()") else {
+            XCTFail("disconnectAfterFlushingPendingSend() not found in P2PWebRTCClient"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate disconnectAfterFlushingPendingSend() body"); return
+        }
+        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("bufferedAmount > 0"),
+            "disconnectAfterFlushingPendingSend() must guard on bufferedAmount > 0 and fall " +
+            "through to an immediate disconnect() otherwise")
+        XCTAssertTrue(
+            body.contains("sessionGeneration"),
+            "disconnectAfterFlushingPendingSend() must capture sessionGeneration before " +
+            "waiting so a fresh call reconfiguring this same client instance during the " +
+            "flush window isn't torn down by this stale wait")
+    }
+
     /// scheduleTURNCredentialRefresh must clamp TTL to at least
     /// turnMinRefreshDelaySeconds so a malformed TTL=0 from the gateway never
     /// schedules an immediate refresh that would hammer the signalling server.
+    /// The clamp lives in CallReliabilityPolicy.turnRefreshDelay (which defaults
+    /// its floor to turnMinRefreshDelaySeconds and is behaviour-tested in
+    /// TurnRefreshDelayPolicyTests) — here we guard that the scheduler wires
+    /// through it instead of computing a raw delay.
     func test_scheduleTURNCredentialRefresh_clampsZeroTTL() throws {
         let source = try callManagerSource()
         guard let methodRange = source.range(of: "func scheduleTURNCredentialRefresh(ttl:") else {
@@ -2141,10 +2371,11 @@ final class CallManagerHardeningTests: XCTestCase {
         }
         let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
         XCTAssertTrue(
-            body.contains("turnMinRefreshDelaySeconds"),
-            "scheduleTURNCredentialRefresh must clamp via QualityThresholds.turnMinRefreshDelaySeconds " +
-            "— a TTL=0 response would otherwise schedule a 0-second refresh that fires " +
-            "immediately on every credential event, hammering the gateway")
+            body.contains("CallReliabilityPolicy.turnRefreshDelay"),
+            "scheduleTURNCredentialRefresh must compute its delay via " +
+            "CallReliabilityPolicy.turnRefreshDelay — a TTL=0 response would otherwise " +
+            "schedule a 0-second refresh that fires immediately on every credential " +
+            "event, hammering the gateway")
     }
 
     /// QualityThresholds must declare turnMinRefreshDelaySeconds so the TURN
@@ -2380,6 +2611,37 @@ final class CallManagerHoldTests: XCTestCase {
             "in CallManager, not in the delegate proxy")
     }
 
+    /// Bug: unlike CXAnswerCallAction/CXEndCallAction (which this file explicitly
+    /// documents as calling `action.fulfill()` synchronously BEFORE creating a
+    /// Task, per CallKit's contract), CXSetHeldCallAction fulfilled from
+    /// *inside* its Task — after hopping to MainActor. That violates the same
+    /// documented contract: fulfill() must be called synchronously before the
+    /// delegate method returns, not after an async hop that isn't guaranteed
+    /// to run before the method returns.
+    func test_callKitDelegateProxy_fulfillsHeldActionSynchronously() throws {
+        let source = try callManagerSource()
+        guard let methodRange = source.range(of: "func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction)") else {
+            XCTFail("CXSetHeldCallAction handler not found"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate CXSetHeldCallAction handler body"); return
+        }
+        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
+        guard let fulfillRange = body.range(of: "action.fulfill()") else {
+            XCTFail("CXSetHeldCallAction handler must call action.fulfill()"); return
+        }
+        guard let taskRange = body.range(of: "Task {") else {
+            XCTFail("CXSetHeldCallAction handler must dispatch a Task"); return
+        }
+        XCTAssertTrue(
+            fulfillRange.lowerBound < taskRange.lowerBound,
+            "CXSetHeldCallAction must call action.fulfill() BEFORE creating its Task — " +
+            "fulfilling from inside the Task hops through an async MainActor boundary " +
+            "that CallKit does not guarantee completes before the delegate method " +
+            "returns, exactly the violation this file documents for CXAnswerCallAction " +
+            "and CXEndCallAction")
+    }
+
     /// isVideoSuspendedByHold must be reset in endCallInternal so hold state
     /// never leaks into the next call.
     func test_endCallInternal_resetsIsVideoSuspendedByHold() throws {
@@ -2413,6 +2675,93 @@ final class CallManagerHoldTests: XCTestCase {
             "resetEndedStateForNewCall must clear isVideoSuspendedByHold — a new call " +
             "arriving within the 1.5s settle window after a held+ended call would " +
             "otherwise inherit stale hold state and suppress the user's camera")
+    }
+
+    /// CallKit contract: CXSetHeldCallAction.fulfill() must be called synchronously
+    /// before the delegate method returns, NOT inside a Task {} block. Fulfilling
+    /// inside a Task delays settlement to the next main-runloop tick, which violates
+    /// the contract (CallKit can time out the action) and is inconsistent with the
+    /// synchronous pattern used for CXAnswerCallAction and CXEndCallAction.
+    func test_cxSetHeldCallAction_fulfillCalledSynchronouslyBeforeTask() throws {
+        let source = try callManagerSource()
+
+        guard let handlerStart = source.range(of: "perform action: CXSetHeldCallAction)") else {
+            XCTFail("CXSetHeldCallAction handler not found in CallManager.swift"); return
+        }
+        // Grab enough context to contain the handler body (≈20 lines).
+        let bodyEnd = source.index(handlerStart.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
+        let handlerBody = String(source[handlerStart.lowerBound ..< bodyEnd])
+
+        guard let fulfillRange = handlerBody.range(of: "action.fulfill()") else {
+            XCTFail("CXSetHeldCallAction handler must call action.fulfill()"); return
+        }
+        guard let taskRange = handlerBody.range(of: "Task {") else {
+            XCTFail("CXSetHeldCallAction handler must contain a Task {} block for async work"); return
+        }
+        XCTAssertTrue(
+            fulfillRange.lowerBound < taskRange.lowerBound,
+            "CXSetHeldCallAction: action.fulfill() must appear BEFORE Task {} — " +
+            "CallKit requires synchronous settlement before the delegate method returns. " +
+            "Fulfilling inside Task delays it to the next run-loop tick and can cause " +
+            "CallKit to time out the action.")
+    }
+
+    /// Bug: `handleHold(true)` calls `downgradeFromVideo()` and discards the
+    /// returned `needsRenegotiation` flag, unlike every other call site
+    /// (toggleVideo, applySurvivalVideoSend, thermalStateDidChange) which all
+    /// follow up with createOffer()+emitCallOffer() when renegotiation is
+    /// needed. Without it, `RTCRtpTransceiver.direction` is flipped to
+    /// recvOnly locally but never actually renegotiated with the peer. If an
+    /// ICE restart (WiFi/cellular handoff, exactly what a GSM call causes)
+    /// fires while on hold, it bakes the stale recvOnly direction into the
+    /// SDP and permanently negotiates it — unhold flips direction back
+    /// locally but (before this fix) never re-offers, so outbound video
+    /// stays silently broken for the rest of the call.
+    func test_handleHold_renegotiatesAfterVideoDowngradeOnHold() throws {
+        let source = try callManagerSource()
+        guard let holdFuncRange = source.range(of: "func handleHold(_ isOnHold: Bool)") else {
+            XCTFail("handleHold not found in CallManager"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    // MARK:", range: holdFuncRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate handleHold body"); return
+        }
+        let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("let needsRenegotiation = await self.webRTCService.downgradeFromVideo()") ||
+            body.contains("let needsRenegotiation = await self?.webRTCService.downgradeFromVideo()"),
+            "handleHold's hold path must capture downgradeFromVideo()'s needsRenegotiation " +
+            "return value instead of discarding it with `_ =`")
+        XCTAssertTrue(
+            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)"),
+            "handleHold's hold path must follow a needed renegotiation with " +
+            "createOffer()+emitCallOffer(isVideo: false) — mirroring toggleVideo/" +
+            "applySurvivalVideoSend — so the peer's negotiated SDP direction " +
+            "actually matches the locally suspended video track")
+    }
+
+    /// Companion to the hold-side fix above: `handleHold(false)` must also
+    /// renegotiate after `upgradeToVideo()` when needed, or the unhold never
+    /// actually restores outbound video at the negotiated-SDP level (only
+    /// the local track/direction flip back, which the peer never sees).
+    func test_handleHold_renegotiatesAfterVideoUpgradeOnUnhold() throws {
+        let source = try callManagerSource()
+        guard let holdFuncRange = source.range(of: "func handleHold(_ isOnHold: Bool)") else {
+            XCTFail("handleHold not found in CallManager"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    // MARK:", range: holdFuncRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate handleHold body"); return
+        }
+        let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("try? await self.webRTCService.upgradeToVideo()") ||
+            body.contains("try? await self?.webRTCService.upgradeToVideo()"),
+            "handleHold's unhold path must capture upgradeToVideo()'s needsRenegotiation " +
+            "return value instead of discarding it with `_ =`")
+        XCTAssertTrue(
+            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)"),
+            "handleHold's unhold path must follow a needed renegotiation with " +
+            "createOffer()+emitCallOffer(isVideo: true) so outbound video is actually " +
+            "restored at the negotiated-SDP level, not just the local track/direction")
     }
 }
 
@@ -2472,23 +2821,37 @@ final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
 
     func test_turnRefreshTask_cancelledBeforeReconnectRefreshRequest() throws {
         let source = try callManagerSource()
-        // Find the emitRequestIceServers call inside the socket-reconnect handler.
-        guard let emitRange = source.range(of: "emitRequestIceServers(callId: callId)") else {
-            XCTFail("emitRequestIceServers not found"); return
+        // Scope to the socket-reconnect handler specifically (anchored on
+        // socket.didReconnect) rather than searching the whole file — the raw
+        // emitRequestIceServers call now lives one level down inside
+        // requestFreshTurnCredentials (shared by every TURN-refresh trigger, see
+        // CallManagerTURNRefreshWatchdogTests), so a file-wide first-occurrence
+        // search would land on the wrong call site.
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect handler not found"); return
         }
-        // The cancel of turnRefreshTask must appear BEFORE the emit call in the
-        // reconnect handler so the old deadline cannot fire while the fresh
+        let reconnectHandlerEnd = source.range(
+            of: ".store(in: &cancellables)",
+            range: reconnectRange.upperBound..<source.endIndex
+        )?.upperBound ?? source.endIndex
+        let handlerBody = String(source[reconnectRange.lowerBound..<reconnectHandlerEnd])
+
+        guard let requestRange = handlerBody.range(of: "requestFreshTurnCredentials(callId: callId)") else {
+            XCTFail("requestFreshTurnCredentials not found in the socket-reconnect handler"); return
+        }
+        // The cancel of turnRefreshTask must appear BEFORE the refresh request in
+        // the reconnect handler so the old deadline cannot fire while the fresh
         // response is in flight, causing duplicate credential requests.
-        let beforeEmit = String(source[..<emitRange.lowerBound])
-        guard let cancelRange = beforeEmit.range(of: "turnRefreshTask?.cancel()", options: .backwards) else {
-            XCTFail("turnRefreshTask?.cancel() must precede emitRequestIceServers on the reconnect path"); return
+        let beforeRequest = String(handlerBody[..<requestRange.lowerBound])
+        guard let cancelRange = beforeRequest.range(of: "turnRefreshTask?.cancel()", options: .backwards) else {
+            XCTFail("turnRefreshTask?.cancel() must precede requestFreshTurnCredentials on the reconnect path"); return
         }
         // Verify the cancel is in the same reconnect context by checking there's
-        // no function definition boundary between the cancel and the emit.
-        let between = String(beforeEmit[cancelRange.upperBound...])
+        // no function definition boundary between the cancel and the request.
+        let between = String(beforeRequest[cancelRange.upperBound...])
         XCTAssertFalse(
             between.contains("func "),
-            "turnRefreshTask?.cancel() must be in the same function as emitRequestIceServers — " +
+            "turnRefreshTask?.cancel() must be in the same function as requestFreshTurnCredentials — " +
             "a function boundary would mean the cancel is in a different code path")
     }
 
@@ -2705,10 +3068,15 @@ final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
 
 // MARK: - Reliability monitor half-open re-arm after reconnect
 
-/// Guards the invariant that `halfOpenSettled` is reset when the call
-/// enters `.reconnecting`. Without the reset, an ICE restart that produces
-/// an asymmetric path (outbound OK, inbound silent) skips the half-open
-/// health check and stays `.connected` with no incoming audio/video.
+/// Guards the invariant that half-open detection re-arms after every
+/// (re)connect. Since the HalfOpenMonitorState refactor the re-arm is driven
+/// by `connectionEpoch` (bumped in `transitionToConnected`) instead of a
+/// loop-local `halfOpenSettled` bool — the old mechanism was only reset when
+/// the poll loop *observed* `.reconnecting`, so a reconnection completing
+/// between two 2s ticks froze self-heal for the rest of the call, and its
+/// cumulative-counter comparison masked post-restart half-opens anyway.
+/// The delta/epoch behaviour itself is unit-tested in HalfOpenMonitorStateTests;
+/// here we guard the CallManager wiring.
 @MainActor
 final class CallManagerHalfOpenReArmTests: XCTestCase {
 
@@ -2722,27 +3090,36 @@ final class CallManagerHalfOpenReArmTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_reliabilityMonitor_reconnectingBranch_resetsHalfOpenSettled() throws {
+    func test_transitionToConnected_bumpsConnectionEpoch() throws {
         let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func transitionToConnected()") else {
+            XCTFail("transitionToConnected not found"); return
+        }
+        let fnBody = String(source[fnRange.upperBound...].prefix(4000))
+        XCTAssertTrue(
+            fnBody.contains("connectionEpoch += 1"),
+            "transitionToConnected must bump connectionEpoch — it is the signal that " +
+            "re-arms half-open detection with a fresh RTP baseline after every " +
+            "(re)connect, even when the reconnection completed between two poll ticks."
+        )
+    }
 
-        // Locate the `.reconnecting` branch inside `startReliabilityMonitor`.
+    func test_reliabilityMonitor_connectedBranch_evaluatesViaEpochMonitor() throws {
+        let source = try callManagerSource()
         guard let monitorRange = source.range(of: "private func startReliabilityMonitor()") else {
             XCTFail("startReliabilityMonitor not found"); return
         }
-        // The reconnecting branch is a `case .reconnecting` inside the monitor body.
-        let monitorBody = String(source[monitorRange.upperBound...])
-        guard let reconnectingRange = monitorBody.range(of: "case .reconnecting(let attempt):") else {
-            XCTFail(".reconnecting case not found inside startReliabilityMonitor"); return
-        }
-        // Capture enough of the branch body to see the reset.
-        let branchBody = String(monitorBody[reconnectingRange.upperBound...].prefix(600))
-
+        let monitorBody = String(source[monitorRange.upperBound...].prefix(6000))
         XCTAssertTrue(
-            branchBody.contains("halfOpenSettled = false"),
-            ".reconnecting branch must reset halfOpenSettled = false so the " +
-            "half-open health check re-runs after each ICE restart reconnect. " +
-            "Without this, a post-reconnect asymmetric path (outbound OK, inbound " +
-            "silent) would bypass detection and stay .connected indefinitely."
+            monitorBody.contains("halfOpenMonitor.evaluate("),
+            ".connected branch must evaluate half-open via HalfOpenMonitorState — " +
+            "a raw evaluateHalfOpen call on cumulative counters would instantly " +
+            "report .healthy after an ICE restart from pre-restart traffic."
+        )
+        XCTAssertTrue(
+            monitorBody.contains("epoch: self.connectionEpoch"),
+            "HalfOpenMonitorState must be keyed off self.connectionEpoch so a " +
+            "reconnect that completes between two poll ticks still re-arms detection."
         )
     }
 }
@@ -2818,11 +3195,13 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
     /// `.reconnecting(attempt:)` with the same attempt number, not merely that the
     /// call `isActive`. Sending a restart offer on an already-connected peer
     /// connection resets ICE to gathering and breaks the live media path.
+    /// (The Task body lives in `scheduleICERestart` since the trigger-arbitration
+    /// refactor — `attemptReconnection` delegates to it.)
     func test_iceRestartTask_afterBackoffSleep_guardsOnReconnectingState() throws {
         let source = try callManagerSource()
 
-        guard let fnRange = source.range(of: "private func attemptReconnection()") else {
-            XCTFail("attemptReconnection() not found"); return
+        guard let fnRange = source.range(of: "private func scheduleICERestart(") else {
+            XCTFail("scheduleICERestart() not found"); return
         }
         let fnBody = String(source[fnRange.upperBound...].prefix(1500))
 
@@ -3140,7 +3519,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
             XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
         }
         // Scan forward far enough to cover the full handler block.
-        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
         let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
@@ -3226,6 +3605,392 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
             source.contains("networkMonitor.start(queue:"),
             "NWPathMonitor must be started with a dedicated queue — not .main — " +
             "so path-update callbacks don't block the main thread during route resolution."
+        )
+    }
+}
+
+// MARK: - Media Server Reset Monitoring
+
+@MainActor
+final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_callManager_sourceCode_observesMediaServicesWereResetNotification() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("AVAudioSession.mediaServicesWereResetNotification"),
+            "CallManager must observe AVAudioSession.mediaServicesWereResetNotification to recover " +
+            "from iOS media server crashes. Without this, audio is permanently dead after a crash."
+        )
+    }
+
+    func test_callManager_sourceCode_handleMediaServicesReset_callsConfigureAudioSession() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func handleMediaServicesReset()") else {
+            XCTFail("handleMediaServicesReset() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("configureAudioSession()"),
+            "handleMediaServicesReset must call configureAudioSession() to reconfigure " +
+            "RTCAudioSession after the media server crash resets all session state."
+        )
+    }
+
+    func test_callManager_sourceCode_handleMediaServicesReset_cyclesRTCAudioSession() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func handleMediaServicesReset()") else {
+            XCTFail("handleMediaServicesReset() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("audioSessionDidDeactivate"),
+            "handleMediaServicesReset must call audioSessionDidDeactivate before audioSessionDidActivate " +
+            "to properly cycle the RTCAudioSession state machine after a media server crash."
+        )
+        XCTAssertTrue(
+            fnBody.contains("audioSessionDidActivate"),
+            "handleMediaServicesReset must call audioSessionDidActivate to restart WebRTC audio I/O " +
+            "after media server recovery."
+        )
+    }
+
+    func test_callManager_sourceCode_startMediaServicesResetMonitoring_calledFromInit() throws {
+        let source = try callManagerSource()
+        // Find the private init body
+        guard let initRange = source.range(of: "private init(webRTCService: WebRTCService? = nil)") else {
+            XCTFail("private init not found in CallManager.swift")
+            return
+        }
+        // The init body is ~59 lines / ~2 500 chars; use 3 500 to stay robust against growth.
+        let endIdx = source.index(initRange.lowerBound, offsetBy: 3500, limitedBy: source.endIndex) ?? source.endIndex
+        let initBody = String(source[initRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            initBody.contains("startMediaServicesResetMonitoring()"),
+            "CallManager.init must call startMediaServicesResetMonitoring() to register the " +
+            "AVAudioSession.mediaServicesWereResetNotification observer at startup."
+        )
+    }
+
+    func test_callManager_sourceCode_handleMediaServicesReset_guardsCallActive() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func handleMediaServicesReset()") else {
+            XCTFail("handleMediaServicesReset() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("guard callState.isActive"),
+            "handleMediaServicesReset must guard callState.isActive — running audio reconstruction " +
+            "outside an active call wastes CPU and may corrupt the idle audio state."
+        )
+    }
+}
+
+// MARK: - CallView auto-hide controls source guards
+
+/// Source guards ensuring `shouldAutoHideControls` in CallView.swift correctly
+/// blocks auto-hide for Mac Catalyst, VoiceOver, non-video calls, and when
+/// the effects toolbar is open — any of these missing would cause controls to
+/// vanish in a context where they must remain permanently visible.
+@MainActor
+final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
+
+    private func callViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_shouldAutoHideControls_gatesOnVideoLayoutActive() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
+            XCTFail("shouldAutoHideControls not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("isVideoUIActive"),
+            "shouldAutoHideControls must gate on isVideoUIActive (local OR remote video, Fix 7) — " +
+            "controls must never auto-hide on a voice-only layout (no video surface to tap for " +
+            "recall), but must auto-hide once the video layout is active even when only the " +
+            "REMOTE camera is on."
+        )
+    }
+
+    func test_shouldAutoHideControls_gatesOnIsiOSAppOnMac() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
+            XCTFail("shouldAutoHideControls not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("isiOSAppOnMac"),
+            "shouldAutoHideControls must gate on isiOSAppOnMac — on Mac the user cannot " +
+            "tap the video surface to recall hidden controls (no touch), so controls must " +
+            "always be visible."
+        )
+    }
+
+    func test_shouldAutoHideControls_gatesOnVoiceOver() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
+            XCTFail("shouldAutoHideControls not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("isVoiceOverRunning"),
+            "shouldAutoHideControls must gate on UIAccessibility.isVoiceOverRunning — " +
+            "VoiceOver users navigate via swipe gestures, not taps on the video surface, " +
+            "so hidden controls are unreachable and must always stay visible."
+        )
+    }
+
+    func test_shouldAutoHideControls_gatesOnEffectsToolbar() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
+            XCTFail("shouldAutoHideControls not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("showEffectsToolbar"),
+            "shouldAutoHideControls must gate on showEffectsToolbar — hiding the controls " +
+            "while the effects toolbar is open would leave the user unable to close it."
+        )
+    }
+}
+
+// MARK: - CallView video connect watchdog source guards
+
+/// Source guards ensuring the `connectingVideoPlaceholder` watchdog Task uses
+/// cancellation-aware sleep (not Timer) and correctly posts a VoiceOver
+/// announcement when the video takes longer than expected.
+@MainActor
+final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
+
+    private func callViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_videoWatchdog_usesTaskSleep_notTimer() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var connectingVideoPlaceholder") else {
+            XCTFail("connectingVideoPlaceholder not found in CallView.swift")
+            return
+        }
+        // The .task { } block with Task.sleep is ~1 400 chars into the function body;
+        // use 3 000 to cover the full property including the closing }.
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("Task.sleep"),
+            "connectingVideoPlaceholder watchdog must use Task.sleep so the delay is " +
+            "automatically cancelled (by SwiftUI .task lifecycle) when remote video arrives."
+        )
+        XCTAssertFalse(
+            body.contains("Timer.scheduledTimer") || body.contains("Timer.publish"),
+            "connectingVideoPlaceholder watchdog must NOT use a Timer — Timer cannot be " +
+            "cancelled cooperatively when the view disappears."
+        )
+    }
+
+    func test_videoWatchdog_checksCancellationBeforeSlowFlag() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var connectingVideoPlaceholder") else {
+            XCTFail("connectingVideoPlaceholder not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("Task.isCancelled"),
+            "connectingVideoPlaceholder watchdog must check Task.isCancelled after sleep " +
+            "so it does not set videoConnectSlow = true after remote video has already arrived."
+        )
+    }
+
+    func test_videoWatchdog_postsAccessibilityAnnouncement() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var connectingVideoPlaceholder") else {
+            XCTFail("connectingVideoPlaceholder not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("UIAccessibility.post") && body.contains(".announcement"),
+            "connectingVideoPlaceholder watchdog must post a UIAccessibility .announcement " +
+            "when the video is slow so VoiceOver users are informed without visual feedback."
+        )
+    }
+
+    func test_videoWatchdog_usesConstant_notBareLiteral() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var connectingVideoPlaceholder") else {
+            XCTFail("connectingVideoPlaceholder not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("videoConnectWatchdogSeconds"),
+            "connectingVideoPlaceholder watchdog must reference videoConnectWatchdogSeconds " +
+            "constant — not a bare numeric literal — so the threshold is tuneable in one place."
+        )
+    }
+
+}
+
+// MARK: - Screen Capture Monitoring (iOS 16+ deprecation guard)
+
+@MainActor
+final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_screenCaptureMonitoring_doesNotUseUIScreenMain_isCaptured() throws {
+        // Regression guard: UIScreen.main is deprecated in iOS 16+ for multi-window apps.
+        // startScreenCaptureMonitoring() must never use UIScreen.main.isCaptured.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+            XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertFalse(
+            fnBody.contains("UIScreen.main.isCaptured"),
+            "startScreenCaptureMonitoring() must not use UIScreen.main.isCaptured — " +
+            "UIScreen.main is deprecated in iOS 16+. Use UIApplication.shared.connectedScenes " +
+            "→ UIWindowScene → .screen.isCaptured instead."
+        )
+    }
+
+    func test_screenCaptureMonitoring_usesConnectedScenes_forMultiScreenDetection() throws {
+        // Regression guard (Swift 6): Notification is not Sendable and cannot be captured
+        // into a Task { @MainActor } closure. The observer must query connectedScenes on the
+        // MainActor instead, which also correctly handles multi-screen (Stage Manager, Catalyst).
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+            XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("UIApplication.shared.connectedScenes"),
+            "startScreenCaptureMonitoring() must use UIApplication.shared.connectedScenes " +
+            "to detect screen capture — UIScreen.main is deprecated in iOS 16+ and Notification " +
+            "is not Sendable in Swift 6 (cannot be captured into Task { @MainActor })."
+        )
+    }
+
+    func test_screenCaptureMonitoring_doesNotCaptureNotification_intoTask() throws {
+        // Regression guard (Swift 6): capturing `notification` (non-Sendable) into a
+        // Task { @MainActor } closure is a hard compile error under -swift-version 6 with
+        // NonisolatedNonsendingByDefault. The observer closure must use `_ in`.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+            XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertFalse(
+            fnBody.contains("notification.object"),
+            "startScreenCaptureMonitoring() must not reference notification.object inside the " +
+            "Task { @MainActor } closure — Notification is not Sendable in Swift 6."
+        )
+    }
+
+    // MARK: - Regression 2026-07-05: AVAudioSession mode must track isVideoEnabled mid-call
+
+    /// `configureAudioSession()` only runs once at call setup and picks
+    /// `.videoChat`/`.voiceChat` from `isVideoEnabled` at that moment. A manual
+    /// `toggleVideo()` mid-call flips the WebRTC transceiver/track but must also
+    /// re-apply the AVAudioSession mode — otherwise the session stays tuned for
+    /// the acoustic path (loudspeaker + camera framing vs. near-field/earpiece
+    /// AEC) of whichever A/V type the call STARTED as, not what it is now.
+    func test_toggleVideo_reappliesAudioSessionMode() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "func toggleVideo() {") else {
+            XCTFail("toggleVideo() not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("updateAudioSessionModeForCurrentVideoState()"),
+            "toggleVideo() must re-apply the AVAudioSession mode after the media switch " +
+            "succeeds — otherwise a mid-call A/V switch leaves the session tuned for the " +
+            "wrong acoustic path (.videoChat vs .voiceChat) for the rest of the call."
+        )
+    }
+
+    /// The thermal-critical branch forces a one-way video→audio-only downgrade
+    /// (distinct from the user-initiated, bidirectional `toggleVideo()`), and
+    /// flips `isVideoEnabled` itself — so it needs the same mode re-application.
+    func test_thermalCriticalVideoDowngrade_reappliesAudioSessionMode() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {") else {
+            XCTFail("thermalStateDidChange(to:) not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("updateAudioSessionModeForCurrentVideoState()"),
+            "thermalStateDidChange's critical-state video downgrade must re-apply the " +
+            "AVAudioSession mode after flipping isVideoEnabled to false, mirroring toggleVideo()."
         )
     }
 }

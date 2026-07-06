@@ -98,8 +98,82 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       `MutationSender`, transient/permanent classification)
 - [x] `WorkManager` flush worker (Hilt-injected, network-constrained, exponential
       backoff, per-lane drain) scheduled on enqueue + FCM push
+- [x] **Outbox dependency-gating** (`outbox-dependency-gating`): the drainer now
+      honours the persisted `dependsOn` cmid via the pure `OutboxDependencies`
+      verdict — a dependent **holds the lane** while its (cross-lane) prerequisite
+      is `PENDING`/`INFLIGHT`, runs once it has succeeded (row gone), and is
+      **cascade-exhausted** if the prerequisite gives up. The durable upload→publish
+      chain primitive (added a `MEDIA` lane + `OutboxRepository.stateOf`).
+- [x] **Outbox produced-id write-back** (`outbox-produced-id-writeback`): the second
+      half of the chain. A prerequisite that delivers a `SendResult.SuccessWithId(realId)`
+      grafts that id into every still-queued dependent's payload (placeholder = the
+      prerequisite's own `cmid`) **before** the row is deleted, via the pure
+      `PublishMediaWriteBack.graft` (decode→swap→`distinct`→re-encode, inert/`null`
+      when undecodable/no-media/absent/identity) and the generic
+      `OutboxRepository.rewriteDependents` (PENDING dependents only). So a media story
+      queued **offline before its upload finished** publishes with the correct id.
+      (Producer half landed in `media-upload-sender` — see below.)
+- [x] **Durable media-blob store** (`media-blob-store`): the first brick of the producer
+      half. The outbox payload is a `String`, so the raw bytes of a queued media upload
+      live in a dedicated `MediaBlobEntity`/`MediaBlobDao` (Room, DB v5→v6) keyed by the
+      upload row's `cmid`, fronted by the `MediaBlobStore` building block
+      (`put`/`get`/`remove`, reusing `MediaUploadItem` as the single bytes shape). Lets a
+      media attachment be enqueued **fully offline**, bytes surviving process death.
+- [x] **Durable media-upload sender** (`media-upload-sender`): the rest of the producer
+      half at the SDK layer. `OutboxKind.UPLOAD_MEDIA` + the pure `MediaUploadSender`
+      (`send(item, upload)` → blob gone/empty → permanent, offline → transient, real id →
+      `SuccessWithId`) + the `MediaUploadQueue.enqueue(item)` building block (writes the
+      bytes then queues an `UPLOAD_MEDIA` row on the `MEDIA` lane, blob + row sharing one
+      `cmid`) + the `OutboxFlushWorker` wiring (a `MEDIA`-lane sender drained **before**
+      `STORY`, blob removed on delivery and on exhaustion). The durable offline
+      upload→publish chain now works end-to-end at the SDK layer.
+      (Composer wiring landed in `story-composer-offline-media` — see below.)
+- [x] **Composer offline-media fallback** (`story-composer-offline-media`): the composer
+      now reaches the durable chain from the UI. When a synchronous upload fails
+      transiently (offline / 429 / 5xx — the pure app-side `MediaUploadRetryPolicy`), a
+      **single** picked media is `MediaUploadQueue.enqueue`d + staged as a single
+      `PendingMediaUpload` placeholder (its `cmid` rides in `draft.mediaIds`, counts toward
+      the ≤10 cap, renders an "Offline" preview tile); `publish()` gates the story on it via
+      the new `StoryRepository.enqueuePublish(request, dependsOn)`. Permanent failure / multi
+      pick / second-while-pending surfaced the error at the time (single-pending kept the
+      single-`dependsOn` chain correct). **Superseded** by `story-composer-multi-pending` (see below),
+      which lifts the single-pending restriction: batches and second picks now stage too.
+- [x] **Remove-pending cancels the durable upload** (`media-upload-cancel`): removing the
+      offline placeholder now `MediaUploadQueue.cancel`s its `UPLOAD_MEDIA` row + blob (drops the
+      outbox row first, then the bytes — unknown cmid inert), so no orphaned upload streams bytes
+      to a media the story never references. UI clears optimistically; the durable cancel is
+      best-effort (a stranded row otherwise exhausts harmlessly). Closes the orphan-leak gap left
+      by `story-composer-offline-media`.
+- [x] **Flush retries on a blocked dependency** (`outbox-flush-retry-on-blocked`): the
+      `OutboxFlushWorker` previously rescheduled (WorkManager `Result.retry()`) only on a
+      **transient** failure, ignoring a lane stopped on a **blocked dependency**. A dependent
+      `BLOCKED` early in a pass whose prerequisite delivered *later in the same pass* therefore
+      sat until an unrelated trigger fired. A pure `OutboxFlushPlan.outcome(reports)` building
+      block now drives the outcome — `RETRY` on **any** transient-or-blocked stop — so the held
+      lane is auto-retried; forward progress is guaranteed (a dependent is delivered, or
+      cascade-exhausted once its prerequisite gives up). Closes the cross-pass `BLOCKED`-not-
+      `anyTransient` retry gap.
+- [x] **Multi-dependency outbox gate** (`outbox-multi-dependency`): the `dependsOn` gate now
+      expresses a **set** of prerequisites, not one. A new pure `OutboxDependencyKey`
+      (`encode`/`decode`/`likePattern`) round-trips the set through the single `dependsOn` column
+      (wrapped-delimited `"|a|b|"`; `decode` tolerant of a bare legacy value; membership `LIKE` with
+      `_`-escaping), `OutboxMutation.dependsOn` is a `Set<String>`, and `OutboxDependencies.verdictAll`
+      gates a dependent on **all** prerequisites (any `EXHAUSTED` ⇒ cascade-exhaust; else any
+      still-queued ⇒ hold). The drainer decodes + gates via `verdictAll`, `findDependents` is a
+      membership query (a delivered producer grafts its id into a dependent waiting on several
+      uploads), and `StoryRepository.enqueuePublish` takes a `List<String>`. The provably-correct SDK
+      half of multi-pending offline uploads; the composer adopts the list contract but keeps the
+      single-pending UI (the multi-pending UX is the next slice). No schema/migration change.
+- [x] **Multi-pending offline uploads — composer UX** (`story-composer-multi-pending`):
+      `StoryComposerUiState.pendingUpload?` → `pendingUploads: List<PendingMediaUpload>`; every
+      transient-failed pick (and each item of an offline batch) is durably queued + appended, the
+      single-pending guard dropped. `publish(dependsOn = pendingUploads.map { cmid })` gates the story
+      on **all** placeholders; per-tile remove cancels only that durable row (others untouched);
+      `queueDurably` stages one-at-a-time so a mid-batch enqueue failure keeps already-staged items;
+      the preview renders N "Offline" tiles. Closes the durable offline upload→publish chain
+      end-to-end from the UI. Surpasses iOS, which drops a pick on an offline upload.
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
-      progress); message-send items `dependsOn` the upload
+      progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests
 - [x] `cmid`↔serverId reconciliation: optimistic Room row (`sendState`
       SENDING/FAILED) swapped atomically on REST ACK, plus `clientMessageId`
@@ -356,24 +430,221 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       apart from a *delivered* one (no spurious hand-off refresh). Surpasses iOS, whose optimistic
       story evaporates on failure with no signal/recovery. Pending: multi-slide canvas / media /
       text styling below.
-- [ ] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
-- [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
-- [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
-      size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing
-- [ ] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
+- [~] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
+      **Pure deck foundation done** (`story-slide-deck`): `StorySlide` (id/text/mediaIds) +
+      `StorySlideDeck` reducer in `:feature:stories` — structural CRUD (`addSlide`/`duplicate`/
+      `removeSlide`/`move`/`select`) with the iOS **≤10 cap** (`MAX_SLIDES`/`canAddSlide`/`isFull`)
+      and the **always-≥1-slide** invariant (`canRemoveSlide`; removal reselects the slide taking the
+      removed one's place). Total functions — every inapplicable op (cap reached, last slide, unknown
+      id, no-op move) returns the same instance; ids are caller-supplied so the reducer stays pure.
+      **ViewModel wiring + strip done** (`story-composer-slide-deck`): `StoryComposerUiState` now
+      carries `deck: StorySlideDeck` (default a single empty slide); the VM mints slide ids
+      (`UUID`, at the impure edge — reducer stays pure) and exposes `onAddSlide`/
+      `onDuplicateSelectedSlide`/`onRemoveSlide`/`onMoveSlide`/`onSelectSlide`, each re-syncing the
+      editor buffer to the (possibly new) selected slide's text so `draft.text == selectedSlide.text`
+      holds. Per-slide text via pure `StorySlideDeck.updateSelectedText`; `onTextChange` writes the
+      selected slide. **Lossless publish across slides**: `publishRequests` emits **one story per
+      non-blank slide** in deck order (pure `publishableSlides`), the first carrying the whole-story
+      media + offline `dependsOn` prerequisites; a media-only deck still emits one media-bearing story
+      (single-slide behaviour byte-identical to before). `canPublish` now gates on the **whole deck**
+      (`hasText`/`isWithinTextLimit` — an off-screen over-long slide blocks publish), not just the
+      active slide. `StoryComposerScreen` renders a `SlideStrip` mini-preview (numbered selectable
+      chips; selected chip carries Duplicate/Remove, Remove hidden on the last slide; trailing "+"
+      add chip disabled at the cap). **Drag-reorder gesture done** (`slide-drag-reorder`): a
+      horizontal drag on a chip reorders it — the pure `SlideReorderResolver.targetIndex`
+      (`:feature:stories`) converts accumulated drag px + measured slot width into the whole-slot
+      crossings, rounds a sub-half-slot drift to zero, clamps to the deck bounds, and degrades to
+      the origin on a non-positive slot width; `SlideStrip` binds `detectHorizontalDragGestures` on
+      each chip and hands the resolved target to the already-tested `onMoveSlide`. **Per-slide media
+      done** (`story-slide-media`): media now belongs to the **slide it was added to**, not the whole
+      story. The deck is the single source of truth (`StorySlideDeck.addMediaToSelected`/`removeMedia`/
+      `hasMedia`/`isWithinMediaLimit`/`selectedRemainingMediaSlots`, ≤10 media **per slide**); `draft`
+      mirrors the selected slide for media exactly as it already does for text. `onMediaPicked`
+      attaches to the selected slide (online ids or offline placeholders), the preview shows only the
+      **selected slide's** media (`selectedSlideAttachments`/`selectedSlidePending`), publish emits one
+      story **per publishable slide** (text **or** media — a media-only middle slide now publishes its
+      own media) carrying that slide's media and `dependsOn` only that slide's offline uploads, and
+      removing a slide reclaims its media (drops the preview entries + cancels its durable rows).
+      Surpasses iOS, where offline media drops on an upload failure. Pending: the 9:16 canvas + text
+      styling below.
+- [~] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets).
+      **Pinch-zoom + drag-pan done** (`story-canvas-transform`): a pure per-slide
+      `StoryCanvasTransform` (`scale` clamped 1–4×, `offsetX/Y` clamped to the scaled-content
+      overflow) owns the gesture math — `apply(panX,panY,zoom,canvasW,canvasH)` multiplies the
+      scale by the gesture zoom then clamps the translation to the bounds of the **new** scale
+      (a pinch-in widens the pan range, a pinch-out tightens it and re-clamps a now-out-of-range
+      offset toward centre); a not-yet-measured (0px) canvas collapses the range without dividing
+      by zero, and `clampedTo(w,h)` re-clamps on resize. The transform is part of the slide's
+      identity (`StorySlide.transform`, carried by `duplicate`), persisted via
+      `StorySlideDeck.updateSelectedTransform` and driven by `StoryComposerViewModel.onCanvasTransform`.
+      `StoryCanvasSurface` renders the selected slide's first media as a 9:16 background under a
+      `graphicsLayer` + `detectTransformGestures` (glue only; the math is unit-tested in one place).
+      **FAB + bottom-band toolbar done** (`story-composer-band`): the flat add-text / add-media /
+      visibility buttons are replaced by a two-FAB (Contenu / Effets) bottom band — the pure value-type
+      port of iOS `BandStateMachine`. `ComposerBandState` (`Hidden` | `Tiles(BandCategory)`) +
+      `BandCategory.swapped` + `ComposerContentTile` own the navigation: `tapFab(category)` opens /
+      switches / toggle-closes the drawer, `swipeDown()` dismisses, `swipeHorizontal()` swaps category
+      (inert while hidden); `activeCategory`/`isVisible` derive the render. The drawer shows the Contenu
+      tiles (Texte → `onAddTextElement`, Médias → system picker) or the Effets visibility chips, with
+      natural swipe-to-dismiss / swipe-to-swap gestures (glue). All decisions live in one unit-tested
+      place; the VM holds `band` and applies the pure transitions (`onBandFabTap`/`onBandDismiss`/
+      `onBandSwapCategory`). +18 tests (11 state machine, 7 VM). Pending: Effets tiles (filters / drawing
+      / timeline), on-canvas sticker/drawing elements.
+- [~] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
+      size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing.
+      **Model + add/move/remove + publish done** (`story-text-elements`): a pure `StoryTextElement`
+      (id, text, `StoryTextStyle` bold/neon/typewriter/handwriting/classic, hex colour, `StoryTextAlign`
+      left/center/right, normalised `x`/`y`) with the clamp living in one place — `normalised()` /
+      `nudged(dx,dy)` keep the element inside the canvas `0f..1f`, and `toTextObject(lang)` maps to the
+      gateway `StoryTextObject` wire strings. The deck mirrors the media reducer per-slide
+      (`StorySlideDeck.addTextElementToSelected`/`removeTextElement`/`updateTextElement`/`moveTextElement`,
+      `MAX_TEXT_ELEMENTS_PER_SLIDE=5`, `selectedRemainingTextSlots`, `isWithinTextElementLimit`); a
+      slide carrying only a publishable element now publishes and `publishableSlides` counts it.
+      `StoryComposerDraft.toCreateStoryRequest` serialises publishable elements into
+      `storyEffects.textObjects` (blanks dropped, `storyEffects` null when empty). The VM adds
+      `onAddTextElement` (mints id, selects it for immediate typing, inert-with-warning at the cap),
+      routes `onTextChange` to the selected element **or** the slide caption (one field, two roles via
+      `editorText`/`isEditingTextElement`), `onSelectTextElement`/`onDeselectTextElement`,
+      `onTextElementMoved` (drag, clamped), `onRemoveTextElement`; switching/removing a slide ends
+      element editing (`mirrorDraftToSelection` drops a dangling selection). `StoryCanvasSurface`
+      renders each element centred at its normalised point, draggable / tappable / removable, with a
+      background tap to deselect (glue; px↔fraction division only, clamp is in the model). Surpasses
+      iOS (durable-outbox publish path).
+      **Style picker + per-style rendering done** (`story-text-element-styling`): the *look* of each face
+      lives in one pure, Compose-agnostic place — `StoryTextStyle.typography()` → `StoryTextTypography`
+      (`fontWeight`/`italic`/`family`/`letterSpacingEm`/`glow`) over the `StoryTextFontFamily` token enum
+      (SANS/SERIF/MONOSPACE/CURSIVE), unit-tested per branch. The VM gains
+      `onTextElementStyle`/`onTextElementColor`/`onTextElementAlign` (one-line `updateTextElement`
+      wrappers, inert on unknown id, selection untouched). `TextElementLayer` renders
+      weight/slant/family/tracking + a neon glow `Shadow`; a `TextStyleToolbar` (style chips +
+      L/C/R `AlignToggle` + `ColorSwatch` palette) appears while editing an element. Pending:
+      size/background/outline/RTL/fade.
+- [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
+      **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
+      element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats
+      in-place over the canvas, anchored just clear of the element. The vertical anchor is decided by
+      the pure, unit-tested `StoryToolbarPlacement.resolve(elementCenterY, elementHalfHeight,
+      toolbarHeight, canvasHeight, gap)` → `ToolbarPlacement(topPx, ToolbarSide.ABOVE|BELOW)`: BELOW
+      when the toolbar fits beneath the element, otherwise ABOVE, clamped into the canvas so it never
+      spills off the top or past the bottom (boundary-exact, degenerate-canvas safe). The composer
+      applies `imePadding`, so the canvas measurement already excludes the soft keyboard — the
+      keyboard-aware shift — and the resolver keeps the toolbar inside the keyboard-free band.
+      `StoryCanvasSurface` measures the selected element's half-height + the toolbar's height and offsets
+      it (glue). Surpasses iOS's fixed bottom style bar. Pending: floating tool *bubbles* per element
+      handle (delete chip exists; rotate/scale now via direct gesture — see below).
+- [x] Per-element pinch-scale + rotate (`story-text-element-transform`): `StoryTextElement` carries a
+      `scale` (clamped `[0.3, 4]`) and `rotationDeg` (wrapped to the canonical `(-180, 180]` turn); the
+      pure `transformed(scaleBy, rotateByDeg)` applies an incremental pinch/rotate gesture with the
+      clamp/wrap rules in one unit-tested place (a non-finite/non-positive factor collapses to the
+      neutral value, never a broken element), `normalised()` re-pulls both fields into range, and
+      `toTextObject` carries `scale`/`rotation` onto the gateway wire. The deck's
+      `transformTextElement(id, scaleBy, rotateByDeg)` and the VM's `onTextElementTransform` mirror the
+      move/style reducers (inert on unknown id, selection/editing untouched). `TextElementLayer` binds a
+      single `detectTransformGestures` so one two-finger gesture pans **and** pinch-scales **and** rotates
+      the element, rendered via `graphicsLayer` (glue). A natural direct-manipulation gesture rather than
+      discrete handle chips. +21 tests (14 element, 4 deck, 3 VM).
 - [~] Media elements (≤10/slide): photo/video import, crop/edit, aspect-ratio preservation.
       **Upload foundation done** (`media-upload-api`): `MediaApi` multipart `POST /attachments/upload`
       (`files` parts) + `MediaRepository.upload()` → domain `UploadedMedia` (id = `mediaId`, url,
       mime, size, dims, durationMs, thumbnail); pure `MediaUpload` part-builder + wire→domain mapper
-      that drops unusable rows. Pending: system picker glue + `mediaIds` into the publish flow.
+      that drops unusable rows. **Picker + publish wiring done** (`story-composer-media`): the
+      composer's `OutlinedButton` launches the system photo/video picker
+      (`ActivityResultContracts.PickVisualMedia`, ImageAndVideo); the chosen file is read off-main
+      into a `MediaUploadItem` and `StoryComposerViewModel.onMediaPicked` uploads it, **appends** the
+      returned media to the draft (`StoryComposerUiState.attachments` preview row + `draft.mediaIds`),
+      and `publish()` carries `mediaIds` into the same durable-outbox flow. A media-only story (no
+      caption) is publishable (`StoryComposerDraft.canPublish` admits text **or** media; `content`
+      sent null when blank). `onRemoveMedia` drops a wrongly-picked attachment; uploads are
+      re-entrancy-guarded and gate `canPublish` while in flight; a failure / thrown error / all-rows-
+      unusable result surfaces a message and leaves the draft intact. **≤10 media cap enforced**
+      (`story-composer-media-cap`): pure `StoryComposerDraft.MAX_MEDIA`/`isWithinMediaLimit`/
+      `remainingMediaSlots`/`isMediaFull` (the cap also gates `canPublish`); `onMediaPicked`
+      truncates a pick to the free slots and is inert-with-a-warning once full; the Add button
+      disables + shows an `n/10` count at the cap. **Multi-pick done** (`story-composer-multipick`):
+      a pure `StoryMediaPicker.modeFor(remainingSlots)` routes the Add button to the single- vs
+      multi-item picker (`PickMultipleVisualMedia(MAX_MEDIA)`), falling back to single when one slot
+      is left so the multi-picker's `maxItems > 1` requirement never throws and launching nothing
+      when full; the screen reads every picked uri off-main and the VM's existing free-slot
+      truncation still caps the batch. Pending: on-canvas crop/edit, durable
+      upload-then-publish outbox chain (SOTA follow-up).
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
-- [ ] Emoji sticker picker (categorised + searchable)
+- [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
+      `StickerCatalog` (8 iOS-parity categories — smileys/animals/food/activities/travel/objects/
+      symbols/flags, ~16 keyworded emojis each, every glyph in exactly one category) owns the emoji
+      data + a pure `search(query, category?)` (trim+lowercase substring over keywords or the glyph
+      itself; blank query ⇒ whole scope; result preserves catalogue order, duplicate-free). A pure
+      `StickerPickerState(category, query)` reducer encodes the product rule — a non-blank query
+      searches **across every category** (iOS parity) and hides the tab row, otherwise the active tab
+      shows; `withCategory`/`withQuery` are inert on no-op. The picker dialog becomes glue: a search
+      field + `FilterChip` tab row + filtered grid + empty-state. +22 tests. Replaces the old flat
+      `STORY_STICKER_EMOJIS` palette.
+- [x] Emoji sticker picker — **on-canvas sticker elements done** (`story-sticker-elements`): a pure
+      `StoryStickerElement` (id/emoji/normalised x,y/scale/rotation) reusing [StoryTextElement]'s
+      canvas-geometry clamps (the single source of truth) + a `toSticker()` gateway-wire mapper
+      (`StoryEffects.stickerObjects`). The deck mirrors the text-element reducer per-slide
+      (`addStickerToSelected`/`removeSticker`/`updateSticker`/`moveSticker`/`transformSticker`,
+      `MAX_STICKERS_PER_SLIDE=30`, `selectedRemainingStickerSlots`, `isWithinStickerLimit`,
+      `hasStickers`); a sticker-only slide now publishes. `StoryComposerDraft.toCreateStoryRequest`
+      serialises publishable stickers into `storyEffects.stickerObjects` (blanks dropped). The VM adds
+      add/select/deselect/move/transform/remove intents with selection mutually exclusive vs the
+      text-element edit; a "Sticker" tile in the Contenu drawer opens an emoji-grid picker, and each
+      on-canvas sticker is draggable / pinch-rotatable / removable (glue mirroring `TextElementLayer`).
+      +50 tests (15 model, 21 deck, 5 draft, ~12 VM). Categorised + searchable picker shipped above
+      (`story-sticker-picker-search`).
 - [ ] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
-- [ ] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
-- [ ] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
-- [ ] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
-- [ ] Multi-element context menu (edit, duplicate, reorder, delete)
+- [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
+      (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
+      `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value
+      equality so it unit-tests on the JVM); `effectiveMatrix(filter, intensity)` blends the base toward
+      the neutral `IDENTITY` by a clamped/guarded strength (0 → no effect, 1 → full, non-finite → full),
+      and `StoryFilter.wireValue()` is the single enum→token mapping kept beside the matrices. Per-slide
+      state: `StorySlide.filter`/`filterIntensity` + the deck reducers `setSelectedFilter`/
+      `setSelectedFilterIntensity` (clamp in one place); the VM exposes `onSelectFilter`/
+      `onFilterIntensityChange` and the derived `selectedSlideFilterMatrix`. The Effets drawer gains a
+      None + 8-chip filter row and a strength `Slider` (shown only while a filter is active); the canvas
+      `AsyncImage` renders `ColorFilter.colorMatrix(...)` live; publish carries the look on
+      `storyEffects.filter`/`filterIntensity` (a filter-only slide still emits a `storyEffects` payload).
+      +31 tests (21 matrix, 10 deck) + 7 VM + 5 draft; +11 strings × 4 locales. Mirrors iOS's per-slide
+      photo filter with an adjustable strength.
+- [~] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
+      **Snap-to-guide + out-of-bounds warning done** (`story-canvas-snap-guides`): a pure
+      `StorySnapResolver.resolve(x, y, …)` → `SnapResult(x, y, verticalGuide, horizontalGuide,
+      withinSafeZone)` is the single source of truth for where a dragged element settles. Each axis
+      **independently** locks onto the nearest in-range alignment guide (rule-of-thirds + centre)
+      within `SNAP_THRESHOLD`; outside it the axis stays at its clamped candidate; a non-finite
+      candidate collapses to the canvas centre and out-of-canvas values clamp into `0f..1f`.
+      `withinSafeZone` flags a centre that drifts inside the `SAFE_ZONE_INSET` edge margin. The
+      existing `onTextElementMoved` drag now routes its resulting centre through the resolver and
+      moves the element by the **snap-adjusted** delta (reusing `StorySlideDeck.moveTextElement`,
+      no new reducer), exposing the live guides + safe-zone verdict as transient
+      `StoryComposerUiState.snapFeedback` (cleared by `onTextElementDragEnd` on lift). The canvas
+      draws the active guide line(s) (accent `primary`) and an `error`-coloured warning border when
+      out of bounds; the drag-end signal is a non-consuming `Final`-pass `awaitEachGesture` that
+      runs alongside the transform detector (glue). A natural magnetic-alignment gesture — surpasses
+      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM). Pending:
+      frosted-glass text backdrops, persistent safe-zone overlay grid.
+- [x] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
+      (`story-text-element-zorder`): the slide's `elements` list order *is* the paint order (index 0 =
+      back, last = front), so a pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks the
+      element within its holding slide — `TO_BACK`/`TO_FRONT` jump to either end, `BACKWARD`/`FORWARD`
+      step one place (target index `coerceIn`-clamped to the list bounds). Inert (same instance) on an
+      unknown id, an already-at-the-extreme move, or a single-element slide; only the holding slide is
+      restacked and the selection is preserved. `StoryComposerViewModel.onReorderTextElement` wraps it
+      and keeps the same state instance on an inert move (no recomposition churn). The floating
+      `TextStyleToolbar` gains a 4-button z-order row (send-to-back / backward / forward / bring-to-front)
+      whose order rides into publish via the existing element serialisation. +16 tests (13 reducer, 3 VM);
+      +4 strings × 4 locales. Mirrors iOS's front/back + forward/backward layering controls.
+- [~] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
+      caption/element routing), **delete** (per-element remove handle), **duplicate**
+      (`story-text-element-duplicate`), and **reorder** (`story-text-element-zorder`, z-order row in the
+      floating toolbar) done. Duplicate: pure `StorySlideDeck.duplicateTextElement`
+      clones every styled field as a fresh id right after the source on its slide, nudged by a small
+      normalised offset (clamped into the canvas) so the copy is visible, inert when the source id is
+      unknown / the new id collides / the slide is at the ≤5 cap; `StoryComposerViewModel.onDuplicateTextElement`
+      mints the id, selects the copy, and warns-without-adding at the cap; a duplicate `ContentCopy`
+      handle sits in the floating `TextStyleToolbar`. Pending: a single unified long-press context menu
+      consolidating these per-element actions.
 - [ ] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide)
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
@@ -498,20 +769,265 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)
-- [ ] System call UI (Telecom/ConnectionService) + ringback tone
-- [ ] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent)
+- [~] System call UI (Telecom/ConnectionService) + ringback tone —
+      **call-audio decision core landed** (slice `call-sound-policy`): the pure
+      `core:model` `CallSoundPolicy` is the SSOT mapping call lifecycle → sound,
+      the Android analogue of the iOS `RingbackTonePlayer` call sites collected
+      into one total function. `loopFor(state)` (`CallSound.None/Ringback/Ringtone`)
+      plays the caller **ringback** through the whole pre-answer wait
+      (`Ringing(outgoing)` + `Offering`) and stops it the instant the answer lands
+      (`Connecting`) — tighter than iOS, which drags it to `.connected` — and the
+      callee **ringtone** while `Ringing(incoming)`; `cueFor(prev, next)` fires the
+      one-shot `CallCue.Connected` on every entry into `Connected` (first connect
+      **and** a successful reconnect) and `CallCue.Ended` only when a *live* call
+      ends (`prev.isActive`, mirroring iOS `if wasActive`), so a phantom `Idle→Ended`
+      or idempotent `Ended→Ended` stays silent; `plan(prev, next)` bundles both per
+      edge. The `:feature:calls` `CallToneController` seam (thin `ToneGenerator`/
+      `RingtoneManager` glue behind an interface, `@Binds` `AndroidCallToneController`)
+      is folded into `CallViewModel.dispatch`: each FSM edge drives the loop (switched
+      only on a genuine change — an inert event never restarts the ringback) + fires
+      the cue, released on `onCleared`. +28 tests (19 policy, 9 VM-fold via a recording
+      fake). **Telecom-connection decision core landed** (slice `call-telecom-state-plan`):
+      the pure `core:model` `TelecomCallPolicy` is the SSOT mapping call lifecycle → the OS
+      telecom reports a self-managed `ConnectionService` must make — the Android analogue of
+      the `CXProvider.reportCall(...)`/`report(_:endedAt:)` calls the iOS `CallManager` makes
+      to CallKit. `connectionStateFor(state)` keys purely on `CallState` (outgoing ring/
+      `Offering` → `Dialing`, incoming ring → `Ringing`, answered = `Active` for
+      `Connecting`/`Connected`/`Reconnecting` so an ICE restart never tears the system call
+      down, `Ended` → `Disconnected`, `Idle` → none); `disconnectCauseFor(reason)` maps every
+      `CallEndReason` (lost/failed → `Error`); `plan(prev,next)` reports only on a genuine
+      transition (dedupes already-active edges, phantom `Idle→Ended`, idempotent `Ended→Ended`
+      and settle `Ended→Idle` to `null`). The `:feature:calls` `TelecomCallReporter` seam
+      (thin `LogTelecomCallReporter` interim glue behind an interface, `@Binds` into a Hilt
+      module) is folded into `CallViewModel.dispatch` (report each genuine edge; released on
+      `onCleared`). +35 tests (28 policy, 7 VM-fold via a recording fake). **Pending:** the
+      real self-managed `ConnectionService`/`PhoneAccount` registration + full-screen call UI +
+      foreground service (swaps the `LogTelecomCallReporter` `@Binds`), then the WebRTC media
+      transport.
+- [~] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent) —
+      **pure decision core landed** (slice `incoming-call-push-decision`): `core:model`
+      `me.meeshy.sdk.model.call` gains `IncomingCallPush` (typed FCM `data`-map / VoIP payload at
+      parity with the gateway `CallEventsHandler` push `type:"call"` and `PushNotificationService`
+      `type:"voip_call"` — `callId`/`conversationId`/`callerUserId`/`callerName`/`isVideo` string flag/
+      `iceServers` JSON) + blank-skipping `displayName`; the total, side-effect-free
+      `IncomingCallPushParser.parse(Map<String,String>) → IncomingCallPush?` (call iff `type ∈
+      {call,voip_call}` AND non-blank `callId`; leniently decodes `iceServers`, degrading a
+      missing/malformed value to `[]` rather than dropping the push); the immutable `SeenCallRing`
+      (pure port of the iOS `VoIPDedupRing`, capacity 24 / ttl 30s — `contains`/`insert`/`remove`,
+      expiry-pruning + capacity-trimming, every mutation returns a new ring); and the pure
+      `IncomingCallDecider.decide(push, context) → IncomingCallDecision` (`Ring` | `Ignore(reason)`)
+      faithful to the iOS `VoIPPushManager`/`CallManager.reportIncomingVoIPCall` ordering: self-fanout →
+      duplicate (active-or-seen) → busy (different call active) → ring. The SSOT the FCM service +
+      Telecom/`ConnectionService` full-screen-intent wiring will consume. +39 behavioural tests.
+      **FCM routing landed** (slice `fcm-call-push-route`): the pure `IncomingCallPushRouter.route(data,
+      context) → IncomingCallPushRoute` (`NotACallPush` | `Ring(push, updatedSeen)` | `Suppress(reason)`)
+      folds parser + decider + ring-insert into the single total decision the service delegates to
+      (ring advanced only on a `Ring`, so a retried push is deduped while a suppressed one never
+      poisons the ring); the app-layer `@Singleton IncomingCallRingStore` owns the live `SeenCallRing`
+      (synchronized `route`/`forget`, self-user id threaded from `SessionRepository`); and
+      `MeeshyFcmService.onMessageReceived` now routes a call push → a full-screen, CATEGORY_CALL /
+      `PRIORITY_MAX` notification on the new `meeshy_calls` channel (`setFullScreenIntent` → `MainActivity`
+      with `callId`/`conversationId`/`callerName`/`isVideo` extras), suppresses duplicates silently, and
+      hands every non-call push to the existing message path. +19 behavioural tests (11 router, 8 store).
+      **Deep-link wired** (slice `incoming-call-deeplink`): the pure `me.meeshy.app.navigation.LaunchRouter`
+      decodes the launch/full-screen intent extras (`LaunchExtras`) into a nav route — a non-blank
+      `callId` → `CallRoute.incoming(...)` (call push wins, deep-links into the incoming-call screen with
+      `isOutgoing=false` carrying the server id so the ring is answerable), else a non-blank
+      `conversationId` → `Routes.chat(...)` (the shared message-notification tap path), else `null`.
+      `CallRoute` was refactored to a **static `call` path + all-optional query args** so a blank room /
+      peer name can never collapse the route or crash `navigate()`. `MainActivity` extracts the extras +
+      hands them to `LaunchRouter` (in `onCreate` and `onNewIntent`); `MeeshyApp` navigates once the graph
+      is live and the user is authenticated, then marks the route consumed. +14 behavioural tests (8
+      router, 6 route). **Pending:** a full `ConnectionService`/Telecom integration + ringtone, then the
+      WebRTC media transport.
 - [ ] Call reconnection on network change (ICE restart)
-- [ ] Call states: ringing/connecting/connected/ended; PiP / floating call pill
+- [~] Call states: ringing/connecting/connected/ended; PiP / floating call pill —
+      **pure call-lifecycle FSM landed** (`core:model` `me.meeshy.sdk.model.call`):
+      `CallState` (Idle/Ringing(isOutgoing)/Offering/Connecting/Connected/Reconnecting(attempt)/
+      Ended(reason)) + `CallEndReason` (Local/Remote/Rejected/Missed/ConnectionLost/Failed(msg)) +
+      `CallEvent` + total side-effect-free `CallStateMachine.reduce(state, event)` faithfully
+      mirroring iOS `CallManager`/`WebRTCTypes` transitions (incl. the 3-attempt reconnect budget →
+      `ConnectionLost`). SSOT the `:feature:calls` wiring will drive — surpasses iOS, where the FSM
+      validator is only a P1 todo. 31 behavioural tests. PiP/call-pill UI + the WebRTC plumbing pending.
+      **`:feature:calls` now consumes the FSM** (slice `calls-viewmodel-screen`): a UDF `CallViewModel`
+      (`StateFlow<CallUiState>`) folds accept/decline/hang-up/mute/camera intents + signalling events
+      through `CallStateMachine.reduce`, with a pure `CallPresenter` projecting `CallState × CallConfig ×
+      CallMedia → CallUiState` (status/answer/hang-up/media-toggle affordances, end-reason label,
+      reconnect attempt). A minimal accent-coherent Compose call screen renders ringing/connecting/
+      connected/ended and is reachable from **audio/video call buttons in the chat header** (iOS parity);
+      dismissal returns to chat. +34 behavioural tests. WebRTC/signalling plumbing still pending.
+      **Live in-call duration timer landed** (slice `call-duration-timer`): a pure `CallDuration.clock(
+      seconds)` in `:core:model` is now the SSOT for call-length formatting (`M:SS` / `H:MM:SS`, `"0:00"`
+      at zero), reused by `CallRecord.durationLabel`; `CallViewModel` runs a 1-Hz timer (injected
+      `CallSecondsTicker` flow seam) exactly while connected/reconnecting, and `CallPresenter` derives a
+      `CallUiState.durationLabel` — `"0:00"` the instant media connects, ticking up through a reconnect,
+      frozen at the final length on the ended screen, and `null` for a call that never connected. The
+      connected screen renders the running clock; the ended screen appends the final length. +18
+      behavioural tests (6 formatter, 5 presenter, 7 VM).
 - [ ] Live in-call transcription overlay (on-device speech-to-text, leader/follower)
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [ ] Camera-covered ("dark frame") detection during video calls
-- [ ] Thermal-aware quality degradation (fps/resolution caps, video disable)
-- [ ] Adaptive call quality (bitrate ladder, auto video-disable on critical link)
-- [ ] Connection-quality indicator; call-waiting banner (second incoming call)
+- [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
+      (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
+      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
+      app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping + the live RTP-sender actuator.
+- [~] Adaptive call quality (bitrate ladder, auto video-disable on critical link) —
+      **quality-tier SSOT landed** (slice `call-quality-level`): pure `core:model`
+      `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
+      `VideoQualityLevel`) with `CallQualityThresholds` (the iOS `QualityThresholds`
+      constants) + two classifiers `from(rttMs, packetLoss)` (worse-of-two-axes,
+      strict `>` boundaries) and `from(availableOutgoingBitrateBps)`, plus each
+      tier's sender caps (`targetResolutionHeight`/`targetFps`/`targetVideoBitrateBps`)
+      the future adaptive-bitrate ladder will apply. **Time-hysteresis auto-video-disable
+      policy landed** (slice `call-video-survival-policy`): the pure `core:model`
+      `VideoSurvivalPolicy` (port of iOS `VideoSurvivalPolicy`) — `reduce(state, level,
+      nowSeconds, userWantsVideo) → (state, VideoSurvivalAction)` drops outbound video to
+      audio-only after a sustained `POOR`/`CRITICAL` streak (`Suspend`, 6 s) and resumes
+      after a sustained `EXCELLENT`/`GOOD` streak (`Resume`, 10 s), with `FAIR` holding the
+      recovery timer and a monotonic-seconds `VideoSurvivalState` (fixed-size, O(1) over a
+      marathon call). Duration-based hysteresis (cadence-independent); user camera-off resets
+      to `INITIAL`. +19 tests. **Adaptive sender-cap plan landed** (slice `call-sender-cap-plan`,
+      2026-07-03): the pure `core:model` `VideoSenderCapPlan` maps a `VideoQualityLevel` (+ a
+      framework-agnostic `ThermalState`) to the concrete RTP sender parameters
+      (`maxBitrateBps`/`maxFramerate`/`scaleResolutionDownBy`) — `forLevel` reads each axis off the
+      tier and floors CRITICAL to 360p15 @ 100 kbps (never a zero encoder / never an upscale);
+      `forConditions` composes it with a `ThermalCeiling` (port of iOS `VideoThermalProfile`,
+      `NOMINAL` a no-op) taking the more conservative value per axis. Closes the
+      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Pending:** the real
+      WebRTC actuator seam (map `PowerManager.THERMAL_STATUS_*` → `ThermalState`, apply the cap to the
+      live RTP video sender, debounce re-apply) + consuming `Suspend`/`Resume`.
+- [~] Connection-quality indicator; call-waiting banner (second incoming call) —
+      **connection-quality indicator landed** (slice `call-quality-level`): the pure
+      four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,
+      parity with iOS `CallManager.connectionQualityLabel`) with `bars`(1–4)/`isWeak`;
+      a `CallQualitySampler` stats seam (interim `NoopCallQualitySampler`) folded into
+      `CallViewModel` exactly while media flows (connected/reconnecting), projected by
+      `CallPresenter` into `CallUiState.connectionQuality` and rendered as an
+      accent-coherent 4-bar signal indicator on the call screen (error hue on a weak
+      link, VoiceOver tier label). +37 tests. The **call-waiting banner** landed
+      (slice `call-waiting-banner`, 2026-07-03): pure `core:model` `WaitingCall` +
+      `CallWaitingReducer` (Offered/Rejected/Accepted/RemotelyEnded), a
+      `CallSignalManager.incomingOffers` identity stream, a `CallViewModel` fold that
+      raises the banner for a *second* offer while active, a 15s auto-dismiss-as-reject
+      `CallWaitingTimer` seam, `rejectWaiting()`/`acceptWaitingSwap()` (end-and-answer,
+      parity with iOS `endCurrentAndAnswerPending`), and an accent-coherent top banner in
+      `CallScreen`. +35 tests. The **`RemotelyEnded` socket driver** landed (slice
+      `call-ended-signal-identity`, 2026-07-03): pure `CallSignalMapper.endedCallId` decode
+      of a `call:ended`/`call:missed` frame's `callId`, a `CallSignalManager.endedCalls`
+      identity stream (parallel to `incomingOffers`), and a `CallViewModel.onRemoteEnded`
+      fold that auto-dismisses the banner + cancels its timer (no `emitEnd`) only for the
+      *pending* call's id. +15 tests. The **identity-aware active-call teardown** landed (slice
+      `call-ended-identity-teardown`, 2026-07-03): `call:ended`/`call:missed` are now `null` in
+      `CallSignalMapper.map` (off the identity-less `events`); the single pure `endedSignal →
+      CallEndedSignal(callId, event)` decode on `endedCalls: SharedFlow<CallEndedSignal>` is the
+      sole teardown path, and `onRemoteEnded` gates on identity — active id reduces the FSM,
+      waiting id only dismisses the banner, neither is inert — so a waiting call's fanned-out
+      teardown no longer tears down the active call. **Pending:** the WebRTC stats source that
+      feeds real quality samples.
 - [ ] Front-camera mirroring; extensible call media pipeline hook bus
-- [ ] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle)
+- [~] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle) —
+      **inbound event models + pure frame→`CallEvent` mapper landed** (slice `call-signalling-events`):
+      `core:model` `me.meeshy.sdk.model.call` gains `@Serializable` payload types at parity with the iOS
+      `MessageSocketManager` listen table (`CallInitiatedPayload`/`CallSignalEnvelope`+`CallSignalPayload`/
+      `CallParticipantPayload`/`CallEndedPayload`/`CallMissedPayload`/`CallMediaTogglePayload`/
+      `CallErrorPayload`/`CallAlreadyAnsweredPayload`) plus a total, side-effect-free `CallSignalMapper.map(
+      eventName, rawJson)` routing each `call:*` frame into the FSM vocabulary: `call:initiated`→
+      `ReceiveIncoming`, `call:participant-joined`→`ParticipantJoined`, `call:signal` type=`answer`→
+      `RemoteAnswer` (offer/ice-candidate inert), `call:ended` reason=`missed`→`RingTimeout` else
+      `RemoteHangUp`, `call:missed`→`RingTimeout`, `call:error`→`ConnectionFailed(msg)`,
+      `call:already-answered`→`RemoteHangUp`; `call:media-toggled` + malformed/unknown frames → `null`
+      (inert, never crashes). +22 behavioural tests. **Socket subscription + outbound emit table landed**
+      (slice `call-signal-manager`): `:sdk-core` `CallSignalManager` (mirrors `SocialSocketManager`/
+      `MessageSocketManager`) — `attach()` listens to all 8 inbound `call:*` frames, routes each through
+      `CallSignalMapper`, and republishes the mapped `CallEvent` on a hot `SharedFlow<CallEvent> events`
+      the `CallViewModel` will fold; a non-JSONObject arg / malformed / inert frame emits nothing.
+      Outbound fire-and-forget emit table at iOS-exact payload keys: `emitJoin`/`emitLeave`/`emitEnd`
+      (`{callId}`), `emitToggleAudio`/`emitToggleVideo` (`{callId, enabled}`), `emitSignal`
+      (`{callId, signal}`). +18 behavioural tests. **ACK-based `call:initiate` landed** (slice
+      `call-initiate-ack`): `core:model` gains the pure `SocketIceServer` (with
+      `IceServerUrlsSerializer` normalising the gateway's single-string-or-array `urls` to a `List`),
+      `CallInitiateAck` (`callId`/`mode`/`iceServers`/`ttlSeconds`), the sealed `CallInitiateResult`
+      (`Success`/`ServerError`/`Malformed`/`Timeout`), and the total `CallInitiateAckParser.parse(rawJson)`
+      — parity with the iOS `emitCallInitiate` guard (`success:true` + non-blank `data.callId` → `Success`;
+      else the gateway error from `error.message` → bare-string `error` → `"unknown error"`; undecodable
+      body → `Malformed`). `:sdk-core` `CallSignalManager.emitInitiate(conversationId, isVideo)` is the
+      suspend transport: emits `call:initiate` with `{conversationId, type}`, awaits the ACK within a 10s
+      budget (iOS parity), delegates the body to the parser, and maps a missing/non-object ACK to
+      `Timeout`. +26 behavioural tests (21 parser: success incl. minimal/unknown-keys, single vs array
+      urls, TURN creds, every ServerError fallback incl. non-string error, Malformed bad-JSON/bad-shape,
+      robust urls dropping; 5 manager: payload keys, video/audio, ServerError, no-ACK Timeout,
+      non-JSONObject Timeout). **VM-fold landed** (slice `call-viewmodel-signal-fold`): the
+      `:feature:calls` `CallViewModel` now folds `CallSignalManager.events` in `viewModelScope` (each
+      mapped `CallEvent` reduced through the FSM, so a peer answer / remote hang-up / stall drives the
+      screen with no manual wiring); an **outgoing** `start` mints the real `callId` via `emitInitiate`
+      (optimistic ring first, then `Ended(Failed)` on a rejected/timed-out/malformed ACK — the gateway
+      message surfaced on `ServerError`); and accept/decline/hang-up/mute/camera fan out to
+      `emitJoin`/`emitEnd`/`emitToggleAudio`/`emitToggleVideo`, each **keyed by the known `callId`** and
+      inert until one is known (outgoing minted, incoming from `CallConfig.callId`). +14 behavioural tests.
+      **App-level socket-lifecycle caller landed** (slice `realtime-session-coordinator`): the whole
+      realtime layer was dead — nothing called `SocketManager.connect()` and no `*.attach()` ran, so
+      `CallSignalManager.events` (and every `message:*`/social frame) never flowed. `:sdk-core`
+      `RealtimeSessionCoordinator.onAuthenticatedChanged(isAuthenticated)` is the auth→socket bridge:
+      sign-in `connect()`s **then** attaches message/social/call, sign-out `disconnect()`s, edge-only (no
+      double-connect). Ordering (connect-before-attach) + edge invariants live in the pure
+      `RealtimeLifecyclePlan`; **attach is paired with every connect** so a logout→login re-attaches on
+      the new socket. Driven by `AuthViewModel` at init (restored token) / login / logout. +16 behavioural
+      tests. **Outgoing-call room threading landed** (slice `call-nav-conversation-thread`): the `:app`
+      CALL route previously dropped the `conversationId`, so `CallViewModel.start` → `emitInitiate("", …)`
+      fired into an empty room (every outgoing call dead-on-arrival). A pure
+      `me.meeshy.app.navigation.CallRoute` (`PATTERN`/`path`/`config(conversationId?, peerName?, isVideo?)
+      → CallConfig`) now owns the route as the SSOT; the CHAT composable threads its own `conversationId`
+      nav-arg into `Routes.call(...)` and the CALL composable decodes the args through `CallRoute.config`.
+      Outgoing calls now initiate into the real room. +8 behavioural tests (first `:app` test source set).
+      **WebRTC-plumbing emits landed** (slice `call-webrtc-plumbing-emits`): `CallSignalManager` gains the
+      five remaining outbound frames at iOS payload-key parity — `emitRequestIceServers(callId)`
+      (`call:request-ice-servers`, TURN-credential refresh), `emitHeartbeat(callId)` (`call:heartbeat`,
+      dead-peer liveness), `emitQualityReport(callId, report)` (`call:quality-report`, `{callId, stats}`),
+      `emitReconnecting(callId, participantId, attempt)` and `emitReconnected(callId, participantId)`
+      (ICE-restart bookkeeping). The `stats` shape is decided once by the pure `core:model`
+      `CallQualityReport.statsFields()` — base five metrics always present, `availableOutgoingBitrateBps`
+      and `jitterMs` appended only when strictly positive (iOS parity); `ConnectionQuality.wireValue`
+      (`excellent|good|fair|poor`) is the SSOT for the `level` token. Byte counters modelled as `Long`
+      (iOS `Int`) so a long call's cumulative totals never overflow the 32-bit range. +16 tests (10 report,
+      6 manager). **Pending:** the app-side driver seams (heartbeat/quality-report timers, ICE-restart
+      controller) that call these emits — land with the WebRTC media transport.
+- [x] Call history / journal (recent + missed calls list, direction, duration, data usage) —
+      **pure call-journal model landed** (slice `call-history-model`): `core:model`
+      `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades
+      unknown → incoming, parity with iOS `CallDirection(raw:)`), `CallMediaType` (audioOnly/audioVideo,
+      port of `WebRTCTypes.swift`), the `@Serializable` `CallHistoryPeer`, and `@Serializable` `CallRecord`
+      mirroring the gateway `CallHistoryItem` REST contract (`GET /api/v1/calls/history`) field-for-field
+      (timestamps kept as ISO-8601 strings → `:core:model` stays date-dependency-free). Pure display
+      accessors are the single tested SSOT a future list renders: `directionKind`/`isMissed`, `mediaType`,
+      four-tier `displayName` (peer display → peer username → conversation title → "Inconnu", blank-skipping,
+      surpasses iOS's empty-only skip), `avatarUrl` (peer → conversation fallback), `durationLabel`
+      (`M:SS`/`H:MM:SS`, empty at zero), `dataLabel` (deterministic locale-independent byte ladder, null
+      when no counters / zero total). +22 behavioural tests (every direction arm incl. unknown, name/avatar
+      fallbacks, hour boundary, byte-ladder + guards, gateway-shaped JSON decode with/without peer). The
+      call-history repository landed (slice `call-history-repository`): `:core:network`
+      `CallHistoryApi` (`GET calls/history?cursor&limit&filter`), `:core:database` `CallHistoryEntity`/
+      `CallHistoryDao` (DB v6→v7, destructive fallback), and `:sdk-core` `CallHistoryRepository` — a
+      cache-first SWR stream (`historyStream()` via `CallHistoryCacheSource`, port of the `StoryCacheSource`
+      pattern, `CachePolicy.CallHistory` fresh 60s / keep the 3-month window) plus a cursor-paginated raw
+      `fetchPage(cursor, limit, missedOnly) → CallHistoryPage(records, nextCursor, hasMore)` the list UI
+      will drive for older pages. +17 behavioural tests (DAO order/upsert/deleteNotIn/clear; cold-cache
+      Empty, refresh persist + prune + sync-meta, Fresh-after-refresh, sync-exception, fetchPage
+      pagination/no-pagination/all+missed filter forwarding/failed-envelope/network-exception). The
+      recent/missed-calls **list UI landed** (slice `call-history-list`): a UDF `CallHistoryViewModel`
+      (`StateFlow<CallHistoryUiState>` over `historyStream()`) with cache-first SWR flags (skeleton only
+      on cold empty), a client-side missed-only filter, cursor-paged infinite scroll via `fetchPage`
+      (de-dup, cursor advance, `hasMore`/re-entrancy/failure gating), and pull-to-refresh that resets
+      paging — backed by pure `CallHistoryList` (combine+filter) and `CallTimeLabel` (ISO → relative
+      label), rendered by an accent-coherent `CallHistoryScreen` (avatar rows, direction icon with
+      missed=error colour, relative time, All/Missed filter chips, skeleton/empty states). +30
+      behavioural tests. The dedicated Calls **tab landed** (slice `calls-tab-nav`): `Routes.CALLS`
+      (`Call` icon, order Messages · Feed · **Calls** · Activity · Profile) mounts `CallHistoryScreen`
+      in the `NavHost`; tapping a journal row re-dials via the pure `CallRoute.redial(record)` (threads
+      the record's conversation, resolved `displayName` and media into the outgoing-call route, identical
+      to a chat-header call). +4 behavioural tests. (The outgoing-call `conversationId` threading + folding
+      `CallSignalManager.events` into `CallViewModel` both landed — see the signalling row above.)
 
 ## I. Communities
 - [ ] Community creation (name, `mshy_` identifier, description, emoji, privacy, initial members)
@@ -523,28 +1039,217 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Community invite links: list, stats, detail, copy/share
 
 ## J. Contacts & Friends
-- [~] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges —
+- [x] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges —
       `:feature:contacts` hub reachable from the conversations top bar (People icon),
-      4-tab `TabRow` with a live count badge on the **Requests** tab ; Contacts /
-      Discover / Blocked tabs remain placeholders pending their data slices
-- [ ] Contacts list (online/offline filters + counts, search, presence + mood-emoji)
-- [ ] Cache-first friends list with cross-screen reconciliation; online-first sorting
-- [ ] Friendship status resolution (friend / pending sent / pending received / blocked)
-- [~] Send / accept / decline / cancel friend request — **Requests tab** lists received +
+      4-tab `TabRow` with a live count badge on the **Requests** tab ; **all four tabs
+      are now live** (Contacts / Requests / Discover / Blocked) — no placeholder remains
+      (slice `contacts-blocked-list`, 2026-07-04). **Pending:** per-tab count badges beyond
+      Requests (Blocked/Discover counts).
+- [~] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
+      **filters + search + presence + per-filter counts shipped**. Filters/search/presence landed in
+      `contacts-list-friends`: the Contacts tab renders the online-first friend list with an
+      All/Online/Offline `FilterChip` row, a search field (matches username or resolved name), and a
+      per-row presence dot. **Per-filter counts shipped** (slice `contacts-filter-counts`,
+      2026-07-04): the pure `:core:model` `ContactList.counts(friends, query) → ContactFilterCounts`
+      (all/online/offline sizes under the active search; online+offline partition all by construction)
+      is the SSOT, exposed on `ContactsListUiState.filterCounts` and rendered as a count badge on each
+      chip. Surpasses iOS, whose counts ignore the search field. **Three-state presence dot shipped**
+      (slice `presence-away-indicator`, 2026-07-04): the previously-dead `:core:model` `UserPresence.state(now)`
+      is now the pure SSOT (port of iOS `UserPresence.state` — offline → no dot, online → green,
+      online-but-idle > 5min → amber away), reached via the `FriendRequestUser.presenceState(now)` adapter,
+      and the friend row renders green/amber/none accordingly. **Pending:** mood-emoji presence.
+- [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
+      **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
+      landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the
+      in-memory SSOT for the friend graph. The **list** now landed: the pure `:core:model` `ContactList`
+      folds accepted received+sent requests into the online-first (then most-recently-active) friend
+      list (port of iOS `ContactsListViewModel.fetchFriendsFromNetwork`), `ContactsListViewModel`
+      hydrates the cache and reconciles the shown list against it on every cross-screen mutation
+      (removals apply locally via `ContactList.reconcile`, additions trigger a single silent refetch —
+      port of iOS `reconcileWithCache`), and `ContactList.visible` is the pure filter+search SSOT.
+      `FriendshipCache.currentFriendIds` exposes the defensive friend-id snapshot the reconcile reads.
+      **Cold-start paint shipped** (slice `contacts-friends-room-cache`, 2026-07-04): a persistent Room
+      `friends` cache (iOS `CacheCoordinator.friends`) — `:core:database` `FriendEntity`/`FriendDao`
+      (DB v7→8; `sortIndex` preserves `ContactList`'s assembled order verbatim, so the ordering SSOT
+      stays in `ContactList`), `:sdk-core` `FriendListRepository` (`cachedSnapshot` distinguishing cold
+      from synced-empty via `sync_meta`, `persist` write-through), and `ContactsListViewModel` rewired
+      cache-first: it paints the last-persisted roster instantly (skeleton only on a cold cache), writes
+      the assembled roster back through on every load, and prune-writes-through on a cross-screen
+      unfriend (no refetch). +14 tests. +52 tests total for the Contacts list
+      (25 `ContactList`, +2 `FriendshipCache`, 17 `ContactsListViewModel`, 8 `FriendListRepository`).
+- [x] Friendship status resolution (friend / pending sent / pending received / blocked) —
+      **shipped** (slice `friendship-relationship-resolver`): the pure `:core:model`
+      `UserRelationshipRules.resolve(target, currentUserId, isBlocked, friendship)` is the total
+      precedence SSOT (blank→None, current wins over block wins over friendship, port of iOS
+      `UserRelationshipResolver`), with `FriendshipStatus` + `UserRelationshipState` (`isPending`)
+      pure models. The `:sdk-core` `UserRelationshipResolver` supplies the live inputs (the
+      `FriendshipCache` status + a `BlockStatusProvider` fun-interface seam + a current-user
+      provider). **The block seam is now bound** (slice `contacts-blocked-list`): the `:sdk-core`
+      `@Singleton BlockCache` (blocklist SSOT, hydrated by `BlockRepository`) backs the
+      `BlockStatusProvider` in `DiscoverViewModel`, so a blocked user resolves live to `Blocked`
+      everywhere. +31 behavioural tests (10 rules, 13 cache, 8 resolver).
+- [x] Send / accept / decline / cancel friend request — **Requests tab** lists received +
       sent requests (avatars tinted by deterministic `DynamicColorGenerator.colorForName`),
       with optimistic accept / decline (`respond`) + cancel (`deleteRequest`), in-flight
-      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT) ;
-      send (compose-new) + offline-queue + idempotency pending
+      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT).
+      **Durable send now shipped** (slice `friend-request-outbox-idempotency`, 2026-07-04): the
+      Discover connect flips the shared `FriendshipCache` optimistically + instantly (even offline),
+      keyed by the outbox `cmid` as a placeholder request id, and queues a `SEND_FRIEND_REQUEST`
+      row on the new `OutboxLanes.FRIEND` lane. The `OutboxCoalescer` dedups a repeated send to the
+      same receiver (idempotent — only one request can exist, latest greeting wins); the
+      `OutboxFlushWorker` sender delivers via `FriendRepository.sendFriendRequest`, classifies the
+      outcome through the pure `FriendRequestSend.classify` (409/blank-id → idempotent already-exists,
+      other 4xx → permanent reject + rollback, 5xx/offline → retry), and grafts the real request id
+      back over the placeholder on delivery; a hard exhaust rolls the pending back. **Also fixed a
+      latent bug**: `OutboxLanes.BLOCK` (and now `FRIEND`) were never in the worker's drain list, so
+      block/unblock rows never delivered — both lanes are now drained. *(Hardened structurally
+      2026-07-05 `outbox-lane-map-ssot`: the worker now derives its drain list from the
+      `OutboxLaneMap` kind→lane SSOT, so a sender can never again be stranded off an undrained lane.)*
+      Surpasses iOS (online-only
+      send). +26 tests (9 `FriendRequestSend`, 3 `OutboxCoalescer`, 5 `FriendRepository`, 4 net
+      `DiscoverViewModel`). Remaining: send **compose-new** UI (user-search entry point → connect)
 - [ ] Invite by email; invite by SMS; import phone contacts
-- [ ] Discover suggestions (cache-first) + live user search with inline connect
-- [ ] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback
+- [x] Discover suggestions (cache-first) + live user search with inline connect —
+      **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab
+      (was `ComingSoon()`) now runs a debounced-by-threshold user search (pure `:core:model`
+      `DiscoverSearch.action` — trim + ≥2-char gate, port of iOS `performSearch` guard) via
+      `UserRepository.searchUsers`, and renders each result with an inline connect control whose
+      state is the shared `UserRelationshipResolver` (pure `:core:model` `ConnectAction.from`,
+      port of iOS `ConnectionActionView`): Connect / Pending / Accept / Contact / Blocked / Hidden.
+      `connect` sends a request (row flips to Pending once the gateway mints the id), `acceptReceived`
+      accepts an inbound one optimistically with rollback; a cross-screen friendship change re-derives
+      every visible row via the `FriendshipCache.version` stream, so Discover stays in lock-step with
+      the Requests tab. **The empty-query cache-first suggestions list now landed too** (slice
+      `discover-suggestions-cache-first`, 2026-07-04): a `:sdk-core` `@Singleton SuggestionsRepository`
+      (in-memory `SwrCacheSource` over `searchUsers("")`, reusing the shared `cacheFirstFlow` +
+      `CachePolicy.Suggestions`) feeds a pure `DiscoverSuggestions.snapshot(CacheResult) →
+      SuggestionsSnapshot` projection (skeleton only on cold empty; any cached data paints without a
+      spinner; a revalidated-empty list is a quiet empty state). `DiscoverViewModel.loadSuggestions()`
+      (called on tab appear, iOS `.task`) streams it into the same `rows`/connect-control surface, so
+      suggestions get live relationship badges and cross-screen re-derivation for free; a search cancels
+      it and switches surfaces, `retry` re-runs it. Surpasses iOS's `.task`-reload with an in-memory
+      singleton cache that paints instantly on a return visit. +23 tests (6 `DiscoverSuggestions`, 5
+      `SuggestionsRepository`, 12 `DiscoverViewModel`). **The suggestions cache is now durable too**
+      (slice `discover-suggestions-room-cache`, 2026-07-04): the in-memory `SwrCacheSource` was replaced
+      by a Room-backed `RoomSuggestionsSource` — `:core:database` `SuggestionEntity`/`SuggestionDao`
+      (DB v8→9, `discover_suggestions` table, `sortIndex` preserves the gateway ranking), persisting the
+      last empty-query fetch so the Discover tab paints suggestions **on a cold launch**, before any
+      network call, surviving process death (iOS `CacheCoordinator.userSearch` parity). Cold (`null`) vs
+      synced-empty is distinguished via `sync_meta`; a failed revalidation keeps the last good list. The
+      `SuggestionsRepository`/`DiscoverViewModel` public surface is unchanged, so no consumer moved. This
+      closes the **last in-memory-only cache gap** (mirroring `FriendEntity`/`CallHistoryEntity`). 11
+      tests (Robolectric + in-memory Room; replaced the 5 in-memory-source tests).
+- [x] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback —
+      **shipped** (slice `contacts-blocked-list`, 2026-07-04): the Blocked tab (was placeholder)
+      renders the blocklist from `BlockRepository.listBlocked()` (which hydrates the shared
+      `:sdk-core` `BlockCache` SSOT), skeleton only on cold empty, error+retry, empty state.
+      Unblock pops an `AlertDialog` confirm, then removes the row optimistically (VM restores the
+      snapshot + surfaces the error on network failure), guarded against double-taps via
+      `pendingIds`. Pure `:core:model` `BlockedUser` + `resolvedName`; `:core:network` `BlockApi`
+      (`GET users/me/blocked-users`, `POST/DELETE users/{id}/block`, iOS `BlockService` parity).
+      +29 tests (4 `BlockedUser`, 9 `BlockCache`, 6 `BlockRepository`, 9 `BlockedListViewModel`,
+      +1 `DiscoverViewModel` seam). **Durable offline unblock now shipped** (slice
+      `block-outbox-durable`, 2026-07-04): the write path moved off online-first REST onto the
+      shared durable outbox. Two new `OutboxKind`s (`BLOCK_USER`/`UNBLOCK_USER`) on a dedicated
+      `OutboxLanes.BLOCK` lane, an `OutboxCoalescer.blockToggle` rule (block+unblock of the same
+      user annihilate — the toggle returns to the last-synced server state, exactly like a reaction
+      toggle; a repeated block/unblock is superseded — idempotent terminal state), two
+      `OutboxFlushWorker` senders (`blockApi.block`/`unblock` → Success/TransientFailure) and an
+      `onExhausted` rollback that flips the `BlockCache` SSOT back so the next `listBlocked` re-hydrates
+      truthfully. `BlockRepository.setBlockedDurably(userId, blocked)` flips the cache optimistically +
+      enqueues (blank id inert; returns the cmid, or `null` when the enqueue annihilated a pending
+      opposite); `BlockedListViewModel.unblock` calls it, wakes the flush worker only on a real cmid,
+      and rolls the row back in place on a local enqueue failure. Survives offline + process death,
+      surpassing iOS's online-only block/unblock. +12 tests (6 coalescer, +4 net `BlockRepository`,
+      +2 net `BlockedListViewModel`). **Pending:** durable offline-queued *block* from a future
+      profile/report surface (the `setBlockedDurably(.., true)` half is ready, awaiting its UI).
 
 ## K. Profile & Account
-- [ ] View profile (by id / username / public handle / email / phone)
-- [ ] Full profile sheet: banner, identity, Profile / Conversations / Stats tabs, achievements
-- [ ] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
-- [ ] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges
-- [ ] Profile completion ring
+- [~] View profile (by id / username / public handle / email / phone) — `:feature:profile`
+      `ProfileScreen`/`ProfileViewModel` load own (session) or other (`getProfile(id)`) profiles.
+      **Header enrichment shipped** (slice `profile-header-presentation`, 2026-07-05): the pure
+      `ProfileHeaderBuilder.build(user, now) → ProfileHeaderPresentation` (`:feature:profile`, precedent
+      `FeedPostBuilder`) is the tested SSOT for the read-only header — display-name ladder (reuses
+      `MeeshyUser.effectiveDisplayName`), `@handle`, blank→null optional fields, presence (reuses
+      `UserPresence.state`), completion % clamped `0..100`, E2EE flag (`signalIdentityKeyPublic`
+      present), and member-since epoch (reuses `isoToEpochMillisOrNull`). **Pending:** resolve by
+      public handle / email / phone; banner.
+- [~] Full profile sheet: banner, identity, Profile / Conversations / Stats tabs, achievements —
+      **identity block advanced** (slice `profile-header-presentation`): the read-only `ProfileScreen`
+      now renders the presence dot (green/amber, semantic, bordered) overlaid on the avatar, the
+      accent-coloured completion ring around it, an E2EE lock badge, and a localized "member since"
+      line (EN/FR/ES/PT). **Secondary identity rows shipped** (slice `profile-details-rows`, 2026-07-05):
+      the pure `ProfileDetailRows.build(header) → List<ProfileDetailRow>` projects the primary/secondary
+      language (flag + name via the `LanguageData` SSOT, unknown code → uppercased raw), the country
+      (ISO alpha-2 → regional-indicator flag + uppercased code, non-code → plain text), and the timezone
+      into an ordered, tested list the sheet renders as label↔flag+value rows; a regional language equal
+      to the system one (case-insensitively) is collapsed. `timezone` added to the header presentation.
+      +14 `ProfileDetailRowsTest` cases. **Pending:** banner, tabs (Profile/Conversations/Stats), achievements.
+- [~] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
+      **Text + content-language editing shipped optimistic + offline** (slice `edit-profile-optimistic`,
+      2026-07-05): the already-declared `OutboxKind.UPDATE_PROFILE` (lane `PROFILE`, drained but senderless)
+      is now wired end-to-end. Pure cores: `:core:model` `ProfileEditApply.apply(user, request)` — the
+      edit-merge SSOT with `PATCH /users/me` omit-null parity (a null field is absent → unchanged, non-null
+      overwrites) so the optimistic paint matches the server exactly; `:feature:profile`
+      `ProfileEditRequestBuilder.build(...)` — trims the editor buffers and degrades blank→null (a blank edit
+      is a server-side no-op, never an accidental clear); and the `OutboxCoalescer` `UPDATE_PROFILE` rule
+      (latest full-snapshot wins, keyed by the own user id). Wiring: `SessionRepository.applyProfileEdit`
+      (optimistic republish of the merged identity, inert with no session), `UserRepository.enqueueProfileEdit`
+      (optimistic flip + durable enqueue on the profile lane, `null`/blank session inert — mirrors
+      `setBlockedDurably`), an `OutboxFlushWorker` `UPDATE_PROFILE` sender (decode → `updateProfile` →
+      `adopt(server user)`) with an `onExhausted` `refresh()` rollback to server truth. `ProfileViewModel`
+      now carries the three content-language buffers, saves through the optimistic/offline path (editor
+      closes instantly, worker woken only on a real `cmid`, local-enqueue failure reopens the editor), and
+      guards the editor buffers from being clobbered by a background session emission mid-edit. `ProfileScreen`
+      renders three `LanguageData`-backed content-language dropdowns (flag + name) in the edit form (EN/FR/ES/PT).
+      +31 tests (ProfileEditApply 7, ProfileEditRequestBuilder 6, OutboxCoalescer +3, SessionRepository +2,
+      UserRepository 4, ProfileViewModelEdit 9). Surpasses iOS, whose profile edit is online-only.
+      **First/last-name fields shipped** (slice `edit-profile-name-fields`, 2026-07-06): the `firstName`/
+      `lastName` legs of the already-name-aware `ProfileEditApply`/`UpdateProfileRequest` are now reachable
+      from the editor. `ProfileEditRequestBuilder.build` gained `firstName`/`lastName` buffers (same trim +
+      blank→null degrade — a blank name is a server no-op, never an accidental clear); `ProfileViewModel`
+      seeds/reads them via two new `StateFlow` buffers + `onFirstNameChange`/`onLastNameChange` intents and
+      `withBuffersFrom` (a user with no names → blank buffers, not "null"); `ProfileScreen` renders First name /
+      Last name `OutlinedTextField`s above Display name (Words capitalization, EN/FR/ES/PT). +6 tests
+      (ProfileEditRequestBuilder +3, ProfileViewModelEdit +3; existing save/cancel cases hardened to assert the
+      name legs too). Reuses the whole optimistic/offline machinery — no new store, no new outbox kind.
+      **Pending:** avatar + banner upload (media pipeline).
+- [~] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges —
+      **stats projection SSOT + read-only dashboard shipped** (slice `profile-stats-presentation`,
+      2026-07-05): the pure `UserStatsBuilder.build(stats) → UserStatsPresentation` (`:feature:profile`,
+      precedent `ProfileHeaderBuilder`) projects the six counter tiles (fixed order, negative counts
+      floored, compact boundary-safe `formatCompactCount` K/M/B labels that never render `1000.0K`) and
+      the achievement badges — every server value reconciled defensively (progress clamped `0..100`,
+      `isUnlocked` recomputed from `current >= threshold`, negative current/threshold floored) then ranked
+      unlocked-first → progress desc → current desc → id. `ProfileViewModel` fetches
+      `getUserStats(id)` once per resolved user (own = session id, other = `getProfile` id) and projects
+      into `ProfileUiState.stats`; a stats failure/throw never clobbers the profile or surfaces an error.
+      `ProfileScreen` renders a counter-tile grid + an "N of M unlocked" achievements list (EN/FR/ES/PT).
+      +35 tests (`UserStatsBuilderTest` 24, `ProfileViewModelStatsTest` 5, +existing). **30-day activity
+      timeline shipped** (slice `profile-stats-timeline`, 2026-07-05): `UserApi.getUserStatsTimeline(days)`
+      + `UserRepository.getUserStatsTimeline(days=30)` (me-only `/users/me/stats/timeline`, `days` clamped
+      to the gateway `7..90` window) feed the pure `StatsTimelineBuilder.build(points) →
+      StatsTimelinePresentation?` (`:feature:profile`, precedent `UserStatsBuilder`): empty → `null`
+      (nothing to chart), non-empty all-zero → a flat presentation with `hasActivity=false`, negative
+      counts floored, each bar peak-normalized `0f..1f` (no divide-by-zero), input order preserved
+      (oldest→newest), `DD/MM` axis labels ported from iOS `shortDate` (malformed date → raw), plus
+      total / rounded per-day average / active-day count. `ProfileViewModel` fetches it once for the
+      **own** profile only (me-only endpoint — never for a viewed id), failure-inert like stats;
+      `ProfileScreen` renders an accent-coherent line+area sparkline (Canvas) with an empty-state label
+      (EN/FR/ES/PT). +17 tests (`StatsTimelineBuilderTest` 11, `ProfileViewModelTimelineTest` 6).
+      **Durable Room cache shipped** (slice `profile-stats-room-cache`, 2026-07-05): `:core:database`
+      `ProfileStatsCacheEntity`/`ProfileStatsCacheDao` (`profile_stats_cache` keyed JSON store, DB v9→v10) +
+      `:sdk-core` `ProfileStatsCacheRepository` (per-user stats key + me-only timeline key; cold-vs-synced-empty
+      by row presence — absent → `null`, present `[]` → `emptyList`; undecodable payload → cache miss).
+      `ProfileViewModel` rewired cache-first for both surfaces (paint cached projection → revalidate →
+      write-through on success; network overwrites cache, a failed fetch keeps the cached paint). This is the
+      Android analogue of iOS `CacheCoordinator.stats`/`.timeline` and closes the §K cache gap. +20 tests
+      (`ProfileStatsCacheRepositoryTest` 11 Robolectric, `ProfileViewModelCacheTest` 6, +3 existing hardened).
+      **Pending:** the dedicated full-screen dashboard.
+- [x] Profile completion ring — **shipped** (slice `profile-header-presentation`, 2026-07-05): the
+      accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
+      `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
+      over/under-fills the ring), plus a "Profile N% complete" label. 22 `ProfileHeaderBuilderTest` cases.
 - [ ] Profile QR code display + save/share; share profile via message/email/copy link
 - [ ] Block / unblock users; report a user (reason + details)
 - [ ] Change email / phone (two-step verification)
@@ -556,8 +1261,76 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## L. Settings & Privacy
 - [ ] Settings hub: profile card, appearance/theme + interface language, notifications,
       transcription, voice profile, data, tools, support, about, logout
-- [ ] Light/dark/system theme with persisted preference
-- [ ] Notification preferences (push/email/sound/vibration, per-event types, DND schedule)
+- [x] Light/dark/system theme with persisted preference — pure `AppThemeMode`
+      codec/resolver/cycle (`:core:model`, `resolveDarkMode`/`storageValue`/`next`/
+      `appThemeModeFromStorage`), durable DataStore-backed `ThemeStore` (`:sdk-core`,
+      hydrates on cold start, corrupt value → AUTO), `SettingsViewModel` pick/cycle
+      intents + segmented picker, `MainActivity` re-themes live via `ThemeViewModel`
+      (`settings-theme-mode`, 2026-07-05). +23 tests.
+- [x] Interface (UI chrome) language with persisted preference — pure `AppLanguage`
+      supported-set/codec/resolver (`:core:model`, `supportedCodes` from
+      `LanguageData.interfaceLanguages`, `fromStorage`/`storageValue`/`resolveInterfaceLocaleTag`;
+      corrupt/legacy/unsupported → System `null`), durable DataStore-backed
+      `InterfaceLanguageStore` (`:sdk-core`, hydrates on cold start), `SettingsViewModel`
+      pick intent + display-language dialog picker (System + fr/en/es/ar), `MainActivity`
+      re-localises the whole Compose tree live via `LanguageViewModel` +
+      `createConfigurationContext` (minSdk-26 safe, no AppCompat) (`settings-interface-language`,
+      2026-07-05). +32 tests. NB: **display** language only; the **regional** language row is a
+      Prisme *content*-preference (backend profile), not the app UI locale — shipped separately below.
+- [x] Regional (secondary content) language preference — the last Settings language row, now live
+      (`settings-regional-content-language`, 2026-07-06). Distinct from the interface language: it is a
+      Prisme *content* preference resolved via `LanguageResolver`, so it is stored on the backend profile
+      (`User.regionalLanguage`) — NOT the device-local `InterfaceLanguageStore`. Pure `:feature:settings`
+      `RegionalLanguageSelection.build(regionalCode, systemCode, query) → RegionalLanguagePresentation`
+      SSOT: options are the full content-language set (`LanguageData.allLanguages`, not the 4 interface
+      languages), the current choice is marked (trimmed/case-insensitive; blank/absent/unknown → no
+      label, no crash), the **primary (system) language is hidden** so a user can never pick their primary
+      as their secondary (unless it *is* the stored choice — a data-inconsistency never hides the active
+      selection), and a trimmed case-insensitive search spans English name / native name / code. Wired
+      through the existing optimistic + offline-queued profile-edit path: `SettingsViewModel`
+      `setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(UpdateProfileRequest(regionalLanguage=…))`
+      (session repaints instantly, durable `UPDATE_PROFILE` row, worker woken only on a real `cmid`; a
+      sessionless/superseded enqueue is inert) — reusing the `edit-profile-optimistic` machinery, **no new
+      store**; `SettingsScreen` renders the searchable flag+native-name dialog (mirrors the notification-type
+      search) with the current value as the row detail. +24 tests (18 pure-core, 6 VM). Surpasses iOS, whose
+      regional-language write is online-only. (EN/FR/ES/PT strings.)
+- [~] Notification preferences (push/email/sound/vibration, per-event types, DND schedule) —
+      **durable master toggles landed** (`settings-notification-prefs`, 2026-07-05): pure
+      `:core:model` JSON codec for the whole `UserNotificationPreferences` block
+      (`storageValue`/`notificationPreferencesFromStorage` — blank/absent/corrupt/partial/unknown-key
+      → safe defaults, never crashes), durable DataStore-backed `NotificationPreferencesStore`
+      (`:sdk-core`, hydrates on cold start, corrupt stored value → defaults), `SettingsViewModel`
+      per-toggle intents (push/new-message/sound/vibration) that persist the whole block without
+      clobbering the other fields, `SettingsScreen` state-driven `Switch` rows (push is the master —
+      the three sub-toggles disable when push is off). +25 tests. **DND schedule editor landed**
+      (`settings-dnd-schedule`, 2026-07-05): pure `:core:model` `DndWindow` SSOT (port of iOS
+      `isInDoNotDisturbWindow`) — `isActive(prefs, weekday, minuteOfDay)`/`isActive(prefs, LocalDateTime)`
+      (enable gate · midnight-wrap · per-day gating · corrupt-`HH:mm` → never-active),
+      `parseMinuteOfDay`/`formatTimeOfDay` (range-clamped) codec, `toggleDay` (canonical Mon→Sun,
+      dedup), `DndDay`↔ISO-`DayOfWeek` mapping; `SettingsViewModel` `setDndEnabled`/`setDndStart`/
+      `setDndEnd`/`toggleDndDay` intents persisting the whole block; `SettingsScreen` DND rows
+      (master toggle + Material3 24h `TimePicker` from/until rows + Mon→Sun `FilterChip` day selector +
+      a **live "quiet hours active now" status** computed from `DndWindow.isActive`). +32 tests
+      (EN/FR/ES/PT strings). Surpasses iOS which has no live-status readout in its editor.
+      **Per-event notification type toggles landed** (`settings-notification-type-toggles`, 2026-07-06):
+      pure `:core:model` `NotificationTypeCatalog` SSOT — 17 `NotificationType`s each with a `get`/`set`
+      lens over its `UserNotificationPreferences` boolean (`toggle`/`isEnabled` edit exactly one, never
+      clobber), grouped by 5 ordered `NotificationCategory`s (Messages · Calls · Social · Groups · System)
+      via `sections(prefs, query, label)` with a locale-aware injected-label case-insensitive/trimmed search
+      that omits empty categories; `SettingsViewModel` `setNotificationTypeEnabled`/`setNotificationTypeQuery`;
+      `SettingsScreen` search field + accent category headers + push-gated per-type switches + empty-state.
+      +14 tests (22 new strings ×EN/FR/ES/PT). Surpasses iOS which lists the same toggles without an in-section
+      search filter. **Offline-queued backend sync landed** (`settings-notification-prefs-sync`, 2026-07-06):
+      the previously-dead `OutboxKind.UPDATE_SETTINGS`/`OutboxLanes.SETTINGS` declarations are now wired
+      end-to-end — pure `:core:model` `NotificationPreferenceSyncBody.from(prefs)` projects the block into the
+      gateway `PATCH /me/preferences/notification` wire contract (all 30 fields, `extras` dropped, `dndDays` as
+      lowercase tokens); `core/network` `PreferencesApi`; `:sdk-core` `NotificationPreferencesSyncRepository`
+      (session-gated durable enqueue keyed by own user id; inert with no session) + an `OutboxCoalescer`
+      latest-snapshot rule (an offline toggle burst collapses to one PATCH) + an `OutboxFlushWorker`
+      `UPDATE_SETTINGS` sender. `SettingsViewModel.updateNotifications` now persists to the device-local store
+      instantly (UI SSOT) **then** enqueues the sync + wakes the worker on a real `cmid`. The PATCH is idempotent,
+      so a delivery retry is harmless (no rollback needed). +15 tests. Surpasses iOS, whose preference write is
+      online-only. **Still open:** the email channel toggle wiring (the field syncs, the UI row is pending).
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync

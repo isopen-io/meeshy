@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_status_incoming">Chamada recebida…</string>
+    <string name="call_status_ringing">Chamando…</string>
+    <string name="call_status_connecting">Conectando…</string>
+    <string name="call_status_connected">Conectado</string>
+    <string name="call_status_reconnecting">Reconectando (%1$d)…</string>
+    <string name="call_ended">Chamada encerrada</string>
+    <string name="call_ended_missed">Chamada perdida</string>
+    <string name="call_ended_declined">Chamada recusada</string>
+    <string name="call_ended_connection_lost">Conexão perdida</string>
+    <string name="call_ended_failed">Falha na chamada</string>
+    <string name="call_action_accept">Atender</string>
+    <string name="call_action_decline">Recusar</string>
+    <string name="call_action_hang_up">Desligar</string>
+    <string name="call_action_mute">Mudo</string>
+    <string name="call_action_camera">Câmera</string>
+    <string name="call_action_close">Fechar</string>
+    <string name="call_start_audio">Chamada de áudio</string>
+    <string name="call_start_video">Videochamada</string>
+    <string name="call_history_title">Chamadas</string>
+    <string name="call_history_filter_all">Todas</string>
+    <string name="call_history_filter_missed">Perdidas</string>
+    <string name="call_history_empty">Nenhuma chamada ainda</string>
+    <string name="call_history_empty_missed">Sem chamadas perdidas</string>
+    <string name="call_history_yesterday">Ontem</string>
+    <string name="call_history_incoming">Chamada recebida</string>
+    <string name="call_history_outgoing">Chamada realizada</string>
+    <string name="call_history_missed">Chamada perdida</string>
+    <string name="call_history_retry">Tentar novamente</string>
+    <string name="call_quality_excellent">Conexão excelente</string>
+    <string name="call_quality_good">Boa conexão</string>
+    <string name="call_quality_fair">Conexão razoável</string>
+    <string name="call_quality_poor">Conexão fraca</string>
+    <string name="call_waiting_subtitle">Chamada recebida…</string>
+    <string name="call_waiting_banner_a11y">Chamada recebida de %1$s</string>
+    <string name="call_waiting_reject_a11y">Recusar a chamada de %1$s</string>
+    <string name="call_waiting_answer_a11y">Desligar e atender %1$s</string>
+</resources>

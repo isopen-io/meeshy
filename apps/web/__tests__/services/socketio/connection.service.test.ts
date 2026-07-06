@@ -629,7 +629,7 @@ describe('ConnectionService', () => {
 
       svc.setupConnectionListeners();
 
-      expect(localSocket.on).toHaveBeenCalledTimes(7);
+      expect(localSocket.on).toHaveBeenCalledTimes(8);
     });
 
     it('on connect: sets connected=true, calls autoJoinCallback, emits status', () => {
@@ -794,6 +794,63 @@ describe('ConnectionService', () => {
         '[Socket] connection error',
         expect.objectContaining({ errorMessage: 'Connection error' })
       );
+    });
+
+    it('on reconnect_failed: sets isConnecting=false, calls onError, emits status', () => {
+      const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+      const localSocket = {
+        ...mockSocket,
+        on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+          eventHandlers[event] = handler;
+        }),
+      };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = localSocket;
+      (svc as any).state.isConnecting = true;
+
+      const onError = jest.fn();
+      svc.setupConnectionListeners(undefined, undefined, onError);
+      eventHandlers['reconnect_failed']();
+
+      expect((svc as any).state.isConnecting).toBe(false);
+      expect(onError).toHaveBeenCalledWith(expect.any(Error));
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        '[Socket]',
+        expect.stringContaining('reconnection failed')
+      );
+    });
+
+    it('on reconnect_failed: hands off to the manual reconnect() backoff loop', () => {
+      const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+      const localSocket = {
+        ...mockSocket,
+        on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+          eventHandlers[event] = handler;
+        }),
+      };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = localSocket;
+
+      const reconnectSpy = jest.spyOn(svc, 'reconnect').mockImplementation(() => {});
+      svc.setupConnectionListeners();
+      eventHandlers['reconnect_failed']();
+
+      expect(reconnectSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('on reconnect_failed: safe when onError is not provided', () => {
+      const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+      const localSocket = {
+        ...mockSocket,
+        on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+          eventHandlers[event] = handler;
+        }),
+      };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = localSocket;
+      jest.spyOn(svc, 'reconnect').mockImplementation(() => {});
+      svc.setupConnectionListeners();
+      expect(() => eventHandlers['reconnect_failed']()).not.toThrow();
     });
 
     it('on AUTHENTICATED: sets currentUser and calls onAuthenticated', () => {

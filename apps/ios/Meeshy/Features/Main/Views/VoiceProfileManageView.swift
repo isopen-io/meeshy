@@ -462,21 +462,21 @@ struct VoiceProfileManageView: View {
 
     private func statusLabel(for status: VoiceProfileStatus) -> String {
         switch status {
-        case .pending: return "En attente"
-        case .processing: return "Analyse en cours"
-        case .ready: return "Actif"
-        case .failed: return "Echec"
-        case .expired: return "Expire"
+        case .pending: return String(localized: "voice.profile.status.pending.label", defaultValue: "En attente", bundle: .main)
+        case .processing: return String(localized: "voice.profile.status.processing.label", defaultValue: "Analyse en cours", bundle: .main)
+        case .ready: return String(localized: "voice.profile.status.ready.label", defaultValue: "Actif", bundle: .main)
+        case .failed: return String(localized: "voice.profile.status.failed.label", defaultValue: "Echec", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.label", defaultValue: "Expire", bundle: .main)
         }
     }
 
     private func statusDescription(for status: VoiceProfileStatus) -> String {
         switch status {
-        case .pending: return "Votre profil est en file d'attente"
-        case .processing: return "L'IA analyse vos echantillons vocaux"
-        case .ready: return "Votre profil vocal est pret a l'emploi"
-        case .failed: return "L'analyse a echoue, veuillez reessayer"
-        case .expired: return "Veuillez enregistrer de nouveaux echantillons"
+        case .pending: return String(localized: "voice.profile.status.pending.description", defaultValue: "Votre profil est en file d'attente", bundle: .main)
+        case .processing: return String(localized: "voice.profile.status.processing.description", defaultValue: "L'IA analyse vos echantillons vocaux", bundle: .main)
+        case .ready: return String(localized: "voice.profile.status.ready.description", defaultValue: "Votre profil vocal est pret a l'emploi", bundle: .main)
+        case .failed: return String(localized: "voice.profile.status.failed.description", defaultValue: "L'analyse a echoue, veuillez reessayer", bundle: .main)
+        case .expired: return String(localized: "voice.profile.status.expired.description", defaultValue: "Veuillez enregistrer de nouveaux echantillons", bundle: .main)
         }
     }
 }

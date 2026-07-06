@@ -18,6 +18,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     REACTION_ADDED: 'reaction:added',
     REACTION_REMOVED: 'reaction:removed',
+    ERROR: 'error',
   },
   ROOMS: {
     conversation: (id: string) => `conversation:${id}`,
@@ -34,6 +35,20 @@ jest.mock('../../../middleware/validation', () => ({
 
 jest.mock('../../../services/notifications/reactionNotify', () => ({
   notifyReactionAdded: jest.fn().mockResolvedValue(undefined),
+}));
+
+const mockCheckLimit = jest.fn<any>().mockResolvedValue(true);
+const mockGetRateLimitInfo = jest.fn<any>().mockReturnValue({ resetIn: 30000 });
+jest.mock('../../../utils/socket-rate-limiter', () => ({
+  getSocketRateLimiter: () => ({
+    checkLimit: (...args: unknown[]) => mockCheckLimit(...args),
+    getRateLimitInfo: (...args: unknown[]) => mockGetRateLimitInfo(...args),
+  }),
+  SOCKET_RATE_LIMITS: {
+    REACTION_ADD: { maxRequests: 30, windowMs: 60000, keyPrefix: 'socket:reaction:add' },
+    REACTION_REMOVE: { maxRequests: 30, windowMs: 60000, keyPrefix: 'socket:reaction:remove' },
+    REACTION_SYNC: { maxRequests: 120, windowMs: 60000, keyPrefix: 'socket:reaction:sync' },
+  },
 }));
 
 const { validateSocketEvent } = require('../../../middleware/validation');
@@ -68,7 +83,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
 
 function makeReactionService(overrides: Record<string, any> = {}) {
   return {
-    addReaction: jest.fn<any>().mockResolvedValue({ id: 'reaction-1', emoji: '👍' }),
+    addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'reaction-1', emoji: '👍' }, replacedEmojis: [] }),
     removeReaction: jest.fn<any>().mockResolvedValue(true),
     getMessageReactions: jest.fn<any>().mockResolvedValue([]),
     createUpdateEvent: jest.fn<any>().mockResolvedValue({ messageId: MESSAGE_ID }),
@@ -120,6 +135,8 @@ function buildHandler(overrides: Record<string, any> = {}) {
 describe('ReactionHandler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCheckLimit.mockResolvedValue(true);
+    mockGetRateLimitInfo.mockReturnValue({ resetIn: 30000 });
     (validateSocketEvent as jest.Mock<any>).mockImplementation((_schema: any, data: any) => ({
       success: true,
       data,
@@ -191,6 +208,34 @@ describe('ReactionHandler', () => {
       );
     });
 
+    it('broadcasts reaction:removed for each replaced emoji before reaction:added (single-reaction swap)', async () => {
+      const createUpdateEvent = jest.fn<any>()
+        .mockImplementation((_messageId: string, emoji: string, action: string) =>
+          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
+      const { handler, io } = buildHandler({
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({
+            reaction: { id: 'reaction-2', emoji: '🔥' },
+            replacedEmojis: ['👍'],
+          }),
+          createUpdateEvent,
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
+      // Broadcasts are fire-and-forget promises — let them settle.
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+      expect(createUpdateEvent).toHaveBeenCalledWith(MESSAGE_ID, '👍', 'remove', PARTICIPANT_ID, expect.any(String));
+      const emitted = io._emit.mock.calls.map((c: any[]) => ({ event: c[0], payload: c[1] }));
+      expect(emitted).toEqual(expect.arrayContaining([
+        expect.objectContaining({ event: 'reaction:removed', payload: expect.objectContaining({ emoji: '👍' }) }),
+        expect.objectContaining({ event: 'reaction:added', payload: expect.objectContaining({ emoji: '🔥' }) }),
+      ]));
+    });
+
     it('returns error on service exception without crashing', async () => {
       const { handler } = buildHandler({
         reactionService: { addReaction: jest.fn<any>().mockRejectedValue(new Error('db down')), createUpdateEvent: jest.fn<any>() },
@@ -251,15 +296,22 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Could not resolve participant' }));
     });
 
-    it('returns error when removeReaction returns false (reaction not found)', async () => {
-      const { handler } = buildHandler({
+    it('replies idempotent success when removeReaction returns false (reaction already absent)', async () => {
+      // Contract 6b5ca4448: an un-react whose reaction is already gone has
+      // reached the caller's desired end-state — replying an error made the
+      // client roll back its optimistic removal and re-show a dead reaction.
+      const { handler, io } = buildHandler({
         reactionService: { removeReaction: jest.fn<any>().mockResolvedValue(false), createUpdateEvent: jest.fn<any>() },
       });
       const callback = jest.fn<any>();
 
       await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Reaction not found' }));
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true, data: { message: 'Reaction already absent' } })
+      );
+      // Nothing changed — no broadcast to the conversation room.
+      expect(io.to).not.toHaveBeenCalled();
     });
 
     it('broadcasts removal and calls callback with success on happy path', async () => {
@@ -380,6 +432,231 @@ describe('ReactionHandler', () => {
       await expect(handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback)).resolves.toBeUndefined();
       // Callback still reported success — notification failure is fire-and-forget
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('notifies with the resolved Participant.id, not the User.id', async () => {
+      // reactorParticipantId must be a Participant.id — notifyReactionAdded looks
+      // it up via `prisma.participant.findUnique({ where: { id: reactorParticipantId } })`.
+      // Passing the User.id here means that lookup always misses and the message
+      // author never receives a reaction notification over the socket path.
+      const { notifyReactionAdded } = require('../../../services/notifications/reactionNotify');
+      const { handler } = buildHandler();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+
+      expect(notifyReactionAdded).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ reactorParticipantId: PARTICIPANT_ID })
+      );
+      expect(notifyReactionAdded).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ reactorParticipantId: USER_ID })
+      );
+    });
+  });
+
+  // ── Rate limiting ────────────────────────────────────────────────────────
+
+  describe('rate limiting', () => {
+    it('rejects handleReactionAdd when rate limit exceeded', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+      mockGetRateLimitInfo.mockReturnValueOnce({ resetIn: 15000 });
+
+      const { handler } = buildHandler();
+      const socket = makeSocket();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(socket, { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Rate limit exceeded' }));
+      expect((socket.emit as jest.Mock<any>)).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: expect.stringContaining('15') })
+      );
+    });
+
+    it('rejects handleReactionRemove when rate limit exceeded', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+      mockGetRateLimitInfo.mockReturnValueOnce({ resetIn: 20000 });
+
+      const { handler } = buildHandler();
+      const socket = makeSocket();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(socket, { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Rate limit exceeded' }));
+      expect((socket.emit as jest.Mock<any>)).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: expect.stringContaining('20') })
+      );
+    });
+
+    it('allows handleReactionAdd when rate limit not exceeded', async () => {
+      mockCheckLimit.mockResolvedValue(true);
+
+      const { handler } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('does not call reactionService.addReaction when rate limited', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+      mockGetRateLimitInfo.mockReturnValueOnce({ resetIn: 5000 });
+
+      const { handler, reactionService } = buildHandler();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' });
+
+      expect(reactionService.addReaction).not.toHaveBeenCalled();
+    });
+
+    it('does not call reactionService.removeReaction when rate limited', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+      mockGetRateLimitInfo.mockReturnValueOnce({ resetIn: 5000 });
+
+      const { handler, reactionService } = buildHandler();
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' });
+
+      expect(reactionService.removeReaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects handleReactionSync when its own rate bucket is exhausted', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+
+      const { handler } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionSync(makeSocket(), MESSAGE_ID, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Rate limit exceeded' }));
+    });
+
+    it('handleReactionSync rate limit is independent from handleReactionAdd', async () => {
+      // First call exhausts REACTION_ADD
+      mockCheckLimit
+        .mockResolvedValueOnce(false)   // REACTION_ADD is exhausted
+        .mockResolvedValueOnce(true);   // REACTION_SYNC is still open
+
+      const { handler } = buildHandler();
+
+      // Add is blocked
+      const addCallback = jest.fn<any>();
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, addCallback);
+      expect(addCallback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+
+      // Sync succeeds on its own bucket
+      const syncCallback = jest.fn<any>();
+      await handler.handleReactionSync(makeSocket(), MESSAGE_ID, syncCallback);
+      expect(syncCallback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('does not call reactionService.getMessageReactions when sync rate limited', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+
+      const { handler, reactionService } = buildHandler();
+
+      await handler.handleReactionSync(makeSocket(), MESSAGE_ID);
+
+      expect(reactionService.getMessageReactions).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Anonymous user reactions ─────────────────────────────────────────────
+
+  describe('anonymous user reactions', () => {
+    const ANON_SESSION_TOKEN = 'anon-session-xyz';
+    const ANON_PARTICIPANT_ID = 'anon-participant-abc';
+    const ANON_SOCKET_ID = 'socket-anon-999';
+
+    function buildAnonHandler(reactionOverrides: Record<string, any> = {}) {
+      const anonUsers = new Map<string, any>();
+      anonUsers.set(ANON_SESSION_TOKEN, {
+        id: ANON_SESSION_TOKEN,
+        socketId: ANON_SOCKET_ID,
+        isAnonymous: true,
+        participantId: ANON_PARTICIPANT_ID,
+        language: 'fr',
+      });
+
+      const anonSocketToUser = new Map<string, string>();
+      anonSocketToUser.set(ANON_SOCKET_ID, ANON_SESSION_TOKEN);
+
+      return buildHandler({
+        connectedUsers: anonUsers,
+        socketToUser: anonSocketToUser,
+        reactionService: makeReactionService(reactionOverrides),
+      });
+    }
+
+    function makeAnonSocket() {
+      return makeSocket(ANON_SOCKET_ID);
+    }
+
+    it('anonymous user can add a reaction using their participantId directly', async () => {
+      const { handler, reactionService } = buildAnonHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeAnonSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
+
+      expect(reactionService.addReaction).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: ANON_PARTICIPANT_ID })
+      );
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('anonymous user can remove a reaction using their participantId directly', async () => {
+      const { handler, reactionService } = buildAnonHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(makeAnonSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
+
+      expect(reactionService.removeReaction).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: ANON_PARTICIPANT_ID })
+      );
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('anonymous user can sync reactions using their participantId directly', async () => {
+      const reactions = [{ emoji: '👋', count: 1 }];
+      const { handler, reactionService } = buildAnonHandler({
+        getMessageReactions: jest.fn<any>().mockResolvedValue(reactions),
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionSync(makeAnonSocket(), MESSAGE_ID, callback);
+
+      expect(reactionService.getMessageReactions).toHaveBeenCalledWith(
+        expect.objectContaining({ currentParticipantId: ANON_PARTICIPANT_ID })
+      );
+      expect(callback).toHaveBeenCalledWith({ success: true, data: reactions });
+    });
+
+    it('anonymous user without participantId cannot add reaction', async () => {
+      const anonUsers = new Map<string, any>();
+      anonUsers.set(ANON_SESSION_TOKEN, {
+        id: ANON_SESSION_TOKEN,
+        socketId: ANON_SOCKET_ID,
+        isAnonymous: true,
+        participantId: undefined, // no participant assigned
+        language: 'fr',
+      });
+
+      const anonSocketToUser = new Map<string, string>();
+      anonSocketToUser.set(ANON_SOCKET_ID, ANON_SESSION_TOKEN);
+
+      const { handler } = buildHandler({ connectedUsers: anonUsers, socketToUser: anonSocketToUser });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeAnonSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Could not resolve participant' })
+      );
     });
   });
 });

@@ -107,13 +107,21 @@ describe('ReactionService', () => {
       },
       reaction: {
         create: jest.fn(),
+        upsert: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
-        deleteMany: jest.fn()
+        deleteMany: jest.fn(),
+        // Compteur autoritaire lu dans updateMessageReactionSummary.
+        count: jest.fn().mockResolvedValue(1),
+        // Ventilation par emoji AUTORITAIRE, lue dans updateMessageReactionSummary —
+        // remplace le delta appliqué à un summary dénormalisé.
+        groupBy: jest.fn().mockResolvedValue([{ emoji: '👍', _count: { emoji: 1 } }])
       },
       participant: {
         findMany: jest.fn().mockResolvedValue([])
-      }
+      },
+      // $transaction executes the callback with a transaction client (same shape).
+      $transaction: jest.fn()
     };
 
     // Create service instance
@@ -142,9 +150,19 @@ describe('ReactionService', () => {
   describe('addReaction', () => {
     beforeEach(() => {
       mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
-      mockPrisma.reaction.findMany.mockResolvedValue([]);
       mockPrisma.reaction.findFirst.mockResolvedValue(null);
-      mockPrisma.reaction.create.mockResolvedValue(createMockReaction());
+      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction());
+      mockPrisma.message.update.mockResolvedValue(createMockMessage());
+      // Wire $transaction to execute callback with a tx that delegates to the same mocks
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          message: {
+            findUnique: mockPrisma.message.findUnique,
+            update: mockPrisma.message.update
+          },
+          reaction: { count: mockPrisma.reaction.count, groupBy: mockPrisma.reaction.groupBy }
+        });
+      });
     });
 
     it('should add a reaction successfully for authenticated user', async () => {
@@ -155,14 +173,14 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.emoji).toBe('👍');
-      expect(result?.messageId).toBe(testMessageId);
-      expect(result?.participantId).toBe(testParticipantId);
-      expect(mockPrisma.reaction.create).toHaveBeenCalledTimes(1);
+      expect(result?.reaction.emoji).toBe('👍');
+      expect(result?.reaction.messageId).toBe(testMessageId);
+      expect(result?.reaction.participantId).toBe(testParticipantId);
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalledTimes(1);
     });
 
     it('should add a reaction successfully for another participant', async () => {
-      mockPrisma.reaction.create.mockResolvedValue(
+      mockPrisma.reaction.upsert.mockResolvedValue(
         createMockReaction({
           participantId: testParticipantId2
         })
@@ -175,7 +193,28 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.participantId).toBe(testParticipantId2);
+      expect(result?.reaction.participantId).toBe(testParticipantId2);
+    });
+
+    it('should upsert on the (messageId, participantId) compound key — no emoji — so concurrent adds with different emojis race on the same document', async () => {
+      // Regression coverage for the duplicate-reaction race (2026-07-04): the old
+      // find/deleteMany/create sequence let two concurrent addReaction calls with
+      // different emojis both pass the "no existing reaction" check before either
+      // committed, so each inserted its own row. The DB unique key is now
+      // (messageId, participantId) with no emoji, so this upsert always targets the
+      // same document regardless of which emoji is sent.
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '🔥'
+      });
+
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalledWith({
+        where: { participant_reaction_unique: { messageId: testMessageId, participantId: testParticipantId } },
+        update: { emoji: '🔥' },
+        create: { messageId: testMessageId, participantId: testParticipantId, emoji: '🔥' }
+      });
+      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
     });
 
     it('should throw error for invalid emoji format', async () => {
@@ -251,7 +290,10 @@ describe('ReactionService', () => {
 
     it('should return existing reaction if already exists', async () => {
       const existingReaction = createMockReaction();
-      mockPrisma.reaction.findFirst.mockResolvedValue(existingReaction);
+      // First findFirst call resolves the previous emoji, second re-fetches the full row.
+      mockPrisma.reaction.findFirst
+        .mockResolvedValueOnce({ emoji: '👍' })
+        .mockResolvedValueOnce(existingReaction);
 
       const result = await service.addReaction({
         messageId: testMessageId,
@@ -260,31 +302,63 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(mockPrisma.reaction.create).not.toHaveBeenCalled();
+      expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
 
-    it('should throw error when max reactions per user reached', async () => {
-      // User has already 1 emoji (current max is 1 per user per message)
-      mockPrisma.reaction.findMany.mockResolvedValue([
-        { emoji: '👍' }
-      ]);
+    it('should replace the previous reaction when adding a different emoji', async () => {
+      // Single-reaction-per-user model (WhatsApp/iMessage): the user already
+      // has 👍 and now sends 🔥 — the server must swap them, not reject.
+      mockPrisma.reaction.findFirst.mockResolvedValue({ emoji: '👍' });
+      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
+
+      const result = await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '🔥'
+      });
+
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalledWith({
+        where: { participant_reaction_unique: { messageId: testMessageId, participantId: testParticipantId } },
+        update: { emoji: '🔥' },
+        create: { messageId: testMessageId, participantId: testParticipantId, emoji: '🔥' }
+      });
+      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
+      expect(result?.reaction.emoji).toBe('🔥');
+      expect(result?.replacedEmojis).toEqual(['👍']);
+    });
+
+    it('should not report a replaced emoji when the user has no previous reaction', async () => {
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
+
+      const result = await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(result?.replacedEmojis).toEqual([]);
+    });
+
+    it('should reject reactions on system messages', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue(
+        createMockMessage({ messageType: 'system' })
+      );
 
       await expect(
         service.addReaction({
           messageId: testMessageId,
           participantId: testParticipantId,
-          emoji: '🔥' // Trying to add a 2nd different emoji
+          emoji: '👍'
         })
-      ).rejects.toThrow('Maximum 1 different reactions per message reached');
+      ).rejects.toThrow('Cannot react to a system message');
+      expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
 
     it('should allow adding same emoji again (returns existing)', async () => {
-      mockPrisma.reaction.findMany.mockResolvedValue([
-        { emoji: '👍' }
-      ]);
-
       const existingReaction = createMockReaction({ emoji: '👍' });
-      mockPrisma.reaction.findFirst.mockResolvedValue(existingReaction);
+      mockPrisma.reaction.findFirst
+        .mockResolvedValueOnce({ emoji: '👍' })
+        .mockResolvedValueOnce(existingReaction);
 
       const result = await service.addReaction({
         messageId: testMessageId,
@@ -293,11 +367,13 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.emoji).toBe('👍');
+      expect(result?.reaction.emoji).toBe('👍');
+      expect(result?.replacedEmojis).toEqual([]);
+      expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
 
     it('should allow adding reaction when user has zero emojis', async () => {
-      mockPrisma.reaction.findMany.mockResolvedValue([]);
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
 
       const result = await service.addReaction({
         messageId: testMessageId,
@@ -306,7 +382,7 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(mockPrisma.reaction.create).toHaveBeenCalled();
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalled();
     });
 
     it('should sanitize emoji before creating reaction', async () => {
@@ -328,6 +404,17 @@ describe('ReactionService', () => {
   describe('removeReaction', () => {
     beforeEach(() => {
       mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
+      mockPrisma.message.update.mockResolvedValue(createMockMessage());
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          message: {
+            findUnique: mockPrisma.message.findUnique,
+            update: mockPrisma.message.update
+          },
+          reaction: { count: mockPrisma.reaction.count, groupBy: mockPrisma.reaction.groupBy }
+        });
+      });
     });
 
     it('should remove a reaction successfully for authenticated user', async () => {
@@ -386,6 +473,141 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBe(false);
+    });
+  });
+
+  // ==============================================
+  // UPDATE MESSAGE REACTION SUMMARY — TRANSACTION + AUTHORITATIVE COUNT
+  // ==============================================
+  // Regression coverage for the lost-update race: two concurrent reaction:add/remove
+  // events on the same message used to read-modify-write `reactionCount` in plain JS,
+  // so the second write clobbered the first. Fixed by mirroring
+  // PostReactionService/CommentReactionService: wrap in $transaction and recompute
+  // `reactionCount` from the `Reaction` table (authoritative, self-healing) instead of
+  // incrementing/decrementing a denormalized counter.
+
+  describe('updateMessageReactionSummary — uses $transaction', () => {
+    beforeEach(() => {
+      mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
+      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction());
+      mockPrisma.message.update.mockResolvedValue(createMockMessage());
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          message: {
+            findUnique: mockPrisma.message.findUnique,
+            update: mockPrisma.message.update
+          },
+          reaction: { count: mockPrisma.reaction.count, groupBy: mockPrisma.reaction.groupBy }
+        });
+      });
+    });
+
+    it('should wrap the summary update in a single $transaction on add', async () => {
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('should wrap the summary update in a single $transaction on remove', async () => {
+      mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 1 });
+
+      await service.removeReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not open a transaction on remove when no row was deleted', async () => {
+      mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 0 });
+
+      await service.removeReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should derive reactionCount from the authoritative Reaction table groupBy, not from a JS increment', async () => {
+      // Simulate a message whose denormalized reactionCount already drifted (lost
+      // update from a prior race) — the fix must ignore it and trust the DB rows.
+      mockPrisma.message.findUnique.mockResolvedValue(
+        createMockMessage({ reactionSummary: { '👍': 1 }, reactionCount: 1 })
+      );
+      mockPrisma.reaction.groupBy.mockResolvedValue([
+        { emoji: '👍', _count: { emoji: 2 } },
+        { emoji: '❤️', _count: { emoji: 1 } }
+      ]);
+
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.reaction.groupBy).toHaveBeenCalledWith({
+        by: ['emoji'],
+        where: { messageId: testMessageId },
+        _count: { emoji: true }
+      });
+      expect(mockPrisma.message.update).toHaveBeenCalledWith({
+        where: { id: testMessageId },
+        data: { reactionSummary: { '👍': 2, '❤️': 1 }, reactionCount: 3 }
+      });
+    });
+
+    it('should recompute the full per-emoji summary from authoritative rows instead of incrementing a stale delta', async () => {
+      // Regression coverage: addReaction used to read `previousReaction` in a
+      // separate, non-transactional query before the atomic upsert, then apply an
+      // add/remove delta to the denormalized `reactionSummary` map. Two concurrent
+      // addReaction calls for the SAME participant with DIFFERENT emojis could both
+      // read `previousReaction === null` before either upsert committed, so both
+      // incremented their own emoji's delta — leaving a phantom emoji entry in
+      // `reactionSummary` with no backing `Reaction` row. Recomputing the whole map
+      // from `groupBy` inside the same transaction as the count is immune to this:
+      // whatever the final DB state is after the race, the summary matches it exactly.
+      mockPrisma.reaction.findFirst.mockResolvedValue({ emoji: '👍' }); // stale pre-race read
+      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
+      // Ground truth in the DB after the race settles: only 🔥 survives for this participant.
+      mockPrisma.reaction.groupBy.mockResolvedValue([{ emoji: '🔥', _count: { emoji: 1 } }]);
+
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '🔥'
+      });
+
+      expect(mockPrisma.message.update).toHaveBeenCalledWith({
+        where: { id: testMessageId },
+        data: { reactionSummary: { '🔥': 1 }, reactionCount: 1 }
+      });
+    });
+
+    it('should call updateMessageReactionSummary only once per addReaction, not once per replaced emoji', async () => {
+      // Prior implementation looped over replacedEmojis calling updateMessageReactionSummary
+      // once per removed emoji PLUS once for the add — each call re-reading a stale
+      // intermediate summary. A single authoritative recompute per mutation is correct
+      // and cheaper.
+      mockPrisma.reaction.findFirst.mockResolvedValue({ emoji: '👍' });
+      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
+
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '🔥'
+      });
+
+      expect(mockPrisma.reaction.groupBy).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.message.update).toHaveBeenCalledTimes(1);
     });
   });
 

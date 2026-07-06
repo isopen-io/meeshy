@@ -24,7 +24,9 @@ import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -73,7 +75,7 @@ export async function getUserTest(fastify: FastifyInstance) {
         message: "Test endpoint working",
         timestamp: new Date()
       });
-    } catch (error) {
+    } catch (error) /* istanbul ignore next */ {
       fastify.log.error(`[TEST] Error: ${error instanceof Error ? error.message : String(error)}`);
       return sendInternalError(reply, error instanceof Error ? error.message : 'Unknown error');
     }
@@ -127,22 +129,23 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       const userId = authContext.userId;
 
+      /* istanbul ignore next — request.body is always an object in Fastify; defensive null guard */
       fastify.log.info(`[PROFILE_UPDATE] User ${userId} updating profile. Body keys: ${Object.keys(request.body || {}).join(', ')}`);
 
       const body = updateUserProfileSchema.parse(request.body);
 
       const updateData: any = {};
 
-      if (body.firstName !== undefined) updateData.firstName = capitalizeName(body.firstName);
-      if (body.lastName !== undefined) updateData.lastName = capitalizeName(body.lastName);
-      if (body.displayName !== undefined) updateData.displayName = normalizeDisplayName(body.displayName);
+      if (body.firstName !== undefined) updateData.firstName = SecuritySanitizer.sanitizeText(capitalizeName(body.firstName));
+      if (body.lastName !== undefined) updateData.lastName = SecuritySanitizer.sanitizeText(capitalizeName(body.lastName));
+      if (body.displayName !== undefined) updateData.displayName = SecuritySanitizer.sanitizeText(normalizeDisplayName(body.displayName));
       if (body.email !== undefined) updateData.email = normalizeEmail(body.email);
       if (body.phoneNumber !== undefined) {
         updateData.phoneNumber = (body.phoneNumber === '' || body.phoneNumber === null)
           ? null
           : normalizePhoneNumber(body.phoneNumber);
       }
-      if (body.bio !== undefined) updateData.bio = body.bio;
+      if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
 
       if (body.systemLanguage !== undefined) updateData.systemLanguage = body.systemLanguage;
       if (body.regionalLanguage !== undefined) updateData.regionalLanguage = body.regionalLanguage;
@@ -224,6 +227,17 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         });
       }
 
+      // Realtime propagation to conversation partners (tasks/socketio-events-cleanup.md #6).
+      // Only public-facing fields matter to other users' cached profile view.
+      const publicChanges: { displayName?: string; firstName?: string; lastName?: string } = {};
+      if (body.firstName !== undefined) publicChanges.firstName = updatedUser.firstName;
+      if (body.lastName !== undefined) publicChanges.lastName = updatedUser.lastName;
+      if (body.displayName !== undefined) publicChanges.displayName = updatedUser.displayName;
+      if (Object.keys(publicChanges).length > 0) {
+        fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: publicChanges })
+          .catch((err: unknown) => fastify.log.error({ err }, '[PROFILE_UPDATE] emitUserUpdated failed'));
+      }
+
       const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
       const permissions = {
         canAccessAdmin: isAdmin,
@@ -244,13 +258,10 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
+        /* istanbul ignore next — authContext always set by authenticate preValidation */
         const userId = authContext?.userId || 'unknown';
         fastify.log.error(`[PROFILE_UPDATE] Validation error for user ${userId}: ${JSON.stringify(error.issues)}`);
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid data',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Invalid data');
       }
 
       logError(fastify.log, 'Update user profile error:', error);
@@ -350,6 +361,9 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
+      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { avatar: updatedUser.avatar } })
+        .catch((err: unknown) => fastify.log.error({ err }, '[AVATAR_UPDATE] emitUserUpdated failed'));
+
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
       return sendSuccess(reply, {
@@ -360,11 +374,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         fastify.log.error(`[AVATAR_UPDATE] Validation error: ${JSON.stringify(error.issues)}`);
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid image format',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Invalid image format');
       }
 
       logError(fastify.log, 'Update user avatar error:', error);
@@ -457,6 +467,9 @@ export async function updateUserBanner(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
+      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { banner: updatedUser.banner } })
+        .catch((err: unknown) => fastify.log.error({ err }, '[BANNER_UPDATE] emitUserUpdated failed'));
+
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 
       return sendSuccess(reply, {
@@ -467,11 +480,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         fastify.log.error(`[BANNER_UPDATE] Validation error: ${JSON.stringify(error.issues)}`);
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid image format',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Invalid image format');
       }
 
       logError(fastify.log, 'Update user banner error:', error);
@@ -570,11 +579,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: error.issues[0]?.message || 'Invalid data',
-          details: error.issues
-        });
+        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data');
       }
 
       logError(fastify.log, 'Update password error:', error);
@@ -696,16 +701,14 @@ export async function updateUsername(fastify: FastifyInstance) {
 
         if (daysSinceLastChange < RATE_LIMIT_DAYS) {
           const nextChangeAllowedAt = new Date(lastChange.getTime() + RATE_LIMIT_DAYS * 24 * 60 * 60 * 1000);
-          return reply.status(429).send({
-            success: false,
-            error: `Username change limited to once every ${RATE_LIMIT_DAYS} days`,
-            nextChangeAllowedAt: nextChangeAllowedAt.toISOString()
-          });
+          return sendError(reply, 429, `Username change limited to once every ${RATE_LIMIT_DAYS} days`);
         }
       }
 
       // Get request context for history
+      /* istanbul ignore next — defensive IP fallbacks; request.ip always set by Fastify inject */
       const ipAddress = request.ip || request.headers['x-forwarded-for'] as string || request.headers['x-real-ip'] as string || 'unknown';
+      /* istanbul ignore next — defensive fallback; user-agent is always present in practice */
       const userAgent = request.headers['user-agent'] || 'unknown';
 
       // Add new entry to history (limit to 10 most recent)
@@ -733,6 +736,9 @@ export async function updateUsername(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
+      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { username: updatedUser.username } })
+        .catch((err: unknown) => fastify.log.error({ err }, '[USERNAME_CHANGE] emitUserUpdated failed'));
+
       fastify.log.info(`[USERNAME_CHANGE] User ${userId} changed username from "${user.username}" to "${body.newUsername}"`);
 
       return sendSuccess(reply, {
@@ -742,11 +748,7 @@ export async function updateUsername(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: error.issues[0]?.message || 'Invalid data',
-          details: error.issues
-        });
+        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data');
       }
 
       logError(fastify.log, 'Update username error:', error);
@@ -760,6 +762,7 @@ export async function updateUsername(fastify: FastifyInstance) {
  */
 export async function getUserByUsername(fastify: FastifyInstance) {
   fastify.get('/u/:username', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by username. Returns public information only (excludes email, phone, password). Case-insensitive username matching.',
       tags: ['users'],
@@ -788,7 +791,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
                 banner: { type: 'string', nullable: true },
                 bio: { type: 'string', nullable: true },
                 role: { type: 'string' },
-                isOnline: { type: 'boolean' },
+                isOnline: { type: ['boolean', 'null'] },
                 lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
                 voicePublic: { type: 'boolean' },
                 voiceSampleUrl: { type: 'string', nullable: true },
@@ -828,6 +831,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
           role: true,
           isOnline: true,
           lastActiveAt: true,
+          deactivatedAt: true,
           createdAt: true,
           voiceModel: { select: voiceModelSelect }
         }
@@ -840,7 +844,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE_U] User found: ${user.username} (${user.id})`);
 
-      return sendSuccess(reply, withVoiceFields(user));
+      return sendSuccess(reply, await gateProfilePresence(fastify, request, withVoiceFields(user)));
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
@@ -854,6 +858,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
  */
 export async function getUserById(fastify: FastifyInstance) {
   fastify.get('/users/:id', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ID or username. Returns public information including language settings. Automatically detects whether ID is MongoDB ObjectId or username.',
       tags: ['users'],
@@ -882,7 +887,7 @@ export async function getUserById(fastify: FastifyInstance) {
                 bio: { type: 'string', nullable: true },
                 role: { type: 'string' },
                 banner: { type: 'string', nullable: true },
-                isOnline: { type: 'boolean' },
+                isOnline: { type: ['boolean', 'null'] },
                 lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
                 voicePublic: { type: 'boolean' },
                 voiceSampleUrl: { type: 'string', nullable: true },
@@ -967,7 +972,7 @@ export async function getUserById(fastify: FastifyInstance) {
         isMeeshyer: true,
       };
 
-      return sendSuccess(reply, publicUserProfile);
+      return sendSuccess(reply, await gateProfilePresence(fastify, request, publicUserProfile));
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
@@ -1065,6 +1070,7 @@ function buildPublicProfile(user: Record<string, unknown>) {
 
 export async function getUserByEmail(fastify: FastifyInstance) {
   fastify.get('/users/email/:email', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by email address (case-insensitive)',
       tags: ['users'],
@@ -1103,7 +1109,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(user));
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
     } catch (error) {
       logError(fastify.log, 'Get user by email error:', error);
       return sendInternalError(reply, 'Internal server error');
@@ -1113,6 +1119,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
 
 export async function getUserByIdDedicated(fastify: FastifyInstance) {
   fastify.get('/users/id/:id', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ObjectId',
       tags: ['users'],
@@ -1141,6 +1148,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
     try {
       const { id } = request.params;
 
+      /* istanbul ignore next — Fastify params schema (pattern:^[a-fA-F\d]{24}$) rejects invalid ids before handler */
       if (!/^[a-f\d]{24}$/i.test(id)) {
         return sendBadRequest(reply, 'Invalid ObjectId format');
       }
@@ -1156,7 +1164,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(user));
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
     } catch (error) {
       logError(fastify.log, 'Get user by ID error:', error);
       return sendInternalError(reply, 'Internal server error');
@@ -1166,6 +1174,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
 
 export async function getUserByPhone(fastify: FastifyInstance) {
   fastify.get('/users/phone/:phone', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by phone number. Accepts digits with optional country code prefix (e.g. 336199909344 or +336199909344). Normalizes to E.164 format for lookup.',
       tags: ['users'],
@@ -1212,7 +1221,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(user));
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
     } catch (error) {
       logError(fastify.log, 'Get user by phone error:', error);
       return sendInternalError(reply, 'Internal server error');

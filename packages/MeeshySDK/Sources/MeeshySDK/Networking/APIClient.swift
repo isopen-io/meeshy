@@ -344,6 +344,14 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }
     }
 
+    /// T15b — purge le cache HTTP de la session (bodies ETag/304 des réponses
+    /// REST). Appelé au logout : aucun payload d'un compte ne doit survivre
+    /// sur disque à travers les sessions (même contrat que
+    /// `CacheCoordinator.reset` / `clearAllMessagesForLogout`).
+    public func clearHTTPCache() {
+        urlSession.configuration.urlCache?.removeAllCachedResponses()
+    }
+
     // MARK: - Retry Helper
 
     private static let maxRetryAttempts = 3

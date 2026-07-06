@@ -33,6 +33,10 @@ struct StarredMessagesView: View {
                                         Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
                                     }
                                 }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
+                                .accessibilityAction { navigate(to: snapshot) }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -54,6 +58,7 @@ struct StarredMessagesView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel(String(localized: "starred.messages.more_options", defaultValue: "Plus d'options", bundle: .main))
                 }
             }
         }
@@ -64,6 +69,7 @@ struct StarredMessagesView: View {
             Image(systemName: "star.circle")
                 .font(MeeshyFont.relative(56))
                 .foregroundStyle(MeeshyColors.indigo400)
+                .accessibilityHidden(true)
             Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)

@@ -49,9 +49,10 @@ struct VoiceProfileWizardView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(MeeshyFont.relative(28))
+                    .font(.system(size: 28)) // chrome control (cadre de tap fixe) — figé comme les xmark/transport (82i)
                     .foregroundStyle(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -69,6 +70,7 @@ struct VoiceProfileWizardView: View {
             }
         }
         .frame(maxWidth: 200)
+        .accessibilityHidden(true) // barre de progression décorative (3pt) — chaque étape s'annonce par son contenu
     }
 
     // MARK: - Consent Step
@@ -79,7 +81,7 @@ struct VoiceProfileWizardView: View {
                 Spacer().frame(height: 20)
 
                 Image(systemName: "waveform.circle.fill")
-                    .font(MeeshyFont.relative(64))
+                    .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
                     .foregroundStyle(
                         LinearGradient(
                             colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.7)],
@@ -87,6 +89,7 @@ struct VoiceProfileWizardView: View {
                             endPoint: .bottomTrailing
                         )
                     )
+                    .accessibilityHidden(true)
 
                 Text(String(localized: "voice.profile.wizard.title", defaultValue: "Profil vocal", bundle: .main))
                     .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
@@ -152,6 +155,7 @@ struct VoiceProfileWizardView: View {
                 .font(MeeshyFont.relative(14))
                 .foregroundColor(Color(hex: accentColor))
                 .frame(width: 24)
+                .accessibilityHidden(true) // glyphe décoratif — le texte porte l'information
             Text(text)
                 .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textSecondary)
@@ -165,8 +169,9 @@ struct VoiceProfileWizardView: View {
             Spacer()
 
             Image(systemName: "person.badge.shield.checkmark.fill")
-                .font(MeeshyFont.relative(64))
+                .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
                 .foregroundColor(Color(hex: accentColor))
+                .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Verification de l'age", bundle: .main))
                 .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
@@ -281,8 +286,9 @@ struct VoiceProfileWizardView: View {
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
-                .font(MeeshyFont.relative(72))
+                .font(.system(size: 72)) // icône héros décorative — figée (≥40pt)
                 .foregroundColor(MeeshyColors.success)
+                .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal cree !", bundle: .main))
                 .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
@@ -341,5 +347,6 @@ struct VoiceProfileWizardView: View {
                 .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
         }
+        .accessibilityElement(children: .combine)
     }
 }

@@ -10,6 +10,8 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SequenceService } from '../SequenceService';
+import { emitWithSeq } from '../../socketio/utils/emitWithSeq';
 import type {
   NotificationActor,
   NotificationContext,
@@ -18,12 +20,15 @@ import type {
   NotificationType,
   Notification,
 } from '@meeshy/shared/types/notification';
+import type { UserUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { getDistinctConversationPartnerUserIds } from '../../utils/conversation-partners';
 import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
@@ -33,10 +38,7 @@ import { EmailService } from '../EmailService';
 import { getCommunityCoMemberIds } from '../posts/communityVisibility';
 
 function formatDuration(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `0:${String(seconds).padStart(2, '0')}`;
+  return formatClock(Math.round(ms / 1000));
 }
 
 function formatFileSize(bytes: number): string {
@@ -373,6 +375,25 @@ export function buildMessageNotificationBodyI18n(lang: string, params: {
   return [base, badges].filter(Boolean).join(' ');
 }
 
+/**
+ * Notification types whose offline email is a genuine account-security alert
+ * (login, password, 2FA, lockout…). Used to (a) keep these in a separate
+ * email-throttle bucket so a social email can never suppress a security alert,
+ * and (b) route them to the security email template rather than the generic one.
+ */
+const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
+  'login_new_device',
+  'login_suspicious',
+  'suspicious_activity',
+  'password_changed',
+  'two_factor_enabled',
+  'two_factor_disabled',
+  'account_locked',
+  'security_alert',
+]);
+
+const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
+
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
@@ -388,11 +409,14 @@ export class NotificationService {
 
   private pushService?: PushNotificationService;
   private emailService?: EmailService;
+  private readonly sequenceService: SequenceService;
 
   constructor(
     private prisma: PrismaClient,
     private io?: SocketIOServer
   ) {
+    // A2 — allocation des `_seq` per-user pour les events user-scoped.
+    this.sequenceService = new SequenceService(prisma);
     // Nettoyer les entrées de rate limit périmées toutes les 2 minutes
     const mentionsCleanup = setInterval(() => this.cleanupOldMentions(), 120_000);
     mentionsCleanup.unref?.();
@@ -503,7 +527,8 @@ export class NotificationService {
       case 'post_repost':       return prefs.postRepostEnabled ?? true;
       case 'story_reaction':    return prefs.storyReactionEnabled ?? true;
       case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
-      case 'comment_like':      return prefs.commentLikeEnabled ?? true;
+      case 'comment_like':
+      case 'comment_reaction':  return prefs.commentLikeEnabled ?? true;
       case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
       case 'story_new_comment':
       case 'friend_story_comment':
@@ -580,6 +605,13 @@ export class NotificationService {
     context: NotificationContext;
     metadata: NotificationMetadata;
     expiresAt?: Date;
+    /**
+     * Forwarded to APNs `apns-collapse-id` / FCM `collapseKey` so undelivered
+     * pushes pile up into one banner instead of spamming the device when it
+     * reconnects. Scope it per-conversation (`conv-${conversationId}`), never
+     * per-message — a per-message id is unique by construction and never
+     * collapses anything.
+     */
     collapseId?: string;
     /**
      * Langue résolue du destinataire (Prisme-first). Fournie par les méthodes
@@ -723,9 +755,11 @@ export class NotificationService {
         subtitle: pushSubtitle,
       };
 
-      // Émettre via Socket.IO
+      // Émettre via Socket.IO — A2 : event user-scoped enrichi de `_seq`
+      // (SyncEngine, détection de gap exacte). `emitWithSeq` est résilient :
+      // sur échec d'allocation de séquence, l'event part sans `_seq`.
       if (this.io) {
-        this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, socketPayload);
+        await emitWithSeq(this.io, this.sequenceService, params.userId, SERVER_EVENTS.NOTIFICATION_NEW, socketPayload as unknown as Record<string, unknown>);
         notificationLogger.debug('notification:new emitted via socket', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
@@ -740,6 +774,23 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}`) :
             undefined;
           const pushBody = params.content.substring(0, 200);
+
+          // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
+          // par le payload push : embarquer le même compte unread que
+          // `notification:counts` (même source → même sémantique, pas de
+          // flicker au recale foreground). `badge` pilote `aps.badge`
+          // nativement ; `data.unreadCount` (string) alimente le miroir App
+          // Group écrit par la NSE pour le widget. Best-effort : sur échec
+          // du count, le push part sans badge (comportement historique).
+          let unreadBadge: number | undefined;
+          try {
+            const count = await this.prisma.notification.count({
+              where: { userId: params.userId, readAt: null },
+            });
+            if (typeof count === 'number') unreadBadge = count;
+          } catch {
+            unreadBadge = undefined;
+          }
 
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
           this.pushService.sendToUser({
@@ -758,13 +809,24 @@ export class NotificationService {
               body: pushBody,
               link,
               collapseId: params.collapseId,
+              ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
+                ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',
                 conversationTitle: params.context.conversationTitle || '',
                 conversationType: params.context.conversationType || '',
                 messageId: params.context.messageId || '',
                 postId: params.context.postId || '',
+                // Comment navigation: the tapped social notification must land on the
+                // exact comment (open entity → comments sheet → scroll/highlight). The
+                // iOS NotificationPayload reads these to thread the commentId through to
+                // PostDetailView / the story comments overlay. `parentCommentId` lets the
+                // client expand the parent thread before scrolling to a reply.
+                commentId: params.context.commentId
+                  || (params.metadata && 'commentId' in params.metadata ? String(params.metadata.commentId ?? '') : ''),
+                parentCommentId: params.context.parentCommentId
+                  || (params.metadata && 'parentCommentId' in params.metadata ? String(params.metadata.parentCommentId ?? '') : ''),
                 postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
                 senderId: params.actor?.id || '',
                 senderUsername: params.actor?.username || '',
@@ -804,7 +866,12 @@ export class NotificationService {
           if (sockets.length === 0) {
             const { getCacheStore } = await import('../CacheStore');
             const cache = getCacheStore();
-            const throttleKey = `notif:email:throttle:${params.userId}`;
+            // Per-category throttle: security alerts and social notifications
+            // use independent 5-min buckets, so a social email (mention, missed
+            // call) can never preempt a genuine security alert (new login,
+            // suspicious activity) for the same user within the window.
+            const throttleCategory = isSecurityEmailType(params.type) ? 'security' : 'social';
+            const throttleKey = `notif:email:throttle:${throttleCategory}:${params.userId}`;
             const canSend = await cache.setnx(throttleKey, '1', 300);
             if (canSend) {
               const user = await this.prisma.user.findUnique({
@@ -822,7 +889,7 @@ export class NotificationService {
                   }).catch(err => {
                     notificationLogger.error('Login alert email failed', { error: err, userId: params.userId });
                   });
-                } else {
+                } else if (isSecurityEmailType(params.type)) {
                   this.emailService.sendSecurityAlertEmail({
                     to: user.email,
                     name: user.username || 'User',
@@ -831,6 +898,18 @@ export class NotificationService {
                     details: params.content.substring(0, 500),
                   }).catch(err => {
                     notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
+                  });
+                } else {
+                  // Social / general notification (mention, missed call, …):
+                  // neutral notification email, never the security template.
+                  this.emailService.sendNotificationEmail({
+                    to: user.email,
+                    name: user.username || 'User',
+                    language: user.systemLanguage || 'fr',
+                    notificationType: params.type,
+                    details: params.content.substring(0, 500),
+                  }).catch(err => {
+                    notificationLogger.error('Immediate notification email failed', { error: err, userId: params.userId });
                   });
                 }
               }
@@ -1049,7 +1128,7 @@ export class NotificationService {
       type: 'new_message',
       priority: 'normal',
       content,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
       lang: recipientLang,
 
       actor: {
@@ -1135,7 +1214,7 @@ export class NotificationService {
       type: 'user_mentioned',
       priority: 'high',
       content: params.messagePreview,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
 
       actor: {
         id: params.mentionerUserId,
@@ -1286,8 +1365,12 @@ export class NotificationService {
     commentPreview?: string;
     /** Display name (fallback: username) of the post/story author. */
     postAuthorName?: string;
-    /** True when the parent post is a story (vs a regular feed post). */
-    isStory?: boolean;
+    /**
+     * Type d'entité portant le commentaire réagi. Mirror du sibling
+     * `createPostLikeNotification` : un REEL/STATUS ne s'effondre plus vers 'POST'
+     * dans la métadonnée ni dans le corps localisé.
+     */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
   }): Promise<void> {
     if (params.commentAuthorId === params.reactorUserId) return;
 
@@ -1316,7 +1399,7 @@ export class NotificationService {
       actor: reactorName,
       emoji: params.reactionEmoji,
       author: params.postAuthorName,
-      isStory: params.isStory,
+      postType: params.postType,
     });
 
     // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
@@ -1353,9 +1436,10 @@ export class NotificationService {
       metadata: {
         action: 'view_post',
         reactionEmoji: params.reactionEmoji,
-        // Entité portant le commentaire → le client affiche « Story »/« Publication »
-        // (et non un libellé générique) quand aucun aperçu de commentaire n'est dispo.
-        postType: params.isStory ? 'STORY' : 'POST',
+        // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
+        // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
+        // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
+        postType: params.postType ?? 'POST',
       },
     });
   }
@@ -2072,6 +2156,98 @@ export class NotificationService {
   }
 
   // ==============================================
+  // FRIEND_REQUEST_CANCELLED (realtime-only, no persisted Notification)
+  // ==============================================
+
+  /**
+   * Fired when a pending friend request is removed via
+   * `DELETE /friend-requests/:id` — sender cancelling, or receiver
+   * declining/removing without an explicit accept/reject. Unlike the other
+   * `create*FriendRequest*` methods this does NOT persist a `Notification`
+   * row (ephemeral realtime signal only) so the counterpart's pending list
+   * can invalidate immediately without polluting their notification feed.
+   */
+  emitFriendRequestCancelled(params: {
+    recipientUserId: string;
+    friendRequestId: string;
+    cancelledBy: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.recipientUserId)).emit(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, {
+      friendRequestId: params.friendRequestId,
+      cancelledBy: params.cancelledBy,
+    });
+  }
+
+  // ==============================================
+  // FRIEND_REQUEST_NEW / ACCEPTED / REJECTED (typed, dual-emitted
+  // alongside the legacy NOTIFICATION_NEW string-discriminated payload —
+  // see socketio-events-cleanup.md #7. Same pattern as CONVERSATION_NEW /
+  // FRIEND_REQUEST_CANCELLED: realtime-only signal, no separate
+  // `Notification` row of their own.)
+  // ==============================================
+
+  emitFriendRequestNew(params: {
+    receiverId: string;
+    friendRequestId: string;
+    senderId: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.receiverId)).emit(SERVER_EVENTS.FRIEND_REQUEST_NEW, {
+      friendRequestId: params.friendRequestId,
+      senderId: params.senderId,
+      receiverId: params.receiverId,
+    });
+  }
+
+  emitFriendRequestAccepted(params: {
+    senderId: string;
+    friendRequestId: string;
+    accepterId: string;
+    conversationId?: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.senderId)).emit(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, {
+      friendRequestId: params.friendRequestId,
+      accepterId: params.accepterId,
+      conversationId: params.conversationId,
+    });
+  }
+
+  emitFriendRequestRejected(params: {
+    senderId: string;
+    friendRequestId: string;
+    rejecterId: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.senderId)).emit(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, {
+      friendRequestId: params.friendRequestId,
+      rejecterId: params.rejecterId,
+    });
+  }
+
+  /**
+   * Propagates a profile change (displayName, avatar, banner, username) to
+   * every user sharing an active conversation with `userId`, instead of a
+   * full broadcast. Realtime-only signal — no `Notification` row, same
+   * pattern as `emitFriendRequestCancelled`. See
+   * tasks/socketio-events-cleanup.md #6.
+   */
+  async emitUserUpdated(params: {
+    userId: string;
+    changes: UserUpdatedEventData['changes'];
+  }): Promise<void> {
+    if (!this.io) return;
+    const partnerIds = await getDistinctConversationPartnerUserIds(this.prisma, params.userId);
+    if (partnerIds.length === 0) return;
+
+    const payload: UserUpdatedEventData = { userId: params.userId, changes: params.changes };
+    for (const partnerId of partnerIds) {
+      this.io.to(ROOMS.user(partnerId)).emit(SERVER_EVENTS.USER_UPDATED, payload);
+    }
+  }
+
+  // ==============================================
   // MEMBER_JOINED
   // ==============================================
 
@@ -2188,7 +2364,7 @@ export class NotificationService {
       type: 'message_reply',
       priority: 'normal',
       content: params.messagePreview,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
 
       actor: {
         id: params.replierUserId,
@@ -2488,6 +2664,9 @@ export class NotificationService {
     postId: string;
     commentAuthorId: string;
     commentId: string;
+    /** Identifiant du commentaire parent — permet au client de déplier le fil
+     *  parent puis de défiler/surligner la réponse (`commentId`). */
+    parentCommentId?: string;
     replyPreview: string;
     /** Extrait du commentaire parent — identifie À QUOI on répond. */
     parentCommentPreview?: string;
@@ -2534,6 +2713,8 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        commentId: params.commentId,
+        ...(params.parentCommentId ? { parentCommentId: params.parentCommentId } : {}),
         ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
         ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
         ...(media?.thumbnailUrl
@@ -2545,6 +2726,7 @@ export class NotificationService {
         action: 'view_post',
         postId: params.postId,
         commentId: params.commentId,
+        ...(params.parentCommentId ? { parentCommentId: params.parentCommentId } : {}),
         commentPreview: this.truncateMessage(params.replyPreview),
         postType: params.postType ?? 'POST',
         ...(trimmedParent !== ''

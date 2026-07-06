@@ -4,6 +4,17 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Section Frame Registry
+
+/// Boîte mutable INERTE : les GeometryReader des headers de section y écrivent
+/// leur frame globale à chaque layout (scroll compris) sans déclencher
+/// d'invalidation SwiftUI — une @State [String: CGRect] re-évaluerait la liste
+/// à chaque tick. Le morph drag de l'overlay (+Overlays) hit-teste le doigt
+/// contre ces frames pour surligner puis résoudre la section de drop.
+final class SectionFrameRegistry {
+    var frames: [String: CGRect] = [:]
+}
+
 // MARK: - Section Drop Delegate
 
 struct SectionDropDelegate: DropDelegate {
@@ -102,7 +113,13 @@ struct ConversationListView: View {
 
     // Performance optimized scroll variables
     @State private var selectedProfileUser: ProfileSheetUser? = nil
-    @State private var headerScrollOffset: CGFloat = 0
+    /// Offset de scroll relayé au header SANS invalider ce body : `@State`
+    /// retient la référence sans s'abonner (même famille que
+    /// `sectionFrameRegistry` / `chipAutoScrollDriver`) ; seul
+    /// `ConversationListHeaderOverlay` observe le relay. L'ancien
+    /// `@State CGFloat headerScrollOffset` ré-exécutait ce body ENTIER
+    /// (~99 rows reconstruites + diff Equatable) à chaque tick de scroll.
+    @State private var scrollOffsetRelay = ScrollOffsetRelay()
     @State private var lastScrollDirectionChange: Date = .distantPast
 
     // Pull-to-refresh : delegue tout a `MeeshyRefreshableScroll` (wrapper
@@ -140,9 +157,72 @@ struct ConversationListView: View {
     // Preview state for hard press
     @State private var previewConversation: Conversation? = nil
 
-    // Drag & Drop state
+    /// Conversation dont l'overlay de menu contextuel custom est présenté
+    /// (appui long). Menu custom qui dessine ses icônes — le `.contextMenu`
+    /// natif ne les affiche pas sur iOS 26.
+    @State var contextMenuConversation: Conversation? = nil
+    /// Pilote l'animation zoom + rebond de l'overlay (false au montage → true
+    /// via `.onAppear` ; false à la fermeture). Voir `conversationContextMenuOverlay`.
+    @State var contextMenuAppeared = false
+    /// Purge différée annulable de l'overlay (voir `dismissContextMenu`). Conservée
+    /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
+    /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
+    @State var contextMenuDismissWork: DispatchWorkItem? = nil
+    /// Scale de la carte d'aperçu de l'overlay (1.0 = dépliée, 0 = repliée via
+    /// le drag vers le haut sur la carte — `previewCollapseGesture`, +Overlays).
+    /// Muté uniquement quand l'overlay est ouvert ; les lignes ne le reçoivent
+    /// plus (gate Equatable intact pendant le geste).
+    @State var previewScale: CGFloat = 1.0
+    /// Offset de la carte d'aperçu pendant le drag vers le bas — suit le doigt
+    /// 1:1 et pilote le morph drag-n-drop (`dragMorphProgress`, +Overlays).
+    /// > 110 pt au lâcher = fermeture du menu.
+    @State var dragOffsetY: CGFloat = 0
+    /// Offset horizontal du drag — actif uniquement en morph (la carte suit
+    /// le doigt latéralement une fois le mode drag engagé).
+    @State var dragOffsetX: CGFloat = 0
+    /// Frame GLOBALE de la ligne pressée au déclenchement du long-press —
+    /// point de départ de l'émergence de l'aperçu. nil = inconnu (rotor
+    /// accessibilité) → fallback zoom centré 0.7 → 1.0.
+    @State var contextMenuSourceFrame: CGRect? = nil
+    /// Frame de REPOS de la carte d'aperçu (mesurée hors transformation,
+    /// overlay invisible) — sert à calculer le placement initial de
+    /// l'émergence depuis la ligne. Voir `runContextMenuEmergence` (+Overlays).
+    @State var previewRestFrame: CGRect = .zero
+    /// Offset y d'émergence : la carte part de la position de la ligne
+    /// (placement invisible) puis rejoint sa position finale — départ lent,
+    /// accélération, léger rebond (timingCurve overshoot).
+    @State var previewEmergeOffset: CGFloat = 0
+
+    /// Renommage : conversation cible + texte en cours d'édition (action
+    /// « Renommer » du menu contextuel, groupes/communautés uniquement).
+    @State var renameTarget: Conversation? = nil
+    @State var renameText: String = ""
+
+    // Drag & Drop state — infra DORMANTE depuis le retrait de `.onDrag`
+    // (135af8f2 : il capturait le long-press du menu custom). Conservée comme
+    // point de reconnexion (poignée dédiée / mode édition futur) : le
+    // `SectionDropDelegate` + `handleDrop` restent câblés sur les sections,
+    // coût runtime nul tant que rien ne pose `draggingConversation`.
+    // Le déplacement utilisateur passe par « Déplacer vers » dans le menu.
     @State private var draggingConversation: Conversation? = nil
-    @State private var dropTargetSection: String? = nil
+    /// Section surlignée comme cible de drop. Alimenté par le morph drag de
+    /// l'overlay (chip sous le doigt — voir `previewCollapseGesture`,
+    /// +Overlays) en plus du `SectionDropDelegate` historique. Pas `private` :
+    /// muté depuis le fichier d'extension +Overlays.
+    @State var dropTargetSection: String? = nil
+    /// Frames GLOBALES des headers de section, tenues à jour par leurs
+    /// GeometryReader dans une boîte INERTE (aucune invalidation par tick de
+    /// scroll) — hit-test du drop de la chip du morph drag.
+    @State var sectionFrameRegistry = SectionFrameRegistry()
+    /// true dès que le morph drag a atteint sa pleine progression : la carte
+    /// RESTE une chip qui suit librement le doigt (y compris vers le haut,
+    /// pour viser un header au-dessus) jusqu'au relâchement — drop ou dismiss.
+    @State var chipModeLatched = false
+    /// Auto-scroll de bord pendant le drag de la chip (Phase 3) : stationner
+    /// près du haut/bas du viewport fait défiler la liste pour atteindre les
+    /// headers de section hors écran. Armé au verrouillage de la chip
+    /// (+Overlays), arrêté au drop et au dismiss.
+    @State var chipAutoScrollDriver = ChipAutoScrollDriver()
 
     @State var userCommunityLookup: [String: MeeshyCommunity] = [:]
 
@@ -182,6 +262,9 @@ struct ConversationListView: View {
                 sectionView(for: group)
             }
         }
+        // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
+        // bord du drag de chip (+Overlays). Aucune interaction, frame nulle.
+        .background(ChipAutoScrollGrabber(driver: chipAutoScrollDriver))
     }
 
     private var isSingleUngroupedSection: Bool {
@@ -197,12 +280,27 @@ struct ConversationListView: View {
                 section: group.section,
                 count: group.conversations.count,
                 isExpanded: expandedSections.contains(group.section.id),
-                isDropTarget: dropTargetSection == group.section.id && group.section.id != "pinned"
+                // "pinned" est désormais une cible de drop LIVE (drop =
+                // épingler) — la surbrillance suit dropTargetSection, que le
+                // chemin chip ne renseigne pour Épingles que si l'action est
+                // réelle (conversation pas déjà épinglée).
+                isDropTarget: dropTargetSection == group.section.id
             ) {
                 toggleSection(group.section.id)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+            // Frame globale du header → registre inerte : cible de drop de la
+            // chip du morph drag (l'overlay hit-teste le doigt au relâchement).
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { sectionFrameRegistry.frames[group.section.id] = geo.frame(in: .global) }
+                        .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                            sectionFrameRegistry.frames[group.section.id] = frame
+                        }
+                }
+            )
             .onDrop(of: [.text], delegate: SectionDropDelegate(
                 sectionId: group.section.id,
                 dropTargetSection: $dropTargetSection,
@@ -248,12 +346,12 @@ struct ConversationListView: View {
         }
     }
 
-    private func storyRingState(for conversation: Conversation) -> StoryRingState {
+    func storyRingState(for conversation: Conversation) -> StoryRingState {
         guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
         return storyViewModel.storyRingState(forUserId: userId)
     }
 
-    private func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
+    func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
         guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
         return statusViewModel.statusForUser(userId: userId)
     }
@@ -306,16 +404,36 @@ struct ConversationListView: View {
                     onSelect(conversation)
                 }
             },
-            onDragStart: {
-                draggingConversation = conversation
-                HapticFeedback.medium()
-            },
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
+            },
+            onLongPress: { sourceFrame in
+                Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
+                // Montage au REPOS invisible (scale 1, offset 0, opacité 0) :
+                // le GeometryReader de l'overlay mesure la frame de repos de
+                // la carte, puis `runContextMenuEmergence` place la carte sur
+                // la ligne pressée (toujours invisible) et anime l'émergence.
+                // Annule une purge de fermeture encore en vol, sinon elle
+                // effacerait ce menu fraîchement ouvert (~0.26 s plus tard).
+                contextMenuDismissWork?.cancel()
+                contextMenuDismissWork = nil
+                let wasMounted = contextMenuConversation != nil
+                contextMenuAppeared = false
+                contextMenuSourceFrame = sourceFrame.height > 0 ? sourceFrame : nil
+                previewScale = 1.0
+                previewEmergeOffset = 0
+                dragOffsetY = 0
+                dragOffsetX = 0
+                chipModeLatched = false
+                contextMenuConversation = conversation
+                if wasMounted {
+                    // Réouverture rapide : l'overlay est encore monté, donc
+                    // `.onAppear` ne re-fire pas — sans relance ici le menu
+                    // resterait invisible (contextMenuAppeared bloqué à false).
+                    runContextMenuEmergence()
+                }
             }
-        ) {
-            conversationContextMenu(for: conversation)
-        }
+        )
         .equatable()
     }
 
@@ -367,32 +485,49 @@ struct ConversationListView: View {
 
     // MARK: - Swipe Actions
 
+    /// Labels des swipe actions précalculés UNE fois par vie de process.
+    /// Les builders ci-dessous tournent pour CHAQUE conversation à CHAQUE
+    /// body pass (~99 rows × 8 labels) ; `String(localized:)` refait un
+    /// lookup de bundle à chaque appel — mesurable dans la famine du main
+    /// thread derrière les kills 0x8BADF00D (diag 2026-07-05). La langue de
+    /// l'app ne change pas à chaud (redémarrage requis), des statiques sont
+    /// donc sûres.
+    private enum SwipeLabels {
+        static let pin = String(localized: "swipe.pin")
+        static let unpin = String(localized: "swipe.unpin")
+        static let mute = String(localized: "swipe.mute")
+        static let unmute = String(localized: "swipe.unmute")
+        static let lock = String(localized: "swipe.lock")
+        static let unlock = String(localized: "swipe.unlock")
+        static let archive = String(localized: "swipe.archive")
+        static let unarchive = String(localized: "swipe.unarchive")
+        static let markRead = String(localized: "swipe.mark_read")
+        static let markUnread = String(localized: "swipe.mark_unread")
+        static let block = String(localized: "swipe.block")
+        static let unblock = String(localized: "swipe.unblock")
+        static let hide = String(localized: "swipe.hide")
+    }
+
     private func leadingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
         let isLocked = lockManager.isLocked(conversation.id)
         return [
             SwipeAction(
                 icon: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill",
-                label: conversation.userState.isPinned
-                    ? String(localized: "swipe.unpin")
-                    : String(localized: "swipe.pin"),
+                label: conversation.userState.isPinned ? SwipeLabels.unpin : SwipeLabels.pin,
                 color: MeeshyColors.pinnedBlue
             ) {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
             },
             SwipeAction(
                 icon: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill",
-                label: conversation.userState.isMuted
-                    ? String(localized: "swipe.unmute")
-                    : String(localized: "swipe.mute"),
+                label: conversation.userState.isMuted ? SwipeLabels.unmute : SwipeLabels.mute,
                 color: MeeshyColors.neutral500
             ) {
                 Task { await conversationViewModel.toggleMute(for: conversation.id) }
             },
             SwipeAction(
                 icon: isLocked ? "lock.open.fill" : "lock.fill",
-                label: isLocked
-                    ? String(localized: "swipe.unlock")
-                    : String(localized: "swipe.lock"),
+                label: isLocked ? SwipeLabels.unlock : SwipeLabels.lock,
                 color: MeeshyColors.warning
             ) {
                 if isLocked {
@@ -418,9 +553,7 @@ struct ConversationListView: View {
         var actions: [SwipeAction] = [
             SwipeAction(
                 icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
-                label: isArchived
-                    ? String(localized: "swipe.unarchive")
-                    : String(localized: "swipe.archive"),
+                label: isArchived ? SwipeLabels.unarchive : SwipeLabels.archive,
                 color: MeeshyColors.warning
             ) {
                 if isArchived {
@@ -431,9 +564,7 @@ struct ConversationListView: View {
             },
             SwipeAction(
                 icon: isRead ? "envelope.badge.fill" : "envelope.open.fill",
-                label: isRead
-                    ? String(localized: "swipe.mark_unread")
-                    : String(localized: "swipe.mark_read"),
+                label: isRead ? SwipeLabels.markUnread : SwipeLabels.markRead,
                 color: MeeshyColors.indigo400
             ) {
                 if isRead {
@@ -448,14 +579,12 @@ struct ConversationListView: View {
             let isBlocked = BlockService.shared.isBlocked(userId: userId)
             actions.append(SwipeAction(
                 icon: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
-                label: isBlocked
-                    ? String(localized: "swipe.unblock")
-                    : String(localized: "swipe.block"),
+                label: isBlocked ? SwipeLabels.unblock : SwipeLabels.block,
                 color: MeeshyColors.error
             ) {
                 if isBlocked {
                     Task {
-                        try? await BlockService.shared.unblockUser(userId: userId)
+                        await BlockActionCoordinator.shared.unblock(userId: userId)
                         HapticFeedback.success()
                     }
                 } else {
@@ -467,7 +596,7 @@ struct ConversationListView: View {
 
         actions.append(SwipeAction(
             icon: "eye.slash.fill",
-            label: String(localized: "swipe.hide"),
+            label: SwipeLabels.hide,
             color: MeeshyColors.error
         ) {
             Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
@@ -595,6 +724,7 @@ struct ConversationListView: View {
                         .zIndex(200)
                 }
             }
+            .overlay { conversationContextMenuOverlay }
             .sheet(item: $lockSheetConversation) { conversation in
                 ConversationLockSheet(
                     mode: lockSheetMode,
@@ -611,6 +741,24 @@ struct ConversationListView: View {
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) {}
             } message: {
                 Text(String(localized: "conversation.list.master_pin_required.message", bundle: .main))
+            }
+            .alert(
+                String(localized: "conversation.rename.title", defaultValue: "Renommer la conversation", bundle: .main),
+                isPresented: Binding(
+                    get: { renameTarget != nil },
+                    set: { if !$0 { renameTarget = nil } }
+                )
+            ) {
+                TextField(String(localized: "conversation.rename.placeholder", defaultValue: "Nom", bundle: .main), text: $renameText)
+                Button(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .main)) {
+                    if let target = renameTarget {
+                        Task { await conversationViewModel.renameConversation(conversationId: target.id, title: renameText) }
+                    }
+                    renameTarget = nil
+                }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {
+                    renameTarget = nil
+                }
             }
             .sheet(isPresented: $showWidgetPreview) {
                 WidgetPreviewView(onNewConversation: onNewConversation)
@@ -633,7 +781,7 @@ struct ConversationListView: View {
                     guard let conv = blockTargetConversation,
                           let targetUserId = conv.participantUserId else { return }
                     Task {
-                        try? await BlockService.shared.blockUser(userId: targetUserId)
+                        await BlockActionCoordinator.shared.block(userId: targetUserId)
                         await conversationViewModel.archiveConversation(conversationId: conv.id)
                         HapticFeedback.success()
                     }
@@ -665,7 +813,7 @@ struct ConversationListView: View {
                 },
                 coordinateSpaceName: "scroll",
                 onScrollOffsetChange: { offset in
-                    headerScrollOffset = offset
+                    scrollOffsetRelay.offset = offset
                     guard !isSearching, !showSearchOverlay else { return }
                     let scrollingDown = offset < -30
                     if scrollingDown != isScrollingDown {
@@ -786,18 +934,21 @@ struct ConversationListView: View {
         // scrolls up under the header.
         .overlay(alignment: .top) {
             ConversationListHeaderOverlay(
-                scrollOffset: headerScrollOffset,
+                scrollRelay: scrollOffsetRelay,
                 iPadFeedAction: iPadFeedAction,
                 iPadNotificationCount: iPadNotificationCount,
                 onNotificationsTap: onNotificationsTap,
                 onSettingsTap: onSettingsTap,
                 onNewConversation: onNewConversation,
                 showShareLinkSheet: $showShareLinkSheet,
-                accessory: {
+                // Paramétré par l'offset (fourni par le header, seul abonné
+                // au relay) — capturer le @State CGFloat d'antan depuis cette
+                // closure liait le body entier de la liste au tick de scroll.
+                accessory: { offset in
                     AnyView(
                         PinnedStoryTrailBand(
                             viewModel: storyViewModel,
-                            scrollOffset: headerScrollOffset,
+                            scrollOffset: offset,
                             onViewStory: { userId in onStoryViewRequest?(userId, true) }
                         )
                     )
@@ -827,7 +978,7 @@ struct ConversationListView: View {
     }
 
     // MARK: - Handle Profile View
-    private func handleProfileView(_ conversation: Conversation) {
+    func handleProfileView(_ conversation: Conversation) {
         // Open user profile sheet (works for DM, uses participant data)
         selectedProfileUser = .from(conversation: conversation)
     }

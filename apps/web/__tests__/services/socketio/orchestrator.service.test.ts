@@ -50,6 +50,8 @@ const mockTypOnTypingStart = jest.fn();
 const mockTypOnTypingStop = jest.fn();
 const mockTypGetListenerCount = jest.fn();
 const mockTypCleanup = jest.fn();
+const mockTypClearAllTypingState = jest.fn();
+const mockTypClearConversationTypingState = jest.fn();
 
 // PresenceService mocks
 const mockPresSetupEventListeners = jest.fn();
@@ -158,6 +160,8 @@ jest.mock('@/services/socketio/typing.service', () => ({
     onTypingStop: (...args: unknown[]) => mockTypOnTypingStop(...args),
     getListenerCount: (...args: unknown[]) => mockTypGetListenerCount(...args),
     cleanup: (...args: unknown[]) => mockTypCleanup(...args),
+    clearAllTypingState: (...args: unknown[]) => mockTypClearAllTypingState(...args),
+    clearConversationTypingState: (...args: unknown[]) => mockTypClearConversationTypingState(...args),
   })),
 }));
 
@@ -429,6 +433,44 @@ describe('SocketIOOrchestrator', () => {
 
       expect(mockMsgSetEncryptionHandlers).not.toHaveBeenCalled();
     });
+
+    it('does not re-register event listeners when called again with the same underlying socket', () => {
+      // Regression: ensureConnection()/setCurrentUser() can call initializeConnection()
+      // repeatedly (e.g. every sendMessage() while the status flag briefly lags behind
+      // socket.connected). connectionService.getSocket() keeps returning the SAME socket
+      // instance across those calls — re-running setupEventListeners() on it must not
+      // stack duplicate Socket.IO listeners (duplicate messages/receipts/reactions).
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      const socket = makeConnectedSocket();
+      mockConnGetSocket.mockReturnValue(socket);
+
+      orchestrator.initializeConnection();
+      orchestrator.initializeConnection();
+      orchestrator.initializeConnection();
+
+      expect(mockConnSetupConnectionListeners).toHaveBeenCalledTimes(1);
+      expect(mockTypSetupEventListeners).toHaveBeenCalledTimes(1);
+      expect(mockPresSetupEventListeners).toHaveBeenCalledTimes(1);
+      expect(mockTransSetupEventListeners).toHaveBeenCalledTimes(1);
+      expect(mockPrefSetupEventListeners).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-registers event listeners when the underlying socket instance changes', () => {
+      // A brand new socket (e.g. after a full logout/cleanup + re-login) has no
+      // listeners attached yet, so it MUST get wired up again.
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      const socketA = makeConnectedSocket();
+      mockConnGetSocket.mockReturnValue(socketA);
+      orchestrator.initializeConnection();
+
+      const socketB = { connected: true, id: 'socket-3' } as any;
+      mockConnGetSocket.mockReturnValue(socketB);
+      orchestrator.initializeConnection();
+
+      expect(mockConnSetupConnectionListeners).toHaveBeenCalledTimes(2);
+      expect(mockTypSetupEventListeners).toHaveBeenCalledTimes(2);
+      expect(mockTypSetupEventListeners).toHaveBeenNthCalledWith(2, socketB);
+    });
   });
 
   // ─── onAuthenticated (via initializeConnection callback) ──────────────────
@@ -440,14 +482,15 @@ describe('SocketIOOrchestrator', () => {
       mockConnGetSocket.mockReturnValue(socket);
       mockMsgHasEncryptionHandlers.mockReturnValue(false);
 
-      orchestrator.setCurrentUser(makeUser({ id: 'user-e2ee' }));
-
       let capturedOnAuth: (() => void) | null = null;
       mockConnSetupConnectionListeners.mockImplementation((onAuth: () => void) => {
         capturedOnAuth = onAuth;
       });
 
-      orchestrator.initializeConnection();
+      // setCurrentUser() triggers the initializeConnection() call that wires up
+      // listeners on this (first) socket instance — listeners are only attached
+      // once per socket, so the mock must be armed before this call.
+      orchestrator.setCurrentUser(makeUser({ id: 'user-e2ee' }));
       capturedOnAuth?.();
 
       await Promise.resolve();
@@ -462,14 +505,12 @@ describe('SocketIOOrchestrator', () => {
       mockMsgHasEncryptionHandlers.mockReturnValue(false);
       mockE2eeInitializeForUser.mockRejectedValue(new Error('e2ee failed'));
 
-      orchestrator.setCurrentUser(makeUser({ id: 'user-e2ee-fail' }));
-
       let capturedOnAuth: (() => void) | null = null;
       mockConnSetupConnectionListeners.mockImplementation((onAuth: () => void) => {
         capturedOnAuth = onAuth;
       });
 
-      orchestrator.initializeConnection();
+      orchestrator.setCurrentUser(makeUser({ id: 'user-e2ee-fail' }));
       capturedOnAuth?.();
 
       await Promise.resolve();

@@ -37,7 +37,14 @@ public actor EngagementOutbox {
     }
 
     private static func makeQueue(path: String) -> DatabaseQueue {
-        let queue = (try? DatabaseQueue(path: path)) ?? (try! DatabaseQueue())
+        let queue: DatabaseQueue
+        if let disk = try? DatabaseQueue(path: path) {
+            queue = disk
+        } else if let mem = try? DatabaseQueue() {
+            queue = mem
+        } else {
+            fatalError("[EngagementOutbox] Cannot create in-memory GRDB queue — out of memory")
+        }
         try? createSchema(in: queue)
         return queue
     }

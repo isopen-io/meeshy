@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/agent",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Autonomous conversation agent service for Meeshy",
   "private": true,
   "main": "dist/src/server.js",

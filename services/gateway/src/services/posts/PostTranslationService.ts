@@ -113,6 +113,14 @@ export class PostTranslationService {
       return;
     }
 
+    // Skip URL-only posts on the on-demand path too: links carry no translatable
+    // text and must be preserved verbatim (NLLB would corrupt them). Mirrors the
+    // translatePost guard so a shared link is never mangled, whatever the path.
+    if (isUrlOnly(post.content)) {
+      log.info('PostTranslation: skipping URL-only post on-demand (links preserved verbatim)', { postId, targetLanguage });
+      return;
+    }
+
     const sourceLang = post.originalLanguage ?? detectLanguage(post.content);
 
     if (sourceLang === targetLanguage) {
@@ -149,6 +157,13 @@ export class PostTranslationService {
    * Fire-and-forget: results arrive via ZMQ events.
    */
   async translateComment(commentId: string, postId: string, content: string, originalLanguage?: string): Promise<void> {
+    // Skip URL-only comments: links carry no translatable text and must be
+    // preserved verbatim (NLLB would corrupt them). Mirrors the translatePost guard.
+    if (isUrlOnly(content)) {
+      log.info('CommentTranslation: skipping URL-only comment (links preserved verbatim)', { commentId });
+      return;
+    }
+
     const sourceLang = originalLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
@@ -241,7 +256,9 @@ export class PostTranslationService {
             confidenceScore: confidenceScore ?? 1,
             createdAt: new Date().toISOString(),
           },
-        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
+        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err: unknown) => {
+          log.error('PostTranslation: broadcast failed', err instanceof Error ? err : new Error(String(err)), { postId, targetLanguage });
+        });
       }
     } catch (err) {
       log.error('PostTranslation: persist failed', err, { postId, targetLanguage });
@@ -294,7 +311,9 @@ export class PostTranslationService {
               confidenceScore: confidenceScore ?? 1,
               createdAt: new Date().toISOString(),
             },
-          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
+          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err: unknown) => {
+            log.error('CommentTranslation: broadcast failed', err instanceof Error ? err : new Error(String(err)), { commentId, targetLanguage });
+          });
         }
       }
     } catch (err) {

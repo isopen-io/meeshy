@@ -175,7 +175,7 @@ struct ConversationInfoSheet: View {
     private var headerBar: some View {
         HStack {
             Text(String(localized: "conversation.info.header", defaultValue: "Conversation", bundle: .main))
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(17, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -183,7 +183,7 @@ struct ConversationInfoSheet: View {
             if canManageMembers && !isDirect {
                 NavigationLink(value: "settings") {
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
@@ -196,7 +196,7 @@ struct ConversationInfoSheet: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
@@ -236,7 +236,7 @@ struct ConversationInfoSheet: View {
             )
 
             Text(conversation.name)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
@@ -245,8 +245,8 @@ struct ConversationInfoSheet: View {
 
             muteIndicator
 
-            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Cree le %@", bundle: .main), dateFormatter.string(from: conversation.createdAt)))
-                .font(.system(size: 11, weight: .medium))
+            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .padding(.horizontal, 20)
@@ -279,7 +279,7 @@ struct ConversationInfoSheet: View {
 
             // Name
             Text(conversation.name)
-                .font(.system(size: 22, weight: .bold))
+                .font(MeeshyFont.relative(22, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
@@ -292,8 +292,8 @@ struct ConversationInfoSheet: View {
             muteIndicator
                 .padding(.top, 6)
 
-            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Cree le %@", bundle: .main), dateFormatter.string(from: conversation.createdAt)))
-                .font(.system(size: 11, weight: .medium))
+            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .padding(.top, 6)
         }
@@ -336,21 +336,21 @@ struct ConversationInfoSheet: View {
     private var conversationInfoRow: some View {
         HStack(spacing: 6) {
             Image(systemName: conversationTypeIcon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(accent)
 
             Text(conversationTypeLabel)
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
             if conversation.memberCount > 0 {
                 Text("·")
                     .foregroundColor(theme.textMuted)
                 Image(systemName: "person.2.fill")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
                     .foregroundColor(theme.textMuted)
                 Text("\(conversation.memberCount)")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
             }
         }
@@ -361,9 +361,9 @@ struct ConversationInfoSheet: View {
         if conversation.userState.isMuted {
             HStack(spacing: 4) {
                 Image(systemName: "bell.slash.fill")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
                 Text(String(localized: "conversation.info.muted", defaultValue: "Notifications desactivees", bundle: .main))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
             }
             .foregroundColor(theme.textMuted)
             .padding(.horizontal, 10)
@@ -389,10 +389,12 @@ struct ConversationInfoSheet: View {
                     VStack(spacing: 6) {
                         HStack(spacing: 4) {
                             Text(tabLabel(for: tab))
-                                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                                .font(MeeshyFont.relative(13, weight: isSelected ? .bold : .medium))
 
                             if let label {
                                 Text(label)
+                                    // Compteur numérique compact dans une pastille capsule — gardé
+                                    // hors Dynamic Type pour que la pill reste « tight » (cf. 53i).
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(isSelected ? .white : theme.textMuted)
                                     .padding(.horizontal, 5)
@@ -464,7 +466,7 @@ struct ConversationInfoSheet: View {
             // Member count
             HStack {
                 Text(String(format: String(localized: "conversation.info.members-count", defaultValue: "%d membre%@", bundle: .main), participants.count, participants.count > 1 ? "s" : ""))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textMuted)
                 Spacer()
             }
@@ -475,10 +477,10 @@ struct ConversationInfoSheet: View {
             // Search field
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textMuted)
                 TextField(String(localized: "conversation.info.member-search", defaultValue: "Rechercher un membre...", bundle: .main), text: $memberSearchQuery)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textPrimary)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -487,7 +489,7 @@ struct ConversationInfoSheet: View {
                         memberSearchQuery = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(theme.textMuted)
                     }
                     .buttonStyle(.plain)
@@ -541,12 +543,12 @@ struct ConversationInfoSheet: View {
         NavigationLink(value: "settings") {
             HStack(spacing: 8) {
                 Image(systemName: "person.2.badge.gearshape")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                 Text(String(localized: "conversation.info.manage_members", defaultValue: "Gerer les membres", bundle: .main))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
             .foregroundColor(accent)
@@ -580,14 +582,14 @@ struct ConversationInfoSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(participant.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     if let role = participant.conversationRole,
                        role.lowercased() != "member" {
                         Text(roleBadgeLabel(role))
-                            .font(.system(size: 9, weight: .bold))
+                            .font(MeeshyFont.relative(9, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
@@ -599,7 +601,7 @@ struct ConversationInfoSheet: View {
 
                 if let username = participant.username {
                     Text("@\(username)")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 }
@@ -610,10 +612,10 @@ struct ConversationInfoSheet: View {
             if let joinedAt = participant.joinedAt {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(String(localized: "conversation.info.member.since", defaultValue: "Depuis", bundle: .main))
-                        .font(.system(size: 9, weight: .medium))
+                        .font(MeeshyFont.relative(9, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     Text(shortDate(joinedAt))
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -689,7 +691,7 @@ struct ConversationInfoSheet: View {
 
             if attachment.type == .video {
                 Image(systemName: "play.circle.fill")
-                    .font(.system(size: 24))
+                    .font(MeeshyFont.relative(24))
                     .foregroundStyle(.white, .black.opacity(0.3))
             }
         }
@@ -715,10 +717,10 @@ struct ConversationInfoSheet: View {
                     if pinned.count > 2 {
                         HStack(spacing: 4) {
                             Text(String(format: String(localized: "conversation.info.pinned.see-all", defaultValue: "Voir les %d messages epingles", bundle: .main), pinned.count))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(MeeshyFont.relative(11, weight: .semibold))
                                 .foregroundColor(accent)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundColor(accent)
                         }
                         .padding(.vertical, 6)
@@ -745,26 +747,26 @@ struct ConversationInfoSheet: View {
     private func pinnedPreviewRow(_ msg: Message) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "pin.fill")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(accent)
                 .rotationEffect(.degrees(45))
 
             Text(msg.senderName ?? "?")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(1)
 
             if !msg.content.isEmpty {
                 Text(msg.content)
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             } else if let att = msg.attachments.first {
                 HStack(spacing: 3) {
                     Image(systemName: attachmentIcon(att.type))
-                        .font(.system(size: 9))
+                        .font(MeeshyFont.relative(9))
                     Text(attachmentLabel(att.type))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                 }
                 .foregroundColor(theme.textMuted)
             }
@@ -799,7 +801,7 @@ struct ConversationInfoSheet: View {
                         showAllPinnedMessages = false
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(MeeshyFont.relative(10, weight: .bold))
                             .foregroundColor(theme.textMuted)
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(theme.textMuted.opacity(0.12)))
@@ -818,7 +820,7 @@ struct ConversationInfoSheet: View {
                     .frame(width: 36, height: 36)
 
                 Image(systemName: "pin.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(accent)
                     .rotationEffect(.degrees(45))
             }
@@ -826,28 +828,28 @@ struct ConversationInfoSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text(msg.senderName ?? "?")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text("·")
                         .foregroundColor(theme.textMuted)
 
                     Text(relativeTime(from: msg.createdAt))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 if !msg.content.isEmpty {
                     Text(msg.content)
-                        .font(.system(size: 13))
+                        .font(MeeshyFont.relative(13))
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
                 } else if let att = msg.attachments.first {
                     HStack(spacing: 4) {
                         Image(systemName: attachmentIcon(att.type))
-                            .font(.system(size: 10))
+                            .font(MeeshyFont.relative(10))
                         Text(attachmentLabel(att.type))
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                     }
                     .foregroundColor(accent)
                 }
@@ -864,11 +866,11 @@ struct ConversationInfoSheet: View {
     private func emptyState(icon: String, text: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 32, weight: .light))
+                .font(MeeshyFont.relative(32, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
 
             Text(text)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -914,7 +916,7 @@ struct ConversationInfoSheet: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: conversation.encryptionMode != nil ? "lock.shield.fill" : "lock.shield")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                         .foregroundColor(conversation.encryptionMode != nil ? MeeshyColors.success : Color(hex: accentColor))
                         .frame(width: 24)
 
@@ -940,7 +942,7 @@ struct ConversationInfoSheet: View {
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
                 .padding(.horizontal, 16)
@@ -968,7 +970,7 @@ struct ConversationInfoSheet: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                         .foregroundColor(MeeshyColors.indigo400)
                         .frame(width: 24)
 
@@ -990,7 +992,7 @@ struct ConversationInfoSheet: View {
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
                 .padding(.horizontal, 16)
@@ -1022,10 +1024,10 @@ struct ConversationInfoSheet: View {
                         .tint(Color(hex: color))
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 Text(label)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
             }
             .foregroundColor(Color(hex: color))
             .frame(maxWidth: .infinity)
@@ -1174,18 +1176,12 @@ struct ConversationInfoSheet: View {
     }
 
     private func shortDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
         let isSameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
-        formatter.dateFormat = isSameYear ? "dd MMM" : "dd MMM yy"
-        return formatter.string(from: date)
-    }
-
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM yyyy"
-        return formatter
+        if isSameYear {
+            return date.formatted(.dateTime.day().month(.abbreviated))
+        } else {
+            return date.formatted(.dateTime.day().month(.abbreviated).year(.twoDigits))
+        }
     }
 
     // MARK: - Block Button
@@ -1202,10 +1198,10 @@ struct ConversationInfoSheet: View {
                         .scaleEffect(0.8)
                 } else {
                     Image(systemName: "exclamationmark.shield")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 Text(String(localized: "conversation.info.block.title", defaultValue: "Bloquer cet utilisateur", bundle: .main))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)

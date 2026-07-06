@@ -26,16 +26,19 @@ struct VideoFilterControlView: View {
             Image(systemName: "camera.filters")
                 .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
+                .accessibilityHidden(true)
 
             Text(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
                 .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
             Toggle("", isOn: $config.isEnabled)
                 .labelsHidden()
                 .tint(MeeshyColors.indigo500)
+                .accessibilityLabel(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
         }
     }
 
@@ -101,6 +104,7 @@ struct VideoFilterControlView: View {
                 .font(MeeshyFont.relative(13))
                 .foregroundColor(.secondary)
                 .frame(width: 20)
+                .accessibilityHidden(true)
 
             Text(label)
                 .font(MeeshyFont.relative(12, weight: .medium))
@@ -109,6 +113,7 @@ struct VideoFilterControlView: View {
 
             Slider(value: value, in: range)
                 .tint(MeeshyColors.indigo500)
+                .accessibilityLabel(label)
 
             Text(formatValue(value.wrappedValue, neutral: neutral))
                 .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
@@ -129,6 +134,7 @@ struct VideoFilterControlView: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.counterclockwise")
                     .font(MeeshyFont.relative(12, weight: .semibold))
+                    .accessibilityHidden(true)
                 Text(String(localized: "video.filter.reinit", defaultValue: "Reinitialiser", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))
             }

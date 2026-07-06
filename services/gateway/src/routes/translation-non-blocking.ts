@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logger } from '../utils/logger';
-import { sendSuccess, sendBadRequest, sendNotFound } from '../utils/response.js';
+import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
 import type { UnifiedAuthRequest } from '../middleware/auth';
@@ -306,11 +306,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
 
         if (!existingMessage) {
           logger.warn(`[Translation] Message ${validatedData.message_id} not found`);
-          return reply.status(404).send({
-            success: false,
-            error: 'Message not found',
-            errorCode: 'MESSAGE_NOT_FOUND'
-          });
+          return sendNotFound(reply, 'Message not found');
         }
 
 
@@ -363,13 +359,25 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
           anonymousDisplayName: authContext.isAnonymous ? authContext.displayName : undefined
         };
 
-        const senderId = authContext.userId;
+        // Résout le Participant.id du sender AVANT d'appeler handleMessage.
+        // MessagingService attend un Participant.id ; lui passer le userId brut
+        // ne fonctionnait que via son fallback DEPRECATED (query supplémentaire
+        // + log d'erreur à chaque requête de traduction non-bloquante).
+        (async () => {
+          const senderParticipantId = authContext.isAnonymous
+            ? authContext.participantId
+            : (await fastify.prisma.participant.findFirst({
+                where: { userId: authContext.userId, conversationId: resolvedConversationId, isActive: true },
+                select: { id: true }
+              }))?.id;
 
-        // DECLENCHEMENT NON-BLOQUANT - pas d'await !
-        messagingService.handleMessage(
-          messageRequest,
-          senderId
-        ).catch((error: any) => {
+          if (!senderParticipantId) {
+            logger.warn(`[Translation] No active participant for user in conversation ${resolvedConversationId}`);
+            return;
+          }
+
+          return messagingService.handleMessage(messageRequest, senderParticipantId);
+        })().catch((error: any) => {
           logger.error(`[Translation] Async message processing error: ${error.message}`);
         });
 
@@ -387,19 +395,10 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
       logError(logger, '[Translation] Request validation error:', error);
 
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid request data',
-          errorCode: 'VALIDATION_ERROR',
-          details: error.issues
-        });
+        return sendError(reply, 400, 'Invalid request data', { message: 'VALIDATION_ERROR' });
       }
 
-      return reply.status(500).send({
-        success: false,
-        error: errorMessage,
-        errorCode: 'INTERNAL_ERROR'
-      });
+      return sendInternalError(reply, errorMessage);
     }
   });
 
@@ -436,11 +435,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
       }
     } catch (error) {
       logError(logger, '[Translation] Status retrieval error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to get translation status',
-        errorCode: 'STATUS_ERROR'
-      });
+      return sendInternalError(reply, 'Failed to get translation status');
     }
   });
 
@@ -488,11 +483,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
       });
 
       if (!conversation) {
-        return reply.status(404).send({
-          success: false,
-          error: `Conversation with identifier '${identifier}' not found`,
-          errorCode: 'CONVERSATION_NOT_FOUND'
-        });
+        return sendNotFound(reply, `Conversation with identifier '${identifier}' not found`);
       }
 
       return sendSuccess(reply, {
@@ -508,11 +499,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
 
     } catch (error) {
       logError(logger, '[Translation] Conversation retrieval error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        errorCode: 'INTERNAL_ERROR'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 

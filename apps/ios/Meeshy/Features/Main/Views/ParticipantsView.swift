@@ -154,6 +154,7 @@ struct ParticipantsView: View {
                     Task { await loadParticipants() }
                 }
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .alert(String(localized: "participants.remove.title", defaultValue: "Retirer ce membre ?", bundle: .main), isPresented: Binding(
                 get: { confirmRemoveUserId != nil },

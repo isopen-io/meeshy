@@ -69,6 +69,10 @@ public struct StickerPickerView: View {
                                     .fill(selectedCategory == category ? Color.white.opacity(0.2) : Color.clear)
                             )
                     }
+                    // .plain obligatoire : le style par défaut rend les
+                    // glyphes emoji INVISIBLES dans la sheet (vécu it.72 —
+                    // onglets et grille vides à la 1re mise en service).
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 12)
@@ -90,6 +94,7 @@ public struct StickerPickerView: View {
                             .font(.system(size: 30))
                             .frame(width: 44, height: 44)
                     }
+                    .buttonStyle(.plain)  // cf. note des onglets (emoji invisibles sinon)
                     .accessibilityLabel("Sticker \(emoji)")
                 }
             }

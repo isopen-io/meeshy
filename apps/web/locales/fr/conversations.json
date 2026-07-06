@@ -211,6 +211,7 @@
       "participantRemoved": "Participant retiré",
       "removeParticipantError": "Erreur lors du retrait du participant",
       "searchParticipants": "Rechercher des participants...",
+      "searchOrAddParticipants": "Rechercher ou ajouter un membre...",
       "noOneOnline": "Personne en ligne",
       "you": "vous",
       "removeFromGroup": "Retirer du groupe",
@@ -228,6 +229,9 @@
       "noDescription": "Aucune description",
       "editDescription": "Modifier la description",
       "clickToChangeImage": "Cliquez pour changer l'image",
+      "changeImage": "Changer l'image",
+      "editCustomName": "Modifier le nom personnalisé",
+      "editReaction": "Modifier la réaction",
       "imageUpdated": "Image de la conversation mise à jour",
       "imageUploadError": "Erreur lors de l'upload de l'image",
       "personalTags": "Tags personnels",
@@ -551,7 +555,10 @@
       "add": "Ajouter",
       "cancel": "Annuler",
       "inviting": "Invitation en cours...",
-      "inviteButton": "Inviter {count} utilisateur(s)"
+      "inviteButton": "Inviter {count} utilisateur(s)",
+      "addUserAria": "Ajouter {name}",
+      "selectedUserAria": "{name} déjà sélectionné",
+      "removeUserAria": "Retirer {name}"
     },
     "drawer": {
       "title": "Options",

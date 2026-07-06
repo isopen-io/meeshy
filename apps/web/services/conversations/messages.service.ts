@@ -40,7 +40,8 @@ export class MessagesService {
     page = 1,
     limit = 20,
     cursor?: string | null,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    after?: string
   ): Promise<GetMessagesResponse> {
     try {
       const requestKey = `messages-${conversationId}`;
@@ -49,7 +50,9 @@ export class MessagesService {
       const offset = (page - 1) * limit;
 
       const queryParams: Record<string, unknown> = { limit };
-      if (cursor) {
+      if (after) {
+        queryParams.after = after;
+      } else if (cursor) {
         queryParams.before = cursor;
       } else {
         queryParams.offset = offset;

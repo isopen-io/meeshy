@@ -9,6 +9,7 @@
 
 import type { Socket } from 'socket.io';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 
 const logger = enhancedLogger.child({ module: 'SocketHelpers' });
 
@@ -82,7 +83,14 @@ export function getConnectedUser(
   return { user, realUserId: user.id };
 }
 
-const conversationIdCache = new Map<string, string>();
+// Cache immutable identifier → ObjectId (populated on first lookup). Bounded
+// to CONVERSATION_ID_CACHE_MAX entries (FIFO eviction) — this is the hottest
+// call site (every message send, typing event, reaction and join/leave), so
+// an unbounded map would grow for the life of the gateway process across
+// every distinct conversation identifier ever seen. Mirrors the bound
+// already applied to MeeshySocketIOManager's private duplicate of this cache.
+export const CONVERSATION_ID_CACHE_MAX = 2000;
+const conversationIdCache = new BoundedTtlCache<string, string>({ maxSize: CONVERSATION_ID_CACHE_MAX });
 
 /**
  * Normalise un identifiant de conversation (ObjectId ou identifier)

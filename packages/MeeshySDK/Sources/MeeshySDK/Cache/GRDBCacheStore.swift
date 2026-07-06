@@ -208,6 +208,38 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         markDirty(key)
     }
 
+    /// Prepends `item` (newest-first) to an EXISTING cached list without resetting
+    /// the freshness clock, so a real-time event can durably append to a cache the
+    /// user already populated — surviving an app restart — while a still-stale or
+    /// -expired entry keeps triggering its normal background refresh.
+    ///
+    /// Strict no-op when no entry exists in L1 or L2: fabricating a single-item
+    /// `.fresh` cache from empty would make a cache-first `load` return only that
+    /// one item and SKIP the authoritative network refresh. De-dups by `id` (an
+    /// already-present id leaves the list untouched). Trims the OLDEST (tail) past
+    /// `maxItemCount`. The freshness timestamp is preserved (existing `loadedAt`).
+    public func prependToExisting(_ item: Value, for key: Key) async {
+        let existing: [Value]
+        let loadedAt: Date
+        if let l1 = memoryCache[key], !l1.items.isEmpty {
+            existing = l1.items
+            loadedAt = l1.loadedAt
+        } else if let l2 = readFromL2(for: namespacedKey(key.description)) {
+            existing = l2.items
+            loadedAt = l2.lastFetchedAt
+        } else {
+            return
+        }
+        guard !existing.contains(where: { $0.id == item.id }) else { return }
+        var merged = [item] + existing
+        if let max = policy.maxItemCount, merged.count > max {
+            merged = Array(merged.prefix(max))
+        }
+        memoryCache[key] = L1Entry(items: merged, loadedAt: loadedAt)
+        touchKey(key)
+        markDirty(key)
+    }
+
     public func invalidate(for key: Key) async {
         memoryCache.removeValue(forKey: key)
         removeFromAccessOrder(key)

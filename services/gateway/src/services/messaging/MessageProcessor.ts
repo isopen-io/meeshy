@@ -629,12 +629,12 @@ export class MessageProcessor {
       (message as Message & { attachments: unknown[] }).attachments = refreshedAttachments;
     }
 
-    // ÉTAPE 5: Mettre à jour les liens de tracking avec le messageId
-    await performanceLogger.withTiming(
+    // ÉTAPE 5: Mettre à jour les liens de tracking avec le messageId (fire-and-forget)
+    performanceLogger.withTiming(
       'messaging.trackingLinks',
       () => this.updateTrackingLinksWithMessageId(processedContent, data, message.id),
       corrWithMsg
-    );
+    ).catch(err => logger.error('[MessageProcessor] trackingLinks update failed', err));
 
     // ÉTAPE 6: Traiter les mentions et déclencher TOUTES les notifications
     // (Mentions, Réponses, Messages réguliers)
@@ -870,7 +870,13 @@ export class MessageProcessor {
   ): Promise<void> {
     try {
       // 1. Gérer les mentions en DB (validation + création)
-      const validatedMentionUserIds = await this.processMentionsInDB(data, message, processedContent);
+      // Short-circuit: skip all DB work when no @ in content and no explicit mentionedUserIds.
+      // This avoids participant lookup + username resolution queries for the majority of messages.
+      const hasPotentialMentions = (data.mentionedUserIds && data.mentionedUserIds.length > 0)
+        || processedContent.includes('@');
+      const validatedMentionUserIds = hasPotentialMentions
+        ? await this.processMentionsInDB(data, message, processedContent)
+        : [];
 
       // 2. Déclencher les notifications (Mentions, Réponses, Messages)
       if (this.notificationService) {

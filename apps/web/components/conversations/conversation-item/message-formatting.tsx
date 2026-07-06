@@ -36,7 +36,7 @@ function formatVideoDuration(milliseconds: number): string {
 function formatImageAttachment(attachment: unknown): React.JSX.Element {
   return (
     <>
-      <span className="inline-flex text-blue-500">📷</span>
+      <span className="inline-flex text-blue-500 dark:text-blue-400">📷</span>
       {attachment.width && attachment.height && (
         <span className="text-xs">{attachment.width}×{attachment.height}</span>
       )}
@@ -50,7 +50,7 @@ function formatImageAttachment(attachment: unknown): React.JSX.Element {
 function formatVideoAttachment(attachment: unknown): React.JSX.Element {
   return (
     <>
-      <span className="inline-flex text-red-500">🎥</span>
+      <span className="inline-flex text-red-500 dark:text-red-400">🎥</span>
       {attachment.duration && (
         <span className="text-xs">{formatVideoDuration(attachment.duration)}</span>
       )}
@@ -97,7 +97,7 @@ function formatAudioAttachment(attachment: unknown): React.JSX.Element {
 
   return (
     <>
-      <span className="inline-flex text-purple-500">🎵</span>
+      <span className="inline-flex text-purple-500 dark:text-purple-400">🎵</span>
       {attachment.duration && (
         <span className="text-xs ml-1">{formatAudioDuration(attachment.duration)}</span>
       )}
@@ -120,7 +120,7 @@ function formatAudioAttachment(attachment: unknown): React.JSX.Element {
 function formatPdfAttachment(attachment: unknown): React.JSX.Element {
   return (
     <>
-      <span className="inline-flex text-orange-500">📄</span>
+      <span className="inline-flex text-orange-500 dark:text-orange-400">📄</span>
       {attachment.pageCount && (
         <span className="text-xs">{attachment.pageCount} page{attachment.pageCount > 1 ? 's' : ''}</span>
       )}
@@ -134,7 +134,7 @@ function formatPdfAttachment(attachment: unknown): React.JSX.Element {
 function formatMarkdownAttachment(attachment: unknown): React.JSX.Element {
   return (
     <>
-      <span className="inline-flex text-blue-500">📝</span>
+      <span className="inline-flex text-blue-500 dark:text-blue-400">📝</span>
       {attachment.lineCount && (
         <span className="text-xs">{attachment.lineCount} ligne{attachment.lineCount > 1 ? 's' : ''}</span>
       )}
@@ -148,7 +148,7 @@ function formatMarkdownAttachment(attachment: unknown): React.JSX.Element {
 function formatCodeAttachment(attachment: unknown): React.JSX.Element {
   return (
     <>
-      <span className="inline-flex text-green-500">💻</span>
+      <span className="inline-flex text-green-500 dark:text-green-400">💻</span>
       {attachment.lineCount && (
         <span className="text-xs">{attachment.lineCount} ligne{attachment.lineCount > 1 ? 's' : ''}</span>
       )}
@@ -160,7 +160,7 @@ function formatCodeAttachment(attachment: unknown): React.JSX.Element {
  * Formater l'affichage d'une pièce jointe générique
  */
 function formatGenericAttachment(): React.JSX.Element {
-  return <span className="inline-flex text-gray-500">📎</span>;
+  return <span className="inline-flex text-gray-500 dark:text-gray-400">📎</span>;
 }
 
 /**

@@ -131,7 +131,7 @@ class ConversationListViewModel: ObservableObject {
             for (i, c) in conversations.enumerated() { index[c.id] = i }
             _convIdIndex = index
         }
-        return _convIdIndex![id]
+        return _convIdIndex?[id]
     }
 
     // MARK: - List Mutators (centralised write surface)
@@ -724,7 +724,16 @@ class ConversationListViewModel: ObservableObject {
                 // that carries lastMessageAt, so we want the row data fresh
                 // BEFORE we bump it to position 0 (otherwise the bumped
                 // row would render stale title for one frame).
-                if let title = event.title { self.conversations[index].title = title }
+                // Un DM n'est jamais renommable : son `title` client est le
+                // nom du participant, dérivé à la conversion REST
+                // (`toConversation` écarte le titre DB). Le payload socket
+                // porte le titre BRUT — le greffer sur un DM écrase le nom
+                // affiché (« sandra raveloson » → « Sany » au premier
+                // pin/mute, vu 2026-07-04). Greffe réservée aux
+                // conversations renommables.
+                if let title = event.title, self.conversations[index].type != .direct {
+                    self.conversations[index].title = title
+                }
                 if let description = event.description { self.conversations[index].description = description }
                 if let avatar = event.avatar { self.conversations[index].avatar = avatar }
                 if let banner = event.banner { self.conversations[index].banner = banner }
@@ -740,6 +749,11 @@ class ConversationListViewModel: ObservableObject {
                 if let autoTranslate = event.autoTranslateEnabled {
                     self.conversations[index].autoTranslateEnabled = autoTranslate
                 }
+                // Message-driven bump also carries the new preview text so
+                // the row shows the latest message without waiting for the
+                // next full sync (lastMessageTranslations arrive separately).
+                if let msgId = event.lastMessageId { self.conversations[index].lastMessageId = msgId }
+                if let preview = event.lastMessagePreview { self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated }
 
                 // Bump the row to the top when the gateway tells us a new
                 // message advanced lastMessageAt. We compare strictly
@@ -1384,6 +1398,28 @@ class ConversationListViewModel: ObservableObject {
         try? await store.apply(.setMuted(newValue), for: conversationId)
     }
 
+    // MARK: - Rename
+
+    /// Renomme une conversation (groupes / communautés). Enqueue via l'outbox
+    /// (`PUT /conversations/:id`) ; le nouveau nom se propage au retour serveur
+    /// via l'event socket `conversationUpdated` déjà observé par ce VM.
+    func renameConversation(conversationId: String, title: String) async {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let payload = UpdateConversationPayload(
+            clientMutationId: ClientMutationId.generate(),
+            conversationId: conversationId,
+            title: trimmed,
+            description: nil,
+            avatarUrl: nil
+        )
+        do {
+            try await OfflineQueue.shared.enqueue(.updateConversation, payload: payload, conversationId: conversationId)
+        } catch {
+            Logger.messages.error("[Rename] enqueue failed id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     // MARK: - Mark as Read
 
     func markAsRead(conversationId: String) async {
@@ -1480,7 +1516,9 @@ class ConversationListViewModel: ObservableObject {
             let username = AuthManager.shared.currentUser?.username
             let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: username) }
             previewMessages[conversationId] = msgs
-        } catch { }
+        } catch {
+            Logger.messages.warning("[ConversationList] previewMessages fetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Précharge les messages des top 20 conversations qui n'ont pas encore de cache.
@@ -1523,7 +1561,9 @@ class ConversationListViewModel: ObservableObject {
                                 }
                                 try? await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
                             }
-                        } catch { }
+                        } catch {
+                            Logger.messages.warning("[ConversationList] prefetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        }
                     }
                 }
             }

@@ -178,6 +178,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const userId = request.user!.userId;
+        /* istanbul ignore next -- AJV useDefaults:true always injects the default; destructuring fallback is unreachable */
         const { days = 30 } = request.query as { days?: number };
 
         const startDate = new Date();
@@ -268,6 +269,7 @@ function computeAchievements(
 
   return (Object.entries(ACHIEVEMENT_THRESHOLDS) as [AchievementKey, typeof ACHIEVEMENT_THRESHOLDS[AchievementKey]][]).map(
     ([key, config]) => {
+      /* istanbul ignore next -- ACHIEVEMENT_THRESHOLDS.field always matches numericStats keys; ?? 0 is unreachable */
       const current = stats[config.field] ?? 0;
       const progress = Math.min(current / config.threshold, 1);
       return {

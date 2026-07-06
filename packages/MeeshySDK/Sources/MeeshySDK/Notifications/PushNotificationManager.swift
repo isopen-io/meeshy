@@ -318,6 +318,12 @@ public struct NotificationPayload {
     public let senderAvatar: String?
     public let postId: String?
     public let postType: String?
+    /// Commentaire ciblé par la notification (like/réponse/commentaire). Permet
+    /// d'ouvrir l'entité puis de défiler/surligner le commentaire exact.
+    public let commentId: String?
+    /// Commentaire parent quand `commentId` est une réponse — déplie le fil parent
+    /// avant de défiler jusqu'à la réponse.
+    public let parentCommentId: String?
     public let title: String?
     public let body: String?
 
@@ -335,6 +341,10 @@ public struct NotificationPayload {
         self.postId = rawPostId.isEmpty ? nil : rawPostId
         let rawPostType = userInfo["postType"] as? String ?? ""
         self.postType = rawPostType.isEmpty ? nil : rawPostType
+        let rawCommentId = userInfo["commentId"] as? String ?? ""
+        self.commentId = rawCommentId.isEmpty ? nil : rawCommentId
+        let rawParentCommentId = userInfo["parentCommentId"] as? String ?? ""
+        self.parentCommentId = rawParentCommentId.isEmpty ? nil : rawParentCommentId
 
         if let aps = userInfo["aps"] as? [String: Any],
            let alert = aps["alert"] as? [String: Any] {

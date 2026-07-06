@@ -48,7 +48,7 @@ jobs:
     # runtime download). 25 min fails fast if a test deadlocks instead of hanging.
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer

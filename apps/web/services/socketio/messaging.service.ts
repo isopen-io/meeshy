@@ -50,7 +50,7 @@ export class MessagingService {
   private consumedListeners: Set<(data: MessageConsumedEventData) => void> = new Set();
   private attachmentStatusListeners: Set<(data: AttachmentStatusUpdatedEventData) => void> = new Set();
   private messageAttachmentUpdatedListeners: Set<(data: AttachmentUpdatedEventData) => void> = new Set();
-  private pendingDeliveredListeners: Set<(data: { count: number }) => void> = new Set();
+  private pendingDeliveredListeners: Set<(data: { count: number; conversationIds: string[] }) => void> = new Set();
   private linkMessageNewListeners: Set<(data: LinkMessageNewEventData) => void> = new Set();
   private messagePinnedListeners: Set<(data: MessagePinnedEventData) => void> = new Set();
   private messageUnpinnedListeners: Set<(data: MessageUnpinnedEventData) => void> = new Set();
@@ -67,7 +67,8 @@ export class MessagingService {
 
   private isOwnMessage(message: Message): boolean {
     if (!this.currentUserId) return false;
-    const senderId = (message.sender as any)?.userId ?? (message.sender as any)?.id ?? (message as any).senderId;
+    const sender = message.sender;
+    const senderId = sender?.userId ?? sender?.id ?? message.senderId;
     return senderId === this.currentUserId;
   }
 
@@ -200,7 +201,7 @@ export class MessagingService {
       this.messageAttachmentUpdatedListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: { count: number }) => void) => void }).on(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, (data: { count: number }) => {
+    (socket as unknown as { on: (event: string, handler: (data: { count: number; conversationIds: string[] }) => void) => void }).on(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, (data: { count: number; conversationIds: string[] }) => {
       this.pendingDeliveredListeners.forEach(listener => listener(data));
     });
 
@@ -555,7 +556,7 @@ export class MessagingService {
     return () => this.messageAttachmentUpdatedListeners.delete(listener);
   }
 
-  onPendingMessagesDelivered(listener: (data: { count: number }) => void): UnsubscribeFn {
+  onPendingMessagesDelivered(listener: (data: { count: number; conversationIds: string[] }) => void): UnsubscribeFn {
     this.pendingDeliveredListeners.add(listener);
     return () => this.pendingDeliveredListeners.delete(listener);
   }

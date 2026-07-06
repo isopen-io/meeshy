@@ -72,6 +72,9 @@ jest.mock('@/lib/react-query/query-keys', () => ({
       stories: () => ['posts', 'list', 'stories'],
       statuses: () => ['posts', 'list', 'statuses'],
     },
+    stories: {
+      feed: () => ['stories', 'feed'],
+    },
   },
 }));
 
@@ -120,6 +123,32 @@ function seedFeed(qc: QueryClient, posts = [mockPost]) {
 
 function getFeedPosts(qc: QueryClient): unknown[] {
   const data = qc.getQueryData<{ pages: { data: unknown[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+  return data?.pages.flatMap((p) => p.data) ?? [];
+}
+
+const mockStory = { ...mockPost, id: 'story-1', type: 'STORY' as const };
+
+function seedStories(qc: QueryClient, stories: unknown[] = [mockStory]) {
+  qc.setQueryData(['stories', 'feed'], stories);
+}
+
+function getStories(qc: QueryClient): Array<{ id: string; viewCount?: number; content?: string }> {
+  return qc.getQueryData<Array<{ id: string; viewCount?: number; content?: string }>>(['stories', 'feed']) ?? [];
+}
+
+// Reels affinity thread caches (`/feed/reels`, `/reel/:id`) key off
+// `['posts','list','reels', seed]` — the `foryou` thread and per-seed threads.
+function seedReels(qc: QueryClient, posts: unknown[] = [mockPost], seed = 'foryou') {
+  qc.setQueryData(['posts', 'list', 'reels', seed], {
+    pages: [{ data: posts, pagination: { hasMore: false, nextCursor: null } }],
+    pageParams: [undefined],
+  });
+}
+
+function getReels(qc: QueryClient, seed = 'foryou'): Array<{ id: string; content?: string; isEdited?: boolean }> {
+  const data = qc.getQueryData<{ pages: { data: Array<{ id: string; content?: string; isEdited?: boolean }> }[] }>(
+    ['posts', 'list', 'reels', seed],
+  );
   return data?.pages.flatMap((p) => p.data) ?? [];
 }
 
@@ -257,15 +286,24 @@ describe('usePostSocketCacheSync', () => {
   });
 
   describe('story:created', () => {
-    it('invalidates stories cache', () => {
+    it('prepends the new story to the stories.feed() cache', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, id: 'story-old' }]);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
-      act(() => emit('story:created', { story: mockPost }));
+      act(() => emit('story:created', { story: { ...mockStory, id: 'story-new' } }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
-      spy.mockRestore();
+      expect(getStories(qc).map((s) => s.id)).toEqual(['story-new', 'story-old']);
+    });
+
+    it('is idempotent when the story already exists (no duplicate)', () => {
+      const qc = createQueryClient();
+      seedStories(qc, [mockStory]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('story:created', { story: mockStory }));
+
+      expect(getStories(qc).map((s) => s.id)).toEqual(['story-1']);
     });
   });
 
@@ -332,6 +370,47 @@ describe('usePostSocketCacheSync', () => {
       const posts = getFeedPosts(qc) as (typeof mockPost & { currentUserReactions: string[] })[];
       expect(posts[0].currentUserReactions).toHaveLength(0);
     });
+
+    it('does NOT double-count likeCount on the reactor own self-echo (optimistic already applied)', () => {
+      // Reactor optimistically bumped likeCount 5→6 and reactionSummary 😂:2→3.
+      // The gateway self-echo carries the AUTHORITATIVE count (3). A blind +1 would
+      // push likeCount to 7 while the emoji badges still sum to 3 — the F56 drift.
+      const qc = createQueryClient();
+      seedFeed(qc, [{ ...mockPost, likeCount: 6, reactionSummary: { '😂': 3 } as Record<string, number>, currentUserReactions: ['😂'] as string[] }]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-2' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'post-1',
+        userId: 'user-2',
+        emoji: '😂',
+        action: 'add',
+        aggregation: { emoji: '😂', count: 3 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { likeCount: number; reactionSummary: Record<string, number> })[];
+      expect(posts[0].likeCount).toBe(6);
+      expect(posts[0].reactionSummary['😂']).toBe(3);
+    });
+
+    it('increments likeCount by the authoritative delta for a remote reactor', () => {
+      const qc = createQueryClient();
+      seedFeed(qc, [{ ...mockPost, likeCount: 5, reactionSummary: { '😂': 2 } as Record<string, number>, currentUserReactions: [] as string[] }]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'post-1',
+        userId: 'user-99',
+        emoji: '😂',
+        action: 'add',
+        aggregation: { emoji: '😂', count: 3 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { likeCount: number; reactionSummary: Record<string, number> })[];
+      expect(posts[0].likeCount).toBe(6);
+      expect(posts[0].reactionSummary['😂']).toBe(3);
+    });
   });
 
   describe('post:reaction-removed', () => {
@@ -394,6 +473,43 @@ describe('usePostSocketCacheSync', () => {
 
       const detail = qc.getQueryData<{ data: typeof mockPost }>(['posts', 'detail', 'post-1']);
       expect(detail?.data.content).toBe('Detail Updated');
+    });
+
+    it('propagates the edit to every reels affinity thread (foryou + deep-linked seed)', () => {
+      const qc = createQueryClient();
+      seedReels(qc, [mockPost], 'foryou');
+      seedReels(qc, [mockPost], 'post-1');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const updated = { ...mockPost, content: 'Reel caption edited', isEdited: true };
+      act(() => emit('post:updated', { post: updated }));
+
+      expect(getReels(qc, 'foryou')[0]).toMatchObject({ content: 'Reel caption edited', isEdited: true });
+      expect(getReels(qc, 'post-1')[0]).toMatchObject({ content: 'Reel caption edited', isEdited: true });
+    });
+  });
+
+  describe('post:deleted — reels affinity thread & detail cache', () => {
+    it('drops the deleted post from every reels cache, leaving siblings intact', () => {
+      const qc = createQueryClient();
+      seedReels(qc, [mockPost, { ...mockPost, id: 'post-2' }], 'foryou');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:deleted', { postId: 'post-1', authorId: 'user-1' }));
+
+      const reels = getReels(qc, 'foryou');
+      expect(reels).toHaveLength(1);
+      expect(reels[0].id).toBe('post-2');
+    });
+
+    it('evicts the post detail cache so a stale reel/detail view cannot resurface', () => {
+      const qc = createQueryClient();
+      qc.setQueryData(['posts', 'detail', 'post-1'], { data: mockPost });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:deleted', { postId: 'post-1', authorId: 'user-1' }));
+
+      expect(qc.getQueryData(['posts', 'detail', 'post-1'])).toBeUndefined();
     });
   });
 
@@ -694,28 +810,27 @@ describe('usePostSocketCacheSync', () => {
   });
 
   describe('story:viewed', () => {
-    it('invalidates stories cache', () => {
+    it('patches viewCount on the matching story in stories.feed()', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, viewCount: 5 }]);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
       act(() => emit('story:viewed', { storyId: 'story-1', viewerId: 'user-2', viewerUsername: 'bob', viewCount: 6 }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
-      spy.mockRestore();
+      expect(getStories(qc)[0].viewCount).toBe(6);
     });
   });
 
   describe('story:reacted', () => {
-    it('invalidates stories cache', () => {
+    it('does not mutate stories.feed() (no authoritative count on the wire)', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [mockStory]);
+      const before = getStories(qc);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
       act(() => emit('story:reacted', { storyId: 'story-1', userId: 'user-2', emoji: '❤️' }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
-      spy.mockRestore();
+      expect(getStories(qc)).toEqual(before);
     });
   });
 
@@ -833,6 +948,33 @@ describe('usePostSocketCacheSync', () => {
       const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
       expect(data?.pages[0].data[0].likeCount).toBe(0);
     });
+
+    it('does NOT double-count likeCount on the reactor own self-echo', () => {
+      // The gateway broadcasts comment:reaction-added for EVERY emoji (incl. ❤️),
+      // so even a plain heart-like double-counted before the delta reconciliation:
+      // optimistic likeCount 3→4 + summary ❤️:3→4, then self-echo authoritative 4.
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 4, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: { '❤️': 4 } as Record<string, number>, currentUserReactions: ['❤️'] as string[] };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-2' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-added', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 4 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number; reactionSummary: Record<string, number> }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(4);
+      expect(data?.pages[0].data[0].reactionSummary['❤️']).toBe(4);
+    });
   });
 
   describe('comment:reaction-removed', () => {
@@ -905,34 +1047,35 @@ describe('usePostSocketCacheSync', () => {
   // M1 — newly-wired consumers that were emitted by the gateway but ignored on
   // web. Story/status lifecycle + comment media all invalidate/patch the cache.
   describe('story/status lifecycle + comment media (M1)', () => {
-    it('story:updated invalidates the stories query', () => {
+    it('story:updated replaces the matching story in stories.feed()', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, id: 's-1', content: 'old' }]);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
-      act(() => emit('story:updated', { storyId: 's-1' }));
+      act(() => emit('story:updated', { story: { ...mockStory, id: 's-1', content: 'new' } }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
+      expect(getStories(qc)[0].content).toBe('new');
     });
 
-    it('story:deleted invalidates the stories query', () => {
+    it('story:deleted removes the story from stories.feed()', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, id: 's-1' }, { ...mockStory, id: 's-2' }]);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
-      act(() => emit('story:deleted', { storyId: 's-1' }));
+      act(() => emit('story:deleted', { storyId: 's-1', authorId: 'user-1' }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
+      expect(getStories(qc).map((s) => s.id)).toEqual(['s-2']);
     });
 
-    it('story:unreacted invalidates the stories query', () => {
+    it('story:unreacted does not mutate stories.feed()', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, id: 's-1' }]);
+      const before = getStories(qc);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
       act(() => emit('story:unreacted', { storyId: 's-1', userId: 'user-2', emoji: '❤️' }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
+      expect(getStories(qc)).toEqual(before);
     });
 
     it('status:unreacted invalidates the statuses query', () => {

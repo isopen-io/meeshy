@@ -19,9 +19,13 @@ import { usersService, conversationsService, type UserStats } from '@/services';
 import { type User } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { useUser } from '@/stores';
+import { useUserStatusTick } from '@/stores/user-store';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
+import { getUserInitials } from '@/lib/avatar-utils';
+import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
+import { formatPresenceLabel, presenceColorClass } from '@/utils/presence-format';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
@@ -45,7 +49,11 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   const router = useRouter();
   const { t } = useI18n('profile');
   const { t: tCommon } = useI18n('common');
-  
+  const { t: tContacts, locale } = useI18n('contacts');
+  // Re-render sur tick de présence : fait vieillir le libellé relatif
+  // (« Vu il y a 5 min » → « 6 min ») et sa couleur sans recharger la page.
+  useUserStatusTick();
+
   const [user, setUser] = useState<User | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -246,13 +254,9 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   };
 
   const getUserDisplayName = (userData: User): string => {
-    if (userData.displayName) return userData.displayName;
-    
-    const firstName = userData.firstName || '';
-    const lastName = userData.lastName || '';
-    const fullName = `${firstName} ${lastName}`.trim();
-    
-    return fullName || userData.username || 'User';
+    // Délègue à la source unique `utils/user-display-name` (displayName >
+    // firstName+lastName > username, trim) — pas de réimplémentation locale.
+    return resolveDisplayName(userData, userData.username || 'User');
   };
 
   const getUserUsername = (userData: User): string => {
@@ -344,16 +348,18 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                     <Avatar className="h-24 w-24">
                       <AvatarImage src={user.avatar} />
                       <AvatarFallback className="text-2xl bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                        {getUserDisplayName(user).slice(0, 2).toUpperCase()}
+                        {getUserInitials(user)}
                       </AvatarFallback>
                     </Avatar>
-                    {/* Online status indicator with 3 states: green (online), orange (away), grey (offline) */}
-                    <OnlineIndicator
-                      isOnline={getUserStatus(user) === 'online'}
-                      status={getUserStatus(user)}
-                      size="lg"
-                      className="absolute bottom-1 right-1"
-                    />
+                    {/* Pastille de présence — masquée si la présence n'est pas montrable (isOnline null) */}
+                    {(user.isOnline as boolean | null) != null && (
+                      <OnlineIndicator
+                        isOnline={getUserStatus(user) === 'online'}
+                        status={getUserStatus(user)}
+                        size="lg"
+                        className="absolute bottom-1 right-1"
+                      />
+                    )}
                   </div>
                   
                   <div className="flex-1 space-y-4">
@@ -362,7 +368,22 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                         {getUserDisplayName(user)}
                       </h2>
                       {user.username && (
-                        <p className="text-gray-600 dark:text-gray-400">@{user.username}</p>
+                        <p className="text-gray-600 dark:text-gray-400">
+                          @{user.username}
+                          {(user.lastActiveAt as Date | string | null) != null && (
+                            <>
+                              {' · '}
+                              <span className={presenceColorClass(user.lastActiveAt, user.isOnline as boolean | null)}>
+                                {formatPresenceLabel({
+                                  lastActiveAt: user.lastActiveAt,
+                                  isOnline: user.isOnline as boolean | null,
+                                  t: tContacts,
+                                  locale,
+                                })}
+                              </span>
+                            </>
+                          )}
+                        </p>
                       )}
                     </div>
 

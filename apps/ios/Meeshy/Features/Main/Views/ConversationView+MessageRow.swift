@@ -108,11 +108,8 @@ extension ConversationView {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-        )
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tint: Color(hex: accentColor).opacity(0.12))
+        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
         .padding(.horizontal, 8)
         .padding(.top, 4)
     }
@@ -295,8 +292,7 @@ extension ConversationView {
                 closeReactionBar()
                 guard let msg = resolved else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .react
+                    overlayState.fullReactionPickerMessage = msg
                 }
             }
         )
@@ -340,6 +336,9 @@ extension ConversationView {
     func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 3) {
+                // Doctrine 82i : icône + micro-label figés — bouton d'action compact
+                // dans un cadre tap fixe 60×44 aligné en rangée horizontale ; les faire
+                // scaler ferait déborder/casser la barre. Le bouton porte `accessibilityLabel`.
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundColor(Color(hex: color))

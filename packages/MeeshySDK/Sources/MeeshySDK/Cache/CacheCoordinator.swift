@@ -227,7 +227,12 @@ public actor CacheCoordinator {
         self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof", encrypted: true)
         self.feed = GRDBCacheStore(policy: .feedPosts, db: db, namespace: "feed")
         self.comments = GRDBCacheStore(policy: .comments, db: db, namespace: "comments")
-        self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories")
+        // R9 — chiffré comme les autres contenus sociaux (messages, profils,
+        // notifications) : le tray porte du contenu privé (FRIENDS/ONLY).
+        // Migration douce : les rows legacy en CLAIR échouent au déchiffrement
+        // → cache-miss propre (contrat pinné par GRDBCacheStoreEncryptionTests)
+        // → un refetch réseau unique au premier lancement, puis tout est chiffré.
+        self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories", encrypted: true)
         self.stats = GRDBCacheStore(policy: .userStats, db: db, namespace: "stats")
         self.notifications = GRDBCacheStore(policy: .notifications, db: db, namespace: "notif", encrypted: true)
         self.affiliateTokens = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "affil")

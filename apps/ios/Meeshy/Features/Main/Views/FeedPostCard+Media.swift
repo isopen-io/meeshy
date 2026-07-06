@@ -133,6 +133,7 @@ extension FeedPostCard {
                             Text("+\(count - 5)")
                                 .font(MeeshyFont.relative(22, weight: .bold))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         }
                     }
                     .contentShape(Rectangle())
@@ -147,6 +148,33 @@ extension FeedPostCard {
             .frame(height: 240)
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         }
+    }
+
+    // Compact media preview for a reposted POST/STATUS quote block (RF1). Reuses
+    // `galleryImageView` (image fill + video play glyph / audio waveform overlay)
+    // bounded to a short thumbnail, with a "+N" badge when the repost carries more
+    // than one media. No tap gesture and no AVPlayer: the enclosing repost Button
+    // already routes the tap to the ORIGINAL reposted post, so the media is hidden
+    // from VoiceOver (the Button is the interactive element).
+    @ViewBuilder
+    func repostMediaPreview(_ model: FeedPostCard.RepostMediaPreview) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            galleryImageView(model.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            if model.count > 1 {
+                Text("+\(model.count - 1)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                    .padding(8)
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     // Gallery-specific image view (no individual rounding)
@@ -174,7 +202,7 @@ extension FeedPostCard {
                 )
             }
 
-            // Video overlay
+            // Video overlay (décoratif : la cellule galerie parente porte le libellé VoiceOver)
             if media.type == .video {
                 VStack(spacing: 6) {
                     ZStack {
@@ -184,6 +212,7 @@ extension FeedPostCard {
                         Circle()
                             .fill(Color.white.opacity(0.85))
                             .frame(width: 30, height: 30)
+                        // Glyphe dans un cercle de dimension fixe 30/36 : figé (déborderait s'il scalait, doctrine 86i)
                         Image(systemName: "play.fill")
                             .font(MeeshyFont.relative(12, weight: .bold))
                             .foregroundColor(.black.opacity(0.7))
@@ -198,6 +227,7 @@ extension FeedPostCard {
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             } else if media.type == .audio {
                 VStack(spacing: 4) {
                     Image(systemName: "waveform")
@@ -212,6 +242,7 @@ extension FeedPostCard {
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             }
         }
         .clipped()
@@ -299,9 +330,11 @@ extension FeedPostCard {
                     .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                     .frame(width: 48, height: 56)
 
+                // Glyphe dans un cadre de dimension fixe 48×56 : figé (déborderait s'il scalait, doctrine 86i) ; le nom de fichier porte le sens
                 Image(systemName: "doc.fill")
                     .font(MeeshyFont.relative(24))
                     .foregroundColor(Color(hex: media.thumbnailColor))
+                    .accessibilityHidden(true)
             }
 
             // Document info
@@ -356,9 +389,11 @@ extension FeedPostCard {
                     )
                     .frame(width: 64, height: 64)
 
+                // Glyphe dans un cadre de dimension fixe 64×64 : figé (déborderait s'il scalait, doctrine 86i) ; le nom du lieu porte le sens
                 Image(systemName: "mappin.circle.fill")
                     .font(MeeshyFont.relative(28))
                     .foregroundColor(Color(hex: media.thumbnailColor))
+                    .accessibilityHidden(true)
             }
 
             // Location info
@@ -377,10 +412,11 @@ extension FeedPostCard {
 
             Spacer()
 
-            // Open in maps
+            // Open in maps (glyphe d'affordance décoratif)
             Image(systemName: "arrow.up.right.circle.fill")
                 .font(MeeshyFont.relative(28))
                 .foregroundColor(Color(hex: media.thumbnailColor))
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(

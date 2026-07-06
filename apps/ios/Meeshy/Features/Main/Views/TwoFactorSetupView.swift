@@ -81,6 +81,7 @@ struct TwoFactorSetupView: View {
                 .font(MeeshyFont.relative(80))
                 .foregroundColor(tfaColor)
                 .padding(.top, 20)
+                .accessibilityHidden(true)
 
             Text(String(localized: "2fa_scan_instruction", defaultValue: "Scannez ce QR code avec votre application d'authentification"))
                 .font(.subheadline.weight(.medium))
@@ -103,6 +104,7 @@ struct TwoFactorSetupView: View {
                     .font(MeeshyFont.relative(40))
                     .foregroundColor(MeeshyColors.warning)
                     .frame(width: 200, height: 200)
+                    .accessibilityHidden(true)
             }
 
             VStack(spacing: 8) {
@@ -116,6 +118,9 @@ struct TwoFactorSetupView: View {
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
+                        .textSelection(.enabled)
+                        .accessibilityLabel(String(localized: "a11y_2fa_secret_key", defaultValue: "Clé secrète"))
+                        .accessibilityValue(setup.otpauthUrl)
 
                     Button {
                         UIPasteboard.general.string = setup.otpauthUrl
@@ -172,6 +177,7 @@ struct TwoFactorSetupView: View {
                 .font(MeeshyFont.relative(50))
                 .foregroundColor(tfaColor)
                 .padding(.top, 20)
+                .accessibilityHidden(true)
 
             Text(String(localized: "2fa_enter_code_instruction", defaultValue: "Entrez le code a 6 chiffres affiche dans votre application"))
                 .font(MeeshyFont.relative(14, weight: .medium))
@@ -246,6 +252,7 @@ struct TwoFactorSetupView: View {
                 .font(MeeshyFont.relative(50))
                 .foregroundColor(MeeshyColors.success)
                 .padding(.top, 20)
+                .accessibilityHidden(true)
 
             Text(String(localized: "2fa_activated_title", defaultValue: "2FA active avec succes !"))
                 .font(MeeshyFont.relative(18, weight: .bold))
@@ -310,6 +317,7 @@ struct TwoFactorSetupView: View {
                 Text(code)
                     .font(MeeshyFont.relative(14, weight: .semibold, design: .monospaced))
                     .foregroundColor(theme.textPrimary)
+                    .textSelection(.enabled)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background(
@@ -333,6 +341,7 @@ struct TwoFactorSetupView: View {
                 .font(MeeshyFont.relative(50))
                 .foregroundColor(MeeshyColors.error)
                 .padding(.top, 40)
+                .accessibilityHidden(true)
 
             Text(message)
                 .font(MeeshyFont.relative(14, weight: .medium))
@@ -410,6 +419,7 @@ struct TwoFactorDisableView: View {
                         .font(MeeshyFont.relative(50))
                         .foregroundColor(MeeshyColors.error)
                         .padding(.top, 40)
+                        .accessibilityHidden(true)
 
                     Text(String(localized: "2fa_disable_title", defaultValue: "Desactiver l'authentification a deux facteurs"))
                         .font(MeeshyFont.relative(16, weight: .bold))
@@ -556,6 +566,7 @@ struct TwoFactorBackupCodesView: View {
                                     .font(MeeshyFont.relative(40))
                                     .foregroundColor(MeeshyColors.error)
                                     .padding(.top, 40)
+                                    .accessibilityHidden(true)
 
                                 Text(error)
                                     .font(MeeshyFont.relative(14, weight: .medium))
@@ -577,6 +588,7 @@ struct TwoFactorBackupCodesView: View {
                                 .font(MeeshyFont.relative(40))
                                 .foregroundColor(tfaColor)
                                 .padding(.top, 20)
+                                .accessibilityHidden(true)
 
                             Text(String(localized: "2fa_backup_codes_warning", defaultValue: "Ces codes remplacent les precedents. Conservez-les en lieu sur."))
                                 .font(MeeshyFont.relative(13, weight: .medium))
@@ -589,6 +601,7 @@ struct TwoFactorBackupCodesView: View {
                                     Text(code)
                                         .font(MeeshyFont.relative(14, weight: .semibold, design: .monospaced))
                                         .foregroundColor(theme.textPrimary)
+                                        .textSelection(.enabled)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 8)
                                         .background(
@@ -656,6 +669,7 @@ struct TwoFactorBackupCodesView: View {
                 .font(MeeshyFont.relative(50))
                 .foregroundColor(tfaColor)
                 .padding(.top, 40)
+                .accessibilityHidden(true)
 
             Text(String(localized: "2fa_backup_code_verify", defaultValue: "Entrez votre code 2FA pour generer de nouveaux codes de secours"))
                 .font(MeeshyFont.relative(14, weight: .medium))

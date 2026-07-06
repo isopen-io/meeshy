@@ -15,6 +15,7 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -42,6 +43,23 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+
+// Mirrors MessageReadStatusService's isStaleCursorMessageId (MongoDB ObjectId
+// hex strings sort chronologically). Duplicated rather than imported: several
+// test suites `jest.mock('../../services/MessageReadStatusService', ...)`
+// with a factory that only exports `MessageReadStatusService`, so a named
+// import of this helper resolves to `undefined` under those mocks.
+const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+function isStaleCursorMessageId(
+  candidateMessageId: string,
+  currentCursorMessageId: string | null | undefined
+): boolean {
+  if (!currentCursorMessageId) return false;
+  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(currentCursorMessageId)) {
+    return false;
+  }
+  return candidateMessageId.toLowerCase() < currentCursorMessageId.toLowerCase();
+}
 
 /**
  * Nested-user fields fetched for a message sender in the GET messages select.
@@ -358,6 +376,7 @@ export function registerMessagesRoutes(
         emitter = emitter.to(userRoom);
       }
       emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+      emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
 
       io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
         conversationId,
@@ -827,7 +846,8 @@ export function registerMessagesRoutes(
               select: {
                 systemLanguage: true,
                 regionalLanguage: true,
-                customDestinationLanguage: true
+                customDestinationLanguage: true,
+                deviceLocale: true
               }
             })
           : Promise.resolve(null)
@@ -896,7 +916,7 @@ export function registerMessagesRoutes(
 
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
-        ? resolveUserLanguage(userPrefs)
+        ? resolveUserLanguage(userPrefs, { deviceLocale: userPrefs.deviceLocale ?? undefined })
         : 'fr';
 
       // DEBUG: Log détaillé pour vérifier les transcriptions audio
@@ -1085,7 +1105,7 @@ export function registerMessagesRoutes(
             // T16 — firstName/lastName were serialized but read by no client and
             // are no longer fetched (messageSenderUserSelect trims them).
             displayName: message.sender.displayName ?? message.sender.user?.displayName ?? null,
-            avatar: message.sender.avatar ?? message.sender.user?.avatar ?? null,
+            avatar: resolveParticipantAvatar(message.sender),
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
             lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
           } : null,
@@ -1117,7 +1137,7 @@ export function registerMessagesRoutes(
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,
               displayName: replySender.displayName ?? replySender.user?.displayName ?? null,
-              avatar: replySender.avatar ?? replySender.user?.avatar ?? null,
+              avatar: resolveParticipantAvatar(replySender),
             } : null,
           };
         }
@@ -1182,7 +1202,7 @@ export function registerMessagesRoutes(
                   ...original.sender,
                   username: (original.sender as any).user?.username ?? (original.sender as any).username ?? null,
                   displayName: (original.sender as any).displayName ?? (original.sender as any).user?.displayName ?? null,
-                  avatar: (original.sender as any).avatar ?? (original.sender as any).user?.avatar ?? null,
+                  avatar: resolveParticipantAvatar(original.sender as any),
                 } : null,
                 attachments: original.attachments
               };
@@ -1660,7 +1680,7 @@ export function registerMessagesRoutes(
         messageId: result.data?.id
       });
 
-      return reply.send(result);
+      return sendSuccess(reply, result.data);
 
     } catch (error) {
       logger.error('Error in REST send message:', error);
@@ -1834,6 +1854,26 @@ export function registerMessagesRoutes(
 
       if (!participantForCursor) {
         return sendForbidden(reply, 'Not a participant');
+      }
+
+      // Guard against a race with a concurrent, fresher read: another device
+      // may have read a message newer than `latestMessage` between our read
+      // above and this write. Without this check the unconditional upsert
+      // below would roll the cursor backward past that fresher read,
+      // resurrecting already-read messages as unread (mirrors the
+      // isStaleCursorMessageId guard in MessageReadStatusService.markMessagesAsRead).
+      const currentCursor = await prisma.conversationReadCursor.findUnique({
+        where: {
+          conversation_participant_cursor: { participantId: participantForCursor.id, conversationId }
+        },
+        select: { lastReadMessageId: true }
+      });
+
+      if (isStaleCursorMessageId(latestMessage.id, currentCursor?.lastReadMessageId)) {
+        logger.info(
+          `[MARK-UNREAD] Ignoring stale mark-unread for user ${userId} in conversation ${conversationId}: cursor already advanced past message ${latestMessage.id}`
+        );
+        return sendSuccess(reply, { unreadCount: 0 });
       }
 
       await prisma.conversationReadCursor.upsert({
@@ -2171,7 +2211,7 @@ export function registerMessagesRoutes(
             id: sender.id,
             userId: sender.userId,
             displayName: sender.displayName ?? sender.user?.displayName ?? null,
-            avatar: sender.avatar ?? sender.user?.avatar ?? null,
+            avatar: resolveParticipantAvatar(sender),
             type: sender.type,
             username: sender.user?.username ?? null,
             firstName: sender.user?.firstName ?? null,
@@ -2479,7 +2519,7 @@ export function registerMessagesRoutes(
             id: sender.id,
             userId: sender.userId,
             displayName: sender.displayName ?? sender.user?.displayName ?? null,
-            avatar: sender.avatar ?? sender.user?.avatar ?? null,
+            avatar: resolveParticipantAvatar(sender),
             username: sender.user?.username ?? null,
             isOnline: sender.user?.isOnline ?? false
           } : null,

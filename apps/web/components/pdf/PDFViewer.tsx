@@ -79,7 +79,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   };
 
   const handleOpenInNewTab = () => {
-    window.open(attachmentFileUrl, '_blank');
+    window.open(attachmentFileUrl, '_blank', 'noopener,noreferrer');
   };
 
   const goToPreviousPage = () => {

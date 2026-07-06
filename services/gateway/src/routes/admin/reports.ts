@@ -71,11 +71,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, report, { statusCode: 201, message: 'Signalement cree avec succes' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Donnees invalides',
-          errors: error.issues
-        });
+        return sendBadRequest(reply, 'Donnees invalides');
       }
 
       logError(fastify.log, 'Create report error:', error);
@@ -206,11 +202,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, report, { message: 'Signalement mis a jour' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Donnees invalides',
-          errors: error.issues
-        });
+        return sendBadRequest(reply, 'Donnees invalides');
       }
 
       logError(fastify.log, 'Update report error:', error);

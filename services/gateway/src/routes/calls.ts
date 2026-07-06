@@ -17,7 +17,7 @@ import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
 import { CallService } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
-import { sendSuccess } from '../utils/response.js';
+import { sendSuccess, sendError, sendForbidden, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
 import {
   initiateCallSchema,
   getCallSchema,
@@ -69,8 +69,15 @@ export default async function callRoutes(fastify: FastifyInstance) {
   // Get decorated prisma instance
   const prisma = fastify.prisma;
 
-  // Initialize CallService
-  const callService = new CallService(prisma);
+  // Reuse the Socket.IO layer's CallService (shares its in-memory
+  // ringingTimeouts/heartbeats/backgroundedParticipants maps with
+  // CallEventsHandler and CallCleanupService) so a call initiated via REST
+  // gets its ringing timeout tracked on the same instance that later reads
+  // it. Falls back to a fresh instance only if routes register before
+  // setupSocketIO() decorates it (should not happen in normal boot order —
+  // see Server.setupSocketIO/setupRoutes call sequence — but keeps this
+  // route usable in isolation, e.g. targeted route tests).
+  const callService = fastify.callService ?? new CallService(prisma);
 
   // Authentication middleware (required for all routes)
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {
@@ -208,14 +215,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         ? errorMessage.split(':').slice(1).join(':').trim()
         : errorMessage;
 
-      return reply.status(400).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message,
-          details: error.details || undefined
-        }
-      });
+      return sendError(reply, 400, errorCode, { message });
     }
   });
 
@@ -324,13 +324,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, errorCode, { message });
     }
   });
 
@@ -436,7 +430,16 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // Get call to verify permissions
       const call = await callService.getCallSession(callId);
 
-      // Verify user is initiator or admin/moderator of conversation
+      // Resolve conversation membership (needed for endParticipantId below).
+      // Authorization on WHO may end the call is enforced by
+      // callService.endCall() itself — P2P: any active participant may end
+      // for everyone; SFU (Phase 2): initiator/moderator only. This route
+      // must mirror that single policy rather than re-implement a stricter
+      // initiator/admin/moderator-only gate here: the socket `call:end` path
+      // has no such extra gate, so a plain P2P callee ending their own call
+      // via REST previously got PERMISSION_DENIED while the identical action
+      // via the socket succeeded — an authorization inconsistency between
+      // the two transports for the exact same operation.
       const membership = await prisma.participant.findFirst({
         where: {
           conversationId: call.conversationId,
@@ -446,29 +449,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: {
-            code: 'NOT_A_PARTICIPANT',
-            message: 'You do not have access to this call'
-          }
-        });
-      }
-
-      // Only initiator or admin/moderator can end call
-      const canEndCall =
-        call.initiatorId === userId ||
-        membership.role === 'admin' ||
-        membership.role === 'moderator';
-
-      if (!canEndCall) {
-        return reply.status(403).send({
-          success: false,
-          error: {
-            code: 'PERMISSION_DENIED',
-            message: 'Only the call initiator or conversation moderators can end the call'
-          }
-        });
+        return sendForbidden(reply, 'NOT_A_PARTICIPANT');
       }
 
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
@@ -486,13 +467,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, errorCode, { message });
     }
   });
 
@@ -638,13 +613,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, errorCode, { message });
     }
   });
 
@@ -752,10 +721,12 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       logger.info('📞 REST: Leaving call', { callId, participantId, userId });
 
+      let call: Awaited<ReturnType<typeof callService.getCallSession>> | undefined;
+
       // Verify user is leaving their own participation or has moderator rights
       if (participantId !== userId) {
         // Check if user is moderator
-        const call = await callService.getCallSession(callId);
+        call = await callService.getCallSession(callId);
         const membership = await prisma.participant.findFirst({
           where: {
             conversationId: call.conversationId,
@@ -768,17 +739,31 @@ export default async function callRoutes(fastify: FastifyInstance) {
           membership?.role === 'admin' || membership?.role === 'moderator';
 
         if (!isModerator) {
-          return reply.status(403).send({
-            success: false,
-            error: {
-              code: 'PERMISSION_DENIED',
-              message: 'You can only leave your own participation'
-            }
-          });
+          return sendForbidden(reply, 'PERMISSION_DENIED');
         }
       }
 
-      const leaveParticipantId = authRequest.authContext.participantId || participantId;
+      // `authContext.participantId` is populated only for anonymous sessions
+      // (see middleware/auth.ts) and is trustworthy ONLY when leaving one's
+      // OWN slot — it is the CALLER's conversation Participant.id. Registered
+      // users never populate it, and a moderator removing someone else must
+      // NEVER fall back to it here: `CallParticipant.participantId` must be
+      // the TARGET's Participant.id, or the moderator's own participation
+      // gets marked as "left" instead of the target's (kick silently no-ops
+      // or ends the wrong side of the call). Resolve the target's real
+      // Participant.id from their userId whenever we can't trust the shortcut.
+      let leaveParticipantId: string;
+      if (participantId === userId && authRequest.authContext.participantId) {
+        leaveParticipantId = authRequest.authContext.participantId;
+      } else {
+        call = call ?? await callService.getCallSession(callId);
+        const targetParticipant = await prisma.participant.findFirst({
+          where: { conversationId: call.conversationId, userId: participantId, isActive: true },
+          select: { id: true }
+        });
+        leaveParticipantId = targetParticipant?.id ?? participantId;
+      }
+
       const callSession = await callService.leaveCall({
         callId,
         userId: participantId,
@@ -797,13 +782,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, errorCode, { message });
     }
   });
 
@@ -840,12 +819,16 @@ export default async function callRoutes(fastify: FastifyInstance) {
           // FIX 2026-05-12 — `oneOf: [callSessionSchema, { type: 'null' }]`
           // déclenchait `TypeError: The value of '#/properties/data' does not
           // match schema definition.` sur fast-json-stringify quand data===null
-          // (limitation connue de la lib pour oneOf+null). On retire la
-          // contrainte de schema sur `data` côté serializer (additionalProperties
-          // true), la doc OpenAPI reste correcte via description.
-          additionalProperties: true,
+          // (limitation connue de la lib pour oneOf+null). `nullable: true` sur
+          // le schema objet directement (au lieu d'un oneOf) évite ce bug tout
+          // en gardant `data` comme whitelist de champs — la version précédente
+          // (`additionalProperties: true` sans schema sur `data`) désactivait
+          // tout filtrage et laissait fuiter des champs Prisma bruts non
+          // destinés au client (ex: `CallParticipant.analytics`, télémétrie
+          // privée d'un AUTRE participant) à tout membre de la conversation.
           properties: {
-            success: { type: 'boolean', example: true }
+            success: { type: 'boolean', example: true },
+            data: { ...callSessionSchema, nullable: true }
           }
         },
         400: {
@@ -921,13 +904,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: {
-            code: 'NOT_A_PARTICIPANT',
-            message: 'You are not a member of this conversation'
-          }
-        });
+        return sendForbidden(reply, 'NOT_A_PARTICIPANT');
       }
 
       const callSession = await callService.getActiveCallForConversation(
@@ -938,13 +915,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call', error);
 
-      return reply.status(500).send({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to get active call'
-        }
-      });
+      return sendInternalError(reply, 'INTERNAL_ERROR');
     }
   });
 
@@ -1016,13 +987,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return reply.status(401).send({
-          success: false,
-          error: {
-            code: 'NOT_AUTHENTICATED',
-            message: 'Authentication required'
-          }
-        });
+        return sendUnauthorized(reply, 'NOT_AUTHENTICATED');
       }
 
       logger.info('📞 REST: Getting active call for user (crash recovery)', {
@@ -1037,7 +1002,9 @@ export default async function callRoutes(fastify: FastifyInstance) {
               participant: {
                 userId: userId,
               },
-              leftAt: null,
+              // Audit C5 (2026-07-02) — Prisma-on-Mongo: `leftAt: null` misses
+              // historical documents where the field is absent entirely.
+              OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
             },
           },
         },
@@ -1058,26 +1025,14 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!activeCall) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'NO_ACTIVE_CALL',
-            message: 'No active call found'
-          }
-        });
+        return sendNotFound(reply, 'NO_ACTIVE_CALL');
       }
 
       return sendSuccess(reply, activeCall);
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call for user', error);
 
-      return reply.status(500).send({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to get active call'
-        }
-      });
+      return sendInternalError(reply, 'INTERNAL_ERROR');
     }
   });
 
@@ -1185,13 +1140,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return reply.status(401).send({
-          success: false,
-          error: {
-            code: 'NOT_AUTHENTICATED',
-            message: 'Authentication required'
-          }
-        });
+        return sendUnauthorized(reply, 'NOT_AUTHENTICATED');
       }
 
       const parsed = callHistoryQuerySchema.safeParse(request.query);
@@ -1206,13 +1155,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
     } catch (error: any) {
       logger.error('❌ REST: Error listing call history', error);
-      return reply.status(500).send({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to get call history'
-        }
-      });
+      return sendInternalError(reply, 'INTERNAL_ERROR', { message: 'Failed to get call history' });
     }
   });
 }

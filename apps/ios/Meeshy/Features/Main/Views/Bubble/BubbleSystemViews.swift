@@ -22,12 +22,12 @@ struct BubbleDeletedView: View, Equatable {
                     .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
                 Text(String(localized: "bubble.system.deleted", defaultValue: "Message deleted", bundle: .main))
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(13, weight: .regular))
                     .italic()
                     .foregroundColor(ThemeManager.shared.textMuted)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule()
                     .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
@@ -41,7 +41,7 @@ struct BubbleDeletedView: View, Equatable {
 
             if !isMe { Spacer(minLength: 50) }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, 2)
     }
 }
@@ -59,12 +59,12 @@ struct BubbleBurnedView: View, Equatable {
                     .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.warning)
                 Text(String(localized: "bubble.system.burned", defaultValue: "Seen and deleted", bundle: .main))
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(13, weight: .regular))
                     .italic()
                     .foregroundColor(ThemeManager.shared.textMuted)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule()
                     .fill(MeeshyColors.warning.opacity(0.08))
@@ -78,7 +78,7 @@ struct BubbleBurnedView: View, Equatable {
 
             if !isMe { Spacer(minLength: 50) }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, 2)
     }
 }
@@ -110,7 +110,7 @@ struct BubbleSystemNoticeView: View, Equatable {
                     .foregroundColor(ThemeManager.shared.textMuted)
                     .multilineTextAlignment(.center)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, 7)
             .background(
                 Capsule()
@@ -125,7 +125,7 @@ struct BubbleSystemNoticeView: View, Equatable {
 
             Spacer(minLength: 24)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, 3)
     }
 }

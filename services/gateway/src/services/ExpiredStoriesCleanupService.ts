@@ -109,6 +109,14 @@ export class ExpiredStoriesCleanupService {
         const repostIds = repostRows.map((p) => p.id);
         const allPostIds = [...ids, ...repostIds];
 
+        // G7 — collect comment ids BEFORE deleting them: their media rows
+        // (PostMedia.commentId, `onDelete: SetNull`) must be purged too.
+        const commentRows = await this.prisma.postComment.findMany({
+          where: { postId: { in: allPostIds } },
+          select: { id: true },
+        });
+        const commentIds = commentRows.map((c) => c.id);
+
         // Clear PostComments BEFORE deleting the posts. The cascade from
         // Post→PostComment would otherwise hit the `CommentReplies`
         // self-relation (onDelete: NoAction): Prisma's MongoDB referential
@@ -122,6 +130,24 @@ export class ExpiredStoriesCleanupService {
         await this.prisma.postComment.deleteMany({
           where: { postId: { in: allPostIds } },
         });
+
+        // G7 — PostMedia.post/.comment are `onDelete: SetNull`: without this
+        // explicit purge every hard-deleted story left its media rows
+        // orphaned (postId = null) FOREVER — stories are the most
+        // media-heavy content and all of them expire. Disk-file reclamation
+        // is a separate follow-up (fileUrl→path resolution, prod caution);
+        // this closes the unbounded DB-row leak.
+        const mediaResult = await this.prisma.postMedia.deleteMany({
+          where: {
+            OR: [
+              { postId: { in: allPostIds } },
+              { commentId: { in: commentIds } },
+            ],
+          },
+        });
+        if (mediaResult.count > 0) {
+          log.info('purged media rows of hard-deleted stories', { count: mediaResult.count });
+        }
 
         if (repostIds.length > 0) {
           const repostResult = await this.prisma.post.deleteMany({

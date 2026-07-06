@@ -245,10 +245,10 @@ describe('ConversationHandler', () => {
       const handler = new ConversationHandler(deps);
       const socket = makeSocket();
       await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
-      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
-        reason: 'not_authenticated',
-      }));
-      expect(socket.join).not.toHaveBeenCalled();
+      // Valid anonymous member (owns the participant): joins the room and emits
+      // no conversation:joined (no userId on an anonymous SocketUser).
+      expect(socket.join).toHaveBeenCalled();
+      expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
     });
 
     it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {
@@ -397,6 +397,15 @@ describe('ConversationHandler', () => {
       await handler.handleConversationLeave(socket as any, LEAVE_PAYLOAD);
       expect(socket.emit).toHaveBeenCalledWith('error', expect.objectContaining({ message: 'bad-schema' }));
       expect(socket.leave).not.toHaveBeenCalled();
+    });
+
+    it('emits error event when an exception occurs during leave', async () => {
+      const socket = makeSocket();
+      socket.leave = jest.fn().mockRejectedValue(new Error('socket error'));
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      await handler.handleConversationLeave(socket as any, LEAVE_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('error', expect.objectContaining({ message: 'Failed to leave conversation' }));
     });
 
   });

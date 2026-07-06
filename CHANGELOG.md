@@ -7,6 +7,11 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- **Réactions dupliquées en cas de course concurrente** : `ReactionService.addReaction` appliquait le modèle "1 emoji par user" au niveau applicatif (find/deleteMany/create), non atomique — deux ajouts concurrents avec des emojis différents pouvaient chacun insérer leur propre ligne. Passage à un `upsert` atomique sur la clé composite `(messageId, participantId)` (l'index unique ne porte plus sur l'emoji). Migration Mongo requise avant déploiement : `packages/shared/prisma/migrations/2026-07-04-reaction-single-per-user-unique-index.mongodb.js`. Voir `docs/analyses/2026-07-04-reaction-duplicate-race-fix.md`.
+- **Idem pour les réactions par pièce jointe** : `AttachmentReactionService.addAttachmentReaction` portait exactement la même course (findMany/deleteMany/upsert non atomique). Même correctif — `upsert` atomique sur `(attachmentId, participantId)`, index resserré. Migration Mongo requise avant déploiement : `packages/shared/prisma/migrations/2026-07-04-attachment-reaction-single-per-user-unique-index.mongodb.js`. Voir `docs/analyses/2026-07-04-attachment-reaction-duplicate-race-fix.md`.
+
 ### 🎉 Refonte Majeure - Système de Notifications
 
 #### Changed

@@ -88,7 +88,7 @@ struct StoryGestureOverlayView: View {
             .contentShape(Rectangle())
             .accessibilityElement()
             .accessibilityLabel(String(localized: "story.viewer.label", defaultValue: "Stories viewer", bundle: .main))
-            .accessibilityHint("Toucher à gauche pour la story précédente, à droite pour la suivante, maintenir pour mettre en pause")
+            .accessibilityHint(String(localized: "story.viewer.navigation.hint", defaultValue: "Tap left for the previous story, right for the next, hold to pause", bundle: .main))
             // `DragGesture(minimumDistance: 0)` capture LE PREMIER touch-down
             // ainsi que le release. C'est le seul moyen fiable en SwiftUI de
             // distinguer un tap court d'un hold long sur la même hit-area —
@@ -410,11 +410,13 @@ struct StoryComposerBarView: View {
                             }
                         } label: {
                             Image(systemName: "xmark")
-                                .font(MeeshyFont.relative(9, weight: .bold))
+                                // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white.opacity(0.6))
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Color.white.opacity(0.12)))
                         }
+                        .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la r\u{00E9}ponse", bundle: .main))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -712,6 +714,18 @@ struct StoryCardView: View {
     /// rend instantanément.
     @State private var showProgressOverlay: Bool = false
 
+    /// R3 — indicateur discret de buffering MID-SLIDE : visible quand la
+    /// timeline est gelée par le stall gate (vidéo qui bufferise, audio/image
+    /// en cours de cache — R1/R2) APRÈS le chargement initial. Le gel était
+    /// jusqu'ici une frame figée muette, indistinguable d'un freeze.
+    @State private var showStallIndicator: Bool = false
+
+    /// Délai de grâce avant d'afficher l'indicateur : un micro-stall (< 350 ms,
+    /// fréquent sur un seek/loop vidéo) ne doit pas faire flasher un spinner.
+    /// La DISPARITION, elle, est immédiate à la reprise. Miroir du pattern
+    /// `showProgressOverlay` (200 ms) du loader initial.
+    @State private var stallIndicatorGraceTask: Task<Void, Never>?
+
     // Closures — actions on the parent view
     let triggerStoryReaction: (String) -> Void
     let pauseTimer: () -> Void
@@ -794,7 +808,11 @@ struct StoryCardView: View {
             bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
             state: canvasPresentation,
-            cardedCornerRadius: 22))
+            cardedCornerRadius: 22,
+            // Directive user 2026-07-04 : la carte se place DIRECTEMENT sous
+            // la ligne d'expiration — le mou vertical va en bas, plus de vide
+            // entre le header et la story.
+            verticalAlignment: .top))
     }
 
     var body: some View {
@@ -916,8 +934,27 @@ struct StoryCardView: View {
                                       // le SDK n'expose que le signal `onPlaybackProgressing`.
                                       onPlaybackProgressing: { progressing in
                                           onPlaybackProgressing(progressing)
+                                          handleStallIndicatorSignal(progressing: progressing)
                                       })
                     .id(story.id)
+                    // U6 inc.2 — la navigation prev/next est une gesture
+                    // SPATIALE (position x du tap dans le canvas) que VoiceOver
+                    // ne peut pas produire : on l'expose en actions custom du
+                    // rotor. Le label donne une identité au canvas (le contenu
+                    // visuel est du CALayer, invisible d'UIAccessibility).
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(
+                        localized: "story.viewer.a11y.canvas",
+                        defaultValue: "Story en cours de lecture"
+                    ))
+                    .accessibilityAction(named: String(
+                        localized: "story.viewer.a11y.next",
+                        defaultValue: "Story suivante"
+                    )) { goToNext() }
+                    .accessibilityAction(named: String(
+                        localized: "story.viewer.a11y.previous",
+                        defaultValue: "Story précédente"
+                    )) { goToPrevious() }
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, `geometry.size.height` étirait le canvas
                     // hors ratio design et décalait visuellement le contenu.
@@ -995,6 +1032,21 @@ struct StoryCardView: View {
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)
+                }
+
+                // R3 — buffering MID-SLIDE : spinner discret centré sur la
+                // carte, UNIQUEMENT après le chargement initial (le loader
+                // ThumbHash ci-dessus couvre `slideContentProgress < 0.95`).
+                // Apparition différée (grâce 350 ms), disparition immédiate à
+                // la reprise — cf. `handleStallIndicatorSignal`.
+                if showStallIndicator && slideContentProgress >= 0.95 {
+                    StoryPlaybackStallIndicator()
+                        .frame(width: canvasFitSize.width,
+                               height: canvasFitSize.height)
+                        .scaleEffect(readerCanvasFraming.scale)
+                        .offset(y: readerCanvasFraming.offset.height)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
                 }
             }
 
@@ -1265,7 +1317,9 @@ struct StoryCardView: View {
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
             if let emoji = bigReactionEmoji {
                 Text(emoji)
-                    .font(MeeshyFont.relative(100))
+                    // Doctrine 84i : emoji de réaction hero décoratif (100pt) animé en burst
+                    // (scaleEffect/offset) → taille figée ; déjà accessibilityHidden ci-dessous.
+                    .font(.system(size: 100))
                     .scaleEffect(bigReactionPhase == 1 ? 1.5 : (bigReactionPhase == 2 ? 0.5 : 0.05))
                     .opacity(bigReactionPhase == 2 ? 0 : (bigReactionPhase == 1 ? 1 : 0))
                     .offset(y: bigReactionPhase == 2 ? -280 : 0)
@@ -1444,6 +1498,12 @@ struct StoryCardView: View {
         .task(id: currentStory?.id) {
             showProgressOverlay = false
             slideContentProgress = 0
+            // R3 — nouvelle slide = état neuf : le canvas repart « progressant »
+            // SANS émettre (resetPlaybackHealthState n'émet pas) ; sans ce reset
+            // un indicateur de stall de la slide précédente resterait affiché.
+            stallIndicatorGraceTask?.cancel()
+            stallIndicatorGraceTask = nil
+            showStallIndicator = false
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
             if slideContentProgress < 0.20 {
@@ -1451,6 +1511,31 @@ struct StoryCardView: View {
                     showProgressOverlay = true
                 }
             }
+        }
+    }
+
+    /// R3 — pilote l'indicateur de stall mid-slide depuis le signal
+    /// `onPlaybackProgressing` du canvas : apparition DIFFÉRÉE (grâce 350 ms —
+    /// un micro-stall de seek/loop ne flashe pas de spinner), disparition
+    /// IMMÉDIATE à la reprise. Indépendant du forward vers `slideTimer`
+    /// (le gel de la barre, lui, est toujours instantané et en phase).
+    private func handleStallIndicatorSignal(progressing: Bool) {
+        stallIndicatorGraceTask?.cancel()
+        stallIndicatorGraceTask = nil
+        if progressing {
+            // U2 — reprise perceptible au toucher UNIQUEMENT si le gel avait
+            // été montré (pas de haptic sur les micro-stalls absorbés par la
+            // grâce ci-dessous).
+            if showStallIndicator { HapticFeedback.light() }
+            withAnimation(.easeOut(duration: 0.15)) { showStallIndicator = false }
+            return
+        }
+        stallIndicatorGraceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.2)) { showStallIndicator = true }
+            // U2 — le gel devient perceptible en même temps que le spinner.
+            HapticFeedback.light()
         }
     }
 
@@ -1704,7 +1789,8 @@ struct StoryViewerContentView: View {
                                     isPresented = false
                                 } label: {
                                     Image(systemName: "xmark")
-                                        .font(MeeshyFont.relative(16, weight: .semibold))
+                                        // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 36×36 → figé.
+                                        .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.white)
                                         .frame(width: 36, height: 36)
                                         .background(Circle().fill(Color.black.opacity(0.5)))
@@ -1782,5 +1868,30 @@ struct NeighborGroupCubeFace: View {
         }
         .clipped()
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - R3 : indicateur de buffering mid-slide
+
+/// Spinner discret style Instagram affiché au CENTRE de la carte quand la
+/// timeline unifiée est gelée par le stall gate (vidéo qui bufferise, audio /
+/// image bg en cours de cache — R1/R2) après le chargement initial. Pas de
+/// plein écran, pas de voile : le média figé reste visible, seul un petit
+/// disque glass signale l'attente. `colorScheme .dark` épinglé : sur verre en
+/// Light, le spinner blanc serait illisible (règle mémoire « texte blanc
+/// illisible Light sur verre »).
+private struct StoryPlaybackStallIndicator: View {
+    var body: some View {
+        ProgressView()
+            .progressViewStyle(.circular)
+            .tint(.white)
+            .scaleEffect(1.15)
+            .frame(width: 52, height: 52)
+            .background(.ultraThinMaterial, in: Circle())
+            .environment(\.colorScheme, .dark)
+            .accessibilityLabel(
+                String(localized: "story.reader.buffering",
+                       defaultValue: "Chargement de la story en cours")
+            )
     }
 }

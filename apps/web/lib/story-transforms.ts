@@ -1,4 +1,5 @@
 import type { Post } from '@meeshy/shared/types/post';
+import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
 
@@ -52,14 +53,20 @@ function parseTextObjects(value: unknown): StoryTextObjectData[] | undefined {
   for (const raw of value) {
     if (!raw || typeof raw !== 'object') continue;
     const r = raw as Record<string, unknown>;
-    if (typeof r.id !== 'string' || typeof r.content !== 'string') continue;
+    // The iOS composer encodes the overlay text under `text`; `content` is a
+    // decoder-only legacy alias. Read the canonical key first, fall back to the
+    // legacy one — without this the web dropped every text overlay iOS sent.
+    const textValue = typeof r.text === 'string'
+      ? r.text
+      : (typeof r.content === 'string' ? r.content : undefined);
+    if (typeof r.id !== 'string' || textValue === undefined) continue;
     if (typeof r.x !== 'number' || typeof r.y !== 'number') continue;
     const translations = (r.translations && typeof r.translations === 'object' && !Array.isArray(r.translations))
       ? r.translations as Record<string, string>
       : undefined;
     result.push({
       id: r.id,
-      content: r.content,
+      content: textValue,
       x: r.x,
       y: r.y,
       scale: typeof r.scale === 'number' ? r.scale : 1,
@@ -68,7 +75,12 @@ function parseTextObjects(value: unknown): StoryTextObjectData[] | undefined {
       sourceLanguage: typeof r.sourceLanguage === 'string' ? r.sourceLanguage : undefined,
       textStyle: parseTextStyle(r.textStyle),
       textColor: typeof r.textColor === 'string' ? r.textColor : undefined,
+      // Legacy `textSize` is css px; canonical `fontSize` is design px on the
+      // 1080-wide reference canvas. Keep them in distinct fields so the renderer
+      // can scale `fontSizeDesign` to the live canvas instead of treating an
+      // iOS 96-design-px size as 96 css px (≈2.25× too large).
       textSize: typeof r.textSize === 'number' ? r.textSize : undefined,
+      fontSizeDesign: typeof r.fontSize === 'number' ? r.fontSize : undefined,
       textAlign: typeof r.textAlign === 'string' ? r.textAlign : undefined,
       textBg: typeof r.textBg === 'string' ? r.textBg : undefined,
       zIndex: typeof r.zIndex === 'number' ? r.zIndex : undefined,
@@ -301,7 +313,11 @@ export function postToStoryData(post: Post): StoryData {
     originalLanguage: post.originalLanguage ?? undefined,
     translations: translations && translations.length > 0 ? translations : undefined,
     storyEffects: effects ? {
-      background: typeof effects.backgroundColor === 'string' ? effects.backgroundColor : undefined,
+      // Canonical key is `background` (iOS composer + gateway StoryEffectsSchema);
+      // `backgroundColor` is a legacy alias kept as a fallback for old payloads.
+      background: typeof effects.background === 'string'
+        ? effects.background
+        : (typeof effects.backgroundColor === 'string' ? effects.backgroundColor : undefined),
       textStyle: parseTextStyle(effects.textStyle),
       textColor: typeof effects.textColor === 'string' ? effects.textColor : undefined,
       textPosition: parseTextPosition(effects.textPosition),
@@ -346,12 +362,158 @@ export function groupStoriesByAuthor(posts: Post[]): Map<string, Post[]> {
 // ============================================================================
 
 export function timeRemaining(expiresAt: string): string | null {
-  const diff = new Date(expiresAt).getTime() - Date.now();
-  if (diff <= 0) return null;
+  return formatTimeRemaining(new Date(expiresAt).getTime(), Date.now());
+}
 
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(minutes / 60);
+// ── W1 — Keyframes (portage 1:1 de KeyframeInterpolator.swift) ────────────────
 
-  if (hours >= 1) return `${hours}h${minutes % 60 > 0 ? `${minutes % 60}m` : ''}`;
-  return `${minutes}m`;
+export type StoryEasingName = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+
+export interface StoryKeyframeData {
+  time: number;          // secondes, RELATIF au startTime de l'objet porteur
+  x?: number;            // normalisé 0-1
+  y?: number;
+  scale?: number;
+  opacity?: number;
+  easing?: StoryEasingName;
+}
+
+export function applyStoryEasing(easing: StoryEasingName, t: number): number {
+  switch (easing) {
+    case 'easeIn': return t * t;
+    case 'easeOut': return 1 - (1 - t) * (1 - t);
+    case 'easeInOut': return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+    default: return t;
+  }
+}
+
+/** Portage exact de `KeyframeInterpolator.interpolate` : tri par time, un seul
+ *  keyframe = constante, clamp avant le premier / après le dernier, sinon
+ *  interpolation du segment avec l'easing du keyframe BAS. */
+export function interpolateKeyframeChannel(
+  channel: Array<{ time: number; value: number; easing: StoryEasingName }>,
+  at: number
+): number | undefined {
+  if (channel.length === 0) return undefined;
+  const sorted = [...channel].sort((a, b) => a.time - b.time);
+  if (sorted.length === 1) return sorted[0].value;
+  if (at <= sorted[0].time) return sorted[0].value;
+  if (at >= sorted[sorted.length - 1].time) return sorted[sorted.length - 1].value;
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const lo = sorted[i];
+    const hi = sorted[i + 1];
+    if (at >= lo.time && at <= hi.time) {
+      const span = hi.time - lo.time;
+      const u = span > 0 ? (at - lo.time) / span : 0;
+      const eased = applyStoryEasing(lo.easing, u);
+      return lo.value + (hi.value - lo.value) * eased;
+    }
+  }
+  return undefined;
+}
+
+export interface ResolvedKeyframeState {
+  x?: number;
+  y?: number;
+  scale?: number;
+  opacity?: number;
+}
+
+/** État interpolé d'un objet à `playheadSec` (temps slide). `startTime` est
+ *  celui de l'objet porteur — `keyframe.time` lui est relatif (spec 2.1). */
+export function resolveKeyframeState(
+  keyframes: StoryKeyframeData[] | undefined,
+  playheadSec: number,
+  startTime: number = 0
+): ResolvedKeyframeState | null {
+  if (!keyframes || keyframes.length === 0) return null;
+  const local = playheadSec - startTime;
+  const channel = (pick: (k: StoryKeyframeData) => number | undefined) =>
+    keyframes.flatMap((k) => {
+      const v = pick(k);
+      return v == null ? [] : [{ time: k.time, value: v, easing: k.easing ?? ('linear' as StoryEasingName) }];
+    });
+  return {
+    x: interpolateKeyframeChannel(channel((k) => k.x), local),
+    y: interpolateKeyframeChannel(channel((k) => k.y), local),
+    scale: interpolateKeyframeChannel(channel((k) => k.scale), local),
+    opacity: interpolateKeyframeChannel(channel((k) => k.opacity), local),
+  };
+}
+
+export interface StoryClipTransitionData {
+  id?: string;
+  fromClipId: string;
+  toClipId: string;
+  kind: 'crossfade' | 'dissolve';
+  duration: number;
+  easing?: StoryEasingName;
+}
+
+/**
+ * W1 inc.4 — portage 1:1 de `ReaderTransitionResolver.opacity` (iOS, branché
+ * au playback par R14) : facteur d'opacité d'un clip foreground sous ses
+ * `clipTransitions` crossfade. Sortant : 1→0 sur `[end-d, end]` ; entrant :
+ * 0→1 sur `[start, start+d]` ; multiplicatif quand plusieurs transitions
+ * matchent ; `dissolve` ignoré (compositor-only, parité reader iOS) ; hors
+ * fenêtre `[start, end]` du média → 0 ; interpolation linéaire (l'easing est
+ * ignoré par le reader iOS). Clamp [0, 1].
+ */
+export function resolveClipTransitionOpacity(
+  media: { id: string; startTime?: number; duration?: number },
+  transitions: readonly StoryClipTransitionData[] | undefined,
+  currentTime: number
+): number {
+  if (!transitions || transitions.length === 0) return 1;
+  const start = media.startTime ?? 0;
+  const end = start + (media.duration ?? 0);
+  if (currentTime < start || currentTime > end) return 0;
+
+  let opacity = 1;
+  for (const tr of transitions) {
+    if (tr.kind !== 'crossfade' || tr.duration <= 0) continue;
+    const isOutgoing = tr.fromClipId === media.id;
+    const isIncoming = tr.toClipId === media.id;
+    if (!isOutgoing && !isIncoming) continue;
+    const trStart = isOutgoing ? end - tr.duration : start;
+    if (currentTime < trStart || currentTime > trStart + tr.duration) continue;
+    const progress = (currentTime - trStart) / tr.duration;
+    opacity *= isOutgoing ? 1 - progress : progress;
+  }
+  return Math.max(0, Math.min(1, opacity));
+}
+
+/**
+ * W7 — un `storyEffects.background` non-hex/non-gradient est traité comme URL
+ * d'image de fond par les viewers. Rendre une URL ARBITRAIRE (posée par un
+ * client malveillant, le serveur ne borne que la longueur) ferait requêter
+ * chaque viewer vers un domaine tiers : tracking pixel / IP-leak des viewers.
+ * N'autorise que les chemins relatifs internes et les origins explicitement
+ * permis (front, gateway) ; rejette aussi tout métacaractère CSS (parenthèse,
+ * quote, espace — aucun chemin média légitime n'en contient) pour qu'aucune
+ * valeur ne puisse s'échapper du contexte `url(...)`. `null` → le caller
+ * retombe sur le gradient par défaut.
+ */
+export function safeBackgroundImageUrl(
+  bg: string,
+  allowedOrigins: readonly string[]
+): string | null {
+  if (/[()'"\s\\]/.test(bg)) return null;
+  if (bg.startsWith('/') && !bg.startsWith('//')) return bg;
+  let parsed: URL;
+  try {
+    parsed = new URL(bg);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+  return allowedOrigins.some((origin) => {
+    try {
+      return new URL(origin).origin === parsed.origin;
+    } catch {
+      return false;
+    }
+  })
+    ? bg
+    : null;
 }

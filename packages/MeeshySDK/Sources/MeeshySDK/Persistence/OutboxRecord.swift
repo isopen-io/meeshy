@@ -44,6 +44,10 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     case publishStory
     case repostStory
     case createPost
+    /// R6 — état « vu » d'une story, durable offline (flush FIFO au reconnect).
+    /// Idempotent côté gateway (P2002 no-op) ; coalescé par storyId (re-voir la
+    /// même story ne stacke pas de doublons).
+    case markStoryViewed
     case toggleLikePost
     case createComment
     case deleteComment

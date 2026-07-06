@@ -35,6 +35,7 @@ public protocol BlockServiceProviding: Sendable {
     func unblockUser(userId: String) async throws
     func listBlockedUsers() async throws -> [BlockedUser]
     func isBlocked(userId: String) -> Bool
+    @MainActor func setBlockedOptimistic(userId: String, blocked: Bool)
     func refreshCache() async
 }
 
@@ -82,6 +83,22 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
 
     public func isBlocked(userId: String) -> Bool {
         blockedUserIds.contains(userId)
+    }
+
+    /// R6-4 — mutation PUREMENT LOCALE de la blocklist canonique, sans réseau.
+    /// Le chemin outbox (`OfflineQueue.enqueue(.blockUser/.unblockUser)`) l'appelle
+    /// pour flipper `blockedUserIds` de manière optimiste (les swipe labels lisent
+    /// `isBlocked`) ; le dispatcher possède le POST/DELETE réel. La réciproque
+    /// (`blocked: false` sur un block, ou l'inverse) sert au rollback sur
+    /// `.exhausted`. Ne JAMAIS l'utiliser pour un block réseau — c'est
+    /// `blockUser(userId:)` qui fait le round-trip.
+    @MainActor
+    public func setBlockedOptimistic(userId: String, blocked: Bool) {
+        if blocked {
+            blockedUserIds.insert(userId)
+        } else {
+            blockedUserIds.remove(userId)
+        }
     }
 
     public func refreshCache() async {

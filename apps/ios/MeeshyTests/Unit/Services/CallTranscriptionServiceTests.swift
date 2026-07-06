@@ -130,6 +130,93 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertTrue(sut.segments.isEmpty)
     }
 
+    // MARK: - Pre-role Buffer (undecided)
+
+    func test_receiveRemoteSegment_asUndecided_doesNotAddToSegments() {
+        let sut = makeSUT()
+        // role defaults to .undecided
+
+        sut.receiveRemoteSegment(makeSegment(text: "early"))
+
+        XCTAssertTrue(
+            sut.segments.isEmpty,
+            "Segments must not appear before role is resolved — the overlay would " +
+            "display content attributed to the wrong speaker or in the wrong state."
+        )
+    }
+
+    func test_receiveRemoteSegment_asUndecided_thenFollower_replaysBuffer() {
+        let sut = makeSUT()
+
+        let s1 = makeSegment(text: "first", startTime: 0)
+        let s2 = makeSegment(text: "second", startTime: 1)
+        sut.receiveRemoteSegment(s1)
+        sut.receiveRemoteSegment(s2)
+
+        // Role resolves to follower after segments arrived
+        sut.resolveRole(localCapability: .none, remoteCapability: .standard, isInitiator: true)
+
+        XCTAssertEqual(sut.segments.count, 2, "Buffered segments must be replayed when role resolves to follower")
+        XCTAssertEqual(sut.segments[0].text, "first")
+        XCTAssertEqual(sut.segments[1].text, "second")
+    }
+
+    func test_receiveRemoteSegment_asUndecided_thenLeader_discardsBuffer() {
+        let sut = makeSUT()
+
+        sut.receiveRemoteSegment(makeSegment(text: "buffered"))
+
+        sut.resolveRole(localCapability: .standard, remoteCapability: .none, isInitiator: true)
+
+        XCTAssertTrue(
+            sut.segments.isEmpty,
+            "Buffered segments from undecided phase must be discarded when role resolves to leader."
+        )
+    }
+
+    func test_receiveRemoteSegment_asUndecided_bufferCapAtTen() {
+        let sut = makeSUT()
+
+        for i in 0..<15 {
+            sut.receiveRemoteSegment(makeSegment(text: "seg \(i)", startTime: Double(i)))
+        }
+
+        sut.resolveRole(localCapability: .none, remoteCapability: .standard, isInitiator: true)
+
+        XCTAssertEqual(
+            sut.segments.count, 10,
+            "Buffer cap of 10 must prevent unbounded accumulation when DataChannel " +
+            "segments arrive long before capability exchange completes."
+        )
+    }
+
+    func test_receiveRemoteSegment_asUndecided_afterResolvedToFollower_addedDirectly() {
+        let sut = makeSUT()
+        sut.resolveRole(localCapability: .none, remoteCapability: .standard, isInitiator: true)
+
+        sut.receiveRemoteSegment(makeSegment(text: "post-resolve"))
+
+        XCTAssertEqual(sut.segments.count, 1)
+        XCTAssertEqual(sut.segments.first?.text, "post-resolve")
+    }
+
+    func test_resetForCallEnd_clearsPendingBuffer() {
+        let sut = makeSUT()
+        // Buffer two segments in undecided state
+        sut.receiveRemoteSegment(makeSegment(text: "a"))
+        sut.receiveRemoteSegment(makeSegment(text: "b"))
+
+        sut.resetForCallEnd()
+
+        // After reset, resolving to follower should NOT replay stale segments
+        sut.resolveRole(localCapability: .none, remoteCapability: .standard, isInitiator: true)
+        XCTAssertTrue(
+            sut.segments.isEmpty,
+            "resetForCallEnd must purge the pending buffer so stale segments from a " +
+            "previous call never appear in the next call."
+        )
+    }
+
     // MARK: - Displayed Segments
 
     func test_displayedSegments_limitsToMaxDisplayed() {
@@ -144,6 +231,45 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertEqual(sut.displayedSegments.count, 5)
     }
 
+    // MARK: - Permission Guard (startTranscribing)
+
+    func test_startTranscribing_whenPermissionNotDetermined_doesNotStart() {
+        let sut = makeSUT()
+        // permission defaults to .notDetermined — no requestPermission() called
+
+        sut.startTranscribing(
+            localLanguage: "en",
+            remoteLanguage: "fr",
+            localUserId: "local",
+            remoteUserId: "remote"
+        )
+
+        XCTAssertFalse(sut.isTranscribing, "Must not start transcription when permission is notDetermined")
+        XCTAssertEqual(sut.lastError, .permissionDenied, "Must set permissionDenied error when not authorized")
+    }
+
+    func test_startTranscribing_whenPermissionNotDetermined_doesNotSetIsTranscribingTrue() {
+        let sut = makeSUT()
+
+        sut.startTranscribing(
+            localLanguage: "en",
+            remoteLanguage: "fr",
+            localUserId: "local",
+            remoteUserId: "remote"
+        )
+
+        XCTAssertFalse(sut.isTranscribing)
+    }
+
+    func test_startTranscribing_calledTwiceWhileNotAuthorized_lastErrorRemainsPermissionDenied() {
+        let sut = makeSUT()
+
+        sut.startTranscribing(localLanguage: "en", remoteLanguage: "fr", localUserId: "l", remoteUserId: "r")
+        sut.startTranscribing(localLanguage: "en", remoteLanguage: "fr", localUserId: "l", remoteUserId: "r")
+
+        XCTAssertEqual(sut.lastError, .permissionDenied)
+    }
+
     // MARK: - Stop Transcribing
 
     func test_stopTranscribing_clearsSegmentsAndState() {
@@ -156,6 +282,33 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertFalse(sut.isTranscribing)
         XCTAssertTrue(sut.segments.isEmpty)
         XCTAssertNil(sut.lastError)
+    }
+
+    // MARK: - Stale Recognizer Callback After Teardown
+
+    func test_applyRecognitionResult_whenNotTranscribing_doesNotRepopulateSegments() {
+        // Regression guard: the on-device recognizer callback runs off-MainActor
+        // and hops back via Task.detached, so a result can still be in flight
+        // when stopTranscribing()/resetForCallEnd() has already cleared state for
+        // a call that just ended. `isTranscribing` defaults to false (as it does
+        // here, and as it remains in every test in this file since none drive a
+        // real SFSpeechRecognizer session), so this exercises exactly that stale-
+        // callback path.
+        let sut = makeSUT()
+        XCTAssertFalse(sut.isTranscribing)
+
+        sut.applyRecognitionResult(
+            segments: [makeSegment(text: "stale from previous call")],
+            speakerId: "user1",
+            isFinal: true,
+            boundaryText: "stale from previous call"
+        )
+
+        XCTAssertTrue(
+            sut.segments.isEmpty,
+            "A recognizer callback that resolves after teardown (isTranscribing == false) " +
+            "must not repopulate the transcript with data from an ended call."
+        )
     }
 }
 
@@ -269,5 +422,42 @@ final class TranscriptionErrorTests: XCTestCase {
     func test_onDeviceNotSupported_includesLanguage() {
         let error = TranscriptionError.onDeviceNotSupported(language: "zh")
         XCTAssertTrue(error.errorDescription?.contains("zh") ?? false)
+    }
+}
+
+// MARK: - Dead Code Regression (rotateRecognitionRequest)
+
+@MainActor
+final class CallTranscriptionServiceDeadCodeTests: XCTestCase {
+
+    private func serviceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_rotateRecognitionRequest_doesNotCheckTaskForNil() throws {
+        // `SFSpeechRecognizer.recognitionTask(with:)` returns a non-optional
+        // SFSpeechRecognitionTask — it can never fail synchronously, so
+        // `stream.task == nil` was dead code that could never execute, and the
+        // "3 consecutive rotation failures" error it guarded never surfaced.
+        // Genuine failures already reach `lastError` on every occurrence via
+        // handleRecognizerCallback's `error` branch, so removing the dead
+        // branch does not weaken error reporting.
+        let source = try serviceSource()
+        XCTAssertFalse(
+            source.contains("stream.task == nil"),
+            "rotateRecognitionRequest must not check stream.task for nil — " +
+            "recognitionTask(with:) never returns nil, making that branch unreachable."
+        )
+        XCTAssertFalse(
+            source.contains("Recognition rotation failed 3 times consecutively"),
+            "The unreachable 3-consecutive-failures error path must be removed, not left " +
+            "as dead code that silently never fires."
+        )
     }
 }

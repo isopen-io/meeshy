@@ -107,21 +107,21 @@ struct StatusBubbleOverlay: View {
                 VStack(alignment: .leading, spacing: 6) {
                     audioPlayerRow(urlString: audioUrl)
                     Text(status.timeAgo)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     if let content = status.content, !content.isEmpty {
                         Text(content)
-                            .font(.system(size: 13))
+                            .font(MeeshyFont.relative(13))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 4)
                     Text(status.timeAgo)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -129,7 +129,7 @@ struct StatusBubbleOverlay: View {
             // "via @username" for republished statuses
             if let via = status.viaUsername {
                 Text(String(localized: "status.bubble.via", defaultValue: "via @\(via)", bundle: .main))
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -142,9 +142,9 @@ struct StatusBubbleOverlay: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.2.squarepath")
-                            .font(.system(size: 11))
+                            .font(MeeshyFont.relative(11))
                         Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                     }
                     .foregroundColor(MeeshyColors.indigo400)
                 }
@@ -152,22 +152,24 @@ struct StatusBubbleOverlay: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(
+        // iOS 26 Liquid Glass — floating mood bubble. The SDK Compatibility wrapper
+        // owns the gating + the .ultraThinMaterial fallback. The avatar-tinted
+        // gradient hairline + elevation shadow stay as overlays ON the glass
+        // (same idiom as FloatingCallPillView: adaptiveGlass + stroke overlay + shadow).
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
+                .stroke(
+                    LinearGradient(
+                        colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
                 )
-                .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
         )
+        .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
     }
 
     // MARK: - Audio Player
@@ -177,12 +179,18 @@ struct StatusBubbleOverlay: View {
             Button {
                 audioPlayer.togglePlayPause()
             } label: {
+                // Glyphe dans un cercle de dimension fixe 18×18 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                 Image(systemName: audioPlayer.isPlaying ? "stop.fill" : "play.fill")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(Color(hex: status.avatarColor)))
             }
+            .accessibilityLabel(
+                audioPlayer.isPlaying
+                    ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
+                    : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
+            )
 
             ProgressView(value: audioPlayer.progress)
                 .progressViewStyle(.linear)

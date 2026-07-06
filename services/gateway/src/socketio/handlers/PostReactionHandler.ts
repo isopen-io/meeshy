@@ -201,13 +201,10 @@ export class PostReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      await this.broadcastReactionChange(validated.postId, validated.emoji, 'add', userId, updateEvent);
-
-      await this._createPostReactionNotification(
-        validated.postId,
-        validated.emoji,
-        userId
-      );
+      this.broadcastReactionChange(validated.postId, validated.emoji, 'add', userId, updateEvent)
+        .catch(err => this.logger.error('post reaction:add broadcast failed', err, { postId: validated.postId }));
+      // _createPostReactionNotification handles errors internally; void to be explicit.
+      void this._createPostReactionNotification(validated.postId, validated.emoji, userId);
     } catch (error: unknown) {
       this.logger.error('Failed to add post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -272,11 +269,12 @@ export class PostReactionHandler {
       });
 
       if (!removed) {
-        const errorResponse: SocketIOResponse<unknown> = {
-          success: false,
-          error: 'Reaction not found',
-        };
-        if (callback) callback(errorResponse);
+        // Idempotent: the reaction is already absent — the caller's desired
+        // end-state is achieved. Reply success (no broadcast, nothing changed)
+        // instead of an error, which the client would treat as a failed un-react
+        // and roll the optimistic removal back, re-showing a reaction that is
+        // gone. Mirrors ReactionHandler.handleReactionRemove (message reactions).
+        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
         return;
       }
 
@@ -295,7 +293,8 @@ export class PostReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      await this.broadcastReactionChange(validated.postId, validated.emoji, 'remove', userId, updateEvent);
+      this.broadcastReactionChange(validated.postId, validated.emoji, 'remove', userId, updateEvent)
+        .catch(err => this.logger.error('post reaction:remove broadcast failed', err, { postId: validated.postId }));
     } catch (error: unknown) {
       this.logger.error('Failed to remove post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -327,6 +326,12 @@ export class PostReactionHandler {
 
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
+
+      const syncAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      if (!syncAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
 
       const reactionSync = await this.postReactionService.getPostReactions({
         postId: data.postId,
@@ -373,6 +378,12 @@ export class PostReactionHandler {
 
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
+
+      const joinAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      if (!joinAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
 
       const post = await this.prisma.post.findUnique({
         where: { id: validated.postId },
@@ -424,6 +435,12 @@ export class PostReactionHandler {
         return;
       }
 
+      const leaveAllowed = await reactionRateLimiter.checkLimit(userIdOrToken, POST_REACTION_RATE_LIMIT);
+      if (!leaveAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
       await socket.leave(ROOMS.post(validated.postId));
       if (callback) callback({ success: true });
     } catch (error: unknown) {
@@ -446,18 +463,26 @@ export class PostReactionHandler {
   ): Promise<void> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { authorId: true },
+      select: { authorId: true, type: true, content: true, createdAt: true, expiresAt: true },
     });
 
     if (!post?.authorId) return;
 
+    // Mirror the REST like route (`routes/posts/interactions.ts`) exactly: forward the
+    // real post type + ephemeral context so a reaction on a STORY/STATUS/REEL yields the
+    // correctly-typed notification (`story_reaction`/`status_reaction`, expiry context)
+    // instead of a generic `post_like`. Hardcoding `'POST'` here dropped that typing on
+    // every socket-path reaction.
     this.notificationService
       .createPostLikeNotification({
         actorId: reactorUserId,
         postId,
         postAuthorId: post.authorId,
         emoji,
-        postType: 'POST',
+        postType: post.type,
+        postPreview: post.content?.slice(0, 80) ?? undefined,
+        postCreatedAt: post.createdAt ?? undefined,
+        postExpiresAt: post.expiresAt ?? undefined,
       })
       .catch((error) => {
         this.logger.error('[PostReactionHandler] Failed to create post reaction notification', error, { reactorUserId, postId, emoji });

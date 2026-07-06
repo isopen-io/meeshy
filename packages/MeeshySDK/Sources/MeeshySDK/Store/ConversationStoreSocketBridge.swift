@@ -9,6 +9,8 @@ import Combine
 /// store-agnostic.
 ///
 /// Scope — the broadcasts routed to the store:
+/// - `conversation:updated`        → `ConversationStore.applyConversationUpdated`
+///   (bump-to-top on new message + metadata changes: title, avatar, …)
 /// - `conversation:deleted`        → `ConversationStore.applyConversationDeleted`
 /// - `user:preferences-updated` (conversation scope, versioned)
 ///                                 → `ConversationStore.applyRemote`
@@ -53,6 +55,7 @@ public final class ConversationStoreSocketBridge {
     /// Wire the shared socket manager's broadcasts to the stores.
     public func activate(socket: MessageSocketManager = .shared) {
         activate(
+            conversationUpdated: socket.conversationUpdated.eraseToAnyPublisher(),
             conversationDeleted: socket.conversationDeleted.eraseToAnyPublisher(),
             userPreferencesUpdated: socket.userPreferencesConversationUpdated.eraseToAnyPublisher(),
             userPreferencesReordered: socket.userPreferencesReordered.eraseToAnyPublisher(),
@@ -60,13 +63,15 @@ public final class ConversationStoreSocketBridge {
             categoryCreated: socket.categoryCreated.eraseToAnyPublisher(),
             categoryUpdated: socket.categoryUpdated.eraseToAnyPublisher(),
             categoryDeleted: socket.categoryDeleted.eraseToAnyPublisher(),
-            categoriesReordered: socket.categoriesReordered.eraseToAnyPublisher()
+            categoriesReordered: socket.categoriesReordered.eraseToAnyPublisher(),
+            didReconnect: socket.didReconnect.eraseToAnyPublisher()
         )
     }
 
     /// Publisher-injected variant (testable without a live socket). Idempotent:
     /// drops any prior subscriptions before re-wiring.
     func activate(
+        conversationUpdated: AnyPublisher<ConversationUpdatedEvent, Never>,
         conversationDeleted: AnyPublisher<ConversationDeletedSocketEvent, Never>,
         userPreferencesUpdated: AnyPublisher<UserPreferencesConversationUpdatedSocketEvent, Never>,
         userPreferencesReordered: AnyPublisher<UserPreferencesReorderedSocketEvent, Never>,
@@ -74,12 +79,17 @@ public final class ConversationStoreSocketBridge {
         categoryCreated: AnyPublisher<CategorySocketEvent, Never>,
         categoryUpdated: AnyPublisher<CategorySocketEvent, Never>,
         categoryDeleted: AnyPublisher<CategoryDeletedSocketEvent, Never>,
-        categoriesReordered: AnyPublisher<CategoriesReorderedSocketEvent, Never>
+        categoriesReordered: AnyPublisher<CategoriesReorderedSocketEvent, Never>,
+        didReconnect: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher()
     ) {
         cancellables.removeAll()
         let store = self.store
         let categoryStore = self.categoryStore
         let currentUserId = self.currentUserId
+
+        conversationUpdated.sink { event in
+            Task { await store.applyConversationUpdated(Self.mapConversationUpdated(event)) }
+        }.store(in: &cancellables)
 
         conversationDeleted.sink { event in
             Task { await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId)) }
@@ -133,11 +143,38 @@ public final class ConversationStoreSocketBridge {
             let updates = event.updates.map { (id: $0.categoryId, order: $0.order) }
             Task { await categoryStore.applyRemote(.reordered(updates: updates)) }
         }.store(in: &cancellables)
+
+        didReconnect.sink {
+            Task { await store.flushOutbox() }
+            Task { try? await categoryStore.hydrate() }
+        }.store(in: &cancellables)
     }
 
     /// Drop all subscriptions (e.g. on logout).
     public func deactivate() {
         cancellables.removeAll()
+    }
+
+    /// Map a `conversation:updated` socket event onto the store's input value
+    /// type. Pure + `nonisolated` so the sink can build it before hopping to
+    /// the store actor.
+    nonisolated static func mapConversationUpdated(
+        _ event: ConversationUpdatedEvent
+    ) -> ConversationUpdatedStoreEvent {
+        ConversationUpdatedStoreEvent(
+            conversationId: event.conversationId,
+            lastMessageAt: event.lastMessageAt,
+            lastMessageId: event.lastMessageId,
+            lastMessagePreview: event.lastMessagePreview,
+            title: event.title,
+            avatar: event.avatar,
+            description: event.description,
+            banner: event.banner,
+            isAnnouncementChannel: event.isAnnouncementChannel,
+            defaultWriteRole: event.defaultWriteRole,
+            slowModeSeconds: event.slowModeSeconds,
+            autoTranslateEnabled: event.autoTranslateEnabled
+        )
     }
 
     /// Map the conversation-scope socket payload onto the store's input value

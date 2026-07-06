@@ -46,6 +46,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
     let audioTranslationFailed = PassthroughSubject<AudioTranslationFailedEvent, Never>()
     let didReconnect = PassthroughSubject<Void, Never>()
+    let connectionRTT = PassthroughSubject<Double, Never>()
     let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     let conversationNew = PassthroughSubject<ConversationNewEvent, Never>()
     let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
@@ -79,6 +80,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
     let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
     let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
+    let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
 
     // MARK: - Call Tracking
 
@@ -114,6 +116,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var callBackgroundedCallCount = 0
     var callForegroundedCallCount = 0
     var callScreenCaptureDetectedCallCount = 0
+    var callAnalyticsCallCount = 0
+    var lastCallAnalyticsPayload: [String: Any]?
 
     // MARK: - Protocol Methods
 
@@ -259,6 +263,11 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callScreenCaptureDetectedCallCount += 1
     }
 
+    func emitCallAnalytics(callId: String, payload: [String: Any]) {
+        callAnalyticsCallCount += 1
+        lastCallAnalyticsPayload = payload
+    }
+
     // MARK: - Simulation Helpers
 
     func simulateMessage(_ message: APIMessage) {
@@ -319,5 +328,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callBackgroundedCallCount = 0
         callForegroundedCallCount = 0
         callScreenCaptureDetectedCallCount = 0
+        callAnalyticsCallCount = 0
+        lastCallAnalyticsPayload = nil
     }
 }

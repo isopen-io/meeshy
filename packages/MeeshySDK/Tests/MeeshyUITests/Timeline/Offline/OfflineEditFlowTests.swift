@@ -198,8 +198,15 @@ final class OfflineEditFlowTests: XCTestCase {
         XCTAssertEqual(items.count, 1)
         let payload = items.first?.slidePayloadJSON ?? ""
         XCTAssertNotEqual(payload, "{}", "slidePayloadJSON must contain real serialised project, not empty object")
-        XCTAssertTrue(payload.contains("\"slideId\""),
-                      "JSON must include TimelineProject fields — got: \(payload.prefix(200))")
+        // Offline serialisation encodes a single-element `[StorySlide]` array
+        // (decoded by `StoryViewModel.executeQueuedPublish`), not a bare
+        // `TimelineProject`. `StorySlide` carries `id`/`effects` — there is no
+        // legacy `slideId` key. The timeline content (mediaObjects) is applied
+        // onto the slide via `TimelineProject.apply(to:)`.
+        XCTAssertTrue(payload.hasPrefix("["),
+                      "slidePayloadJSON must serialise a [StorySlide] array — got: \(payload.prefix(200))")
+        XCTAssertTrue(payload.contains("\"effects\""),
+                      "JSON must include StorySlide effects — got: \(payload.prefix(200))")
         XCTAssertTrue(payload.contains("\"mediaObjects\""),
                       "JSON must include mediaObjects array — got: \(payload.prefix(200))")
     }

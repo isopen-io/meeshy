@@ -515,6 +515,9 @@ extension StoryViewerView {
         || showCommentsOverlay
         || isTransitioning
         || isDismissing
+        // Interstitiel d'identité inter-groupes : la lecture (timer + canvas +
+        // audio) attend la fin des 2,2 s (ou le tap skip) — reprise sans saut.
+        || showGroupIntro
     }
 
     func startTimer() {
@@ -1218,7 +1221,7 @@ struct StoryCommentsOverlayView: View {
     /// consultables, mais on signale que la story n'est plus accessible.
     private var expiredStoryBanner: some View {
         Label {
-            Text("Story expirée — les commentaires restent visibles")
+            Text(String(localized: "story.viewer.expiredBanner", defaultValue: "Story expirée — les commentaires restent visibles", bundle: .main))
                 .font(MeeshyFont.relative(11, weight: .semibold))
                 .lineLimit(1)
         } icon: {
@@ -1228,7 +1231,7 @@ struct StoryCommentsOverlayView: View {
         .foregroundColor(.white.opacity(0.85))
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .background(Capsule().fill(Color(hex: "F87171").opacity(0.32)))
+        .background(Capsule().fill(MeeshyColors.error.opacity(0.32)))
         .padding(.bottom, 6)
         .transition(.opacity)
     }
@@ -2081,6 +2084,18 @@ struct StoryActionButton: View {
                     .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
             }
             .frame(width: 56)
+            // Élargit la zone sensible de quelques pixels AUTOUR du glyph + label.
+            // Sans cartouche/cercle de fond (style « glyph flottant »), seul le
+            // glyph rendu était tappable : un tap qui manquait le glyph de
+            // quelques pixels traversait jusqu'à l'overlay de navigation (Layer 6
+            // de StoryViewerView+Canvas — gesture prev/next) et faisait passer la
+            // story à la suivante (bug user 2026-06-28 « je touche un bouton, ça
+            // passe à la story suivante »). Le `padding` agrandit le rectangle et
+            // comble les gaps entre FABs ; `contentShape(Rectangle())` rend TOUT
+            // ce rectangle (padding inclus) sensible, transparent compris.
+            .padding(.vertical, 8)
+            .padding(.horizontal, 6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

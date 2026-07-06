@@ -85,6 +85,8 @@ struct StatusBarView: View {
             .glassCard(cornerRadius: MeeshyRadius.xl)
             .breathingGlow(color: Color(hex: status.avatarColor), intensity: 0.4)
         }
+        .accessibilityLabel(String(localized: "status.bar.my_status_label", defaultValue: "Mon statut \(status.moodEmoji)", bundle: .main))
+        .accessibilityHint(String(localized: "status.bar.my_status_hint", defaultValue: "Voir les détails de votre statut", bundle: .main))
     }
 
     // MARK: - Add Status Pill
@@ -106,6 +108,8 @@ struct StatusBarView: View {
             .padding(.vertical, 8)
             .glassCard(cornerRadius: MeeshyRadius.xl)
         }
+        .accessibilityLabel(String(localized: "status.bar.add_label", defaultValue: "Ajouter un statut", bundle: .main))
+        .accessibilityHint(String(localized: "status.bar.add_hint", defaultValue: "Publie un statut visible par vos contacts", bundle: .main))
         .breathingGlow(color: MeeshyColors.indigo500, intensity: 0.3)
     }
 
@@ -128,6 +132,8 @@ struct StatusBarView: View {
             .padding(.vertical, 8)
             .glassCard(cornerRadius: MeeshyRadius.xl)
         }
+        .accessibilityLabel("\(status.moodEmoji) \(status.username)")
+        .accessibilityHint(String(localized: "status.bar.status_hint", defaultValue: "Voir le statut", bundle: .main))
     }
 
     // MARK: - Status Popover

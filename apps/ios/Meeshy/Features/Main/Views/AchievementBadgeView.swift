@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct AchievementBadgeView: View {
     let achievement: Achievement
@@ -28,7 +29,8 @@ struct AchievementBadgeView: View {
                     .rotationEffect(.degrees(-90))
 
                 Image(systemName: achievement.icon)
-                    .font(MeeshyFont.relative(22, weight: .semibold))
+                    // doctrine 86i — icône bornée par le cercle de progression fixe 56×56
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(
                         achievement.isUnlocked
                             ? Color(hex: achievement.color)

@@ -780,7 +780,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       if (failedMsg.attachmentIds.length > 0) setAttachmentIds(failedMsg.attachmentIds);
       if (failedMsg.replyTo) useReplyStore.getState().setReplyingTo(failedMsg.replyTo as unknown);
       setTimeout(() => messageComposerRef.current?.focus(), 100);
-      toast.info(t('messageRestored') || 'Message restauré.');
+      toast.info(t('bubbleStream.messageRestored', 'Message restored in composer'));
     },
     [setNewMessage, setAttachmentIds, t]
   );

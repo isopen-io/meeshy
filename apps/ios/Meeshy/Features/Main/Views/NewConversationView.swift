@@ -113,10 +113,13 @@ struct NewConversationView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
+                // Chrome nav glyph: fixed 16pt tap target (doctrine 82i/87i/90i —
+                // header/toolbar chevrons stay fixed, not Dynamic-Type-scaled).
                 Image(systemName: "chevron.left")
                     .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
             }
+            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 
@@ -156,6 +159,7 @@ struct NewConversationView: View {
             Image(systemName: "person.3.fill")
                 .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo600)
+                .accessibilityHidden(true)
 
             TextField(String(localized: "Nom du groupe", defaultValue: "Nom du groupe"), text: $groupTitle)
                 .font(MeeshyFont.relative(15, weight: .medium))
@@ -220,6 +224,7 @@ struct NewConversationView: View {
                     .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "accessibility.remove_selected_user", bundle: .main))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -241,6 +246,7 @@ struct NewConversationView: View {
             Image(systemName: "magnifyingglass")
                 .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             TextField(String(localized: "Rechercher un utilisateur...", defaultValue: "Rechercher un utilisateur..."), text: $searchQuery)
                 .font(MeeshyFont.relative(15, weight: .medium))
@@ -260,6 +266,7 @@ struct NewConversationView: View {
                         .font(MeeshyFont.relative(14))
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityLabel(String(localized: "accessibility.clear_search", bundle: .main))
             }
         }
         .padding(.horizontal, 14)
@@ -299,6 +306,7 @@ struct NewConversationView: View {
             Image(systemName: "person.slash")
                 .font(MeeshyFont.relative(36))
                 .foregroundColor(theme.textMuted.opacity(0.5))
+                .accessibilityHidden(true)
 
             Text(String(localized: "Aucun utilisateur trouve", defaultValue: "Aucun utilisateur trouv\u{00E9}"))
                 .font(MeeshyFont.relative(15, weight: .medium))
@@ -306,6 +314,7 @@ struct NewConversationView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+        .accessibilityElement(children: .combine)
     }
 
     private func userRow(_ user: SearchedUser) -> some View {
@@ -352,6 +361,7 @@ struct NewConversationView: View {
                     Image(systemName: "hand.raised.fill")
                         .font(MeeshyFont.relative(16))
                         .foregroundColor(MeeshyColors.error.opacity(0.7))
+                        .accessibilityHidden(true)
                 } else {
                     if user.isOnline == true {
                         Circle()
@@ -359,9 +369,12 @@ struct NewConversationView: View {
                             .frame(width: 8, height: 8)
                     }
 
+                    // Selection state is conveyed to VoiceOver by the row's
+                    // `.isSelected` trait below; the glyph itself is decorative.
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(MeeshyFont.relative(20))
                         .foregroundColor(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                        .accessibilityHidden(true)
                 }
             }
             .opacity(isBlocked ? 0.5 : 1)
@@ -383,6 +396,7 @@ struct NewConversationView: View {
             )
         }
         .disabled(isBlocked)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // Networking is delegated to `NewConversationViewModel`. The view no

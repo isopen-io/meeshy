@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.friend.FriendRepository
+import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
@@ -28,6 +29,7 @@ data class ContactsUiState(
 @HiltViewModel
 class ContactsViewModel @Inject constructor(
     private val friendRepository: FriendRepository,
+    private val friendshipCache: FriendshipCache = FriendshipCache(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsUiState())
@@ -49,6 +51,9 @@ class ContactsViewModel @Inject constructor(
             try {
                 val received = friendRepository.receivedRequests()
                 val sent = friendRepository.sentRequests()
+                if (received is NetworkResult.Success && sent is NetworkResult.Success) {
+                    friendshipCache.hydrate(sent = sent.data, received = received.data)
+                }
                 _state.update { current ->
                     current.copy(
                         receivedRequests = (received as? NetworkResult.Success)?.data ?: current.receivedRequests,
@@ -79,11 +84,13 @@ class ContactsViewModel @Inject constructor(
                 errorMessage = null,
             )
         }
+        applyRespondToCache(removed.senderId, accepted)
         viewModelScope.launch {
             val result = runCatching { friendRepository.respond(requestId, accepted) }
                 .getOrElse { if (it is CancellationException) throw it else NetworkResult.Failure(toError(it)) }
             finishAction(requestId) {
                 if (result is NetworkResult.Failure) {
+                    rollbackRespondCache(removed.senderId, removed.id, accepted)
                     it.copy(
                         receivedRequests = restore(it.receivedRequests, snapshot, removed),
                         errorMessage = result.error.message,
@@ -103,17 +110,35 @@ class ContactsViewModel @Inject constructor(
                 errorMessage = null,
             )
         }
+        if (removed.receiverId.isNotBlank()) friendshipCache.didCancelRequest(removed.receiverId)
         viewModelScope.launch {
             val result = runCatching { friendRepository.deleteRequest(requestId) }
                 .getOrElse { if (it is CancellationException) throw it else NetworkResult.Failure(toError(it)) }
             finishAction(requestId) {
                 if (result is NetworkResult.Failure) {
+                    if (removed.receiverId.isNotBlank()) {
+                        friendshipCache.didSendRequest(removed.receiverId, removed.id)
+                    }
                     it.copy(
                         sentRequests = restore(it.sentRequests, snapshot, removed),
                         errorMessage = result.error.message,
                     )
                 } else it
             }
+        }
+    }
+
+    private fun applyRespondToCache(senderId: String, accepted: Boolean) {
+        if (senderId.isBlank()) return
+        if (accepted) friendshipCache.didAcceptRequest(senderId) else friendshipCache.didRejectRequest(senderId)
+    }
+
+    private fun rollbackRespondCache(senderId: String, requestId: String, accepted: Boolean) {
+        if (senderId.isBlank()) return
+        if (accepted) {
+            friendshipCache.rollbackAccept(senderId, requestId)
+        } else {
+            friendshipCache.rollbackReject(senderId, requestId)
         }
     }
 

@@ -254,7 +254,7 @@ struct MessageInfoSheet: View {
             // Delivered step
             timelineStep(
                 icon: "checkmark.circle",
-                iconColor: isDelivered ? Color(hex: "8E8E93") : theme.textMuted.opacity(0.3),
+                iconColor: isDelivered ? MeeshyColors.neutral400 : theme.textMuted.opacity(0.3),
                 label: String(localized: "message-detail.views.delivered", defaultValue: "Distribue", bundle: .main),
                 timestamp: deliveredTimestamp?.formatted(date: .omitted, time: .shortened),
                 isActive: isDelivered,
@@ -267,7 +267,7 @@ struct MessageInfoSheet: View {
             // Read step
             timelineStep(
                 icon: "checkmark.circle.fill",
-                iconColor: isRead ? Color(hex: "34B7F1") : theme.textMuted.opacity(0.3),
+                iconColor: isRead ? MeeshyColors.readReceipt : theme.textMuted.opacity(0.3),
                 label: String(localized: "message-detail.views.read", defaultValue: "Lu", bundle: .main),
                 timestamp: readTimestamp?.formatted(date: .omitted, time: .shortened),
                 isActive: isRead,

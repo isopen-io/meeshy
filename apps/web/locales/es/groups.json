@@ -50,6 +50,10 @@
       "myGroups": "Mis Comunidades",
       "invitations": "Invitaciones"
     },
+    "card": {
+      "openLabel": "Abrir {name}",
+      "copyIdentifier": "Copiar identificador {identifier}"
+    },
     "list": {
       "communities": "Comunidades",
       "loading": "Cargando...",

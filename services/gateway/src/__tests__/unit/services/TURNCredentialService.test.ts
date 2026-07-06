@@ -32,14 +32,17 @@ jest.mock('../../../utils/logger', () => ({
 }));
 
 import { TURNCredentialService } from '../../../services/TURNCredentialService';
+import { CallCleanupService } from '../../../services/CallCleanupService';
 import { logger } from '../../../utils/logger';
 import crypto from 'crypto';
 
 type MockFn = jest.Mock<any>;
 const warnMock = logger.warn as MockFn;
 
-// Mirror of CallCleanupService.MAX_ACTIVE_MS (2 h) expressed in seconds.
-const MAX_ACTIVE_CALL_SECONDS = 2 * 60 * 60;
+// Imported (not hand-duplicated) so a future change to either service's
+// constant can't silently drift out of sync and reintroduce the "call drops
+// after ~10 min behind TURN" regression this suite guards against.
+const MAX_ACTIVE_CALL_SECONDS = CallCleanupService.MAX_ACTIVE_MS / 1000;
 
 const DEFAULT_INSECURE_SECRET = 'meeshy-turn-secret-CHANGE-IN-PRODUCTION';
 const STRONG_SECRET = 'a9f2c3e4b5d6a7f8c9e0b1d2a3f4c5e6';
@@ -96,6 +99,19 @@ describe('TURNCredentialService — production security guard', () => {
   it('does NOT throw in production when a strong custom TURN_SECRET is provided', () => {
     withEnv({ NODE_ENV: 'production', TURN_SECRET: STRONG_SECRET }, () => {
       expect(() => new TURNCredentialService()).not.toThrow();
+    });
+  });
+
+  it('throws when NODE_ENV=production and TURN_SECRET is set but shorter than 32 characters', () => {
+    withEnv({ NODE_ENV: 'production', TURN_SECRET: 'short_custom_secret' }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+      expect(() => new TURNCredentialService()).toThrow('32 characters');
+    });
+  });
+
+  it('throws when NODE_ENV=staging and TURN_SECRET is set but shorter than 32 characters', () => {
+    withEnv({ NODE_ENV: 'staging', TURN_SECRET: 'too_short_stg' }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
     });
   });
 

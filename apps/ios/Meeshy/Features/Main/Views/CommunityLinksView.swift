@@ -54,6 +54,7 @@ struct CommunityLinksView: View {
             Text(String(localized: "community.links.title", defaultValue: "Liens communauté", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -83,6 +84,7 @@ struct CommunityLinksView: View {
         VStack(spacing: 6) {
             Image(systemName: icon).font(MeeshyFont.relative(20))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
             Text(value).font(MeeshyFont.relative(24, weight: .bold)).foregroundColor(theme.textPrimary)
             Text(label).font(MeeshyFont.relative(11)).foregroundColor(theme.textSecondary)
         }
@@ -93,25 +95,30 @@ struct CommunityLinksView: View {
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(accent.opacity(0.2), lineWidth: 1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var communityLinksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(String(localized: "community.links.section.mine", defaultValue: "MES COMMUNAUTÉS", bundle: .main)).font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
+                .accessibilityAddTraits(.isHeader)
 
             if viewModel.isLoading {
                 ProgressView().frame(maxWidth: .infinity).padding(40)
             } else if viewModel.links.isEmpty {
                 VStack(spacing: 12) {
-                    Image(systemName: "person.3.fill").font(MeeshyFont.relative(40))
+                    // Hero glyph ≥40pt: décoratif, le libellé adjacent porte le sens — figé + masqué VoiceOver (doctrine 74i/86i)
+                    Image(systemName: "person.3.fill").font(.system(size: 40))
                         .foregroundColor(accent.opacity(0.6))
+                        .accessibilityHidden(true)
                     Text(String(localized: "community.links.empty.title", defaultValue: "Aucune communauté administrée", bundle: .main))
                         .font(MeeshyFont.relative(15, weight: .semibold)).foregroundColor(theme.textPrimary)
                     Text(String(localized: "community.links.empty.subtitle", defaultValue: "Les communautés que vous gérez apparaîtront ici avec leur lien de partage", bundle: .main))
                         .font(MeeshyFont.relative(13)).foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
                 }.padding(40).frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
             } else {
                 VStack(spacing: 8) {
                     ForEach(viewModel.links) { link in
@@ -128,8 +135,10 @@ struct CommunityLinksView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().fill(accent.opacity(0.15)).frame(width: 40, height: 40)
-                Image(systemName: "person.3.fill").font(MeeshyFont.relative(14))
+                // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
+                Image(systemName: "person.3.fill").font(.system(size: 14))
                     .foregroundColor(accent)
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(link.name).font(MeeshyFont.relative(15, weight: .semibold))
@@ -147,6 +156,7 @@ struct CommunityLinksView: View {
             }.padding(.horizontal, 4)
             .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
             Image(systemName: "chevron.right").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(

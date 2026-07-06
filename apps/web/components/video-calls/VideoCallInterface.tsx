@@ -513,8 +513,17 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       <div className="absolute inset-0">
         {displayParticipant ? (
           <div
-            className="w-full h-full cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label={t('calls.stream.fullscreen')}
+            className="w-full h-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
             onClick={() => handleToggleFullscreen(displayParticipant[0])}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleToggleFullscreen(displayParticipant[0]);
+              }
+            }}
           >
             <VideoStream
               key={displayParticipant[0]}

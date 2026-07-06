@@ -12,6 +12,7 @@ import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import type { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -27,6 +28,7 @@ export class ConversationHandler {
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
   private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -70,6 +72,16 @@ export class ConversationHandler {
           conversationId: validated.conversationId,
           reason: 'not_authenticated',
           message: 'Non authentifié',
+        });
+        return;
+      }
+
+      const joinAllowed = await this.rateLimiter.checkLimit(userIdOrToken!, SOCKET_RATE_LIMITS.CONVERSATION_JOIN);
+      if (!joinAllowed) {
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: validated.conversationId,
+          reason: 'rate_limited',
+          message: 'Trop de requêtes. Veuillez réessayer.',
         });
         return;
       }
@@ -185,6 +197,7 @@ export class ConversationHandler {
       }
     } catch (error) {
       logger.error('conversation:leave failed', { error });
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Failed to leave conversation' });
     }
   }
 

@@ -135,7 +135,7 @@ struct DownloadBadgeView: View {
                 Text(totalSizeText)
                     .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(.black.opacity(0.55)))
             }
@@ -156,8 +156,8 @@ struct DownloadBadgeView: View {
                     }
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule().fill(.ultraThinMaterial)
                         .overlay(Capsule().fill(accent.opacity(0.55)))
@@ -453,16 +453,7 @@ final class AttachmentDownloader: ObservableObject {
     }
 
     static func fmt(_ bytes: Int64) -> String {
-        let kb = Double(bytes) / 1024
-        if kb < 1 {
-            return String(format: String(localized: "media.size.bytes", bundle: .main), bytes)
-        }
-        if kb < 1024 {
-            let val = String(format: "%.0f", kb)
-            return String(format: String(localized: "media.size.kb", bundle: .main), val)
-        }
-        let val = String(format: "%.1f", kb / 1024)
-        return String(format: String(localized: "media.size.mb", bundle: .main), val)
+        bytes.formatted(.byteCount(style: .file))
     }
 }
 

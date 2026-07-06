@@ -29,6 +29,20 @@ export type CallStatus =
   | 'failed';
 
 /**
+ * Statuts TERMINAUX — un call dans l'un de ces états est résolu : aucun
+ * chemin (leave, disconnect-grace, force-end) ne doit plus réécrire son
+ * statut/endReason/duration ni re-poster de summary.
+ * Mirror runtime : `TERMINAL_STATUSES` dans services/gateway CallService
+ * (typée sur l'enum Prisma) — garder les deux listes synchronisées.
+ */
+export const CALL_TERMINAL_STATUSES: readonly CallStatus[] = [
+  'ended',
+  'missed',
+  'rejected',
+  'failed',
+] as const;
+
+/**
  * Raison de fin d'appel — synced with Prisma CallEndReason enum
  * @see schema.prisma CallEndReason
  */
@@ -517,6 +531,12 @@ export interface CallQualityFeedback {
 
 export interface CallAnalytics {
   readonly setupTimeMs: number
+  /**
+   * answer/join → connected : la négociation WebRTC seule, SANS le temps de
+   * sonnerie humain inclus dans `setupTimeMs`. Optionnel (absent des builds
+   * iOS < 2026-07-03) ; -1 = jamais connecté / ancrage manquant.
+   */
+  readonly negotiationTimeMs?: number
   readonly iceMethod: 'direct' | 'stun' | 'turn'
   readonly codec: { readonly audio: string; readonly video: string }
   readonly averageRtt: number
@@ -777,6 +797,37 @@ export interface CallIceServersRefreshedEvent {
   readonly ttl: number;
 }
 
+/**
+ * Client → Server: force-leave a conversation's active call.
+ * Sent as a preflight before `call:initiate` to clean up zombie call sessions
+ * left by a previous client crash or disconnect without graceful teardown.
+ */
+export interface CallForceLeaveClientEvent {
+  readonly conversationId: string;
+}
+
+/**
+ * Server → Client: the gateway has force-ended the call.
+ * Emitted when a server-side cleanup (GC, admin action, heartbeat timeout)
+ * terminates a call. iOS/web clients subscribe to this on their personal
+ * user room so the call UI is dismissed cleanly without waiting for a WebRTC
+ * connection failure.
+ */
+export interface CallForceLeaveServerEvent {
+  readonly callId: string;
+  readonly reason?: string;
+}
+
+/**
+ * Client → Server: request fresh TURN credentials before TTL expiry.
+ * Clients send this at ~80% of the credential TTL so long calls always
+ * have valid TURN credentials available for ICE restarts.
+ * Gateway responds with `call:ice-servers-refreshed`.
+ */
+export interface CallRequestIceServersEvent {
+  readonly callId: string;
+}
+
 // ===== SOCKET.IO EVENT NAMES =====
 
 /**
@@ -804,6 +855,7 @@ export const CALL_EVENTS = {
   BACKGROUNDED: 'call:backgrounded',
   FOREGROUNDED: 'call:foregrounded',
   SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
+  ANALYTICS: 'call:analytics',
 
   // Server → Client (peer notification)
   SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
@@ -844,6 +896,14 @@ export interface CallError {
   readonly code: CallErrorCode;
   readonly message: string;
   readonly details?: Record<string, unknown>;
+  /**
+   * The call this error pertains to, when known. Clients with an active call
+   * MUST ignore any `call:error` whose `callId` is present and does not match
+   * their current call — an error for call A must never tear down an
+   * unrelated, healthy call B on the same device. Absent only for errors that
+   * occur before a call context exists (auth failures, generic rate limits).
+   */
+  readonly callId?: string;
 }
 
 /**
@@ -874,7 +934,9 @@ export const CALL_ERROR_CODES = {
   UNSUPPORTED_CALL_TYPE: 'UNSUPPORTED_CALL_TYPE',
   ALREADY_IN_CALL: 'ALREADY_IN_CALL',
   NOT_IN_CALL: 'NOT_IN_CALL',
-  
+  /** Optimistic-locking conflict on CallSession.version persisted after retry (see CallService.joinCall). */
+  CALL_STATE_CONFLICT: 'CALL_STATE_CONFLICT',
+
   // Media control errors
   MEDIA_TOGGLE_FAILED: 'MEDIA_TOGGLE_FAILED',
 

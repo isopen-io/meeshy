@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_status_incoming">Appel entrant…</string>
+    <string name="call_status_ringing">Sonnerie…</string>
+    <string name="call_status_connecting">Connexion…</string>
+    <string name="call_status_connected">Connecté</string>
+    <string name="call_status_reconnecting">Reconnexion (%1$d)…</string>
+    <string name="call_ended">Appel terminé</string>
+    <string name="call_ended_missed">Appel manqué</string>
+    <string name="call_ended_declined">Appel refusé</string>
+    <string name="call_ended_connection_lost">Connexion perdue</string>
+    <string name="call_ended_failed">Échec de l\'appel</string>
+    <string name="call_action_accept">Accepter</string>
+    <string name="call_action_decline">Refuser</string>
+    <string name="call_action_hang_up">Raccrocher</string>
+    <string name="call_action_mute">Muet</string>
+    <string name="call_action_camera">Caméra</string>
+    <string name="call_action_close">Fermer</string>
+    <string name="call_start_audio">Appel audio</string>
+    <string name="call_start_video">Appel vidéo</string>
+    <string name="call_history_title">Appels</string>
+    <string name="call_history_filter_all">Tous</string>
+    <string name="call_history_filter_missed">Manqués</string>
+    <string name="call_history_empty">Aucun appel</string>
+    <string name="call_history_empty_missed">Aucun appel manqué</string>
+    <string name="call_history_yesterday">Hier</string>
+    <string name="call_history_incoming">Appel entrant</string>
+    <string name="call_history_outgoing">Appel sortant</string>
+    <string name="call_history_missed">Appel manqué</string>
+    <string name="call_history_retry">Réessayer</string>
+    <string name="call_quality_excellent">Connexion excellente</string>
+    <string name="call_quality_good">Bonne connexion</string>
+    <string name="call_quality_fair">Connexion moyenne</string>
+    <string name="call_quality_poor">Connexion faible</string>
+    <string name="call_waiting_subtitle">Appel entrant…</string>
+    <string name="call_waiting_banner_a11y">Appel entrant de %1$s</string>
+    <string name="call_waiting_reject_a11y">Refuser l\'appel de %1$s</string>
+    <string name="call_waiting_answer_a11y">Raccrocher et répondre à %1$s</string>
+</resources>

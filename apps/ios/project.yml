@@ -40,6 +40,14 @@ settings:
   CURRENT_PROJECT_VERSION: "1"
   MARKETING_VERSION: "1.0.0"
 
+  # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
+  # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
+  # automatique ne peut pas résoudre le profil → BUILD/sign FAILED. La valeur
+  # ne vivait QUE dans le pbxproj committé (résidu d'un réglage Xcode local) →
+  # perdue à chaque `xcodegen generate`. Désormais source de vérité ici.
+  # Sans impact CI (build simulateur = pas de signature device requise).
+  DEVELOPMENT_TEAM: D72UK7R5RE
+
 # Swift package graph. Only two packages are referenced directly by the
 # Xcode project: Firebase (remote) and the local MeeshySDK. GRDB, Socket.IO,
 # WebRTC and WhisperKit are transitive dependencies of MeeshySDK

@@ -21,7 +21,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## config  (0/2 have a test)
 
 - [x] `services/gateway/src/config/message-limits.ts`
-- [ ] `services/gateway/src/config/user-preferences-defaults.ts`
+- [x] `services/gateway/src/config/user-preferences-defaults.ts`
 
 ## dma-interoperability/adapters  (0/1 have a test)
 
@@ -37,64 +37,64 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## errors  (0/1 have a test)
 
-- [ ] `services/gateway/src/errors/custom-errors.ts`
+- [x] `services/gateway/src/errors/custom-errors.ts`
 
 ## jobs  (1/7 have a test)
 
 - [ ] `services/gateway/src/jobs/broadcast-sender.ts`
-- [ ] `services/gateway/src/jobs/cleanup-expired-tokens.ts`
+- [x] `services/gateway/src/jobs/cleanup-expired-tokens.ts`
 - [x] `services/gateway/src/jobs/delivery-queue-cleanup.ts`
-- [ ] `services/gateway/src/jobs/index.ts`
-- [ ] `services/gateway/src/jobs/mutation-log-cleanup.ts`
+- [x] `services/gateway/src/jobs/index.ts`
+- [x] `services/gateway/src/jobs/mutation-log-cleanup.ts`
 - [~] `services/gateway/src/jobs/notification-digest.ts`
-- [ ] `services/gateway/src/jobs/unlock-accounts.ts`
+- [x] `services/gateway/src/jobs/unlock-accounts.ts`
 
 ## middleware  (3/9 have a test)
 
 - [x] `services/gateway/src/middleware/admin-permissions.middleware.ts`
 - [x] `services/gateway/src/middleware/admin-user-auth.middleware.ts`
 - [~] `services/gateway/src/middleware/auth.ts`
-- [ ] `services/gateway/src/middleware/clientMutationId.ts`
-- [~] `services/gateway/src/middleware/deviceLocale.ts`
+- [x] `services/gateway/src/middleware/clientMutationId.ts`
+- [x] `services/gateway/src/middleware/deviceLocale.ts`
 - [x] `services/gateway/src/middleware/rate-limit.ts`
 - [x] `services/gateway/src/middleware/rate-limiter.ts`
-- [ ] `services/gateway/src/middleware/request-id.ts`
-- [ ] `services/gateway/src/middleware/validation.ts`
+- [x] `services/gateway/src/middleware/request-id.ts`
+- [x] `services/gateway/src/middleware/validation.ts`
 
 ## migrations  (0/1 have a test)
 
 - [ ] `services/gateway/src/migrations/migrate-from-legacy.ts`
 
-## routes  (1/30 have a test)
+## routes  (2/30 have a test)
 
 - [ ] `services/gateway/src/routes/affiliate.ts`
 - [ ] `services/gateway/src/routes/anonymous.ts`
 - [ ] `services/gateway/src/routes/attachments.ts`
 - [x] `services/gateway/src/routes/calls.ts`
-- [ ] `services/gateway/src/routes/communities.ts`
-- [ ] `services/gateway/src/routes/community-preferences.ts`
-- [ ] `services/gateway/src/routes/conversation-encryption.ts`
-- [ ] `services/gateway/src/routes/conversation-preferences.ts`
-- [ ] `services/gateway/src/routes/friends.ts`
-- [ ] `services/gateway/src/routes/invitations.ts`
-- [ ] `services/gateway/src/routes/magic-link.ts`
-- [ ] `services/gateway/src/routes/maintenance.ts`
-- [ ] `services/gateway/src/routes/mentions.ts`
-- [ ] `services/gateway/src/routes/message-read-status.ts`
+- [x] `services/gateway/src/routes/communities.ts`
+- [x] `services/gateway/src/routes/community-preferences.ts`
+- [x] `services/gateway/src/routes/conversation-encryption.ts`
+- [x] `services/gateway/src/routes/conversation-preferences.ts`
+- [x] `services/gateway/src/routes/friends.ts`
+- [x] `services/gateway/src/routes/invitations.ts`
+- [x] `services/gateway/src/routes/magic-link.ts`
+- [x] `services/gateway/src/routes/maintenance.ts`
+- [x] `services/gateway/src/routes/mentions.ts`
+- [x] `services/gateway/src/routes/message-read-status.ts`
 - [ ] `services/gateway/src/routes/messages.ts`
 - [x] `services/gateway/src/routes/notifications.ts`
 - [ ] `services/gateway/src/routes/password-reset.ts`
 - [x] `services/gateway/src/routes/push-tokens.ts`
-- [ ] `services/gateway/src/routes/reactions.ts`
-- [ ] `services/gateway/src/routes/signal-protocol.ts`
-- [ ] `services/gateway/src/routes/translation-jobs.ts`
+- [x] `services/gateway/src/routes/reactions.ts`
+- [x] `services/gateway/src/routes/signal-protocol.ts`
+- [x] `services/gateway/src/routes/translation-jobs.ts`
 - [ ] `services/gateway/src/routes/translation-non-blocking.ts`
 - [ ] `services/gateway/src/routes/translation.ts`
-- [ ] `services/gateway/src/routes/two-factor.ts`
+- [x] `services/gateway/src/routes/two-factor.ts`
 - [ ] `services/gateway/src/routes/user-deletions.ts`
-- [ ] `services/gateway/src/routes/user-stats.ts`
+- [x] `services/gateway/src/routes/user-stats.ts`
 - [ ] `services/gateway/src/routes/users.ts`
-- [ ] `services/gateway/src/routes/voice-analysis.ts`
+- [x] `services/gateway/src/routes/voice-analysis.ts`
 - [ ] `services/gateway/src/routes/voice-profile.ts`
 - [ ] `services/gateway/src/routes/voice.ts`
 
@@ -114,10 +114,10 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/admin/posts.ts`
 - [x] `services/gateway/src/routes/admin/reports.ts`
 - [x] `services/gateway/src/routes/admin/roles.ts`
-- [ ] `services/gateway/src/routes/admin/services/PermissionsService.ts`
+- [x] `services/gateway/src/routes/admin/services/PermissionsService.ts`
 - [x] `services/gateway/src/routes/admin/system-rankings.ts`
 - [ ] `services/gateway/src/routes/admin/system.ts`
-- [ ] `services/gateway/src/routes/admin/types.ts`
+- [x] `services/gateway/src/routes/admin/types.ts`
 - [x] `services/gateway/src/routes/admin/users.ts`
 
 ## routes/attachments  (0/6 have a test)
@@ -127,26 +127,26 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/attachments/metadata.ts`
 - [ ] `services/gateway/src/routes/attachments/translation.ts`
 - [ ] `services/gateway/src/routes/attachments/types.ts`
-- [ ] `services/gateway/src/routes/attachments/upload.ts`
+- [x] `services/gateway/src/routes/attachments/upload.ts`
 
-## routes/auth  (0/7 have a test)
+## routes/auth  (2/7 have a test)
 
 - [ ] `services/gateway/src/routes/auth/index.ts`
-- [ ] `services/gateway/src/routes/auth/login.ts`
+- [x] `services/gateway/src/routes/auth/login.ts`
 - [ ] `services/gateway/src/routes/auth/magic-link.ts`
 - [ ] `services/gateway/src/routes/auth/phone-transfer.ts`
-- [ ] `services/gateway/src/routes/auth/register.ts`
+- [x] `services/gateway/src/routes/auth/register.ts`
 - [ ] `services/gateway/src/routes/auth/revoke-all-sessions.ts`
-- [ ] `services/gateway/src/routes/auth/types.ts`
+- [x] `services/gateway/src/routes/auth/types.ts`
 
-## routes/communities  (0/6 have a test)
+## routes/communities  (6/6 have a test)
 
-- [ ] `services/gateway/src/routes/communities/core.ts`
-- [ ] `services/gateway/src/routes/communities/index.ts`
-- [ ] `services/gateway/src/routes/communities/members.ts`
-- [ ] `services/gateway/src/routes/communities/search.ts`
-- [ ] `services/gateway/src/routes/communities/settings.ts`
-- [ ] `services/gateway/src/routes/communities/types.ts`
+- [x] `services/gateway/src/routes/communities/core.ts`
+- [x] `services/gateway/src/routes/communities/index.ts`
+- [x] `services/gateway/src/routes/communities/members.ts`
+- [x] `services/gateway/src/routes/communities/search.ts`
+- [x] `services/gateway/src/routes/communities/settings.ts`
+- [x] `services/gateway/src/routes/communities/types.ts`
 
 ## routes/conversations  (2/15 have a test)
 
@@ -157,7 +157,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/conversations/leave.ts`
 - [x] `services/gateway/src/routes/conversations/messages-advanced.ts`
 - [ ] `services/gateway/src/routes/conversations/messages.ts`
-- [~] `services/gateway/src/routes/conversations/participants.ts`
+- [x] `services/gateway/src/routes/conversations/participants.ts`
 - [x] `services/gateway/src/routes/conversations/search.ts`
 - [x] `services/gateway/src/routes/conversations/sharing.ts`
 - [x] `services/gateway/src/routes/conversations/stats.ts`
@@ -192,15 +192,15 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/me/preferences/preference-router-factory.ts`
 - [ ] `services/gateway/src/routes/me/preferences/types.ts`
 
-## routes/posts  (0/7 have a test)
+## routes/posts  (7/7 have a test)
 
-- [ ] `services/gateway/src/routes/posts/audio.ts`
-- [ ] `services/gateway/src/routes/posts/comments.ts`
-- [ ] `services/gateway/src/routes/posts/core.ts`
-- [ ] `services/gateway/src/routes/posts/feed.ts`
-- [ ] `services/gateway/src/routes/posts/index.ts`
-- [ ] `services/gateway/src/routes/posts/interactions.ts`
-- [ ] `services/gateway/src/routes/posts/types.ts`
+- [x] `services/gateway/src/routes/posts/audio.ts`
+- [x] `services/gateway/src/routes/posts/comments.ts`
+- [x] `services/gateway/src/routes/posts/core.ts`
+- [x] `services/gateway/src/routes/posts/feed.ts`
+- [x] `services/gateway/src/routes/posts/index.ts`
+- [x] `services/gateway/src/routes/posts/interactions.ts`
+- [x] `services/gateway/src/routes/posts/types.ts`
 
 ## routes/tracking-links  (0/4 have a test)
 
@@ -213,15 +213,15 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [ ] `services/gateway/src/routes/uploads/tus-handler.ts`
 
-## routes/users  (1/8 have a test)
+## routes/users  (7/8 have a test)
 
-- [~] `services/gateway/src/routes/users/blocking.ts`
-- [ ] `services/gateway/src/routes/users/contact-change.ts`
-- [ ] `services/gateway/src/routes/users/devices.ts`
-- [ ] `services/gateway/src/routes/users/index.ts`
-- [ ] `services/gateway/src/routes/users/preferences.ts`
-- [ ] `services/gateway/src/routes/users/presence.ts`
-- [ ] `services/gateway/src/routes/users/profile.ts`
+- [x] `services/gateway/src/routes/users/blocking.ts`
+- [x] `services/gateway/src/routes/users/contact-change.ts`
+- [x] `services/gateway/src/routes/users/devices.ts`
+- [x] `services/gateway/src/routes/users/index.ts`
+- [x] `services/gateway/src/routes/users/preferences.ts`
+- [x] `services/gateway/src/routes/users/presence.ts`
+- [x] `services/gateway/src/routes/users/profile.ts`
 - [ ] `services/gateway/src/routes/users/types.ts`
 
 ## routes/voice  (0/4 have a test)
@@ -244,7 +244,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/CacheStore.ts`
 - [ ] `services/gateway/src/services/CallCleanupService.ts`
 - [~] `services/gateway/src/services/CallService.ts`
-- [ ] `services/gateway/src/services/CaptchaService.ts`
+- [x] `services/gateway/src/services/CaptchaService.ts`
 - [~] `services/gateway/src/services/CommentReactionService.ts`
 - [ ] `services/gateway/src/services/ConsentValidationService.ts`
 - [x] `services/gateway/src/services/ConversationMessageStatsService.ts`
@@ -260,8 +260,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/MentionService.ts`
 - [x] `services/gateway/src/services/MessageReadStatusService.ts`
 - [~] `services/gateway/src/services/MessagingService.ts`
-- [ ] `services/gateway/src/services/MultiLevelCache.ts`
-- [ ] `services/gateway/src/services/MultiLevelJobMappingCache.ts`
+- [x] `services/gateway/src/services/MultiLevelCache.ts`
+- [x] `services/gateway/src/services/MultiLevelJobMappingCache.ts`
 - [x] `services/gateway/src/services/MutationLogService.ts`
 - [~] `services/gateway/src/services/PasswordResetService.ts`
 - [ ] `services/gateway/src/services/PhonePasswordResetService.ts`
@@ -271,14 +271,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/PostReactionService.ts`
 - [~] `services/gateway/src/services/PostService.ts`
 - [ ] `services/gateway/src/services/PrivacyPreferencesService.ts`
-- [~] `services/gateway/src/services/PushNotificationService.ts`
+- [x] `services/gateway/src/services/PushNotificationService.ts`
 - [~] `services/gateway/src/services/ReactionService.ts`
 - [x] `services/gateway/src/services/RedisDeliveryQueue.ts`
 - [ ] `services/gateway/src/services/SecurityMonitor.ts`
 - [~] `services/gateway/src/services/SessionService.ts`
 - [~] `services/gateway/src/services/SmsService.ts`
 - [~] `services/gateway/src/services/StatusService.ts`
-- [ ] `services/gateway/src/services/TURNCredentialService.ts`
+- [x] `services/gateway/src/services/TURNCredentialService.ts`
 - [ ] `services/gateway/src/services/TrackingLinkService.ts`
 - [~] `services/gateway/src/services/TranslationCache.ts`
 - [ ] `services/gateway/src/services/TusCleanupService.ts`
@@ -419,30 +419,30 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/utils/keyed-mutex.ts`
 - [~] `services/gateway/src/utils/languages.ts`
 - [~] `services/gateway/src/utils/logger-enhanced.ts`
-- [ ] `services/gateway/src/utils/logger.ts`
+- [x] `services/gateway/src/utils/logger.ts`
 - [~] `services/gateway/src/utils/normalize.ts`
 - [~] `services/gateway/src/utils/pagination.ts`
-- [ ] `services/gateway/src/utils/participant-resolver.ts`
+- [x] `services/gateway/src/utils/participant-resolver.ts`
 - [x] `services/gateway/src/utils/rate-limiter.ts`
-- [ ] `services/gateway/src/utils/response.ts`
+- [x] `services/gateway/src/utils/response.ts`
 - [~] `services/gateway/src/utils/sanitize.ts`
 - [~] `services/gateway/src/utils/session-token.ts`
 - [~] `services/gateway/src/utils/socket-broadcast.ts`
 - [x] `services/gateway/src/utils/socket-rate-limiter.ts`
-- [ ] `services/gateway/src/utils/transcription.ts`
+- [x] `services/gateway/src/utils/transcription.ts`
 - [~] `services/gateway/src/utils/translation-transformer.ts`
 - [x] `services/gateway/src/utils/withMutationLog.ts`
 
-## validation  (1/11 have a test)
+## validation  (9/11 have a test)
 
 - [x] `services/gateway/src/validation/admin-schemas.ts`
-- [~] `services/gateway/src/validation/call-schemas.ts`
-- [ ] `services/gateway/src/validation/conversation-encryption-schemas.ts`
-- [ ] `services/gateway/src/validation/delete-account-schemas.ts`
-- [ ] `services/gateway/src/validation/helpers.ts`
-- [ ] `services/gateway/src/validation/mentions-schemas.ts`
-- [ ] `services/gateway/src/validation/message-read-status-schemas.ts`
-- [ ] `services/gateway/src/validation/messages-schemas.ts`
+- [x] `services/gateway/src/validation/call-schemas.ts`
+- [x] `services/gateway/src/validation/conversation-encryption-schemas.ts`
+- [x] `services/gateway/src/validation/delete-account-schemas.ts`
+- [x] `services/gateway/src/validation/helpers.ts`
+- [x] `services/gateway/src/validation/mentions-schemas.ts`
+- [x] `services/gateway/src/validation/message-read-status-schemas.ts`
+- [x] `services/gateway/src/validation/messages-schemas.ts`
 - [x] `services/gateway/src/validation/notification-schemas.ts`
-- [ ] `services/gateway/src/validation/socket-event-schemas.ts`
-- [ ] `services/gateway/src/validation/two-factor-schemas.ts`
+- [x] `services/gateway/src/validation/socket-event-schemas.ts`
+- [x] `services/gateway/src/validation/two-factor-schemas.ts`

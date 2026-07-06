@@ -111,8 +111,8 @@ extension iPadRootView {
         case .dataExport:
             DataExportView()
                                 .navigationBarHidden(true)
-        case .postDetail(let postId, let initialPost, let showComments):
-            PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments)
+        case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
+            PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
                         case .bookmarks:
             BookmarksView()
                                 .navigationBarHidden(true)
@@ -205,11 +205,13 @@ struct iPadLeftColumnHeader: View {
 
                         if notificationCount > 0 {
                             Text("\(min(notificationCount, 99))")
-                                .font(MeeshyFont.relative(9, weight: .bold))
+                                // Doctrine 86i : compteur dans une pastille circulaire fixe 16×16 → figé.
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(MeeshyColors.error))
                                 .offset(x: 6, y: -6)
+                                .accessibilityHidden(true)
                         }
                     }
                 }
@@ -217,7 +219,7 @@ struct iPadLeftColumnHeader: View {
                 .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main))
                 .accessibilityValue(notificationCount > 0
                     ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationCount)
-                    : nil)
+                    : "")
             }
 
             if let onSettingsTap {

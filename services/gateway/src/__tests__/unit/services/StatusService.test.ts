@@ -300,5 +300,411 @@ describe('StatusService', () => {
       // Guard still active: Prisma should not be called
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
+
+    it('should purge stale activityCache entries older than 10 minutes', () => {
+      const cache = (service as any).activityCache as Map<string, number>;
+      cache.set('stale-user', Date.now() - 700_000);
+      cache.set('fresh-user', Date.now() - 60_000);
+      service.clearOldCacheEntries();
+      expect(cache.has('stale-user')).toBe(false);
+      expect(cache.has('fresh-user')).toBe(true);
+    });
+
+    it('should purge stale connectionCache entries older than 10 minutes', () => {
+      const cache = (service as any).connectionCache as Map<string, number>;
+      cache.set('stale-conn', Date.now() - 700_000);
+      cache.set('fresh-conn', Date.now() - 60_000);
+      service.clearOldCacheEntries();
+      expect(cache.has('stale-conn')).toBe(false);
+      expect(cache.has('fresh-conn')).toBe(true);
+    });
+
+    it('should purge stale onlineEnsureCache entries older than 10 minutes', () => {
+      const cache = (service as any).onlineEnsureCache as Map<string, number>;
+      cache.set('stale-online', Date.now() - 700_000);
+      cache.set('fresh-online', Date.now() - 60_000);
+      service.clearOldCacheEntries();
+      expect(cache.has('stale-online')).toBe(false);
+      expect(cache.has('fresh-online')).toBe(true);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // updateAnonymousLastSeen
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('updateAnonymousLastSeen', () => {
+    it('should call prisma.participant.update on first call', async () => {
+      await service.updateAnonymousLastSeen('anon-1');
+      await flushPromises();
+      expect(mockPrisma.participant.update).toHaveBeenCalledWith({
+        where: { id: 'anon-1' },
+        data: { lastActiveAt: expect.any(Date) }
+      });
+    });
+
+    it('should throttle: second call within 5s does not trigger another Prisma update', async () => {
+      await service.updateAnonymousLastSeen('anon-1');
+      await flushPromises();
+      await service.updateAnonymousLastSeen('anon-1');
+      await flushPromises();
+      expect(mockPrisma.participant.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('should skip when the anonymous user is in the disconnect guard', async () => {
+      service.markDisconnected('anon-1', true);
+      await service.updateAnonymousLastSeen('anon-1');
+      await flushPromises();
+      expect(mockPrisma.participant.update).not.toHaveBeenCalled();
+    });
+
+    it('should allow update after throttle window has elapsed', async () => {
+      await service.updateAnonymousLastSeen('anon-1');
+      await flushPromises();
+      backDate((service as any).activityCache, 'anon_activity_anon-1', 6_000);
+      await service.updateAnonymousLastSeen('anon-1');
+      await flushPromises();
+      expect(mockPrisma.participant.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('should increment failedUpdates when Prisma rejects', async () => {
+      mockPrisma.participant.update.mockRejectedValueOnce(new Error('DB error'));
+      await service.updateAnonymousLastSeen('anon-1');
+      await flushPromises();
+      expect(service.getMetrics().failedUpdates).toBe(1);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // updateAnonymousLastActive
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('updateAnonymousLastActive', () => {
+    it('should call prisma.participant.update on first call', async () => {
+      await service.updateAnonymousLastActive('anon-1');
+      await flushPromises();
+      expect(mockPrisma.participant.update).toHaveBeenCalledWith({
+        where: { id: 'anon-1' },
+        data: { lastActiveAt: expect.any(Date) }
+      });
+    });
+
+    it('should throttle: second call within 60s does not trigger another update', async () => {
+      await service.updateAnonymousLastActive('anon-1');
+      await flushPromises();
+      await service.updateAnonymousLastActive('anon-1');
+      await flushPromises();
+      expect(mockPrisma.participant.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('should skip when the disconnect guard is active for anonymous user', async () => {
+      service.markDisconnected('anon-1', true);
+      await service.updateAnonymousLastActive('anon-1');
+      await flushPromises();
+      expect(mockPrisma.participant.update).not.toHaveBeenCalled();
+    });
+
+    it('should increment failedUpdates when Prisma rejects', async () => {
+      mockPrisma.participant.update.mockRejectedValueOnce(new Error('DB error'));
+      await service.updateAnonymousLastActive('anon-1');
+      await flushPromises();
+      expect(service.getMetrics().failedUpdates).toBe(1);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // updateLastSeen / updateLastActive (generic delegates)
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('updateLastSeen (generic)', () => {
+    it('delegates to updateUserLastSeen when isAnonymous=false', async () => {
+      await service.updateLastSeen('user-1', false);
+      await flushPromises();
+      expect(mockPrisma.user.update).toHaveBeenCalled();
+      expect(mockPrisma.participant.update).not.toHaveBeenCalled();
+    });
+
+    it('delegates to updateAnonymousLastSeen when isAnonymous=true', async () => {
+      await service.updateLastSeen('anon-1', true);
+      await flushPromises();
+      expect(mockPrisma.participant.update).toHaveBeenCalled();
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateLastActive (generic)', () => {
+    it('delegates to updateUserLastActive when isAnonymous=false', async () => {
+      await service.updateLastActive('user-1', false);
+      await flushPromises();
+      expect(mockPrisma.user.update).toHaveBeenCalled();
+      expect(mockPrisma.participant.update).not.toHaveBeenCalled();
+    });
+
+    it('delegates to updateAnonymousLastActive when isAnonymous=true', async () => {
+      await service.updateLastActive('anon-1', true);
+      await flushPromises();
+      expect(mockPrisma.participant.update).toHaveBeenCalled();
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // forceUpdateLastSeen / forceUpdateLastActive / forceUpdateBoth
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('forceUpdateLastSeen', () => {
+    it('calls prisma.user.update for registered user', async () => {
+      await service.forceUpdateLastSeen('user-1', false);
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { lastActiveAt: expect.any(Date) }
+      });
+    });
+
+    it('calls prisma.participant.update for anonymous user', async () => {
+      await service.forceUpdateLastSeen('anon-1', true);
+      expect(mockPrisma.participant.update).toHaveBeenCalledWith({
+        where: { id: 'anon-1' },
+        data: { lastActiveAt: expect.any(Date) }
+      });
+    });
+  });
+
+  describe('forceUpdateLastActive', () => {
+    it('calls prisma.user.update for registered user', async () => {
+      await service.forceUpdateLastActive('user-1', false);
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { lastActiveAt: expect.any(Date) }
+      });
+    });
+
+    it('calls prisma.participant.update for anonymous user', async () => {
+      await service.forceUpdateLastActive('anon-1', true);
+      expect(mockPrisma.participant.update).toHaveBeenCalledWith({
+        where: { id: 'anon-1' },
+        data: { lastActiveAt: expect.any(Date) }
+      });
+    });
+  });
+
+  describe('forceUpdateBoth', () => {
+    it('calls both user.update methods in parallel for registered user', async () => {
+      await service.forceUpdateBoth('user-1', false);
+      expect(mockPrisma.user.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('calls both participant.update methods in parallel for anonymous user', async () => {
+      await service.forceUpdateBoth('anon-1', true);
+      expect(mockPrisma.participant.update).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // getMetrics / resetMetrics
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('getMetrics', () => {
+    it('returns a snapshot of the current metrics', async () => {
+      await service.updateUserLastSeen('user-1');
+      await flushPromises();
+      const metrics = service.getMetrics();
+      expect(metrics.totalRequests).toBeGreaterThanOrEqual(1);
+      expect(metrics.activityUpdates).toBeGreaterThanOrEqual(1);
+      expect(typeof metrics.successfulUpdates).toBe('number');
+    });
+  });
+
+  describe('resetMetrics', () => {
+    it('resets all counters to zero', async () => {
+      await service.updateUserLastSeen('user-1');
+      await flushPromises();
+      service.resetMetrics();
+      const metrics = service.getMetrics();
+      expect(metrics.totalRequests).toBe(0);
+      expect(metrics.successfulUpdates).toBe(0);
+      expect(metrics.throttledRequests).toBe(0);
+      expect(metrics.failedUpdates).toBe(0);
+      expect(metrics.activityUpdates).toBe(0);
+      expect(metrics.connectionUpdates).toBe(0);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // shutdown (detailed)
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('shutdown', () => {
+    it('clears the cleanup interval and all in-memory caches', () => {
+      // Populate the caches
+      (service as any).activityCache.set('u1', Date.now());
+      (service as any).connectionCache.set('u1', Date.now());
+      (service as any).onlineEnsureCache.set('u1', Date.now());
+      (service as any).disconnectedUsers.set('u1', Date.now());
+
+      service.shutdown();
+
+      expect((service as any).activityCache.size).toBe(0);
+      expect((service as any).connectionCache.size).toBe(0);
+      expect((service as any).onlineEnsureCache.size).toBe(0);
+      expect((service as any).disconnectedUsers.size).toBe(0);
+      expect((service as any).cleanupInterval).toBeNull();
+    });
+
+    it('is safe to call shutdown twice (idempotent)', () => {
+      service.shutdown();
+      expect(() => service.shutdown()).not.toThrow();
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Redis NX path in updateUserLastSeen
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('updateUserLastSeen — Redis NX path', () => {
+    it('throttles when Redis SET NX returns null (key already exists)', async () => {
+      const mockRedis = { set: jest.fn().mockResolvedValue(null) };
+      const getCacheStore = require('../../../services/CacheStore').getCacheStore;
+      (getCacheStore as jest.Mock<any>).mockReturnValueOnce({
+        get: mockGet,
+        set: mockSet,
+        del: mockDel,
+        keys: jest.fn().mockResolvedValue([]),
+        setnx: jest.fn().mockResolvedValue(true),
+        expire: jest.fn().mockResolvedValue(true),
+        publish: jest.fn().mockResolvedValue(0),
+        info: jest.fn().mockResolvedValue(''),
+        isAvailable: jest.fn().mockReturnValue(false),
+        close: jest.fn().mockResolvedValue(undefined),
+        getNativeClient: jest.fn().mockReturnValue(mockRedis),
+      });
+      const { StatusService: StatusServiceFresh } = await import('../../../services/StatusService');
+      const prisma = createMockPrisma();
+      const svc = new StatusServiceFresh(prisma as any);
+      try {
+        await svc.updateUserLastSeen('user-redis');
+        await flushPromises();
+        // SET NX returned null → throttled → no Prisma call
+        expect(prisma.user.update).not.toHaveBeenCalled();
+      } finally {
+        svc.shutdown();
+      }
+    });
+
+    it('allows update when Redis SET NX returns "OK" (new key set)', async () => {
+      const mockRedis = { set: jest.fn().mockResolvedValue('OK') };
+      const getCacheStore = require('../../../services/CacheStore').getCacheStore;
+      (getCacheStore as jest.Mock<any>).mockReturnValueOnce({
+        get: mockGet,
+        set: mockSet,
+        del: mockDel,
+        keys: jest.fn().mockResolvedValue([]),
+        setnx: jest.fn().mockResolvedValue(true),
+        expire: jest.fn().mockResolvedValue(true),
+        publish: jest.fn().mockResolvedValue(0),
+        info: jest.fn().mockResolvedValue(''),
+        isAvailable: jest.fn().mockReturnValue(false),
+        close: jest.fn().mockResolvedValue(undefined),
+        getNativeClient: jest.fn().mockReturnValue(mockRedis),
+      });
+      const { StatusService: StatusServiceFresh } = await import('../../../services/StatusService');
+      const prisma = createMockPrisma();
+      const svc = new StatusServiceFresh(prisma as any);
+      try {
+        await svc.updateUserLastSeen('user-redis');
+        await flushPromises();
+        expect(prisma.user.update).toHaveBeenCalled();
+      } finally {
+        svc.shutdown();
+      }
+    });
+
+    it('falls back to in-memory throttle when Redis NX throws', async () => {
+      const mockRedis = { set: jest.fn().mockRejectedValue(new Error('Redis down')) };
+      const getCacheStore = require('../../../services/CacheStore').getCacheStore;
+      (getCacheStore as jest.Mock<any>).mockReturnValueOnce({
+        get: mockGet,
+        set: mockSet,
+        del: mockDel,
+        keys: jest.fn().mockResolvedValue([]),
+        setnx: jest.fn().mockResolvedValue(true),
+        expire: jest.fn().mockResolvedValue(true),
+        publish: jest.fn().mockResolvedValue(0),
+        info: jest.fn().mockResolvedValue(''),
+        isAvailable: jest.fn().mockReturnValue(false),
+        close: jest.fn().mockResolvedValue(undefined),
+        getNativeClient: jest.fn().mockReturnValue(mockRedis),
+      });
+      const { StatusService: StatusServiceFresh } = await import('../../../services/StatusService');
+      const prisma = createMockPrisma();
+      const svc = new StatusServiceFresh(prisma as any);
+      try {
+        // First call: Redis throws → in-memory cache used → no existing entry → proceed
+        await svc.updateUserLastSeen('user-redis');
+        await flushPromises();
+        expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      } finally {
+        svc.shutdown();
+      }
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // ensureUserOnline error path
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('ensureUserOnline — error path', () => {
+    it('logs error when Prisma rejects without throwing (line 124)', async () => {
+      mockPrisma.user.update.mockRejectedValueOnce(new Error('Prisma down'));
+      service.ensureUserOnline('user-1', false);
+      await flushPromises();
+      // Test passes as long as no unhandled rejection escapes
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // updateUserLastSeen error path
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('updateUserLastSeen — error path', () => {
+    it('increments failedUpdates when Prisma rejects (lines 222-224)', async () => {
+      mockPrisma.user.update.mockRejectedValueOnce(new Error('Prisma down'));
+      await service.updateUserLastSeen('user-1');
+      await flushPromises();
+      expect(service.getMetrics().failedUpdates).toBe(1);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // updateUserLastActive error path
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('updateUserLastActive — error path', () => {
+    it('increments failedUpdates when Prisma rejects (lines 261-263)', async () => {
+      mockPrisma.user.update.mockRejectedValueOnce(new Error('Prisma down'));
+      await service.updateUserLastActive('user-1');
+      await flushPromises();
+      expect(service.getMetrics().failedUpdates).toBe(1);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // markDisconnected / markConnected Redis error paths
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('markDisconnected — Redis del error path (line 146)', () => {
+    it('does not throw when cache.del rejects', async () => {
+      mockDel.mockRejectedValueOnce(new Error('Redis del failed'));
+      expect(() => service.markDisconnected('user-1', false)).not.toThrow();
+      await flushPromises();
+    });
+  });
+
+  describe('markConnected — Redis set error path (line 163)', () => {
+    it('does not throw when cache.set rejects', async () => {
+      mockSet.mockRejectedValueOnce(new Error('Redis set failed'));
+      expect(() => service.markConnected('user-1', false)).not.toThrow();
+      await flushPromises();
+    });
   });
 });

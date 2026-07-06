@@ -497,6 +497,64 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertLessThanOrEqual(cache.count, 2)
     }
 
+    // MARK: - Call notice
+
+    func test_callSummarySystemMessage_buildsCallNoticeWithTimestamp() {
+        let created = Date(timeIntervalSince1970: 1_700_000_000)
+        let msg = makeMessage(
+            content: "Appel vidéo · 04:32",
+            createdAt: created,
+            cachedTimeString: "18:41",
+            messageSource: .system,
+            callSummary: makeCallSummary(initiatorId: "u1", callType: .video, outcome: .completed, durationSeconds: 272)
+        )
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        let notice = content.callNotice
+        XCTAssertNotNil(notice)
+        XCTAssertEqual(notice?.timeString, "18:41")
+        XCTAssertEqual(notice?.timestamp, created)
+        // Current user initiated → outgoing.
+        XCTAssertEqual(notice?.isOutgoing, true)
+    }
+
+    func test_callSummarySystemMessage_incomingWhenCurrentUserIsNotInitiator() {
+        let msg = makeMessage(
+            content: "Appel vidéo entrant",
+            messageSource: .system,
+            callSummary: makeCallSummary(initiatorId: "peer", callType: .video, outcome: .completed, durationSeconds: 49)
+        )
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertEqual(content.callNotice?.isOutgoing, false)
+    }
+
+    func test_nonCallSystemMessage_hasNilCallNotice() {
+        let msg = makeMessage(content: "Conversation créée", messageSource: .system, callSummary: nil)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertNil(content.callNotice)
+        XCTAssertEqual(content.kind, .system)
+    }
+
+    private func makeCallSummary(
+        initiatorId: String,
+        callType: CallSummaryMetadata.MediaType,
+        outcome: CallSummaryMetadata.Outcome,
+        durationSeconds: Int
+    ) -> CallSummaryMetadata {
+        CallSummaryMetadata(
+            callId: "call1",
+            initiatorId: initiatorId,
+            callType: callType,
+            outcome: outcome,
+            durationSeconds: durationSeconds,
+            bytesTotal: 9_300_000,
+            bytesEstimated: true,
+            networkQuality: .good
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeMessage(
@@ -515,7 +573,9 @@ final class BubbleContentMatrixTests: XCTestCase {
         isEdited: Bool = false,
         reactions: [MeeshyReaction] = [],
         createdAt: Date = Date(timeIntervalSince1970: 0),
-        cachedTimeString: String? = "12:34"
+        cachedTimeString: String? = "12:34",
+        messageSource: MeeshyMessage.MessageSource = .user,
+        callSummary: CallSummaryMetadata? = nil
     ) -> MeeshyMessage {
         var effects = MessageEffects(flags: [])
         if isViewOnce {
@@ -528,7 +588,7 @@ final class BubbleContentMatrixTests: XCTestCase {
             content: content,
             originalLanguage: "fr",
             messageType: .text,
-            messageSource: .user,
+            messageSource: messageSource,
             isEdited: isEdited,
             editedAt: nil,
             deletedAt: deletedAt,
@@ -561,7 +621,8 @@ final class BubbleContentMatrixTests: XCTestCase {
             readByAllAt: nil,
             deliveredCount: 0,
             readCount: 0,
-            cachedTimeString: cachedTimeString
+            cachedTimeString: cachedTimeString,
+            callSummary: callSummary
         )
     }
 

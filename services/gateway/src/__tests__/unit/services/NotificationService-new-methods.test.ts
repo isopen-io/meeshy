@@ -110,6 +110,13 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   securityLogger: { logViolation: jest.fn(), logAttempt: jest.fn(), logSuccess: jest.fn() },
 }));
 
+// In-memory setnx so the email-throttle branch is fully controllable: the first
+// call for a given key returns true (lock acquired), subsequent calls false.
+const mockSetnx = jest.fn();
+jest.mock('../../../services/CacheStore', () => ({
+  getCacheStore: () => ({ setnx: mockSetnx }),
+}));
+
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
@@ -710,6 +717,68 @@ describe('NotificationService — New Methods', () => {
       });
       expect(loginResult).toBeDefined();
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ==============================================
+  // Email throttle — per-category buckets (Debt C)
+  // ==============================================
+
+  describe('email throttle — security alerts are not suppressed by social emails', () => {
+    let mockEmail: any;
+
+    beforeEach(() => {
+      const throttleKeys = new Set<string>();
+      mockSetnx.mockImplementation(async (key: string) => {
+        if (throttleKeys.has(key)) return false;
+        throttleKeys.add(key);
+        return true;
+      });
+
+      mockEmail = {
+        sendSecurityAlertEmail: jest.fn().mockResolvedValue({ success: true }),
+        sendNotificationEmail: jest.fn().mockResolvedValue({ success: true }),
+        sendLoginAlertEmail: jest.fn().mockResolvedValue({ success: true }),
+      };
+
+      // Offline recipient (no sockets) so the immediate-email branch fires.
+      const offlineIO = {
+        to: jest.fn().mockReturnThis(),
+        emit: jest.fn(),
+        in: jest.fn(() => ({ fetchSockets: jest.fn().mockResolvedValue([]) })),
+      };
+      service.setSocketIO(offlineIO as any, new Map());
+      service.setEmailService(mockEmail as any);
+
+      prisma.user.findUnique.mockResolvedValue({
+        username: 'u', displayName: 'U', avatar: null, email: 'u@example.com', systemLanguage: 'fr',
+      });
+      prisma.conversation.findUnique.mockResolvedValue({ title: 'C', type: 'GROUP' });
+      prisma.userPreferences.findUnique.mockResolvedValue(null);
+      prisma.notification.create.mockResolvedValue(mockNotification('missed_call'));
+    });
+
+    it('sends a security email even after a social email to the same offline user', async () => {
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+      // Social notification → dedicated notification email (NOT the security template).
+      expect(mockEmail.sendNotificationEmail).toHaveBeenCalledTimes(1);
+      expect(mockEmail.sendSecurityAlertEmail).not.toHaveBeenCalled();
+
+      await service.createPasswordChangedNotification({ recipientUserId: 'u1' });
+      // The social email must NOT have consumed the security bucket.
+      expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('still throttles repeated social emails to the same offline user (anti-spam preserved)', async () => {
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+      await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-2', conversationId: 'c1', callSessionId: 's2', callType: 'audio',
+      });
+      expect(mockEmail.sendNotificationEmail).toHaveBeenCalledTimes(1);
     });
   });
 });

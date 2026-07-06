@@ -9,6 +9,12 @@ struct PostDetailView: View {
     let postId: String
     var initialPost: FeedPost?
     var showComments: Bool = false
+    /// Commentaire ciblé par une navigation depuis une notification (like /
+    /// réponse / commentaire). L'écran défile jusqu'à lui et le surligne.
+    var targetCommentId: String?
+    /// Commentaire parent quand la cible est une réponse — l'écran déplie le fil
+    /// du parent puis défile jusqu'à ce fil (la réponse y apparaît).
+    var targetParentCommentId: String?
 
     @StateObject private var viewModel = PostDetailViewModel()
     /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
@@ -17,10 +23,19 @@ struct PostDetailView: View {
     @StateObject private var mentionController: MentionComposerController
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(postId: String, initialPost: FeedPost? = nil, showComments: Bool = false) {
+    init(
+        postId: String,
+        initialPost: FeedPost? = nil,
+        showComments: Bool = false,
+        targetCommentId: String? = nil,
+        targetParentCommentId: String? = nil
+    ) {
         self.postId = postId
         self.initialPost = initialPost
-        self.showComments = showComments
+        // A comment target implies the comments section must be revealed.
+        self.showComments = showComments || targetCommentId != nil
+        self.targetCommentId = targetCommentId
+        self.targetParentCommentId = targetParentCommentId
         _mentionController = StateObject(wrappedValue: MentionComposerController(context: .post(id: postId)))
     }
     @EnvironmentObject private var statusViewModel: StatusViewModel
@@ -37,6 +52,11 @@ struct PostDetailView: View {
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    /// Section de commentaire actuellement surlignée (cible d'une notification).
+    @State private var highlightedCommentId: String? = nil
+    /// Garde-fou : ne défile vers la cible qu'une seule fois (les commentaires
+    /// peuvent arriver après le premier rendu via le chargement paginé).
+    @State private var didScrollToTargetComment: Bool = false
     /// Texte du composer, lié au `UniversalComposerBar`. Permet de préremplir une
     /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
     /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
@@ -423,6 +443,17 @@ struct PostDetailView: View {
                 replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
             )
             .padding(.horizontal, 16)
+            .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
+                    .padding(.horizontal, 8)
+            )
+            .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
+            // Anchor for notification-driven navigation: scroll/highlight targets
+            // the top-level section. For a reply, the parent thread is expanded so
+            // the reply becomes visible right below this anchor.
+            .id("comment-\(comment.id)")
         }
 
         if viewModel.isLoadingComments {
@@ -439,6 +470,41 @@ struct PostDetailView: View {
                     .foregroundColor(MeeshyColors.indigo500)
             }
             .padding()
+        }
+    }
+
+    /// Notification → comment navigation. Scrolls to (and briefly highlights) the
+    /// targeted comment once it's loaded. For a reply, scrolls to the parent
+    /// section and expands its thread so the reply is revealed. Falls back to the
+    /// legacy "reveal comments + focus composer" behaviour when there's no target.
+    /// Runs once (guarded by `didScrollToTargetComment`); re-invoked as comments
+    /// page in until the target is present.
+    private func attemptScrollToTargetComment(using proxy: ScrollViewProxy) {
+        guard let target = targetCommentId, !target.isEmpty else {
+            if showComments && !didScrollToTargetComment {
+                didScrollToTargetComment = true
+                withAnimation { proxy.scrollTo("commentsSection", anchor: .top) }
+                composerFocusTrigger.toggle()
+            }
+            return
+        }
+        guard !didScrollToTargetComment else { return }
+
+        // Only top-level sections carry a scroll anchor. For a reply, that's the
+        // parent comment; otherwise the comment itself.
+        let sectionId = targetParentCommentId.flatMap { $0.isEmpty ? nil : $0 } ?? target
+        guard viewModel.topLevelComments.contains(where: { $0.id == sectionId }) else { return }
+        didScrollToTargetComment = true
+
+        if let parentId = targetParentCommentId, !parentId.isEmpty,
+           !viewModel.expandedThreads.contains(parentId) {
+            Task { await viewModel.toggleThread(parentId, postId: postId) }
+        }
+
+        withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+        highlightedCommentId = sectionId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+            if highlightedCommentId == sectionId { highlightedCommentId = nil }
         }
     }
 
@@ -491,12 +557,15 @@ struct PostDetailView: View {
                         .onAppear {
                             if showComments {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    withAnimation {
-                                        scrollProxy.scrollTo("commentsSection", anchor: .top)
-                                    }
-                                    composerFocusTrigger.toggle()
+                                    attemptScrollToTargetComment(using: scrollProxy)
                                 }
                             }
+                        }
+                        // Comments load asynchronously (and paginate), so the
+                        // target may not exist at first render. Retry the scroll
+                        // each time the loaded set changes until it lands once.
+                        .adaptiveOnChange(of: viewModel.topLevelComments.count) { _, _ in
+                            attemptScrollToTargetComment(using: scrollProxy)
                         }
                         .onReceive(CallManager.shared.$callState) { state in
                             isCallActive = state.isActive
@@ -941,7 +1010,7 @@ struct PostDetailView: View {
                             .foregroundColor(theme.textMuted)
 
                         let flags = buildAvailableFlags()
-                        if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                        if !flags.isEmpty || post.translations?.isEmpty == false {
                             Text("·").font(.caption).foregroundColor(theme.textMuted)
 
                             ForEach(flags, id: \.self) { code in
@@ -966,7 +1035,7 @@ struct PostDetailView: View {
                                 .meeshyTapTarget(44)
                             }
 
-                            if post.translations != nil, !post.translations!.isEmpty {
+                            if post.translations?.isEmpty == false {
                                 Image(systemName: "translate")
                                     .font(.caption2.weight(.medium))
                                     .foregroundColor(MeeshyColors.indigo400)
@@ -1176,17 +1245,19 @@ struct PostDetailView: View {
                 }
             }
 
-            // Story-type repost — render the canvas
+            // Story-type repost — render the canvas. Unmuted to match the native
+            // story detail (RF3); the SHARED `storyCanvasContainer` brings the SAME
+            // off-screen + call-aware pause wiring, so the repost canvas can't play
+            // with sound while scrolled off-screen.
             if isStoryRepost {
-                StoryReaderRepresentable(
-                    repost: repost,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                    mute: true
+                storyCanvasContainer(
+                    StoryReaderRepresentable(
+                        repost: repost,
+                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                        mute: false,
+                        isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                    )
                 )
-                .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                .frame(maxWidth: 460)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
             } else if !repost.media.isEmpty {
@@ -1385,7 +1456,7 @@ struct PostDetailView: View {
             .accessibilityLabel(String(localized: "a11y.post.repost", defaultValue: "Republier", bundle: .main))
             .accessibilityValue(isPostReposted ? String(localized: "a11y.post.reposted", defaultValue: "Republié", bundle: .main) : "")
             .accessibilityHint(String(localized: "a11y.post.repost.hint", defaultValue: "Republier ou citer cette publication", bundle: .main))
-            .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
+            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) {
                     toggleDetailRepost(quote: false)
                 }
@@ -1436,18 +1507,30 @@ struct PostDetailView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 32)
         } else {
-            StoryReaderRepresentable(
-                feedPost: post,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                mute: false,
-                isPaused: !storyCanvasVisible || isCallActive
+            storyCanvasContainer(
+                StoryReaderRepresentable(
+                    feedPost: post,
+                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                    mute: false,
+                    isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                )
             )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+    }
+
+    /// Shared canvas wrapper for BOTH the native story and the STORY-repost paths
+    /// (RF3): identical sizing + the GeometryReader/`StoryCanvasFrameKey`/
+    /// `onPreferenceChange` visibility tracking that updates `storyCanvasVisible`.
+    /// Extracting it guarantees the off-screen pause wiring can't exist on one path
+    /// and be missing on the other (which would leak audio on the repost path).
+    private func storyCanvasContainer(_ reader: StoryReaderRepresentable) -> some View {
+        reader
             .aspectRatio(9.0 / 16.0, contentMode: .fit)
             .frame(maxWidth: 460)
             .frame(maxWidth: .infinity, alignment: .center)
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md - 2))
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
             .background(
                 GeometryReader { geo in
                     Color.clear.preference(key: StoryCanvasFrameKey.self,
@@ -1458,7 +1541,6 @@ struct PostDetailView: View {
                 let h = scrollViewportHeight > 0 ? scrollViewportHeight : frame.maxY + 1
                 storyCanvasVisible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
             }
-        }
     }
 
     // MARK: - Media Views
@@ -1473,30 +1555,44 @@ struct PostDetailView: View {
         VStack(spacing: 8) {
             // Single media
             if mediaList.count == 1, let media = mediaList.first {
-                detailSingleMedia(media)
+                detailSingleMedia(media, isPrimaryVideo: media.id == primaryAutoplayVideoId)
             } else {
-                // Visual grid
+                // Visual grid (multi-media videos render as tap-to-play thumbnails
+                // here — they never autoplay).
                 if !visualMedia.isEmpty {
                     detailVisualGrid(visualMedia)
                 }
-                // Audio players
+                // Audio players (never a video → never the primary autoplay video)
                 ForEach(audioMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
                 // Documents
                 ForEach(docMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
                 // Locations
                 ForEach(locMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
             }
         }
     }
 
+    /// The single video that autoplays on open (F2): deterministic own > repost.
+    /// The first `.video` of the post's own media; if the post has no own video,
+    /// the first `.video` of the repost's media. `nil` when neither has a video.
+    /// Only this media id gets `autoplayOnAppear: true` — every other video stays
+    /// tap-to-play so two videos (own + repost) never fight over the single
+    /// `SharedAVPlayerManager` (last-to-appear-wins flicker / clobbered load).
+    private var primaryAutoplayVideoId: String? {
+        guard let post = displayPost else { return nil }
+        if let own = post.media.first(where: { $0.type == .video }) { return own.id }
+        if let reposted = post.repost?.media.first(where: { $0.type == .video }) { return reposted.id }
+        return nil
+    }
+
     @ViewBuilder
-    private func detailSingleMedia(_ media: FeedMedia) -> some View {
+    private func detailSingleMedia(_ media: FeedMedia, isPrimaryVideo: Bool) -> some View {
         switch media.type {
         case .image:
             let aspectRatio: CGFloat? = {
@@ -1531,6 +1627,17 @@ struct PostDetailView: View {
                     frame: .card,
                     availability: availability,
                     performance: .inline,
+                    // WS3.7 / D2 / F2 — detail media is a focused view: autoplay
+                    // the PRIMARY video (with sound) on appear. The feed and every
+                    // other call site keep the default (tap-to-play, muted). Only
+                    // the primary video (deterministic own > repost, see
+                    // `primaryAutoplayVideoId`) autoplays — a post + repost each
+                    // with a video would otherwise both hit the single
+                    // `SharedAVPlayerManager` and clobber each other.
+                    autoplayOnAppear: isPrimaryVideo,
+                    // F5 — detail = sound on. The mute intent is now an opaque SDK
+                    // param; the product decision lives here, app-side.
+                    autoplayMuted: false,
                     onDownload: onDownload,
                     onExpand: { openMediaFullscreen(media) }
                 )

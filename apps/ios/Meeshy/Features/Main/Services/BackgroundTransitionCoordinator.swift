@@ -131,8 +131,16 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("sync.conversations") {
             await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
         }
+        await withBudget("conversationStore.flushOutbox") {
+            await ConversationStore.shared.flushOutbox()
+        }
         await withBudget("push.retryPending") {
             await PushDeliveryReceiptService.shared.flushPending()
+            // PendingStatusQueue is also flushed on socket reconnect via
+            // ConversationSocketHandler.triggerSyncIfNeeded(), but that observer
+            // only exists while a conversation is open. Flush here to cover the
+            // case where the user returns to the foreground on the list screen.
+            await PendingStatusQueue.shared.flush()
         }
         await withBudget("outbox.recovery") {
             // Récupère les records orphelins laissés en `.inflight` si le

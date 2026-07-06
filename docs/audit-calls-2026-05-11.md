@@ -1,5 +1,70 @@
 # Audit 360° — Sous-systeme Appels Audio/Video Meeshy
 
+> **Statut au 2026-07-04** : verification systematique des 5 P0 + 18 P1
+> contre `main` (branche `claude/eager-hamilton-nykzoy`). **4/5 P0 et 28/31
+> P1 sont fixes** (deux mois de commits `fix(ios/calls)`/`feat(calls)`
+> continus). Restants confirmes :
+> - **P0-1 (TURN secret hardcode) reste ouvert EN PRODUCTION** —
+>   `docker-compose.prod.yml` monte `turnserver.conf` (secret public en
+>   clair), pas `turnserver.prod.conf`. Le pattern template+sed a deja ete
+>   tente (commit `71b4b64a`) puis delibarement revert
+>   (`docs/superpowers/specs/2026-05-11-docker-compose-prod-reconciliation-design.md`
+>   §8.2) car `config/turnserver.prod.conf` n'existe pas sur le serveur prod
+>   et le chemin relatif resolvait mal. Le fix reel necessite une
+>   coordination ops (rotation du secret + depot du fichier template sur
+>   `/opt/meeshy/production/config/` + mise a jour de `.env`) qu'un agent
+>   sans acces SSH prod ne peut pas faire en toute securite. **A traiter par
+>   un humain avec acces prod.**
+> - **P1-11** (CallKit `CXEndCallAction.fulfill()` synchrone avant le
+>   teardown async) — laisse en l'etat : le commentaire in-code documente un
+>   arbitrage deliberer (eviter un timeout CallKit sur l'action) qui ne peut
+>   pas etre valide sans test sur simulateur/device reel.
+> - **P1-16** (partiel) corrige dans cette meme branche : `CallView`
+>   n'accepte plus `callManager` en default `= CallManager.shared` — injecte
+>   par `RootView`/`iPadRootView` qui possedent deja leur propre instance.
+>   `IncomingCallView` etait deja corrige.
+> - Tous les autres P1 lus dans le code actuel sont FIXED (P0-2/3/4/5,
+>   P1-1..10, 12..15, 17..31).
+>
+> **Statut au 2026-07-05** (branche `claude/eager-hamilton-d5webr`, re-verification
+> ciblee gateway — pas d'acces Xcode/simulateur dans cet environnement, cote iOS
+> non re-verifie au-dela d'une lecture statique) :
+> - **Suite de tests gateway complete** (`bunx jest@30.4.2 --config=jest.config.json
+>   --coverage`, apres `prisma generate` + `bun run build` de `packages/shared`
+>   comme documente ci-dessus) : **483/509 suites vertes, 13289/13290 tests
+>   verts** ; les 26 suites en echec (`sync.test.ts`, `SequenceService.test.ts`,
+>   `notifications/*`, etc.) sont **toutes hors-perimetre appels** — meme cause
+>   racine partagee (`SequenceService.ts:1` importe `PrismaClient` depuis
+>   `@prisma/client` au lieu du client genere `@meeshy/shared/prisma/client`),
+>   **zero echec sur un fichier `Call*`**.
+> - **P2-GW-1, P2-GW-2, P2-GW-5** (fetchSockets O(N), callType hardcode dans le
+>   push missed-call, mismatch participantId) : confirmes FIXED dans le code
+>   actuel, chacun porte un commentaire `Audit P2-GW-*` a la ligne concernee
+>   (`CallEventsHandler.ts:1363` et `:3358`, `CallService.ts:1644-1669`).
+> - **RC-4** (`tasks/calls-fonctionnel-todo.md`, double instance `CallService`) :
+>   FIXED — `MeeshySocketIOManager.ts:212-213` cree l'unique instance partagee
+>   et l'injecte dans `CallEventsHandler`; `server.ts:816` la decore sur
+>   `fastify.callService` (consommee par `routes/calls.ts:80`); `CallCleanupService`
+>   la recoit via `setCallService()` (`server.ts:1311`, cf. le commentaire
+>   `RC-4` dans `CallCleanupService.ts:86-94`).
+> - **Dead code** `CallEventsHandler.ts` `private getSocketUserId()` (releve par
+>   un audit exploratoire cette session) : deja supprime entre-temps par un
+>   agent concurrent — confirme absent du code actuel (repo multi-agent, `main`
+>   force-push plusieurs fois pendant cette session).
+> - **CallEventQueue** (`apps/ios/.../Services/CallEventQueue.swift`, actor FSM
+>   type avec table de transition complete + `CallEventQueueTests.swift`) reste
+>   **construit mais non cable** dans `CallManager.swift` (aucune reference
+>   croisee) — c'est l'etape d'integration prevue par
+>   `docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md` §2.2/ADR-2,
+>   non tentee cette session : cable ce FSM dans un `CallManager` de 4783 lignes
+>   sans pouvoir compiler/tester sur simulateur (pas de Xcode dans cet
+>   environnement) serait une modification a fort risque sur une feature de prod
+>   sans verification possible — a traiter dans une session avec acces build iOS.
+> - Aucune regression, aucun nouveau P0/P1/P2 trouve cote gateway. Seuls
+>   P0-1 (secret TURN prod, acces SSH requis) et P1-11 (arbitrage CallKit
+>   deliberer, non validable sans device) restent ouverts, inchanges depuis
+>   hier.
+
 **Date** : 2026-05-11
 **Branche auditee** : `fix/audit-2026-05-11-hotfixes`
 **Methode** : 12 agents specialises en parallele (read-only) — iOS lifecycle, WebRTC, audio session, CallKit, NSE/VoIP push, UI, Gateway signaling, Gateway security, Web calls, Performance, Edge cases, Type alignment

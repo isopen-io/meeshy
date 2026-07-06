@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { isExpired } from '@/utils/time-remaining';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,7 @@ import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog';
+import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 
 interface ShareLink {
   id: string;
@@ -142,14 +144,14 @@ export default function AdminShareLinksPage() {
     });
   };
 
-  const isExpired = (expiresAt?: string) => {
-    if (!expiresAt) return false;
-    return new Date(expiresAt) < new Date();
-  };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(t('shareLinks.copiedToClipboard'));
+  const copyToClipboard = async (text: string) => {
+    const { success } = await copyTextToClipboard(text);
+    if (success) {
+      toast.success(t('shareLinks.copiedToClipboard'));
+    } else {
+      toast.error(t('shareLinks.copyError'));
+    }
   };
 
   const handleDeleteLink = async () => {
@@ -403,7 +405,7 @@ export default function AdminShareLinksPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank')}>
+                              <DropdownMenuItem onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}>
                                 <ExternalLink className="mr-2 h-4 w-4" />
                                 {t('shareLinks.open')}
                               </DropdownMenuItem>
@@ -426,7 +428,7 @@ export default function AdminShareLinksPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank')}
+                              onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}
                             >
                               <ExternalLink className="h-4 w-4 mr-1" />
                               {t('shareLinks.open')}

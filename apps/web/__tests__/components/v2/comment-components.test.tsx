@@ -145,6 +145,23 @@ describe('CommentItem', () => {
     render(<CommentItem comment={mockComment} isAuthor={false} />);
     expect(screen.queryByLabelText('Delete comment')).not.toBeInTheDocument();
   });
+
+  it('exposes a stable comment-<id> anchor for notification navigation', () => {
+    const { container } = render(<CommentItem comment={mockComment} />);
+    expect(container.querySelector('#comment-comment-1')).toBeInTheDocument();
+  });
+
+  it('applies a highlight ring when isHighlighted', () => {
+    render(<CommentItem comment={mockComment} isHighlighted />);
+    const item = screen.getByTestId('comment-item-comment-1');
+    expect(item.className).toContain('ring-1');
+  });
+
+  it('does not highlight by default', () => {
+    render(<CommentItem comment={mockComment} />);
+    const item = screen.getByTestId('comment-item-comment-1');
+    expect(item.className).not.toContain('ring-1');
+  });
 });
 
 // ── CommentComposer ─────────────────────────────────────────────────────
@@ -246,5 +263,45 @@ describe('CommentList', () => {
   it('hides composer when onSubmitComment is not provided', () => {
     render(<CommentList postId="post-1" comments={[]} />);
     expect(screen.queryByTestId('comment-composer')).not.toBeInTheDocument();
+  });
+
+  it('scrolls to and highlights the targetCommentId when present in the list', () => {
+    const scrollSpy = jest.fn();
+    // jsdom doesn't implement scrollIntoView — stub it on the prototype.
+    const original = (Element.prototype as any).scrollIntoView;
+    (Element.prototype as any).scrollIntoView = scrollSpy;
+
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment, mockComment2]}
+        targetCommentId="comment-2"
+      />,
+    );
+
+    expect(scrollSpy).toHaveBeenCalled();
+    const target = screen.getByTestId('comment-item-comment-2');
+    expect(target.className).toContain('ring-1');
+    // The non-targeted comment is not highlighted.
+    expect(screen.getByTestId('comment-item-comment-1').className).not.toContain('ring-1');
+
+    (Element.prototype as any).scrollIntoView = original;
+  });
+
+  it('no-ops when targetCommentId is not in the loaded list', () => {
+    const scrollSpy = jest.fn();
+    const original = (Element.prototype as any).scrollIntoView;
+    (Element.prototype as any).scrollIntoView = scrollSpy;
+
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment]}
+        targetCommentId="missing-comment"
+      />,
+    );
+
+    expect(scrollSpy).not.toHaveBeenCalled();
+    (Element.prototype as any).scrollIntoView = original;
   });
 });

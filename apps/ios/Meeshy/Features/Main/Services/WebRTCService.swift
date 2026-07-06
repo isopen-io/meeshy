@@ -42,7 +42,6 @@ final class WebRTCService {
 
     var videoFilters: VideoFilterPipeline { client.videoFilterPipeline }
 
-    var audioEffectsService: CallAudioEffectsServiceProviding? { client.audioEffectsService }
     var localVideoTrack: Any? { client.localVideoTrack }
     var remoteVideoTrack: Any? { client.remoteVideoTrack }
 
@@ -54,6 +53,17 @@ final class WebRTCService {
     // connection is closed — prevents post-teardown addIceCandidate calls
     // against a disposed RTCPeerConnection (which throw and log spurious errors).
     private var flushCandidatesTask: Task<Void, Never>?
+    // Tracks a single live addIceCandidate task (when remote description is
+    // already set). Cancelled in close() so it cannot outlive teardown and
+    // attempt addIceCandidate on a disposed peer connection.
+    private var pendingCandidateTask: Task<Void, Never>?
+    // Chains onto the previous camera-switch task instead of firing an
+    // untracked `Task` per call: a rapid double-tap on flip-camera otherwise
+    // overlaps two `stopCapture()`/`startCapture()` sequences on the same
+    // `RTCCameraVideoCapturer`, which can leave the capturer in an
+    // indeterminate state or desync `isUsingFrontCamera` from the actually
+    // active camera. Mirrors `CallManager.holdVideoTask`'s chaining pattern.
+    private var switchCameraTask: Task<Void, Never>?
 
     private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
     private(set) var currentQualityLevel: VideoQualityLevel = .excellent
@@ -63,8 +73,10 @@ final class WebRTCService {
     // no structured cancellation hand-off.
     private var qualityMonitorTask: Task<Void, Never>?
     private var lastStats: CallStats?
-    private var comfortNoiseEnabled = true
     private var qualityLevelDebounceDate: Date?
+    // BWE warm-up anchor — the GCC estimate is ignored while it ramps from
+    // its kick-off value (see CallReliabilityPolicy.effectiveQualityLevel).
+    private var qualityMonitorStartDate: Date?
     // §5.6 — last device thermal state applied to the encoder. A change here
     // re-applies the video encoding ceiling even when the network quality
     // level is steady (see adjustBitrate / VideoThermalProfile).
@@ -81,6 +93,14 @@ final class WebRTCService {
     }
 
     deinit {
+        // Belt-and-suspenders: cancel all in-flight tasks so they stop
+        // referencing self as soon as the object is deallocated, rather than
+        // waiting for the next [weak self] guard to fire. Task.cancel() is
+        // nonisolated and safe to call from any context.
+        qualityMonitorTask?.cancel()
+        disconnectDebounceTask?.cancel()
+        flushCandidatesTask?.cancel()
+        pendingCandidateTask?.cancel()
         Logger.webrtc.info("WebRTCService deinit")
     }
 
@@ -88,7 +108,14 @@ final class WebRTCService {
 
     func configure(isVideo: Bool, iceServers: [IceServer]? = nil) {
         do {
-            let servers = iceServers ?? IceServer.defaultServers
+            // Treat an empty array the same as nil: a VoIP push whose
+            // `iceServers` field decodes to zero usable servers (all entries
+            // dropped by the credential-length guard, or an explicit `[]`)
+            // must still fall back to STUN — passing `[]` through to libwebrtc
+            // means no candidate gathering at all beyond host candidates,
+            // which fails behind virtually any NAT.
+            let resolved = iceServers ?? []
+            let servers = resolved.isEmpty ? IceServer.defaultServers : resolved
             try client.configure(iceServers: servers)
             Logger.webrtc.info("WebRTC configured - video: \(isVideo), ICE servers: \(servers.count)")
         } catch {
@@ -106,6 +133,13 @@ final class WebRTCService {
     }
 
     func createOffer() async -> SessionDescription? {
+        // Le data channel doit exister AVANT l'offre pour être négocié dans le
+        // SDP (m=application). Côté offreur uniquement — l'answerer le reçoit
+        // via `didOpen`. Idempotent : les offres de re-négociation (ICE
+        // restart, escalade vidéo) ne créent pas de second channel. Il porte
+        // les segments de transcription ET les messages de contrôle in-band
+        // (`bye` = raccroché instantané sans aller-retour serveur).
+        _ = client.createDataChannel(label: "transcription")
         do {
             let offer = try await client.createOffer()
             Logger.webrtc.info("Created SDP offer")
@@ -118,12 +152,18 @@ final class WebRTCService {
 
     func createAnswer(from offer: SessionDescription) async -> SessionDescription? {
         do {
-            hasRemoteDescription = true
             let answer = try await client.createAnswer(for: offer)
+            hasRemoteDescription = true
             flushBufferedCandidates()
             Logger.webrtc.info("Created SDP answer")
             return answer
         } catch {
+            // Do NOT set `hasRemoteDescription` before this can throw (e.g. the
+            // perfect-negotiation glare guard raising `.offerIgnored` for a
+            // collided offer): leaving it `true` on a failed answer would make
+            // `addICECandidate` forward candidates straight to the ICE agent
+            // for a remote description that was never actually applied,
+            // instead of buffering them for the retried negotiation.
             Logger.webrtc.error("Failed to create answer: \(error.localizedDescription)")
             return nil
         }
@@ -169,9 +209,11 @@ final class WebRTCService {
             Logger.webrtc.debug("Buffered ICE candidate (no remote description yet), count=\(self.iceCandidateBuffer.count)")
             return
         }
-        Task {
+        pendingCandidateTask?.cancel()
+        pendingCandidateTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                try await client.addIceCandidate(candidate)
+                try await self.client.addIceCandidate(candidate)
             } catch WebRTCError.noPeerConnection {
                 // Expected after call teardown: peerConnection is nil once
                 // disconnect() runs. Log at debug to avoid error noise in
@@ -214,9 +256,11 @@ final class WebRTCService {
     }
 
     func switchCamera() {
-        Task {
+        let previousTask = switchCameraTask
+        switchCameraTask = Task { [weak self] in
+            await previousTask?.value
             do {
-                try await client.switchCamera()
+                try await self?.client.switchCamera()
             } catch {
                 Logger.webrtc.error("Failed to switch camera: \(error.localizedDescription)")
             }
@@ -229,21 +273,17 @@ final class WebRTCService {
     }
 
     func switchToCamera(uniqueID: String) {
-        Task {
+        let previousTask = switchCameraTask
+        switchCameraTask = Task { [weak self] in
+            await previousTask?.value
             do {
-                try await client.switchToCamera(uniqueID: uniqueID)
+                try await self?.client.switchToCamera(uniqueID: uniqueID)
             } catch {
                 Logger.webrtc.error("Failed to switch to camera \(uniqueID): \(error.localizedDescription)")
             }
         }
     }
 
-    // MARK: - Comfort Noise
-
-    func handleRemoteAudioMuted(_ muted: Bool) {
-        guard comfortNoiseEnabled else { return }
-        Logger.webrtc.info("Remote audio \(muted ? "muted" : "unmuted") — CNG active via Opus")
-    }
 
     // MARK: - Quality Monitoring
 
@@ -256,6 +296,7 @@ final class WebRTCService {
 
     func startQualityMonitor() {
         stopQualityMonitor()
+        qualityMonitorStartDate = Date()
         let interval = QualityThresholds.statsIntervalSeconds
         // The outer Task inherits @MainActor isolation (created from a @MainActor
         // method), so all state mutations inside are actor-safe without an extra
@@ -291,6 +332,7 @@ final class WebRTCService {
         qualityMonitorTask?.cancel()
         qualityMonitorTask = nil
         lastStats = nil
+        qualityMonitorStartDate = nil
     }
 
     private func adjustBitrate(basedOn stats: CallStats, previous: CallStats?) {
@@ -306,13 +348,23 @@ final class WebRTCService {
 
         // Merge the RTT/loss heuristic with the TWCC GCC bandwidth estimate.
         // When TWCC is active (bps > 0), GCC has better visibility into the
-        // actual available path capacity than RTT alone. Taking the min of both
-        // ensures we never over-commit beyond what either signal permits.
+        // actual available path capacity than RTT alone — but its ladder is
+        // calibrated on VIDEO tier bitrates, so the policy only lets it
+        // constrain the level when video is actually sending and the
+        // estimator has converged (audio-only calls sit at ~64 kbps forever
+        // and would read as .poor/.critical on a perfectly healthy link).
         let heuristicLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: lossRatio)
         let bweLevel: VideoQualityLevel? = stats.availableOutgoingBitrateBps > 0
             ? VideoQualityLevel.from(availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps)
             : nil
-        let newLevel = bweLevel.map { min(heuristicLevel, $0) } ?? heuristicLevel
+        let newLevel = CallReliabilityPolicy.effectiveQualityLevel(
+            heuristic: heuristicLevel,
+            bwe: bweLevel,
+            isSendingVideo: hasLocalVideoTrack,
+            // nil start date = monitor not formally started → treat as NOT
+            // warmed up (fail-closed: heuristic only), never as warmed-up.
+            secondsSinceMonitorStart: qualityMonitorStartDate.map { Date().timeIntervalSince($0) } ?? 0
+        )
 
         let newBitrate: Int
         if rtt <= QualityThresholds.excellentRTT && lossRatio <= QualityThresholds.excellentPacketLoss {
@@ -322,17 +374,23 @@ final class WebRTCService {
         } else {
             newBitrate = QualityThresholds.minBitrate
         }
+        // Jitter > 30ms degrades Opus PLC; cap to minBitrate even on a low-RTT path.
+        let effectiveBitrate = stats.jitterMs > QualityThresholds.highJitterThresholdMs
+            ? QualityThresholds.minBitrate : newBitrate
 
-        if newBitrate != currentBitrate {
-            currentBitrate = newBitrate
+        if effectiveBitrate != currentBitrate {
+            currentBitrate = effectiveBitrate
             // Apply the new ceiling to the live audio sender so the encoder
             // actually sheds bandwidth — previously this was only logged.
-            client.applyAudioEncoding(maxBitrateBps: newBitrate)
+            client.applyAudioEncoding(maxBitrateBps: effectiveBitrate)
             let lossPct = String(format: "%.1f%%", lossRatio * 100)
             let bweMbps = stats.availableOutgoingBitrateBps > 0
                 ? String(format: " bwe=%.1fMbps", Double(stats.availableOutgoingBitrateBps) / 1_000_000)
                 : ""
-            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate / 1000)kbps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps))")
+            let jitterTag = stats.jitterMs > QualityThresholds.highJitterThresholdMs
+                ? String(format: " jitter=%.0fms[capped]", stats.jitterMs)
+                : ""
+            Logger.webrtc.info("Audio bitrate adjusted to \(effectiveBitrate / 1000)kbps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps)\(jitterTag))")
         }
 
         // §5.6 — a thermal transition must re-apply the encoder ceiling even
@@ -402,27 +460,18 @@ final class WebRTCService {
         client.sendDataChannelMessage(data)
     }
 
+    /// Raccroché in-band : pousse `{type: "bye"}` au pair en P2P direct pour
+    /// une coupure instantanée, AVANT que le fanout serveur `call:ended`
+    /// n'arrive (multi-requêtes DB côté gateway). No-op si le channel n'est
+    /// pas ouvert (appel jamais connecté) — le chemin socket reste autoritatif.
+    func sendHangupBye(reason: String = "completed") {
+        let message = DataChannelControlMessage(type: "bye", reason: reason)
+        guard let data = try? JSONEncoder().encode(message) else { return }
+        client.sendDataChannelMessage(data)
+    }
+
     func sendDTMF(digits: String) {
         client.sendDTMF(digits: digits)
-    }
-
-    // MARK: - Audio Effects
-
-    func setAudioEffect(_ effect: AudioEffectConfig?) {
-        do {
-            try client.setAudioEffect(effect)
-            Logger.webrtc.info("Audio effect set via service: \(effect?.effectType.rawValue ?? "none")")
-        } catch {
-            Logger.webrtc.error("Failed to set audio effect: \(error.localizedDescription)")
-        }
-    }
-
-    func updateAudioEffectParams(_ config: AudioEffectConfig) {
-        do {
-            try client.updateAudioEffectParams(config)
-        } catch {
-            Logger.webrtc.error("Failed to update audio effect params: \(error.localizedDescription)")
-        }
     }
 
     // MARK: - ICE Restart
@@ -445,7 +494,17 @@ final class WebRTCService {
         disconnectDebounceTask = nil
         flushCandidatesTask?.cancel()
         flushCandidatesTask = nil
-        client.disconnect()
+        pendingCandidateTask?.cancel()
+        pendingCandidateTask = nil
+        switchCameraTask?.cancel()
+        switchCameraTask = nil
+        // Uses the flush-aware teardown variant, not a bare disconnect() call:
+        // `endCall()` sends the P2P hangup `bye` on the data channel right
+        // before this runs (CallManager.swift), and closing the peer
+        // connection synchronously after an enqueued-but-unflushed send can
+        // silently drop it — degrading the "instant hangup" fast path back
+        // to the slower socket `call:end` fanout it was built to bypass.
+        client.disconnectAfterFlushingPendingSend()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
         connectionState = .closed

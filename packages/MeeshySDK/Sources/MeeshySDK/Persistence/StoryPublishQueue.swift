@@ -34,10 +34,16 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// IDs d'utilisateurs ciblés (ONLY) ou exclus (EXCEPT). Optionnel pour
     /// rester rétro-compatible avec les rows persistés avant ce champ.
     public let visibilityUserIds: [String]?
+    /// Langue source (Prisme Linguistique) du contenu de la story. Persistée
+    /// pour que le gateway puisse router NLLB-200/TTS au flush et que le reader
+    /// résolve le texte/audio dans la langue préférée du viewer. Optionnelle pour
+    /// rester rétro-compatible avec les rows persistés avant ce champ (→ `nil`).
+    public let originalLanguage: String?
 
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
+        case originalLanguage
     }
 
     public init(
@@ -46,7 +52,8 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         repostOfId: String? = nil,
         mediaReferences: [StoryMediaReference] = [],
         tempStoryId: String? = nil,
-        visibilityUserIds: [String]? = nil
+        visibilityUserIds: [String]? = nil,
+        originalLanguage: String? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -59,6 +66,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.retryCount = 0
         self.lastError = nil
         self.visibilityUserIds = visibilityUserIds
+        self.originalLanguage = originalLanguage
     }
 
     public init(from decoder: Decoder) throws {
@@ -73,6 +81,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.retryCount = try container.decodeIfPresent(Int.self, forKey: .retryCount) ?? 0
         self.lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
         self.visibilityUserIds = try container.decodeIfPresent([String].self, forKey: .visibilityUserIds)
+        self.originalLanguage = try container.decodeIfPresent(String.self, forKey: .originalLanguage)
     }
 }
 
@@ -92,6 +101,33 @@ public struct StoryMediaReference: Codable, Sendable {
         self.elementId = elementId
         self.mediaType = mediaType
         self.localFilePath = localFilePath
+    }
+
+    /// File extensions (case-insensitive) treated as video containers.
+    private static let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v"]
+
+    /// Infers a visual `mediaType` ("video" or "image") from a file path's
+    /// extension. The offline-queue converters only know a flat disk path (not
+    /// the original media kind), so without this a queued `.mp4` would be
+    /// re-tagged as "image" and replay via `UIImage(contentsOfFile:)` → nil →
+    /// unrecoverable failure (or the video never uploads). Pure, side-effect
+    /// free atom; audio refs are tagged explicitly by callers and never routed
+    /// through here.
+    ///
+    /// CLOSED-SET ASSUMPTION (F4): the extension is lowercased before lookup so
+    /// `.MP4`/`.MOV` resolve correctly. The set `{mp4, mov, m4v}` is the single
+    /// point deciding offline-replay recoverability; it is sound because every
+    /// caller feeds a clean local DISK path — `TimelineViewModel+OfflinePublish`
+    /// and `StoryQueueMigrator` pass `URL.path`, which already strips any query
+    /// string / fragment — so a URL-shaped path (e.g. `clip.mp4?token=…`) cannot
+    /// reach here. Anything outside the set (unknown / empty / dotfile-without-
+    /// extension) defaults to "image": images dominate and a mis-tagged image is
+    /// harmless, whereas a mis-tagged video fails loudly via the disk-existence /
+    /// decode path rather than corrupting silently. Update the set in lockstep if
+    /// the composer ever exports a new video container.
+    public static func inferVisualMediaType(forPath path: String) -> String {
+        let ext = (path as NSString).pathExtension.lowercased()
+        return videoFileExtensions.contains(ext) ? "video" : "image"
     }
 }
 
@@ -222,7 +258,31 @@ public actor StoryPublishQueue {
 
     public func dequeue(_ itemId: String) {
         items.removeAll { $0.id == itemId }
+        inFlightIds.remove(itemId)
         saveToDisk()
+    }
+
+    // MARK: - In-flight marking (E5 write-ahead)
+
+    /// E5 — ids des items dont l'upload est piloté EN CE MOMENT par le chemin
+    /// online de l'UI (write-ahead). VOLATILE à dessein : jamais persisté.
+    /// Pendant la vie du process, `processNext()` saute ces items (pas de
+    /// double publication pendant que l'upload UI tourne) ; après un kill le
+    /// marqueur disparaît et l'item persisté redevient naturellement éligible
+    /// au drain de boot — la sémantique « inflight orphelin → pending » sans
+    /// champ persisté ni migration de format.
+    private var inFlightIds: Set<String> = []
+
+    public func markInFlight(_ itemId: String) {
+        inFlightIds.insert(itemId)
+    }
+
+    public func clearInFlight(_ itemId: String) {
+        inFlightIds.remove(itemId)
+    }
+
+    public func isInFlight(_ itemId: String) -> Bool {
+        inFlightIds.contains(itemId)
     }
 
     public var pendingItems: [StoryPublishQueueItem] {
@@ -248,7 +308,14 @@ public actor StoryPublishQueue {
     }
 
     public func clearAll() {
+        // E9/E10 — un clearAll (logout multi-compte) emporte aussi les copies
+        // médias locales de chaque item : les stories en attente d'un compte
+        // ne doivent laisser ni queue ni fichiers au compte suivant.
+        for item in items {
+            removeLocalMedia(of: item)
+        }
         items.removeAll()
+        inFlightIds.removeAll()
         saveToDisk()
     }
 
@@ -277,6 +344,9 @@ public actor StoryPublishQueue {
         var successIds: [String] = []
 
         for (index, item) in items.enumerated() {
+            // E5 — un item write-ahead dont l'upload online est en cours dans
+            // CE process ne doit pas être double-publié par le drain.
+            if inFlightIds.contains(item.id) { continue }
             // Backoff between consecutive retries within the same processing
             // pass — small jitter to avoid thundering-herd on reconnect.
             if index > 0 {
@@ -335,7 +405,14 @@ public actor StoryPublishQueue {
         }
 
         // Apply the dispositions atomically before notifying observers.
+        // E10 — une disposition TERMINALE (succès OU échec permanent) emporte
+        // ses copies média locales : sans ce cleanup, chaque publication via
+        // la queue laissait son dossier `meeshy_offline_queue/<tempStoryId>/`
+        // orphelin sur disque (fuite confirmée it.12).
         for id in successIds + permanentFailureIds {
+            if let item = items.first(where: { $0.id == id }) {
+                removeLocalMedia(of: item)
+            }
             items.removeAll { $0.id == id }
         }
         saveToDisk()
@@ -349,6 +426,25 @@ public actor StoryPublishQueue {
 
         if !successIds.isEmpty || !permanentFailureIds.isEmpty {
             logger.info("Processed: \(successIds.count) succeeded, \(permanentFailureIds.count) permanently failed, \(self.items.count) still pending")
+        }
+    }
+
+    /// E10 — supprime les copies média locales d'un item en disposition
+    /// terminale puis chaque répertoire parent devenu VIDE (prudent : on ne
+    /// touche jamais un dossier qui contient encore autre chose). Best-effort
+    /// et agnostique du produit : la queue ne connaît que ses `mediaReferences`.
+    private func removeLocalMedia(of item: StoryPublishQueueItem) {
+        let fm = FileManager.default
+        var parents: Set<URL> = []
+        for ref in item.mediaReferences {
+            let url = URL(fileURLWithPath: ref.localFilePath)
+            try? fm.removeItem(at: url)
+            parents.insert(url.deletingLastPathComponent())
+        }
+        for parent in parents {
+            if let contents = try? fm.contentsOfDirectory(atPath: parent.path), contents.isEmpty {
+                try? fm.removeItem(at: parent)
+            }
         }
     }
 

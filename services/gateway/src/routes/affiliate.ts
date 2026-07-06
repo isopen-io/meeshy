@@ -5,6 +5,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AffiliateTrackingService } from '../services/AffiliateTrackingService';
+import { SecuritySanitizer } from '../utils/sanitize';
 import { validatePagination } from '../utils/pagination';
 import {
   affiliateTokenSchema,
@@ -138,7 +139,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const affiliateToken = await fastify.prisma.affiliateToken.create({
         data: {
           token,
-          name,
+          name: SecuritySanitizer.sanitizeText(name),
           createdBy: userId,
           maxUses,
           expiresAt: expiresAt ? new Date(expiresAt) : null,

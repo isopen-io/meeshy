@@ -32,6 +32,7 @@ struct FriendRequestListView: View {
                     .font(.callout.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
             }
+            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 

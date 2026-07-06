@@ -152,7 +152,9 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       `user:${offlineUserId}`
     ]));
 
-    expect(emit).toHaveBeenCalledTimes(1);
+    // 2 events: legacy read-status:updated + dual-emitted message:read-status-updated
+    // (same payload — see tasks/socketio-events-cleanup.md #3).
+    expect(emit).toHaveBeenCalledTimes(2);
     const [eventName, payload] = emit.mock.calls[0];
     expect(eventName).toBe('read-status:updated');
     expect(payload).toMatchObject({
@@ -162,6 +164,9 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       userId: onlineUserId,
       summary: { totalMembers: 2, deliveredCount: 1, readCount: 0 }
     });
+    const [dualEventName, dualPayload] = emit.mock.calls[1];
+    expect(dualEventName).toBe('message:read-status-updated');
+    expect(dualPayload).toEqual(payload);
   });
 
   it('marks all online recipients in parallel and acks with the first of them', async () => {
@@ -186,8 +191,12 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       messageId
     );
 
-    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledTimes(2);
     expect(emit.mock.calls[0][1]).toMatchObject({
+      participantId: onlineParticipantId,
+      userId: onlineUserId
+    });
+    expect(emit.mock.calls[1][1]).toMatchObject({
       participantId: onlineParticipantId,
       userId: onlineUserId
     });
@@ -206,8 +215,12 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       conversationId
     );
 
-    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledTimes(2);
     expect(emit.mock.calls[0][1]).toMatchObject({
+      participantId: offlineParticipantId,
+      userId: offlineUserId
+    });
+    expect(emit.mock.calls[1][1]).toMatchObject({
       participantId: offlineParticipantId,
       userId: offlineUserId
     });

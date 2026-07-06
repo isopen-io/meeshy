@@ -52,8 +52,8 @@ jest.mock('@/components/ui/label', () => ({
 }));
 
 jest.mock('@/components/ui/badge', () => ({
-  Badge: ({ children, onClick, variant, className }: { children?: React.ReactNode; onClick?: () => void; variant?: string; className?: string }) => (
-    <span data-testid="badge" data-variant={variant} className={className} onClick={onClick}>{children}</span>
+  Badge: ({ children, onClick, variant, className, ...rest }: { children?: React.ReactNode; onClick?: () => void; variant?: string; className?: string; [key: string]: unknown }) => (
+    <span data-testid="badge" data-variant={variant} className={className} onClick={onClick} {...rest}>{children}</span>
   ),
 }));
 
@@ -237,6 +237,64 @@ describe('AgentGlobalConfigTab', () => {
       await waitFor(() => {
         expect(groupBadge.closest('[data-testid="badge"]')).toHaveAttribute('data-variant', 'outline');
       });
+    });
+
+    it('exposes each type badge as a keyboard-operable toggle button', async () => {
+      (agentAdminService.getGlobalConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeGlobalConfig({ eligibleConversationTypes: ['group'] }),
+      });
+      render(<AgentGlobalConfigTab />);
+      await waitFor(() => screen.getByTestId('card-title'));
+      const groupBadge = screen.getByText('agent.overview.conversationType.group').closest('[data-testid="badge"]');
+      const channelBadge = screen.getByText('agent.overview.conversationType.channel').closest('[data-testid="badge"]');
+      expect(groupBadge).toHaveAttribute('role', 'button');
+      expect(groupBadge).toHaveAttribute('tabindex', '0');
+      expect(groupBadge).toHaveAttribute('aria-pressed', 'true');
+      expect(channelBadge).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('toggles a type via the Enter key', async () => {
+      (agentAdminService.getGlobalConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeGlobalConfig({ eligibleConversationTypes: ['group'] }),
+      });
+      render(<AgentGlobalConfigTab />);
+      await waitFor(() => screen.getByTestId('card-title'));
+      const channelBadge = screen.getByText('agent.overview.conversationType.channel').closest('[data-testid="badge"]')!;
+      fireEvent.keyDown(channelBadge, { key: 'Enter' });
+      await waitFor(() => {
+        expect(channelBadge).toHaveAttribute('data-variant', 'default');
+        expect(channelBadge).toHaveAttribute('aria-pressed', 'true');
+      });
+    });
+
+    it('toggles a type via the Space key', async () => {
+      (agentAdminService.getGlobalConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeGlobalConfig({ eligibleConversationTypes: ['group', 'channel'] }),
+      });
+      render(<AgentGlobalConfigTab />);
+      await waitFor(() => screen.getByTestId('card-title'));
+      const channelBadge = screen.getByText('agent.overview.conversationType.channel').closest('[data-testid="badge"]')!;
+      fireEvent.keyDown(channelBadge, { key: ' ' });
+      await waitFor(() => {
+        expect(channelBadge).toHaveAttribute('data-variant', 'outline');
+        expect(channelBadge).toHaveAttribute('aria-pressed', 'false');
+      });
+    });
+
+    it('ignores neutral keys on a type badge', async () => {
+      (agentAdminService.getGlobalConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeGlobalConfig({ eligibleConversationTypes: ['group'] }),
+      });
+      render(<AgentGlobalConfigTab />);
+      await waitFor(() => screen.getByTestId('card-title'));
+      const channelBadge = screen.getByText('agent.overview.conversationType.channel').closest('[data-testid="badge"]')!;
+      fireEvent.keyDown(channelBadge, { key: 'Tab' });
+      expect(channelBadge).toHaveAttribute('data-variant', 'outline');
+      expect(channelBadge).toHaveAttribute('aria-pressed', 'false');
     });
   });
 

@@ -68,4 +68,46 @@ describe('RedisCacheStore (memory-only mode)', () => {
   test('isAvailable returns false without Redis', () => {
     expect(store.isAvailable()).toBe(false);
   });
+
+  test('expire() updates TTL for an existing memory key and returns true', async () => {
+    await store.set('ttl-key', 'value', 300);
+    const result = await store.expire('ttl-key', 7200);
+    expect(result).toBe(true);
+  });
+
+  test('expire() returns false when key is not in memory', async () => {
+    const result = await store.expire('nonexistent-key', 60);
+    expect(result).toBe(false);
+  });
+
+  test('publish() returns 0 without Redis', async () => {
+    const result = await store.publish('my-channel', 'hello');
+    expect(result).toBe(0);
+  });
+
+  test('info() returns simulated memory stats without Redis', async () => {
+    const result = await store.info();
+    expect(result).toContain('# Memory');
+  });
+});
+
+describe('RedisCacheStore — startMemoryCacheCleanup interval', () => {
+  it('removes expired entries but keeps live ones when the cleanup interval fires', () => {
+    jest.useFakeTimers();
+    try {
+      const store = new RedisCacheStore();
+      const cache = (store as any).memoryCache as Map<string, { value: string; expiresAt: number }>;
+      cache.set('stale', { value: 'v', expiresAt: Date.now() - 1 });
+      cache.set('live', { value: 'v', expiresAt: Date.now() + 100_000 });
+
+      jest.advanceTimersByTime(60_001);
+
+      expect(cache.has('stale')).toBe(false);
+      expect(cache.has('live')).toBe(true);
+
+      store.close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

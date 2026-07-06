@@ -2,15 +2,25 @@ package me.meeshy.core.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import me.meeshy.core.database.dao.CallHistoryDao
 import me.meeshy.core.database.dao.ConversationDao
+import me.meeshy.core.database.dao.FriendDao
+import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
+import me.meeshy.core.database.dao.ProfileStatsCacheDao
 import me.meeshy.core.database.dao.StoryDao
+import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
+import me.meeshy.core.database.entity.CallHistoryEntity
 import me.meeshy.core.database.entity.ConversationEntity
+import me.meeshy.core.database.entity.FriendEntity
+import me.meeshy.core.database.entity.MediaBlobEntity
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.core.database.entity.ProfileStatsCacheEntity
 import me.meeshy.core.database.entity.StoryEntity
+import me.meeshy.core.database.entity.SuggestionEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
 
 /**
@@ -27,8 +37,13 @@ import me.meeshy.core.database.entity.SyncMetaEntity
         OutboxEntity::class,
         MessageEntity::class,
         StoryEntity::class,
+        MediaBlobEntity::class,
+        CallHistoryEntity::class,
+        FriendEntity::class,
+        SuggestionEntity::class,
+        ProfileStatsCacheEntity::class,
     ],
-    version = 5,
+    version = 10,
     exportSchema = false,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -37,4 +52,9 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun outboxDao(): OutboxDao
     public abstract fun messageDao(): MessageDao
     public abstract fun storyDao(): StoryDao
+    public abstract fun mediaBlobDao(): MediaBlobDao
+    public abstract fun callHistoryDao(): CallHistoryDao
+    public abstract fun friendDao(): FriendDao
+    public abstract fun suggestionDao(): SuggestionDao
+    public abstract fun profileStatsCacheDao(): ProfileStatsCacheDao
 }
