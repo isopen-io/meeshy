@@ -1870,9 +1870,9 @@ private struct PendingSettingsBannerInline: View {
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -1931,9 +1931,9 @@ private struct PendingStoryBannerInline: View {
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }

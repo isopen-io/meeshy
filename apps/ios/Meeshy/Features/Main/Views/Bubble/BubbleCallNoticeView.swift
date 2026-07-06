@@ -134,9 +134,9 @@ struct BubbleCallNoticeView: View, Equatable {
     private func metric(icon: String, text: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
             Text(text)
-                .font(.caption.weight(.medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .lineLimit(1)
         }
         .foregroundColor(ThemeManager.shared.textMuted)
@@ -154,7 +154,7 @@ struct BubbleCallNoticeView: View, Equatable {
                 .fill(tint.opacity(isDark ? 0.14 : 0.09))
                 .frame(width: 36, height: 36)
             Image(systemName: mediaGlyph)
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(tint)
         }
         .overlay(alignment: .bottomTrailing) { directionChip }
@@ -167,7 +167,7 @@ struct BubbleCallNoticeView: View, Equatable {
                 .fill(ThemeManager.shared.backgroundPrimary)
                 .frame(width: 16, height: 16)
             Image(systemName: directionGlyph)
-                .font(.system(size: 8, weight: .black))
+                .font(MeeshyFont.relative(8, weight: .black))
                 .foregroundColor(tint)
         }
         .offset(x: 3, y: 3)
@@ -319,14 +319,14 @@ struct CallSummaryDetailSheet: View {
                     .fill(tint.opacity(0.12))
                     .frame(width: 64, height: 64)
                 Image(systemName: mediaGlyph)
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(MeeshyFont.relative(26, weight: .semibold))
                     .foregroundColor(tint)
             }
             .overlay(alignment: .bottomTrailing) {
                 ZStack {
                     Circle().fill(theme.backgroundPrimary).frame(width: 26, height: 26)
                     Image(systemName: directionGlyph)
-                        .font(.system(size: 12, weight: .black))
+                        .font(MeeshyFont.relative(12, weight: .black))
                         .foregroundColor(tint)
                 }
                 .offset(x: 4, y: 4)

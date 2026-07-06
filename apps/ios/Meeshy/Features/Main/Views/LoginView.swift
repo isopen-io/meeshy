@@ -561,8 +561,8 @@ struct LoginView: View {
                         Text(env.label)
                             .font(MeeshyFont.relative(11, weight: selectedEnv == env ? .bold : .medium))
                             .foregroundColor(selectedEnv == env ? .white : theme.textMuted)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                            .padding(.horizontal, MeeshySpacing.sm + 2)
+                            .padding(.vertical, MeeshySpacing.xs + 1)
                             .background(
                                 Capsule().fill(
                                     selectedEnv == env

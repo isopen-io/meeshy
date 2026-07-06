@@ -61,7 +61,7 @@ private struct InitialsAvatar: View {
             Circle()
                 .fill(Color(hex: accentColor))
             Text(initials)
-                .font(.system(size: size * 0.4, weight: .semibold, design: .rounded))
+                .font(.system(size: size * 0.4, weight: .semibold, design: .rounded, relativeTo: .body))
                 .foregroundColor(.white)
         }
         .frame(width: size, height: size)
@@ -530,7 +530,7 @@ struct SmallUnreadView: View {
 
             if count > 0 {
                 Text("\(count)")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .font(.system(size: 36, weight: .bold, design: .rounded, relativeTo: .largeTitle))
                     .foregroundColor(.white)
                 Text(String(localized: "widget.unread", defaultValue: "Unread"))
                     .font(.caption)

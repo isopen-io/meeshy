@@ -410,7 +410,7 @@ private struct MyStoryButton: View {
                             // (cf. MeeshyAvatar.badgeSize .storyTray).
                             // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
                             Text("\u{1F4AD}")
-                                .font(.system(size: 20))
+                                .font(MeeshyFont.relative(20))
                                 .frame(width: 32, height: 32)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
@@ -437,7 +437,7 @@ private struct MyStoryButton: View {
                             // en ab691abaf).
                             // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                             Image(systemName: "plus")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(MeeshyFont.relative(22, weight: .bold))
                                 .foregroundStyle(Color.white)
                                 .frame(width: 40, height: 40)
                                 .background(
@@ -521,7 +521,7 @@ private struct StoryUploadOverlay: View {
 
                 // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(.white)
             } else {
                 Circle()
@@ -536,7 +536,7 @@ private struct StoryUploadOverlay: View {
 
                 // Texte dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Text("\(Int(upload.progress * 100))%")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(MeeshyFont.relative(12, weight: .bold))
                     .foregroundColor(.white)
             }
         }
@@ -672,7 +672,7 @@ struct PinnedStoryTrailBand: View {
         } label: {
             // Glyphe dans un cercle de dimension fixe 44×44 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
             Image(systemName: "plus")
-                .font(.system(size: 20, weight: .bold))
+                .font(MeeshyFont.relative(20, weight: .bold))
                 .foregroundStyle(Color.white)
                 .frame(width: 44, height: 44)
                 .background(
