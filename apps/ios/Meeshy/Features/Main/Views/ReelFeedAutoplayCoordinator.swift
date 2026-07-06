@@ -61,7 +61,7 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
         }
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100 ms
+            try? await Task.sleep(for: .seconds(0.1)) // 100 ms
             guard !Task.isCancelled, let self else { return }
             guard !self.isCallActive() else { self.clear(); return }
             let next = mostCenteredReel(frames: frames, viewportMinY: viewportMinY, viewportMaxY: viewportMaxY)

@@ -1,7 +1,7 @@
 import { apiService } from './api.service';
 import { logger } from '@/utils/logger';
 import type { ApiResponse } from '@meeshy/shared/types';
-import { hasMentions as hasMentionsShared, extractMentions as extractMentionsShared, type MentionSuggestion } from '@meeshy/shared/types/mention';
+import type { MentionSuggestion } from '@meeshy/shared/types/mention';
 
 export interface MentionSuggestionsParams {
   conversationId: string;
@@ -145,16 +145,13 @@ export const mentionsService = {
   },
 
   /**
-   * Vérifie si un message contient des mentions (@username ou @DisplayName).
-   *
-   * Délègue à la détection partagée Unicode-aware (`@meeshy/shared`) — source de vérité unique,
-   * cohérente avec `parseMentions` (reconnaît `@Éric`, `@André`, etc.).
+   * Vérifie si un message contient des mentions (@username)
    *
    * @param content - Contenu du message
    * @returns true si le message contient des mentions
    */
   hasMentions(content: string): boolean {
-    return hasMentionsShared(content);
+    return /@\w+/.test(content);
   },
 
   /**
@@ -164,7 +161,8 @@ export const mentionsService = {
    * @returns Array des usernames (sans le @)
    */
   extractMentions(content: string): string[] {
-    return extractMentionsShared(content);
+    const mentions = content.match(/@(\w+)/g);
+    return mentions ? mentions.map(mention => mention.substring(1)) : [];
   },
 };
 

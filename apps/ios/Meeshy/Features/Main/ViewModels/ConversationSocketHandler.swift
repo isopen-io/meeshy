@@ -74,11 +74,7 @@ final class ConversationSocketHandler {
     private let conversationId: String
     private let currentUserId: String
     private let messageSocket: MessageSocketProviding
-    // `nonisolated(unsafe)` for the same reason as the typing state below:
-    // `deinit` needs to snapshot this reference into a local BEFORE handing
-    // it (not `self`) to the MainActor `Task` that clears it — self is
-    // uniquely referenced at that point, so there's no real race.
-    nonisolated(unsafe) weak var delegate: ConversationSocketDelegate?
+    weak var delegate: ConversationSocketDelegate?
 
     /// Foreground/active probe for the read-receipt precision gate. Injected so
     /// the XCTest host — which never reaches `.active` — can force a known value.
@@ -195,15 +191,8 @@ final class ConversationSocketHandler {
         typingSafetyTimers.removeAll()
         typingUserOrder.removeAll()
         typingUserNames.removeAll()
-        // Snapshot `delegate` now, while `self` is still valid, and hand the
-        // snapshot (not `self`) to the Task. ARC zeroes weak references to
-        // `self` as soon as `deinit` begins — a `[weak self]` capture inside
-        // a Task launched FROM `deinit` already observes `self` as nil by
-        // the time it runs, making `self?.delegate?...` silently dead code
-        // and leaving stale typing indicators on the delegate after teardown.
-        let delegateSnapshot = delegate
-        Task { @MainActor in
-            delegateSnapshot?.typingUsernames.removeAll()
+        Task { @MainActor [weak self] in
+            self?.delegate?.typingUsernames.removeAll()
         }
     }
 

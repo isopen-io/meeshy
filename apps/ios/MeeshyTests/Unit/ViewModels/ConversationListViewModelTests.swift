@@ -1439,47 +1439,6 @@ final class ConversationListViewModelTests: XCTestCase {
                        "bumpToTop on unknown id must leave the list untouched")
     }
 
-    // MARK: - conversation:updated socket event — graft du titre
-
-    /// Un DM n'est jamais renommable : son `title` client est le NOM DU
-    /// PARTICIPANT, dérivé à la conversion REST (`toConversation`). Le
-    /// payload socket porte le titre BRUT de la DB — le greffer écraserait
-    /// le nom affiché (vu au pin/unpin 2026-07-04 : « sandra raveloson » →
-    /// « Sany » après un `setPinned`).
-    func test_conversationUpdatedEvent_titleOnDirect_doesNotClobberParticipantName() async throws {
-        let messageSocket = MockMessageSocket()
-        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
-        sut.setConversations([
-            makeConversation(id: "dm1", name: "sandra raveloson", type: .direct)
-        ])
-
-        let event = makeConversationUpdatedEvent(
-            conversationId: "dm1", lastMessageAt: nil, title: "Sany")
-        messageSocket.conversationUpdated.send(event)
-
-        try await Task.sleep(nanoseconds: 80_000_000)
-
-        XCTAssertEqual(sut.conversations.first?.title, "sandra raveloson",
-                       "Le titre brut du payload socket ne doit pas écraser le nom du participant d'un DM")
-    }
-
-    func test_conversationUpdatedEvent_titleOnGroup_appliesRename() async throws {
-        let messageSocket = MockMessageSocket()
-        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
-        sut.setConversations([
-            makeConversation(id: "g1", name: "Ancien nom", type: .group)
-        ])
-
-        let event = makeConversationUpdatedEvent(
-            conversationId: "g1", lastMessageAt: nil, title: "Nouveau nom")
-        messageSocket.conversationUpdated.send(event)
-
-        try await Task.sleep(nanoseconds: 80_000_000)
-
-        XCTAssertEqual(sut.conversations.first?.title, "Nouveau nom",
-                       "Le rename d'un groupe doit continuer de se propager via l'event socket")
-    }
-
     // MARK: - conversation:updated socket event with lastMessageAt
 
     func test_conversationUpdatedEvent_withLastMessageAt_triggersBumpToTop() async throws {

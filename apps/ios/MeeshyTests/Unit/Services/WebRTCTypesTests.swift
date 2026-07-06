@@ -594,22 +594,18 @@ final class QualityThresholdsVideoTests: XCTestCase {
         XCTAssertEqual(QualityThresholds.minVideoBitrate, 100_000)
     }
 
-    func test_turnDefaultCredentialTTLSeconds_matchesGatewayDefault() {
-        // Mirrors TURNCredentialService.credentialTTL's default (86400s / 24h,
-        // services/gateway/src/services/TURNCredentialService.ts) — the gateway raised
-        // it from 600s (CALL-FIX 2026-06-25) after the short value silently killed
-        // TURN-relayed calls once credentials expired mid-call. This client-side
-        // fallback (used only when a signalling path carries no explicit ttl, e.g. a
-        // VoIP push) must not drift back to a value that misrepresents the real TTL.
-        XCTAssertEqual(QualityThresholds.turnDefaultCredentialTTLSeconds, 86400, accuracy: 0.001)
+    func test_turnDefaultCredentialTTLSeconds_is480() {
+        // TURN credentials issued by the Meeshy gateway default to 480 s. The 80%-TTL
+        // refresh fires at 384 s — well before Coturn's 600 s server-side eviction.
+        XCTAssertEqual(QualityThresholds.turnDefaultCredentialTTLSeconds, 480, accuracy: 0.001)
     }
 
     func test_turnRefreshFires_at80PercentOfDefaultTTL() {
         // scheduleTURNCredentialRefresh applies an 80% factor: refreshDelay = ttl * 0.8.
-        // With the default TTL the refresh should fire at 69120 s.
+        // With the default TTL the refresh should fire at 384 s.
         let refreshAt = QualityThresholds.turnDefaultCredentialTTLSeconds * 0.8
-        XCTAssertEqual(refreshAt, 69120.0, accuracy: 0.001,
-                       "TURN credential refresh must fire at 80% of the 86400 s default TTL.")
+        XCTAssertEqual(refreshAt, 384.0, accuracy: 0.001,
+                       "TURN credential refresh must fire at 384 s (80% of 480 s default TTL)")
     }
 }
 
@@ -1007,30 +1003,6 @@ final class AddTransportCCTests: XCTestCase {
             result.contains("a=extmap:6 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"),
             "When extmapStartId (5) is taken, Transport-CC must be assigned ID 6"
         )
-    }
-
-    func test_addTransportCC_appliesToBothMLines_whenVideoIsTheLastLine() {
-        // Regression for a forward-walking-index bug: a fixed `0..<lines.count`
-        // range computed before any insertion desyncs once the audio insertion
-        // shifts every later line by +1. With no attribute lines trailing the
-        // video m-line (and no terminating \r\n to leave a buffering empty
-        // element), the shifted video m-line index used to fall outside the
-        // original loop bound and never received its own extmap.
-        let sdp = "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\nm=video 9 UDP/TLS/RTP/SAVPF 96"
-        let result = P2PWebRTCClient.addTransportCC(sdp)
-        let ccURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
-        let lines = result.components(separatedBy: "\r\n")
-
-        guard let audioIdx = lines.firstIndex(where: { $0.hasPrefix("m=audio ") }),
-              let videoIdx = lines.firstIndex(where: { $0.hasPrefix("m=video ") }) else {
-            return XCTFail("expected both m-lines to survive munging")
-        }
-        let audioSection = lines[audioIdx..<videoIdx]
-        let videoSection = lines[videoIdx...]
-        XCTAssertTrue(audioSection.contains(where: { $0.contains(ccURI) }),
-                      "audio m-section must contain its own Transport-CC extmap")
-        XCTAssertTrue(videoSection.contains(where: { $0.contains(ccURI) }),
-                      "video m-section must also contain a Transport-CC extmap, not just audio")
     }
 }
 

@@ -89,10 +89,6 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       queryClient.setQueryData(queryKeys.posts.detail(data.post.id), (old: unknown) =>
         old ? { ...(old as Record<string, unknown>), data: data.post } : old,
       );
-      // A reel edited from any surface must refresh its caption/media on the
-      // reels affinity threads too — otherwise `/feed/reels` and `/reel/:id`
-      // keep the stale pre-edit post until a full refetch.
-      patchReelCaches(queryClient, data.post.id, () => data.post);
     }
 
     function handlePostDeleted(data: PostDeletedEventData) {
@@ -109,10 +105,6 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
           };
         },
       );
-      // Drop the deleted post from the reels affinity threads and evict its
-      // detail cache so no reel/detail surface can resurface a removed post.
-      removePostFromReelCaches(queryClient, data.postId);
-      queryClient.removeQueries({ queryKey: queryKeys.posts.detail(data.postId) });
     }
 
     function handlePostLiked(data: PostLikedEventData) {
@@ -626,33 +618,6 @@ function patchReelCaches(
         pages: old.pages.map((page) => ({
           ...page,
           data: (page.data ?? []).map((p) => (p.id === postId ? patcher(p) : p)),
-        })),
-      };
-    },
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Shared helper: remove a post from every reels affinity thread cache.
-//
-// Mirror of `patchReelCaches` for deletion — a prefix-matched setQueriesData
-// filters the post out of the `foryou` thread and every per-seed thread at
-// once, so a deleted reel disappears from all reel surfaces without a refetch.
-// ---------------------------------------------------------------------------
-
-function removePostFromReelCaches(
-  queryClient: ReturnType<typeof useQueryClient>,
-  postId: string,
-) {
-  queryClient.setQueriesData<{ pages?: Array<{ data?: Post[] }> }>(
-    { queryKey: [...queryKeys.posts.lists(), 'reels'] },
-    (old) => {
-      if (!old?.pages) return old;
-      return {
-        ...old,
-        pages: old.pages.map((page) => ({
-          ...page,
-          data: (page.data ?? []).filter((p) => p.id !== postId),
         })),
       };
     },

@@ -17,7 +17,7 @@
  */
 
 import { MongoClient, Db, ObjectId } from 'mongodb';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient } from '@prisma/client';
 import * as dotenv from 'dotenv';
 
 // Charger variables d'environnement

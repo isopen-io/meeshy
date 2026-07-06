@@ -220,9 +220,9 @@ extension BubbleStandardLayout {
                 }
         }
         .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .stroke(strokeColor, lineWidth: 0.5)
         )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -374,7 +374,7 @@ fileprivate struct BubbleGridCell: View {
                     onDismiss: { withAnimation { showReactionPicker = false } }
                 )
                 .padding(8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .padding(.horizontal, 6)
             }
             .transition(.opacity)
@@ -458,7 +458,7 @@ fileprivate struct BubbleGridCell: View {
                     Spacer()
                     Text("\(attachment.viewOnceCount)")
                         // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
                         .background(
@@ -621,7 +621,7 @@ fileprivate struct BubbleGridVideoThumbnailView: View {
             Image(systemName: "play.fill")
                 // Doctrine 86i : glyphe play dans un cercle de lecture de dimension fixe
                 // (48/36) → taille figée, proportionnée au cercle (ne doit pas déborder).
-                .font(.system(size: solo ? 18 : 12, weight: .bold))
+                .font(MeeshyFont.relative(solo ? 18 : 12, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: solo ? 2 : 1)
         }
@@ -787,7 +787,7 @@ struct BubbleCarouselView: View {
             } label: {
                 Image(systemName: "xmark")
                     // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))

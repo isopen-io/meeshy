@@ -896,14 +896,6 @@ export interface CallError {
   readonly code: CallErrorCode;
   readonly message: string;
   readonly details?: Record<string, unknown>;
-  /**
-   * The call this error pertains to, when known. Clients with an active call
-   * MUST ignore any `call:error` whose `callId` is present and does not match
-   * their current call — an error for call A must never tear down an
-   * unrelated, healthy call B on the same device. Absent only for errors that
-   * occur before a call context exists (auth failures, generic rate limits).
-   */
-  readonly callId?: string;
 }
 
 /**

@@ -532,60 +532,6 @@ describe('AffiliateTrackingService.getAffiliateStats', () => {
     expect(result.data?.tokens[0]._count.affiliations).toBe(1);
   });
 
-  it('applies the same filter to the status-breakdown groupBy as to the referrals list', async () => {
-    const prisma = makePrisma({
-      affiliateToken: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
-      affiliateRelation: {
-        findMany: jest.fn().mockResolvedValue([]),
-        groupBy: jest.fn().mockResolvedValue([]),
-      },
-    });
-    await AffiliateTrackingService.getAffiliateStats(prisma, userId, { tokenId: 'tok_specific' });
-
-    const groupByCall = prisma.affiliateRelation.groupBy.mock.calls[0][0];
-    expect(groupByCall.where.affiliateUserId).toBe(userId);
-    expect(groupByCall.where.affiliateTokenId).toBe('tok_specific');
-  });
-
-  it('keeps the status breakdown consistent with totalReferrals when a status filter narrows the result', async () => {
-    // Realistic prisma double: both queries honor the where they receive, so a
-    // status='completed' filter must reduce BOTH the referrals list and the
-    // per-status breakdown. Before the fix, the unfiltered groupBy leaked
-    // pending/expired counts, making completed+pending+expired exceed totalReferrals.
-    const relationsByStatus = {
-      completed: [{ id: 'r1', status: 'completed' }, { id: 'r2', status: 'completed' }, { id: 'r3', status: 'completed' }],
-      pending: [{ id: 'r4', status: 'pending' }],
-      expired: [{ id: 'r5', status: 'expired' }, { id: 'r6', status: 'expired' }],
-    };
-    const allRelations = [...relationsByStatus.completed, ...relationsByStatus.pending, ...relationsByStatus.expired];
-    const filteredBy = (where: { status?: string }) =>
-      where.status ? allRelations.filter(r => r.status === where.status) : allRelations;
-
-    const prisma = makePrisma({
-      affiliateToken: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
-      affiliateRelation: {
-        findMany: jest.fn().mockImplementation(({ where }) => Promise.resolve(filteredBy(where))),
-        groupBy: jest.fn().mockImplementation(({ where }) => Promise.resolve(
-          Object.entries(relationsByStatus)
-            .map(([status, rels]) => ({ status, _count: { status: filteredBy({ ...where, status: where.status ?? status }).length } }))
-            .filter(g => !where.status || g.status === where.status)
-        )),
-      },
-    });
-
-    const result = await AffiliateTrackingService.getAffiliateStats(prisma, userId, { status: 'completed' });
-
-    expect(result.data?.totalReferrals).toBe(3);
-    expect(result.data?.completedReferrals).toBe(3);
-    expect(result.data?.pendingReferrals).toBe(0);
-    expect(result.data?.expiredReferrals).toBe(0);
-    const breakdownSum =
-      (result.data?.completedReferrals ?? 0) +
-      (result.data?.pendingReferrals ?? 0) +
-      (result.data?.expiredReferrals ?? 0);
-    expect(breakdownSum).toBe(result.data?.totalReferrals);
-  });
-
   it('returns error when prisma throws', async () => {
     const prisma = makePrisma({
       affiliateToken: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn().mockRejectedValue(new Error('DB error')) },

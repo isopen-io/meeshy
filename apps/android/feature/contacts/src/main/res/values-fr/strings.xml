@@ -23,8 +23,6 @@
     <string name="contacts_discover_search_hint">Rechercher des utilisateurs Meeshy</string>
     <string name="contacts_discover_prompt">Recherchez des personnes à ajouter</string>
     <string name="contacts_discover_no_results">Aucun utilisateur trouvé</string>
-    <string name="contacts_discover_suggestions_title">Suggestions</string>
-    <string name="contacts_discover_suggestions_empty">Aucune suggestion pour le moment</string>
     <string name="contacts_discover_error">Échec de la recherche d\'utilisateurs</string>
     <string name="contacts_discover_connect">Connecter</string>
     <string name="contacts_discover_pending">En attente</string>

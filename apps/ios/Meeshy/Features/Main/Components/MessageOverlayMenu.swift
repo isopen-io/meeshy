@@ -631,8 +631,9 @@ struct MessageOverlayMenu: View {
         if calendar.isDateInToday(date) {
             return date.formatted(.dateTime.hour().minute())
         } else if calendar.isDateInYesterday(date) {
-            let timeString = date.formatted(.dateTime.hour().minute())
-            return String(format: String(localized: "date.yesterday.at", defaultValue: "Hier %@", bundle: .main), timeString)
+            let time = date.formatted(.dateTime.hour().minute())
+            let yesterday = String(localized: "time.long.yesterday", defaultValue: "Hier", bundle: .main)
+            return "\(yesterday) \(time)"
         } else {
             return date.formatted(.dateTime.day().month(.abbreviated).year().hour().minute())
         }
@@ -755,11 +756,11 @@ struct MessageOverlayMenu: View {
                 isDark: isDark
             )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         // Liseré subtil a la teinte de la bulle — donne du relief au
         // preview flottant sans alourdir la lecture.
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                 .stroke(
                     Color(hex: bubbleAccentHex).opacity(message.isMe ? 0.0 : 0.18),
                     lineWidth: 0.75
@@ -800,7 +801,7 @@ struct MessageOverlayMenu: View {
                 }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
     }
 
     private func previewSingleImage(_ attachment: MessageAttachment) -> some View {
@@ -851,7 +852,7 @@ struct MessageOverlayMenu: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
         )
     }
@@ -1059,11 +1060,7 @@ struct MessageOverlayMenu: View {
     // MARK: - Helpers
 
     private func formatFileSize(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        let kb = Double(bytes) / 1024
-        if kb < 1024 { return String(format: "%.1f KB", kb) }
-        let mb = kb / 1024
-        return String(format: "%.1f MB", mb)
+        AttachmentDownloader.fmt(Int64(bytes))
     }
 
     // MARK: - Dismiss
@@ -1213,7 +1210,7 @@ private struct PreviewAudioPlayer: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
         )
         .onDisappear { player.stop() }
@@ -1277,7 +1274,7 @@ private struct PreviewVideoPlayer: View {
                 videoControls
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         .onDisappear { player.stop() }
     }
 

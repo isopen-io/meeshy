@@ -19,7 +19,6 @@ import { SocketTypingSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
-import { getBlockedUserIdsAmong } from '../../utils/blocking';
 
 const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
@@ -29,8 +28,6 @@ export interface StatusHandlerDependencies {
   privacyPreferencesService: PrivacyPreferencesService;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
-  /** userId → connected socket ids (multi-device). Optional for back-compat; defaults to empty. */
-  userSockets?: Map<string, Set<string>>;
 }
 
 const IDENTITY_CACHE_TTL_MS = 60_000;
@@ -46,7 +43,6 @@ export class StatusHandler {
   private privacyPreferencesService: PrivacyPreferencesService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
-  private userSockets: Map<string, Set<string>>;
   private identityCache = new BoundedTtlCache<string, CachedIdentity>({
     maxSize: IDENTITY_CACHE_MAX_SIZE,
     ttlMs: IDENTITY_CACHE_TTL_MS
@@ -65,7 +61,6 @@ export class StatusHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
-    this.userSockets = deps.userSockets ?? new Map();
     this.typingThrottleCleanupTimer = setInterval(() => this._evictStale(), 30_000);
     if (this.typingThrottleCleanupTimer.unref) this.typingThrottleCleanupTimer.unref();
   }
@@ -111,11 +106,11 @@ export class StatusHandler {
    * still present and typing on another device, so clients must not clear the
    * indicator prematurely.
    */
-  async handleSocketDisconnecting(
+  handleSocketDisconnecting(
     socketId: string,
-    broadcastFn: (room: string, event: string, data: unknown, exceptSocketIds?: string[]) => void,
+    broadcastFn: (room: string, event: string, data: unknown) => void,
     otherSocketIds?: ReadonlySet<string>
-  ): Promise<void> {
+  ): void {
     const typers = this.activeTypers.get(socketId);
     if (typers && typers.length > 0) {
       for (const { conversationId, userId, username, displayName } of typers) {
@@ -127,8 +122,7 @@ export class StatusHandler {
         }
         const room = ROOMS.conversation(conversationId);
         const typingEvent: TypingEvent = { userId, username, displayName, conversationId, isTyping: false };
-        const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, conversationId);
-        broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent, blockedSocketIds.length > 0 ? blockedSocketIds : undefined);
+        broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent);
       }
       this.activeTypers.delete(socketId);
     }
@@ -142,30 +136,6 @@ export class StatusHandler {
     const existing = this.activeTypers.get(socketId) ?? [];
     const filtered = existing.filter(t => t.conversationId !== conversationId);
     this.activeTypers.set(socketId, [...filtered, { conversationId, userId, username, displayName }]);
-  }
-
-  /**
-   * PRIVACY: socket ids to exclude from a typing broadcast — same bidirectional
-   * blocking rule already enforced on the presence channel (`_broadcastUserStatus`
-   * in MeeshySocketIOManager). Typing is a more sensitive, moment-to-moment signal
-   * than presence, so it must not leak to a blocked co-participant either.
-   * Anonymous participants (no `userId`) can't block/be blocked — only registered
-   * users are considered.
-   */
-  private async _getBlockedSocketIdsInRoom(userId: string, conversationId: string): Promise<string[]> {
-    const participants = await this.prisma.participant.findMany({
-      where: { conversationId, isActive: true, userId: { not: null } },
-      select: { userId: true }
-    });
-    const onlineParticipantUserIds = participants
-      .map(p => p.userId)
-      .filter((id): id is string => !!id && id !== userId && this.connectedUsers.has(id));
-    if (onlineParticipantUserIds.length === 0) return [];
-
-    const blockedUserIds = await getBlockedUserIdsAmong(this.prisma, userId, onlineParticipantUserIds);
-    if (blockedUserIds.size === 0) return [];
-
-    return [...blockedUserIds].flatMap(id => [...(this.userSockets.get(id) ?? [])]);
   }
 
   private _untrackTyping(socketId: string, conversationId: string): void {
@@ -287,9 +257,7 @@ export class StatusHandler {
       }
 
       const room = ROOMS.conversation(normalizedId);
-      const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, normalizedId);
-      const emitter = blockedSocketIds.length > 0 ? socket.to(room).except(blockedSocketIds) : socket.to(room);
-      emitter.emit(SERVER_EVENTS.TYPING_START, typingEvent);
+      socket.to(room).emit(SERVER_EVENTS.TYPING_START, typingEvent);
       this._trackTyping(socket.id, normalizedId, userId, identity.username, identity.displayName);
     } catch (error) {
       logger.error('typing:start failed', { error });
@@ -354,9 +322,7 @@ export class StatusHandler {
       };
 
       const room = ROOMS.conversation(normalizedId);
-      const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, normalizedId);
-      const emitter = blockedSocketIds.length > 0 ? socket.to(room).except(blockedSocketIds) : socket.to(room);
-      emitter.emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
+      socket.to(room).emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
       this._untrackTyping(socket.id, normalizedId);
       // An explicit stop ends the typing burst, so drop the throttle window for
       // this (user, conversation): the next typing:start is a NEW burst and must

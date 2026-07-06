@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { isBlockedBetween, getBlockedUserIdsAmong } from '../blocking';
+import { isBlockedBetween } from '../blocking';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 function createMockPrisma(findFirstImpl: (args: unknown) => unknown) {
@@ -62,65 +62,5 @@ describe('isBlockedBetween', () => {
       { id: 'B', blockedUserIds: { has: 'A' } },
     ]);
     expect(arg.select).toEqual({ id: true });
-  });
-});
-
-describe('getBlockedUserIdsAmong', () => {
-  function createMockPrisma(opts: {
-    findManyResult?: Array<{ id: string }>;
-    findUniqueResult?: { blockedUserIds: string[] } | null;
-  }) {
-    const findMany = jest.fn(async () => opts.findManyResult ?? []);
-    const findUnique = jest.fn(async () => opts.findUniqueResult ?? null);
-    const prisma = { user: { findMany, findUnique } } as unknown as PrismaClient;
-    return { prisma, findMany, findUnique };
-  }
-
-  it('returns empty set without querying when candidateIds is empty', async () => {
-    const { prisma, findMany, findUnique } = createMockPrisma({});
-
-    await expect(getBlockedUserIdsAmong(prisma, 'A', [])).resolves.toEqual(new Set());
-    expect(findMany).not.toHaveBeenCalled();
-    expect(findUnique).not.toHaveBeenCalled();
-  });
-
-  it('excludes the userId itself from candidates without querying when it is the only candidate', async () => {
-    const { prisma, findMany } = createMockPrisma({});
-
-    await expect(getBlockedUserIdsAmong(prisma, 'A', ['A'])).resolves.toEqual(new Set());
-    expect(findMany).not.toHaveBeenCalled();
-  });
-
-  it('includes candidates who blocked userId', async () => {
-    const { prisma } = createMockPrisma({ findManyResult: [{ id: 'B' }] });
-
-    await expect(getBlockedUserIdsAmong(prisma, 'A', ['B', 'C'])).resolves.toEqual(new Set(['B']));
-  });
-
-  it('includes candidates userId blocked (other direction)', async () => {
-    const { prisma } = createMockPrisma({ findUniqueResult: { blockedUserIds: ['C'] } });
-
-    await expect(getBlockedUserIdsAmong(prisma, 'A', ['B', 'C'])).resolves.toEqual(new Set(['C']));
-  });
-
-  it('unions both directions and dedupes candidateIds', async () => {
-    const { prisma } = createMockPrisma({
-      findManyResult: [{ id: 'B' }],
-      findUniqueResult: { blockedUserIds: ['C', 'not-a-candidate'] },
-    });
-
-    await expect(getBlockedUserIdsAmong(prisma, 'A', ['B', 'B', 'C'])).resolves.toEqual(new Set(['B', 'C']));
-  });
-
-  it('returns empty set when neither direction has a block', async () => {
-    const { prisma } = createMockPrisma({ findUniqueResult: { blockedUserIds: [] } });
-
-    await expect(getBlockedUserIdsAmong(prisma, 'A', ['B', 'C'])).resolves.toEqual(new Set());
-  });
-
-  it('handles a null blockedUserIds row gracefully', async () => {
-    const { prisma } = createMockPrisma({ findUniqueResult: null });
-
-    await expect(getBlockedUserIdsAmong(prisma, 'A', ['B'])).resolves.toEqual(new Set());
   });
 });

@@ -109,7 +109,7 @@ struct VoiceProfileWizardView: View {
                 }
                 .padding(16)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(theme.backgroundSecondary)
                 )
                 .padding(.horizontal, 20)
@@ -305,7 +305,7 @@ struct VoiceProfileWizardView: View {
                 }
                 .padding(16)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(theme.backgroundSecondary)
                 )
                 .padding(.horizontal, 20)

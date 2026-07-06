@@ -12,54 +12,35 @@ import { getDeviceLocale } from '@/lib/device-locale';
  * Génère les choix de langues disponibles pour un utilisateur
  * Basé sur ses préférences système, régionale et personnalisée
  */
-/**
- * Recherche l'entrée du catalogue de langues de manière insensible à la casse.
- * Les codes du catalogue sont lowercase ; une préférence stockée `'EN'` (casse
- * mixte issue d'un ancien client) doit tout de même résoudre son nom/drapeau —
- * sinon `getUserLanguageChoices` retombait silencieusement sur 🇫🇷 « Français ».
- */
-function findLanguageMeta(code: string | null | undefined) {
-  if (!code) return undefined;
-  const lc = code.toLowerCase();
-  return SUPPORTED_LANGUAGES.find(l => l.code.toLowerCase() === lc);
-}
-
 export function getUserLanguageChoices(user: User): LanguageChoice[] {
-  // Lookup by the raw (lowercased) preference so an absent systemLanguage keeps
-  // the historical 🇫🇷 « Français » fallback; the emitted code still defaults to 'fr'.
-  const systemRaw = user.systemLanguage?.toLowerCase();
-  const systemCode = systemRaw || 'fr';
-  const regionalCode = user.regionalLanguage?.toLowerCase();
-  const customCode = user.customDestinationLanguage?.toLowerCase();
-
   const choices: LanguageChoice[] = [
     {
-      code: systemCode,
+      code: user.systemLanguage || 'fr',
       name: 'Langue système',
-      description: findLanguageMeta(systemRaw)?.name || 'Français',
-      flag: findLanguageMeta(systemRaw)?.flag || '🇫🇷',
+      description: SUPPORTED_LANGUAGES.find(l => l.code === user.systemLanguage)?.name || 'Français',
+      flag: SUPPORTED_LANGUAGES.find(l => l.code === user.systemLanguage)?.flag || '🇫🇷',
       isDefault: true
     }
   ];
 
-  if (regionalCode && regionalCode !== systemCode) {
+  if (user.regionalLanguage && user.regionalLanguage !== user.systemLanguage) {
     choices.push({
-      code: regionalCode,
+      code: user.regionalLanguage,
       name: 'Langue régionale',
-      description: findLanguageMeta(regionalCode)?.name || regionalCode,
-      flag: findLanguageMeta(regionalCode)?.flag || '🌍',
+      description: SUPPORTED_LANGUAGES.find(l => l.code === user.regionalLanguage)?.name || user.regionalLanguage,
+      flag: SUPPORTED_LANGUAGES.find(l => l.code === user.regionalLanguage)?.flag || '🌍',
       isDefault: false
     });
   }
 
-  if (customCode &&
-      customCode !== systemCode &&
-      customCode !== regionalCode) {
+  if (user.customDestinationLanguage &&
+      user.customDestinationLanguage !== user.systemLanguage &&
+      user.customDestinationLanguage !== user.regionalLanguage) {
     choices.push({
-      code: customCode,
+      code: user.customDestinationLanguage,
       name: 'Langue personnalisée',
-      description: findLanguageMeta(customCode)?.name || customCode,
-      flag: findLanguageMeta(customCode)?.flag || '🎯',
+      description: SUPPORTED_LANGUAGES.find(l => l.code === user.customDestinationLanguage)?.name || user.customDestinationLanguage,
+      flag: SUPPORTED_LANGUAGES.find(l => l.code === user.customDestinationLanguage)?.flag || '🎯',
       isDefault: false
     });
   }
@@ -94,29 +75,23 @@ export function resolveUserPreferredLanguage(user: User): string {
  * Obtient la liste des langues utilisées par l'utilisateur
  */
 export function getUserLanguagePreferences(user: User): string[] {
-  // Lowercase avant déduplication — parité avec resolveUserLanguagesOrdered
-  // (@meeshy/shared) : 'EN' et 'en' sont la même langue, un seul code émis.
-  const systemCode = user.systemLanguage?.toLowerCase();
-  const regionalCode = user.regionalLanguage?.toLowerCase();
-  const customCode = user.customDestinationLanguage?.toLowerCase();
-
   const languages = new Set<string>();
 
   // Toujours inclure la langue système
-  if (systemCode) {
-    languages.add(systemCode);
+  if (user.systemLanguage) {
+    languages.add(user.systemLanguage);
   }
 
   // Inclure la langue régionale si différente
-  if (regionalCode && regionalCode !== systemCode) {
-    languages.add(regionalCode);
+  if (user.regionalLanguage && user.regionalLanguage !== user.systemLanguage) {
+    languages.add(user.regionalLanguage);
   }
 
   // Inclure la langue personnalisée si définie et différente
-  if (customCode &&
-      customCode !== systemCode &&
-      customCode !== regionalCode) {
-    languages.add(customCode);
+  if (user.customDestinationLanguage &&
+      user.customDestinationLanguage !== user.systemLanguage &&
+      user.customDestinationLanguage !== user.regionalLanguage) {
+    languages.add(user.customDestinationLanguage);
   }
 
   return Array.from(languages);
