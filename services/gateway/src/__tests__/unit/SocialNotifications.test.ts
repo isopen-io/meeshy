@@ -41,6 +41,7 @@ jest.mock('../../utils/logger-enhanced', () => ({
 }));
 
 import { NotificationService } from '../../services/notifications/NotificationService';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 
 // ---------------------------------------------------------------------------
 // Shared mock factories
@@ -301,7 +302,10 @@ describe('Social Notification Methods', () => {
         emoji: '👍',
       });
 
-      expect(mockIO.to).toHaveBeenCalledWith(AUTHOR_ID);
+      // Seq-enriched notifications go to the per-user room `ROOMS.user(id)`
+      // (`user:<id>`) — the room registered sockets join at auth. Emitting to
+      // the bare id reaches no registered socket. See emitWithSeq.
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.user(AUTHOR_ID));
       expect(mockIO.emit).toHaveBeenCalled();
     });
   });
