@@ -778,6 +778,72 @@ describe('MessageReadStatusService', () => {
   });
 
   // ==============================================
+  // DEDUP KEY RELEASED ON FAILURE (regression)
+  // ==============================================
+  //
+  // The 2s dedup gate stamps its key with `now` BEFORE the cursor write runs.
+  // If that write throws (transient DB error), the key must be released so a
+  // retry within the TTL can actually record the receipt — otherwise the gate
+  // swallows every retry until the window expires and the delivery/read tick
+  // is silently lost. Burst-dedup on the SUCCESS path is unchanged: the key
+  // is only released when the operation threw.
+
+  describe('dedup key is released when the cursor write fails (regression)', () => {
+    it('markMessagesAsRead retries the advance after a transient failure instead of being suppressed by the dedup gate', async () => {
+      // First advance attempt throws (transient DB error); the mark rejects.
+      mockPrisma.conversationReadCursor.updateMany.mockRejectedValueOnce(
+        new Error('transient db error')
+      );
+
+      await expect(
+        service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId)
+      ).rejects.toThrow('transient db error');
+
+      // A retry for the SAME message, well within the 2s TTL, must reach the DB
+      // again — nothing was recorded by the failed attempt. Without releasing
+      // the poisoned dedup key, this retry would be swallowed at the gate.
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      const readAdvanceCalls = mockPrisma.conversationReadCursor.updateMany.mock.calls.filter(
+        ([arg]: [{ data?: { lastReadMessageId?: string } }]) =>
+          arg?.data?.lastReadMessageId === testMessageId
+      );
+      // Two read-cursor advances: the failed original + the successful retry.
+      expect(readAdvanceCalls).toHaveLength(2);
+    });
+
+    it('markMessagesAsReceived retries the advance after a transient failure instead of being suppressed by the dedup gate', async () => {
+      mockPrisma.conversationReadCursor.updateMany.mockRejectedValueOnce(
+        new Error('transient db error')
+      );
+
+      await expect(
+        service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId)
+      ).rejects.toThrow('transient db error');
+
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
+
+      const deliveredAdvanceCalls = mockPrisma.conversationReadCursor.updateMany.mock.calls.filter(
+        ([arg]: [{ data?: { lastDeliveredMessageId?: string } }]) =>
+          arg?.data?.lastDeliveredMessageId === testMessageId
+      );
+      expect(deliveredAdvanceCalls).toHaveLength(2);
+    });
+
+    it('markMessagesAsRead still dedups a successful mark repeated within the TTL (success path unchanged)', async () => {
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      const readAdvanceCalls = mockPrisma.conversationReadCursor.updateMany.mock.calls.filter(
+        ([arg]: [{ data?: { lastReadMessageId?: string } }]) =>
+          arg?.data?.lastReadMessageId === testMessageId
+      );
+      // The first mark advances; the second is deduped and adds nothing.
+      expect(readAdvanceCalls).toHaveLength(1);
+    });
+  });
+
+  // ==============================================
   // GET MESSAGE READ STATUS TESTS
   // ==============================================
 

@@ -452,6 +452,10 @@ export class MessageReadStatusService {
     conversationId: string,
     latestMessageId?: string
   ): Promise<void> {
+    // Hoisted so the catch below can release the dedup key when the write
+    // fails — a poisoned key would otherwise swallow every retry within the
+    // TTL and silently drop the delivery receipt.
+    let dedupKey: string | undefined;
     try {
       // Resolve the effective target message id BEFORE the dedup gate. When the
       // caller omits latestMessageId, the dedup key must reflect the ACTUAL
@@ -474,7 +478,7 @@ export class MessageReadStatusService {
       // Keyed by the RESOLVED messageId so a genuinely newer message always
       // produces a distinct key and is never swallowed by the TTL gate — only
       // identical repeats (same message within the TTL) are deduped.
-      const dedupKey = `${participantId}:${conversationId}:received:${messageId}`;
+      dedupKey = `${participantId}:${conversationId}:received:${messageId}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -545,6 +549,12 @@ export class MessageReadStatusService {
         `[MessageReadStatus] Participant ${participantId} received update in conversation ${conversationId}`
       );
     } catch (error) {
+      // Release the dedup key so a retry within the TTL is not swallowed by the
+      // gate — the failed attempt recorded nothing, so the receipt must still
+      // be markable. Deleting an already-cleared / never-set key is a no-op.
+      if (dedupKey) {
+        MessageReadStatusService.recentActionCache.delete(dedupKey);
+      }
       logger.error(
         "[MessageReadStatus] Error marking messages as received:",
         error
@@ -562,6 +572,10 @@ export class MessageReadStatusService {
     conversationId: string,
     latestMessageId?: string
   ): Promise<void> {
+    // Hoisted so the catch below can release the dedup key when the write
+    // fails — a poisoned key would otherwise swallow every retry within the
+    // TTL and silently drop the read receipt.
+    let dedupKey: string | undefined;
     try {
       // Resolve the effective target message id BEFORE the dedup gate. When the
       // caller omits latestMessageId, the dedup key must reflect the ACTUAL
@@ -583,7 +597,7 @@ export class MessageReadStatusService {
       // Keyed by the RESOLVED messageId so a genuinely newer message always
       // produces a distinct key and is never swallowed by the TTL gate — only
       // identical repeats (same message within the TTL) are deduped.
-      const dedupKey = `${participantId}:${conversationId}:read:${messageId}`;
+      dedupKey = `${participantId}:${conversationId}:read:${messageId}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -712,6 +726,12 @@ export class MessageReadStatusService {
         );
       }
     } catch (error) {
+      // Release the dedup key so a retry within the TTL is not swallowed by the
+      // gate — the failed attempt recorded nothing, so the receipt must still
+      // be markable. Deleting an already-cleared / never-set key is a no-op.
+      if (dedupKey) {
+        MessageReadStatusService.recentActionCache.delete(dedupKey);
+      }
       logger.error(
         "[MessageReadStatus] Error marking messages as read:",
         error
