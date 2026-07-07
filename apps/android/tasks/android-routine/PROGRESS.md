@@ -4,6 +4,29 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-07 the **swipe-to-reply gesture** landed (slice `chat-swipe-to-reply`, Chat parity §C —
+> feature-parity.md "Reply … swipe"). Reply was reachable only through the long-press action sheet; iOS opens
+> the reply composer with a horizontal bubble swipe (`MessageListView.dragGesture` + `BubbleSwipeResistance`).
+> New pure `:feature:chat` `SwipeToReply` SSOT (`ReplyDirection` FromIncoming(+1) / FromOwn(−1) — incoming bubbles
+> reply on a rightward drag, own on a leftward): `resolveOffset(translationX, direction)` tracks the finger 1:1
+> toward the reply direction up to a `RUBBER_BAND_ZONE` (72) then compresses further travel by
+> `RUBBER_BAND_RESISTANCE` (0.15), and clamps any drag *away* from the reply direction to a dead 0; `isArmed`
+> lights once the directed offset reaches `COMMIT_THRESHOLD` (66); the `onDrag` reducer over `SwipeReplyState`
+> returns `armedHaptic` **only on the transition into armed** so a held drag never re-fires and re-arming after
+> relaxing fires again; `onRelease` commits the reply iff released while armed. Wired: `ChatScreen`'s new
+> `SwipeToReplyContainer` wraps every `MessageBubble` — `detectHorizontalDragGestures` accumulates the raw
+> translation into the reducer, an `animateFloatAsState` offset renders the drag (spring-back on release), a
+> reveal-alpha reply glyph sits behind it (accent-tinted), the arm haptic fires once mid-drag, and a committed
+> release fires a success haptic + the existing `viewModel.startReply(messageId)` (no new state path, no dead
+> end). +23 tests (`SwipeToReplyTest`: direction gating both ways, zero-translation, in-zone 1:1 both signs,
+> zone-edge boundary, past-zone rubber-band compression both signs, below/at/above commit threshold, wrong-
+> direction never-armed, arm-fires-haptic-once, held-no-refire, disarm-no-haptic, re-arm-refire, short-drag-inert,
+> release commit/cancel/untouched, own-bubble commit). `:app:assembleDebug` + full `testDebugUnitTest` green
+> (system Gradle 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API, no tautologies,
+> boundary coverage on both the zone and the commit threshold; SDK-purity honoured — the "when to arm / when to
+> commit / how far to rubber-band" product decision is a pure atom in `:feature:chat`, the gesture/animation is
+> exempt Compose glue; natural-gesture UX, accent-coherent reveal glyph, reuses the existing reply entry point).
+
 > On 2026-07-07 the **scroll-to-bottom control with unread badge + preview** landed (slice
 > `chat-scroll-to-bottom-control`, Chat parity §C — feature-parity.md "Scroll-to-bottom control"). The FAB was a
 > bare `!isNearBottom` visibility toggle — no unread awareness, no preview. iOS's `ConversationScrollControlsView`
@@ -623,12 +646,9 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `chat-scroll-to-bottom-control`** — the scroll-to-bottom FAB now
-carries a live unread badge + newest-unread preview via the pure `:feature:chat` `ScrollAffordance`
-reducer (see run log). **Recommended next candidates:**
-- **`chat-swipe-to-reply`** — the swipe gesture that opens the reply composer (parity §C "Reply … swipe").
-  Mostly Compose-gesture glue; keep a small pure threshold/decision core (swipe distance + direction →
-  trigger/cancel) testable in `:feature:chat`.
+**Just shipped (2026-07-07): `chat-swipe-to-reply`** — the horizontal bubble swipe now opens the reply
+composer via the pure `:feature:chat` `SwipeToReply` decision core (rubber-band + commit threshold + one-shot
+arm haptic; incoming→right / own→left; commit → existing `startReply`). See run log. **Recommended next candidates:**
 - **`chat-read-status-sheet`** — tap the delivery checks → a "seen by / delivered to" breakdown sheet
   (iOS `onShowReadStatus` → detail sheet "Vues" tab). Needs a per-recipient read model on the wire; if the
   gateway payload only carries counts, defer and pick the next item.
@@ -1136,6 +1156,24 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `chat-swipe-to-reply` ✅ (impl done, reviewer PASS)
+- **Slice:** swipe-to-reply gesture on message bubbles (Chat parity §C "Reply … swipe"). Pure `:feature:chat`
+  `SwipeToReply` SSOT — `ReplyDirection` (FromIncoming +1 / FromOwn −1); `resolveOffset` (1:1 in the
+  `RUBBER_BAND_ZONE`=72, then `RUBBER_BAND_RESISTANCE`=0.15 compression, wrong-direction clamped to 0); `isArmed`
+  at `COMMIT_THRESHOLD`=66; `onDrag` reducer over `SwipeReplyState` returning a one-shot `armedHaptic`; `onRelease`
+  → Commit/Cancel. Port of iOS `MessageListView.dragGesture` + `BubbleSwipeResistance`.
+- **Wiring:** `ChatScreen.SwipeToReplyContainer` wraps each `MessageBubble` — `detectHorizontalDragGestures`
+  accumulates raw translation into the reducer, `animateFloatAsState` renders the drag (spring-back on release),
+  an accent-tinted reply glyph reveals behind (alpha = progress to threshold), arm-haptic fires once mid-drag,
+  committed release fires a success haptic + the existing `viewModel.startReply(messageId)` (no new state path).
+- **Tests:** +23 `SwipeToReplyTest` (direction gating both ways, zero, in-zone/at-edge/past-zone both signs,
+  below/at/above threshold, wrong-direction never-armed, haptic once/held/disarm/re-arm, short-drag inert,
+  commit/cancel/untouched/own-commit).
+- **Gate:** `:app:assembleDebug` + full `testDebugUnitTest` BUILD SUCCESSFUL (system Gradle 8.14.3). Diff
+  `apps/android` only (SwipeToReply.kt, SwipeToReplyTest.kt, ChatScreen.kt + tracking docs). Reviewer: PASS —
+  behaviour-through-public-API, no tautologies, boundary coverage on both thresholds, SDK-purity (pure decision in
+  `:feature:chat`, gesture/animation in exempt Compose glue), natural-gesture UX reusing the existing reply entry.
 
 ### 2026-07-06 — slice `chat-mention-autocomplete` ⚠ blocked-on-infra (impl done, reviewer PASS, PR #1580 open)
 - **Status:** implementation complete, locally green (+40 tests, `:feature:chat:testDebugUnitTest` +
