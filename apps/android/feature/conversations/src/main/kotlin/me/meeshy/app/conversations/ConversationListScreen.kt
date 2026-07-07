@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -111,36 +113,28 @@ fun ConversationListScreen(
                     actionIconContentColor = MeeshyTheme.tokens.textSecondary,
                 ),
                 title = {
-                    if (state.isSearchActive) {
-                        ConversationSearchField(
-                            query = state.searchText,
-                            onQueryChange = viewModel::setSearch,
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(R.string.conversations_title),
-                            style = MaterialTheme.typography.displayMedium,
-                            color = MeeshyPalette.Indigo500,
-                        )
-                    }
+                    Text(
+                        text = stringResource(R.string.conversations_title),
+                        style = MaterialTheme.typography.displayMedium,
+                        color = MeeshyPalette.Indigo500,
+                    )
                 },
                 actions = {
-                    if (state.isSearchActive) {
-                        IconButton(onClick = { viewModel.setSearchActive(false) }) {
-                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.conversations_search_close))
-                        }
-                    } else {
-                        IconButton(onClick = { viewModel.setSearchActive(true) }) {
-                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.conversations_search))
-                        }
-                        IconButton(onClick = onContacts) {
-                            Icon(Icons.Filled.People, contentDescription = stringResource(R.string.conversations_contacts))
-                        }
-                        IconButton(onClick = onLogout) {
-                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.conversations_logout))
-                        }
+                    // iOS parity: search moves to the bottom bar; the top keeps only
+                    // the contacts + sign-out affordances.
+                    IconButton(onClick = onContacts) {
+                        Icon(Icons.Filled.People, contentDescription = stringResource(R.string.conversations_contacts))
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.conversations_logout))
                     }
                 },
+            )
+        },
+        bottomBar = {
+            ConversationSearchBar(
+                query = state.searchText,
+                onQueryChange = viewModel::setSearch,
             )
         },
     ) { padding ->
@@ -233,25 +227,52 @@ fun ConversationListScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** iOS parity: a floating glass search pill anchored to the bottom of the screen. */
 @Composable
-private fun ConversationSearchField(
+private fun ConversationSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
 ) {
-    TextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        placeholder = { Text(stringResource(R.string.conversations_search_hint)) },
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-        ),
-    )
+    MeeshyGlassSurface(
+        shape = RoundedCornerShape(MeeshyRadius.pill),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = null,
+                tint = MeeshyTheme.tokens.textMuted,
+                modifier = Modifier.size(20.dp),
+            )
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MeeshyTheme.tokens.textPrimary),
+                cursorBrush = SolidColor(MeeshyPalette.Indigo500),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = MeeshySpacing.sm),
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.conversations_search_hint),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MeeshyTheme.tokens.textMuted,
+                            )
+                        }
+                        inner()
+                    }
+                },
+            )
+        }
+    }
 }
 
 @Composable
