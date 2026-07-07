@@ -3,6 +3,18 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-07 (`chat-edit-time-window`): a time source is already in the Hilt graph — inject it, don't
+  `System.currentTimeMillis()` inside a ViewModel.** `SdkModule.providesCacheClock()` binds `CacheClock`
+  (`@Singleton`), so a VM that needs "now" can add `private val clock: CacheClock` to its `@Inject constructor`
+  with **zero DI changes** and tests pass a fixed clock (deterministic window/expiry assertions). Gotcha:
+  `CacheClock` is a **plain `interface`, not a `fun interface`** — the SAM lambda `CacheClock { fixedNow }` fails
+  to compile ("interface does not have constructors"); use an anonymous object `object : CacheClock { override
+  fun nowMillis() = fixedNow }`. When you gate a VM action on a window, put the predicate in a pure `:core:model`
+  object (here `MessageEditability.canEdit`, beside `DeliveryStatusResolver`) taking `nowMillis: Long` + a
+  nullable `createdAtMillis` — parse the wire's ISO string with the `isoToEpochMillisOrNull` SSOT, and decide the
+  null case deliberately (here: null → editable, since a message factory / optimistic row often has no
+  `createdAt` and the existing green edit tests rely on it; blocking on a missing timestamp would both break
+  them and be worse UX than a stale edit).
 - **2026-07-07 (`chat-typing-in-control`): render-priority rules belong in a pure content SSOT, not `if`s in the
   Composable.** iOS `ConversationScrollControlsView` documents "typing indicator takes priority over count"; on
   Android that lived nowhere until `ScrollControlContent.of(affordance, typing)` made the four states
