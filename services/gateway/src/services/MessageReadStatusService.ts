@@ -1099,6 +1099,37 @@ export class MessageReadStatusService {
 
       // Only consider cursors from active participants
       const activeCursors = cursors.filter(c => activeParticipantIds.has(c.participantId));
+      const cursorByParticipant = new Map(activeCursors.map(c => [c.participantId, c]));
+
+      // Précision absolue : les dates FIGÉES par message (write-once) priment sur
+      // la dérivation curseur — même règle que `getMessageReadStatus` /
+      // `getMessageStatusDetails`. Sans cette union, un curseur supprimé par
+      // `cleanupObsoleteCursors` (son `lastReadMessageId` pointe vers un message
+      // effacé) ferait disparaître un reçu de livraison/lecture figé toujours
+      // valide → cette variante batch sous-comptait par rapport aux deux
+      // méthodes mono-message pour EXACTEMENT les mêmes données.
+      const frozenEntries = await this.prisma.messageStatusEntry.findMany({
+        where: { messageId: { in: messageIds }, conversationId },
+        select: {
+          messageId: true,
+          participantId: true,
+          deliveredAt: true,
+          receivedAt: true,
+          readAt: true,
+        },
+      });
+      const frozenByMessage = new Map<
+        string,
+        Map<string, { deliveredAt: Date | null; receivedAt: Date | null; readAt: Date | null }>
+      >();
+      for (const e of frozenEntries) {
+        let inner = frozenByMessage.get(e.messageId);
+        if (!inner) {
+          inner = new Map();
+          frozenByMessage.set(e.messageId, inner);
+        }
+        inner.set(e.participantId, e);
+      }
 
       const statusMap = new Map<
         string,
@@ -1110,18 +1141,40 @@ export class MessageReadStatusService {
         let receivedCount = 0;
         let readCount = 0;
 
-        for (const cursor of activeCursors) {
-          if (cursor.participantId === msg.senderId) continue;
+        // Union des participants ayant un curseur actif ET de ceux ayant un reçu
+        // figé actif pour CE message (sender exclu). Un participant figé-seul
+        // (curseur nettoyé) reste compté ; un figé dont le participant n'est plus
+        // actif est ignoré — parité exacte avec `getMessageReadStatus`.
+        const frozenForMsg = frozenByMessage.get(msg.id);
+        const evaluatedParticipantIds = new Set<string>();
+        for (const c of activeCursors) {
+          if (c.participantId !== msg.senderId) evaluatedParticipantIds.add(c.participantId);
+        }
+        if (frozenForMsg) {
+          for (const participantId of frozenForMsg.keys()) {
+            if (participantId !== msg.senderId && activeParticipantIds.has(participantId)) {
+              evaluatedParticipantIds.add(participantId);
+            }
+          }
+        }
 
-          if (
-            cursor.lastDeliveredAt &&
-            cursor.lastDeliveredAt >= msg.createdAt
-          ) {
-            receivedCount++;
-          }
-          if (cursor.lastReadAt && cursor.lastReadAt >= msg.createdAt) {
-            readCount++;
-          }
+        for (const participantId of evaluatedParticipantIds) {
+          const cursor = cursorByParticipant.get(participantId);
+          const cursorDelivered =
+            cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt
+              ? cursor.lastDeliveredAt
+              : null;
+          const cursorRead =
+            cursor?.lastReadAt && cursor.lastReadAt >= msg.createdAt
+              ? cursor.lastReadAt
+              : null;
+
+          const frozen = frozenForMsg?.get(participantId);
+          const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
+          const readAt = frozen?.readAt ?? cursorRead;
+
+          if (receivedAt) receivedCount++;
+          if (readAt) readCount++;
         }
 
         statusMap.set(msg.id, { totalMembers, receivedCount, readCount });
