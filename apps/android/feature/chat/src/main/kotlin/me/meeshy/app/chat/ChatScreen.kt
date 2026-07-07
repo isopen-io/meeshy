@@ -53,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -90,6 +91,7 @@ import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
+import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -145,8 +147,9 @@ fun ChatScreen(
         ?.takeIf { it != Color.Unspecified }
         ?: MeeshyPalette.Indigo500
 
+    MeeshyBackground {
     Scaffold(
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        containerColor = Color.Transparent,
         topBar = {
             if (state.search.isActive) {
                 ChatSearchBar(
@@ -159,6 +162,13 @@ fun ChatScreen(
                 )
             } else {
                 TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                        titleContentColor = MeeshyTheme.tokens.textPrimary,
+                        navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
+                        actionIconContentColor = MeeshyPalette.Indigo500,
+                    ),
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
@@ -277,7 +287,7 @@ fun ChatScreen(
                                         Text(
                                             text = stringResource(R.string.chat_send_failed_retry),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.error,
+                                            color = MeeshyPalette.Error,
                                             textAlign = TextAlign.End,
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -364,6 +374,7 @@ fun ChatScreen(
                 modifier = Modifier.navigationBarsPadding(),
             )
         }
+    }
     }
 }
 
@@ -536,7 +547,7 @@ private fun MessageActionsSheet(
                 SheetAction(
                     icon = Icons.Filled.Delete,
                     label = stringResource(R.string.chat_action_delete),
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = MeeshyPalette.Error,
                     onClick = onDelete,
                 )
             }
