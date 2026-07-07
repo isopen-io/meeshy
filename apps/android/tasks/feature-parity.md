@@ -428,7 +428,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tap acknowledges + jumps. +19 tests (`ScrollAffordanceTest` 14 reducer branches,
       `AffordanceMessageMappingTest` 5 mapping). **Pending:** typing usernames inside the control, offline
       indicator (needs a `NetworkMonitor` flow — iOS hard-codes `false`), slow-scroll search state.
-- [ ] Typing indicators (header + inline)
+- [~] Typing indicators (header + inline) — inline indicator live via pure `:feature:chat` `TypingParticipants`
+      keyed roster SSOT (userId-keyed dedup so two same-named typists stay distinct + refresh-to-tail +
+      self-exclusion + blank-name→userId fallback) + `TypingLabel` presentation (None/One/Two/Many), driven
+      by `ChatViewModel.typingParticipants` and rendered by `ChatScreen.TypingIndicator` (slice
+      `chat-typing-participants-core`, 2026-07-07, +21 tests). **Pending:** header-level indicator, avatar chips.
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background
