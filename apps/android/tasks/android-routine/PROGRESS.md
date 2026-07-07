@@ -4,6 +4,22 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-07 the **header typing-avatar chips** landed (slice `chat-typing-header-avatars`, Chat parity §C —
+> feature-parity.md "Typing indicators … avatar chips"). The header showed only a "X is typing…" label; iOS shows
+> overlapping avatars of who is composing. New pure `:feature:chat` `TypingAvatarStack.of(participants,
+> maxVisible = MAX_TYPING_AVATARS = 3) → TypingAvatarStack(visible: List<TypingAvatarChip>, overflow: Int)` SSOT:
+> the first `maxVisible` typers become chips in roster order; anyone beyond the cap folds into a `+N` overflow
+> (empty → empty/0, at-cap → all/0, over-cap → truncated/overflow, zero/negative cap → nothing visible + everyone
+> in overflow). `TypingParticipant` gained a roster-resolved `avatarUrl` (the `typing:start` socket payload carries
+> none) — trimmed, blank→null — threaded through `TypingParticipants.started`. `ChatViewModel` builds an
+> `avatarByUserId` map from the conversation participants and resolves each start event's avatar; `ChatScreen`
+> overlaps accent-tinted `MeeshyAvatar` chips (surface-ring separated) with a `+N` pill beside the subtitle. +20
+> tests (`TypingAvatarStackTest` 9 branches, `TypingParticipantsTest` +5, `ChatViewModelTest` +2). `assembleDebug`
+> + full `testDebugUnitTest` green (system Gradle 8.14.3). Reviewer: PASS (diff apps/android only;
+> behaviour-through-public-API, no tautologies, boundary coverage on the cap; SDK-purity honoured — the
+> "how-many-chips / overflow" product decision is a pure atom in `:feature:chat`, the overlap render is exempt
+> Compose glue; accent-coherent, degrades to initials, no dead code).
+
 > On 2026-07-07 the **swipe-to-reply gesture** landed (slice `chat-swipe-to-reply`, Chat parity §C —
 > feature-parity.md "Reply … swipe"). Reply was reachable only through the long-press action sheet; iOS opens
 > the reply composer with a horizontal bubble swipe (`MessageListView.dragGesture` + `BubbleSwipeResistance`).
@@ -660,9 +676,25 @@ createdAtMillis = isoToEpochMillisOrNull(message.createdAt), now = clock.nowMill
 authorship (previously unchecked); `ChatScreen` computes the same predicate over `BubbleContent.createdAtIso`
 + `System.currentTimeMillis()` and hides the Edit sheet action once the window has passed (Delete stays
 available, at iOS parity). +13 tests. See run log.
+**Just shipped (2026-07-07): `chat-typing-header-avatars`** — the last piece of the typing item is now live:
+overlapping avatar chips of who is composing sit beside the header subtitle (iOS shows avatars, not just the
+name). New pure `:feature:chat` `TypingAvatarStack.of(participants, maxVisible = MAX_TYPING_AVATARS = 3) →
+TypingAvatarStack(visible, overflow)` SSOT: the first `maxVisible` typers become `TypingAvatarChip`s in
+roster order and anyone beyond the cap folds into a `+N` overflow count (empty → empty/0; at-cap → all/0;
+over-cap → truncated/overflow; a zero or negative cap → nothing visible, everyone in overflow). `TypingParticipant`
+now carries a roster-resolved `avatarUrl` (the `typing:start` socket payload has none), normalised blank→null and
+trimmed at `TypingParticipants.started`. `ChatViewModel` builds an `avatarByUserId` map from the conversation
+participants and threads the resolved avatar into `started`; `ChatScreen` renders overlapping accent-tinted
+`MeeshyAvatar` chips (surface-ring separated) + a `+N` pill beside the subtitle. +20 tests (`TypingAvatarStackTest`
+9 — empty/single/null-avatar/at-cap/over-cap/order/zero-cap/negative-cap/cap-of-one; `TypingParticipantsTest` +5 —
+avatar carry-through/blank→null/trim/refresh/default-null; `ChatViewModelTest` +2 — roster avatar resolved on
+typing:start, absent avatar → null). `assembleDebug` + full `testDebugUnitTest` (896 tasks) green (system Gradle
+8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API, no tautologies, boundary coverage on
+the cap; SDK-purity honoured — the "how many chips / overflow count" product decision is a pure atom in
+`:feature:chat`, the overlap/ring render is exempt Compose glue; accent-coherent visuals, degrades to initials, no
+dead code — the stack + chip are consumed by `ChatScreen`).
+
 **Recommended next candidates:**
-- **`chat-typing-header-avatars`** — the last piece of the typing item: small stacked avatar chips of who is
-  typing (iOS shows avatars, not just the name). Needs an avatar-url projection on `TypingParticipant`.
 - **`chat-delete-for-me-vs-everyone`** — split delete into "for everyone" (own + within 2h, via a new
   `MessageEditability`-style `canDeleteForEveryone`) vs "for me" (local-only tombstone). Needs a local-only
   delete path in `MessageRepository`/outbox; if the wire only supports one delete kind, defer.

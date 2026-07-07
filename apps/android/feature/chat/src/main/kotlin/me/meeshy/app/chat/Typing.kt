@@ -3,11 +3,14 @@ package me.meeshy.app.chat
 /**
  * A user currently composing a message in the conversation, identified by [userId]
  * so two distinct users who happen to share a [name] never collapse into one, and
- * stopping one never removes the other.
+ * stopping one never removes the other. [avatarUrl] is resolved from the conversation
+ * roster (the `typing:start` payload carries no avatar) and is `null` when unknown or
+ * blank, so a stacked header chip degrades gracefully to initials.
  */
 data class TypingParticipant(
     val userId: String,
     val name: String,
+    val avatarUrl: String? = null,
 )
 
 /**
@@ -25,16 +28,52 @@ object TypingParticipants {
         userId: String,
         name: String,
         selfId: String? = null,
+        avatarUrl: String? = null,
     ): List<TypingParticipant> {
         if (userId.isBlank() || userId == selfId) return current
         val resolved = name.ifBlank { userId }
-        return current.filterNot { it.userId == userId } + TypingParticipant(userId, resolved)
+        val avatar = avatarUrl?.trim()?.ifEmpty { null }
+        return current.filterNot { it.userId == userId } + TypingParticipant(userId, resolved, avatar)
     }
 
     fun stopped(
         current: List<TypingParticipant>,
         userId: String,
     ): List<TypingParticipant> = current.filterNot { it.userId == userId }
+}
+
+/** A single avatar in the stacked typing-avatars header cluster. */
+data class TypingAvatarChip(
+    val userId: String,
+    val name: String,
+    val avatarUrl: String?,
+)
+
+/**
+ * The stacked avatar cluster shown in the chat header while peers are composing
+ * (iOS shows overlapping avatars, not just the name). [visible] holds the first
+ * [MAX_TYPING_AVATARS] typers in roster order; anyone beyond the cap is counted in
+ * [overflow] (rendered as a "+N" chip). Deciding *how many to show* and *the overflow
+ * count* is pure product logic here so the Composable only overlaps the chips.
+ */
+data class TypingAvatarStack(
+    val visible: List<TypingAvatarChip>,
+    val overflow: Int,
+) {
+    companion object {
+        const val MAX_TYPING_AVATARS: Int = 3
+
+        fun of(
+            participants: List<TypingParticipant>,
+            maxVisible: Int = MAX_TYPING_AVATARS,
+        ): TypingAvatarStack {
+            val cap = maxVisible.coerceAtLeast(0)
+            val visible = participants.take(cap)
+                .map { TypingAvatarChip(it.userId, it.name, it.avatarUrl) }
+            val overflow = (participants.size - visible.size).coerceAtLeast(0)
+            return TypingAvatarStack(visible, overflow)
+        }
+    }
 }
 
 /**

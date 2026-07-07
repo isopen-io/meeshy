@@ -101,6 +101,7 @@ class ChatViewModel @Inject constructor(
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
     private var mentionRoster: List<MentionCandidate> = emptyList()
+    private var avatarByUserId: Map<String, String?> = emptyMap()
     private var isEmittingTyping = false
     private var typingReemitJob: Job? = null
     private var typingIdleJob: Job? = null
@@ -128,6 +129,8 @@ class ChatViewModel @Inject constructor(
                     excludeUserId = currentUserId,
                 )
                 mentionRoster = roster
+                avatarByUserId = conversation.participants
+                    .associate { (it.userId ?: it.id) to it.avatar }
                 recipientCount.value = conversation.participants
                     .mapNotNull { it.userId }
                     .filterNot { it == currentUserId }
@@ -232,6 +235,7 @@ class ChatViewModel @Inject constructor(
                                     userId = event.userId,
                                     name = name,
                                     selfId = sessionRepository.currentUser.value?.id,
+                                    avatarUrl = avatarByUserId[event.userId],
                                 ),
                             )
                         }

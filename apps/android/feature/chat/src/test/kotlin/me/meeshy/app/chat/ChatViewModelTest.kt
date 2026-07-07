@@ -308,7 +308,7 @@ class ChatViewModelTest {
         title = "Squad",
         participants = listOf(
             ApiParticipant(id = "p0", userId = "me", username = "atabeth", displayName = "Ata Beth"),
-            ApiParticipant(id = "p1", userId = "u1", username = "bob", displayName = "Bob Martin"),
+            ApiParticipant(id = "p1", userId = "u1", username = "bob", displayName = "Bob Martin", avatar = "bob.png"),
             ApiParticipant(id = "p2", userId = "u2", username = "bobby", displayName = "Bobby Tables"),
         ),
     )
@@ -1022,6 +1022,28 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.typingParticipants)
             .containsExactly(TypingParticipant("u1", "Bob"))
+    }
+
+    @Test
+    fun a_peer_typing_start_resolves_the_avatar_from_the_conversation_roster() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+
+        typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Bob"))
+        runCurrent()
+
+        assertThat(h.vm.state.value.typingParticipants.single().avatarUrl).isEqualTo("bob.png")
+    }
+
+    @Test
+    fun a_peer_typing_start_without_a_roster_avatar_carries_no_avatar() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+
+        typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u2", displayName = "Bobby"))
+        runCurrent()
+
+        assertThat(h.vm.state.value.typingParticipants.single().avatarUrl).isNull()
     }
 
     @Test
