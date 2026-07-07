@@ -310,9 +310,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Hard-press conversation preview popover
 - [~] Conversation row: rich last-message preview done (labels type média
       📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,
-      « Vous » pour soi) + unread badge done ; ephemeral/expired/hidden/view-once/
-      draft/typing, activity-heat, tags, presence/story-ring/mood pending
-- [ ] Draft-aware ordering (drafts float to top); bump-to-top on send/receive
+      « Vous » pour soi) + unread badge + **draft preview** done (slice
+      `conversations-draft-aware-ordering`, 2026-07-07 : `draftPreview` accent-teinté
+      « Brouillon : … » prime sur le last-message quand un brouillon utile existe ;
+      reply-only → préfixe + « … ») ; ephemeral/expired/hidden/view-once/
+      typing, activity-heat, tags, presence/story-ring/mood pending
+- [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
+      **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
+      2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
+      draftsById)` fait flotter en tête toute conversation portant un brouillon
+      *utile* (`ConversationDraft.isMeaningful` SSOT `:core:model` — texte non vide
+      **ou** reply armé), triées par `updatedAt` desc (null en dernier du groupe,
+      tri stable) ; le reste garde son ordre en dessous. `ConversationDraftStore`
+      gagne `observeAll()` (`:sdk-core`, InMemory StateFlow + DataStore préfixe-scan,
+      entrée corrompue omise) ; `ConversationListViewModel` collecte les brouillons
+      et les applique dans `withVisible` après le filtre. La split épinglés-en-tête
+      de l'écran reste au-dessus (Épingles > brouillons > reste). +23 tests.
+      **Reste** : bump-to-top on send/receive (déjà couvert par refresh backend).
 - [ ] Cold-start skeletons + error-with-retry empty state
 - [x] Connection-health banner — `SocketManager.connectionState` (StateFlow
       DISCONNECTED/CONNECTING/CONNECTED) → mapping pur `bannerFor` (la reconnexion

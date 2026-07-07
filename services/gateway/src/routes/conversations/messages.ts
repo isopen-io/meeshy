@@ -988,7 +988,8 @@ export function registerMessagesRoutes(
       const readStatusMap = new Map<string, { deliveredCount: number; readCount: number; recipientCount: number }>();
       if (messages.length > 0 && authRequest.authContext?.userId) {
         try {
-          const [activeParticipants, cursors] = await Promise.all([
+          const messageIds = (messages as any[]).map((m: any) => m.id);
+          const [activeParticipants, cursors, frozenEntries] = await Promise.all([
             prisma.participant.findMany({
               where: { conversationId, isActive: true },
               select: { id: true }
@@ -996,18 +997,55 @@ export function registerMessagesRoutes(
             prisma.conversationReadCursor.findMany({
               where: { conversationId },
               select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
+            }),
+            // Reçus figés (write-once) par message. Sans cette union, un curseur
+            // supprimé par `cleanupObsoleteCursors` (son `lastReadMessageId` pointe
+            // vers un message effacé) ferait disparaître un reçu de livraison/lecture
+            // toujours valide — parité exacte avec `getMessageReadStatus` /
+            // `getConversationReadStatuses`, qui unissent curseur + reçu figé.
+            prisma.messageStatusEntry.findMany({
+              where: { conversationId, messageId: { in: messageIds } },
+              select: { messageId: true, participantId: true, deliveredAt: true, receivedAt: true, readAt: true }
             })
           ]);
           const activeIds = new Set(activeParticipants.map((p: any) => p.id));
           const activeCursors = cursors.filter((c: any) => activeIds.has(c.participantId));
+          const cursorByParticipant = new Map(activeCursors.map((c: any) => [c.participantId, c]));
+          const frozenByMessage = new Map<string, Map<string, any>>();
+          for (const e of (frozenEntries as any[])) {
+            let inner = frozenByMessage.get(e.messageId);
+            if (!inner) { inner = new Map(); frozenByMessage.set(e.messageId, inner); }
+            inner.set(e.participantId, e);
+          }
 
           for (const msg of (messages as any[])) {
             let deliveredCount = 0;
             let readCount = 0;
+            // Union des participants ayant un curseur actif ET de ceux ayant un reçu
+            // figé actif pour CE message (sender exclu). Un participant figé-seul
+            // (curseur nettoyé) reste compté ; un figé d'un participant inactif est
+            // ignoré — parité exacte avec les endpoints read-status.
+            const frozenForMsg = frozenByMessage.get(msg.id);
+            const evaluatedParticipantIds = new Set<string>();
             for (const cursor of activeCursors) {
-              if (cursor.participantId === msg.senderId) continue;
-              if (cursor.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt) deliveredCount++;
-              if (cursor.lastReadAt && cursor.lastReadAt >= msg.createdAt) readCount++;
+              if (cursor.participantId !== msg.senderId) evaluatedParticipantIds.add(cursor.participantId);
+            }
+            if (frozenForMsg) {
+              for (const participantId of frozenForMsg.keys()) {
+                if (participantId !== msg.senderId && activeIds.has(participantId)) {
+                  evaluatedParticipantIds.add(participantId);
+                }
+              }
+            }
+            for (const participantId of evaluatedParticipantIds) {
+              const cursor = cursorByParticipant.get(participantId);
+              const cursorDelivered = cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt ? cursor.lastDeliveredAt : null;
+              const cursorRead = cursor?.lastReadAt && cursor.lastReadAt >= msg.createdAt ? cursor.lastReadAt : null;
+              const frozen = frozenForMsg?.get(participantId);
+              const deliveredAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
+              const readAt = frozen?.readAt ?? cursorRead;
+              if (deliveredAt) deliveredCount++;
+              if (readAt) readCount++;
             }
             // Authoritative all-or-nothing denominator: active participants
             // EXCLUDING this message's sender. Lets the client render the group

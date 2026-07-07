@@ -11,8 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -33,8 +35,12 @@ data class ConversationListUiState(
     val selectedFilter: ConversationFilter = ConversationFilter.ALL,
     val searchText: String = "",
     val isSearchActive: Boolean = false,
+    val drafts: Map<String, ConversationDraft> = emptyMap(),
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
+
+    /** The persisted draft for [conversationId], if the composer holds one — drives the row's "Draft: …" preview. */
+    fun draftFor(conversationId: String): ConversationDraft? = drafts[conversationId]
 
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
@@ -47,6 +53,7 @@ class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
+    draftStore: ConversationDraftStore,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -80,6 +87,12 @@ class ConversationListViewModel @Inject constructor(
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
                 _state.update { it.copy(currentUserId = user?.id).withVisible(rawConversations) }
+            }
+        }
+
+        viewModelScope.launch {
+            draftStore.observeAll().collect { drafts ->
+                _state.update { it.copy(drafts = drafts).withVisible(rawConversations) }
             }
         }
 
@@ -201,7 +214,12 @@ private fun CacheResult<List<ApiConversation>>.rawListOr(
  * cache list, applying the active filter, search query and current user identity.
  */
 private fun ConversationListUiState.withVisible(raw: List<ApiConversation>): ConversationListUiState =
-    copy(conversations = ConversationFilters.apply(raw, selectedFilter, searchText, currentUserId))
+    copy(
+        conversations = DraftAwareOrdering.apply(
+            ConversationFilters.apply(raw, selectedFilter, searchText, currentUserId),
+            drafts,
+        ),
+    )
 
 /**
  * Maps a [CacheResult]'s SWR flags onto the screen state — skeleton only on a
