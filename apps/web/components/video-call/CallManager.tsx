@@ -42,6 +42,8 @@ export function CallManager() {
     reset,
     removeRemoteStream,
     removePeerConnection,
+    startHeartbeat,
+    stopHeartbeat,
   } = useCallStore();
 
   const [incomingCall, setIncomingCall] = useState<CallInitiatedEvent | null>(null);
@@ -122,6 +124,27 @@ export function CallManager() {
     startCallTimeout(currentCall.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCall?.id, currentCall?.status, currentCall?.initiatorId, user?.id]);
+
+  /**
+   * CALL-RESILIENCE — client heartbeat liveness contract (audit Vague 26,
+   * sibling drift). `CallCleanupService`'s gateway GC tier force-ends any
+   * call whose participants show no fresh heartbeat for >120s, using
+   * `call:heartbeat` (15s interval, `startHeartbeat`/`stopHeartbeat` in
+   * call-store.ts) as the liveness signal — iOS emits it for every call via
+   * `CallManager.startHeartbeat()`. This component never called the store's
+   * `startHeartbeat` action anywhere: a web↔web call had zero heartbeat
+   * entries from either side, which the GC's post-restart DB fallback
+   * treats identically to a genuine zombie once the one-time boot grace
+   * window passes — a healthy P2P call longer than ~2 minutes would be
+   * force-ended server-side with `endReason: heartbeatTimeout`. Starts the
+   * moment a call becomes active, stops the moment it ends (both driven by
+   * `isInCall`, which `setCurrentCall`/`reset` already toggle).
+   */
+  useEffect(() => {
+    if (!isInCall || !currentCall?.id) return;
+    startHeartbeat(currentCall.id);
+    return () => stopHeartbeat();
+  }, [isInCall, currentCall?.id, startHeartbeat, stopHeartbeat]);
 
   /**
    * Handle incoming call
