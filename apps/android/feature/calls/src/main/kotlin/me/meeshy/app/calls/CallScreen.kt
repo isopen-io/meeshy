@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.ConnectionQuality
@@ -56,6 +57,8 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+
+private const val CALL_ENDED_AUTO_DISMISS_MS = 1500L
 
 private fun hasSelfPermission(context: Context, permission: String): Boolean =
     ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
@@ -104,6 +107,17 @@ fun CallScreen(
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
         if (config.isOutgoing) withMediaPermissions { viewModel.start(config) } else viewModel.start(config)
+    }
+
+    // Auto-dismiss a settled call after a short beat so the "Call ended" screen does
+    // not linger (parity with iOS's 1.5 s settle → full-screen cover close). The
+    // manual close button on the ended view remains for an immediate back-out.
+    LaunchedEffect(state.isEnded) {
+        if (state.isEnded) {
+            delay(CALL_ENDED_AUTO_DISMISS_MS)
+            viewModel.dismiss()
+            onClose()
+        }
     }
 
     val accent = hexColor(DynamicColorGenerator.colorForName(config.peerId.ifBlank { config.peerName }))
