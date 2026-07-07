@@ -8,6 +8,7 @@
     <string name="tab_activity">Activité</string>
     <string name="tab_profile">Profil</string>
     <string name="menu_new_conversation">Nouveau</string>
+    <string name="menu_reels">Réels</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Bon retour</string>

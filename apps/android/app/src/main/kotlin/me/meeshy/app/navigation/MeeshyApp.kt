@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -43,6 +44,7 @@ import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.conversations.NewConversationScreen
 import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.notifications.NotificationsScreen
+import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.settings.SettingsScreen
 import me.meeshy.app.stories.StoryComposerScreen
@@ -70,8 +72,10 @@ object Routes {
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
     const val STORY_COMPOSER = "story_composer"
+    const val REELS = "reels?seed={seed}"
     val CALL = CallRoute.PATTERN
 
+    fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
     fun story(userId: String): String = "story/$userId"
@@ -92,7 +96,8 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
     val activity = stringResource(R.string.tab_activity)
     val profile = stringResource(R.string.tab_profile)
     val newConversation = stringResource(R.string.menu_new_conversation)
-    return remember(messages, feed, calls, activity, profile, newConversation) {
+    val reels = stringResource(R.string.menu_reels)
+    return remember(messages, feed, calls, activity, profile, newConversation, reels) {
         fun tab(route: String): () -> Unit = {
             navController.navigate(route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -106,6 +111,9 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
             },
             RadialMenuItem(Icons.Filled.ChatBubble, messages, MeeshyPalette.Indigo500, onSelect = tab(Routes.CONVERSATIONS)),
             RadialMenuItem(Icons.Filled.Home, feed, MeeshyPalette.Success, onSelect = tab(Routes.FEED)),
+            RadialMenuItem(Icons.Filled.PlayCircle, reels, MeeshyPalette.Error) {
+                navController.navigate(Routes.reels())
+            },
             RadialMenuItem(Icons.Filled.Call, calls, MeeshyPalette.Info, onSelect = tab(Routes.CALLS)),
             RadialMenuItem(Icons.Filled.Notifications, activity, MeeshyPalette.Warning, onSelect = tab(Routes.NOTIFICATIONS)),
             RadialMenuItem(Icons.Filled.Settings, profile, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
@@ -225,7 +233,7 @@ fun MeeshyApp(
             }
             composable(Routes.FEED) {
                 FeedScreen(
-                    onPostClick = { },
+                    onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
                 )
             }
             composable(Routes.CALLS) {
@@ -273,6 +281,17 @@ fun MeeshyApp(
             }
             composable(Routes.STORY_COMPOSER) {
                 StoryComposerScreen(onClose = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.REELS,
+                arguments = listOf(
+                    navArgument("seed") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) { entry ->
+                ReelsScreen(
+                    seed = entry.arguments?.getString("seed"),
+                    onClose = { navController.popBackStack() },
+                )
             }
             composable(
                 route = Routes.CALL,

@@ -21,8 +21,11 @@ ReelFeedAutoplayCoordinator,ReelFeedLayout}.swift`, `ViewModels/ReelsViewModel.s
       overlay (avatar/nom/légende bas-gauche, actions like/comment/repost/share colonne
       droite, bouton fermer). ReelVideoSurface passé en `@OptIn(UnstableApi)` interne (API
       stable pour l'appelant, feature/reels ne dépend pas de media3). (fait)
-- [ ] **P4 — nav + lancement** : route `reels` (+ `reels?seed=`) dans MeeshyApp/NavHost ;
-      lancement depuis le Feed (tap carte réel / long-press) ; overlay plein écran.
+- [x] **P4 — nav + lancement (code ; A/B vidéo DIFFÉRÉ)** : `Routes.REELS="reels?seed={seed}"`
+      + `reels(seed)` + composable → `ReelsScreen`. Feed `onPostClick` → `reels(seed=postId)`.
+      Item radial « Réels » (PlayCircle/Error) → `reels()`. Build vert. **A/B vidéo réelle
+      NON vérifié** : émulateur wedgé (mémoire hôte ~110 MB, shell KO, screencap 0o) — à
+      refaire quand l'émulateur récupère (libérer RAM hôte / rebooter l'AVD `-gpu host`).
 - [ ] **P5 — intégration Feed** : les réels apparaissent dans le Feed (carte réel cliquable
       qui ouvre l'overlay Réels au bon seed) — « les deux » (écran dédié + dans le Feed).
 - [ ] **P6 — boutons flottants « comme iOS »** : aligner le menu radial + le lancement
