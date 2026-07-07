@@ -346,7 +346,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle + **tap-aperçu → scroll vers l'original**
-      (`ReplyJumpResolver`, inerte si original paginé hors écran) ; swipe / forward pending
+      (`ReplyJumpResolver`, inerte si original paginé hors écran) + **swipe-to-reply**
+      (`SwipeToReply` : incoming→droite / own→gauche, rubber-band + seuil de commit + haptique,
+      révèle un glyphe reply, commit → `startReply`) ; forward pending
 - [ ] Reply-count pills + reply thread overlay
 - [~] Message bubbles: text done ; pièces jointes image (grille 1–4 + overlay « +N »,
       URL relative résolue contre l'origine gateway, `ApiMessage.attachments` persisté
