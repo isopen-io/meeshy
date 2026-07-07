@@ -335,6 +335,7 @@ fun ChatScreen(
                     }
                     ScrollToBottomControl(
                         affordance = scrollAffordance,
+                        typingParticipants = state.typingParticipants,
                         accentColor = accentColor,
                         onClick = {
                             scrollAffordance = ScrollAffordance.next(
@@ -526,23 +527,32 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
 @Composable
 private fun ScrollToBottomControl(
     affordance: ScrollAffordanceState,
+    typingParticipants: List<TypingParticipant>,
     accentColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val content = ScrollControlContent.of(affordance, typingParticipants)
     androidx.compose.animation.AnimatedVisibility(
-        visible = affordance.isVisible,
+        visible = content != ScrollControlContent.Hidden,
         modifier = modifier,
     ) {
         Column(horizontalAlignment = Alignment.End) {
-            affordance.preview?.let { preview ->
-                UnreadPreviewPill(preview = preview, accentColor = accentColor, onClick = onClick)
+            when (content) {
+                is ScrollControlContent.Typing ->
+                    TypingPill(label = content.label, accentColor = accentColor, onClick = onClick)
+                is ScrollControlContent.Unread ->
+                    content.preview?.let { preview ->
+                        UnreadPreviewPill(preview = preview, accentColor = accentColor, onClick = onClick)
+                    }
+                else -> Unit
             }
+            val badgeCount = (content as? ScrollControlContent.Unread)?.count ?: 0
             BadgedBox(
                 badge = {
-                    if (affordance.hasUnread) {
+                    if (badgeCount > 0) {
                         Badge(containerColor = accentColor, contentColor = MeeshyPalette.White) {
-                            Text(unreadBadgeLabel(affordance.unreadCount))
+                            Text(unreadBadgeLabel(badgeCount))
                         }
                     }
                 },
@@ -614,6 +624,51 @@ private fun UnreadPreviewPill(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TypingPill(label: TypingLabel, accentColor: Color, onClick: () -> Unit) {
+    val text = typingLabelText(label) ?: return
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(MeeshyRadius.pill),
+        color = MeeshyTheme.tokens.backgroundSecondary,
+        modifier = Modifier
+            .padding(bottom = MeeshySpacing.sm)
+            .widthIn(max = 220.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = MeeshySpacing.md,
+                vertical = MeeshySpacing.xs,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Edit,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = accentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun typingLabelText(label: TypingLabel): String? = when (label) {
+    TypingLabel.None -> null
+    is TypingLabel.One -> stringResource(R.string.chat_typing_one, label.name)
+    is TypingLabel.Two -> stringResource(R.string.chat_typing_two, label.first, label.second)
+    is TypingLabel.Many -> stringResource(R.string.chat_typing_many, label.count)
 }
 
 private fun unreadPreviewIcon(kind: UnreadPreviewKind): ImageVector? = when (kind) {
@@ -794,12 +849,7 @@ private fun SheetAction(
 
 @Composable
 private fun TypingIndicator(participants: List<TypingParticipant>, modifier: Modifier = Modifier) {
-    val text = when (val label = TypingLabel.of(participants)) {
-        TypingLabel.None -> return
-        is TypingLabel.One -> stringResource(R.string.chat_typing_one, label.name)
-        is TypingLabel.Two -> stringResource(R.string.chat_typing_two, label.first, label.second)
-        is TypingLabel.Many -> stringResource(R.string.chat_typing_many, label.count)
-    }
+    val text = typingLabelText(TypingLabel.of(participants)) ?: return
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,

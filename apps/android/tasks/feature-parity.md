@@ -426,13 +426,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       message; scrolling back to bottom clears the badge; top-pruned history never resurrects as unread
       and a lost anchor re-baselines to the newest. `ChatScreen` renders a `BadgedBox` FAB + preview pill,
       tap acknowledges + jumps. +19 tests (`ScrollAffordanceTest` 14 reducer branches,
-      `AffordanceMessageMappingTest` 5 mapping). **Pending:** typing usernames inside the control, offline
+      `AffordanceMessageMappingTest` 5 mapping). Typing-in-control now live: pure `ScrollControlContent.of`
+      (Hidden/Typing/Unread/Plain) folds the typing roster into the control with **typing taking priority
+      over the unread count** (iOS `ConversationScrollControlsView` rule), rendered as a `TypingPill`
+      (slice `chat-typing-in-control`, 2026-07-07, +10 tests). **Pending:** offline
       indicator (needs a `NetworkMonitor` flow — iOS hard-codes `false`), slow-scroll search state.
 - [~] Typing indicators (header + inline) — inline indicator live via pure `:feature:chat` `TypingParticipants`
       keyed roster SSOT (userId-keyed dedup so two same-named typists stay distinct + refresh-to-tail +
       self-exclusion + blank-name→userId fallback) + `TypingLabel` presentation (None/One/Two/Many), driven
       by `ChatViewModel.typingParticipants` and rendered by `ChatScreen.TypingIndicator` (slice
-      `chat-typing-participants-core`, 2026-07-07, +21 tests). **Pending:** header-level indicator, avatar chips.
+      `chat-typing-participants-core`, 2026-07-07, +21 tests). Typing roster also folded into the
+      scroll-to-bottom control via `ScrollControlContent` (slice `chat-typing-in-control`, 2026-07-07).
+      **Pending:** header-level indicator, avatar chips.
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background

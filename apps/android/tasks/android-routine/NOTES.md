@@ -3,6 +3,14 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-07 (`chat-typing-in-control`): render-priority rules belong in a pure content SSOT, not `if`s in the
+  Composable.** iOS `ConversationScrollControlsView` documents "typing indicator takes priority over count"; on
+  Android that lived nowhere until `ScrollControlContent.of(affordance, typing)` made the four states
+  (Hidden/Typing/Unread/Plain) an explicit, branch-swept decision. The Composable then just maps a variant to a
+  pill and reads the badge count from the `Unread` variant only — so "typing hides the badge" is enforced by the
+  type, not by remembering to guard it. When two feature slices need the same `TypingLabel`→string mapping,
+  extract one `@Composable typingLabelText(label): String?` and reuse it (killed the duplicated `when` in
+  `TypingIndicator`).
 - **2026-07-07 (`chat-typing-participants-core`): two `runTest` gotchas that silently emptied a just-populated
   ViewModel roster.** (1) **mockk stub name-shadowing:** a socket flow field on the *test class* that shares a
   name with the mocked property (`private val typingStarted = MutableSharedFlow<TypingEvent>()`) makes a bare

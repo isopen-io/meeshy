@@ -99,6 +99,46 @@ object ScrollAffordance {
     }
 }
 
+/**
+ * What the scroll-to-bottom control renders, decided in pure code so the Composable
+ * only maps a variant to its pill. Mirrors iOS `ConversationScrollControlsView`, whose
+ * four states are: hidden (at the bottom), a typing preview, an unread count + preview,
+ * and a plain jump chevron. The **typing indicator takes priority over the unread
+ * count** — when a peer is composing, the control shows who is typing rather than the
+ * badge (iOS parity).
+ */
+sealed interface ScrollControlContent {
+    /** The reader is at the bottom; the control is hidden. */
+    data object Hidden : ScrollControlContent
+
+    /** One or more peers are composing; suppresses the unread count while active. */
+    data class Typing(val label: TypingLabel) : ScrollControlContent
+
+    /** Incoming messages arrived while the reader was scrolled away. */
+    data class Unread(val count: Int, val preview: UnreadPreview?) : ScrollControlContent
+
+    /** Scrolled away with nothing unread and nobody typing — a bare jump control. */
+    data object Plain : ScrollControlContent
+
+    companion object {
+        fun of(
+            affordance: ScrollAffordanceState,
+            typing: List<TypingParticipant>,
+        ): ScrollControlContent {
+            if (!affordance.isVisible) return Hidden
+            return when (val label = TypingLabel.of(typing)) {
+                TypingLabel.None ->
+                    if (affordance.hasUnread) {
+                        Unread(affordance.unreadCount, affordance.preview)
+                    } else {
+                        Plain
+                    }
+                else -> Typing(label)
+            }
+        }
+    }
+}
+
 private fun AffordanceMessage.toPreview() = UnreadPreview(
     messageId = id,
     senderName = senderName,
