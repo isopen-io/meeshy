@@ -1248,4 +1248,35 @@ describe('SecuritySanitizer - NoSQL Injection Edge Cases', () => {
     expect(result.$or).toBeUndefined();
     expect(result.role).toEqual({});
   });
+
+  it('should not leak attacker keys through a polluted prototype via __proto__', () => {
+    // JSON.parse yields a REAL own "__proto__" key (unlike an object literal).
+    const input = JSON.parse('{"__proto__": {"isAdmin": true}, "username": "x"}');
+    const result = SecuritySanitizer.sanitizeMongoQuery(input);
+    expect(result.isAdmin).toBeUndefined();
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    expect(result.username).toBe('x');
+  });
+
+  it('should strip constructor and prototype keys', () => {
+    const input = JSON.parse('{"constructor": {"evil": 1}, "prototype": 2, "name": "ok"}');
+    const result = SecuritySanitizer.sanitizeMongoQuery(input);
+    expect(Object.prototype.hasOwnProperty.call(result, 'prototype')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(result, 'constructor')).toBe(false);
+    expect(result.name).toBe('ok');
+  });
+
+  it('should strip nested __proto__ pollution attempts', () => {
+    const input = JSON.parse('{"filter": {"__proto__": {"isAdmin": true}, "keep": 1}}');
+    const result = SecuritySanitizer.sanitizeMongoQuery(input);
+    expect(result.filter.isAdmin).toBeUndefined();
+    expect(Object.getPrototypeOf(result.filter)).toBe(Object.prototype);
+    expect(result.filter.keep).toBe(1);
+  });
+
+  it('should not pollute the global Object.prototype', () => {
+    const input = JSON.parse('{"__proto__": {"polluted": "yes"}}');
+    SecuritySanitizer.sanitizeMongoQuery(input);
+    expect(({} as any).polluted).toBeUndefined();
+  });
 });
