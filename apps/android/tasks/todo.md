@@ -4,19 +4,15 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-regional-content-language` ✅
-**Regional (secondary content) language preference** — the last no-op Settings language row is now live. A
-Prisme *content* preference (resolved via `LanguageResolver`, stored on the backend profile
-`User.regionalLanguage`), NOT the device-local UI locale. Pure `:feature:settings`
-`RegionalLanguageSelection.build(regionalCode, systemCode, query)` SSOT (options = full
-`LanguageData.allLanguages`; primary/system language hidden unless it is the stored choice;
-trimmed/case-insensitive marking + label lookup + name/nativeName/code search; empty query → all; unknown
-code → no label, no crash). Wiring reuses `edit-profile-optimistic` — **no new store**:
-`SettingsViewModel.setRegionalLanguage(code)` → `UserRepository.enqueueProfileEdit(
-UpdateProfileRequest(regionalLanguage=…))` (optimistic session repaint + durable `UPDATE_PROFILE` + wake
-worker on real `cmid`) + UI-only `setRegionalLanguageQuery`; `SettingsScreen` searchable flag+native-name
-dialog (EN/FR/ES/PT). +24 tests, `assembleDebug`+`testDebugUnitTest` green, diff = `apps/android` only.
-Next: the worker drain-list Robolectric test (PROGRESS.md "Next" #5).
+## This loop (Phase: Chat §C) — slice `chat-typing-in-control` ✅
+**Typing folded into the scroll-to-bottom control** — pure `:feature:chat`
+`ScrollControlContent.of(affordance, typing)` SSOT (Hidden/Typing/Unread/Plain) with **typing taking priority
+over the unread count** (iOS `ConversationScrollControlsView` rule); rendered as an accent `TypingPill`. The
+`TypingLabel`→string mapping was extracted to a shared `typingLabelText` reused by the inline `TypingIndicator`
+(DRY). Reuses the existing `TypingLabel`/`TypingParticipants` cores — no new roster logic. +10 tests,
+`:feature:chat:testDebugUnitTest` green, diff = `apps/android` only.
+Next: `chat-typing-header` (typing under the conversation title) or resume Profile/Settings §K/§L
+(PROGRESS.md "Next").
 
 ## Prior loop (Phase: Settings §L) — slice `settings-notification-prefs-sync` ✅
 **Offline-queued notification-preference backend sync** — wires the dead `OutboxKind.UPDATE_SETTINGS`/
