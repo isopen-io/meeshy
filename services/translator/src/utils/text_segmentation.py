@@ -29,7 +29,14 @@ EMOJI_PATTERN = re.compile(
     "[\U0001FA00-\U0001FA6F]|"  # Chess Symbols
     "[\U0001FA70-\U0001FAFF]|"  # Symbols and Pictographs Extended-A
     "[\U00002702-\U000027B0]|"  # Dingbats
-    "[\U000024C2-\U0001F251]|"  # Enclosed characters
+    # Enclosed Alphanumeric/Ideographic Supplement — NE PAS écrire
+    # "[\U000024C2-\U0001F251]" : cette PLAGE U+24C2..U+1F251 traverse les blocs
+    # CJK (U+4E00..U+9FFF), Kana (U+3040..U+30FF) et Hangul (U+AC00..U+D7AF), donc
+    # extract_emojis() extrayait des phrases entières chinoises/japonaises/coréennes
+    # comme « emoji » et les remplaçait par des placeholders → texte CJK jamais
+    # traduit. Les code points encadrés hors supplément (Ⓜ U+24C2, ㊗ U+3297,
+    # ㊙ U+3299, indicateurs régionaux) sont déjà couverts par d'autres branches.
+    "[\U0001F100-\U0001F251]|"  # Enclosed Alphanumeric/Ideographic Supplement
     "[\U0001F1E0-\U0001F1FF]|"  # Regional Indicator Symbols (flags)
     "[\U00002600-\U000026FF]|"  # Miscellaneous Symbols
     "[\U00002700-\U000027BF]|"  # Dingbats
