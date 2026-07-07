@@ -761,21 +761,55 @@ export class CallEventsHandler {
   }
 
   /**
-   * call:end's fast-path broadcast tells the room the call ended before the
-   * authoritative endCall() write runs (see the comment at that call site).
-   * If that write never completes — the ender doesn't resolve to a
-   * participant, or endCall() itself throws — the CallSession would
-   * otherwise be left ACTIVE, blocking every future call:initiate in the
-   * conversation until CallCleanupService's GC tier reaps it (~120s).
+   * call:end's fast-path broadcast tells the ROOM (only) the call ended
+   * before the authoritative endCall() write runs (see the comment at that
+   * call site) — it never reaches conversation members who haven't joined
+   * the call room (a still-ringing callee). If the authoritative write never
+   * completes — the ender doesn't resolve to a participant, or endCall()
+   * itself throws — the CallSession would otherwise be left ACTIVE, blocking
+   * every future call:initiate in the conversation until
+   * CallCleanupService's GC tier reaps it (~120s).
+   *
+   * Audit Vague 26 (sibling-drift) — this used to only force-end the DB row
+   * and conditionally call handleMissedCall, silently SKIPPING the wide
+   * call:ended fanout (broadcastCallEnded: clearQualityDegradedStreaks +
+   * the same call+conversation+every-member's-user-room audience as
+   * call:initiated + the phantom-ring call_cancel push), and skipping
+   * postCallSummary (the chat "Appel …" system message) — unlike its exact
+   * sibling, the disconnect force-cleanup path a few hundred lines up, which
+   * already does all of this. A still-ringing callee whose caller's
+   * call:end hit this failure branch would keep ringing (exactly the prod
+   * incident 2026-07-03 06:14 that broadcastCallEnded's fanout exists to
+   * prevent), the quality-streak map would leak, and no summary message
+   * would appear in chat. Fixed by mirroring the disconnect force-cleanup
+   * path exactly: broadcastCallEnded + postCallSummary + conditional
+   * handleMissedCall.
+   *
    * Best-effort: a failure here is logged, not thrown — this handler's
    * listener isn't awaited by Socket.IO's emit() (see the gateway's
    * async-EventEmitter hazard note), so letting this reject would surface as
    * an unhandled rejection instead of the clean error response already sent.
    */
-  private async forceEndOrphanedCallAfterOptimisticBroadcast(callId: string, reason?: string): Promise<void> {
+  private async forceEndOrphanedCallAfterOptimisticBroadcast(
+    io: SocketIOServer,
+    callId: string,
+    endedBy: string,
+    reason?: string
+  ): Promise<void> {
     try {
       const forceEnded = await this.callService.forceEndOrphanedCallSession(callId, (reason || 'completed') as CallEndReason);
-      if (forceEnded?.status === CallStatus.missed) {
+      if (!forceEnded) return;
+
+      const forceEndedEvent: CallEndedEvent = {
+        callId,
+        duration: forceEnded.duration,
+        endedBy,
+        reason: forceEnded.endReason
+      };
+      await this.broadcastCallEnded(io, callId, forceEnded.conversationId, forceEndedEvent);
+      await this.postCallSummary(callId);
+
+      if (forceEnded.status === CallStatus.missed) {
         // Mirror the sibling call:end/call:leave paths (see their doc
         // comments): a call force-ended before it was ever answered must
         // still notify the other party it was missed, not just resolve the
@@ -2629,7 +2663,7 @@ export class CallEventsHandler {
           // state ourselves so it isn't left stuck ACTIVE — otherwise it
           // blocks every future call:initiate in this conversation until
           // CallCleanupService's GC tier reaps it (~120s).
-          await this.forceEndOrphanedCallAfterOptimisticBroadcast(data.callId, data.reason);
+          await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, userId, data.reason);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'
@@ -2696,7 +2730,10 @@ export class CallEventsHandler {
         // a no-op if endCall() actually succeeded before a later step failed
         // (broadcastCallEnded/postCallSummary), since the session is already
         // terminal by then.
-        await this.forceEndOrphanedCallAfterOptimisticBroadcast(data.callId, data.reason);
+        // `userId` was declared inside the try block above and is out of
+        // scope here — re-resolve it the same way the try block did.
+        const endedByUserId = getUserId(socket.id) ?? 'unknown';
+        await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, endedByUserId, data.reason);
         const errorMessage = error.message || 'Failed to end call';
         const errorCode = errorMessage.split(':')[0];
         const message = errorMessage.includes(':')

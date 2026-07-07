@@ -1264,6 +1264,52 @@ describe('CallEventsHandler', () => {
       expect(mockCallServiceForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
     });
 
+    // Audit Vague 26 (sibling-drift): the force-end-orphaned-session recovery
+    // path used to only resolve the DB row + conditionally call
+    // handleMissedCall — SKIPPING the wide call:ended fanout, the chat
+    // summary, and the quality-streak cleanup that its exact sibling (the
+    // disconnect force-cleanup path) already performs. This left a
+    // still-ringing callee (in neither the call room nor the conversation
+    // room) with no way to learn the call ended.
+    it('on force-end-orphaned recovery (not-a-participant), fans out call:ended to every member USER room + posts the chat summary + triggers handleMissedCall — not just the call-room fast-path', async () => {
+      mockCallServiceForceEndOrphanedCallSession.mockResolvedValue({
+        duration: 12,
+        conversationId: CONV_ID,
+        status: 'missed',
+        endReason: 'missed',
+      });
+      const summaryMessage = { id: 'msg-1', conversationId: CONV_ID };
+      mockCallServiceCreateCallSummaryMessage.mockResolvedValue(summaryMessage);
+      const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
+
+      const { handler, socket, io } = setupWithSocket({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            { userId: USER_ID },
+            { userId: 'ringing-callee-id' },
+          ]),
+        },
+      });
+      handler.setMessageBroadcaster(broadcaster);
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:end', validData, jest.fn());
+      await new Promise(r => setImmediate(r));
+
+      expect(io.to).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          `call:${CALL_ID}`,
+          `conversation:${CONV_ID}`,
+          `user:${USER_ID}`,
+          'user:ringing-callee-id',
+        ])
+      );
+      expect(broadcaster).toHaveBeenCalledWith(summaryMessage, CONV_ID);
+      expect(mockCallServiceMarkCallAsMissed).toHaveBeenCalledWith(CALL_ID);
+    });
+
     it('ends call, broadcasts ended to call+conversation rooms in ONE deduplicated emit, removes all sockets, ack(true)', async () => {
       const endedSession = makeCallSession({ status: 'ended', duration: 90 });
       mockCallServiceEndCall.mockResolvedValue(endedSession);
@@ -1334,6 +1380,44 @@ describe('CallEventsHandler', () => {
       const { socket } = setupWithSocket();
       await socket._trigger('call:end', validData, jest.fn());
       expect(mockCallServiceForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
+    });
+
+    it('on force-end-orphaned recovery (endCall threw), fans out call:ended to every member USER room + posts the chat summary — same sibling-drift fix as the not-a-participant recovery path', async () => {
+      mockCallServiceEndCall.mockRejectedValue(new Error('END_CALL_FAIL: permission denied'));
+      mockCallServiceForceEndOrphanedCallSession.mockResolvedValue({
+        duration: 7,
+        conversationId: CONV_ID,
+        status: 'ended',
+        endReason: 'completed',
+      });
+      const summaryMessage = { id: 'msg-2', conversationId: CONV_ID };
+      mockCallServiceCreateCallSummaryMessage.mockResolvedValue(summaryMessage);
+      const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
+
+      const { handler, socket, io } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            { userId: USER_ID },
+            { userId: 'ringing-callee-id' },
+          ]),
+        },
+      });
+      handler.setMessageBroadcaster(broadcaster);
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:end', validData, jest.fn());
+      await new Promise(r => setImmediate(r));
+
+      expect(io.to).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          `call:${CALL_ID}`,
+          `conversation:${CONV_ID}`,
+          `user:${USER_ID}`,
+          'user:ringing-callee-id',
+        ])
+      );
+      expect(broadcaster).toHaveBeenCalledWith(summaryMessage, CONV_ID);
     });
 
     it('does not force-end an already-terminated session when call:end succeeds', async () => {
