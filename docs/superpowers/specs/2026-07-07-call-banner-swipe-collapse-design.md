@@ -59,6 +59,13 @@ enum BubbleHorizontalEdge: Sendable { case leading, trailing }
 `CallBubbleView` suit le même montage inconditionnel aux deux mêmes emplacements, avec une garde interne
 symétrique : `displayMode == .bubble && callState.isActive && !isSystemPiPActive`.
 
+> **Dérogation assumée** : `bubbleEdge`/`bubbleVerticalFraction` sont de l'état de positionnement écran, donc
+> a priori de l'état "view-only" que la règle CLAUDE.md *"Never store view-only state (animations, scroll
+> position) in ViewModels"* interdit de mettre sur un manager `@Published`. On les met néanmoins sur
+> `CallManager`, pour la même raison que `displayMode` y est déjà : cet état doit être visible et cohérent
+> depuis deux points de montage distincts (`RootView` et `iPadRootView`), donc ne peut pas vivre en `@State`
+> local d'une seule vue. C'est une extension du précédent existant, pas un nouvel écart.
+
 ## Geste pill → bulle
 
 `FloatingCallPillView` gagne un `DragGesture` horizontal, sur le même principe que le swipe-to-reply des bulles
@@ -87,19 +94,40 @@ Fichier : `apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift`.
 
 - Cercle de 56pt de diamètre (cohérent avec `buttonSize` des FAB existants, `FloatingButtons.swift:67`).
 - Contenu vidéo/avatar : extraction du bloc `pillLeadingVisual` / `avatarView` de `FloatingCallPillView` (lignes
-  172-219) vers une sous-vue partagée `CallParticipantVisual` (flux vidéo distant si actif, sinon avatar via
-  `CachedAsyncImage`, cache-first via `resolveRemoteProfile`), réutilisée par la pill ET la bulle pour éviter
-  la duplication.
+  172-219) vers une sous-vue partagée `CallParticipantVisual(diameter: CGFloat)` (flux vidéo distant si actif,
+  sinon avatar via `CachedAsyncImage`, cache-first via `resolveRemoteProfile`) — paramétrée par `diameter` pour
+  être réutilisée à 44pt dans la pill ET à 56pt dans la bulle, sans dupliquer le layout.
 - Badge qualité de signal : `TransientCallSignalGlyph(strength:)` existant, réutilisé tel quel, positionné en
   haut-droite du cercle (`.offset(x: 16, y: -16)`, style repris de `NotificationBadge`,
   `FloatingButtons.swift:659-699`).
 - Position : `.position()` dérivée de `bubbleEdge` + `bubbleVerticalFraction` du `CallManager`, calculée par
   rapport aux `safeAreaInsets` du conteneur.
 
-### Geste tap
+### Composition des gestes (tap / drag / long-press)
 
-`.onTapGesture` → `callManager.displayMode = .fullScreen` (même trajectoire que `expandToFullScreen()` existant
-dans `FloatingCallPillView`).
+La bulle porte 3 reconnaisseurs sur la même vue — un cas non couvert tel quel par les 2 précédents existants
+dans le code (`MessageListView.swift:90-113` combine drag + long-press via
+`.simultaneousGesture(dragGesture)` + `.simultaneousGesture(LongPressGesture(minimumDuration:
+maximumDistance:))` ; `ReelsPlayerView.swift:481-482` montre que tap + long-press seuls, sans drag, sont
+nativement mutuellement exclusifs). On étend le premier pattern à 3 gestes :
+
+```swift
+CallParticipantVisual(diameter: 56)
+    .simultaneousGesture(dragGesture)                     // repositionnement, voir plus bas
+    .simultaneousGesture(
+        LongPressGesture(minimumDuration: 0.5, maximumDistance: 6)
+            .onEnded { _ in revealQuickMenu() }
+    )
+    .onTapGesture { callManager.displayMode = .fullScreen }
+```
+
+- `maximumDistance: 6` (même valeur que `MessageListView.swift:108`) : si le doigt bouge de plus de 6pt avant
+  0.5s, le `LongPressGesture` s'annule et laisse le `DragGesture` s'approprier le geste — pas de contention
+  entre "je veux déplacer la bulle" et "je veux le menu".
+- Le tap classique ne fire qu'au relâchement sans mouvement significatif ; comme dans `ReelsPlayerView`, il
+  reste mutuellement exclusif du long-press réussi.
+- Pendant que le mini-menu est révélé, le tap normal (→ plein écran) est désactivé côté state (`isMenuRevealed`
+  gate dans le handler du tap), pour éviter toute ambiguïté après une révélation.
 
 ### Geste drag (repositionnement)
 
@@ -108,10 +136,15 @@ dans `FloatingCallPillView`).
 - Au relâchement : `CallBubbleGestureResolver.snappedEdge(centerX:screenWidth:)` détermine le bord le plus
   proche ; animation ressort vers ce bord ; `bubbleEdge` et `bubbleVerticalFraction` (clampée dans la zone sûre)
   sont mis à jour sur `CallManager` pour persister la position tant que l'appel est actif.
+- **Exclusion du FAB principal** : `bubbleVerticalFraction` est clampée pour exclure la zone occupée par le
+  FAB principal (menu ladder / badges de notification, coin bas-droit) — le clamp exact (marge en pt depuis le
+  bas de la zone sûre) est à mesurer en implémentation contre la position réelle du FAB, mais le principe est
+  que la bulle ne peut jamais se déposer dans/sur cette zone, quel que soit le bord (`leading`/`trailing`) où
+  elle est ancrée.
 
 ### Geste long-press (mini-menu d'appel)
 
-- `.onLongPressGesture(minimumDuration: 0.5)` révèle 3 boutons ronds autour de la bulle :
+- Révèle 3 boutons ronds d'au moins 44×44pt (minimum HIG) autour de la bulle :
   - **Mute**, à gauche de la bulle — `icon: callManager.isMuted ? "mic.slash.fill" : "mic.fill"`,
     couleur `callManager.isMuted ? MeeshyColors.error : .white` (mêmes symboles/couleurs que le contrôle
     équivalent de `CallView.swift:1329-1337`), tap → `callManager.toggleMute()`.
@@ -128,10 +161,30 @@ dans `FloatingCallPillView`).
   côté `.trailing`, le bouton droit (haut-parleur) sortirait de l'écran — dans ce cas, à la révélation, le
   cluster bulle + 3 boutons se décale temporairement vers l'intérieur de l'écran (juste assez pour que les 3
   tiennent), et revient à la position ancrée au bord quand le menu se referme. Symétrique si ancrée `.leading`.
-- Un tap n'importe où ailleurs à l'écran, ou l'absence d'interaction pendant 3 secondes, referme le mini-menu et
-  revient à la bulle simple (sans action).
-- Pendant que le mini-menu est révélé, le tap normal sur la bulle (→ plein écran) est désactivé pour éviter
-  toute ambiguïté de geste.
+  Décision extraite en fonction pure testable au même titre que les 2 autres :
+  `CallBubbleGestureResolver.menuOffset(edge: BubbleHorizontalEdge, screenWidth: CGFloat, buttonDiameter:
+  CGFloat) -> CGFloat`.
+- **Couche de fermeture** : pendant que le mini-menu est révélé, un calque transparent plein écran
+  (`Color.clear.contentShape(Rectangle())`) est inséré au-dessus du reste du contenu de `RootView`/
+  `iPadRootView` (mais en dessous du cluster bulle+boutons), avec un `.onTapGesture` qui referme le menu sans
+  action. Ce calque n'existe QUE pendant la révélation — le reste du temps, la bulle est un overlay minimal qui
+  ne capte les touches que sur son propre cercle, et ne bloque rien en dessous.
+- Un tap sur ce calque, ou l'absence d'interaction pendant 3 secondes, referme le mini-menu et revient à la
+  bulle simple (sans action).
+
+## Accessibilité
+
+Obligatoire par `apps/ios/CLAUDE.md` (règles Accessibility) ; précédent direct dans la même zone
+fonctionnelle : `MessageListView.swift:77-79` expose des `.accessibilityAction(named:)` pour ses gestes
+reply/forward/long-press swipe. On applique le même principe :
+
+- Pill : `.accessibilityAction(named: "a11y.call.pill.collapse")` en équivalent VoiceOver du swipe de collapse.
+- Bulle : `.accessibilityAction(named: "a11y.call.bubble.expand")` (tap → plein écran) et
+  `.accessibilityAction(named: "a11y.call.bubble.quickMenu")` (long-press → mini-menu), en plus du geste réel.
+- Chaque bouton du mini-menu reçoit un `.accessibilityLabel()` explicite (mute/unmute, activer/désactiver
+  haut-parleur, raccrocher) — raccrocher étant destructif, son label doit être sans ambiguïté (ex. "Raccrocher
+  l'appel").
+- Les 3 boutons du mini-menu et la bulle elle-même respectent le minimum de touch target 44×44pt (HIG).
 
 ## Cas limites
 
@@ -145,7 +198,9 @@ dans `FloatingCallPillView`).
 ## Tests
 
 - `CallBubbleGestureResolverTests` : `shouldCollapse` (sous seuil / au-dessus en distance / au-dessus en
-  vélocité, gauche et droite) et `snappedEdge` (centre à gauche/droite de l'écran, cas pile au milieu).
+  vélocité, gauche et droite), `snappedEdge` (centre à gauche/droite de l'écran, cas pile au milieu), et
+  `menuOffset` (cluster tient déjà à l'écran → offset nul ; ancré `.trailing`/`.leading` → offset qui ramène
+  les 3 boutons dans l'écran).
 - `CallManagerTests` (existant) : couverture déjà existante de `toggleMute()`/`toggleSpeaker()`/`endCall()` —
   pas de nouveau comportement `CallManager` à tester ici, le mini-menu ne fait qu'appeler ces méthodes
   existantes. Un test au niveau du composant bulle (au niveau ViewModel/état, pas de test UI de geste requis
