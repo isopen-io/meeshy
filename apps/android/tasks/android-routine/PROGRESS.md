@@ -1255,7 +1255,17 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
-### 2026-07-07 — slice `chat-draft-reply-ref` ✅ (reviewer PASS)
+### 2026-07-07 — slice `chat-draft-reply-ref` ✅ impl + reviewer PASS · ⚠ merge blocked-on-infra (PR #1633 open)
+- **Merge status:** implementation complete, reviewer PASS, local `assembleDebug testDebugUnitTest` green. **Merge is
+  blocked by an external GitHub-hosted-runner incident**, not by this diff: every CI job that `sudo apt-get update`s
+  (Voice API Tests, Test Python (translator)) aborts with exit 100 because `packages.microsoft.com` serves an
+  invalid/unsigned `InRelease` (`Clearsigned file isn't valid, got 'NOSPLIT'` / `is no longer signed`) — a
+  fleet-wide apt-mirror signing failure that would break the same jobs on `main`. The JS/TS + Android-relevant
+  checks (Security, Quality (bun), Test web/gateway/shared/agent, Prisma) all pass. The maintainer merged `main`
+  into the branch (cfea06e); a subsequent empty-commit re-trigger (47dc4c0) hit the identical apt error, so the
+  incident is still ongoing. A ~19-min probe cron re-triggers CI and will squash-merge (re-verifying apps/android
+  scope) the moment the apt step recovers; if a probe ever fails for a reason implicating this diff it stops and
+  reports. **Do not merge past the red apt jobs.**
 - **Slice:** persist the reply reference alongside the per-conversation draft (Chat parity §C "Draft
   auto-save/restore … + reply"; iOS app-side `DraftStore` stores the reply reference next to the text). After
   `chat-draft-autosave` only the text survived navigation — a reply armed (or half-typed under a reply) was lost.
