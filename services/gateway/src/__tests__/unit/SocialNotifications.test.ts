@@ -301,7 +301,10 @@ describe('Social Notification Methods', () => {
         emoji: '👍',
       });
 
-      expect(mockIO.to).toHaveBeenCalledWith(AUTHOR_ID);
+      // User-scoped notification events route to ROOMS.user(id) (`user:${id}`) —
+      // registered sockets never join the raw-id room. See emitWithSeq.
+      expect(mockIO.to).toHaveBeenCalledWith(`user:${AUTHOR_ID}`);
+      expect(mockIO.to).not.toHaveBeenCalledWith(AUTHOR_ID);
       expect(mockIO.emit).toHaveBeenCalled();
     });
   });
