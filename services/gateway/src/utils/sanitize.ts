@@ -235,8 +235,15 @@ export class SecuritySanitizer {
 
     const sanitized: any = {};
     for (const [key, value] of Object.entries(obj)) {
-      // Block MongoDB operators ($ne, $gt, $regex, $where, etc.)
-      if (key.startsWith('$')) {
+      // Block MongoDB operators ($ne, $gt, $regex, $where, etc.) AND prototype
+      // pollution vectors (__proto__, constructor, prototype). The latter is
+      // not merely cosmetic: `sanitized['__proto__'] = value` reassigns this
+      // object's prototype instead of setting an own property, so an attacker
+      // payload like `{ "__proto__": { "isAdmin": true } }` would make
+      // `sanitized.isAdmin` resolve to `true` through the prototype chain.
+      // Kept in lockstep with `sanitizeJSON` — both sanitizers must share the
+      // same dangerous-key guard.
+      if (key.startsWith('__') || key.startsWith('$') || key === 'constructor' || key === 'prototype') {
         continue;
       }
 
