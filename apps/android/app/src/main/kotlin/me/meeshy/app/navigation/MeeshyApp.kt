@@ -34,6 +34,7 @@ import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoginScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallScreen
+import me.meeshy.app.calls.IncomingCallViewModel
 import me.meeshy.ui.component.chrome.MeeshyMenuFab
 import me.meeshy.ui.component.chrome.RadialMenuItem
 import me.meeshy.ui.theme.MeeshyPalette
@@ -135,6 +136,7 @@ fun MeeshyApp(
 ) {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
+    val incomingCallViewModel: IncomingCallViewModel = hiltViewModel()
     val authState by authViewModel.state.collectAsStateWithLifecycle()
 
     val navBackStack by navController.currentBackStackEntryAsState()
@@ -152,6 +154,17 @@ fun MeeshyApp(
         if (launchRoute != null && authState.isAuthenticated) {
             navController.navigate(launchRoute)
             onLaunchRouteConsumed()
+        }
+    }
+
+    // App-level ring: a foreground `call:initiated` socket offer navigates into the
+    // incoming-call screen (the Android analogue of iOS CallManager.shared observed
+    // at RootView). Reads the live destination per offer so a second offer mid-call
+    // yields no route (call-waiting stays with CallViewModel's banner).
+    LaunchedEffect(Unit) {
+        incomingCallViewModel.incomingOffers.collect { offer ->
+            LaunchRouter.routeIncomingSocketOffer(offer, navController.currentDestination?.route)
+                ?.let(navController::navigate)
         }
     }
 
