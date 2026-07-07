@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_title">Meeshy Chats</string>
     <string name="conversations_logout">Cerrar sesión</string>
     <string name="conversations_contacts">Contactos</string>
     <string name="conversations_empty">Aún no hay conversaciones</string>

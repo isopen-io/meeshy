@@ -23,7 +23,7 @@
     <string name="chat_retry">Réessayer</string>
 
     <!-- Conversation list screen -->
-    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_title">Meeshy Chats</string>
     <string name="conversations_logout">Se déconnecter</string>
     <string name="conversations_empty">Aucune conversation pour l\'instant</string>
     <string name="conversations_retry">Réessayer</string>

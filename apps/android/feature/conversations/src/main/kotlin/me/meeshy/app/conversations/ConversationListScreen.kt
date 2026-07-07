@@ -31,9 +31,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SwipeToDismissBox
@@ -41,8 +41,9 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -69,7 +70,11 @@ import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.chrome.FloatingGradientFab
+import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -86,22 +91,24 @@ fun ConversationListScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    MeeshyBackground {
     Scaffold(
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        containerColor = Color.Transparent,
         floatingActionButton = {
-            FloatingActionButton(
+            FloatingGradientFab(
                 onClick = onNewConversation,
-                containerColor = MeeshyPalette.Indigo500,
-                contentColor = MeeshyPalette.White,
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Chat,
-                    contentDescription = stringResource(R.string.conversations_new),
-                )
-            }
+                icon = Icons.AutoMirrored.Filled.Chat,
+                contentDescription = stringResource(R.string.conversations_new),
+            )
         },
         topBar = {
-            TopAppBar(
+            LargeTopAppBar(
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MeeshyPalette.Indigo500,
+                    actionIconContentColor = MeeshyTheme.tokens.textSecondary,
+                ),
                 title = {
                     if (state.isSearchActive) {
                         ConversationSearchField(
@@ -109,7 +116,11 @@ fun ConversationListScreen(
                             onQueryChange = viewModel::setSearch,
                         )
                     } else {
-                        Text(stringResource(R.string.conversations_title), fontWeight = FontWeight.Bold)
+                        Text(
+                            text = stringResource(R.string.conversations_title),
+                            style = MaterialTheme.typography.displayMedium,
+                            color = MeeshyPalette.Indigo500,
+                        )
                     }
                 },
                 actions = {
@@ -182,6 +193,7 @@ fun ConversationListScreen(
                 }
             }
         }
+    }
     }
 }
 
@@ -320,18 +332,23 @@ private fun ConversationRowContent(
         senderFormat = stringResource(R.string.conversations_preview_sender_format),
     )
     Box {
-        Row(
+        MeeshyGlassSurface(
+            shape = RoundedCornerShape(MeeshyRadius.xl),
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MeeshyTheme.tokens.backgroundPrimary)
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs)
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = { menuExpanded = true },
                 )
-                .semantics { role = Role.Button; contentDescription = title }
-                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-            verticalAlignment = Alignment.CenterVertically,
+                .semantics { role = Role.Button; contentDescription = title },
         ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
             MeeshyAvatar(
                 name = title,
                 containerColor = hexColor(conversation.accentHex()),
@@ -387,6 +404,7 @@ private fun ConversationRowContent(
             }
             if (conversation.unreadCount > 0) {
                 Badge { Text(conversation.unreadCount.coerceAtMost(99).toString()) }
+            }
             }
         }
 
