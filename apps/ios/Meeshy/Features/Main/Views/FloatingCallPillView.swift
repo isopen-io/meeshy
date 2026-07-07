@@ -89,11 +89,6 @@ struct FloatingCallPillView: View {
     // when reduce motion is on, collapse it to a simple cross-fade.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Avatar réel du correspondant — cache-first UNIQUEMENT (le refresh API +
-    // la persistance cache sont déjà faits par CallView.resolveRemoteProfile ;
-    // la bannière se contente de servir le cache, même stale, sans réseau).
-    @State private var remoteProfile: MeeshyUser?
-
     private let pillHeight: CGFloat = 64
 
     var body: some View {
@@ -107,9 +102,6 @@ struct FloatingCallPillView: View {
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.75), value: callManager.displayMode)
                 .zIndex(999)
-                .task(id: callManager.remoteUserId) {
-                    await resolveRemoteProfile(userId: callManager.remoteUserId)
-                }
         }
     }
 
@@ -117,7 +109,7 @@ struct FloatingCallPillView: View {
 
     private var pillContent: some View {
         HStack(spacing: 12) {
-            pillLeadingVisual
+            CallParticipantVisual(diameter: 44)
             userInfoSection
             Spacer(minLength: 8)
             controlButtons
@@ -157,81 +149,6 @@ struct FloatingCallPillView: View {
         )
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
         .accessibilityAddTraits(.isButton)
-    }
-
-    // MARK: - Leading Visual (remote video thumbnail or avatar)
-
-    /// §7.6 — whenever the peer's video is flowing, show the live remote feed
-    /// as a small thumbnail so the user still sees their interlocutor (a
-    /// return-to-call pill that drops the video is a major gap). Keyed on the
-    /// REMOTE stream only — the peer may have escalated an audio call to video
-    /// while the local camera stays off. Falls back to the avatar when the
-    /// peer's camera is off / no track yet. Only one renderer is live at a
-    /// time: CallView is dismounted while in `.pip`, so this does not
-    /// double-render the remote track.
-    @ViewBuilder
-    private var pillLeadingVisual: some View {
-        if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
-            CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
-                )
-                .accessibilityHidden(true)
-        } else {
-            avatarView
-        }
-    }
-
-    // MARK: - Avatar
-
-    private var avatarView: some View {
-        let name = callManager.remoteUsername ?? "?"
-        let initial = String(name.prefix(1)).uppercased()
-
-        return ZStack {
-            Circle()
-                .fill(MeeshyColors.brandGradient)
-
-            Text(initial)
-                .font(.system(.callout, design: .rounded).weight(.bold))
-                .foregroundColor(.white)
-
-            // Vraie photo de profil par-dessus le fallback initiale (le
-            // dégradé + initiale restent visibles pendant le chargement).
-            if let avatar = remoteProfile?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: 44, height: 44),
-                    thumbHash: remoteProfile?.avatarThumbHash
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
-            }
-        }
-        .frame(width: 44, height: 44)
-        .accessibilityHidden(true)
-    }
-
-    /// Résolution cache-first de l'avatar (Instant App) : `.fresh`/`.stale`
-    /// servis immédiatement, pas d'appel réseau ici — CallView rafraîchit et
-    /// ré-alimente le cache quand l'appel passe en plein écran.
-    private func resolveRemoteProfile(userId: String?) async {
-        guard let userId, !userId.isEmpty else {
-            remoteProfile = nil
-            return
-        }
-        switch await CacheCoordinator.shared.profiles.load(for: userId) {
-        case .fresh(let users, _), .stale(let users, _):
-            remoteProfile = users.first
-        case .expired, .empty:
-            break
-        }
     }
 
     // MARK: - User Info
