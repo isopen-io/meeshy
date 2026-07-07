@@ -298,10 +298,29 @@ class TestListItemDetection:
         """Test text that is not a list item"""
         assert segmenter.is_list_item("Hello world") is False
         assert segmenter.is_list_item("This is a sentence.") is False
-        # Note: "A regular paragraph" would match Roman numeral pattern [IVXLCDM]
-        # Use text that doesn't start with those letters
         assert segmenter.is_list_item("Regular paragraph here") is False
         assert segmenter.is_list_item("Some normal text") is False
+        # "A regular paragraph" must NOT match: 'A' is not in the Roman set
+        # IVXLCDM and there is no ')'. It only ever matched because of the
+        # bullet-class range bug (see test_bullet_range_does_not_swallow_prose).
+        assert segmenter.is_list_item("A regular paragraph") is False
+
+    def test_bullet_range_does_not_swallow_prose(self, segmenter):
+        """Regression: the bullet class is a literal set {-, +, •, *, →}, NOT a
+        U+002B..U+2022 range. Prose whose first character happens to fall in that
+        range (digits, A-Z, punctuation, accents) followed by whitespace must NOT
+        be classified as a list item."""
+        assert segmenter.is_list_item("A dog") is False
+        assert segmenter.is_list_item("W hat is this") is False
+        assert segmenter.is_list_item("2 apples left") is False
+        assert segmenter.is_list_item("; punctuation lead") is False
+        assert segmenter.is_list_item("é accented word") is False
+        # The intended literal bullets still match:
+        assert segmenter.is_list_item("- dash item") is True
+        assert segmenter.is_list_item("+ plus item") is True
+        assert segmenter.is_list_item("• dot item") is True
+        assert segmenter.is_list_item("* star item") is True
+        assert segmenter.is_list_item("→ arrow item") is True
 
     def test_empty_line(self, segmenter):
         """Test empty line"""

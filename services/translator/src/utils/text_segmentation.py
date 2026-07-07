@@ -190,8 +190,10 @@ class TextSegmenter:
         if not stripped:
             return False
 
-        # Pattern pour listes à puces
-        bullet_pattern = r'^[+-•*→]\s+'
+        # Pattern pour listes à puces (le '-' est échappé pour rester littéral :
+        # non échappé, `[+-•]` définit une PLAGE U+002B..U+2022 qui avale chiffres,
+        # lettres et ponctuation, classant à tort « A dog » / « 2 items » comme liste)
+        bullet_pattern = r'^[+\-•*→]\s+'
         # Pattern pour listes numérotées (1., 2., etc.)
         numbered_pattern = r'^\d+\.\s+'
         # Pattern pour listes avec lettres (a), b), etc.)
