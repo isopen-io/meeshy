@@ -130,6 +130,73 @@ describe('useAdaptiveDegradation', () => {
     expect(actions.applyTier).not.toHaveBeenCalled();
   });
 
+  // Audit Vague 25 — the suspend()/resume() rejection branches previously
+  // wrote to nonexistent `poorStreak`/`goodStreak` fields (TS2353 compile
+  // error; `DegradationState` only has `poorSince`/`goodSince`), so the
+  // catch handlers never had test coverage of their "revert + retry" intent.
+  it('reverts to sending video when suspend() rejects, and retries after a fresh poor streak', async () => {
+    const actions = makeActions();
+    actions.suspend.mockRejectedValueOnce(new Error('stop track failed'));
+    const { rerender } = renderHook(
+      ({ qualityStats }) =>
+        useAdaptiveDegradation({ qualityStats, userWantsVideo: true, actions }),
+      { initialProps: { qualityStats: sample('good', 0) as ConnectionQualityStats } }
+    );
+
+    let t = TICK;
+    for (let i = 0; i < POOR_TICKS; i++, t += TICK) {
+      rerender({ qualityStats: sample('poor', t) });
+    }
+    await waitFor(() => expect(actions.suspend).toHaveBeenCalledTimes(1));
+
+    // Suspend failed: a single subsequent poor sample must NOT immediately
+    // re-trigger suspend — it needs a fresh sustained streak, exactly like
+    // the very first attempt did.
+    rerender({ qualityStats: sample('poor', t) });
+    t += TICK;
+    expect(actions.suspend).toHaveBeenCalledTimes(1);
+
+    // A full fresh poor streak retries the fallback.
+    for (let i = 0; i < POOR_TICKS; i++, t += TICK) {
+      rerender({ qualityStats: sample('poor', t) });
+    }
+    await waitFor(() => expect(actions.suspend).toHaveBeenCalledTimes(2));
+  });
+
+  it('stays in audio-only survival when resume() rejects, and retries after a fresh good streak', async () => {
+    const actions = makeActions();
+    actions.resume.mockRejectedValueOnce(new Error('getUserMedia failed'));
+    const { rerender, result } = renderHook(
+      ({ qualityStats }) =>
+        useAdaptiveDegradation({ qualityStats, userWantsVideo: true, actions }),
+      { initialProps: { qualityStats: sample('good', 0) as ConnectionQualityStats } }
+    );
+
+    let t = TICK;
+    for (let i = 0; i < POOR_TICKS; i++, t += TICK) {
+      rerender({ qualityStats: sample('poor', t) });
+    }
+    await waitFor(() => expect(result.current.videoSuspended).toBe(true));
+
+    for (let i = 0; i < GOOD_TICKS; i++, t += TICK) {
+      rerender({ qualityStats: sample('good', t) });
+    }
+    await waitFor(() => expect(actions.resume).toHaveBeenCalledTimes(1));
+    // resume() rejected: the suspended indicator must not have flipped off.
+    expect(result.current.videoSuspended).toBe(true);
+
+    // A single subsequent good sample must NOT immediately re-trigger resume.
+    rerender({ qualityStats: sample('good', t) });
+    t += TICK;
+    expect(actions.resume).toHaveBeenCalledTimes(1);
+
+    // A full fresh good streak retries the resume.
+    for (let i = 0; i < GOOD_TICKS; i++, t += TICK) {
+      rerender({ qualityStats: sample('good', t) });
+    }
+    await waitFor(() => expect(actions.resume).toHaveBeenCalledTimes(2));
+  });
+
   it('clears the suspended indicator when the user turns video off', async () => {
     const actions = makeActions();
     const { rerender, result } = renderHook(

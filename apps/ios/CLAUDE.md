@@ -6,7 +6,7 @@
 - Swift Package Manager (SPM)
 - Firebase 12.12 (Analytics, Crashlytics, Messaging, Performance)
 - Socket.IO Client 16.1
-- WebRTC 141.0 (calls)
+- WebRTC 146.0.0 (calls)
 - Image caching: AsyncImage (SwiftUI native iOS 15+) + CachedAsyncImage + CacheCoordinator 3-tier (no Kingfisher — removed 2026-05)
 - WhisperKit 0.9 (on-device speech recognition)
 

@@ -338,24 +338,40 @@ export class CallService {
   async forceEndOrphanedCallSession(
     callId: string,
     endReason: CallEndReason
-  ): Promise<{ duration: number; conversationId: string } | null> {
+  ): Promise<{ duration: number; conversationId: string; status: CallStatus; endReason: CallEndReason } | null> {
     const session = await this.prisma.callSession.findUnique({
       where: { id: callId },
-      select: { startedAt: true, conversationId: true }
+      select: { startedAt: true, conversationId: true, answeredAt: true }
     });
     if (!session) return null;
 
     const now = new Date();
     const duration = Math.max(0, Math.floor((now.getTime() - session.startedAt.getTime()) / 1000));
 
+    // Audit Vague 25 — mirror endCall()'s wasPreAnswered handling (see its
+    // doc comment): a call force-ended before it was ever answered (e.g. the
+    // caller's own participant row can't be resolved, or endCall() itself
+    // threw, while the callee never picked up) must resolve to `missed`, not
+    // `ended` — otherwise the callee gets no missed-call notification and
+    // call history shows a phantom "completed" 0-duration call. `answeredAt`
+    // is the authoritative "was ever answered" signal, stamped once on the
+    // SDP answer. An explicit non-default reason (e.g. connectionLost) is
+    // preserved; only the generic default `completed` is normalized to
+    // `missed`, same rule as endCall().
+    const wasPreAnswered = !session.answeredAt;
+    const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
+    const targetEndReason = wasPreAnswered && endReason === CallEndReason.completed
+      ? CallEndReason.missed
+      : endReason;
+
     const ended = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.callSession.updateMany({
         where: { id: callId, status: { in: ACTIVE_STATUSES } },
         data: {
-          status: CallStatus.ended,
+          status: targetStatus,
           endedAt: now,
           duration,
-          endReason,
+          endReason: targetEndReason,
           version: { increment: 1 }
         }
       });
@@ -385,7 +401,7 @@ export class CallService {
     this.clearRingingTimeout(callId);
     await this.releaseActiveCallClaim(session.conversationId, callId);
 
-    return { duration, conversationId: session.conversationId };
+    return { duration, conversationId: session.conversationId, status: targetStatus, endReason: targetEndReason };
   }
 
   /**

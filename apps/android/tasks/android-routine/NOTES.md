@@ -3,6 +3,19 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-07 (`chat-draft-autosave`): DataStore test files must end `.preferences_pb`, and use the explicit
+  serializer for `encodeToString`/`decodeFromString`.** Two traps in one slice: (1) `PreferenceDataStoreFactory
+  .create { file }` throws `IllegalStateException` at construction unless the produced file's extension is exactly
+  `preferences_pb` — so Robolectric/TemporaryFolder tests must name the file e.g. `tmp.newFile("d1.preferences_pb")`
+  (mirror `ThemeStoreTest`), never a bare name. (2) `json.encodeToString(draft)` resolved to the two-arg
+  `(SerializationStrategy, value)` overload and failed to compile ("Cannot infer type … Argument type mismatch");
+  use the explicit `json.encodeToString(ConversationDraft.serializer(), draft)` /
+  `json.decodeFromString(ConversationDraft.serializer(), raw)` to avoid the reified-vs-strategy overload
+  ambiguity. Also: DataStore forbids **two live instances over one file** — to test "survives process death",
+  reuse the *same* backing `DataStore` for a fresh wrapper (as `ThemeStoreTest.hydrate` does) rather than
+  cancelling one scope and opening a second over the same path (flaky active-files race). Pattern reused: durable
+  seam = stateless building block in `:sdk-core` (interface + `InMemory…` + `DataStore…`), the "when to
+  save/purge/restore" product decision = pure atom in `:feature:chat`, composer render = exempt Compose glue.
 - **2026-07-07 (`chat-typing-header-avatars`): resolve socket-payload gaps from the roster the VM already holds,
   and cover the flaky-suite timeout.** The `typing:start` `TypingEvent` carries no avatar, so the header-avatar
   chip's URL has to come from the conversation participants. The `ChatViewModel` conversation collector already
