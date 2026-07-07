@@ -50,6 +50,8 @@ data class ChatUiState(
     val errorMessage: String? = null,
     val typingParticipants: List<TypingParticipant> = emptyList(),
     val conversationTitle: String? = null,
+    val memberCount: Int = 0,
+    val isGroup: Boolean = false,
     val accentColorHex: String? = null,
     val actionMessageId: String? = null,
     val emojiPickerMessageId: String? = null,
@@ -130,6 +132,8 @@ class ChatViewModel @Inject constructor(
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(),
+                        memberCount = conversation.memberCount,
+                        isGroup = conversation.type.lowercase() != "direct",
                         accentColorHex = conversation.accentHex(),
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                     )

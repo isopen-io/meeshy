@@ -646,14 +646,17 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `chat-typing-in-control`** — the typing roster is now folded into the
-scroll-to-bottom control via the pure `:feature:chat` `ScrollControlContent.of(affordance, typing)` SSOT
-(Hidden/Typing/Unread/Plain), with **typing taking priority over the unread count** (iOS
-`ConversationScrollControlsView` rule) and rendered as an accent `TypingPill`; the label→string mapping was
-extracted to a shared `typingLabelText` reused by the inline `TypingIndicator` (DRY). See run log.
+**Just shipped (2026-07-07): `chat-typing-header`** — the typing roster now surfaces in the conversation
+header. New pure `:feature:chat` `ChatHeaderSubtitle.of(memberCount, isGroup, typing) → None | Members(count)
+| Typing(label)` SSOT: while a peer composes the header subtitle shows who is typing (reusing `TypingLabel`),
+otherwise a group shows its member count and a direct chat shows nothing; **typing supersedes the member
+count** (iOS `ConversationHeaderState` typing-dot parity), and a non-positive count never renders "0 members".
+`ChatViewModel` now exposes `memberCount`/`isGroup` (derived in the conversation collector); `ChatScreen`
+renders the subtitle under the title (typing in `accentColor`, members in `textSecondary`). +11 tests. See run
+log. Closes the header half of feature-parity "Typing indicators (header + inline)"; only avatar chips remain.
 **Recommended next candidates:**
-- **`chat-typing-header`** — surface the typing roster in the conversation header (iOS shows "X is typing…" under
-  the title); reuse `TypingLabel`, pure label→header-subtitle mapping.
+- **`chat-typing-header-avatars`** — the last piece of the typing item: small stacked avatar chips of who is
+  typing (iOS shows avatars, not just the name). Needs an avatar-url projection on `TypingParticipant`.
 - **`chat-read-status-sheet`** — tap the delivery checks → a "seen by / delivered to" breakdown sheet
   (iOS `onShowReadStatus` → detail sheet "Vues" tab). Needs a per-recipient read model on the wire; if the
   gateway payload only carries counts, defer and pick the next item.
@@ -1158,6 +1161,32 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `chat-typing-header` ✅ (merged, reviewer PASS)
+- **Slice:** surface the typing roster in the conversation header (Chat parity §C "Typing indicators (header +
+  inline)"; iOS `ConversationHeaderState` typing-dot phase). The inline indicator + scroll-control pill were
+  live, but the header showed only a static title — no "X is typing…" and no group member subtitle.
+- **Pure core (`:feature:chat`, `Typing.kt`):** `sealed interface ChatHeaderSubtitle { None; Members(count);
+  Typing(label) }` + `of(memberCount, isGroup, typing)` — the header-subtitle SSOT. Decision order: typing
+  present → `Typing(TypingLabel.of(...))` (supersedes the count — iOS parity); else a group with `memberCount
+  > 0` → `Members(count)`; else `None`. Reuses the existing `TypingLabel` SSOT — no new roster logic. A
+  non-positive count (not-yet-loaded roster) yields `None`, never "0 members".
+- **Wiring/render:** `ChatViewModel` derives `memberCount` (= `conversation.memberCount`) and `isGroup`
+  (`type != "direct"`) in the conversation collector and exposes them on `ChatUiState`. `ChatScreen` wraps the
+  header title `Row` in a `Column` and renders `ChatHeaderSubtitleRow(ChatHeaderSubtitle.of(...))` beneath it:
+  typing text (reusing `typingLabelText`) in the conversation `accentColor`, the member count (new
+  `chat_header_members` EN/FR/ES/PT string) in `textSecondary`, single-line ellipsized; `None` renders nothing.
+- **Tests (+11):** `ChatHeaderSubtitleTest` (9) — direct+idle→None, group+idle→Members(n), group-of-1→
+  Members(1) boundary, group+0→None boundary, group+negative→None boundary, typing-beats-members in a group,
+  typing in a direct chat, Two/Many label propagation. `ChatViewModelTest` (+2) — group exposes memberCount=3 +
+  isGroup=true; direct exposes memberCount=2 + isGroup=false. Full branch sweep of `of`.
+- **Verify:** `gradle assembleDebug testDebugUnitTest` (896 tasks) green — `ChatHeaderSubtitleTest` 9/9, the two
+  new `ChatViewModelTest` cases green, whole suite green.
+- **Reviewer:** PASS — diff `apps/android/feature/chat` only; behaviour-through-public-API (`ChatHeaderSubtitle.of`
+  + VM state), no tautologies, every `of` branch + count boundaries (0/1/negative) exercised; SDK-purity/SSOT
+  honoured (pure decision in `:feature:chat` reusing `TypingLabel`, render exempt Compose glue); accent/nav
+  coherence (typing subtitle in the conversation `accentColor`); no dead code — the subtitle is consumed by the
+  header.
 
 ### 2026-07-07 — slice `chat-typing-in-control` ✅ (merged, reviewer PASS)
 - **Slice:** fold the typing roster into the scroll-to-bottom control (Chat parity §C "Typing indicators …
