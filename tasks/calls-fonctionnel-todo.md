@@ -1768,3 +1768,80 @@ falsifier tout candidat contre ce fichier + `lessons.md` avant de rapporter) lan
 - **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
   CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
   travers tous les événements call (`forceEndCall` room Socket.IO résolu par la Vague 22 ci-dessus).
+
+## Vague 24 — disconnect-grace missed calls never notified (gateway) + stale perfect-negotiation state on participant rejoin (web) (2026-07-07)
+
+Point d'entrée : routine calling-feature. `git log` confirme HEAD (`0ea62a8`) inchangé depuis la Vague 23 —
+cette branche pointait déjà sur le même commit que `origin/main`. Trois agents d'exploration dédiés
+(lecture seule, mandatés à falsifier tout candidat contre ce fichier + `lessons.md` avant de rapporter,
+lancés en parallèle) : cartographie complète de la pile d'appel iOS (aucune régression trouvée,
+confirmation que l'`actor CallEventQueue` évoqué par l'ADR SOTA n'existe pas encore sous ce nom — candidat
+pour une future session avec toolchain Swift), audit gateway, audit web.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallEventsHandler.leaveParticipationAndBroadcast()`
+  (le chemin partagé qui termine un appel quand le socket d'un participant tombe et ne revient pas, couvrant
+  à la fois la grâce pré-réponse ~10s et la grâce post-réponse ~30s+extensions) diffusait bien `call:ended`
+  et postait le résumé de chat quand `leftSession.status === 'missed'`, mais n'appelait jamais
+  `this.handleMissedCall(leftSession.id)` — contrairement à ses trois siblings structurels (`call:leave`
+  l.1918-1927, `call:force-leave` l.2119-2124, `call:end` l.2643-2648) qui font tous exactement cet appel
+  sur la même transition de statut. `handleMissedCall()` fait deux choses : `markCallAsMissed()` (no-op
+  idempotent ici, la ligne est déjà terminale) et surtout `createMissedCallNotifications()` — la
+  **notification persistée** (badge/centre de notifications) pour chaque participant n'ayant pas répondu,
+  distincte des pushes silencieux `call_cancel` (qui ne font que fermer l'UI CallKit) et du message de
+  résumé en chat. **Scénario concret** : A appelle B ; avant que B décroche, le socket de A tombe (coupure
+  réseau, app backgroundée/tuée — bien plus fréquent en pratique qu'un raccroché explicite pendant la
+  sonnerie, d'où l'existant appareillage de grâce). Après `PRE_ANSWER_GRACE_MS` (10s) sans reconnexion, le
+  serveur résout l'appel `missed` via exactement ce chemin. L'UI CallKit/sonnerie de B est bien fermée
+  (broadcast + push silencieux), mais B ne reçoit **aucune trace persistée** qu'un appel a eu lieu — le seul
+  enregistrement qui survit si B ne regardait pas l'app à cet instant précis. Aucun test n'exerçait ce cas
+  (`CallEventsHandler-disconnect.test.ts` n'assertait que sur `status: 'ended'`/`'active'`, jamais sur
+  `'missed'` ni sur `handleMissedCall`). **Fix** : ajout du même bloc `this.handleMissedCall(leftSession.id)`
+  (catché + loggé, jamais rejeté) que les 3 siblings, juste après `postCallSummary`, gardé sur
+  `dcStatus === 'missed'` uniquement. **Tests TDD** (`CallEventsHandler-disconnect.test.ts`, nouveau describe
+  imbriqué) : `jest.spyOn(handler, 'handleMissedCall')` — appelé avec le bon `callId` quand `dcStatus ===
+  'missed'`, jamais appelé quand `dcStatus === 'ended'`. RED confirmé (`git stash` du seul fix source → le
+  test positif échoue, 0 appel), GREEN restauré. Suite gateway filtrée `[Cc]all` : 31/31 suites, 870/870
+  tests verts (+2). `tsc --noEmit` gateway : 0 erreur.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ]** `WebRTCService.createPeerConnection()`
+  (`apps/web/services/webrtc-service.ts`) construisait toujours une nouvelle `RTCPeerConnection` mais ne
+  réinitialisait JAMAIS l'état de perfect-negotiation (`autoNegotiate`/`makingOffer`/
+  `isSettingRemoteAnswerPending`/`ignoreOffer`/`videoTransceiver`) — seul `close()` le faisait. Or
+  `use-webrtc-p2p.ts` cache **un service par `participantId`** (`webrtcServicesRef`) et ne le vide QUE sur
+  cleanup complet ou changement de `userId` — jamais sur le départ d'un seul participant. Un participant qui
+  quitte puis **rejoint** un appel pendant qu'un autre reste connecté récupère donc la MÊME instance
+  `WebRTCService`, avec `autoNegotiate` resté à `true` depuis la négociation initiale déjà aboutie. Le
+  rejoin appelle `createPeerConnection()` sur cette instance réutilisée : une toute nouvelle
+  `RTCPeerConnection` est créée (transceivers ajoutés par `addLocalMedia()` juste après programment un
+  `negotiationneeded` navigateur), mais `autoNegotiate` étant resté vrai, ce `negotiationneeded` déclenche
+  un `negotiate()` (donc un `createOffer()`/`setLocalDescription()`) CONCURREMMENT à l'appel explicite
+  `createOffer()` que le hook de rejoin est déjà en train d'attendre — deux séquences d'offre indépendantes
+  courent sur la même connexion ; celle qui résout en dernier gagne `pc.localDescription`, tandis que
+  l'autre chemin signale quand même sa propre offre (désormais périmée) au pair via
+  `CLIENT_EVENTS.CALL_SIGNAL` — le pair répond à partir d'une SDP qui ne correspond plus à ce qui est
+  réellement posé en local. Net : un rejoin peut silencieusement échouer à rétablir le média, sapant
+  exactement le travail de reconnexion que la Vague 20 visait à livrer, sans aucun test couvrant le chemin
+  « pas de `close()` avant réutilisation ». **Fix** : réinitialisation des 5 champs de perfect-negotiation
+  au DÉBUT de `createPeerConnection()` elle-même (pas seulement dans `close()`), puisque cette méthode
+  construit toujours une ressource neuve et que tout état lié à une connexion antérieure y est
+  catégoriquement périmé, que l'appelant ait pensé à `close()` avant ou non. **Test TDD**
+  (`webrtc-service.coverage.test.ts`, nouveau describe) : `createOffer()` (arme `autoNegotiate=true`) →
+  `createPeerConnection()` À NOUVEAU sans `close()` → déclenche `onnegotiationneeded` → assert
+  `onLocalDescription` PAS appelé (variante du test existant l.1696 sans le `close()` intercalé, avec flush
+  de microtasks car `negotiate()` est asynchrone — piège découvert en écrivant le test : sans `await
+  Promise.resolve()` × 3, l'assertion passe trivialement avant que la promesse de négociation n'ait eu la
+  chance de résoudre, RED silencieux). RED confirmé (`git stash` du seul fix source → 1 appel constaté au
+  lieu de 0), GREEN restauré. Suite web filtrée `[Cc]all|webrtc` : 22 suites, 436/436 tests verts (+1).
+  `tsc --noEmit` web : 1534 erreurs avant/après identique (confirmé par comparaison directe `git stash`),
+  aucune nouvelle — bruit préexistant `(socket as unknown)`/mocks de test déjà présent partout dans ce
+  fichier.
+- **iOS (lecture seule, aucun changement)** : cartographie complète effectuée (CallKit, PushKit, WebRTC,
+  signaling, audio session, UI, tests — voir résumé agent) ; aucun bug candidat retenu au-delà de ce qui
+  était déjà connu. Piste à creuser dans une session avec toolchain Swift réel : l'`actor CallEventQueue`
+  documenté dans l'ADR SOTA (`docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md` §10) comme
+  devant sérialiser les entrées concurrentes socket/CallKit/WebRTC/réseau n'a pas été trouvé sous ce nom
+  dans `CallManager.swift` — à vérifier si l'intention a été absorbée autrement (ex. `@MainActor` seul) ou
+  si c'est un gap réel de l'ADR jamais implémenté. Drift documentaire mineur aussi noté :
+  `apps/ios/CLAUDE.md` indique WebRTC 141.0 alors que `Package.swift`/`Package.resolved` épinglent 146.0.0.
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call.

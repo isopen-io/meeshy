@@ -558,6 +558,64 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
 
       expect(mockCreateCallSummaryMessageDc).toHaveBeenCalledWith(CALL_ID);
     });
+
+    // -----------------------------------------------------------------------
+    // Regression: a disconnect-grace expiry that resolves a pre-answer call
+    // to `missed` must trigger the same missed-call notification path as the
+    // call:leave/call:force-leave/call:end sibling handlers (Vague 24).
+    // -----------------------------------------------------------------------
+
+    it('triggers handleMissedCall when the disconnect-grace leave resolves to missed', async () => {
+      const leftSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'missed',
+        duration: 0,
+        endReason: 'missed',
+        mode: 'p2p',
+      };
+      mockLeaveCallDc.mockResolvedValue(leftSession);
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      const handleMissedCallSpy = jest
+        .spyOn(handler, 'handleMissedCall')
+        .mockResolvedValue(undefined);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(handleMissedCallSpy).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('does not trigger handleMissedCall when the disconnect-grace leave resolves to ended', async () => {
+      const leftSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'ended',
+        duration: 42,
+        endReason: 'completed',
+        mode: 'p2p',
+      };
+      mockLeaveCallDc.mockResolvedValue(leftSession);
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      const handleMissedCallSpy = jest
+        .spyOn(handler, 'handleMissedCall')
+        .mockResolvedValue(undefined);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(handleMissedCallSpy).not.toHaveBeenCalled();
+    });
   });
 
   // -------------------------------------------------------------------------
