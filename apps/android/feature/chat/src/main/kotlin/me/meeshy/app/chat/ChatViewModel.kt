@@ -119,10 +119,14 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             val stored = draftStore.load(conversationId)
-            lastPersistedDraft = stored?.takeIf { it.text.isNotBlank() }
+            lastPersistedDraft = stored?.takeIf { it.text.isNotBlank() || it.replyToId != null }
             _state.update { current ->
                 val restored = DraftAutosave.restore(stored, current.draft, current.isEditing)
-                if (restored != null) current.copy(draft = restored) else current
+                if (restored != null) {
+                    current.copy(draft = restored.text, replyingToMessageId = restored.replyToId)
+                } else {
+                    current
+                }
             }
         }
 
@@ -313,7 +317,7 @@ class ChatViewModel @Inject constructor(
         } else {
             startTypingEmission()
         }
-        persistDraft(value)
+        persistDraft(value, _state.value.replyingToMessageId)
     }
 
     /**
@@ -322,12 +326,15 @@ class ChatViewModel @Inject constructor(
      * edit is in flight — the edit content is not a draft — and skips the write
      * entirely when the store already matches ([DraftAutosave.resolve] → [DraftPersist.None]).
      * The single [draftPersistJob] coalesces rapid keystrokes to a last-write-wins.
+     * [replyToId] carries the currently-armed reply so it is persisted alongside the text
+     * (iOS app-side `DraftStore` reply-reference parity).
      */
-    private fun persistDraft(rawText: String) {
+    private fun persistDraft(rawText: String, replyToId: String?) {
         if (_state.value.isEditing) return
         val decision = DraftAutosave.resolve(
             conversationId = conversationId,
             rawText = rawText,
+            replyToId = replyToId,
             nowIso = java.time.Instant.ofEpochMilli(clock.nowMillis()).toString(),
             previous = lastPersistedDraft,
         )
@@ -413,7 +420,7 @@ class ChatViewModel @Inject constructor(
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = _state.value.replyingToMessageId
         _state.update { it.copy(draft = "", replyingToMessageId = null, mention = it.mention.reset()) }
-        persistDraft("")
+        persistDraft("", replyToId = null)
         viewModelScope.launch {
             try {
                 messageRepository.sendOptimistic(
@@ -559,10 +566,12 @@ class ChatViewModel @Inject constructor(
                 draft = if (it.isEditing) "" else it.draft,
             )
         }
+        persistDraft(_state.value.draft, replyToId = messageId)
     }
 
     fun cancelReply() {
         _state.update { it.copy(replyingToMessageId = null) }
+        persistDraft(_state.value.draft, replyToId = null)
     }
 
     fun cancelEdit() {
