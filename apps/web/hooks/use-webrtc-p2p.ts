@@ -17,6 +17,8 @@ import type {
   CallSignalEvent,
   WebRTCSignal,
   CALL_ERROR_CODES,
+  CallRequestIceServersEvent,
+  CallIceServersRefreshedEvent,
 } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
@@ -25,6 +27,18 @@ export interface UseWebRTCP2POptions {
   userId?: string;
   onError?: (error: Error) => void;
 }
+
+// Gap fix (2026-07-07) — the gateway has always exposed a full TURN
+// credential refresh round-trip (`call:request-ice-servers` /
+// `call:ice-servers-refreshed`, mirroring the HMAC secret's rotation TTL) and
+// iOS has consumed it since the SOTA reliability pass, but web never had a
+// single call site for either event: a call outliving the TURN credential
+// TTL (default ~3600s) with no refresh armed would silently retry ICE
+// restarts with expired credentials, unrecoverable for a peer behind
+// symmetric NAT. This default is a conservative fallback for the FIRST
+// refresh only — the real TTL from the server response reschedules every
+// refresh after that (see `scheduleTurnRefresh` below).
+const DEFAULT_TURN_CREDENTIAL_TTL_SECONDS = 3600;
 
 export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   const {
@@ -61,6 +75,27 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   // the same `WebRTCService` and silently orphaning the first
   // `RTCPeerConnection`. This ref closes that window synchronously.
   const offerInFlightRef = useRef<Set<string>>(new Set());
+  // TURN credential refresh timer — see DEFAULT_TURN_CREDENTIAL_TTL_SECONDS doc above.
+  const turnRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Emits `call:request-ice-servers`; the response is applied by the
+   * `call:ice-servers-refreshed` listener registered below. */
+  const requestFreshTurnCredentials = useCallback(() => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket) return;
+    socket.emit(CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS, { callId } as CallRequestIceServersEvent);
+    logger.debug('[useWebRTCP2P]', 'Requested fresh TURN credentials', { callId });
+  }, [callId]);
+
+  /** Arms the next refresh at 80% of `ttlSeconds` (floor 60s so a degenerate
+   * TTL never disarms the refresh entirely, mirroring the iOS policy). */
+  const scheduleTurnRefresh = useCallback((ttlSeconds: number) => {
+    if (turnRefreshTimerRef.current) clearTimeout(turnRefreshTimerRef.current);
+    const delayMs = Math.max(ttlSeconds * 0.8, 60) * 1000;
+    turnRefreshTimerRef.current = setTimeout(() => {
+      requestFreshTurnCredentials();
+    }, delayMs);
+  }, [requestFreshTurnCredentials]);
 
   const drainIceCandidateQueue = useCallback(async (peerId: string, service: WebRTCService) => {
     const queuedCandidates = iceCandidateQueueRef.current.get(peerId) || [];
@@ -173,7 +208,12 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             });
             setIceConnectionState(state);
 
-            if (state === 'failed') {
+            if (state === 'disconnected') {
+              // A network change (Wi-Fi↔cellular, ICE restart ahead) is
+              // exactly when a stale TURN credential most likely bites — get
+              // ahead of it instead of waiting for the periodic refresh.
+              requestFreshTurnCredentials();
+            } else if (state === 'failed') {
               setError('ICE connection failed');
               toast.error('Connection failed. Retrying...');
               onError?.(new Error('ICE_CONNECTION_FAILED'));
@@ -211,7 +251,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
       return service;
     },
-    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError]  // CRITICAL: Added userId, iceServers
+    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError, requestFreshTurnCredentials]  // CRITICAL: Added userId, iceServers
   );
 
   /**
@@ -686,6 +726,44 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
       socket.off(SERVER_EVENTS.CALL_SIGNAL, handleIncomingSignal);
     };
   }, [callId, handleOffer, handleAnswer, handleIceCandidate]);
+
+  /**
+   * TURN credential refresh (see DEFAULT_TURN_CREDENTIAL_TTL_SECONDS doc
+   * above) — arms the periodic refresh on mount/callId change, applies a
+   * received refresh to the store AND every already-established peer
+   * connection (WebRTCService.setIceServers applies live via
+   * RTCPeerConnection.setConfiguration when the connection already exists),
+   * then reschedules using the real TTL from the response.
+   */
+  useEffect(() => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket) return;
+
+    const handleIceServersRefreshed = (event: CallIceServersRefreshedEvent) => {
+      if (event.callId !== callId || !event.iceServers?.length) return;
+
+      logger.info('[useWebRTCP2P]', 'TURN credentials refreshed', {
+        callId,
+        serverCount: event.iceServers.length,
+        ttl: event.ttl,
+      });
+
+      useCallStore.getState().setIceServers(event.iceServers);
+      webrtcServicesRef.current.forEach((service) => service.setIceServers(event.iceServers));
+      scheduleTurnRefresh(event.ttl);
+    };
+
+    socket.on(SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED, handleIceServersRefreshed);
+    scheduleTurnRefresh(DEFAULT_TURN_CREDENTIAL_TTL_SECONDS);
+
+    return () => {
+      socket.off(SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED, handleIceServersRefreshed);
+      if (turnRefreshTimerRef.current) {
+        clearTimeout(turnRefreshTimerRef.current);
+        turnRefreshTimerRef.current = null;
+      }
+    };
+  }, [callId, scheduleTurnRefresh]);
 
   return {
     connectionState,

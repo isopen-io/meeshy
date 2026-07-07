@@ -2069,6 +2069,15 @@ export class CallEventsHandler {
                 participantId: cleanupParticipantId || userId
               });
 
+              // Sibling-drift fix — mirrors the `call:leave` handler above:
+              // this is an explicit leave just like `call:leave`, so it must
+              // clear the same per-call in-memory state. Without this, a
+              // still-armed ringing timer or buffered offer for this callId
+              // lingers in memory until its own unrelated sweep/timeout,
+              // instead of being released the moment the leave is known.
+              this.callService.clearRingingTimeout(call.id);
+              this.clearBufferedOffer(call.id);
+
               // Broadcast participant left event
               const leftEvent: CallParticipantLeftEvent = {
                 callId: callSession.id,
