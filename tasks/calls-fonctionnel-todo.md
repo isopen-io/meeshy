@@ -1921,3 +1921,61 @@ lancés en parallèle ; iOS non ré-audité cette session (pas de toolchain Swif
 - **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
   CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
   travers tous les événements call.
+
+## Vague 26 — `call:end` recovery path bypassait le fanout d'appel + web n'émettait jamais `call:heartbeat` (2026-07-07)
+
+Point d'entrée : routine calling-feature. `git log` confirme HEAD (`ec73d65`) inchangé côté calling depuis
+la Vague 25. Trois agents d'exploration dédiés (gateway, web, iOS — lecture seule, mandatés à falsifier
+tout candidat contre ce fichier + `lessons.md` avant de rapporter, lancés en parallèle) : iOS n'a rien
+trouvé de nouveau (aucun commit iOS sur les fichiers d'appel depuis la Vague 24, hormis la feature bulle
+swipe-to-collapse déjà couverte par son propre design doc — pas de toolchain Swift/Xcode dans cet
+environnement de toute façon).
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `forceEndOrphanedCallAfterOptimisticBroadcast` (le chemin
+  de récupération de `call:end` quand l'ender ne résout pas en participant, OU quand `endCall()` lève)
+  bypassait `broadcastCallEnded()`** — sibling-drift confirmé contre son jumeau exact, le chemin de
+  force-cleanup sur disconnect (`CallEventsHandler.ts` ~l.667-682), qui fait déjà
+  `broadcastCallEnded` (clearQualityDegradedStreaks + fanout call+conversation+chaque user room membre,
+  la même audience que `call:initiated`) + `postCallSummary` + `handleMissedCall` conditionnel. La
+  méthode de récupération de `call:end`, elle, ne faisait QUE le force-end DB + `handleMissedCall`
+  conditionnel — sautant entièrement le fanout large, le nettoyage quality-streak, et le message de
+  résumé en chat. Le fast-path optimiste de `call:end` (avant l'écriture autoritative) ne notifie QUE la
+  call room, et seulement si l'émetteur y est déjà — un callee encore en sonnerie (jamais dans la call
+  room, souvent pas non plus dans la conversation room) ne recevait donc AUCUNE notification de fin
+  d'appel sur ce chemin de récupération précis : exactement l'incident prod 2026-07-03 06:14 que
+  `broadcastCallEnded` existe pour prévenir, réouvert par un chemin différent. **Fix** :
+  `forceEndOrphanedCallAfterOptimisticBroadcast` prend maintenant `io` + `endedBy` en paramètres et
+  mirrore exactement le chemin disconnect — `broadcastCallEnded` + `postCallSummary` + `handleMissedCall`
+  conditionnel sur statut `missed`. Les 2 sites d'appel (branche `NOT_A_PARTICIPANT`, catch-all de
+  `endCall()`) passent désormais `io` et `userId` (ré-résolu via `getUserId(socket.id)` dans le catch,
+  `userId` du `try` n'étant pas visible dans son scope). **Tests TDD** (`CallEventsHandler.test.ts`,
+  describe `call:end`) : 2 nouveaux cas (un par site d'appel) asserting le fanout large
+  (`io.to` avec call+conversation+chaque user room membre) + le résumé chat posté (`messageBroadcaster`).
+  RED confirmé (`git stash` du seul fix source → les 2 échouent, `io.to` jamais appelé avec l'audience
+  large), GREEN restauré. Suite gateway filtrée `.*[Cc]all.*\.test\.ts$` : 31/31 suites, 876/876 tests
+  verts (+2). `tsc --noEmit` gateway : 0 erreur.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ] Web n'émettait JAMAIS `call:heartbeat`** — `stores/call-store.ts`
+  définit `startHeartbeat`/`stopHeartbeat` (intervalle 15s, miroir du contrat iOS
+  `CallManager.startHeartbeat()`) mais AUCUN composant monté ne les appelait (confirmé : seul le fichier
+  de test du store référence `startHeartbeat`). Le tier GC de `CallCleanupService` (gateway) traite
+  `hasHeartbeatData`/`recordHeartbeat` comme le signal de liveness ; sans lui, un appel purement web↔web
+  n'a jamais d'entrée heartbeat sur AUCUN participant — indiscernable pour le GC d'un zombie authentique
+  une fois la fenêtre de grâce post-boot passée, donc un appel web↔web sain de plus de ~2 minutes se
+  faisait force-terminer (`endReason: heartbeatTimeout`) malgré un média P2P parfaitement fonctionnel.
+  Drift protocolaire iOS/web jamais détecté par les audits précédents (focalisés sur le drift
+  gateway-side, pas sur "cette obligation client est-elle seulement implémentée"). **Fix** :
+  `CallManager.tsx` (composant réellement monté, cf. vague 10) — nouvel effet démarrant
+  `startHeartbeat(currentCall.id)` dès que `isInCall && currentCall?.id`, cleanup `stopHeartbeat()` au
+  départ (déjà redondant avec le `reset()` du store qui stoppe aussi l'intervalle, mais symétrique avec le
+  pattern des autres effets du fichier). **Test TDD** (nouveau fichier
+  `CallManager.heartbeat.test.tsx`, miroir du pattern `CallManager.reconnect.test.tsx`) : 3 cas (émet
+  `call:heartbeat` toutes les 15s en appel actif / n'émet rien sans appel actif / s'arrête après
+  `reset()`). RED confirmé (`git stash` du seul fix source → 2/3 rouges, le socket n'émettait que
+  `call:check-active`), GREEN restauré. Suite web filtrée `.*(call|webrtc|quality).*\.test\.` : 23
+  suites/439 tests verts (+1 suite/+3 tests). `tsc --noEmit` web : 1532 erreurs avant/après identique
+  (confirmé par `git stash` du seul diff source), aucune nouvelle.
+- **iOS (lecture seule, aucun changement)** : aucun bug candidat retenu — voir résumé agent en tête de
+  section. `actor CallEventQueue` (ADR SOTA) toujours absent du code sous ce nom, gap déjà documenté.
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call.
