@@ -5301,4 +5301,32 @@ final class CallManagerBubblePositionTests: XCTestCase {
             "resetEndedStateForNewCall must reset bubbleVerticalFraction to its default — a new call must not inherit the previous call's dragged position"
         )
     }
+
+    /// `resetEndedStateForNewCall`'s reset (above) only fires if a new call
+    /// starts WITHIN the 1.5s post-hangup settle window (`callState` still
+    /// `.ended`). The ordinary case — any call started later, once
+    /// `callState` has already settled to `.idle` — never reaches that guard.
+    /// `endCallInternal` has an existing "reset inconditionnel" block (video
+    /// state) for exactly this reason; the bubble reset must live there too,
+    /// unconditionally, not only in the conditional settle-window path.
+    func test_endCallInternal_resetsBubblePositionUnconditionally() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "private func endCallInternal(reason: CallEndReason) {") else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        let bodyEnd = source.range(
+            of: "\n    // MARK: - Audio Session",
+            range: range.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("bubbleEdge = .trailing"),
+            "endCallInternal must unconditionally reset bubbleEdge to .trailing — otherwise a call started " +
+            "more than 1.5s after the previous one silently inherits its dragged bubble position"
+        )
+        XCTAssertTrue(
+            body.contains("bubbleVerticalFraction = 0.08"),
+            "endCallInternal must unconditionally reset bubbleVerticalFraction to its default"
+        )
+    }
 }

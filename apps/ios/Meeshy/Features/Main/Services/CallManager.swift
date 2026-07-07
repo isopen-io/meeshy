@@ -3058,6 +3058,14 @@ final class CallManager: ObservableObject {
         isVideoSuspended = false
         isVideoSuspendedByBackground = false
         isVideoSuspendedByHold = false
+        // Même rationale que le reset vidéo ci-dessus : `resetEndedStateForNewCall`
+        // ne reset la bulle QUE si le nouvel appel arrive dans la fenêtre de
+        // settle 1,5s (callState encore `.ended`). Le cas ordinaire — un appel
+        // qui démarre plus tard — passe par `callState == .idle`, où ce garde
+        // ne se déclenche jamais. Sans ce reset inconditionnel, la bulle
+        // réapparaît silencieusement à la position de l'appel PRÉCÉDENT.
+        bubbleEdge = .trailing
+        bubbleVerticalFraction = 0.08
         detachSystemPiP()
         Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
                                 duration: callDuration, remote: remoteUsername, reason: reason)

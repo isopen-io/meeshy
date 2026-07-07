@@ -96,6 +96,13 @@ struct CallBubbleView: View {
         .accessibilityAction(named: String(localized: "a11y.call.bubble.quickMenu", defaultValue: "Ouvrir le mini-menu d'appel", bundle: .main)) {
             revealMenu()
         }
+        // Le calque de fermeture (dismissLayer) est `.accessibilityHidden` —
+        // sans cette action, un utilisateur VoiceOver qui ouvre le mini-menu
+        // n'a aucun moyen de le refermer autrement qu'attendre les 3s d'auto-
+        // dismiss ou déclencher raccrocher (destructif).
+        .accessibilityAction(named: String(localized: "a11y.call.bubble.closeMenu", defaultValue: "Fermer le mini-menu d'appel", bundle: .main)) {
+            closeMenu()
+        }
     }
 
     private var signalStrength: CallSignalStrength {
@@ -119,7 +126,12 @@ struct CallBubbleView: View {
     // MARK: - Reposition drag
 
     private func dragGesture(in geometry: GeometryProxy) -> some Gesture {
-        DragGesture(minimumDistance: 2)
+        // `minimumDistance: 10` — matches the pill's own collapse gesture
+        // (`FloatingCallPillView.collapseDragGesture`). A near-zero threshold
+        // co-fires with `.onTapGesture` on ordinary finger jitter during a
+        // tap, causing a redundant edge-snap + haptic alongside the tap's
+        // own full-screen expansion.
+        DragGesture(minimumDistance: 10)
             .onChanged { value in
                 guard !isMenuRevealed else { return }
                 dragTranslation = value.translation

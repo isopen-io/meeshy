@@ -93,7 +93,7 @@ struct FloatingCallPillView: View {
     /// persiste rien (contrairement à `bubbleEdge`/`bubbleVerticalFraction`
     /// sur `CallManager`, qui ne concernent que la bulle repliée).
     @State private var pillDragOffset: CGFloat = 0
-    @State private var pillDragStartTime: Date?
+    @State private var pillLastDragSample: (time: Date, translationWidth: CGFloat)?
 
     private let pillHeight: CGFloat = 64
 
@@ -299,7 +299,11 @@ struct FloatingCallPillView: View {
     private var collapseDragGesture: some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
-                if pillDragStartTime == nil { pillDragStartTime = Date() }
+                // Sample BEFORE updating pillDragOffset, so onEnded can diff
+                // against the second-to-last position — an instantaneous
+                // velocity estimate, not one diluted by a slow start earlier
+                // in the same gesture.
+                pillLastDragSample = (Date(), pillDragOffset)
                 pillDragOffset = value.translation.width
             }
             .onEnded { value in
@@ -307,13 +311,18 @@ struct FloatingCallPillView: View {
                 // velocity is approximated from elapsed wall-clock time
                 // instead (no existing precedent in this codebase uses the
                 // iOS 17 API either).
-                let elapsed = pillDragStartTime.map { Date().timeIntervalSince($0) } ?? 0
-                let velocityWidth = elapsed > 0 ? Double(value.translation.width) / elapsed : 0
-                pillDragStartTime = nil
+                let velocityWidth: CGFloat
+                if let sample = pillLastDragSample {
+                    let elapsed = Date().timeIntervalSince(sample.time)
+                    velocityWidth = elapsed > 0 ? (value.translation.width - sample.translationWidth) / CGFloat(elapsed) : 0
+                } else {
+                    velocityWidth = 0
+                }
+                pillLastDragSample = nil
 
                 if CallBubbleGestureResolver.shouldCollapse(
                     translationWidth: value.translation.width,
-                    velocityWidth: CGFloat(velocityWidth)
+                    velocityWidth: velocityWidth
                 ) {
                     collapseToBubble(exitTranslation: value.translation.width)
                 } else {
@@ -335,6 +344,11 @@ struct FloatingCallPillView: View {
             if !reduceMotion {
                 try? await Task.sleep(nanoseconds: 250_000_000)
             }
+            // The call can end during this 250ms exit animation (user hangs
+            // up immediately after swiping, remote hangs up, etc.) — guard
+            // against flipping displayMode to .bubble for a call that's no
+            // longer active, matching CallBubbleView's own display guard.
+            guard callManager.callState.isActive else { return }
             callManager.displayMode = .bubble
             pillDragOffset = 0
         }
