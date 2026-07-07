@@ -14,10 +14,13 @@ ReelFeedAutoplayCoordinator,ReelFeedLayout}.swift`, `ViewModels/ReelsViewModel.s
       `media3-ui`) au catalog + `:sdk-ui`. Atome `me.meeshy.ui.component.video.ReelVideoSurface`
       (AndroidView+PlayerView+ExoPlayer, loop+muted+RESIZE_MODE_ZOOM, play si `isActive`,
       release au dispose ; params opaques URL+isActive). (fait)
-- [ ] **P3 — écran Réels** : `:feature:reels` module + `ReelsViewModel` (charge getReels,
-      pagination, seed) + `ReelsScreen` = `VerticalPager` plein écran, une page = un réel
-      (vidéo + overlay auteur/légende/actions like/comment/repost façon ReelFeedCard iOS).
-      Autoplay de la page visible, pause des autres (mirror ReelFeedAutoplayCoordinator).
+- [x] **P3 — écran Réels** : module `:feature:reels` (settings + app deps) + `ReelPresentation`
+      /`ReelBuilder` (Post type=reel → vidéo via 1er média video/*, URL résolue vs config
+      .socketUrl) + `ReelsViewModel(getReels seed)` + `ReelsScreen` = `VerticalPager` plein
+      écran fond noir, chaque page = `ReelVideoSurface(isActive = page==currentPage)` +
+      overlay (avatar/nom/légende bas-gauche, actions like/comment/repost/share colonne
+      droite, bouton fermer). ReelVideoSurface passé en `@OptIn(UnstableApi)` interne (API
+      stable pour l'appelant, feature/reels ne dépend pas de media3). (fait)
 - [ ] **P4 — nav + lancement** : route `reels` (+ `reels?seed=`) dans MeeshyApp/NavHost ;
       lancement depuis le Feed (tap carte réel / long-press) ; overlay plein écran.
 - [ ] **P5 — intégration Feed** : les réels apparaissent dans le Feed (carte réel cliquable

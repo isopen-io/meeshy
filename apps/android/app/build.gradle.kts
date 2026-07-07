@@ -54,6 +54,7 @@ dependencies {
     implementation(project(":feature:contacts"))
     implementation(project(":feature:stories"))
     implementation(project(":feature:calls"))
+    implementation(project(":feature:reels"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

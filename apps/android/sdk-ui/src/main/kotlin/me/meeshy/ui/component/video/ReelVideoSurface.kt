@@ -21,7 +21,7 @@ import androidx.media3.ui.PlayerView
  * so the others stay paused and rewound. Opaque params only; the atom owns just the
  * player lifecycle (created for the current [mediaUrl], released on dispose).
  */
-@UnstableApi
+@OptIn(UnstableApi::class)
 @Composable
 fun ReelVideoSurface(
     mediaUrl: String,
