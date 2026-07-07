@@ -319,7 +319,7 @@ private fun ConversationRowContent(
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
 ) {
-    val title = conversation.displayTitle()
+    val title = conversation.displayTitle(currentUserId)
     var menuExpanded by remember { mutableStateOf(false) }
     val previewLabels = LastMessagePreviewLabels(
         photo = stringResource(R.string.conversations_preview_photo),

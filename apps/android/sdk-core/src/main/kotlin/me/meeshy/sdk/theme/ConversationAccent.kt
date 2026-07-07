@@ -20,7 +20,25 @@ fun ApiConversation.accentHex(): String {
     return DynamicColorGenerator.colorFor(context).primary
 }
 
-fun ApiConversation.displayTitle(): String =
-    title?.takeIf { it.isNotBlank() }
-        ?: preferences?.customName?.takeIf { it.isNotBlank() }
-        ?: "Conversation"
+private val directConversationTypes = setOf("direct", "dm")
+
+/**
+ * The name to show for a conversation. A group/community keeps its [title]; a direct
+ * conversation has no title, so — like iOS `APIConversation.toConversation` — it
+ * resolves the OTHER participant's name (excluding [currentUserId]) instead of the
+ * bare "Conversation" fallback.
+ */
+fun ApiConversation.displayTitle(currentUserId: String? = null): String {
+    title?.takeIf { it.isNotBlank() }?.let { return it }
+    preferences?.customName?.takeIf { it.isNotBlank() }?.let { return it }
+    if (type.lowercase() in directConversationTypes) {
+        otherParticipantName(currentUserId)?.let { return it }
+    }
+    return "Conversation"
+}
+
+private fun ApiConversation.otherParticipantName(currentUserId: String?): String? {
+    val other = participants.firstOrNull { it.userId != null && it.userId != currentUserId }
+    return other?.displayName?.takeIf { it.isNotBlank() }
+        ?: other?.username?.takeIf { it.isNotBlank() }
+}
