@@ -1380,7 +1380,7 @@ struct RootView: View {
     /// hides when the queue drains. Shown only when the device is online so
     /// it does not stack with `OfflineBanner`.
     private var pendingSettingsBannerOverlay: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xs + 2) {
             PendingSettingsBannerInline()
             PendingStoryBannerInline()
             Spacer()
@@ -1538,7 +1538,7 @@ struct RootView: View {
                     if showFeed {
                         // Animated logo when feed is open (with breathing effect)
                         AnimatedLogoView(color: .white, lineWidth: 3, continuous: true)
-                            .frame(width: 26, height: 26)
+                            .frame(width: MeeshySpacing.xxl + MeeshySpacing.xs, height: MeeshySpacing.xxl + MeeshySpacing.xs)
                     } else {
                         Image(systemName: "square.stack.fill")
                             .font(MeeshyFont.relative(20, weight: .semibold))
@@ -1842,13 +1842,13 @@ private struct PendingSettingsBannerInline: View {
     var body: some View {
         Group {
             if pendingCount > 0 {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.white)
 
                     Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
@@ -1858,8 +1858,8 @@ private struct PendingSettingsBannerInline: View {
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
                     LinearGradient(
                         colors: [
@@ -1872,7 +1872,7 @@ private struct PendingSettingsBannerInline: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -1903,13 +1903,13 @@ private struct PendingStoryBannerInline: View {
     var body: some View {
         Group {
             if publishService.pendingCount > 0 {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "photo.stack")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.white)
 
                     Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
@@ -1919,8 +1919,8 @@ private struct PendingStoryBannerInline: View {
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
                     LinearGradient(
                         colors: [
@@ -1933,7 +1933,7 @@ private struct PendingStoryBannerInline: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
