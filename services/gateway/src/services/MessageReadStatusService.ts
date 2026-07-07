@@ -601,18 +601,21 @@ export class MessageReadStatusService {
       // fenêtre du gel. Une erreur ici ne doit pas faire échouer le marquage
       // (on retombe sur `null` = gel depuis l'origine, lui-même résilient).
       let prevReadAt: Date | null = null;
+      let prevDeliveredAt: Date | null = null;
       let cursorExists = false;
       try {
         const prevCursor = await this.prisma.conversationReadCursor.findUnique({
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastReadAt: true },
+          select: { lastReadAt: true, lastDeliveredAt: true },
         });
         prevReadAt = prevCursor?.lastReadAt ?? null;
+        prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
         cursorExists = prevCursor != null;
       } catch {
         prevReadAt = null;
+        prevDeliveredAt = null;
       }
 
       // Out-of-order read receipt (e.g. a second, staler device catching up
@@ -650,6 +653,36 @@ export class MessageReadStatusService {
         at: now,
         field: "readAt",
       });
+
+      // Read implies delivered: a message can never be read without first having
+      // been delivered. When a recipient opens a conversation whose newest
+      // message was never marked received (they were offline when it arrived, so
+      // no delivery receipt / auto-deliver ran), advancing only the read cursor
+      // leaves the delivery frontier behind the read frontier — the sender then
+      // sees the "read" tick ahead of the "delivered" tick (readCount > deliveredCount),
+      // an impossible state. Also advance the delivery cursor and freeze
+      // deliveredAt/receivedAt for the same window. Both operations are idempotent
+      // (the cursor guard no-ops when delivery is already ahead; the freeze is
+      // write-once), so this is a cheap no-op on the healthy delivered-then-read path.
+      const deliveredAdvanced = await this._advanceCursor({
+        participantId,
+        conversationId,
+        messageId,
+        now,
+        cursorExists: true,
+        idField: "lastDeliveredMessageId",
+        atField: "lastDeliveredAt",
+        resetUnreadCount: false,
+      });
+      if (deliveredAdvanced) {
+        await this.freezeMessageStatus({
+          participantId,
+          conversationId,
+          since: prevDeliveredAt,
+          at: now,
+          field: "deliveredAt",
+        });
+      }
 
       logger.info(
         `[MessageReadStatus] Participant ${participantId} marked conversation ${conversationId} as read`
