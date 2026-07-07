@@ -29,8 +29,8 @@ object CallSignalMapper {
                 CallEvent.ReceiveIncoming
             }
             "call:participant-joined" -> {
-                json.decodeFromString<CallParticipantPayload>(rawJson)
-                CallEvent.ParticipantJoined
+                val payload = json.decodeFromString<CallParticipantPayload>(rawJson)
+                CallEvent.ParticipantJoined(payload.participant?.userId)
             }
             "call:signal" -> mapSignal(json.decodeFromString<CallSignalEnvelope>(rawJson))
             // `call:ended` / `call:missed` are **identity-gated** teardown — decoded

@@ -117,7 +117,7 @@ class CallViewModel @Inject constructor(
      */
     private fun onRemoteEvent(event: CallEvent) {
         dispatch(event)
-        if (event is CallEvent.ParticipantJoined) coordinator.onParticipantJoined()
+        if (event is CallEvent.ParticipantJoined) coordinator.onParticipantJoined(event.peerId)
     }
 
     /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */

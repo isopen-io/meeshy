@@ -40,9 +40,9 @@ class CallSignalMapperTest {
     // --- call:participant-joined -------------------------------------------
 
     @Test
-    fun `a participant-joined frame maps to ParticipantJoined`() {
-        val json = """{"callId":"c1","participantId":"p2","userId":"u2","mode":"p2p"}"""
-        assertThat(map("call:participant-joined", json)).isEqualTo(CallEvent.ParticipantJoined)
+    fun `a participant-joined frame maps to ParticipantJoined carrying the joiner id`() {
+        val json = """{"callId":"c1","participant":{"userId":"u2"},"mode":"p2p"}"""
+        assertThat(map("call:participant-joined", json)).isEqualTo(CallEvent.ParticipantJoined("u2"))
     }
 
     // --- call:signal (offer / answer / ice-candidate) ----------------------

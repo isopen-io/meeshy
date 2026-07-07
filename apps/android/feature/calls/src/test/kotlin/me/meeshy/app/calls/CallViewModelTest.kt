@@ -187,7 +187,7 @@ class CallViewModelTest {
         val vm = vm()
         vm.start(outgoingVideo)
 
-        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.ParticipantJoined())
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
 
         vm.onSignal(CallEvent.RemoteAnswer)
@@ -201,7 +201,7 @@ class CallViewModelTest {
     fun `a remote hang-up ends the call`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
-        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.ParticipantJoined())
         vm.onSignal(CallEvent.RemoteAnswer)
         vm.onSignal(CallEvent.MediaConnected)
         vm.onSignal(CallEvent.RemoteHangUp)
@@ -408,7 +408,7 @@ class CallViewModelTest {
         val vm = vm()
         vm.start(outgoingVideo)
 
-        events.emit(CallEvent.ParticipantJoined)
+        events.emit(CallEvent.ParticipantJoined())
         events.emit(CallEvent.RemoteAnswer)
         events.emit(CallEvent.MediaConnected)
 
@@ -433,7 +433,7 @@ class CallViewModelTest {
         vm.start(outgoingVideo)
         assertThat(vm.state.value.durationLabel).isNull()
 
-        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.ParticipantJoined())
         vm.onSignal(CallEvent.RemoteAnswer)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
         assertThat(vm.state.value.durationLabel).isNull()
@@ -516,7 +516,7 @@ class CallViewModelTest {
         emitQuality(rttMs = 40.0) // no collector while ringing → ignored
         assertThat(vm.state.value.connectionQuality).isNull()
 
-        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.ParticipantJoined())
         vm.onSignal(CallEvent.RemoteAnswer)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
         assertThat(vm.state.value.connectionQuality).isNull()
@@ -598,7 +598,7 @@ class CallViewModelTest {
     fun `an outgoing call stops the ringback and cues connected when media flows`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
-        vm.onSignal(CallEvent.ParticipantJoined) // → offering: ringback continues
+        vm.onSignal(CallEvent.ParticipantJoined()) // → offering: ringback continues
         vm.onSignal(CallEvent.RemoteAnswer)      // → connecting: ringback stops
         vm.onSignal(CallEvent.MediaConnected)    // → connected: connected cue
 
@@ -687,7 +687,7 @@ class CallViewModelTest {
     fun `an answered outgoing call goes active once and dedupes the media edges`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
-        vm.onSignal(CallEvent.ParticipantJoined) // → offering: still dialing, no report
+        vm.onSignal(CallEvent.ParticipantJoined()) // → offering: still dialing, no report
         vm.onSignal(CallEvent.RemoteAnswer)      // → connecting: active
         vm.onSignal(CallEvent.MediaConnected)    // → connected: already active, no report
 

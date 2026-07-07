@@ -103,8 +103,12 @@ class WebRtcCallCoordinator @Inject constructor(
     }
 
     /** Caller only: the peer joined the room → create and send the SDP offer. */
-    fun onParticipantJoined() {
+    fun onParticipantJoined(joinerId: String? = null) {
         val cs = callScope ?: return
+        // An outgoing call carries no peerId through the route; the joiner IS the
+        // callee we must address, so adopt their id before offering — otherwise the
+        // offer's `to` is blank and the gateway rejects it ("to field is required").
+        joinerId?.takeIf { it.isNotBlank() }?.let { peerId = it }
         cs.launch {
             val offer = engine.createOffer()
             engine.setLocalDescription(offer)

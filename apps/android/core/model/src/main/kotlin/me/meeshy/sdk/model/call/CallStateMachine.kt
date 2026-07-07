@@ -44,7 +44,7 @@ object CallStateMachine {
     }
 
     private fun reduceRinging(state: CallState.Ringing, event: CallEvent): CallState = when (event) {
-        CallEvent.ParticipantJoined -> if (state.isOutgoing) CallState.Offering else state
+        is CallEvent.ParticipantJoined -> if (state.isOutgoing) CallState.Offering else state
         CallEvent.LocalAnswer -> if (state.isOutgoing) state else CallState.Connecting
         CallEvent.Reject -> if (state.isOutgoing) state else CallState.Ended(CallEndReason.Rejected)
         CallEvent.RingTimeout -> CallState.Ended(CallEndReason.Missed)

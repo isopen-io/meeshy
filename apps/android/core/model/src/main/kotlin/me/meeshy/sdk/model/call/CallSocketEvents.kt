@@ -67,9 +67,14 @@ data class IceServersRefreshedPayload(
 @Serializable
 data class CallParticipantPayload(
     val callId: String,
-    val participantId: String? = null,
-    val userId: String? = null,
+    val participant: CallParticipantRef? = null,
     val mode: String? = null,
+)
+
+/** The nested participant object a `call:participant-joined` frame carries. */
+@Serializable
+data class CallParticipantRef(
+    val userId: String? = null,
 )
 
 /** `call:ended` — the definitive teardown, carrying the end [reason]. */

@@ -13,8 +13,13 @@ sealed interface CallEvent {
     /** An incoming-call offer arrives while idle (`call:offer` / VoIP push). */
     data object ReceiveIncoming : CallEvent
 
-    /** Outgoing: the callee joined the room (`call:participant-joined`); send the offer. */
-    data object ParticipantJoined : CallEvent
+    /**
+     * Outgoing: the callee joined the room (`call:participant-joined`); send the offer.
+     * Carries the joiner's [peerId] (their userId) so the caller can address its SDP
+     * offer + ICE `to` field at them — an outgoing call has no peerId threaded through
+     * the route, so this is where the caller first learns who to answer.
+     */
+    data class ParticipantJoined(val peerId: String? = null) : CallEvent
 
     /** Incoming: the local user taps Accept (`call:answer` is sent). */
     data object LocalAnswer : CallEvent
