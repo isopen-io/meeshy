@@ -178,6 +178,15 @@ final class CallManager: ObservableObject {
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
     /// masquée pour éviter le doublon visuel au retour au premier plan.
     @Published private(set) var isSystemPiPActive: Bool = false
+    /// Bord d'ancrage de la bulle d'appel repliée (`.bubble` displayMode). Vit
+    /// sur CallManager (pas en `@State` local d'une View) car visible depuis
+    /// deux sites de montage distincts (`RootView`, `iPadRootView`) — même
+    /// rationale que `displayMode` juste au-dessus.
+    @Published var bubbleEdge: BubbleHorizontalEdge = .trailing
+    /// Position verticale de la bulle, en fraction de la zone sûre (0 = haut,
+    /// 1 = bas) — survit à la rotation/redimensionnement, contrairement à un
+    /// point absolu. Proche du haut par défaut, sous la Dynamic Island.
+    @Published var bubbleVerticalFraction: CGFloat = 0.08
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
     /// Outbound video auto-suspended by the graceful-degradation survival layer
@@ -742,6 +751,8 @@ final class CallManager: ObservableObject {
             isRemoteScreenCapturing = false
             isMuted = false
             isSpeaker = false
+            bubbleEdge = .trailing
+            bubbleVerticalFraction = 0.08
             videoSurvivalController.reset()
             isVideoSuspended = false
             isVideoSuspendedByBackground = false

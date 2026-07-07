@@ -5252,3 +5252,53 @@ final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Bubble Position State (Call Banner Swipe-to-Collapse)
+
+@MainActor
+final class CallManagerBubblePositionTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_bubbleEdge_defaultsToTrailing() {
+        XCTAssertEqual(CallManager.shared.bubbleEdge, .trailing)
+    }
+
+    func test_bubbleVerticalFraction_defaultsNearTop() {
+        XCTAssertEqual(CallManager.shared.bubbleVerticalFraction, 0.08, accuracy: 0.0001)
+    }
+
+    /// `resetEndedStateForNewCall` is private and touches live singleton/CallKit
+    /// state — exercising it end-to-end would require mocking WebRTC/CallKit far
+    /// beyond this feature's scope. Source-guard instead (same technique as
+    /// `AudioRouteChangeStateReconciliationTests` above in this file): assert the
+    /// reset lines exist in the function body, so a new call never inherits the
+    /// previous call's dragged bubble position.
+    func test_resetEndedStateForNewCall_resetsBubblePositionToDefaults() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "private func resetEndedStateForNewCall()") else {
+            XCTFail("resetEndedStateForNewCall not found in CallManager.swift"); return
+        }
+        let bodyEnd = source.range(
+            of: "\n    /// Starts an outgoing call",
+            range: range.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("bubbleEdge = .trailing"),
+            "resetEndedStateForNewCall must reset bubbleEdge to .trailing so a new call starts at the default bubble position"
+        )
+        XCTAssertTrue(
+            body.contains("bubbleVerticalFraction = 0.08"),
+            "resetEndedStateForNewCall must reset bubbleVerticalFraction to its default — a new call must not inherit the previous call's dragged position"
+        )
+    }
+}
