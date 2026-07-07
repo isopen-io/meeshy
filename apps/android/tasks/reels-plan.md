@@ -10,9 +10,10 @@ ReelFeedAutoplayCoordinator,ReelFeedLayout}.swift`, `ViewModels/ReelsViewModel.s
 ## Phases (chaque phase = build vert + commit + A/B vs iOS quand visuel)
 
 - [x] **P1 — API + repo** : `PostApi.getReels(seed,cursor,limit)` + `PostRepository.getReels`. (fait)
-- [ ] **P2 — dépendance vidéo + lecteur atome** : ajouter `androidx.media3:media3-exoplayer` +
-      `media3-ui` (ou compose) au version catalog + `:sdk-ui` ou `:feature:reels`. Atome
-      `ReelVideoSurface` (PlayerView/AndroidView + ExoPlayer, lifecycle-aware, autoplay/pause).
+- [x] **P2 — dépendance vidéo + lecteur atome** : Media3 1.4.1 (`media3-exoplayer` +
+      `media3-ui`) au catalog + `:sdk-ui`. Atome `me.meeshy.ui.component.video.ReelVideoSurface`
+      (AndroidView+PlayerView+ExoPlayer, loop+muted+RESIZE_MODE_ZOOM, play si `isActive`,
+      release au dispose ; params opaques URL+isActive). (fait)
 - [ ] **P3 — écran Réels** : `:feature:reels` module + `ReelsViewModel` (charge getReels,
       pagination, seed) + `ReelsScreen` = `VerticalPager` plein écran, une page = un réel
       (vidéo + overlay auteur/légende/actions like/comment/repost façon ReelFeedCard iOS).
