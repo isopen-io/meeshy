@@ -40,6 +40,23 @@ describe('mentionsToLinks', () => {
     expect(mentionsToLinks('hey @marie-claire', '/u/{username}', []))
       .toBe('hey @marie-claire');
   });
+
+  it('linkifie une mention tapée en casse mixte contre une liste minuscule', () => {
+    // validatedMentions est stocké en minuscules par MentionService ;
+    // le texte du message conserve la casse tapée par l'utilisateur.
+    expect(mentionsToLinks('Hey @Alice!', '/u/{username}', ['alice']))
+      .toBe('Hey [@Alice](/u/alice)!');
+  });
+
+  it('linkifie une mention MAJUSCULE avec URL canonique en minuscules', () => {
+    expect(mentionsToLinks('cc @BOB', '/u/{username}', ['bob']))
+      .toBe('cc [@BOB](/u/bob)');
+  });
+
+  it('normalise aussi une liste validée en casse mixte', () => {
+    expect(mentionsToLinks('hi @alice', '/u/{username}', ['Alice']))
+      .toBe('hi [@alice](/u/alice)');
+  });
 });
 
 describe('isValidMentionUsername', () => {

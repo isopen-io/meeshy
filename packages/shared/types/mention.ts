@@ -270,15 +270,25 @@ export function mentionsToLinks(
   linkTemplate: string = '/u/{username}',
   validUsernames?: string[]
 ): string {
+  if (!validUsernames || validUsernames.length === 0) return content;
+
+  // Les usernames sont canoniques en minuscules (MentionService les normalise
+  // avant persistance dans `validatedMentions`), tandis que le texte du message
+  // conserve la casse tapée par l'utilisateur. La comparaison doit donc être
+  // insensible à la casse, sinon `@Alice` ne devient jamais un lien.
+  const validLower = new Set(validUsernames.map((u) => u.toLowerCase()));
+
   return content.replace(new RegExp(`@([${MENTION_HANDLE_CHARS}]+)`, 'g'), (_match, username) => {
+    const canonical = username.toLowerCase();
     // Vérifier si le username est dans la liste validée
-    if (!validUsernames || !validUsernames.includes(username)) {
+    if (!validLower.has(canonical)) {
       // Username pas validé → texte plain
       return `@${username}`;
     }
 
-    // Username validé → lien cliquable
-    const link = linkTemplate.replace('{username}', username);
+    // Username validé → lien cliquable. L'URL utilise l'username canonique
+    // (minuscules) ; le libellé conserve la casse d'origine du message.
+    const link = linkTemplate.replace('{username}', canonical);
     return `[@${username}](${link})`;
   });
 }
