@@ -92,7 +92,7 @@ export function useAdaptiveDegradation({
           // Suspend failed: revert to sending so adaptive tiers keep working and
           // a later poor streak retries the fallback.
           .catch(() => {
-            stateRef.current = { ...stateRef.current, sending: true, poorStreak: 0 };
+            stateRef.current = { ...stateRef.current, sending: true, poorSince: null };
           });
         break;
       case 'resume-video':
@@ -101,7 +101,7 @@ export function useAdaptiveDegradation({
           .then(() => setVideoSuspended(false))
           // Re-acquire failed: stay in survival so a later good streak retries.
           .catch(() => {
-            stateRef.current = { ...stateRef.current, sending: false, goodStreak: 0 };
+            stateRef.current = { ...stateRef.current, sending: false, goodSince: null };
           });
         break;
     }

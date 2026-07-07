@@ -92,6 +92,7 @@ import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -211,7 +212,12 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
     // (status-guarded + version-bumped) instead of a raw callSession.update
     // inside the $transaction above — see CallService.test.ts for its own
     // unit coverage. Default: succeeds, matching the count=0 fixtures below.
-    mockForceEndOrphanedCallSessionDc.mockResolvedValue({ duration: 60, conversationId: CONV_ID });
+    mockForceEndOrphanedCallSessionDc.mockResolvedValue({
+      duration: 60,
+      conversationId: CONV_ID,
+      status: CallStatus.ended,
+      endReason: CallEndReason.connectionLost
+    });
   });
 
   afterEach(() => {
@@ -282,6 +288,62 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       expect(mockCreateCallSummaryMessageDc).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    // Audit Vague 25 — forceEndOrphanedCallSession now branches to `missed`
+    // for a never-answered call (mirroring endCall/leaveCall). This force-
+    // cleanup path must trigger the same missed-call notification as its
+    // siblings when that happens.
+    it('triggers handleMissedCall when force-cleanup resolves the call to missed', async () => {
+      mockLeaveCallDc.mockRejectedValue(new Error('DB error'));
+      mockForceEndOrphanedCallSessionDc.mockResolvedValue({
+        duration: 5,
+        conversationId: CONV_ID,
+        status: CallStatus.missed,
+        endReason: CallEndReason.connectionLost
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+
+      const handleMissedCallSpy = jest
+        .spyOn(handler, 'handleMissedCall')
+        .mockResolvedValue(undefined as any);
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(handleMissedCallSpy).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('does NOT trigger handleMissedCall when force-cleanup resolves the call to ended', async () => {
+      mockLeaveCallDc.mockRejectedValue(new Error('DB error'));
+      mockForceEndOrphanedCallSessionDc.mockResolvedValue({
+        duration: 60,
+        conversationId: CONV_ID,
+        status: CallStatus.ended,
+        endReason: CallEndReason.connectionLost
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+
+      const handleMissedCallSpy = jest
+        .spyOn(handler, 'handleMissedCall')
+        .mockResolvedValue(undefined as any);
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(handleMissedCallSpy).not.toHaveBeenCalled();
     });
 
     it('does NOT force-end the call when participants remain (remainingParticipants > 0)', async () => {
