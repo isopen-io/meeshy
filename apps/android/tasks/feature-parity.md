@@ -437,7 +437,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       by `ChatViewModel.typingParticipants` and rendered by `ChatScreen.TypingIndicator` (slice
       `chat-typing-participants-core`, 2026-07-07, +21 tests). Typing roster also folded into the
       scroll-to-bottom control via `ScrollControlContent` (slice `chat-typing-in-control`, 2026-07-07).
-      **Pending:** header-level indicator, avatar chips.
+      **Header-level indicator now live** via pure `:feature:chat` `ChatHeaderSubtitle.of(memberCount,
+      isGroup, typing) → None | Members(count) | Typing(label)` SSOT — while a peer composes the header
+      subtitle shows who is typing (reusing `TypingLabel`), otherwise a group shows its member count and a
+      direct chat shows nothing; **typing supersedes the member count** (iOS `ConversationHeaderState`
+      typing-dot parity), and a non-positive count never renders "0 members". `ChatViewModel` now exposes
+      `memberCount`/`isGroup`; `ChatScreen` renders the subtitle under the title (typing in `accentColor`,
+      members in `textSecondary`) (slice `chat-typing-header`, 2026-07-07, +11 tests). **Pending:** avatar
+      chips.
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background

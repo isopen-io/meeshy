@@ -316,6 +316,24 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun a_group_conversation_exposes_its_member_count_and_group_flag_for_the_header() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.isGroup).isTrue()
+        assertThat(h.vm.state.value.memberCount).isEqualTo(3)
+    }
+
+    @Test
+    fun a_direct_conversation_is_not_flagged_as_a_group() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = directConversation())
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.isGroup).isFalse()
+        assertThat(h.vm.state.value.memberCount).isEqualTo(2)
+    }
+
+    @Test
     fun typing_an_at_query_activates_mention_suggestions_excluding_self() = runTest(dispatcher) {
         val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
         advanceUntilIdle()

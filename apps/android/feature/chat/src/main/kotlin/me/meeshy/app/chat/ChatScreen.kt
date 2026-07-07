@@ -192,19 +192,29 @@ fun ChatScreen(
             } else {
                 TopAppBar(
                     title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(accentColor),
-                            )
-                            Text(
-                                text = state.conversationTitle ?: stringResource(R.string.chat_title),
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(start = MeeshySpacing.sm),
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(accentColor),
+                                )
+                                Text(
+                                    text = state.conversationTitle ?: stringResource(R.string.chat_title),
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(start = MeeshySpacing.sm),
+                                )
+                            }
+                            ChatHeaderSubtitleRow(
+                                subtitle = ChatHeaderSubtitle.of(
+                                    memberCount = state.memberCount,
+                                    isGroup = state.isGroup,
+                                    typing = state.typingParticipants,
+                                ),
+                                accentColor = accentColor,
                             )
                         }
                     },
@@ -669,6 +679,26 @@ private fun typingLabelText(label: TypingLabel): String? = when (label) {
     is TypingLabel.One -> stringResource(R.string.chat_typing_one, label.name)
     is TypingLabel.Two -> stringResource(R.string.chat_typing_two, label.first, label.second)
     is TypingLabel.Many -> stringResource(R.string.chat_typing_many, label.count)
+}
+
+@Composable
+private fun ChatHeaderSubtitleRow(subtitle: ChatHeaderSubtitle, accentColor: Color) {
+    val (text, color) = when (subtitle) {
+        ChatHeaderSubtitle.None -> return
+        is ChatHeaderSubtitle.Members ->
+            stringResource(R.string.chat_header_members, subtitle.count) to
+                MeeshyTheme.tokens.textSecondary
+        is ChatHeaderSubtitle.Typing ->
+            (typingLabelText(subtitle.label) ?: return) to accentColor
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(start = MeeshySpacing.md),
+    )
 }
 
 private fun unreadPreviewIcon(kind: UnreadPreviewKind): ImageVector? = when (kind) {

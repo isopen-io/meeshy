@@ -31,6 +31,7 @@
     <string name="chat_typing_one">%1$s est en train d\'écrire…</string>
     <string name="chat_typing_two">%1$s et %2$s sont en train d\'écrire…</string>
     <string name="chat_typing_many">%1$d personnes sont en train d\'écrire…</string>
+    <string name="chat_header_members">%1$d membres</string>
     <string name="chat_search">Rechercher des messages</string>
     <string name="chat_search_hint">Rechercher dans cette conversation</string>
     <string name="chat_search_close">Fermer la recherche</string>

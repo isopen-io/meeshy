@@ -27,6 +27,7 @@
     <string name="chat_typing_one">%1$s está escribiendo…</string>
     <string name="chat_typing_two">%1$s y %2$s están escribiendo…</string>
     <string name="chat_typing_many">%1$d personas están escribiendo…</string>
+    <string name="chat_header_members">%1$d miembros</string>
     <string name="chat_scroll_to_bottom">Ir al último mensaje</string>
     <string name="chat_unread_photo">Foto</string>
     <string name="chat_unread_attachment">Adjunto</string>

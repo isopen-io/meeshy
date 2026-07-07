@@ -57,3 +57,37 @@ sealed interface TypingLabel {
         }
     }
 }
+
+/**
+ * The subtitle line under the conversation title in the chat header, decided in pure
+ * code so the Composable only maps a variant to a string. Mirrors iOS
+ * `ConversationHeaderState` (typing dot phase) and the group member/active header: while
+ * a peer is composing the subtitle shows who is typing; otherwise a group shows its
+ * member count and a direct conversation shows nothing. **Typing takes priority over the
+ * member count** (iOS parity — the live typing indicator supersedes the static header
+ * info). A non-positive [memberCount] never renders a count, so a not-yet-loaded roster
+ * shows a bare title rather than "0 members".
+ */
+sealed interface ChatHeaderSubtitle {
+    /** No subtitle — a direct conversation with nobody typing. */
+    data object None : ChatHeaderSubtitle
+
+    /** A group's member count, shown when nobody is typing. */
+    data class Members(val count: Int) : ChatHeaderSubtitle
+
+    /** One or more peers are composing; supersedes the member count. */
+    data class Typing(val label: TypingLabel) : ChatHeaderSubtitle
+
+    companion object {
+        fun of(
+            memberCount: Int,
+            isGroup: Boolean,
+            typing: List<TypingParticipant>,
+        ): ChatHeaderSubtitle =
+            when (val label = TypingLabel.of(typing)) {
+                TypingLabel.None ->
+                    if (isGroup && memberCount > 0) Members(memberCount) else None
+                else -> Typing(label)
+            }
+    }
+}
