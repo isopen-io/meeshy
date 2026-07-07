@@ -330,7 +330,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
 ## C. Chat / Messaging
-- [ ] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
+- [~] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
+      **Edit 2-hour window now enforced** via pure `:core:model` `MessageEditability.canEdit(isOwn,
+      createdAtMillis, nowMillis, windowMillis=2h)` SSOT (port of iOS's `Date().timeIntervalSince(createdAt)
+      < 2h` gate): an own message is editable only while <2h elapsed; a future-dated createdAt (clock skew)
+      is treated as just-created (still editable); an unknown createdAt cannot be windowed → stays editable
+      (refusing to edit merely because the wire omitted a timestamp is a worse gap). `ChatViewModel` injects
+      `CacheClock` and gates `startEdit` (own + within window); `ChatScreen` hides the Edit sheet action once
+      the window has passed (Delete stays available) (slice `chat-edit-time-window`, 2026-07-07, +13 tests).
+      **Pending:** delete for-me vs for-everyone split (needs a local-only delete path), forward.
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
 - [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
       `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine

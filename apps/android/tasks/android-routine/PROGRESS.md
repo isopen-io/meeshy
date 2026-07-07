@@ -646,17 +646,26 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `chat-typing-header`** — the typing roster now surfaces in the conversation
-header. New pure `:feature:chat` `ChatHeaderSubtitle.of(memberCount, isGroup, typing) → None | Members(count)
-| Typing(label)` SSOT: while a peer composes the header subtitle shows who is typing (reusing `TypingLabel`),
-otherwise a group shows its member count and a direct chat shows nothing; **typing supersedes the member
-count** (iOS `ConversationHeaderState` typing-dot parity), and a non-positive count never renders "0 members".
-`ChatViewModel` now exposes `memberCount`/`isGroup` (derived in the conversation collector); `ChatScreen`
-renders the subtitle under the title (typing in `accentColor`, members in `textSecondary`). +11 tests. See run
-log. Closes the header half of feature-parity "Typing indicators (header + inline)"; only avatar chips remain.
+**Just shipped (2026-07-07): `chat-edit-time-window`** — the 2-hour edit window is now enforced (Chat parity
+§C — feature-parity "send, edit, delete … 2h window"; iOS `ConversationScreen` offers Edit only while
+`Date().timeIntervalSince(createdAt) < 2h`). Android's `startEdit`/Edit action had **no** window: any own
+SYNCED message stayed editable forever. New pure `:core:model` `MessageEditability.canEdit(isOwn,
+createdAtMillis, nowMillis, windowMillis = EDIT_WINDOW_MILLIS(=2h)) → Boolean` SSOT (placed beside
+`DeliveryStatusResolver`): editable iff own AND `nowMillis - createdAtMillis < window`; a future-dated
+createdAt (client/server clock skew) is treated as just-created (still editable, iOS negative-elapsed parity);
+an **unknown/unparseable createdAt cannot be windowed → stays editable** (refusing an edit merely because the
+wire omitted a timestamp is a worse gap; iOS never has a null `createdAt`). Wired: `ChatViewModel` injects the
+already-Hilt-provided `CacheClock` and gates `startEdit` on `canEdit(isOwn = senderId == currentUserId,
+createdAtMillis = isoToEpochMillisOrNull(message.createdAt), now = clock.nowMillis())` — now also enforces
+authorship (previously unchecked); `ChatScreen` computes the same predicate over `BubbleContent.createdAtIso`
++ `System.currentTimeMillis()` and hides the Edit sheet action once the window has passed (Delete stays
+available, at iOS parity). +13 tests. See run log.
 **Recommended next candidates:**
 - **`chat-typing-header-avatars`** — the last piece of the typing item: small stacked avatar chips of who is
   typing (iOS shows avatars, not just the name). Needs an avatar-url projection on `TypingParticipant`.
+- **`chat-delete-for-me-vs-everyone`** — split delete into "for everyone" (own + within 2h, via a new
+  `MessageEditability`-style `canDeleteForEveryone`) vs "for me" (local-only tombstone). Needs a local-only
+  delete path in `MessageRepository`/outbox; if the wire only supports one delete kind, defer.
 - **`chat-read-status-sheet`** — tap the delivery checks → a "seen by / delivered to" breakdown sheet
   (iOS `onShowReadStatus` → detail sheet "Vues" tab). Needs a per-recipient read model on the wire; if the
   gateway payload only carries counts, defer and pick the next item.
@@ -1161,6 +1170,41 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `chat-edit-time-window` ✅ (merged, reviewer PASS)
+- **Slice:** enforce the 2-hour message-edit window (Chat parity §C "send, edit, delete … 2h window"; iOS
+  `ConversationScreen` offers Edit only while `Date().timeIntervalSince(createdAt) < 2h`). Android's
+  `startEdit` + Edit sheet action had no window and no authorship check — any own SYNCED, non-deleted message
+  stayed editable forever.
+- **Pure core (`:core:model`, `MessageEditability.kt`):** `object MessageEditability` beside
+  `DeliveryStatusResolver`. `const EDIT_WINDOW_MILLIS = 2h`; `canEdit(isOwn, createdAtMillis: Long?, nowMillis,
+  windowMillis = EDIT_WINDOW_MILLIS) → Boolean`: `!isOwn → false`; `createdAtMillis == null → true` (window
+  unprovable, stays editable — iOS never has a null createdAt, and refusing an edit merely because the wire
+  omitted a timestamp is a worse gap); else `nowMillis - createdAtMillis < windowMillis`. A future createdAt
+  (clock skew) yields a negative elapsed `< window` → still editable (iOS negative-`timeIntervalSince` parity);
+  the boundary is strict (`elapsed == window` → not editable).
+- **Wiring:** `ChatViewModel` injects the already-Hilt-provided (`SdkModule.providesCacheClock`) `CacheClock`
+  and gates `startEdit` — `isOwn = message.senderId != null && senderId == currentUser.id` (authorship now
+  enforced), `createdAtMillis = isoToEpochMillisOrNull(message.createdAt)` (SSOT parse), `now =
+  clock.nowMillis()`; refuses when not editable. `ChatScreen` computes the same predicate over
+  `BubbleContent.createdAtIso` + `System.currentTimeMillis()` and shows the Edit sheet action only when
+  `bubble.isOutgoing && isActionable && canEdit`; the Delete action was split out of the shared block so it
+  stays available regardless of the edit window (iOS keeps delete).
+- **Tests (+13):** `MessageEditabilityTest` (10) — window constant, moments-ago editable, just-inside-window
+  editable, exactly-at-boundary not editable, past-window not editable, someone-else never editable,
+  future-createdAt editable, null-createdAt own editable, null-createdAt other not editable, caller window
+  override. `ChatViewModelTest` (+3) — inside-window `startEdit` opens the editor + fills the draft,
+  past-window `startEdit` is blocked (editingMessageId stays null, draft empty), non-own `startEdit` refused.
+  Harness now injects a fixed `CacheClock` (FIXED_NOW = 2026-07-07T12:00:00Z); existing edit tests (m1 has a
+  null createdAt → editable) stay green.
+- **Verify:** system `gradle assembleDebug testDebugUnitTest` (896 tasks) green — `MessageEditabilityTest`
+  10/10, the 3 new `ChatViewModelTest` cases green, whole JVM suite green.
+- **Reviewer:** PASS — diff `apps/android` only (`:core:model` + `:feature:chat`); behaviour-through-public-API
+  (`MessageEditability.canEdit` + VM state), no tautologies, full branch sweep incl. the boundary and both
+  null-createdAt authorship cases; SDK-purity/SSOT honoured (stateless rule in `:core:model` like
+  `DeliveryStatusResolver`, clock injected via the existing Hilt binding, ISO parse via `isoToEpochMillisOrNull`
+  SSOT, render gate is exempt Compose glue); UX coherence (Edit hidden after the window, Delete preserved — no
+  dead end); no floor lowered, no test weakened.
 
 ### 2026-07-07 — slice `chat-typing-header` ✅ (merged, reviewer PASS)
 - **Slice:** surface the typing roster in the conversation header (Chat parity §C "Typing indicators (header +

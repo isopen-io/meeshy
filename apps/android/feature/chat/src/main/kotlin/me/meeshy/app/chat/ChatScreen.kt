@@ -99,6 +99,8 @@ import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.MessageEditability
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.EmojiQuickStrip
@@ -389,6 +391,11 @@ fun ChatScreen(
     if (actionTarget != null) {
         MessageActionsSheet(
             bubble = actionTarget,
+            canEdit = MessageEditability.canEdit(
+                isOwn = actionTarget.isOutgoing,
+                createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso),
+                nowMillis = System.currentTimeMillis(),
+            ),
             ownReactions = state.ownReactions[actionTarget.messageId] ?: emptySet(),
             quickReactions = state.quickReactions,
             accentColor = accentColor,
@@ -777,6 +784,7 @@ private fun ChatSearchBar(
 @Composable
 private fun MessageActionsSheet(
     bubble: BubbleContent,
+    canEdit: Boolean,
     ownReactions: Set<String>,
     quickReactions: List<String>,
     accentColor: Color,
@@ -839,12 +847,14 @@ private fun MessageActionsSheet(
                     },
                 )
             }
-            if (bubble.isOutgoing && isActionable) {
+            if (bubble.isOutgoing && isActionable && canEdit) {
                 SheetAction(
                     icon = Icons.Filled.Edit,
                     label = stringResource(R.string.chat_action_edit),
                     onClick = onEdit,
                 )
+            }
+            if (bubble.isOutgoing && isActionable) {
                 SheetAction(
                     icon = Icons.Filled.Delete,
                     label = stringResource(R.string.chat_action_delete),
