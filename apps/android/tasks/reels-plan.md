@@ -30,9 +30,13 @@ ReelFeedAutoplayCoordinator,ReelFeedLayout}.swift`, `ViewModels/ReelsViewModel.s
       ==reel) ; bandeau réel (PlayCircle indigo + « Réel ») sur les cartes reel ; tap sur un
       reel → overlay Réels au seed (onClick gaté : non-reels inertes, pas de détail post).
       Build+tests verts. A/B différé (émulateur wedgé). string feed_reel ×4.
-- [ ] **P6 — boutons flottants « comme iOS »** : aligner le menu radial + le lancement
-      Réels (long-press bouton Feed du menu radial) + actions de création (story/post/réel)
-      telles qu'iOS les expose (RootView + RootViewComponents).
+- [x] **P6 — boutons flottants « comme iOS »** : lecture RootView iOS — le `menuLadder` est
+      un menu de NAVIGATION (Liens/Notifications/Contacts/Découvrir/Communautés/Réglages),
+      PAS d'actions de création (la story se crée via le « + » du story tray, présent côté
+      Android). Le radial Android couvre déjà la nav ; ajouté **Contacts** (People/PinnedBlue
+      → Routes.CONTACTS). Radial = New/Messages/Feed/Réels/Calls/Activity/Contacts/Profile (8
+      items lisibles). A/B vérifié. (Liens/Communautés/Découvrir-séparé = écrans absents
+      Android, hors scope.) FEATURE RÉELS + BOUTONS FLOTTANTS COMPLETS.
 
 ## Méthodo
 Build `JAVA_HOME=/opt/homebrew/opt/openjdk@21/... ; ./apps/android/meeshy.sh build` (grep le

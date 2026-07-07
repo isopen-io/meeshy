@@ -9,6 +9,7 @@
     <string name="tab_profile">Perfil</string>
     <string name="menu_new_conversation">Nuevo</string>
     <string name="menu_reels">Reels</string>
+    <string name="menu_contacts">Contactos</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Bienvenido de nuevo</string>

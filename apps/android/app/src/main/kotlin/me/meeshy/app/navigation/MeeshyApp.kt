@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Scaffold
@@ -97,7 +98,8 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
     val profile = stringResource(R.string.tab_profile)
     val newConversation = stringResource(R.string.menu_new_conversation)
     val reels = stringResource(R.string.menu_reels)
-    return remember(messages, feed, calls, activity, profile, newConversation, reels) {
+    val contacts = stringResource(R.string.menu_contacts)
+    return remember(messages, feed, calls, activity, profile, newConversation, reels, contacts) {
         fun tab(route: String): () -> Unit = {
             navController.navigate(route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -116,6 +118,9 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
             },
             RadialMenuItem(Icons.Filled.Call, calls, MeeshyPalette.Info, onSelect = tab(Routes.CALLS)),
             RadialMenuItem(Icons.Filled.Notifications, activity, MeeshyPalette.Warning, onSelect = tab(Routes.NOTIFICATIONS)),
+            RadialMenuItem(Icons.Filled.People, contacts, MeeshyPalette.PinnedBlue) {
+                navController.navigate(Routes.CONTACTS)
+            },
             RadialMenuItem(Icons.Filled.Settings, profile, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
         )
     }
