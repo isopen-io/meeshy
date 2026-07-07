@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
@@ -24,6 +25,8 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.MessageEditability
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -81,6 +84,7 @@ class ChatViewModel @Inject constructor(
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
+    private val clock: CacheClock,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -463,6 +467,13 @@ class ChatViewModel @Inject constructor(
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED
         }?.message ?: return
         if (message.deletedAt != null) return
+        val editable = MessageEditability.canEdit(
+            isOwn = message.senderId != null &&
+                message.senderId == sessionRepository.currentUser.value?.id,
+            createdAtMillis = isoToEpochMillisOrNull(message.createdAt),
+            nowMillis = clock.nowMillis(),
+        )
+        if (!editable) return
         _state.update {
             it.copy(
                 editingMessageId = messageId,

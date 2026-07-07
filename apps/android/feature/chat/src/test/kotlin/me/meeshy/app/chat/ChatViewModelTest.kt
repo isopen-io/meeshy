@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
@@ -111,6 +112,7 @@ class ChatViewModelTest {
         stream: Flow<CacheResult<List<LocalMessage>>>,
         currentUser: MeeshyUser? = null,
         conversation: ApiConversation? = null,
+        nowMillis: Long = FIXED_NOW,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -125,6 +127,10 @@ class ChatViewModelTest {
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
+        val fixedNow = nowMillis
+        val clock = object : CacheClock {
+            override fun nowMillis(): Long = fixedNow
+        }
         return Harness(
             ChatViewModel(
                 repo,
@@ -135,6 +141,7 @@ class ChatViewModelTest {
                 socket,
                 workManager,
                 MeeshyConfig(),
+                clock,
                 handle,
             ),
             repo,
@@ -430,6 +437,25 @@ class ChatViewModelTest {
 
     private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
 
+    private val FIXED_NOW = java.time.Instant.parse("2026-07-07T12:00:00Z").toEpochMilli()
+
+    private fun messageCreatedAt(senderId: String, createdAt: String?) = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(
+                    ApiMessage(
+                        id = "m1",
+                        conversationId = "c1",
+                        senderId = senderId,
+                        content = "salut",
+                        createdAt = createdAt,
+                    ),
+                ),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
     private fun syncedConversation() = flowOf(
         CacheResult.Fresh(
             listOf(
@@ -663,6 +689,47 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.editingMessageId).isNull()
         assertThat(h.vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun startEdit_is_allowed_while_the_message_is_still_inside_the_two_hour_window() = runTest(dispatcher) {
+        val h = harness(
+            messageCreatedAt(senderId = "me", createdAt = "2026-07-07T11:30:00Z"),
+            currentUser = me,
+        )
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+
+        assertThat(h.vm.state.value.editingMessageId).isEqualTo("m1")
+        assertThat(h.vm.state.value.draft).isEqualTo("salut")
+    }
+
+    @Test
+    fun startEdit_is_blocked_once_the_two_hour_edit_window_has_passed() = runTest(dispatcher) {
+        val h = harness(
+            messageCreatedAt(senderId = "me", createdAt = "2026-07-07T09:00:00Z"),
+            currentUser = me,
+        )
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+
+        assertThat(h.vm.state.value.editingMessageId).isNull()
+        assertThat(h.vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun startEdit_refuses_a_message_the_current_user_does_not_own() = runTest(dispatcher) {
+        val h = harness(
+            messageCreatedAt(senderId = "other", createdAt = "2026-07-07T11:30:00Z"),
+            currentUser = me,
+        )
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+
+        assertThat(h.vm.state.value.editingMessageId).isNull()
     }
 
     @Test
