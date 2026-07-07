@@ -225,6 +225,30 @@ struct CallView: View {
                         }
                         .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Reduire l'appel", bundle: .main))
                         .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une banniere flottante", bundle: .main))
+
+                        // Ouvrir la conversation (DM) de l'interlocuteur tout en
+                        // gardant l'appel actif (minimisé en pilule). Masqué quand
+                        // la conversationId est inconnue (ex: appel entrant réveillé
+                        // par un push VoIP sans conversationId dans le payload).
+                        if callManager.conversationId != nil {
+                            Button {
+                                openConversationDuringCall()
+                            } label: {
+                                Image(systemName: "bubble.left.and.bubble.right.fill")
+                                    // Doctrine 82i : glyphe de chrome dans un cadre
+                                    // glass fixe (diameter 40) → taille figée.
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .callControlGlass(diameter: 40, isActive: false, tint: .white)
+                                    // Cercle glass 40pt (doctrine 82i) mais cible
+                                    // tactile HIG 44×44.
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .padding(.leading, 8)
+                            .accessibilityLabel(String(localized: "call.openConversation", defaultValue: "Conversation", bundle: .main))
+                            .accessibilityHint(String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main))
+                        }
                         Spacer()
                     }
                     Spacer()
@@ -465,6 +489,50 @@ struct CallView: View {
 
     private static func hasBackdropImage(_ user: MeeshyUser) -> Bool {
         (user.banner?.isEmpty == false) || (user.avatar?.isEmpty == false)
+    }
+
+    // MARK: - Open Conversation During Call
+
+    /// Minimise l'appel en pilule flottante (PiP, exactement comme le chevron)
+    /// PUIS ouvre la conversation (DM) de l'interlocuteur — l'utilisateur peut
+    /// consulter/écrire dans le chat pendant l'appel, puis revenir au plein écran
+    /// via la pilule. Réutilise le canal de navigation `.navigateToConversation`
+    /// déjà observé par RootView (iPhone) et iPadRootView (iPad) — même point
+    /// d'entrée que la création de conversation et les deep links — plutôt que de
+    /// dépendre d'un Router injecté qui ne traverse pas la frontière du
+    /// `.fullScreenCover`.
+    private func openConversationDuringCall() {
+        guard let conversationId = callManager.conversationId else { return }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
+            callManager.displayMode = .pip
+        }
+        HapticFeedback.medium()
+        Task { await resolveAndOpenConversation(conversationId: conversationId) }
+    }
+
+    /// Résout la conversation cache-first (Instant App : la conversation de
+    /// l'appel est quasi toujours déjà dans la liste en cache → navigation
+    /// immédiate), avec repli réseau — le socket d'appel étant vivant, le repli
+    /// `getById` aboutit. La `Conversation` résolue est postée sur le canal
+    /// `.navigateToConversation` que RootView/iPadRootView routent vers le DM.
+    private func resolveAndOpenConversation(conversationId: String) async {
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        switch await CacheCoordinator.shared.conversations.load(for: "list") {
+        case .fresh(let list, _), .stale(let list, _):
+            if let conv = list.first(where: { $0.id == conversationId }) {
+                NotificationCenter.default.post(name: .navigateToConversation, object: conv)
+                return
+            }
+        case .expired, .empty:
+            break
+        }
+        do {
+            let apiConv = try await ConversationService.shared.getById(conversationId)
+            let conv = apiConv.toConversation(currentUserId: currentUserId)
+            NotificationCenter.default.post(name: .navigateToConversation, object: conv)
+        } catch {
+            Logger.calls.warning("CallView: conversation d'appel non résolue (\(conversationId)): \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Outgoing Ringing
