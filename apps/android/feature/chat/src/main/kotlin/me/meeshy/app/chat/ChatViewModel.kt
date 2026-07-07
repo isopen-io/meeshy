@@ -114,14 +114,15 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
                 if (conversation == null) return@collect
+                val currentUserId = sessionRepository.currentUser.value?.id
                 val roster = MentionRoster.fromParticipants(
                     participants = conversation.participants,
-                    excludeUserId = sessionRepository.currentUser.value?.id,
+                    excludeUserId = currentUserId,
                 )
                 mentionRoster = roster
                 _state.update {
                     it.copy(
-                        conversationTitle = conversation.displayTitle(),
+                        conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
                         accentColorHex = conversation.accentHex(),
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                     )
