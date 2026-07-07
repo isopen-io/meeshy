@@ -64,7 +64,10 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.PresenceState
+import androidx.compose.material3.TopAppBarDefaults
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.text.DateFormat
@@ -83,9 +86,18 @@ fun ProfileScreen(
         state.errorMessage?.let { snackbar.showSnackbar(it) }
     }
 
+    MeeshyBackground {
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MeeshyTheme.tokens.textPrimary,
+                    navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
+                    actionIconContentColor = MeeshyPalette.Indigo500,
+                ),
                 title = { Text(if (state.isEditing) stringResource(R.string.profile_edit_title) else stringResource(R.string.profile_title)) },
                 navigationIcon = {
                     IconButton(onClick = if (state.isEditing) viewModel::cancelEditing else onBack) {
@@ -102,7 +114,6 @@ fun ProfileScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) { padding ->
         if (state.isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -130,8 +141,8 @@ fun ProfileScreen(
                     header?.completionPercent?.let { percent ->
                         ProfileCompletionRing(
                             percent = percent,
-                            color = MaterialTheme.colorScheme.primary,
-                            track = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MeeshyPalette.Indigo500,
+                            track = MeeshyTheme.tokens.backgroundTertiary,
                             modifier = Modifier.size(108.dp),
                         )
                     }
@@ -238,7 +249,7 @@ fun ProfileScreen(
                     Text(
                         text = it,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MeeshyTheme.tokens.textSecondary,
                     )
                 }
                 header?.bio?.let {
@@ -251,14 +262,14 @@ fun ProfileScreen(
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MeeshyPalette.Indigo500,
                             modifier = Modifier.size(16.dp),
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
                             text = stringResource(R.string.profile_e2ee),
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MeeshyPalette.Indigo500,
                         )
                     }
                 }
@@ -266,14 +277,14 @@ fun ProfileScreen(
                     Text(
                         text = stringResource(R.string.profile_completion, percent),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MeeshyTheme.tokens.textSecondary,
                     )
                 }
                 header?.memberSinceEpochMillis?.let { millis ->
                     Text(
                         text = stringResource(R.string.profile_member_since, formatMemberSince(millis)),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MeeshyTheme.tokens.textSecondary,
                     )
                 }
                 header?.let { ProfileDetailsSection(it) }
@@ -281,6 +292,7 @@ fun ProfileScreen(
                 state.timeline?.let { ProfileTimelineSection(it) }
             }
         }
+    }
     }
 }
 
@@ -297,7 +309,7 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
             text = stringResource(R.string.profile_stats_title),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MeeshyTheme.tokens.textPrimary,
         )
         stats.tiles.chunked(2).forEach { rowTiles ->
             Row(
@@ -322,7 +334,7 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
                     text = stringResource(R.string.profile_achievements_title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MeeshyTheme.tokens.textPrimary,
                 )
                 Text(
                     text = stringResource(
@@ -331,7 +343,7 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
                         stats.totalCount,
                     ),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                 )
             }
             stats.badges.forEach { AchievementBadgeView(it) }
@@ -343,7 +355,7 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
 @Composable
 private fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
     if (timeline.bars.isEmpty()) return
-    val accent = MaterialTheme.colorScheme.primary
+    val accent = MeeshyPalette.Indigo500
     Spacer(Modifier.height(MeeshySpacing.md))
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -358,12 +370,12 @@ private fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
                 text = stringResource(R.string.profile_activity_title),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MeeshyTheme.tokens.textPrimary,
             )
             Text(
                 text = stringResource(R.string.profile_activity_average, timeline.averagePerDay),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
         }
         if (timeline.hasActivity) {
@@ -378,7 +390,7 @@ private fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
             Text(
                 text = stringResource(R.string.profile_activity_empty),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
         }
     }
@@ -437,7 +449,7 @@ private fun StatTileView(tile: StatTile, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MeeshyTheme.tokens.backgroundTertiary,
     ) {
         Column(
             modifier = Modifier
@@ -449,12 +461,12 @@ private fun StatTileView(tile: StatTile, modifier: Modifier = Modifier) {
                 text = tile.formattedValue,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MeeshyTheme.tokens.textPrimary,
             )
             Text(
                 text = stringResource(statMetricLabel(tile.metric)),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
         }
     }
@@ -470,14 +482,14 @@ private fun AchievementBadgeView(badge: AchievementBadge) {
         Text(
             text = badge.name,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (badge.isUnlocked) MaterialTheme.colorScheme.onSurface
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (badge.isUnlocked) MeeshyTheme.tokens.textPrimary
+            else MeeshyTheme.tokens.textSecondary,
             fontWeight = if (badge.isUnlocked) FontWeight.SemiBold else FontWeight.Normal,
         )
         Text(
             text = "${badge.progressPercent}%",
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
         )
     }
 }
@@ -530,7 +542,7 @@ private fun ProfileDetailRowView(row: ProfileDetailRow) {
         Text(
             text = stringResource(profileDetailLabel(row.kind)),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             row.flag?.let {
