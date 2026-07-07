@@ -75,4 +75,36 @@ describe('truncateText', () => {
   it('treats exact-length text as not truncated', () => {
     expect(truncateText('abcdef', 6)).toEqual({ truncated: 'abcdef', isTruncated: false });
   });
+
+  it('truncates at the maxLength + 1 boundary', () => {
+    expect(truncateText('abcdefg', 6)).toEqual({ truncated: 'abcdef...', isTruncated: true });
+  });
+
+  // CONTRACT: maxLength is a CONTENT budget — the ellipsis is appended on top, so
+  // the returned string can legitimately exceed maxLength by the ellipsis length.
+  // This is the core distinction from truncateFilename and must stay pinned so a
+  // future "unify the two helpers" refactor can't silently clamp it.
+  it('appends the ellipsis on top of the content budget (output may exceed maxLength)', () => {
+    const { truncated } = truncateText('abcdefghij', 6);
+    expect(truncated).toBe('abcdef...');
+    expect(truncated.length).toBe(9); // 6 content + 3 ellipsis > maxLength
+    expect(truncated.length).toBeGreaterThan(6);
+  });
+
+  it('trims a trailing space before the ellipsis', () => {
+    // slice(0, 6) of "hello world" is "hello " (trailing space) → trimmed to "hello".
+    expect(truncateText('hello world', 6)).toEqual({ truncated: 'hello...', isTruncated: true });
+  });
+
+  // Explicit contrast: SAME input + budget, opposite length guarantees.
+  it('contrasts with truncateFilename: content-budget (may exceed) vs total-budget (never exceeds)', () => {
+    const input = 'abcdefghij';
+    const budget = 6;
+
+    const text = truncateText(input, budget).truncated;
+    expect(text.length).toBeGreaterThan(budget); // truncateText: content budget + ellipsis
+
+    const filename = truncateFilename(input, budget);
+    expect(filename.length).toBeLessThanOrEqual(budget); // truncateFilename: never exceeds
+  });
 });
