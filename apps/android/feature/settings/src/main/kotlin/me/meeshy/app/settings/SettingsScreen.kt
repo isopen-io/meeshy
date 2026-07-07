@@ -40,6 +40,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
+import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,9 +84,17 @@ fun SettingsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    MeeshyBackground {
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MeeshyTheme.tokens.textPrimary,
+                    navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
+                ),
                 title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -252,6 +264,7 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(MeeshySpacing.xl))
         }
+    }
     }
 }
 
