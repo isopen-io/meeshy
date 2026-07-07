@@ -22,6 +22,9 @@ private fun message(
     isEdited: Boolean = false,
     deletedAt: String? = null,
     sender: ApiMessageSender? = null,
+    deliveredCount: Int = 0,
+    readCount: Int = 0,
+    readByAllAt: String? = null,
 ) = ApiMessage(
     id = id,
     conversationId = "c1",
@@ -32,6 +35,9 @@ private fun message(
     deletedAt = deletedAt,
     translations = translations,
     sender = sender,
+    deliveredCount = deliveredCount,
+    readCount = readCount,
+    readByAllAt = readByAllAt,
 )
 
 class BubbleContentBuilderTest {
@@ -241,6 +247,54 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Sent)
+    }
+
+    @Test
+    fun `a direct message the peer read shows Read`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredCount = 1, readCount = 1),
+            currentUserId = "me",
+            preferences = french,
+            recipientCount = 1,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Read)
+    }
+
+    @Test
+    fun `a group message only one member read stays Sent`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredCount = 1, readCount = 1),
+            currentUserId = "me",
+            preferences = french,
+            recipientCount = 4,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Sent)
+    }
+
+    @Test
+    fun `a group message every member received shows Delivered`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredCount = 4, readCount = 0),
+            currentUserId = "me",
+            preferences = french,
+            recipientCount = 4,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Delivered)
+    }
+
+    @Test
+    fun `a group message every member read shows Read`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me", deliveredCount = 4, readCount = 4),
+            currentUserId = "me",
+            preferences = french,
+            recipientCount = 4,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Read)
     }
 
     @Test

@@ -4,6 +4,28 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-06 the **group all-or-nothing delivery semantics** landed (slice `chat-delivery-status-group-semantics`,
+> Chat parity §C — feature-parity.md "Delivery status checkmarks"). The bubble's own-message indicator promoted to
+> ✓✓-delivered / ✓✓-read as soon as a **single** recipient received / read it — correct for a 1:1 but **misleading
+> in a group**: the sender saw the indigo "read" the instant one of ten members opened the conversation. New pure
+> `:core:model` `DeliveryStatusResolver.resolve(deliveredCount, readCount, recipientCount, deliveredToAllAt?,
+> readByAllAt?) → DeliveryTier` (Sent | Delivered | Read), a faithful port of the iOS `MeeshySDK.DeliveryStatusResolver`:
+> for `recipientCount > 1` (group) the delivered / read tier lights up only once **every** recipient has received /
+> read (`count >= recipientCount`), trusting the unambiguous `readByAllAt` / `deliveredToAllAt` "all" markers ahead of
+> the counters so a live update never transiently regresses to a single check; for `recipientCount <= 1` (direct /
+> unknown denominator) the legacy "any recipient ⇒ done" behaviour is preserved. Wired: `BubbleContentBuilder.build`
+> gains a `recipientCount: Int = 0` param (default keeps the 1:1 behaviour) and maps the resolved `DeliveryTier` →
+> `DeliveryStatus`; `ChatViewModel` computes `recipientCount` (distinct participant `userId`s excluding self) in the
+> conversation collector and threads it reactively through the message `combine` (5th source → `BubbleInputs`), so
+> bubbles rebuild when either the messages or the roster change. +21 tests (`DeliveryStatusResolverTest` 15 — every
+> group/direct/marker/boundary branch incl. stale-delivered-counter-still-reads and read-marker-wins-over-delivered-marker;
+> `BubbleContentBuilderTest` +4 — direct-read/group-one-read-stays-sent/group-all-delivered/group-all-read;
+> `ChatViewModelTest` +2 — group one-of-many read stays Sent, direct peer-read shows Read). `assembleDebug` + full
+> `testDebugUnitTest` green (system Gradle 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API;
+> SDK-purity/SSOT honoured — the resolver is a stateless pure atom in `:core:model`, the tier→status mapping is in the
+> `:sdk-ui` builder, and the "who counts as a recipient" product decision lives in the `:feature:chat` ViewModel; no
+> dead code — the resolver's single public `resolve` is consumed by the builder).
+
 > On 2026-07-06 the **tap-a-quoted-reply → scroll-to-original** landed (slice `chat-reply-jump-to-original`,
 > Chat parity §C — feature-parity.md "Reply … jump"). The quoted-reply preview inside a bubble was a **dead-end
 > visual**: it rendered the quoted sender + snippet but a tap did nothing, whereas iOS scrolls to the original.
@@ -579,7 +601,19 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Recommended next (2026-07-06, after `chat-mention-autocomplete`):** the remaining highest-value Chat
+**Just shipped (2026-07-06): `chat-delivery-status-group-semantics`** — the sender's own-message
+✓/✓✓/✓✓-read indicator now applies WhatsApp-style all-or-nothing group semantics via the pure
+`:core:model` `DeliveryStatusResolver` (see run log). **Recommended next candidates:**
+- **`chat-read-status-sheet`** — tap the delivery checks → a "seen by / delivered to" breakdown sheet
+  (iOS `onShowReadStatus` → detail sheet "Vues" tab). Needs a per-recipient read model on the wire; if the
+  gateway payload only carries counts, defer and pick the next item.
+- **`chat-swipe-to-reply`** — the swipe gesture that opens the reply composer (parity §C "Reply … swipe").
+  Mostly Compose-gesture glue; keep a small pure threshold/decision core testable.
+- **`chat-scroll-to-bottom-control`** — the scroll-to-bottom FAB with unread/typing states (parity §C).
+  A pure `ScrollAffordanceState` core (unread count + near-bottom + typing) is very testable.
+Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K).
+
+**Earlier recommendation (2026-07-06, after `chat-mention-autocomplete`):** the remaining highest-value Chat
 follow-ups now that rich-text + in-conversation search + mentions (local roster) are live —
 1. ~~**`chat-search-highlight-wiring`**~~ ✅ shipped 2026-07-06 — see run log.
 2. ~~**`chat-mention-display-names`**~~ ✅ folded into `chat-mention-autocomplete` (2026-07-06) — `ChatViewModel`

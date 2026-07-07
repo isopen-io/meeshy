@@ -91,6 +91,7 @@ class ChatViewModel @Inject constructor(
 
     private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     private val showingOriginal = MutableStateFlow<Set<String>>(emptySet())
+    private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
     private var mentionRoster: List<MentionCandidate> = emptyList()
@@ -115,11 +116,17 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
                 if (conversation == null) return@collect
+                val currentUserId = sessionRepository.currentUser.value?.id
                 val roster = MentionRoster.fromParticipants(
                     participants = conversation.participants,
-                    excludeUserId = sessionRepository.currentUser.value?.id,
+                    excludeUserId = currentUserId,
                 )
                 mentionRoster = roster
+                recipientCount.value = conversation.participants
+                    .mapNotNull { it.userId }
+                    .filterNot { it == currentUserId }
+                    .distinct()
+                    .size
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(),
@@ -143,11 +150,14 @@ class ChatViewModel @Inject constructor(
                 sessionRepository.currentUser,
                 ownReactions,
                 showingOriginal,
-            ) { result, user, own, originals -> BubbleInputs(result, user, own, originals) }
-                .collect { (result, user, own, originals) ->
+                recipientCount,
+            ) { result, user, own, originals, recipients ->
+                BubbleInputs(result, user, own, originals, recipients)
+            }
+                .collect { (result, user, own, originals, recipients) ->
                     latestMessages = result.valueOrNull() ?: latestMessages
                     _state.update { current ->
-                        val next = current.applyResult(result, user, own, originals, config.socketUrl)
+                        val next = current.applyResult(result, user, own, originals, config.socketUrl, recipients)
                         next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
                 }
@@ -563,6 +573,7 @@ private data class BubbleInputs(
     val user: MeeshyUser?,
     val ownReactions: Map<String, Set<String>>,
     val showingOriginal: Set<String>,
+    val recipientCount: Int,
 )
 
 private fun <T> CacheResult<List<T>>.valueOrNull(): List<T>? = when (this) {
@@ -578,22 +589,23 @@ private fun ChatUiState.applyResult(
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
     mediaBaseUrl: String,
+    recipientCount: Int,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount),
         ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = false,
         errorMessage = null,
     )
     is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount),
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = false,
     )
     is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl)
+        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount)
             ?: messages,
         ownReactions = ownReactions,
         isSyncing = true,
@@ -612,6 +624,7 @@ private fun List<LocalMessage>.toBubbles(
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
     mediaBaseUrl: String,
+    recipientCount: Int,
 ): List<BubbleContent> = map { local ->
     BubbleContentBuilder.build(
         message = local.message,
@@ -621,6 +634,7 @@ private fun List<LocalMessage>.toBubbles(
         isPending = local.sendState == LocalSendState.SENDING,
         isFailed = local.sendState == LocalSendState.FAILED,
         ownReactions = ownReactions[local.message.id] ?: emptySet(),
+        recipientCount = recipientCount,
         showOriginal = local.message.id in showingOriginal,
         mediaBaseUrl = mediaBaseUrl,
     )

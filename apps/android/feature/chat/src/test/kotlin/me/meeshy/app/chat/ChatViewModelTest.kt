@@ -363,6 +363,49 @@ class ChatViewModelTest {
         assertThat(h.vm.state.value.mention).isEqualTo(MentionAutocompleteState())
     }
 
+    private fun directConversation() = ApiConversation(
+        id = "c1",
+        type = "direct",
+        participants = listOf(
+            ApiParticipant(id = "p0", userId = "me", username = "atabeth", displayName = "Ata Beth"),
+            ApiParticipant(id = "p1", userId = "u1", username = "bob", displayName = "Bob Martin"),
+        ),
+    )
+
+    private fun ownMessageReadByOnePeer() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(
+                    ApiMessage(
+                        id = "m1",
+                        conversationId = "c1",
+                        senderId = "me",
+                        content = "hey",
+                        deliveredCount = 1,
+                        readCount = 1,
+                    ),
+                ),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
+    @Test
+    fun in_a_group_a_message_read_by_one_of_many_stays_sent() = runTest(dispatcher) {
+        val h = harness(ownMessageReadByOnePeer(), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.single().deliveryStatus).isEqualTo(DeliveryStatus.Sent)
+    }
+
+    @Test
+    fun in_a_direct_conversation_a_message_read_by_the_peer_shows_read() = runTest(dispatcher) {
+        val h = harness(ownMessageReadByOnePeer(), currentUser = me, conversation = directConversation())
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.single().deliveryStatus).isEqualTo(DeliveryStatus.Read)
+    }
+
     private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
 
     private fun syncedConversation() = flowOf(
