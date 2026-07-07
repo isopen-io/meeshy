@@ -58,19 +58,21 @@ aucun changement de schéma persistant (le champ `metadata.type` existe déjà e
 - [x] Web `lib/calls/__tests__/call-media-constraints.test.ts` : 4/4.
 - [x] Web suite filtrée `*[Cc]all*|webrtc*` : 21 suites, 430 tests.
 - [x] Web `tsc --noEmit` : 1535 erreurs avant/après identique (confirmé par stash scopé).
-- [ ] Suite complète gateway (`bun run test:coverage`) — en cours.
-- [ ] Suite complète web (`npx jest --maxWorkers=50%`) — en cours.
-- [ ] Commit + push.
+- [x] Suite complète gateway (`bun run test:coverage`) : 509/509 suites, 13804/13805 tests (1 skip
+      pré-existant) — meilleur que la baseline documentée (13779/13780).
+- [x] Suite complète web (`npx jest --maxWorkers=50%`) : 440/440 suites, 10954/10975 tests (21 skips
+      pré-existants).
+- [x] Commit + push (`4acb149d`, branche `claude/loving-thompson-ykzqoe`).
 
 ## Completion status
-Fix + tests ciblés verts. Suites complètes en cours de validation avant commit/push.
+**COMPLET.** Fix + tests + suites complètes vertes des deux côtés. Poussé, prêt pour PR + merge.
 
 ## Progress tracking
 - [x] Analyse + plan.
 - [x] Tests RED puis fix GREEN (gateway + web).
 - [x] Suites ciblées + filtrées vertes.
-- [ ] Suites complètes (parité CI).
-- [ ] Commit + push.
+- [x] Suites complètes (parité CI).
+- [x] Commit + push.
 - [ ] Merge sur main après pull/résolution manuelle + CI verte.
 
 ## Future improvements
