@@ -17,6 +17,7 @@
     <string name="conversations_preview_file">📎 Arquivo</string>
     <string name="conversations_preview_location">📍 Localização</string>
     <string name="conversations_preview_you">Você</string>
+    <string name="conversations_preview_draft_prefix">Rascunho: </string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
     <string name="conversations_search">Pesquisar</string>
     <string name="conversations_search_hint">Pesquisar conversas</string>

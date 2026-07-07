@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.isMeaningful
 
 /** The persistence action a composer change implies for its per-conversation draft. */
 sealed interface DraftPersist {
@@ -58,7 +59,7 @@ object DraftAutosave {
     ): DraftPersist {
         val reply = replyToId?.trim()?.takeIf { it.isNotEmpty() }
         if (rawText.isBlank() && reply == null) {
-            val hadDraft = previous != null && (previous.text.isNotBlank() || previous.replyToId != null)
+            val hadDraft = previous != null && previous.isMeaningful
             return if (hadDraft) DraftPersist.Clear(conversationId) else DraftPersist.None
         }
         if (previous?.text == rawText && previous.replyToId == reply) return DraftPersist.None
@@ -83,9 +84,8 @@ object DraftAutosave {
      */
     fun restore(stored: ConversationDraft?, currentDraft: String, isEditing: Boolean): DraftRestore? {
         if (isEditing || currentDraft.isNotBlank()) return null
-        if (stored == null) return null
+        if (stored == null || !stored.isMeaningful) return null
         val reply = stored.replyToId?.trim()?.takeIf { it.isNotEmpty() }
-        if (stored.text.isBlank() && reply == null) return null
         return DraftRestore(text = stored.text, replyToId = reply)
     }
 }

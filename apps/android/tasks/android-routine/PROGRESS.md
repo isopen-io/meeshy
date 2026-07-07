@@ -662,7 +662,26 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `chat-draft-reply-ref`** — the persisted draft now carries its reply reference so a
+**Just shipped (2026-07-07): `conversations-draft-aware-ordering`** — the conversation list now floats
+draft-bearing rows to the top (parity §B "drafts float to top") and shows an accent "Brouillon : …" preview. Pure
+`:feature:conversations` `DraftAwareOrdering.apply` (float by `ConversationDraft.isMeaningful`, sort by draft
+`updatedAt` desc, stable, non-drafts keep order) + `draftPreview`; `ConversationDraft.isMeaningful` extracted as the
+`:core:model` SSOT (now consumed by `DraftAutosave` too); `ConversationDraftStore.observeAll()` added to `:sdk-core`
+(InMemory StateFlow + DataStore prefix-scan, corrupt-omitted); `ConversationListViewModel` collects the drafts and
+applies the ordering in `withVisible` after the filter; the screen's Épingles-first split stays above (Épinglés >
+brouillons > reste). +23 tests. See run log.
+
+**Recommended next candidates (highest value first):**
+- **`conversations-draft-list-mutation`** — surface the draft *mutation* end-to-end so a draft typed in Chat and a
+  send/clear immediately re-orders the list. `observeAll()` already makes it reactive; verify the round-trip and add
+  a "swipe-to-discard-draft" affordance on a draft-bearing row (pure discard rule + optimistic clear via the store).
+- **`conversations-cold-start-skeleton`** — parity §B "Cold-start skeletons + error-with-retry empty state": the
+  skeleton flag exists (`showSkeleton`), but the error state has no retry CTA. Pure `EmptyStateContent.of(state)`
+  → {Skeleton | Error(retry) | Filtered-empty | Cold-empty} and an error card with a Réessayer button.
+- **`chat-draft-language-effects`** — the remaining draft-autosave gap (§C "text + reply + language + effects + blur
+  + ephemeral"): once those composer features exist on Android, persist them in `ConversationDraft`.
+
+**Earlier — `chat-draft-reply-ref` (2026-07-07)** — the persisted draft now carries its reply reference so a
 half-typed (or freshly-armed) reply survives leaving and reopening the conversation (iOS app-side `DraftStore`
 reply-reference parity). `ConversationDraft` gained a nullable `replyToId`. Pure `:feature:chat` `DraftAutosave`
 was extended: a draft is now *meaningful* when it holds text **or** an armed reply, so a reply armed on an empty
@@ -1254,6 +1273,38 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `conversations-draft-aware-ordering` ✅ impl + reviewer PASS
+- **Parity:** §B "Draft-aware ordering (drafts float to top)" + the draft row preview. iOS floats a conversation
+  the user has started (unsent) composing to the top of the list and shows an accent "Draft: …" preview; Android
+  ordered purely by backend recency and never surfaced the draft.
+- **Pure cores (TDD):**
+  - `ConversationDraft.isMeaningful` (`:core:model`) — the shared SSOT for "a draft worth surfacing/persisting"
+    (non-blank text **or** an armed, non-blank reply). `DraftAutosave` (`:feature:chat`) was refactored to consume
+    it in both `resolve` (the had-draft/clear branch) and `restore` (the inert-draft guard) — one definition of
+    "meaningful", not three. +4 tests (`ConversationDraftTest`).
+  - `DraftAwareOrdering.apply(conversations, draftsById)` (`:feature:conversations`) — floats every conversation
+    whose id has a *meaningful* draft to the top, ordered by draft `updatedAt` desc (a null timestamp sorts last
+    within the floated group; the sort is stable so equal/absent timestamps and every non-draft row keep their
+    incoming order). Empty drafts / drafts for absent conversations are no-ops. +10 tests (`DraftAwareOrderingTest`:
+    empty list, no-drafts identity, single float, relative-order preserved, updatedAt-desc, null-timestamp-last,
+    stable-ties, inert-no-float, reply-only-floats, ghost-id-ignored).
+  - `draftPreview(draft, labels)` (`:feature:conversations`) — the accent "Brouillon : …" row line (trimmed text),
+    or the prefix + "…" for a reply-only draft, or `null` (→ falls back to `lastMessagePreview`). +4 tests.
+- **Seam + wiring:** `ConversationDraftStore.observeAll(): Flow<Map<String, ConversationDraft>>` (`:sdk-core`) —
+  InMemory now StateFlow-backed (reactive), DataStore maps over `data` scanning the `draft:` key prefix and omitting
+  a corrupt entry. +4 tests (2 InMemory, 2 DataStore incl. corrupt-omitted). `ConversationListViewModel` injects
+  the store (already in the Hilt graph — zero DI change), collects `observeAll()` into `state.drafts`, and
+  `withVisible` now applies `DraftAwareOrdering` after `ConversationFilters`. `ConversationListScreen` threads the
+  per-row draft and renders the accent draft preview (Compose glue, exempt). +1 VM test (draft floats to top). New
+  string `conversations_preview_draft_prefix` in en/fr/es/pt.
+- **Coherence:** the screen's Épingles-first split stays above the floated group → **Épinglés > brouillons > reste**,
+  a coherent hierarchy; the draft preview reuses the conversation `accentColor` (no hardcoded colour).
+- **Verify:** `gradle assembleDebug testDebugUnitTest` (system Gradle 8.14.3) — green. +23 tests total.
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API, no tautologies; boundary coverage on
+  the float/sort/meaningful branches; SDK-purity honoured (the "when to float / how to sort" product rule is a pure
+  `:feature` atom, the store is a stateless `:sdk-core` seam, the model predicate is `:core:model` SSOT); UDF
+  immutable state, cache-first (no spinner), no dead end.
 
 ### 2026-07-07 — slice `chat-draft-reply-ref` ✅ impl + reviewer PASS · ⚠ merge blocked-on-infra (PR #1633 open)
 - **Merge status:** implementation complete, reviewer PASS, local `assembleDebug testDebugUnitTest` green. **Merge is
