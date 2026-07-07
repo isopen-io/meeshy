@@ -776,7 +776,12 @@ export class CallService {
                 status: CallStatus.ended,
                 endedAt: now,
                 duration: Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000)),
-                endReason: CallEndReason.garbageCollected
+                endReason: CallEndReason.garbageCollected,
+                // Terminal write protocol: every terminal writer MUST bump `version`
+                // (see endCall/markCallAsMissed) — otherwise a version-guarded writer
+                // that read this row a moment earlier still matches its stale `version`
+                // and clobbers this terminal state right after.
+                version: { increment: 1 }
               }
             });
           });
@@ -827,7 +832,12 @@ export class CallService {
             status: CallStatus.ended,
             endedAt: now,
             duration,
-            endReason: CallEndReason.garbageCollected
+            endReason: CallEndReason.garbageCollected,
+            // Terminal write protocol: every terminal writer MUST bump `version`
+            // (see endCall/markCallAsMissed) — otherwise a version-guarded writer
+            // that read this row a moment earlier still matches its stale `version`
+            // and clobbers this terminal state right after.
+            version: { increment: 1 }
           }
         });
 
