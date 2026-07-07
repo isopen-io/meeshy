@@ -149,6 +149,32 @@ describe('AuthHandler', () => {
       }));
     });
 
+    it('joins the anonymous socket to the ROOMS.user personal room emitters target (regression: unread badge)', async () => {
+      // Personal-event emitters (CONVERSATION_UNREAD_UPDATED, mentions, …) all
+      // address `io.to(ROOMS.user(participant.userId ?? participant.id))`. For an
+      // anonymous participant (no userId) that resolves to `user:<participantId>`.
+      // The join therefore MUST use the same convention — joining the bare
+      // participantId room left the socket where no emitter ever broadcasts, so
+      // anonymous users never received their unread badge until a REST refetch.
+      const mockSocket = createMockSocket({
+        handshake: { auth: { sessionToken: 'anon-session-123' } }
+      });
+
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
+        id: 'anon-123',
+        displayName: 'Anonymous',
+        language: 'en',
+        conversationId: 'conv-123'
+      } as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      // Joins the personal room every emitter addresses…
+      expect(mockSocket.join).toHaveBeenCalledWith('user:anon-123');
+      // …and NOT the bare participantId room, which no emitter ever targets.
+      expect(mockSocket.join).not.toHaveBeenCalledWith('anon-123');
+    });
+
     it('should handle missing tokens gracefully', async () => {
       jest.useFakeTimers();
       const mockSocket = createMockSocket();

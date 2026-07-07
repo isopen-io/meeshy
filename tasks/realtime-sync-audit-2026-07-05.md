@@ -162,6 +162,39 @@ Vérifié : suite `MessageReadStatusService` 153/153, suites voisines
 (MessagingService/MessageHandler/routes/socketio) 18 suites 1160 tests verts,
 `tsc --noEmit` OK.
 
+## 7. Utilisateur anonyme dans une salle personnelle nue — `conversation:unread-updated` jamais reçu — ✅ Corrigé 2026-07-07
+
+`services/gateway/src/socketio/handlers/AuthHandler.ts` — `_authenticateAnonymousUser`
+(jointure) vs. `MessageHandler._updateUnreadCounts` / `MeeshySocketIOManager.broadcastMessage`
++ `routes/conversations/messages.ts` + `routes/message-read-status.ts` (émission)
+
+Le chemin JWT rejoint la salle personnelle via `socket.join(ROOMS.user(user.id))`
+(= `user:<userId>`). Le chemin anonyme rejoignait une salle **nue**
+`socket.join(socketUser.id)` (= `<participantId>`, sans préfixe `user:`). Or **tous**
+les émetteurs d'événements personnels adressent `io.to(ROOMS.user(participant.userId ??
+participant.id))` — pour un anonyme (pas de `userId`), cela résout `user:<participantId>`,
+une salle qu'aucun socket anonyme ne rejoint jamais.
+
+**Scénario de défaillance** : un anonyme A (participant `pA`, sans `userId`) est connecté,
+joint à la conversation C mais posé sur la liste / une autre conversation. B envoie un
+message dans C → `broadcastNewMessage → _updateUnreadCounts` calcule `unreadCount = 1`
+pour `pA` et émet `CONVERSATION_UNREAD_UPDATED` vers `ROOMS.user(pA)` = `"user:pA"`. Le
+socket de A est dans la salle `"pA"`, pas `"user:pA"` → l'event est **droppé**. Le badge
+de non-lus de A reste figé jusqu'à un refetch REST sans rapport. Le repli `?? participant.id`
+présent dans les deux sites d'émission montrait l'intention de servir les anonymes ; la
+livraison échouait par pure divergence salle-de-jointure vs salle-d'émission (les
+destinataires enregistrés n'étaient pas touchés, d'où le silence du bug).
+
+**Fix** : le chemin anonyme rejoint désormais `ROOMS.user(socketUser.id)`, alignant
+jointure et émission sur la convention unique (la même qu'utilisent notifications,
+`CONVERSATION_UPDATED`, `emitWithSeq`, etc.). Balayage exhaustif préalable de tous les
+`io.to(...)`/`io.in(...)` du gateway : **aucun** émetteur ne ciblait la salle nue
+`<participantId>` — elle était morte — donc zéro régression. Test de régression :
+`AuthHandler.test.ts` → « joins the anonymous socket to the ROOMS.user personal room
+emitters target (regression: unread badge) » (RED→GREEN vérifié : la jointure asserte
+`user:anon-123` et **jamais** `anon-123`). Vérifié : 52 tests AuthHandler verts,
+`tsc --noEmit` OK.
+
 ## Priorisation suggérée pour le suivi
 
 | Priorité | Item | Raison |
@@ -169,6 +202,7 @@ Vérifié : suite `MessageReadStatusService` 153/153, suites voisines
 | ~~P1~~ | ~~#1 deinit typing leak~~ | ✅ Corrigé 2026-07-05 (à vérifier en CI macOS) |
 | ~~P1~~ | ~~#5 dedup read/delivery sur clé constante~~ | ✅ Corrigé 2026-07-06 (gateway, vérifié 13767 tests verts) |
 | ~~P1~~ | ~~#6 markMessagesAsRead n'avance pas le curseur de livraison (read⇒delivered)~~ | ✅ Corrigé 2026-07-07 (gateway, vérifié 153 + 1160 tests verts) |
+| ~~P1~~ | ~~#7 anonyme dans salle personnelle nue — unread jamais reçu~~ | ✅ Corrigé 2026-07-07 (gateway, vérifié 52 tests verts + tsc OK) |
 | P2 | #2 double boucle reconnexion | Peut prolonger une coupure déjà en cours, pas de perte de données mais UX dégradée |
 | P2 | #3 pas de gap detection message/reaction | Silencieux — aucune donnée perdue de façon visible pour l'utilisateur avant refetch, mais viole "eventual consistency garantie" |
 | P3 | #4 reaction reorder | Fenêtre étroite (dépend de #3 pour se manifester), corrigible avec le timestamp déjà présent au payload |
