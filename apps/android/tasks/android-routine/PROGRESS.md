@@ -4,6 +4,28 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-07 the **scroll-to-bottom control with unread badge + preview** landed (slice
+> `chat-scroll-to-bottom-control`, Chat parity §C — feature-parity.md "Scroll-to-bottom control"). The FAB was a
+> bare `!isNearBottom` visibility toggle — no unread awareness, no preview. iOS's `ConversationScrollControlsView`
+> shows a live unread count and a compact preview of the newest unread message, resetting both when the reader
+> jumps back down. New pure `:feature:chat` `ScrollAffordance.next(previous, messages, isNearBottom) →
+> ScrollAffordanceState`: while the reader sits at the bottom every message is acknowledged and the control hides;
+> the moment they scroll away the acknowledged anchor freezes and each subsequent **incoming (non-own, undeleted)**
+> message grows the unread badge and refreshes the `UnreadPreview` (sender + text + kind: Text/Image/File);
+> scrolling back down clears the badge + preview. History paged out from the top never resurrects as unread, and a
+> lost anchor re-baselines to the newest rather than counting the whole history (defensive against a misleading huge
+> badge). Wired: `ChatScreen` maps `state.messages` → `AffordanceMessage`s via `BubbleContent.toAffordanceMessage()`
+> (kind derived: image beats file beats text), holds the reduced state, and renders a `BadgedBox` FAB (badge caps at
+> `99+`) with a tappable preview pill above it; tapping either acknowledges (via `next(..., isNearBottom = true)`) and
+> animates to the latest. +19 tests (`ScrollAffordanceTest` 14 — near-bottom acknowledge/hide, empty, return-clears,
+> scrolled-away-no-badge, one/several incoming, own/deleted excluded, mixed, preview-kind, fresh baseline, pruned-anchor
+> rebaseline, top-prune tail count, single-message boundary; `AffordanceMessageMappingTest` 5 — identity/direction/text,
+> deleted passthrough, image/file kind, image-wins-over-file). `assembleDebug` (app) + full `testDebugUnitTest` (896
+> tasks) green (system Gradle 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API, no
+> tautologies; SDK-purity honoured — the "when to show / what counts as unread" product decision is a pure atom in
+> `:feature:chat`, the render is Compose glue; UDF immutable state, pure transition; accent-coherent visuals; no dead
+> code — the reducer + mapper are both consumed by `ChatScreen`).
+
 > On 2026-07-06 the **group all-or-nothing delivery semantics** landed (slice `chat-delivery-status-group-semantics`,
 > Chat parity §C — feature-parity.md "Delivery status checkmarks"). The bubble's own-message indicator promoted to
 > ✓✓-delivered / ✓✓-read as soon as a **single** recipient received / read it — correct for a 1:1 but **misleading
@@ -601,16 +623,18 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-06): `chat-delivery-status-group-semantics`** — the sender's own-message
-✓/✓✓/✓✓-read indicator now applies WhatsApp-style all-or-nothing group semantics via the pure
-`:core:model` `DeliveryStatusResolver` (see run log). **Recommended next candidates:**
+**Just shipped (2026-07-07): `chat-scroll-to-bottom-control`** — the scroll-to-bottom FAB now
+carries a live unread badge + newest-unread preview via the pure `:feature:chat` `ScrollAffordance`
+reducer (see run log). **Recommended next candidates:**
+- **`chat-swipe-to-reply`** — the swipe gesture that opens the reply composer (parity §C "Reply … swipe").
+  Mostly Compose-gesture glue; keep a small pure threshold/decision core (swipe distance + direction →
+  trigger/cancel) testable in `:feature:chat`.
 - **`chat-read-status-sheet`** — tap the delivery checks → a "seen by / delivered to" breakdown sheet
   (iOS `onShowReadStatus` → detail sheet "Vues" tab). Needs a per-recipient read model on the wire; if the
   gateway payload only carries counts, defer and pick the next item.
-- **`chat-swipe-to-reply`** — the swipe gesture that opens the reply composer (parity §C "Reply … swipe").
-  Mostly Compose-gesture glue; keep a small pure threshold/decision core testable.
-- **`chat-scroll-to-bottom-control`** — the scroll-to-bottom FAB with unread/typing states (parity §C).
-  A pure `ScrollAffordanceState` core (unread count + near-bottom + typing) is very testable.
+- **`chat-typing-in-control`** — fold typing usernames into the scroll control (iOS shows them inside
+  `ConversationScrollControlsView`); a small pure typing-label core (1/2/N variants) already partly exists
+  in `TypingIndicator` — extract + test it, then surface in the affordance.
 Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K).
 
 **Earlier recommendation (2026-07-06, after `chat-mention-autocomplete`):** the remaining highest-value Chat

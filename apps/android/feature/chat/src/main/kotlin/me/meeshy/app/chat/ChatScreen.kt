@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.automirrored.filled.Reply
@@ -33,10 +35,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,8 +62,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -136,8 +143,15 @@ fun ChatScreen(
         viewModel.onScrollHandled()
     }
 
-    val showScrollToBottom by remember(listItems.lastIndex) {
-        derivedStateOf { !listState.isNearBottom(listItems.lastIndex) }
+    val affordanceMessages = remember(state.messages) {
+        state.messages.map { it.toAffordanceMessage() }
+    }
+    val isNearBottom by remember(listItems) {
+        derivedStateOf { listState.isNearBottom(listItems.lastIndex) }
+    }
+    var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
+    LaunchedEffect(affordanceMessages, isNearBottom) {
+        scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isNearBottom)
     }
 
     LaunchedEffect(listState) {
@@ -303,27 +317,25 @@ fun ChatScreen(
                             }
                         }
                     }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showScrollToBottom,
+                    ScrollToBottomControl(
+                        affordance = scrollAffordance,
+                        accentColor = accentColor,
+                        onClick = {
+                            scrollAffordance = ScrollAffordance.next(
+                                scrollAffordance,
+                                affordanceMessages,
+                                isNearBottom = true,
+                            )
+                            scope.launch {
+                                if (listItems.isNotEmpty()) {
+                                    listState.animateScrollToItem(listItems.lastIndex)
+                                }
+                            }
+                        },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(MeeshySpacing.lg),
-                    ) {
-                        SmallFloatingActionButton(
-                            onClick = {
-                                scope.launch {
-                                    listState.animateScrollToItem(listItems.lastIndex)
-                                }
-                            },
-                            containerColor = accentColor,
-                            contentColor = MeeshyPalette.White,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.ArrowDownward,
-                                contentDescription = stringResource(R.string.chat_scroll_to_bottom),
-                            )
-                        }
-                    }
+                    )
                     }
                     TypingIndicator(typingUsers = state.typingUsers)
                 }
@@ -415,6 +427,122 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/**
+ * The scroll-to-bottom affordance: a badged FAB that surfaces when the reader has
+ * scrolled away, with a live count and a compact preview of the newest unread message
+ * (iOS `ConversationScrollControlsView`). Tapping either the pill or the button jumps
+ * to the latest and clears the badge. Pure decisions (visibility, count, preview) live
+ * in [ScrollAffordance]; this is only the render.
+ */
+@Composable
+private fun ScrollToBottomControl(
+    affordance: ScrollAffordanceState,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible = affordance.isVisible,
+        modifier = modifier,
+    ) {
+        Column(horizontalAlignment = Alignment.End) {
+            affordance.preview?.let { preview ->
+                UnreadPreviewPill(preview = preview, accentColor = accentColor, onClick = onClick)
+            }
+            BadgedBox(
+                badge = {
+                    if (affordance.hasUnread) {
+                        Badge(containerColor = accentColor, contentColor = MeeshyPalette.White) {
+                            Text(unreadBadgeLabel(affordance.unreadCount))
+                        }
+                    }
+                },
+            ) {
+                SmallFloatingActionButton(
+                    onClick = onClick,
+                    containerColor = accentColor,
+                    contentColor = MeeshyPalette.White,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowDownward,
+                        contentDescription = stringResource(R.string.chat_scroll_to_bottom),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UnreadPreviewPill(
+    preview: UnreadPreview,
+    accentColor: Color,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(MeeshyRadius.pill),
+        color = MeeshyTheme.tokens.backgroundSecondary,
+        modifier = Modifier
+            .padding(bottom = MeeshySpacing.sm)
+            .widthIn(max = 220.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = MeeshySpacing.md,
+                vertical = MeeshySpacing.xs,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            unreadPreviewIcon(preview.kind)?.let { icon ->
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Column {
+                preview.senderName?.let { name ->
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = unreadPreviewLabel(preview),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+private fun unreadPreviewIcon(kind: UnreadPreviewKind): ImageVector? = when (kind) {
+    UnreadPreviewKind.Image -> Icons.Filled.Image
+    UnreadPreviewKind.File -> Icons.Filled.AttachFile
+    UnreadPreviewKind.Text -> null
+}
+
+@Composable
+private fun unreadPreviewLabel(preview: UnreadPreview): String = when {
+    preview.text.isNotBlank() -> preview.text
+    preview.kind == UnreadPreviewKind.Image -> stringResource(R.string.chat_unread_photo)
+    preview.kind == UnreadPreviewKind.File -> stringResource(R.string.chat_unread_attachment)
+    else -> stringResource(R.string.chat_unread_new_message)
+}
+
+private fun unreadBadgeLabel(count: Int): String = if (count > 99) "99+" else count.toString()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
