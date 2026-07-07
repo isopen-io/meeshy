@@ -353,7 +353,7 @@ fun ChatScreen(
                             .padding(MeeshySpacing.lg),
                     )
                     }
-                    TypingIndicator(typingUsers = state.typingUsers)
+                    TypingIndicator(participants = state.typingParticipants)
                 }
             }
         }
@@ -793,12 +793,12 @@ private fun SheetAction(
 }
 
 @Composable
-private fun TypingIndicator(typingUsers: List<String>, modifier: Modifier = Modifier) {
-    if (typingUsers.isEmpty()) return
-    val text = when (typingUsers.size) {
-        1 -> stringResource(R.string.chat_typing_one, typingUsers[0])
-        2 -> stringResource(R.string.chat_typing_two, typingUsers[0], typingUsers[1])
-        else -> stringResource(R.string.chat_typing_many, typingUsers.size)
+private fun TypingIndicator(participants: List<TypingParticipant>, modifier: Modifier = Modifier) {
+    val text = when (val label = TypingLabel.of(participants)) {
+        TypingLabel.None -> return
+        is TypingLabel.One -> stringResource(R.string.chat_typing_one, label.name)
+        is TypingLabel.Two -> stringResource(R.string.chat_typing_two, label.first, label.second)
+        is TypingLabel.Many -> stringResource(R.string.chat_typing_many, label.count)
     }
     Text(
         text = text,

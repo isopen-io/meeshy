@@ -646,15 +646,18 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `chat-swipe-to-reply`** — the horizontal bubble swipe now opens the reply
-composer via the pure `:feature:chat` `SwipeToReply` decision core (rubber-band + commit threshold + one-shot
-arm haptic; incoming→right / own→left; commit → existing `startReply`). See run log. **Recommended next candidates:**
+**Just shipped (2026-07-07): `chat-typing-participants-core`** — the inline typing indicator now runs on the
+pure `:feature:chat` `TypingParticipants` keyed roster SSOT (userId-keyed dedup fixes the same-name collapse/
+removal bugs; self-exclusion; blank-name→userId fallback) + `TypingLabel` presentation (None/One/Two/Many). See
+run log. **Recommended next candidates:**
+- **`chat-typing-in-control`** — fold the now-tested typing roster into the scroll-to-bottom control (iOS shows
+  the typists inside `ConversationScrollControlsView`); `TypingLabel`/`TypingParticipants` already exist, so this
+  is the surface wiring (a `ScrollAffordanceState` typing field + preview-pill row). Mostly Compose glue now.
+- **`chat-typing-header`** — surface the typing roster in the conversation header (iOS shows "X is typing…" under
+  the title); reuse `TypingLabel`, pure label→header-subtitle mapping.
 - **`chat-read-status-sheet`** — tap the delivery checks → a "seen by / delivered to" breakdown sheet
   (iOS `onShowReadStatus` → detail sheet "Vues" tab). Needs a per-recipient read model on the wire; if the
   gateway payload only carries counts, defer and pick the next item.
-- **`chat-typing-in-control`** — fold typing usernames into the scroll control (iOS shows them inside
-  `ConversationScrollControlsView`); a small pure typing-label core (1/2/N variants) already partly exists
-  in `TypingIndicator` — extract + test it, then surface in the affordance.
 Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K).
 
 **Earlier recommendation (2026-07-06, after `chat-mention-autocomplete`):** the remaining highest-value Chat
@@ -1156,6 +1159,35 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `chat-typing-participants-core` ✅ (merged, reviewer PASS)
+- **Slice:** the inline typing indicator (Chat parity §C "Typing indicators"). The incoming-typing roster was
+  built ad-hoc in `ChatViewModel` keyed by **displayName** (`typingUsers: List<String>`, `(list - name) + name`),
+  and the 1/2/N label lived untested inside the `TypingIndicator` Composable. Two real bugs: two distinct users
+  who share a display name collapsed into one entry, and stopping one removed the other (remove-by-name).
+- **Pure cores (`:feature:chat`, new `Typing.kt`):**
+  - `TypingParticipant(userId, name)` + `object TypingParticipants` — keyed SSOT. `started(current, userId, name,
+    selfId?)`: blank/self userId inert, blank name → `userId` fallback, dedup by userId with refresh-to-tail
+    (most-recent-last); `stopped(current, userId)`: remove exactly that userId. Port of iOS
+    `ConversationSocketHandler` typing book-keeping, fixing the same-name collapse/removal bugs.
+  - `sealed interface TypingLabel { None; One(name); Two(a,b); Many(count) }` + `of(participants)` — presentation
+    SSOT so the Composable only maps a variant to a string resource (per TDD-COVERAGE "push decisions out of the
+    Composable").
+- **Wiring:** `ChatUiState.typingUsers: List<String>` → `typingParticipants: List<TypingParticipant>`; the
+  `typing:start`/`typing:stop` collectors call `TypingParticipants.started/stopped` (self-id from
+  `sessionRepository.currentUser`); `removeTypingUser(userId)` (name arg dropped); the 5 s cleanup job re-keyed by
+  userId. `ChatScreen.TypingIndicator(participants)` renders via `TypingLabel.of`.
+- **Tests (+21):** `TypingParticipantsTest` 12 (add/append/refresh-to-tail/same-name-distinct/self-exclude/
+  self-id-admits-others/blank-name-fallback/blank-userId-inert; stop matching/only-matching-not-same-named/
+  unknown-inert/empty), `TypingLabelTest` 5 (none/one/two-in-order/three→many/five→many), `ChatViewModelTest` +4
+  (peer start populates, other-conversation ignored, two same-named both show & stop leaves the other, 5 s expiry).
+- **Verify:** `gradle assembleDebug testDebugUnitTest` green (896 tasks, system Gradle 8.14.3).
+- **Reviewer:** PASS — diff `apps/android/feature/chat` only; behaviour-through-public-API, no tautologies,
+  full branch sweep incl. the inert arms; SDK-purity/SSOT honoured (pure roster+label cores in `:feature:chat`,
+  gesture/render exempt Compose glue); UDF immutable state; no dead code (both cores consumed). Fixes two real
+  same-name defects. **Lesson captured** (NOTES.md): mockk stub `every { this@mockk.flowProp }` must qualify when
+  an outer test field shares the name; `advanceUntilIdle()` fires the 5 s typing-cleanup `delay` — use
+  `runCurrent()` to assert the pre-timeout roster.
 
 ### 2026-07-07 — slice `chat-swipe-to-reply` ✅ (impl done, reviewer PASS)
 - **Slice:** swipe-to-reply gesture on message bubbles (Chat parity §C "Reply … swipe"). Pure `:feature:chat`

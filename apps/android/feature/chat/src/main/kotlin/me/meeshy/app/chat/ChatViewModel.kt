@@ -48,7 +48,7 @@ data class ChatUiState(
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
-    val typingUsers: List<String> = emptyList(),
+    val typingParticipants: List<TypingParticipant> = emptyList(),
     val conversationTitle: String? = null,
     val accentColorHex: String? = null,
     val actionMessageId: String? = null,
@@ -218,11 +218,18 @@ class ChatViewModel @Inject constructor(
                         val name = event.displayName ?: event.username ?: event.userId
                         typingCleanupJobs[event.userId]?.cancel()
                         _state.update { s ->
-                            s.copy(typingUsers = (s.typingUsers - name) + name)
+                            s.copy(
+                                typingParticipants = TypingParticipants.started(
+                                    current = s.typingParticipants,
+                                    userId = event.userId,
+                                    name = name,
+                                    selfId = sessionRepository.currentUser.value?.id,
+                                ),
+                            )
                         }
                         typingCleanupJobs[event.userId] = viewModelScope.launch {
                             delay(TYPING_TIMEOUT_MS)
-                            removeTypingUser(event.userId, event.displayName ?: event.username ?: event.userId)
+                            removeTypingUser(event.userId)
                         }
                     }
                 }
@@ -231,7 +238,7 @@ class ChatViewModel @Inject constructor(
                 messageSocketManager.typingStopped.collect { event ->
                     if (event.conversationId == conversationId) {
                         typingCleanupJobs.remove(event.userId)?.cancel()
-                        removeTypingUser(event.userId, event.displayName ?: event.username ?: event.userId)
+                        removeTypingUser(event.userId)
                     }
                 }
             }
@@ -263,8 +270,8 @@ class ChatViewModel @Inject constructor(
         messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
     }
 
-    private fun removeTypingUser(userId: String, displayName: String) {
-        _state.update { s -> s.copy(typingUsers = s.typingUsers - displayName) }
+    private fun removeTypingUser(userId: String) {
+        _state.update { s -> s.copy(typingParticipants = TypingParticipants.stopped(s.typingParticipants, userId)) }
     }
 
     fun onDraftChange(value: String) {

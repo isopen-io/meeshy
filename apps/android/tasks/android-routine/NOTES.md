@@ -3,6 +3,21 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-07 (`chat-typing-participants-core`): two `runTest` gotchas that silently emptied a just-populated
+  ViewModel roster.** (1) **mockk stub name-shadowing:** a socket flow field on the *test class* that shares a
+  name with the mocked property (`private val typingStarted = MutableSharedFlow<TypingEvent>()`) makes a bare
+  `every { typingStarted } returns …` resolve to the **outer test field**, not the mock's property — the mock
+  property stays unstubbed. Qualify it: `every { this@mockk.typingStarted } returns this@ChatViewModelTest.
+  typingStarted` (the existing `messageReceived`/`reactionAdded` stubs already do this — follow the pattern for any
+  new same-named flow). (2) **`advanceUntilIdle()` fires pending `delay()`s:** the typing collector schedules a 5 s
+  `delay(TYPING_TIMEOUT_MS)` cleanup that removes the participant, so `emit(start)` **then** `advanceUntilIdle()`
+  runs the clock past 5 s and the roster is empty again by the assertion. Use `runCurrent()` (process the emission
+  at the current virtual time, no clock advance) to assert the *pre-timeout* roster; reserve `advanceTimeBy(6_000)`
+  for the expiry test. Symptom for both: `expected [X] but was []` with no exception.
+- **2026-07-07 (`chat-typing-participants-core`): dedup incoming presence rosters by a stable id, never by the
+  display name.** The old inline typing roster keyed on displayName (`(list - name) + name`) collapsed two distinct
+  users named "Alex" into one and let a `typing:stop` from one remove the other. Keying `TypingParticipant` by
+  `userId` fixes both; the same rule applies to any future presence/reaction/read roster.
 - **2026-07-06 (`chat-mention-autocomplete`): the monorepo CI's `services/translator` Python jobs can fail on a
   PyTorch-CDN TLS outage that has nothing to do with an `apps/android` diff — recognise it and do NOT merge past
   it, but also do NOT churn re-triggers.** Symptom: `Test Python (translator)` + `Voice API Tests` +

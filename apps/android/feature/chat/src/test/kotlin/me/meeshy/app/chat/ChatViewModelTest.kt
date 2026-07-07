@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
@@ -36,6 +37,7 @@ import me.meeshy.sdk.model.ReactionSyncResponse
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
+import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -70,14 +72,16 @@ class ChatViewModelTest {
     private val reactionRemoved = MutableSharedFlow<ReactionUpdateEvent>()
     private val messageReceived = MutableSharedFlow<ApiMessage>()
     private val readStatusUpdated = MutableSharedFlow<ReadStatusUpdatedEvent>()
+    private val typingStarted = MutableSharedFlow<TypingEvent>()
+    private val typingStopped = MutableSharedFlow<TypingEvent>()
 
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { this@mockk.messageReceived } returns this@ChatViewModelTest.messageReceived
             every { messageUpdated } returns MutableSharedFlow()
             every { messageDeleted } returns MutableSharedFlow()
-            every { typingStarted } returns MutableSharedFlow()
-            every { typingStopped } returns MutableSharedFlow()
+            every { this@mockk.typingStarted } returns this@ChatViewModelTest.typingStarted
+            every { this@mockk.typingStopped } returns this@ChatViewModelTest.typingStopped
             every { this@mockk.reactionAdded } returns this@ChatViewModelTest.reactionAdded
             every { this@mockk.reactionRemoved } returns this@ChatViewModelTest.reactionRemoved
             every { this@mockk.readStatusUpdated } returns this@ChatViewModelTest.readStatusUpdated
@@ -921,6 +925,63 @@ class ChatViewModelTest {
 
         verify(exactly = 0) { h.socket.emitTypingStop(any()) }
         verify(exactly = 0) { h.socket.emitTypingStart(any()) }
+    }
+
+    @Test
+    fun a_peer_typing_start_populates_the_typing_roster() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Bob"))
+        runCurrent()
+
+        assertThat(h.vm.state.value.typingParticipants)
+            .containsExactly(TypingParticipant("u1", "Bob"))
+    }
+
+    @Test
+    fun typing_events_for_another_conversation_are_ignored() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        typingStarted.emit(TypingEvent(conversationId = "other", userId = "u1", displayName = "Bob"))
+        runCurrent()
+
+        assertThat(h.vm.state.value.typingParticipants).isEmpty()
+    }
+
+    @Test
+    fun two_distinct_peers_who_share_a_name_both_show_and_stopping_one_leaves_the_other() =
+        runTest(dispatcher) {
+            val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+            advanceUntilIdle()
+
+            typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Alex"))
+            runCurrent()
+            typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u2", displayName = "Alex"))
+            runCurrent()
+            assertThat(h.vm.state.value.typingParticipants).hasSize(2)
+
+            typingStopped.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Alex"))
+            runCurrent()
+
+            assertThat(h.vm.state.value.typingParticipants)
+                .containsExactly(TypingParticipant("u2", "Alex"))
+        }
+
+    @Test
+    fun a_peer_typing_start_expires_after_the_timeout() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Bob"))
+        runCurrent()
+        assertThat(h.vm.state.value.typingParticipants).hasSize(1)
+
+        advanceTimeBy(6_000)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.typingParticipants).isEmpty()
     }
 
     private fun chatMessages(vararg contents: Pair<String, String>) = flowOf(
