@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryLocallyHiddenMessagesStore
 import me.meeshy.sdk.chat.LocallyHiddenMessages
 import me.meeshy.sdk.conversation.ConversationRepository
@@ -35,6 +36,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ReactionSyncResponse
 import me.meeshy.sdk.model.ReactionUpdateEvent
@@ -101,6 +103,7 @@ class ChatViewModelTest {
         val socket: MessageSocketManager,
         val emojiUsage: InMemoryEmojiUsageStore,
         val locallyHidden: InMemoryLocallyHiddenMessagesStore,
+        val draftStore: InMemoryConversationDraftStore,
     )
 
     private fun viewModel(
@@ -117,6 +120,7 @@ class ChatViewModelTest {
         conversation: ApiConversation? = null,
         nowMillis: Long = FIXED_NOW,
         hidden: LocallyHiddenMessages = LocallyHiddenMessages(),
+        drafts: Map<String, ConversationDraft> = emptyMap(),
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -132,6 +136,7 @@ class ChatViewModelTest {
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
         val locallyHidden = InMemoryLocallyHiddenMessagesStore(hidden)
+        val draftStore = InMemoryConversationDraftStore(drafts)
         val fixedNow = nowMillis
         val clock = object : CacheClock {
             override fun nowMillis(): Long = fixedNow
@@ -148,6 +153,7 @@ class ChatViewModelTest {
                 workManager,
                 MeeshyConfig(),
                 clock,
+                draftStore,
                 handle,
             ),
             repo,
@@ -157,6 +163,7 @@ class ChatViewModelTest {
             socket,
             emojiUsage,
             locallyHidden,
+            draftStore,
         )
     }
 
@@ -696,6 +703,82 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.editingMessageId).isNull()
         assertThat(h.vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun a_stored_draft_is_restored_into_the_composer_when_the_conversation_opens() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "unsent thought")),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("unsent thought")
+    }
+
+    @Test
+    fun opening_a_conversation_with_no_stored_draft_leaves_the_composer_empty() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun typing_auto_saves_the_draft_to_the_durable_store() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("half a sentence")
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")?.text).isEqualTo("half a sentence")
+    }
+
+    @Test
+    fun clearing_the_composer_purges_the_stored_draft() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "unsent")),
+        )
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("")
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
+    fun sending_a_message_purges_the_stored_draft() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hello")
+        advanceUntilIdle()
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
+    fun editing_a_message_never_overwrites_the_stored_new_message_draft() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "keep me")),
+        )
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+        h.vm.onDraftChange("salut edited")
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")?.text).isEqualTo("keep me")
     }
 
     @Test
