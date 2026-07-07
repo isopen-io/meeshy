@@ -226,7 +226,7 @@ jest.mock('../handlers/StatusHandler', () => ({
       handleTypingStop: jest.fn().mockResolvedValue(undefined),
       invalidateIdentityCache: jest.fn(),
       clearTypingThrottle: jest.fn(),
-      drainActiveTypingState: jest.fn().mockReturnValue({ conversationIds: [], identity: null }),
+      handleSocketDisconnecting: jest.fn().mockResolvedValue(undefined),
     };
     return mockStatusHandlerInstance;
   }),
@@ -925,13 +925,79 @@ describe('MeeshySocketIOManager', () => {
       expect(mockAuthHandlerInstance.handleDisconnection).toHaveBeenCalledWith(socket);
     });
 
-    it('invalidates identity cache and clears typing throttle on disconnect when userId found', () => {
+    it('invalidates identity cache on disconnect when userId found', () => {
       const socket = makeSocket('sock-d3');
       (manager as any).socketToUser.set('sock-d3', 'user-d3');
       triggerConnection(socket);
       socket._handlers['disconnect']('transport close');
-      expect(mockStatusHandlerInstance.drainActiveTypingState).toHaveBeenCalledWith('user-d3');
       expect(mockStatusHandlerInstance.invalidateIdentityCache).toHaveBeenCalledWith('user-d3');
+    });
+
+    it('does NOT re-broadcast typing:stop from the disconnect handler (delegated to disconnecting)', () => {
+      // Regression: the disconnect handler previously drained the per-user
+      // throttle map and re-emitted typing:stop without multi-device
+      // suppression or blocked-viewer exclusion, producing duplicate/false
+      // stops. That broadcast now belongs solely to the disconnecting handler.
+      const socket = makeSocket('sock-d3b');
+      (manager as any).socketToUser.set('sock-d3b', 'user-d3b');
+      triggerConnection(socket);
+      ioState.toEmit.mockClear();
+      socket._handlers['disconnect']('transport close');
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.TYPING_STOP, expect.anything());
+    });
+
+    it('delegates typing:stop cleanup to handleSocketDisconnecting, passing sibling sockets', () => {
+      const socket = makeSocket('sock-dc1');
+      (manager as any).socketToUser.set('sock-dc1', 'user-dc1');
+      (manager as any).userSockets.set('user-dc1', new Set(['sock-dc1', 'sock-dc2']));
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      expect(mockStatusHandlerInstance.handleSocketDisconnecting).toHaveBeenCalledWith(
+        'sock-dc1',
+        expect.any(Function),
+        expect.any(Set)
+      );
+      const otherSockets = mockStatusHandlerInstance.handleSocketDisconnecting.mock.calls[0][2];
+      expect([...otherSockets]).toEqual(['sock-dc2']);
+    });
+
+    it('omits sibling-socket set when the disconnecting socket is the only one', () => {
+      const socket = makeSocket('sock-dc-solo');
+      (manager as any).socketToUser.set('sock-dc-solo', 'user-dc-solo');
+      (manager as any).userSockets.set('user-dc-solo', new Set(['sock-dc-solo']));
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      expect(mockStatusHandlerInstance.handleSocketDisconnecting.mock.calls[0][2]).toBeUndefined();
+    });
+
+    it('routes the handleSocketDisconnecting broadcast through io.to(room).except(blocked)', () => {
+      const socket = makeSocket('sock-dc3');
+      (manager as any).socketToUser.set('sock-dc3', 'user-dc3');
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      const broadcastFn = mockStatusHandlerInstance.handleSocketDisconnecting.mock.calls[0][1];
+      ioState.to.mockClear();
+      ioState.except.mockClear();
+      ioState.toEmit.mockClear();
+      broadcastFn('conversation:c1', SERVER_EVENTS.TYPING_STOP, { isTyping: false }, ['blocked-sock']);
+      expect(ioState.to).toHaveBeenCalledWith('conversation:c1');
+      expect(ioState.except).toHaveBeenCalledWith(['blocked-sock']);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.TYPING_STOP, { isTyping: false });
+    });
+
+    it('routes the handleSocketDisconnecting broadcast without except when no blocked sockets', () => {
+      const socket = makeSocket('sock-dc4');
+      (manager as any).socketToUser.set('sock-dc4', 'user-dc4');
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      const broadcastFn = mockStatusHandlerInstance.handleSocketDisconnecting.mock.calls[0][1];
+      ioState.to.mockClear();
+      ioState.except.mockClear();
+      ioState.toEmit.mockClear();
+      broadcastFn('conversation:c2', SERVER_EVENTS.TYPING_STOP, { isTyping: false });
+      expect(ioState.to).toHaveBeenCalledWith('conversation:c2');
+      expect(ioState.except).not.toHaveBeenCalled();
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.TYPING_STOP, { isTyping: false });
     });
 
     it('deletes presenceSnapshotCache entry on disconnect', () => {
