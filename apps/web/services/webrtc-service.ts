@@ -319,6 +319,19 @@ export class WebRTCService {
 
       this.participantId = participantId;
 
+      // Perfect-negotiation state is scoped to the RTCPeerConnection this
+      // method is about to build — a service instance can be reused across a
+      // participant leave→rejoin without an intervening close() (see
+      // use-webrtc-p2p.ts's per-participant service cache), so any state left
+      // over from a prior connection (e.g. autoNegotiate=true from a
+      // completed initial negotiation) is stale and must not leak onto the
+      // new one, or onnegotiationneeded can fire a second, racing offer.
+      this.videoTransceiver = null;
+      this.autoNegotiate = false;
+      this.makingOffer = false;
+      this.isSettingRemoteAnswerPending = false;
+      this.ignoreOffer = false;
+
       // Create RTCPeerConnection (prefer server-provided TURN servers over config defaults)
       this.peerConnection = new RTCPeerConnection({
         iceServers: this.serverIceServers ?? this.config.iceServers,

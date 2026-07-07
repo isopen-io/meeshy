@@ -1712,6 +1712,38 @@ describe('close', () => {
 });
 
 // ===========================================================================
+// createPeerConnection — reused without an intervening close() (participant
+// leave→rejoin: use-webrtc-p2p.ts caches one WebRTCService per participantId
+// and only calls close() on full teardown, not on a single participant leave)
+// ===========================================================================
+
+describe('createPeerConnection — reused without close (participant rejoin)', () => {
+  it('resets autoNegotiate and other perfect-negotiation flags on reuse, even without close() first', async () => {
+    const { service } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer(); // sets autoNegotiate=true on the FIRST connection
+
+    // Participant rejoins: a new peer connection is built on the SAME
+    // service instance, with no close() call in between (mirrors
+    // use-webrtc-p2p.ts's per-participant service cache).
+    const pc2 = service.createPeerConnection('p2') as unknown as FakeRTCPeerConnection;
+
+    // A stale autoNegotiate=true would let onnegotiationneeded fire a second,
+    // racing offer concurrently with the explicit createOffer() the rejoin
+    // flow is about to await.
+    const onLocalDesc = jest.fn();
+    (service as unknown as { config: WebRTCServiceConfig }).config.onLocalDescription = onLocalDesc;
+    pc2.onnegotiationneeded!();
+    // negotiate() awaits createOffer() then setLocalDescription() before
+    // emitting onLocalDescription — flush those microtasks before asserting.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onLocalDesc).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
 // enableSimulcast (public SDP method)
 // ===========================================================================
 
