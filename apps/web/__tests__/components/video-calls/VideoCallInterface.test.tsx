@@ -68,7 +68,10 @@ jest.mock('@/hooks/use-adaptive-degradation', () => ({
   useAdaptiveDegradation: (...args: unknown[]) => useAdaptiveDegradationMock(...(args as [])),
 }));
 jest.mock('@/services/meeshy-socketio.service', () => ({
-  meeshySocketIOService: { getSocket: () => null, onStatusChange: jest.fn(() => () => {}) },
+  meeshySocketIOService: {
+    getSocket: jest.fn(() => null),
+    onStatusChange: jest.fn(() => () => {}),
+  },
 }));
 jest.mock('@/stores/call-store', () => {
   const useCallStore = jest.fn(() => storeState) as unknown as {
@@ -82,12 +85,22 @@ jest.mock('@/stores/call-store', () => {
 });
 
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 
 describe('VideoCallInterface (container)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     storeState.controls = { audioEnabled: true, videoEnabled: true };
+    storeState.currentCall = {
+      id: 'call1',
+      startedAt: new Date().toISOString(),
+      initiatorId: 'other',
+      participants: [
+        { userId: 'u1', username: 'Me', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+      ],
+    };
     useAdaptiveDegradationMock.mockReturnValue({ videoSuspended: false });
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(null);
   });
 
   it('renders the core call chrome', () => {
@@ -131,5 +144,68 @@ describe('VideoCallInterface (container)', () => {
     } finally {
       storeState.remoteStreams = new Map();
     }
+  });
+
+  // Sibling-drift fix: `offersCreatedFor` used to be populated on offer
+  // creation but never cleared when the peer left — a participant who left
+  // and later rejoined mid-call (network blip, tab reload) would silently
+  // never get a fresh offer, since the guard thought it had already offered
+  // them. It must be released once the peer's connection is actually torn
+  // down (the same 2s cleanup step that removes their stream/peer connection).
+  describe('offersCreatedFor guard release on participant-left', () => {
+    it('clears the offer-created guard so a rejoined participant gets a fresh offer', () => {
+      jest.useFakeTimers();
+      try {
+        const fakeSocket = { on: jest.fn(), off: jest.fn() };
+        (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+
+        // We are the initiator so the offer-creation effect is active.
+        storeState.currentCall = {
+          id: 'call1',
+          startedAt: new Date().toISOString(),
+          initiatorId: 'u1',
+          participants: [
+            { userId: 'peer1', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+          ],
+        };
+
+        const { rerender } = render(<VideoCallInterface callId="call1" />);
+        expect(webrtc.createOffer).toHaveBeenCalledTimes(1);
+        expect(webrtc.createOffer).toHaveBeenCalledWith('peer1');
+
+        // The peer leaves: participant-left fires, then the 2s cleanup runs.
+        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
+        jest.advanceTimersByTime(2000);
+        expect(storeState.removeRemoteStream).toHaveBeenCalledWith('peer1');
+        expect(storeState.removePeerConnection).toHaveBeenCalledWith('peer1');
+
+        // Force the offer-creation effect to re-evaluate by round-tripping
+        // `participants.length` (its dependency) through 0 and back to 1 —
+        // simulating the peer briefly leaving the roster then rejoining.
+        storeState.currentCall = {
+          id: 'call1',
+          startedAt: new Date().toISOString(),
+          initiatorId: 'u1',
+          participants: [],
+        };
+        rerender(<VideoCallInterface callId="call1" />);
+        storeState.currentCall = {
+          id: 'call1',
+          startedAt: new Date().toISOString(),
+          initiatorId: 'u1',
+          participants: [
+            { userId: 'peer1', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+          ],
+        };
+        rerender(<VideoCallInterface callId="call1" />);
+
+        expect(webrtc.createOffer).toHaveBeenCalledTimes(2);
+        expect(webrtc.createOffer).toHaveBeenNthCalledWith(2, 'peer1');
+      } finally {
+        jest.useRealTimers();
+        storeState.remoteStreams = new Map();
+      }
+    });
   });
 });

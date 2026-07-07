@@ -1521,3 +1521,86 @@ candidats contre le backlog avant de rapporter quoi que ce soit — web et gatew
   - `negotiate()` (`webrtc-service.ts:750-755`) : le guard `makingOffer` peut potentiellement abandonner
     silencieusement un ICE-restart en attente s'il court-circuite une renégociation A/V déjà en vol —
     spéculatif, fenêtre de course étroite, non vérifié comme atteignable en pratique.
+
+## Vague 20 — 3 des 5 items ouverts de la Vague 19 traités (item 1 déjà corrigé entre-temps) (2026-07-07)
+
+Point d'entrée : routine calling-feature. Un agent d'exploration dédié (lecture seule) a re-vérifié les 5
+items "Reste ouvert" de la Vague 19 contre `HEAD` avant tout fix — `git log` confirme qu'aucun commit
+postérieur à `4c99916d` n'avait touché ces fichiers.
+
+- **Item 1 (`call:force-leave` court-circuite `broadcastCallEnded()`) — DÉJÀ CORRIGÉ**, par le commit
+  `164efcf9` ("repair phantom-ringing fanout gap + call teardown edge cases", même journée que la Vague 19).
+  Vérifié par lecture directe : `CallEventsHandler.ts` route bien ce chemin via `broadcastCallEnded()`
+  depuis ce commit. Aucune action nécessaire.
+- **[FIX RÉEL, gateway, TDD] Item 5 — `call:force-leave` ne nettoyait ni `ringingTimeout` ni
+  `bufferedOffer`** — contrairement à `call:leave` (même fichier, juste au-dessus), qui appelle les deux
+  juste après `leaveCall()`. Fix : mêmes deux appels ajoutés dans la boucle de force-leave, juste après
+  `leaveCall()`. 2 tests TDD (`CallEventsHandler-force-leave.test.ts`) : clearRingingTimeout appelé avec le
+  bon callId, bufferedOffer supprimé (seedé via accès `(handler as any).bufferedOffers`).
+- **[FIX RÉEL, gateway, TDD] Item 2 — GC tier 1 (initiated/ringing > 120s → missed) ne créait jamais de
+  `Notification` persistée** pour les participants n'ayant pas répondu, contrairement au chemin in-process
+  (`CallEventsHandler.handleMissedCall` → `createMissedCallNotifications`). `CallCleanupService.forceEndCall`
+  mirrorait déjà les DEUX autres effets de bord d'un missed (résumé via `postSummary`, push silencieux via
+  `missedCallCancelPush`) mais pas la notification badge/centre-de-notifications elle-même — un appel résolu
+  UNIQUEMENT par ce filet GC laissait le callee sans aucune trace qu'on l'avait appelé. Fix : nouveau bridge
+  `setMissedCallNotificationCallback` (miroir exact de `setMissedCallCancelPushCallback`), câblé dans
+  `server.ts` vers `callEventsHandler.createMissedCallNotifications(callId)` — PAS `handleMissedCall` (qui
+  ré-invoquerait `markCallAsMissed`, déjà fait par la transaction GC elle-même ; seul l'effet de bord
+  notification manquait). 6 tests TDD dans `CallCleanupService.test.ts` (miroir exact de la suite
+  `setMissedCallCancelPushCallback` : invoqué tier-1 seulement, pas tier-2/3, pas sur race-guard skip, ne
+  jette pas si le callback rejette, no-op sans callback).
+- **[FIX RÉEL, web, TDD] Item 3 — `VideoCallInterface.offersCreatedFor` (ref, composant réellement monté via
+  `CallManager.tsx` → confirmé, pas le jumeau mort) n'était jamais invalidé sur `participant-left`** — un
+  participant qui quitte puis rejoint pendant que le composant reste monté (blip réseau, reload d'onglet) ne
+  recevait plus jamais d'offer, la guard le croyant déjà offert pour toujours. Fix : `offersCreatedFor.current.delete(participantId)`
+  ajouté dans le même bloc `setTimeout` (2s) qui fait déjà `removeRemoteStream`/`removePeerConnection` —
+  au moment où la peer connection est réellement démontée, pas avant. Test TDD dans
+  `VideoCallInterface.test.tsx` : simule quitter (event participant-left + avance des timers 2s) puis
+  rejoindre (round-trip `participants.length` 1→0→1 via `rerender`, la vraie dépendance de l'effet
+  d'offer) → `createOffer` doit être rappelé une 2e fois pour le même participantId. RED confirmé (revert
+  du seul fix source → 1/6 rouge, `createOffer` jamais rappelé).
+- **[FIX RÉEL, web, TDD] Item 4 — le refresh périodique des credentials TURN n'était jamais implémenté côté
+  web** (gap de fonctionnalité entière, documenté 3 vagues de suite comme "hors scope, nécessite une session
+  dédiée" — traité ici avec un scope volontairement réduit pour rester sûr). Le gateway expose depuis
+  longtemps le round-trip complet `call:request-ice-servers`/`call:ice-servers-refreshed` (iOS le consomme :
+  refresh périodique à 80% du TTL + refresh sur ICE-restart) mais `apps/web/hooks/use-webrtc-p2p.ts` n'avait
+  AUCUN site d'appel pour l'un ou l'autre event — un appel web dépassant la TTL TURN (~3600s par défaut) qui
+  a besoin d'un ICE restart retentait avec des credentials expirés, sans échappatoire pour un pair en NAT
+  symétrique. Fix scope volontairement réduit (évite de threader `ttl` à travers tous les acks/events
+  `call:initiate`/`call:join`/`call:initiated`/`call:participant-joined`, qui aurait cassé plusieurs mocks
+  `CallService` de tests gateway existants sans `getIceServerTtl` stubé — vérifié en amont, pas tenté) :
+  timer de refresh périodique armé au montage avec un TTL par défaut conservateur (3600s, miroir du défaut
+  documenté ailleurs dans ce fichier), ET refresh immédiat déclenché sur `iceConnectionState === 'disconnected'`
+  (signal de network-change/ICE-restart imminent, avant même l'échec). La réponse `call:ice-servers-refreshed`
+  (qui, elle, porte bien un `ttl` réel per-event) met à jour le store ET applique en direct
+  `service.setIceServers(...)` à chaque `WebRTCService` déjà existant dans `webrtcServicesRef` (le fix RC-1
+  antérieur fait que `setIceServers` applique déjà via `RTCPeerConnection.setConfiguration` si la connexion
+  existe), puis reprogramme le prochain refresh sur le VRAI ttl reçu — donc après le premier cycle, le
+  scheduling converge vers la valeur serveur réelle même si le défaut de démarrage était approximatif.
+  5 tests TDD (`use-webrtc-p2p.test.tsx`, nouveau describe `TURN credential refresh`) : écoute l'event au
+  montage + arme le timer par défaut ; refresh immédiat sur `disconnected` ; applique store+peer connections
+  existantes et reprogramme sur le TTL réel reçu ; ignore un refresh pour un autre callId ; nettoie le timer
+  au démontage. RED confirmé (revert du seul fix source → 5/29 rouges dans ce fichier). Mock `useCallStore`
+  du fichier de test converti de littéral figé vers `Object.assign(buildState, { getState: buildState })`
+  (le hook appelle maintenant `useCallStore.getState().setIceServers(...)`, motif déjà établi ailleurs dans
+  la codebase pour les stores Zustand mockés).
+- **Non traité (déféré à une session dédiée, comme documenté depuis 3 vagues)** : threader le VRAI `ttl` à
+  travers `call:join`/`call:initiate`/`call:initiated`/`call:participant-joined` remplacerait le défaut
+  conservateur ci-dessus par la valeur serveur exacte dès le premier cycle — gain marginal (le premier
+  refresh utilise de toute façon le TTL réel dès la 1re réponse), coût réel (≥5 fichiers de test gateway à
+  mettre à jour avec un mock `getIceServerTtl`), jugé hors scope pour cette session.
+- **Vérification (gateway)** : suite filtrée `*[Cc]all*` : 31/31 suites, 863/863 tests verts (+11 vs Vague
+  19 : 2 force-leave clear + 6 missed-notification callback + 3 déjà comptés côté web n'affectent pas ce
+  total). `tsc --noEmit` gateway : 0 erreur (client Prisma généré + `packages/shared` buildé proprement
+  cette session, réseau OK).
+- **Vérification (web)** : suite filtrée `*[Cc]all*` + `*webrtc*` : 21 suites, 427 tests verts (aucune
+  régression). `tsc --noEmit` web : 1513 erreurs avant/après (identique, diff textuel confirmé) — les 11
+  restantes sur `VideoCallInterface.tsx` sont pré-existantes (typage `unknown` sur `window`/`event`, non
+  liées à ce diff).
+- **iOS (lecture seule, aucun changement)** : aucun commit iOS sur les fichiers d'appel depuis la Vague 19 —
+  pas de nouvelle zone à auditer cette session (toujours pas de toolchain Swift/Xcode dans cet
+  environnement Linux).
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `forceEndCall` room Socket.IO non vidée, `negotiate()` guard `makingOffer`
+  spéculatif ; nouveau : threading complet du `ttl` TURN à travers tous les événements call (voir item 4
+  ci-dessus).

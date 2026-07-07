@@ -19,6 +19,7 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
 const mockLeaveCall5 = jest.fn<any>();
 const mockCreateCallSummaryMessage5 = jest.fn<any>();
+const mockClearRingingTimeout5 = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -30,7 +31,7 @@ jest.mock('../../../services/CallService', () => ({
     endCall: jest.fn<any>(),
     getCallSession: jest.fn<any>(),
     generateIceServers: jest.fn<any>().mockReturnValue([]),
-    clearRingingTimeout: jest.fn<any>(),
+    clearRingingTimeout: mockClearRingingTimeout5,
     scheduleRingingTimeout: jest.fn<any>(),
     listHistory: jest.fn<any>(),
     handleMissedCall: jest.fn<any>(),
@@ -331,6 +332,58 @@ describe('CallEventsHandler — call:force-leave handler', () => {
       await handlers['call:force-leave'](FORCE_LEAVE_DATA);
 
       expect(mockLeaveCall5).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sibling-drift fix — mirrors `call:leave`'s clearRingingTimeout/
+  // clearBufferedOffer calls, which force-leave never had. Without this, a
+  // still-armed ringing timer or buffered offer for the force-left call
+  // lingers in memory instead of being released the moment the leave is
+  // known (same category of fix as C7 above, found in the same audit pass).
+  // -------------------------------------------------------------------------
+
+  describe('clears ringing timeout and buffered offer on force-leave (sibling-drift fix)', () => {
+    it('clears the ringing timeout for the force-left call', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+      });
+      mockLeaveCall5.mockResolvedValue(makeEndedCallSession());
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(mockClearRingingTimeout5).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('clears any buffered offer for the force-left call', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+      });
+      mockLeaveCall5.mockResolvedValue(makeEndedCallSession());
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      // Seed a buffered offer for this callId the way `call:signal` would.
+      (handler as any).bufferedOffers.set(CALL_ID, {
+        signal: { type: 'offer', sdp: 'v=0' },
+        bufferedAt: Date.now(),
+      });
+
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect((handler as any).bufferedOffers.has(CALL_ID)).toBe(false);
     });
   });
 
