@@ -23,9 +23,9 @@ ReelFeedAutoplayCoordinator,ReelFeedLayout}.swift`, `ViewModels/ReelsViewModel.s
       stable pour l'appelant, feature/reels ne dépend pas de media3). (fait)
 - [x] **P4 — nav + lancement (code ; A/B vidéo DIFFÉRÉ)** : `Routes.REELS="reels?seed={seed}"`
       + `reels(seed)` + composable → `ReelsScreen`. Feed `onPostClick` → `reels(seed=postId)`.
-      Item radial « Réels » (PlayCircle/Error) → `reels()`. Build vert. **A/B vidéo réelle
-      NON vérifié** : émulateur wedgé (mémoire hôte ~110 MB, shell KO, screencap 0o) — à
-      refaire quand l'émulateur récupère (libérer RAM hôte / rebooter l'AVD `-gpu host`).
+      Item radial « Réels » (PlayCircle/Error) → `reels()`. Build vert. **A/B VIDÉO VÉRIFIÉ ✅** (après reboot AVD) : la vidéo JOUE plein écran cropée
+      (RESIZE_MODE_ZOOM), le swipe vertical change de réel (chaque page joue sa vidéo,
+      poster→lecture), overlay auteur/légende/actions OK. = parité iOS ReelsPlayerView.
 - [x] **P5 — intégration Feed (code ; A/B différé)** : `FeedPostPresentation.isReel` (post.type
       ==reel) ; bandeau réel (PlayCircle indigo + « Réel ») sur les cartes reel ; tap sur un
       reel → overlay Réels au seed (onClick gaté : non-reels inertes, pas de détail post).
