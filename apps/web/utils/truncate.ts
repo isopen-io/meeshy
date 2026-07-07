@@ -15,6 +15,11 @@
 export function truncateFilename(filename: string, maxLength: number = 32): string {
   if (filename.length <= maxLength) return filename;
 
+  // An ellipsis form ("x...") needs at least 1 content char + "..." = 4 chars.
+  // Below that budget any ellipsis output can only overrun maxLength, so degrade
+  // to a bare slice — honoring the documented "never exceeds maxLength" invariant.
+  if (maxLength <= 3) return filename.slice(0, Math.max(0, maxLength));
+
   const dot = filename.lastIndexOf('.');
   const head = (budget: number) => `${filename.slice(0, Math.max(1, budget))}...`;
 
