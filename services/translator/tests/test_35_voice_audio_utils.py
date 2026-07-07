@@ -370,6 +370,27 @@ class TestEndsSentenceBoundary:
         from src.utils.smart_segment_merger import _ends_with_sentence_boundary
         assert _ends_with_sentence_boundary("bonjour") is False
 
+    def test_cjk_is_not_a_sentence_boundary(self):
+        """Regression: EMOJI_PATTERN must NOT match CJK/Kana/Hangul. Writing the
+        enclosed-characters block as the range "\\U000024C2-\\U0001F251" makes it
+        span U+4E00..U+9FFF (CJK), U+3040..U+30FF (Kana) and U+AC00..U+D7AF
+        (Hangul), so ordinary Chinese/Japanese/Korean text was misdetected as an
+        emoji and every CJK segment was treated as ending a sentence."""
+        from src.utils.smart_segment_merger import _ends_with_sentence_boundary
+        assert _ends_with_sentence_boundary("你好") is False
+        assert _ends_with_sentence_boundary("这是中文") is False
+        assert _ends_with_sentence_boundary("これは") is False
+        assert _ends_with_sentence_boundary("안녕하세요") is False
+        assert _ends_with_sentence_boundary("日本語") is False
+
+    def test_enclosed_emoji_still_detected(self):
+        """The intended enclosed-emoji code points must still count as boundaries
+        after removing the CJK-swallowing range."""
+        from src.utils.smart_segment_merger import _ends_with_sentence_boundary
+        assert _ends_with_sentence_boundary("ok Ⓜ") is True        # U+24C2
+        assert _ends_with_sentence_boundary("full 🈵") is True      # U+1F235
+        assert _ends_with_sentence_boundary("flag 🇫🇷") is True     # regional indicators
+
 
 class TestMergeShortSegments:
     def test_empty_returns_empty(self):
@@ -403,6 +424,20 @@ class TestMergeShortSegments:
         ]
         result = merge_short_segments(segs)
         assert len(result) == 2
+
+    def test_pass1_merges_cjk_characters(self):
+        """Regression: Whisper emits CJK as many tiny per-character segments.
+        Before the EMOJI_PATTERN range fix, each CJK char was mistaken for an
+        emoji (sentence boundary), so merging was disabled for Chinese/Japanese/
+        Korean audio. Two close CJK chars must now merge like any short words."""
+        from src.utils.smart_segment_merger import merge_short_segments
+        segs = [
+            _seg("你", 0, 100),
+            _seg("好", 105, 200),   # pause 5ms < 90ms; total 3 chars < 8
+        ]
+        result = merge_short_segments(segs)
+        assert len(result) == 1
+        assert result[0].text == "你 好"
 
     def test_pass1_does_not_merge_long_pause(self):
         from src.utils.smart_segment_merger import merge_short_segments
