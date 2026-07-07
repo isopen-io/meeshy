@@ -20,9 +20,12 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -76,7 +79,8 @@ class ConversationListViewModelTest {
     private fun viewModel(
         repo: ConversationRepository,
         connection: SocketManager = connectionSocket(),
-    ) = ConversationListViewModel(repo, socketManager(), workManager, connection, session())
+        draftStore: ConversationDraftStore = InMemoryConversationDraftStore(),
+    ) = ConversationListViewModel(repo, socketManager(), workManager, draftStore, connection, session())
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
@@ -89,6 +93,26 @@ class ConversationListViewModelTest {
         assertThat(vm.state.value.conversations).hasSize(1)
         assertThat(vm.state.value.showSkeleton).isFalse()
         assertThat(vm.state.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun a_conversation_with_a_stored_draft_floats_to_the_top() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2"), ApiConversation(id = "c3")),
+                    ageMillis = 0,
+                ),
+            ),
+        )
+        val draftStore = InMemoryConversationDraftStore(
+            mapOf("c3" to ConversationDraft(conversationId = "c3", text = "unsent")),
+        )
+        val vm = viewModel(repo, draftStore = draftStore)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("c3", "c1", "c2").inOrder()
+        assertThat(vm.state.value.draftFor("c3")?.text).isEqualTo("unsent")
     }
 
     @Test

@@ -68,6 +68,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.CollapsibleSection
@@ -165,6 +166,7 @@ fun ConversationListScreen(
                             ConversationRow(
                                 conversation = conversation,
                                 currentUserId = state.currentUserId,
+                                draft = state.draftFor(conversation.id),
                                 onClick = { onConversationClick(conversation.id) },
                                 onTogglePin = { viewModel.togglePin(conversation.id) },
                                 onToggleMute = { viewModel.toggleMute(conversation.id) },
@@ -303,6 +305,7 @@ private fun ConnectionBannerStrip(banner: ConnectionBanner, modifier: Modifier =
 private fun ConversationRow(
     conversation: ApiConversation,
     currentUserId: String?,
+    draft: ConversationDraft?,
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
@@ -340,6 +343,7 @@ private fun ConversationRow(
         ConversationRowContent(
             conversation = conversation,
             currentUserId = currentUserId,
+            draft = draft,
             isPinned = isPinned,
             isMuted = isMuted,
             isArchived = isArchived,
@@ -357,6 +361,7 @@ private fun ConversationRow(
 private fun ConversationRowContent(
     conversation: ApiConversation,
     currentUserId: String?,
+    draft: ConversationDraft?,
     isPinned: Boolean,
     isMuted: Boolean,
     isArchived: Boolean,
@@ -377,7 +382,9 @@ private fun ConversationRowContent(
         none = stringResource(R.string.conversations_no_messages),
         you = stringResource(R.string.conversations_preview_you),
         senderFormat = stringResource(R.string.conversations_preview_sender_format),
+        draftPrefix = stringResource(R.string.conversations_preview_draft_prefix),
     )
+    val draftLine = draftPreview(draft, previewLabels)
     Box {
         MeeshyGlassSurface(
             shape = RoundedCornerShape(MeeshyRadius.xl),
@@ -437,14 +444,18 @@ private fun ConversationRowContent(
                     }
                 }
                 Text(
-                    text = lastMessagePreview(
+                    text = draftLine ?: lastMessagePreview(
                         message = conversation.lastMessage,
                         currentUserId = currentUserId,
                         showSender = conversation.type != "direct",
                         labels = previewLabels,
                     ),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MeeshyTheme.tokens.textSecondary,
+                    color = if (draftLine != null) {
+                        hexColor(conversation.accentHex())
+                    } else {
+                        MeeshyTheme.tokens.textSecondary
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
