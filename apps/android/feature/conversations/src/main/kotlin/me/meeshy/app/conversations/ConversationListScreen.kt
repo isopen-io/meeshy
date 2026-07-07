@@ -113,13 +113,10 @@ fun ConversationListScreen(
                     )
                 },
                 actions = {
-                    // iOS parity: search moves to the bottom bar; the top keeps only
-                    // the contacts + sign-out affordances.
+                    // iOS parity: search moves to the bottom bar; sign-out lives in
+                    // Settings (Danger section), so the top keeps only Contacts.
                     IconButton(onClick = onContacts) {
                         Icon(Icons.Filled.People, contentDescription = stringResource(R.string.conversations_contacts))
-                    }
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.conversations_logout))
                     }
                 },
             )
