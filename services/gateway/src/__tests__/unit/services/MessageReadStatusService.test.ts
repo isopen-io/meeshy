@@ -662,6 +662,50 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.messageStatusEntry.updateMany).not.toHaveBeenCalled();
     });
 
+    it('read implies delivered: also advances the delivery cursor to the read message', async () => {
+      // Recipient opens a conversation whose newest message was never delivered
+      // to them (they were offline when it arrived, so no delivery receipt ran).
+      // Reading it must NOT leave the delivery frontier behind the read frontier —
+      // read strictly implies delivered. Otherwise the sender sees the "read"
+      // tick ahead of the "delivered" tick (readCount 1, deliveredCount 0), an
+      // impossible state.
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01'), lastDeliveredAt: null });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      // The delivery cursor is advanced to the same message, not just the read cursor.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            lastDeliveredMessageId: testMessageId,
+            lastDeliveredAt: expect.any(Date)
+          })
+        })
+      );
+    });
+
+    it('read implies delivered: frozen status entries carry deliveredAt/receivedAt, not readAt alone', async () => {
+      // A read-without-prior-delivery must still stamp deliveredAt/receivedAt on
+      // the per-message status entry, so getMessageStatusDetails lists the reader
+      // under BOTH the "delivered" and "read" filters (never read-only).
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      const createStampsDelivered = mockPrisma.messageStatusEntry.createMany.mock.calls
+        .flatMap((call: any[]) => call[0].data)
+        .some((row: any) => row.deliveredAt != null && row.receivedAt != null);
+      const updateStampsDelivered = mockPrisma.messageStatusEntry.updateMany.mock.calls
+        .some((call: any[]) => call[0]?.data && 'deliveredAt' in call[0].data);
+      expect(createStampsDelivered || updateStampsDelivered).toBe(true);
+    });
+
     it('should sync notifications when marking as read', async () => {
       const mockMessage = { id: testMessageId, createdAt: new Date() };
 
@@ -712,8 +756,9 @@ describe('MessageReadStatusService', () => {
       await service.markMessagesAsRead(testParticipantId, testConversationId);
 
       // Second call resolves the same newest message → same key → deduped: the
-      // cursor advance runs exactly once.
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(1);
+      // first mark runs both cursor advances (read + read-implies-delivered),
+      // the deduped second mark adds none.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(2);
     });
 
     it('markMessagesAsReceived advances to a newer message after an argument-less mark deduped, when a newer message arrived', async () => {
@@ -1863,8 +1908,9 @@ describe('MessageReadStatusService', () => {
       // Second read - should use the guarded cursor-advance path again
       await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
-      // Cursor advance should be called twice (once per markMessagesAsRead call)
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(2);
+      // Each markMessagesAsRead advances two cursors (read + read-implies-delivered);
+      // two calls → four advances.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(4);
       // No messageStatusEntry.upsert in cursor-based approach
       expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
     });
@@ -1943,8 +1989,9 @@ describe('MessageReadStatusService', () => {
 
       await expect(Promise.all(promises)).resolves.not.toThrow();
 
-      // Each user should have their own cursor advanced (cursor-based approach)
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(3);
+      // Each user gets their own read cursor advanced plus the read-implies-delivered
+      // advance → two updateMany per user, three users → six.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(6);
     });
 
     it('should handle concurrent attachment status updates', async () => {
@@ -2066,8 +2113,8 @@ describe('MessageReadStatusService', () => {
 
       await service.markMessagesAsRead(testParticipantId, testConversationId, 'msg-49');
 
-      // Should update cursor once regardless of message count
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(1);
+      // Read + read-implies-delivered → two cursor advances, regardless of message count.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(2);
       expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ participantId: testParticipantId, conversationId: testConversationId }),
@@ -2576,8 +2623,10 @@ describe('MessageReadStatusService', () => {
       // A second, newer message arrives and is read < 2s later: must NOT be dropped by dedup.
       await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId2);
 
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(2);
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenLastCalledWith(
+      // Two non-deduped marks, each advancing read + read-implies-delivered cursors → four.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(4);
+      // The second mark's read cursor advanced to the newer message (not swallowed by dedup).
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ lastReadMessageId: testMessageId2 }),
         })

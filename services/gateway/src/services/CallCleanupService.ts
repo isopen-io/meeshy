@@ -78,6 +78,21 @@ export class CallCleanupService {
   // background push that tears it down.
   private missedCallCancelPush: ((callId: string, conversationId: string | undefined, duration: number) => Promise<void>) | null = null;
 
+  // Sibling-drift fix (2026-07-07) — set via `setMissedCallNotificationCallback()`.
+  // `CallEventsHandler.handleMissedCall` (the in-process ringing-timeout path)
+  // both marks the call missed AND creates a persisted `Notification` (badge/
+  // notification-center entry) for every unresponded participant. GC tier 1
+  // (initiated/ringing > 120s → missed) is the backstop for when that
+  // in-process timer never fires — it already mirrors the OTHER two side
+  // effects of a missed call (the `postSummary` system message and the
+  // `missedCallCancelPush` silent APNs push above) but had no bridge for the
+  // notification itself, so a call resolved ONLY by this GC path left the
+  // callee with no notification-center/badge trace it was ever called.
+  // `markCallAsMissed` is NOT re-invoked here — GC's own transaction above
+  // already performed the terminal write, so only the notification side
+  // effect is needed.
+  private missedCallNotify: ((callId: string) => Promise<void>) | null = null;
+
   constructor(
     private prisma: PrismaClient,
     private callService?: CallService,
@@ -128,6 +143,15 @@ export class CallCleanupService {
   ): void {
     this.missedCallCancelPush = cancelPush;
     logger.info('[CallCleanupService] Missed-call cancel-push callback attached — phantom-ringing callees will be released on GC tier 1');
+  }
+
+  // Mirrors `setMissedCallCancelPushCallback` (see the field doc above) —
+  // injected from server startup once CallEventsHandler exists, so a call
+  // resolved only by GC tier 1 also gets its persisted missed-call
+  // notification, not just the silent cancel push.
+  setMissedCallNotificationCallback(notify: (callId: string) => Promise<void>): void {
+    this.missedCallNotify = notify;
+    logger.info('[CallCleanupService] Missed-call notification callback attached — GC tier 1 will create notifications for unresponded participants');
   }
 
   start(): void {
@@ -482,6 +506,16 @@ export class CallCleanupService {
     if (this.missedCallCancelPush && endReason === CallEndReason.missed) {
       this.missedCallCancelPush(callId, session?.conversationId ?? undefined, duration).catch((error) => {
         logger.error('[CallCleanupService] Failed to send missed-call cancel push for GC-ended call', { callId, error });
+      });
+    }
+
+    // Sibling-drift fix (2026-07-07) — same tier-1-only scope as the cancel
+    // push above: only a still-ringing call GC'd into `missed` has
+    // unresponded participants who never got the missed-call notification
+    // any other path (`handleMissedCall`) would have created for them.
+    if (this.missedCallNotify && endReason === CallEndReason.missed) {
+      this.missedCallNotify(callId).catch((error) => {
+        logger.error('[CallCleanupService] Failed to create missed-call notification for GC-ended call', { callId, error });
       });
     }
 

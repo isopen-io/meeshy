@@ -19,8 +19,10 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
@@ -28,6 +30,7 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
@@ -35,6 +38,7 @@ import me.meeshy.sdk.model.ReactionSyncResponse
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
+import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -69,14 +73,16 @@ class ChatViewModelTest {
     private val reactionRemoved = MutableSharedFlow<ReactionUpdateEvent>()
     private val messageReceived = MutableSharedFlow<ApiMessage>()
     private val readStatusUpdated = MutableSharedFlow<ReadStatusUpdatedEvent>()
+    private val typingStarted = MutableSharedFlow<TypingEvent>()
+    private val typingStopped = MutableSharedFlow<TypingEvent>()
 
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { this@mockk.messageReceived } returns this@ChatViewModelTest.messageReceived
             every { messageUpdated } returns MutableSharedFlow()
             every { messageDeleted } returns MutableSharedFlow()
-            every { typingStarted } returns MutableSharedFlow()
-            every { typingStopped } returns MutableSharedFlow()
+            every { this@mockk.typingStarted } returns this@ChatViewModelTest.typingStarted
+            every { this@mockk.typingStopped } returns this@ChatViewModelTest.typingStopped
             every { this@mockk.reactionAdded } returns this@ChatViewModelTest.reactionAdded
             every { this@mockk.reactionRemoved } returns this@ChatViewModelTest.reactionRemoved
             every { this@mockk.readStatusUpdated } returns this@ChatViewModelTest.readStatusUpdated
@@ -106,6 +112,7 @@ class ChatViewModelTest {
         stream: Flow<CacheResult<List<LocalMessage>>>,
         currentUser: MeeshyUser? = null,
         conversation: ApiConversation? = null,
+        nowMillis: Long = FIXED_NOW,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -120,6 +127,10 @@ class ChatViewModelTest {
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
+        val fixedNow = nowMillis
+        val clock = object : CacheClock {
+            override fun nowMillis(): Long = fixedNow
+        }
         return Harness(
             ChatViewModel(
                 repo,
@@ -130,6 +141,7 @@ class ChatViewModelTest {
                 socket,
                 workManager,
                 MeeshyConfig(),
+                clock,
                 handle,
             ),
             repo,
@@ -311,6 +323,24 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun a_group_conversation_exposes_its_member_count_and_group_flag_for_the_header() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.isGroup).isTrue()
+        assertThat(h.vm.state.value.memberCount).isEqualTo(3)
+    }
+
+    @Test
+    fun a_direct_conversation_is_not_flagged_as_a_group() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = directConversation())
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.isGroup).isFalse()
+        assertThat(h.vm.state.value.memberCount).isEqualTo(2)
+    }
+
+    @Test
     fun typing_an_at_query_activates_mention_suggestions_excluding_self() = runTest(dispatcher) {
         val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = conversationWithRoster())
         advanceUntilIdle()
@@ -362,7 +392,69 @@ class ChatViewModelTest {
         assertThat(h.vm.state.value.mention).isEqualTo(MentionAutocompleteState())
     }
 
+    private fun directConversation() = ApiConversation(
+        id = "c1",
+        type = "direct",
+        participants = listOf(
+            ApiParticipant(id = "p0", userId = "me", username = "atabeth", displayName = "Ata Beth"),
+            ApiParticipant(id = "p1", userId = "u1", username = "bob", displayName = "Bob Martin"),
+        ),
+    )
+
+    private fun ownMessageReadByOnePeer() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(
+                    ApiMessage(
+                        id = "m1",
+                        conversationId = "c1",
+                        senderId = "me",
+                        content = "hey",
+                        deliveredCount = 1,
+                        readCount = 1,
+                    ),
+                ),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
+    @Test
+    fun in_a_group_a_message_read_by_one_of_many_stays_sent() = runTest(dispatcher) {
+        val h = harness(ownMessageReadByOnePeer(), currentUser = me, conversation = conversationWithRoster())
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.single().deliveryStatus).isEqualTo(DeliveryStatus.Sent)
+    }
+
+    @Test
+    fun in_a_direct_conversation_a_message_read_by_the_peer_shows_read() = runTest(dispatcher) {
+        val h = harness(ownMessageReadByOnePeer(), currentUser = me, conversation = directConversation())
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.single().deliveryStatus).isEqualTo(DeliveryStatus.Read)
+    }
+
     private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+
+    private val FIXED_NOW = java.time.Instant.parse("2026-07-07T12:00:00Z").toEpochMilli()
+
+    private fun messageCreatedAt(senderId: String, createdAt: String?) = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(
+                    ApiMessage(
+                        id = "m1",
+                        conversationId = "c1",
+                        senderId = senderId,
+                        content = "salut",
+                        createdAt = createdAt,
+                    ),
+                ),
+            ),
+            ageMillis = 0,
+        ),
+    )
 
     private fun syncedConversation() = flowOf(
         CacheResult.Fresh(
@@ -597,6 +689,47 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.editingMessageId).isNull()
         assertThat(h.vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun startEdit_is_allowed_while_the_message_is_still_inside_the_two_hour_window() = runTest(dispatcher) {
+        val h = harness(
+            messageCreatedAt(senderId = "me", createdAt = "2026-07-07T11:30:00Z"),
+            currentUser = me,
+        )
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+
+        assertThat(h.vm.state.value.editingMessageId).isEqualTo("m1")
+        assertThat(h.vm.state.value.draft).isEqualTo("salut")
+    }
+
+    @Test
+    fun startEdit_is_blocked_once_the_two_hour_edit_window_has_passed() = runTest(dispatcher) {
+        val h = harness(
+            messageCreatedAt(senderId = "me", createdAt = "2026-07-07T09:00:00Z"),
+            currentUser = me,
+        )
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+
+        assertThat(h.vm.state.value.editingMessageId).isNull()
+        assertThat(h.vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun startEdit_refuses_a_message_the_current_user_does_not_own() = runTest(dispatcher) {
+        val h = harness(
+            messageCreatedAt(senderId = "other", createdAt = "2026-07-07T11:30:00Z"),
+            currentUser = me,
+        )
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+
+        assertThat(h.vm.state.value.editingMessageId).isNull()
     }
 
     @Test
@@ -879,6 +1012,63 @@ class ChatViewModelTest {
         verify(exactly = 0) { h.socket.emitTypingStart(any()) }
     }
 
+    @Test
+    fun a_peer_typing_start_populates_the_typing_roster() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Bob"))
+        runCurrent()
+
+        assertThat(h.vm.state.value.typingParticipants)
+            .containsExactly(TypingParticipant("u1", "Bob"))
+    }
+
+    @Test
+    fun typing_events_for_another_conversation_are_ignored() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        typingStarted.emit(TypingEvent(conversationId = "other", userId = "u1", displayName = "Bob"))
+        runCurrent()
+
+        assertThat(h.vm.state.value.typingParticipants).isEmpty()
+    }
+
+    @Test
+    fun two_distinct_peers_who_share_a_name_both_show_and_stopping_one_leaves_the_other() =
+        runTest(dispatcher) {
+            val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+            advanceUntilIdle()
+
+            typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Alex"))
+            runCurrent()
+            typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u2", displayName = "Alex"))
+            runCurrent()
+            assertThat(h.vm.state.value.typingParticipants).hasSize(2)
+
+            typingStopped.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Alex"))
+            runCurrent()
+
+            assertThat(h.vm.state.value.typingParticipants)
+                .containsExactly(TypingParticipant("u2", "Alex"))
+        }
+
+    @Test
+    fun a_peer_typing_start_expires_after_the_timeout() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        typingStarted.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Bob"))
+        runCurrent()
+        assertThat(h.vm.state.value.typingParticipants).hasSize(1)
+
+        advanceTimeBy(6_000)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.typingParticipants).isEmpty()
+    }
+
     private fun chatMessages(vararg contents: Pair<String, String>) = flowOf(
         CacheResult.Fresh(
             contents.map { (id, text) ->
@@ -996,5 +1186,84 @@ class ChatViewModelTest {
         h.vm.onSearchQueryChange("hello")
 
         assertThat(h.vm.state.value.search.matchIds).containsExactly("live")
+    }
+
+    private fun replyThread() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(ApiMessage(id = "orig", conversationId = "c1", senderId = "other", content = "the original")),
+                synced(
+                    ApiMessage(
+                        id = "answer",
+                        conversationId = "c1",
+                        senderId = "other",
+                        content = "the reply",
+                        replyTo = ApiMessageReplyPreview(id = "orig", content = "the original"),
+                    ),
+                ),
+                synced(ApiMessage(id = "plain", conversationId = "c1", senderId = "other", content = "no reply here")),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
+    @Test
+    fun tapping_a_reply_whose_original_is_loaded_requests_a_scroll_to_it() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.onReplyPreviewTap("answer")
+
+        assertThat(vm.state.value.scrollToMessageId).isEqualTo("orig")
+    }
+
+    @Test
+    fun tapping_a_reply_to_a_paged_out_original_is_inert() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(
+                        synced(
+                            ApiMessage(
+                                id = "answer",
+                                conversationId = "c1",
+                                senderId = "other",
+                                content = "the reply",
+                                replyTo = ApiMessageReplyPreview(id = "gone", content = "old"),
+                            ),
+                        ),
+                    ),
+                    ageMillis = 0,
+                ),
+            ),
+            currentUser = me,
+        )
+        advanceUntilIdle()
+
+        vm.onReplyPreviewTap("answer")
+
+        assertThat(vm.state.value.scrollToMessageId).isNull()
+    }
+
+    @Test
+    fun tapping_a_message_that_is_not_a_reply_is_inert() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.onReplyPreviewTap("plain")
+
+        assertThat(vm.state.value.scrollToMessageId).isNull()
+    }
+
+    @Test
+    fun handling_the_scroll_clears_the_pending_reply_jump() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+        vm.onReplyPreviewTap("answer")
+        assertThat(vm.state.value.scrollToMessageId).isEqualTo("orig")
+
+        vm.onScrollHandled()
+
+        assertThat(vm.state.value.scrollToMessageId).isNull()
     }
 }

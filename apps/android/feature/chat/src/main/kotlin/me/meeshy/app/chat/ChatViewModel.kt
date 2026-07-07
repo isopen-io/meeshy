@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
@@ -24,6 +25,8 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.MessageEditability
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -48,8 +51,10 @@ data class ChatUiState(
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
-    val typingUsers: List<String> = emptyList(),
+    val typingParticipants: List<TypingParticipant> = emptyList(),
     val conversationTitle: String? = null,
+    val memberCount: Int = 0,
+    val isGroup: Boolean = false,
     val accentColorHex: String? = null,
     val actionMessageId: String? = null,
     val emojiPickerMessageId: String? = null,
@@ -60,6 +65,7 @@ data class ChatUiState(
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
     val imageViewer: ImageViewerTarget? = null,
+    val scrollToMessageId: String? = null,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
@@ -78,6 +84,7 @@ class ChatViewModel @Inject constructor(
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
+    private val clock: CacheClock,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -90,6 +97,7 @@ class ChatViewModel @Inject constructor(
 
     private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     private val showingOriginal = MutableStateFlow<Set<String>>(emptySet())
+    private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
     private var mentionRoster: List<MentionCandidate> = emptyList()
@@ -120,9 +128,16 @@ class ChatViewModel @Inject constructor(
                     excludeUserId = currentUserId,
                 )
                 mentionRoster = roster
+                recipientCount.value = conversation.participants
+                    .mapNotNull { it.userId }
+                    .filterNot { it == currentUserId }
+                    .distinct()
+                    .size
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
+                        memberCount = conversation.memberCount,
+                        isGroup = conversation.type.lowercase() != "direct",
                         accentColorHex = conversation.accentHex(),
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                     )
@@ -143,11 +158,14 @@ class ChatViewModel @Inject constructor(
                 sessionRepository.currentUser,
                 ownReactions,
                 showingOriginal,
-            ) { result, user, own, originals -> BubbleInputs(result, user, own, originals) }
-                .collect { (result, user, own, originals) ->
+                recipientCount,
+            ) { result, user, own, originals, recipients ->
+                BubbleInputs(result, user, own, originals, recipients)
+            }
+                .collect { (result, user, own, originals, recipients) ->
                     latestMessages = result.valueOrNull() ?: latestMessages
                     _state.update { current ->
-                        val next = current.applyResult(result, user, own, originals, config.socketUrl)
+                        val next = current.applyResult(result, user, own, originals, config.socketUrl, recipients)
                         next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
                 }
@@ -208,11 +226,18 @@ class ChatViewModel @Inject constructor(
                         val name = event.displayName ?: event.username ?: event.userId
                         typingCleanupJobs[event.userId]?.cancel()
                         _state.update { s ->
-                            s.copy(typingUsers = (s.typingUsers - name) + name)
+                            s.copy(
+                                typingParticipants = TypingParticipants.started(
+                                    current = s.typingParticipants,
+                                    userId = event.userId,
+                                    name = name,
+                                    selfId = sessionRepository.currentUser.value?.id,
+                                ),
+                            )
                         }
                         typingCleanupJobs[event.userId] = viewModelScope.launch {
                             delay(TYPING_TIMEOUT_MS)
-                            removeTypingUser(event.userId, event.displayName ?: event.username ?: event.userId)
+                            removeTypingUser(event.userId)
                         }
                     }
                 }
@@ -221,7 +246,7 @@ class ChatViewModel @Inject constructor(
                 messageSocketManager.typingStopped.collect { event ->
                     if (event.conversationId == conversationId) {
                         typingCleanupJobs.remove(event.userId)?.cancel()
-                        removeTypingUser(event.userId, event.displayName ?: event.username ?: event.userId)
+                        removeTypingUser(event.userId)
                     }
                 }
             }
@@ -253,8 +278,8 @@ class ChatViewModel @Inject constructor(
         messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
     }
 
-    private fun removeTypingUser(userId: String, displayName: String) {
-        _state.update { s -> s.copy(typingUsers = s.typingUsers - displayName) }
+    private fun removeTypingUser(userId: String) {
+        _state.update { s -> s.copy(typingParticipants = TypingParticipants.stopped(s.typingParticipants, userId)) }
     }
 
     fun onDraftChange(value: String) {
@@ -361,6 +386,23 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(imageViewer = ImageViewerTarget(messageId, imageIndex)) }
     }
 
+    /**
+     * A quoted-reply preview was tapped on the bubble [messageId]. When the quoted
+     * original is currently loaded, request a scroll to it; a paged-out original or a
+     * non-reply is inert (never a crash on an absent target). See [ReplyJumpResolver].
+     */
+    fun onReplyPreviewTap(messageId: String) {
+        val links = _state.value.messages.map { ReplyLink(it.messageId, it.replyToId) }
+        val target = (ReplyJumpResolver.resolve(messageId, links) as? ReplyJump.Scroll)?.targetMessageId
+            ?: return
+        _state.update { it.copy(scrollToMessageId = target) }
+    }
+
+    /** The pending reply-jump scroll has been performed by the screen. */
+    fun onScrollHandled() {
+        _state.update { it.copy(scrollToMessageId = null) }
+    }
+
     fun dismissImageViewer() {
         _state.update { it.copy(imageViewer = null) }
     }
@@ -425,6 +467,13 @@ class ChatViewModel @Inject constructor(
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED
         }?.message ?: return
         if (message.deletedAt != null) return
+        val editable = MessageEditability.canEdit(
+            isOwn = message.senderId != null &&
+                message.senderId == sessionRepository.currentUser.value?.id,
+            createdAtMillis = isoToEpochMillisOrNull(message.createdAt),
+            nowMillis = clock.nowMillis(),
+        )
+        if (!editable) return
         _state.update {
             it.copy(
                 editingMessageId = messageId,
@@ -546,6 +595,7 @@ private data class BubbleInputs(
     val user: MeeshyUser?,
     val ownReactions: Map<String, Set<String>>,
     val showingOriginal: Set<String>,
+    val recipientCount: Int,
 )
 
 private fun <T> CacheResult<List<T>>.valueOrNull(): List<T>? = when (this) {
@@ -561,22 +611,23 @@ private fun ChatUiState.applyResult(
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
     mediaBaseUrl: String,
+    recipientCount: Int,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount),
         ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = false,
         errorMessage = null,
     )
     is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount),
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = false,
     )
     is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl)
+        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount)
             ?: messages,
         ownReactions = ownReactions,
         isSyncing = true,
@@ -595,6 +646,7 @@ private fun List<LocalMessage>.toBubbles(
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
     mediaBaseUrl: String,
+    recipientCount: Int,
 ): List<BubbleContent> = map { local ->
     BubbleContentBuilder.build(
         message = local.message,
@@ -604,6 +656,7 @@ private fun List<LocalMessage>.toBubbles(
         isPending = local.sendState == LocalSendState.SENDING,
         isFailed = local.sendState == LocalSendState.FAILED,
         ownReactions = ownReactions[local.message.id] ?: emptySet(),
+        recipientCount = recipientCount,
         showOriginal = local.message.id in showingOriginal,
         mediaBaseUrl = mediaBaseUrl,
     )

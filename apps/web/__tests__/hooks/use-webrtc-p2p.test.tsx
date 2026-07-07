@@ -14,6 +14,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { WebRTCService } from '@/services/webrtc-service';
 
 // Mock Socket.IO service
 const mockGetSocket = jest.fn();
@@ -77,10 +78,11 @@ const mockAddPeerConnection = jest.fn();
 const mockRemovePeerConnection = jest.fn();
 const mockSetError = jest.fn();
 const mockSetConnecting = jest.fn();
+const mockSetIceServersStore = jest.fn();
 let mockIceServers: RTCIceServer[] | null = null;
 
-jest.mock('@/stores/call-store', () => ({
-  useCallStore: () => ({
+jest.mock('@/stores/call-store', () => {
+  const buildState = () => ({
     localStream: null,
     iceServers: mockIceServers,
     setLocalStream: mockSetLocalStream,
@@ -89,8 +91,11 @@ jest.mock('@/stores/call-store', () => ({
     removePeerConnection: mockRemovePeerConnection,
     setError: mockSetError,
     setConnecting: mockSetConnecting,
-  }),
-}));
+    setIceServers: mockSetIceServersStore,
+  });
+  const useCallStore = Object.assign(buildState, { getState: buildState });
+  return { useCallStore };
+});
 
 // Mock logger
 jest.mock('@/utils/logger', () => ({
@@ -622,6 +627,118 @@ describe('useWebRTCP2P', () => {
 
       // Should not throw
       expect(mockOn).not.toHaveBeenCalled();
+    });
+  });
+
+  // Gap fix (2026-07-07): web never had a call site for
+  // call:request-ice-servers/call:ice-servers-refreshed — a call outliving
+  // the TURN credential TTL had no way to get fresh ones.
+  describe('TURN credential refresh', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('listens for call:ice-servers-refreshed and arms a periodic refresh timer on mount', () => {
+      jest.useFakeTimers();
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+
+      expect(mockOn).toHaveBeenCalledWith(SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED, expect.any(Function));
+
+      // Default fallback TTL is 3600s, refreshed at 80% = 2880s.
+      act(() => {
+        jest.advanceTimersByTime(2880 * 1000);
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS,
+        { callId: mockCallId }
+      );
+    });
+
+    it('requests fresh TURN credentials immediately when ICE connection state becomes disconnected', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockEmit.mockClear();
+
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onIceConnectionStateChange('disconnected');
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS,
+        { callId: mockCallId }
+      );
+    });
+
+    it('applies a refreshed ICE server list to the store and every existing peer connection, then reschedules using the real TTL', async () => {
+      jest.useFakeTimers();
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      const refreshedHandler = mockOn.mock.calls.find(
+        (c) => c[0] === SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED
+      )![1];
+
+      const freshServers = [{ urls: 'turn:fresh.example.com', username: 'u', credential: 'c' }];
+      act(() => {
+        refreshedHandler({ callId: mockCallId, iceServers: freshServers, ttl: 600 });
+      });
+
+      expect(mockSetIceServersStore).toHaveBeenCalledWith(freshServers);
+      expect(mockSetIceServers).toHaveBeenCalledWith(freshServers);
+
+      // Rescheduled at 80% of the REAL ttl (600s), not the 3600s default.
+      mockEmit.mockClear();
+      act(() => {
+        jest.advanceTimersByTime(480 * 1000);
+      });
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS,
+        { callId: mockCallId }
+      );
+    });
+
+    it('ignores a refresh event for a different callId', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      const refreshedHandler = mockOn.mock.calls.find(
+        (c) => c[0] === SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED
+      )![1];
+
+      act(() => {
+        refreshedHandler({ callId: 'some-other-call', iceServers: [{ urls: 'turn:x' }], ttl: 600 });
+      });
+
+      expect(mockSetIceServersStore).not.toHaveBeenCalled();
+    });
+
+    it('clears the refresh timer on unmount', () => {
+      jest.useFakeTimers();
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+      const { unmount } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      unmount();
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
     });
   });
 

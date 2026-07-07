@@ -4,6 +4,93 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-07 the **swipe-to-reply gesture** landed (slice `chat-swipe-to-reply`, Chat parity §C —
+> feature-parity.md "Reply … swipe"). Reply was reachable only through the long-press action sheet; iOS opens
+> the reply composer with a horizontal bubble swipe (`MessageListView.dragGesture` + `BubbleSwipeResistance`).
+> New pure `:feature:chat` `SwipeToReply` SSOT (`ReplyDirection` FromIncoming(+1) / FromOwn(−1) — incoming bubbles
+> reply on a rightward drag, own on a leftward): `resolveOffset(translationX, direction)` tracks the finger 1:1
+> toward the reply direction up to a `RUBBER_BAND_ZONE` (72) then compresses further travel by
+> `RUBBER_BAND_RESISTANCE` (0.15), and clamps any drag *away* from the reply direction to a dead 0; `isArmed`
+> lights once the directed offset reaches `COMMIT_THRESHOLD` (66); the `onDrag` reducer over `SwipeReplyState`
+> returns `armedHaptic` **only on the transition into armed** so a held drag never re-fires and re-arming after
+> relaxing fires again; `onRelease` commits the reply iff released while armed. Wired: `ChatScreen`'s new
+> `SwipeToReplyContainer` wraps every `MessageBubble` — `detectHorizontalDragGestures` accumulates the raw
+> translation into the reducer, an `animateFloatAsState` offset renders the drag (spring-back on release), a
+> reveal-alpha reply glyph sits behind it (accent-tinted), the arm haptic fires once mid-drag, and a committed
+> release fires a success haptic + the existing `viewModel.startReply(messageId)` (no new state path, no dead
+> end). +23 tests (`SwipeToReplyTest`: direction gating both ways, zero-translation, in-zone 1:1 both signs,
+> zone-edge boundary, past-zone rubber-band compression both signs, below/at/above commit threshold, wrong-
+> direction never-armed, arm-fires-haptic-once, held-no-refire, disarm-no-haptic, re-arm-refire, short-drag-inert,
+> release commit/cancel/untouched, own-bubble commit). `:app:assembleDebug` + full `testDebugUnitTest` green
+> (system Gradle 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API, no tautologies,
+> boundary coverage on both the zone and the commit threshold; SDK-purity honoured — the "when to arm / when to
+> commit / how far to rubber-band" product decision is a pure atom in `:feature:chat`, the gesture/animation is
+> exempt Compose glue; natural-gesture UX, accent-coherent reveal glyph, reuses the existing reply entry point).
+
+> On 2026-07-07 the **scroll-to-bottom control with unread badge + preview** landed (slice
+> `chat-scroll-to-bottom-control`, Chat parity §C — feature-parity.md "Scroll-to-bottom control"). The FAB was a
+> bare `!isNearBottom` visibility toggle — no unread awareness, no preview. iOS's `ConversationScrollControlsView`
+> shows a live unread count and a compact preview of the newest unread message, resetting both when the reader
+> jumps back down. New pure `:feature:chat` `ScrollAffordance.next(previous, messages, isNearBottom) →
+> ScrollAffordanceState`: while the reader sits at the bottom every message is acknowledged and the control hides;
+> the moment they scroll away the acknowledged anchor freezes and each subsequent **incoming (non-own, undeleted)**
+> message grows the unread badge and refreshes the `UnreadPreview` (sender + text + kind: Text/Image/File);
+> scrolling back down clears the badge + preview. History paged out from the top never resurrects as unread, and a
+> lost anchor re-baselines to the newest rather than counting the whole history (defensive against a misleading huge
+> badge). Wired: `ChatScreen` maps `state.messages` → `AffordanceMessage`s via `BubbleContent.toAffordanceMessage()`
+> (kind derived: image beats file beats text), holds the reduced state, and renders a `BadgedBox` FAB (badge caps at
+> `99+`) with a tappable preview pill above it; tapping either acknowledges (via `next(..., isNearBottom = true)`) and
+> animates to the latest. +19 tests (`ScrollAffordanceTest` 14 — near-bottom acknowledge/hide, empty, return-clears,
+> scrolled-away-no-badge, one/several incoming, own/deleted excluded, mixed, preview-kind, fresh baseline, pruned-anchor
+> rebaseline, top-prune tail count, single-message boundary; `AffordanceMessageMappingTest` 5 — identity/direction/text,
+> deleted passthrough, image/file kind, image-wins-over-file). `assembleDebug` (app) + full `testDebugUnitTest` (896
+> tasks) green (system Gradle 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API, no
+> tautologies; SDK-purity honoured — the "when to show / what counts as unread" product decision is a pure atom in
+> `:feature:chat`, the render is Compose glue; UDF immutable state, pure transition; accent-coherent visuals; no dead
+> code — the reducer + mapper are both consumed by `ChatScreen`).
+
+> On 2026-07-06 the **group all-or-nothing delivery semantics** landed (slice `chat-delivery-status-group-semantics`,
+> Chat parity §C — feature-parity.md "Delivery status checkmarks"). The bubble's own-message indicator promoted to
+> ✓✓-delivered / ✓✓-read as soon as a **single** recipient received / read it — correct for a 1:1 but **misleading
+> in a group**: the sender saw the indigo "read" the instant one of ten members opened the conversation. New pure
+> `:core:model` `DeliveryStatusResolver.resolve(deliveredCount, readCount, recipientCount, deliveredToAllAt?,
+> readByAllAt?) → DeliveryTier` (Sent | Delivered | Read), a faithful port of the iOS `MeeshySDK.DeliveryStatusResolver`:
+> for `recipientCount > 1` (group) the delivered / read tier lights up only once **every** recipient has received /
+> read (`count >= recipientCount`), trusting the unambiguous `readByAllAt` / `deliveredToAllAt` "all" markers ahead of
+> the counters so a live update never transiently regresses to a single check; for `recipientCount <= 1` (direct /
+> unknown denominator) the legacy "any recipient ⇒ done" behaviour is preserved. Wired: `BubbleContentBuilder.build`
+> gains a `recipientCount: Int = 0` param (default keeps the 1:1 behaviour) and maps the resolved `DeliveryTier` →
+> `DeliveryStatus`; `ChatViewModel` computes `recipientCount` (distinct participant `userId`s excluding self) in the
+> conversation collector and threads it reactively through the message `combine` (5th source → `BubbleInputs`), so
+> bubbles rebuild when either the messages or the roster change. +21 tests (`DeliveryStatusResolverTest` 15 — every
+> group/direct/marker/boundary branch incl. stale-delivered-counter-still-reads and read-marker-wins-over-delivered-marker;
+> `BubbleContentBuilderTest` +4 — direct-read/group-one-read-stays-sent/group-all-delivered/group-all-read;
+> `ChatViewModelTest` +2 — group one-of-many read stays Sent, direct peer-read shows Read). `assembleDebug` + full
+> `testDebugUnitTest` green (system Gradle 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API;
+> SDK-purity/SSOT honoured — the resolver is a stateless pure atom in `:core:model`, the tier→status mapping is in the
+> `:sdk-ui` builder, and the "who counts as a recipient" product decision lives in the `:feature:chat` ViewModel; no
+> dead code — the resolver's single public `resolve` is consumed by the builder).
+
+> On 2026-07-06 the **tap-a-quoted-reply → scroll-to-original** landed (slice `chat-reply-jump-to-original`,
+> Chat parity §C — feature-parity.md "Reply … jump"). The quoted-reply preview inside a bubble was a **dead-end
+> visual**: it rendered the quoted sender + snippet but a tap did nothing, whereas iOS scrolls to the original.
+> New pure `:feature:chat` `ReplyJumpResolver.resolve(tappedMessageId, messages: List<ReplyLink>) → ReplyJump`
+> SSOT (`Scroll(targetMessageId)` | `TargetNotLoaded` | `None`): looks up the tapped message, trims/blank-guards
+> its `replyToId`, guards a self-reference, and returns `Scroll` **only when the original is currently loaded** —
+> a paged-out original is reported distinctly (`TargetNotLoaded`, inert, never an absent-index crash) rather than
+> silently mis-scrolling. `ReplyLink(id, replyToId)` is an opaque SDK-agnostic projection so the decision stays
+> fully JVM-testable. Wired: `BubbleContent`/`BubbleContentBuilder` now carry `replyToId` (from `message.replyTo
+> ?.id`); `MessageBubble.ReplyPreview` gains an optional `onClick` (clickable **only** when `replyToId != null`);
+> `ChatViewModel.onReplyPreviewTap(messageId)` resolves + sets a consumable `scrollToMessageId`, and
+> `onScrollHandled()` clears it; `ChatScreen` adds a `LaunchedEffect(scrollToMessageId)` mirroring the existing
+> search-jump (find index → `animateScrollToItem` → consume). +15 tests (`ReplyJumpResolverTest` 9 — every branch:
+> unknown-tapped / non-reply / blank / self / loaded-scroll / paged-out / trim / empty / dup-first-wins;
+> `ChatViewModelTest` +4 — loaded→scroll, paged-out inert, non-reply inert, consume clears; `BubbleContentBuilderTest`
+> +2 — replyToId carried / null when no reply). `assembleDebug` + full `testDebugUnitTest` green (system Gradle
+> 8.14.3). Reviewer: PASS (diff apps/android only; behaviour-through-public-API; SDK-purity/SSOT honoured — pure
+> decision in `:feature:chat`, data carriers in `:sdk-ui`, render/scroll orchestration in the exempt Screen glue;
+> UDF consumable state; no dead end — the preview now navigates, gracefully inert when the target is paged out).
+
 > On 2026-07-06 the **in-conversation message search + search-highlight wiring** landed (slice
 > `chat-search-highlight-wiring`, Chat parity §C — feature-parity.md "In-conversation message search" +
 > the search-highlight half of "Rich text rendering"). The bubble already accepted a `highlightTerm` and the
@@ -559,7 +646,32 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Recommended next (2026-07-06, after `chat-mention-autocomplete`):** the remaining highest-value Chat
+**Just shipped (2026-07-07): `chat-edit-time-window`** — the 2-hour edit window is now enforced (Chat parity
+§C — feature-parity "send, edit, delete … 2h window"; iOS `ConversationScreen` offers Edit only while
+`Date().timeIntervalSince(createdAt) < 2h`). Android's `startEdit`/Edit action had **no** window: any own
+SYNCED message stayed editable forever. New pure `:core:model` `MessageEditability.canEdit(isOwn,
+createdAtMillis, nowMillis, windowMillis = EDIT_WINDOW_MILLIS(=2h)) → Boolean` SSOT (placed beside
+`DeliveryStatusResolver`): editable iff own AND `nowMillis - createdAtMillis < window`; a future-dated
+createdAt (client/server clock skew) is treated as just-created (still editable, iOS negative-elapsed parity);
+an **unknown/unparseable createdAt cannot be windowed → stays editable** (refusing an edit merely because the
+wire omitted a timestamp is a worse gap; iOS never has a null `createdAt`). Wired: `ChatViewModel` injects the
+already-Hilt-provided `CacheClock` and gates `startEdit` on `canEdit(isOwn = senderId == currentUserId,
+createdAtMillis = isoToEpochMillisOrNull(message.createdAt), now = clock.nowMillis())` — now also enforces
+authorship (previously unchecked); `ChatScreen` computes the same predicate over `BubbleContent.createdAtIso`
++ `System.currentTimeMillis()` and hides the Edit sheet action once the window has passed (Delete stays
+available, at iOS parity). +13 tests. See run log.
+**Recommended next candidates:**
+- **`chat-typing-header-avatars`** — the last piece of the typing item: small stacked avatar chips of who is
+  typing (iOS shows avatars, not just the name). Needs an avatar-url projection on `TypingParticipant`.
+- **`chat-delete-for-me-vs-everyone`** — split delete into "for everyone" (own + within 2h, via a new
+  `MessageEditability`-style `canDeleteForEveryone`) vs "for me" (local-only tombstone). Needs a local-only
+  delete path in `MessageRepository`/outbox; if the wire only supports one delete kind, defer.
+- **`chat-read-status-sheet`** — tap the delivery checks → a "seen by / delivered to" breakdown sheet
+  (iOS `onShowReadStatus` → detail sheet "Vues" tab). Needs a per-recipient read model on the wire; if the
+  gateway payload only carries counts, defer and pick the next item.
+Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K).
+
+**Earlier recommendation (2026-07-06, after `chat-mention-autocomplete`):** the remaining highest-value Chat
 follow-ups now that rich-text + in-conversation search + mentions (local roster) are live —
 1. ~~**`chat-search-highlight-wiring`**~~ ✅ shipped 2026-07-06 — see run log.
 2. ~~**`chat-mention-display-names`**~~ ✅ folded into `chat-mention-autocomplete` (2026-07-06) — `ChatViewModel`
@@ -572,8 +684,13 @@ follow-ups now that rich-text + in-conversation search + mentions (local roster)
 4. **`chat-mention-backend-suggestions`** — the debounced `/mentions` API merge over the local roster (online
    enrichment: author + commenters + contacts, deduped by username against the local candidates). Needs a
    `MentionApi`/repository + a cancellation-safe debounce in `ChatViewModel`.
-5. Or **`chat-quoted-reply-preview`** — the quoted-reply preview surface (sender, snippet, thumbnail) in the
-   bubble (pure `ReplyPreview` builder + a `:sdk-ui` sub-view), parity §C "Quoted-reply previews".
+5. ~~**`chat-quoted-reply-preview`**~~ — the quoted-reply preview *surface* (sender + snippet + accent bar) was
+   already rendered in `MessageBubble.ReplyPreview`; the genuinely-missing half was **tap-to-jump**, shipped
+   2026-07-06 as `chat-reply-jump-to-original` (see run log). Still open under §C: the *media thumbnail* on the
+   preview (needs an attachment/media field on `ApiMessageReplyPreview` — deferred until the wire shape carries it)
+   and **swipe-to-reply** gesture.
+6. Or **`chat-quoted-reply-thumbnail`** — extend `ApiMessageReplyPreview` with the quoted message's first-image
+   thumbnail (parity §C "Quoted-reply previews … thumbnails") once the gateway payload is confirmed to carry it.
 Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K; §L worker drain-list test).
 
 ---
@@ -1053,6 +1170,141 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `chat-edit-time-window` ✅ (merged, reviewer PASS)
+- **Slice:** enforce the 2-hour message-edit window (Chat parity §C "send, edit, delete … 2h window"; iOS
+  `ConversationScreen` offers Edit only while `Date().timeIntervalSince(createdAt) < 2h`). Android's
+  `startEdit` + Edit sheet action had no window and no authorship check — any own SYNCED, non-deleted message
+  stayed editable forever.
+- **Pure core (`:core:model`, `MessageEditability.kt`):** `object MessageEditability` beside
+  `DeliveryStatusResolver`. `const EDIT_WINDOW_MILLIS = 2h`; `canEdit(isOwn, createdAtMillis: Long?, nowMillis,
+  windowMillis = EDIT_WINDOW_MILLIS) → Boolean`: `!isOwn → false`; `createdAtMillis == null → true` (window
+  unprovable, stays editable — iOS never has a null createdAt, and refusing an edit merely because the wire
+  omitted a timestamp is a worse gap); else `nowMillis - createdAtMillis < windowMillis`. A future createdAt
+  (clock skew) yields a negative elapsed `< window` → still editable (iOS negative-`timeIntervalSince` parity);
+  the boundary is strict (`elapsed == window` → not editable).
+- **Wiring:** `ChatViewModel` injects the already-Hilt-provided (`SdkModule.providesCacheClock`) `CacheClock`
+  and gates `startEdit` — `isOwn = message.senderId != null && senderId == currentUser.id` (authorship now
+  enforced), `createdAtMillis = isoToEpochMillisOrNull(message.createdAt)` (SSOT parse), `now =
+  clock.nowMillis()`; refuses when not editable. `ChatScreen` computes the same predicate over
+  `BubbleContent.createdAtIso` + `System.currentTimeMillis()` and shows the Edit sheet action only when
+  `bubble.isOutgoing && isActionable && canEdit`; the Delete action was split out of the shared block so it
+  stays available regardless of the edit window (iOS keeps delete).
+- **Tests (+13):** `MessageEditabilityTest` (10) — window constant, moments-ago editable, just-inside-window
+  editable, exactly-at-boundary not editable, past-window not editable, someone-else never editable,
+  future-createdAt editable, null-createdAt own editable, null-createdAt other not editable, caller window
+  override. `ChatViewModelTest` (+3) — inside-window `startEdit` opens the editor + fills the draft,
+  past-window `startEdit` is blocked (editingMessageId stays null, draft empty), non-own `startEdit` refused.
+  Harness now injects a fixed `CacheClock` (FIXED_NOW = 2026-07-07T12:00:00Z); existing edit tests (m1 has a
+  null createdAt → editable) stay green.
+- **Verify:** system `gradle assembleDebug testDebugUnitTest` (896 tasks) green — `MessageEditabilityTest`
+  10/10, the 3 new `ChatViewModelTest` cases green, whole JVM suite green.
+- **Reviewer:** PASS — diff `apps/android` only (`:core:model` + `:feature:chat`); behaviour-through-public-API
+  (`MessageEditability.canEdit` + VM state), no tautologies, full branch sweep incl. the boundary and both
+  null-createdAt authorship cases; SDK-purity/SSOT honoured (stateless rule in `:core:model` like
+  `DeliveryStatusResolver`, clock injected via the existing Hilt binding, ISO parse via `isoToEpochMillisOrNull`
+  SSOT, render gate is exempt Compose glue); UX coherence (Edit hidden after the window, Delete preserved — no
+  dead end); no floor lowered, no test weakened.
+
+### 2026-07-07 — slice `chat-typing-header` ✅ (merged, reviewer PASS)
+- **Slice:** surface the typing roster in the conversation header (Chat parity §C "Typing indicators (header +
+  inline)"; iOS `ConversationHeaderState` typing-dot phase). The inline indicator + scroll-control pill were
+  live, but the header showed only a static title — no "X is typing…" and no group member subtitle.
+- **Pure core (`:feature:chat`, `Typing.kt`):** `sealed interface ChatHeaderSubtitle { None; Members(count);
+  Typing(label) }` + `of(memberCount, isGroup, typing)` — the header-subtitle SSOT. Decision order: typing
+  present → `Typing(TypingLabel.of(...))` (supersedes the count — iOS parity); else a group with `memberCount
+  > 0` → `Members(count)`; else `None`. Reuses the existing `TypingLabel` SSOT — no new roster logic. A
+  non-positive count (not-yet-loaded roster) yields `None`, never "0 members".
+- **Wiring/render:** `ChatViewModel` derives `memberCount` (= `conversation.memberCount`) and `isGroup`
+  (`type != "direct"`) in the conversation collector and exposes them on `ChatUiState`. `ChatScreen` wraps the
+  header title `Row` in a `Column` and renders `ChatHeaderSubtitleRow(ChatHeaderSubtitle.of(...))` beneath it:
+  typing text (reusing `typingLabelText`) in the conversation `accentColor`, the member count (new
+  `chat_header_members` EN/FR/ES/PT string) in `textSecondary`, single-line ellipsized; `None` renders nothing.
+- **Tests (+11):** `ChatHeaderSubtitleTest` (9) — direct+idle→None, group+idle→Members(n), group-of-1→
+  Members(1) boundary, group+0→None boundary, group+negative→None boundary, typing-beats-members in a group,
+  typing in a direct chat, Two/Many label propagation. `ChatViewModelTest` (+2) — group exposes memberCount=3 +
+  isGroup=true; direct exposes memberCount=2 + isGroup=false. Full branch sweep of `of`.
+- **Verify:** `gradle assembleDebug testDebugUnitTest` (896 tasks) green — `ChatHeaderSubtitleTest` 9/9, the two
+  new `ChatViewModelTest` cases green, whole suite green.
+- **Reviewer:** PASS — diff `apps/android/feature/chat` only; behaviour-through-public-API (`ChatHeaderSubtitle.of`
+  + VM state), no tautologies, every `of` branch + count boundaries (0/1/negative) exercised; SDK-purity/SSOT
+  honoured (pure decision in `:feature:chat` reusing `TypingLabel`, render exempt Compose glue); accent/nav
+  coherence (typing subtitle in the conversation `accentColor`); no dead code — the subtitle is consumed by the
+  header.
+
+### 2026-07-07 — slice `chat-typing-in-control` ✅ (merged, reviewer PASS)
+- **Slice:** fold the typing roster into the scroll-to-bottom control (Chat parity §C "Typing indicators …
+  inside the control"; iOS `ConversationScrollControlsView`, whose documented rule is **"typing indicator
+  takes priority over count"**). Before this the control only ever showed the unread count/preview; a peer
+  typing while you were scrolled away was invisible until you returned to the bottom.
+- **Pure core (`:feature:chat`, `ScrollAffordance.kt`):** `sealed interface ScrollControlContent { Hidden;
+  Typing(label); Unread(count, preview); Plain }` + `of(affordance, typing)` — the render SSOT. Decision order:
+  not visible → `Hidden` (regardless of typing/unread); else typing present → `Typing(TypingLabel.of(...))`
+  (suppresses the count — the iOS priority rule); else unread → `Unread(count, preview)`; else `Plain`. Reuses
+  the existing `TypingLabel`/`TypingParticipants` cores — no new roster logic.
+- **Wiring/render:** `ScrollToBottomControl` now takes `typingParticipants`, computes `ScrollControlContent.of`,
+  and renders a `TypingPill` (accent edit-icon + `typingLabelText`) for `Typing`, the existing `UnreadPreviewPill`
+  + badge for `Unread`, and a bare FAB for `Plain`; the badge count comes from the `Unread` variant only, so
+  typing hides it. The label→string mapping was extracted to a shared `@Composable typingLabelText(label)` reused
+  by the inline `TypingIndicator` (removes the duplicated `when` over `TypingLabel`).
+- **Tests (+10):** `ScrollControlContentTest` — at-bottom→Hidden even with typing / even with unread; one/two/
+  three typists→Typing(One/Two/Many); typing-beats-unread priority; unread-only→Unread(count, preview);
+  unread-missing-preview→Unread(count, null); nothing→Plain; empty-typing falls through. Full branch sweep of
+  `of`.
+- **Verify:** `gradle :feature:chat:testDebugUnitTest` (146 tasks, `ScrollControlContentTest` 10/10) +
+  `:feature:chat:assembleDebug` both green.
+- **Reviewer:** PASS — diff `apps/android/feature/chat` only; behaviour-through-public-API, no tautologies, every
+  `of` branch exercised incl. the visibility-wins-over-typing arms; SDK-purity/SSOT honoured (pure decision in
+  `:feature:chat`, render exempt Compose glue); DRY win (shared `typingLabelText`); accent/navigation coherence
+  unchanged (`TypingPill` uses the conversation `accentColor`). No dead code — the new content type is consumed
+  by the control.
+
+### 2026-07-07 — slice `chat-typing-participants-core` ✅ (merged, reviewer PASS)
+- **Slice:** the inline typing indicator (Chat parity §C "Typing indicators"). The incoming-typing roster was
+  built ad-hoc in `ChatViewModel` keyed by **displayName** (`typingUsers: List<String>`, `(list - name) + name`),
+  and the 1/2/N label lived untested inside the `TypingIndicator` Composable. Two real bugs: two distinct users
+  who share a display name collapsed into one entry, and stopping one removed the other (remove-by-name).
+- **Pure cores (`:feature:chat`, new `Typing.kt`):**
+  - `TypingParticipant(userId, name)` + `object TypingParticipants` — keyed SSOT. `started(current, userId, name,
+    selfId?)`: blank/self userId inert, blank name → `userId` fallback, dedup by userId with refresh-to-tail
+    (most-recent-last); `stopped(current, userId)`: remove exactly that userId. Port of iOS
+    `ConversationSocketHandler` typing book-keeping, fixing the same-name collapse/removal bugs.
+  - `sealed interface TypingLabel { None; One(name); Two(a,b); Many(count) }` + `of(participants)` — presentation
+    SSOT so the Composable only maps a variant to a string resource (per TDD-COVERAGE "push decisions out of the
+    Composable").
+- **Wiring:** `ChatUiState.typingUsers: List<String>` → `typingParticipants: List<TypingParticipant>`; the
+  `typing:start`/`typing:stop` collectors call `TypingParticipants.started/stopped` (self-id from
+  `sessionRepository.currentUser`); `removeTypingUser(userId)` (name arg dropped); the 5 s cleanup job re-keyed by
+  userId. `ChatScreen.TypingIndicator(participants)` renders via `TypingLabel.of`.
+- **Tests (+21):** `TypingParticipantsTest` 12 (add/append/refresh-to-tail/same-name-distinct/self-exclude/
+  self-id-admits-others/blank-name-fallback/blank-userId-inert; stop matching/only-matching-not-same-named/
+  unknown-inert/empty), `TypingLabelTest` 5 (none/one/two-in-order/three→many/five→many), `ChatViewModelTest` +4
+  (peer start populates, other-conversation ignored, two same-named both show & stop leaves the other, 5 s expiry).
+- **Verify:** `gradle assembleDebug testDebugUnitTest` green (896 tasks, system Gradle 8.14.3).
+- **Reviewer:** PASS — diff `apps/android/feature/chat` only; behaviour-through-public-API, no tautologies,
+  full branch sweep incl. the inert arms; SDK-purity/SSOT honoured (pure roster+label cores in `:feature:chat`,
+  gesture/render exempt Compose glue); UDF immutable state; no dead code (both cores consumed). Fixes two real
+  same-name defects. **Lesson captured** (NOTES.md): mockk stub `every { this@mockk.flowProp }` must qualify when
+  an outer test field shares the name; `advanceUntilIdle()` fires the 5 s typing-cleanup `delay` — use
+  `runCurrent()` to assert the pre-timeout roster.
+
+### 2026-07-07 — slice `chat-swipe-to-reply` ✅ (impl done, reviewer PASS)
+- **Slice:** swipe-to-reply gesture on message bubbles (Chat parity §C "Reply … swipe"). Pure `:feature:chat`
+  `SwipeToReply` SSOT — `ReplyDirection` (FromIncoming +1 / FromOwn −1); `resolveOffset` (1:1 in the
+  `RUBBER_BAND_ZONE`=72, then `RUBBER_BAND_RESISTANCE`=0.15 compression, wrong-direction clamped to 0); `isArmed`
+  at `COMMIT_THRESHOLD`=66; `onDrag` reducer over `SwipeReplyState` returning a one-shot `armedHaptic`; `onRelease`
+  → Commit/Cancel. Port of iOS `MessageListView.dragGesture` + `BubbleSwipeResistance`.
+- **Wiring:** `ChatScreen.SwipeToReplyContainer` wraps each `MessageBubble` — `detectHorizontalDragGestures`
+  accumulates raw translation into the reducer, `animateFloatAsState` renders the drag (spring-back on release),
+  an accent-tinted reply glyph reveals behind (alpha = progress to threshold), arm-haptic fires once mid-drag,
+  committed release fires a success haptic + the existing `viewModel.startReply(messageId)` (no new state path).
+- **Tests:** +23 `SwipeToReplyTest` (direction gating both ways, zero, in-zone/at-edge/past-zone both signs,
+  below/at/above threshold, wrong-direction never-armed, haptic once/held/disarm/re-arm, short-drag inert,
+  commit/cancel/untouched/own-commit).
+- **Gate:** `:app:assembleDebug` + full `testDebugUnitTest` BUILD SUCCESSFUL (system Gradle 8.14.3). Diff
+  `apps/android` only (SwipeToReply.kt, SwipeToReplyTest.kt, ChatScreen.kt + tracking docs). Reviewer: PASS —
+  behaviour-through-public-API, no tautologies, boundary coverage on both thresholds, SDK-purity (pure decision in
+  `:feature:chat`, gesture/animation in exempt Compose glue), natural-gesture UX reusing the existing reply entry.
 
 ### 2026-07-06 — slice `chat-mention-autocomplete` ⚠ blocked-on-infra (impl done, reviewer PASS, PR #1580 open)
 - **Status:** implementation complete, locally green (+40 tests, `:feature:chat:testDebugUnitTest` +

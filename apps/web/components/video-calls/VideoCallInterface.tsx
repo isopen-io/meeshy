@@ -436,6 +436,15 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         removeRemoteStream(participantId);
         removePeerConnection(participantId);
 
+        // Sibling-drift fix: `offersCreatedFor` is only ever populated (or
+        // cleared on createOffer failure) by the offer-creation effect above —
+        // never on a participant leaving. If this same participant rejoins
+        // while the component stays mounted (network blip, tab reload), the
+        // effect would see them as already-offered and silently skip
+        // `createOffer` forever, since the peer connection just torn down
+        // above is gone but the guard never was.
+        offersCreatedFor.current.delete(participantId);
+
         // Remove from disconnected set
         setDisconnectedParticipants((prev) => {
           const newSet = new Set(prev);

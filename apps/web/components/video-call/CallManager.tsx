@@ -23,6 +23,7 @@ import type {
   CallError,
 } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 
 const CALL_TIMEOUT_MS = 30000; // 30 seconds
 
@@ -354,6 +355,9 @@ export function CallManager() {
 
     logger.debug('[CallManager]', 'Accepting call - callId: ' + incomingCall.callId);
 
+    const isVideoCall = incomingCall.type === 'video';
+    let stream: MediaStream | null = null;
+
     try {
       // Clear timeout since we're accepting
       clearCallTimeout();
@@ -362,6 +366,21 @@ export function CallManager() {
       import('@/utils/ringtone').then(({ stopRingtone }) => {
         stopRingtone();
       });
+
+      // Privacy fix (audit 2026-07-07): acquire local media BEFORE joining,
+      // gated on the call's ACTUAL type — mirrors the caller's own
+      // pre-authorization in use-video-call.ts's startCall. Previously the
+      // callee never called getUserMedia here at all; VideoCallInterface's
+      // mount effect fell back to unconditional audio+video constraints
+      // (DEFAULT_MEDIA_CONSTRAINTS in webrtc-service.ts) regardless of call
+      // type, so an audio-only call still activated the callee's camera and
+      // transmitted live video with no consent. Handing the stream off via
+      // `__preauthorizedMediaStream` reuses the same Safari-compatible path
+      // VideoCallInterface already checks on mount — no changes needed there.
+      stream = await navigator.mediaDevices.getUserMedia(
+        getCallMediaConstraints(isVideoCall ? 'video' : 'audio')
+      );
+      (window as any).__preauthorizedMediaStream = stream;
 
       // Join call via Socket.IO - CallInterface will initialize local stream
       const socket = meeshySocketIOService.getSocket();
@@ -386,7 +405,7 @@ export function CallManager() {
             callId: incomingCall.callId,
             settings: {
               audioEnabled: true,
-              videoEnabled: true,
+              videoEnabled: isVideoCall,
             },
           },
           resolve
@@ -423,6 +442,10 @@ export function CallManager() {
 
       logger.info('[CallManager]', 'Call accepted - callId: ' + incomingCall.callId);
     } catch (error: unknown) {
+      // A failure anywhere after getUserMedia succeeded (no socket, rejected
+      // join ack) must not leave the mic/camera hot with nothing consuming
+      // the stream.
+      stopPreauthorizedStream(stream);
       logger.error('[CallManager]', 'Failed to accept call: ' + (error?.message || 'Unknown error'));
       toast.error(t('calls.toasts.joinFailed'));
       setIncomingCall(null);

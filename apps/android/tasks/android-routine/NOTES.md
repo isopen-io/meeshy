@@ -3,6 +3,41 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-07 (`chat-edit-time-window`): a time source is already in the Hilt graph — inject it, don't
+  `System.currentTimeMillis()` inside a ViewModel.** `SdkModule.providesCacheClock()` binds `CacheClock`
+  (`@Singleton`), so a VM that needs "now" can add `private val clock: CacheClock` to its `@Inject constructor`
+  with **zero DI changes** and tests pass a fixed clock (deterministic window/expiry assertions). Gotcha:
+  `CacheClock` is a **plain `interface`, not a `fun interface`** — the SAM lambda `CacheClock { fixedNow }` fails
+  to compile ("interface does not have constructors"); use an anonymous object `object : CacheClock { override
+  fun nowMillis() = fixedNow }`. When you gate a VM action on a window, put the predicate in a pure `:core:model`
+  object (here `MessageEditability.canEdit`, beside `DeliveryStatusResolver`) taking `nowMillis: Long` + a
+  nullable `createdAtMillis` — parse the wire's ISO string with the `isoToEpochMillisOrNull` SSOT, and decide the
+  null case deliberately (here: null → editable, since a message factory / optimistic row often has no
+  `createdAt` and the existing green edit tests rely on it; blocking on a missing timestamp would both break
+  them and be worse UX than a stale edit).
+- **2026-07-07 (`chat-typing-in-control`): render-priority rules belong in a pure content SSOT, not `if`s in the
+  Composable.** iOS `ConversationScrollControlsView` documents "typing indicator takes priority over count"; on
+  Android that lived nowhere until `ScrollControlContent.of(affordance, typing)` made the four states
+  (Hidden/Typing/Unread/Plain) an explicit, branch-swept decision. The Composable then just maps a variant to a
+  pill and reads the badge count from the `Unread` variant only — so "typing hides the badge" is enforced by the
+  type, not by remembering to guard it. When two feature slices need the same `TypingLabel`→string mapping,
+  extract one `@Composable typingLabelText(label): String?` and reuse it (killed the duplicated `when` in
+  `TypingIndicator`).
+- **2026-07-07 (`chat-typing-participants-core`): two `runTest` gotchas that silently emptied a just-populated
+  ViewModel roster.** (1) **mockk stub name-shadowing:** a socket flow field on the *test class* that shares a
+  name with the mocked property (`private val typingStarted = MutableSharedFlow<TypingEvent>()`) makes a bare
+  `every { typingStarted } returns …` resolve to the **outer test field**, not the mock's property — the mock
+  property stays unstubbed. Qualify it: `every { this@mockk.typingStarted } returns this@ChatViewModelTest.
+  typingStarted` (the existing `messageReceived`/`reactionAdded` stubs already do this — follow the pattern for any
+  new same-named flow). (2) **`advanceUntilIdle()` fires pending `delay()`s:** the typing collector schedules a 5 s
+  `delay(TYPING_TIMEOUT_MS)` cleanup that removes the participant, so `emit(start)` **then** `advanceUntilIdle()`
+  runs the clock past 5 s and the roster is empty again by the assertion. Use `runCurrent()` (process the emission
+  at the current virtual time, no clock advance) to assert the *pre-timeout* roster; reserve `advanceTimeBy(6_000)`
+  for the expiry test. Symptom for both: `expected [X] but was []` with no exception.
+- **2026-07-07 (`chat-typing-participants-core`): dedup incoming presence rosters by a stable id, never by the
+  display name.** The old inline typing roster keyed on displayName (`(list - name) + name`) collapsed two distinct
+  users named "Alex" into one and let a `typing:stop` from one remove the other. Keying `TypingParticipant` by
+  `userId` fixes both; the same rule applies to any future presence/reaction/read roster.
 - **2026-07-06 (`chat-mention-autocomplete`): the monorepo CI's `services/translator` Python jobs can fail on a
   PyTorch-CDN TLS outage that has nothing to do with an `apps/android` diff — recognise it and do NOT merge past
   it, but also do NOT churn re-triggers.** Symptom: `Test Python (translator)` + `Voice API Tests` +

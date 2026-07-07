@@ -330,7 +330,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
 ## C. Chat / Messaging
-- [ ] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
+- [~] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
+      **Edit 2-hour window now enforced** via pure `:core:model` `MessageEditability.canEdit(isOwn,
+      createdAtMillis, nowMillis, windowMillis=2h)` SSOT (port of iOS's `Date().timeIntervalSince(createdAt)
+      < 2h` gate): an own message is editable only while <2h elapsed; a future-dated createdAt (clock skew)
+      is treated as just-created (still editable); an unknown createdAt cannot be windowed → stays editable
+      (refusing to edit merely because the wire omitted a timestamp is a worse gap). `ChatViewModel` injects
+      `CacheClock` and gates `startEdit` (own + within window); `ChatScreen` hides the Edit sheet action once
+      the window has passed (Delete stays available) (slice `chat-edit-time-window`, 2026-07-07, +13 tests).
+      **Pending:** delete for-me vs for-everyone split (needs a local-only delete path), forward.
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
 - [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
       `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine
@@ -345,7 +353,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       add/remove optimistic done ; reaction detail breakdown (who-reacted sheet) pending
 - [ ] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
-      replyToId optimiste + aperçu cité dans la bulle ; swipe / forward / jump pending
+      replyToId optimiste + aperçu cité dans la bulle + **tap-aperçu → scroll vers l'original**
+      (`ReplyJumpResolver`, inerte si original paginé hors écran) + **swipe-to-reply**
+      (`SwipeToReply` : incoming→droite / own→gauche, rubber-band + seuil de commit + haptique,
+      révèle un glyphe reply, commit → `startReply`) ; forward pending
 - [ ] Reply-count pills + reply thread overlay
 - [~] Message bubbles: text done ; pièces jointes image (grille 1–4 + overlay « +N »,
       URL relative résolue contre l'origine gateway, `ApiMessage.attachments` persisté
@@ -367,7 +378,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       roster from the conversation participants via `MentionRoster` and threads `mentionDisplayNames` into every
       `MessageBubble`, so `@username` resolves to the display name in-bubble. **Pending:** in-app browser / OG cards.
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
-- [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
+- [~] Delivery status checkmarks + offline-pending hourglass + failed-message retry —
+      ✓/✓✓/✓✓-read tier + Pending/Failed done ; **group all-or-nothing semantics done**
+      (`chat-delivery-status-group-semantics` 2026-07-06): pure `:core:model` `DeliveryStatusResolver`
+      (port of iOS `DeliveryStatusResolver`) — in a group the delivered/read tier lights up only once
+      EVERY recipient has received/read (never on the first peer), trusting `readByAllAt`/`deliveredToAllAt`
+      markers ahead of the counters ; `BubbleContentBuilder` consumes it with a reactive `recipientCount`
+      (distinct other members) threaded from `ChatViewModel`. **Pending:** the finer 8-state
+      send-lifecycle glyphs (clock/slow/invisible), offline hourglass, tap-checks → read-status sheet
 - [ ] Edited / pinned / forwarded indicators; edit-history viewer
 - [ ] Ephemeral (self-destruct) messages with duration picker + countdown badges
 - [ ] Blurred ("tap to reveal") + view-once messages with fog effect
@@ -407,8 +425,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       every `MessageBubble` (reusing the tested `MessageTextParser.highlightRanges`). Local match is instant — no
       debounce needed (surpasses iOS's debounced-but-online search). +29 tests (24 pure-core, 5 VM). **Pending:**
       server-side/remote search over uncached history.
-- [ ] Scroll-to-bottom control with rich unread/typing/offline/search states
-- [ ] Typing indicators (header + inline)
+- [~] Scroll-to-bottom control with rich unread/typing/offline/search states —
+      **unread badge + preview done** (`chat-scroll-to-bottom-control` 2026-07-07): pure
+      `:feature:chat` `ScrollAffordance.next(previous, messages, isNearBottom) → ScrollAffordanceState`
+      (port of iOS `ConversationScrollControlsView` book-keeping) computes the control's visibility,
+      an unread badge that grows only on incoming (non-own, undeleted) messages arriving while the
+      reader is scrolled away, and a compact preview (sender + text + kind icon) of the newest such
+      message; scrolling back to bottom clears the badge; top-pruned history never resurrects as unread
+      and a lost anchor re-baselines to the newest. `ChatScreen` renders a `BadgedBox` FAB + preview pill,
+      tap acknowledges + jumps. +19 tests (`ScrollAffordanceTest` 14 reducer branches,
+      `AffordanceMessageMappingTest` 5 mapping). Typing-in-control now live: pure `ScrollControlContent.of`
+      (Hidden/Typing/Unread/Plain) folds the typing roster into the control with **typing taking priority
+      over the unread count** (iOS `ConversationScrollControlsView` rule), rendered as a `TypingPill`
+      (slice `chat-typing-in-control`, 2026-07-07, +10 tests). **Pending:** offline
+      indicator (needs a `NetworkMonitor` flow — iOS hard-codes `false`), slow-scroll search state.
+- [~] Typing indicators (header + inline) — inline indicator live via pure `:feature:chat` `TypingParticipants`
+      keyed roster SSOT (userId-keyed dedup so two same-named typists stay distinct + refresh-to-tail +
+      self-exclusion + blank-name→userId fallback) + `TypingLabel` presentation (None/One/Two/Many), driven
+      by `ChatViewModel.typingParticipants` and rendered by `ChatScreen.TypingIndicator` (slice
+      `chat-typing-participants-core`, 2026-07-07, +21 tests). Typing roster also folded into the
+      scroll-to-bottom control via `ScrollControlContent` (slice `chat-typing-in-control`, 2026-07-07).
+      **Header-level indicator now live** via pure `:feature:chat` `ChatHeaderSubtitle.of(memberCount,
+      isGroup, typing) → None | Members(count) | Typing(label)` SSOT — while a peer composes the header
+      subtitle shows who is typing (reusing `TypingLabel`), otherwise a group shows its member count and a
+      direct chat shows nothing; **typing supersedes the member count** (iOS `ConversationHeaderState`
+      typing-dot parity), and a non-positive count never renders "0 members". `ChatViewModel` now exposes
+      `memberCount`/`isGroup`; `ChatScreen` renders the subtitle under the title (typing in `accentColor`,
+      members in `textSecondary`) (slice `chat-typing-header`, 2026-07-07, +11 tests). **Pending:** avatar
+      chips.
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background
