@@ -38,6 +38,8 @@ import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * The Discover tab — live user search with an inline connect control per result,
@@ -101,7 +103,7 @@ private fun ResultList(
                 Text(
                     text = it,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
@@ -149,7 +151,7 @@ private fun ResultRow(
                 Text(
                     text = "@$it",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -183,20 +185,20 @@ private fun ConnectControl(
             Icon(
                 Icons.Filled.Check,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = MeeshyPalette.Indigo500,
                 modifier = Modifier.width(18.dp),
             )
             Spacer(Modifier.width(4.dp))
             Text(
                 text = stringResource(R.string.contacts_discover_contact),
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = MeeshyPalette.Indigo500,
             )
         }
         is ConnectAction.Blocked -> Text(
             text = stringResource(R.string.contacts_discover_blocked),
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.error,
+            color = MeeshyPalette.Error,
         )
         is ConnectAction.Hidden -> Unit
     }
@@ -209,7 +211,7 @@ private fun ErrorState(onRetry: () -> Unit) {
             Text(
                 text = stringResource(R.string.contacts_discover_error),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
             Spacer(Modifier.width(12.dp))
             OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.contacts_list_retry)) }
@@ -223,7 +225,7 @@ private fun EmptyMessage(message: String) {
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.padding(32.dp),
         )
     }
