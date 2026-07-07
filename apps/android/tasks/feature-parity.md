@@ -415,7 +415,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       every `MessageBubble` (reusing the tested `MessageTextParser.highlightRanges`). Local match is instant — no
       debounce needed (surpasses iOS's debounced-but-online search). +29 tests (24 pure-core, 5 VM). **Pending:**
       server-side/remote search over uncached history.
-- [ ] Scroll-to-bottom control with rich unread/typing/offline/search states
+- [~] Scroll-to-bottom control with rich unread/typing/offline/search states —
+      **unread badge + preview done** (`chat-scroll-to-bottom-control` 2026-07-07): pure
+      `:feature:chat` `ScrollAffordance.next(previous, messages, isNearBottom) → ScrollAffordanceState`
+      (port of iOS `ConversationScrollControlsView` book-keeping) computes the control's visibility,
+      an unread badge that grows only on incoming (non-own, undeleted) messages arriving while the
+      reader is scrolled away, and a compact preview (sender + text + kind icon) of the newest such
+      message; scrolling back to bottom clears the badge; top-pruned history never resurrects as unread
+      and a lost anchor re-baselines to the newest. `ChatScreen` renders a `BadgedBox` FAB + preview pill,
+      tap acknowledges + jumps. +19 tests (`ScrollAffordanceTest` 14 reducer branches,
+      `AffordanceMessageMappingTest` 5 mapping). **Pending:** typing usernames inside the control, offline
+      indicator (needs a `NetworkMonitor` flow — iOS hard-codes `false`), slow-scroll search state.
 - [ ] Typing indicators (header + inline)
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
