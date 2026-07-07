@@ -15,6 +15,14 @@ sealed interface DraftPersist {
 }
 
 /**
+ * The composer snapshot to seed when a conversation opens: the [text] to place and the
+ * [replyToId] reply to re-arm (`null` = a plain draft with no reply). Produced by
+ * [DraftAutosave.restore] only when the composer is idle; `null` from `restore` means
+ * "leave the composer untouched".
+ */
+data class DraftRestore(val text: String, val replyToId: String?)
+
+/**
  * Pure decision layer for per-conversation draft auto-save/restore — the Android
  * port of iOS `ConversationDraftManager` (save/draft/clear) plus the empty-draft
  * purge rule from `ConversationScreen.persistDraft` (a blank composer removes the
@@ -28,40 +36,56 @@ sealed interface DraftPersist {
 object DraftAutosave {
 
     /**
-     * Decide what to persist for [rawText] given the [previous] stored draft.
+     * Decide what to persist for [rawText] and the currently-armed [replyToId] given
+     * the [previous] stored draft. A draft is *meaningful* when it holds text **or** an
+     * armed reply — so a reply armed on an empty composer is persisted (and survives
+     * navigation) rather than dropped, and cancelling that reply on an empty composer
+     * purges it.
      *
-     * - Blank text with a stored non-blank draft → [DraftPersist.Clear].
-     * - Blank text with no stored draft → [DraftPersist.None] (no redundant write).
-     * - Non-blank text identical to the stored draft → [DraftPersist.None].
-     * - Non-blank text that differs → [DraftPersist.Save] (raw text preserved so a
-     *   restore returns exactly what the user typed, timestamped with [nowIso]).
+     * - No text and no reply, over a meaningful stored draft → [DraftPersist.Clear].
+     * - No text and no reply, over nothing/an empty draft → [DraftPersist.None].
+     * - A draft (text and/or reply) identical to the stored one → [DraftPersist.None].
+     * - A draft that differs → [DraftPersist.Save] (raw text preserved so a restore
+     *   returns exactly what the user typed, timestamped with [nowIso]). [replyToId]
+     *   is normalised (trimmed, blank → `null`).
      */
     fun resolve(
         conversationId: String,
         rawText: String,
+        replyToId: String?,
         nowIso: String,
         previous: ConversationDraft?,
     ): DraftPersist {
-        if (rawText.isBlank()) {
-            val hadDraft = previous != null && previous.text.isNotBlank()
+        val reply = replyToId?.trim()?.takeIf { it.isNotEmpty() }
+        if (rawText.isBlank() && reply == null) {
+            val hadDraft = previous != null && (previous.text.isNotBlank() || previous.replyToId != null)
             return if (hadDraft) DraftPersist.Clear(conversationId) else DraftPersist.None
         }
-        if (previous?.text == rawText) return DraftPersist.None
+        if (previous?.text == rawText && previous.replyToId == reply) return DraftPersist.None
         return DraftPersist.Save(
-            ConversationDraft(conversationId = conversationId, text = rawText, updatedAt = nowIso),
+            ConversationDraft(
+                conversationId = conversationId,
+                text = rawText,
+                updatedAt = nowIso,
+                replyToId = reply,
+            ),
         )
     }
 
     /**
-     * The text to seed the composer with when a conversation opens, or `null` to
-     * leave it untouched. A stored draft is restored only when the composer is
-     * idle: not mid-edit, and still empty — so a restore never clobbers an
-     * in-flight edit nor text the user has already begun typing (the load is
-     * asynchronous and may resolve after the first keystroke). A stored draft
-     * whose text is blank is ignored.
+     * The composer snapshot to seed when a conversation opens, or `null` to leave it
+     * untouched. A stored draft is restored only when the composer is idle: not
+     * mid-edit, and still empty — so a restore never clobbers an in-flight edit nor
+     * text the user has already begun typing (the load is asynchronous and may resolve
+     * after the first keystroke). A stored draft that holds neither text nor an armed
+     * reply is ignored; a reply-only draft restores empty text with the reply re-armed.
+     * The stored [ConversationDraft.replyToId] is normalised (trimmed, blank → `null`).
      */
-    fun restore(stored: ConversationDraft?, currentDraft: String, isEditing: Boolean): String? {
+    fun restore(stored: ConversationDraft?, currentDraft: String, isEditing: Boolean): DraftRestore? {
         if (isEditing || currentDraft.isNotBlank()) return null
-        return stored?.text?.takeIf { it.isNotBlank() }
+        if (stored == null) return null
+        val reply = stored.replyToId?.trim()?.takeIf { it.isNotEmpty() }
+        if (stored.text.isBlank() && reply == null) return null
+        return DraftRestore(text = stored.text, replyToId = reply)
     }
 }
