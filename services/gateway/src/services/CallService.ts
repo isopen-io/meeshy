@@ -1059,6 +1059,16 @@ export class CallService {
       );
     }
 
+    // Privacy gate (audit 2026-07-07): the joiner's isVideoEnabled must be
+    // derived from the call's actual media type, exactly like the
+    // initiator's is at create time above — never trust `settings.videoEnabled`
+    // on its own. Without this, a stale or malicious client answering an
+    // AUDIO call with `videoEnabled: true` gets recorded (and, via the web
+    // client, actually transmits) live camera video the callee never
+    // consented to for this call.
+    const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
+    const isVideoCall = metadataType === 'video';
+
     // Join call in transaction, guarded by an optimistic-lock claim on
     // CallSession.version so a concurrent joiner can't silently slip past
     // the cap check above (see joinCallAttempt's doc comment).
@@ -1074,7 +1084,7 @@ export class CallService {
           role: ParticipantRole.participant,
           leftAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
-          isVideoEnabled: settings?.videoEnabled ?? true
+          isVideoEnabled: isVideoCall ? (settings?.videoEnabled ?? true) : false
         }
       });
 

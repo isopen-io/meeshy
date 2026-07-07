@@ -1604,3 +1604,64 @@ postérieur à `4c99916d` n'avait touché ces fichiers.
   CALL-DIAG retagging, `forceEndCall` room Socket.IO non vidée, `negotiate()` guard `makingOffer`
   spéculatif ; nouveau : threading complet du `ttl` TURN à travers tous les événements call (voir item 4
   ci-dessus).
+
+## Vague 21 — privacy: un callee répondant à un appel AUDIO activait quand même sa caméra et transmettait de la vidéo, gateway+web (2026-07-07)
+
+Point d'entrée : routine calling-feature. 4 PRs calls concurrentes déjà ouvertes au démarrage (#1601
+socket-room eviction sur GC force-end, #1606 version-bump `initiateCall` + web quality-report, #1597 typo
+prop `DraggableParticipantOverlay`, #1610 docs-only) — cible retenue strictement disjointe, trouvée par un
+agent d'exploration dédié (lecture seule) scopé explicitement à éviter ces 4 zones et le backlog déjà
+déprioritisé (C6/CALL-DIAG/`negotiate()`/threading TTL).
+
+**Mécanisme** : le CALLER respecte déjà le type d'appel — `use-video-call.ts` (`startCall`) acquiert le
+stream via `getUserMedia({ audio, video: isVideo ? VIDEO_CONSTRAINTS : false })` puis le pré-autorise via
+`window.__preauthorizedMediaStream` (consommé par `VideoCallInterface` au mount, chemin Safari-compatible).
+Le CALLEE, lui, n'appelait JAMAIS `getUserMedia` dans `CallManager.handleAcceptCall` — aucun
+pré-autorization n'était posé, donc `VideoCallInterface` retombait sur `initializeLocalStream()` →
+`WebRTCService.getLocalStream()` sans contraintes → `DEFAULT_MEDIA_CONSTRAINTS` (audio+vidéo
+inconditionnels), quel que soit `incomingCall.type`. Sibling-drift confirmé côté gateway : `CallService.ts`
+gate déjà `isVideoEnabled` par `type === 'video'` pour l'INITIATEUR (`initiateCall`, ligne ~877) mais PAS
+pour le JOINEUR (`joinCallAttempt`, `isVideoEnabled: settings?.videoEnabled ?? true` sans lien avec
+`call.metadata.type`) — un joiner (ou un client web bugué/malveillant) pouvait faire persister
+`isVideoEnabled: true` sur un appel audio-only.
+
+**Impact** : un appelant démarre un appel AUDIO ; le callee accepte ; son navigateur active la caméra et
+transmet de la vidéo live à l'appelant sans consentement pour CET appel — vrai gap privacy/consentement,
+atteignable en usage normal (pas de fenêtre de course), et un défaut de conformité "usage justifié de la
+caméra" au sens des guidelines plateforme.
+
+**Fix (bounded, TDD)** :
+- **Gateway** (`services/gateway/src/services/CallService.ts`, `joinCallAttempt`) : lit
+  `call.metadata.type` (même pattern déjà établi ligne ~2065 pour `buildCallSummaryWithMetadata`) et
+  applique la même garde que l'initiateur : `isVideoEnabled: isVideoCall ? (settings?.videoEnabled ?? true)
+  : false`. 1 nouveau test TDD (`CallService.test.ts`, describe `joinCall`) : un joiner qui ENVOIE
+  `videoEnabled: true` sur un appel dont `metadata.type === 'audio'` doit quand même persister
+  `isVideoEnabled: false`. RED confirmé (échec `Received value: true` avant fix). Suite `CallService.test.ts`
+  complète : 179/179 ; suite gateway filtrée `*[Cc]all*` : 31/31 suites, 864/864 tests ; `tsc --noEmit`
+  gateway : 0 erreur.
+- **Web** : extraction d'une source unique `apps/web/lib/calls/call-media-constraints.ts`
+  (`AUDIO_CONSTRAINTS`/`VIDEO_CONSTRAINTS`/`getCallMediaConstraints(type)`/`stopPreauthorizedStream`) —
+  élimine exactement la classe de duplication qui a causé ce bug (le callee n'avait jamais reçu la version
+  caller de cette logique). `use-video-call.ts` refactoré pour consommer la source unique (comportement
+  caller inchangé, 46/46 tests toujours verts). `CallManager.handleAcceptCall` mirrore maintenant le
+  pré-authorization pattern du caller : `getUserMedia(getCallMediaConstraints(incomingCall.type === 'video'
+  ? 'video' : 'audio'))` AVANT d'émettre `call:join`, stream posé sur `__preauthorizedMediaStream`,
+  `settings.videoEnabled` du payload `call:join` dérivé du même booléen (au lieu du `true` hardcodé) ;
+  cleanup (`stopPreauthorizedStream`) sur tout échec après acquisition (pas de socket, ack rejeté) pour ne
+  jamais laisser micro/caméra actifs sans rien pour consommer le stream — bénéfice UX en prime : un refus
+  de permission est maintenant intercepté AVANT de joindre l'appel, au lieu d'atterrir dans un état "in
+  call" déjà commité avec un stream jamais obtenu. 3 nouveaux tests TDD
+  (`CallManager.acceptCall.test.tsx`) : audio→`getUserMedia({video:false})`+`call:join{videoEnabled:false}`,
+  video→`getUserMedia({video:{...}})`+`call:join{videoEnabled:true}`, permission refusée→`call:join` jamais
+  émis + tracks partiels stoppés. RED confirmé (3/5 rouges, `git stash` scoped aux seuls fichiers source via
+  patch, tests inchangés) → GREEN après fix. + 4 tests unitaires du nouvel helper
+  (`lib/calls/__tests__/call-media-constraints.test.ts`). Suite `*[Cc]all*|webrtc*` web : 21 suites/430
+  tests + les 2 nouveaux fichiers (acceptCall 5/5, helper 4/4) ; `tsc --noEmit` web : 1535 erreurs
+  avant/après identique (bruit préexistant `(socket as unknown)` déjà présent partout dans ce fichier,
+  confirmé par `git stash` du seul diff source).
+- **iOS** : non audité cette session (pas de toolchain Swift/Xcode dans cet environnement Linux) — la
+  logique CallKit `hasVideo` iOS lit déjà `type` correctement à l'INITIATION
+  (`CallInitiatedEvent.type`/`hasVideo`, cf. commentaire ligne 415 `video-call.ts`) ; non revérifié pour le
+  chemin JOIN iOS dans cette session, candidat pour une prochaine passe iOS dédiée.
+- **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non vidée,
+  `negotiate()` guard spéculatif, threading TTL complet.

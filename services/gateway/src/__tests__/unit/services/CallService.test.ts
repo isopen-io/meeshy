@@ -566,6 +566,47 @@ describe('CallService', () => {
       expect(result.iceServers.length).toBeGreaterThan(0);
     });
 
+    it('privacy: a joiner\'s isVideoEnabled is gated on the call\'s actual media type, not just the client-sent settings (mirrors the initiator gating at CallService.ts:877 — a callee accepting an AUDIO call must never be recorded/treated as video-enabled even if a stale/malicious client sends videoEnabled:true)', async () => {
+      const audioCall = createMockCallSession({
+        status: CallStatus.initiated,
+        metadata: { type: 'audio' },
+        participants: [createMockParticipant({ isVideoEnabled: false })],
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(audioCall);
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: 'member-456',
+        conversationId: 'conv-123',
+        userId: 'user-456',
+        isActive: true
+      });
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(audioCall);
+
+      let capturedData: Record<string, unknown> | undefined;
+      mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: {
+            create: jest.fn().mockImplementation(({ data }: any) => {
+              capturedData = data;
+              return {};
+            })
+          },
+          callSession: {
+            updateMany: jest.fn().mockResolvedValue({ count: 1 })
+          }
+        };
+        return cb(tx);
+      });
+
+      await callService.joinCall({
+        ...validJoinData,
+        settings: { audioEnabled: true, videoEnabled: true } // client claims video, call is audio-only
+      });
+
+      expect(capturedData).toHaveProperty('isVideoEnabled', false);
+    });
+
     it('should throw error when call not found', async () => {
       mockPrisma.callSession.findUnique.mockResolvedValue(null);
 
