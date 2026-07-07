@@ -3727,7 +3727,9 @@ export class NotificationService {
     notificationLogger.info('✅ [SOCKET.IO] this.io configuré avec succès', {
       hasThisIo: !!this.io,
     });
-    // userSocketsMap non utilisé dans V2 (utilise io.to(userId) directement)
+    // userSocketsMap non utilisé dans V2 : les émissions user-scoped ciblent la
+    // room `ROOMS.user(userId)` (`user:${id}`) que chaque socket enregistré
+    // rejoint à l'auth — Socket.IO gère le fan-out multi-device.
   }
 
   setPushNotificationService(pushService: PushNotificationService): void {
