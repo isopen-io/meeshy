@@ -53,21 +53,43 @@ Chaque merge est un commit distinct sur `main` (squash), revert individuel possi
 ## Validation criteria
 - [x] #1597 mergé (clean, CI verte).
 - [x] #1610 mergé (clean, CI verte).
-- [x] #1601 rebasé + revérifié + poussé ; CI en cours au moment de la rédaction.
-- [x] #1606 rebasé + revérifié + poussé ; CI en cours au moment de la rédaction.
-- [ ] #1601 mergé sur `main` après CI verte confirmée.
-- [ ] #1606 rerebasé sur le nouveau tip de `main` (post-#1601, Vague 22 déjà présente → sa propre entrée
-      devient Vague 23 sans nouveau conflit de numérotation), revérifié, poussé, mergé.
-- [ ] Pull final de `main` sur la branche routine de cette session, aucun conflit résiduel.
+- [x] #1601 rebasé + revérifié localement (gateway `CallCleanupService` 70/70, suite `[Cc]all` 31/31
+      suites 867/867, `tsc --noEmit` 0 erreur) + poussé.
+- [x] #1606 rebasé + revérifié localement (gateway `CallService` 222/222, suite `[Cc]all` 31/31 suites
+      865/865, web `use-call-quality` 40/40, `tsc --noEmit` gateway 0 erreur) + poussé.
+- [~] CI GitHub sur #1601 : bloquée >1h sur les jobs "Test Python (translator)" et "Build (bun)", statut
+      identique sur ~8 vérifications espacées sur plus d'une heure (aucune progression de step) — semble
+      être un runner bloqué (contention probable : de très nombreuses branches/sessions routine parallèles
+      actives sur ce repo au moment de la rédaction) plutôt qu'un vrai ralentissement. Aucun rapport avec
+      le diff (gateway `CallCleanupService.ts` uniquement, zéro fichier translator/build touché) : les 8
+      jobs directement pertinents (Test gateway, Test web, Test shared, Test agent, Prisma, Quality,
+      Security, Audio Pipeline, Voice API, TTS/STT) sont tous verts.
+- [ ] #1601 mergé sur `main` — **bloqué sur CI**, non fait cette session.
+- [ ] #1606 rerebasé sur le nouveau tip de `main` (post-#1601) + mergé — **bloqué sur #1601**, non fait
+      cette session.
+- [x] Pull final de `main` sur la branche routine de cette session (`124af137`, +1 commit non lié
+      `#1617`), merge clean, aucun conflit.
 
 ## Progress tracking
 - [x] Audit iOS join-path (piste fermée, pas de code à écrire).
 - [x] Merge #1597, #1610.
 - [x] Rebase + revérification #1601.
 - [x] Rebase + revérification #1606.
-- [ ] Merge #1601.
-- [ ] Rerebase + merge #1606.
-- [ ] Pull main final sur la branche de session.
+- [ ] Merge #1601 — reporté, CI bloquée (voir Validation criteria).
+- [ ] Rerebase + merge #1606 — reporté, dépend de #1601.
+- [x] Pull main final sur la branche de session.
+
+## Handoff pour la prochaine session
+`#1601` et `#1606` sont dans un état **prêt-à-merger** : rebasés sur le `main` courant au moment du
+rebase, aucun conflit de code (seul `tasks/calls-fonctionnel-todo.md` avait un conflit, déjà résolu et
+renuméroté Vague 22/23), vérifiés localement en entier (tests + `tsc`). Il ne reste qu'à :
+1. Vérifier si la CI GitHub a fini de tourner sur #1601 (`gh`/MCP `get_check_runs` — si toujours bloquée,
+   envisager de relancer le run via l'UI/API `rerun` plutôt que d'attendre indéfiniment un runner mort).
+2. Une fois verte, merger #1601.
+3. Rerebaser #1606 sur le nouveau tip de `main` (conflit doc-only attendu de nouveau sur
+   `tasks/calls-fonctionnel-todo.md`, même résolution que cette session : garder les deux entrées, la
+   nouvelle devient Vague 23), revérifier, pousser, attendre CI verte, merger.
+4. Pull `main` final sur la branche de session suivante.
 
 ## Future improvements
 Rien de nouveau identifié cette session au-delà de l'existant (items J, C6, CALL-DIAG retagging,
