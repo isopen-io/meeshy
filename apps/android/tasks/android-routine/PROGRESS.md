@@ -646,13 +646,12 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `chat-typing-participants-core`** — the inline typing indicator now runs on the
-pure `:feature:chat` `TypingParticipants` keyed roster SSOT (userId-keyed dedup fixes the same-name collapse/
-removal bugs; self-exclusion; blank-name→userId fallback) + `TypingLabel` presentation (None/One/Two/Many). See
-run log. **Recommended next candidates:**
-- **`chat-typing-in-control`** — fold the now-tested typing roster into the scroll-to-bottom control (iOS shows
-  the typists inside `ConversationScrollControlsView`); `TypingLabel`/`TypingParticipants` already exist, so this
-  is the surface wiring (a `ScrollAffordanceState` typing field + preview-pill row). Mostly Compose glue now.
+**Just shipped (2026-07-07): `chat-typing-in-control`** — the typing roster is now folded into the
+scroll-to-bottom control via the pure `:feature:chat` `ScrollControlContent.of(affordance, typing)` SSOT
+(Hidden/Typing/Unread/Plain), with **typing taking priority over the unread count** (iOS
+`ConversationScrollControlsView` rule) and rendered as an accent `TypingPill`; the label→string mapping was
+extracted to a shared `typingLabelText` reused by the inline `TypingIndicator` (DRY). See run log.
+**Recommended next candidates:**
 - **`chat-typing-header`** — surface the typing roster in the conversation header (iOS shows "X is typing…" under
   the title); reuse `TypingLabel`, pure label→header-subtitle mapping.
 - **`chat-read-status-sheet`** — tap the delivery checks → a "seen by / delivered to" breakdown sheet
@@ -1159,6 +1158,33 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `chat-typing-in-control` ✅ (merged, reviewer PASS)
+- **Slice:** fold the typing roster into the scroll-to-bottom control (Chat parity §C "Typing indicators …
+  inside the control"; iOS `ConversationScrollControlsView`, whose documented rule is **"typing indicator
+  takes priority over count"**). Before this the control only ever showed the unread count/preview; a peer
+  typing while you were scrolled away was invisible until you returned to the bottom.
+- **Pure core (`:feature:chat`, `ScrollAffordance.kt`):** `sealed interface ScrollControlContent { Hidden;
+  Typing(label); Unread(count, preview); Plain }` + `of(affordance, typing)` — the render SSOT. Decision order:
+  not visible → `Hidden` (regardless of typing/unread); else typing present → `Typing(TypingLabel.of(...))`
+  (suppresses the count — the iOS priority rule); else unread → `Unread(count, preview)`; else `Plain`. Reuses
+  the existing `TypingLabel`/`TypingParticipants` cores — no new roster logic.
+- **Wiring/render:** `ScrollToBottomControl` now takes `typingParticipants`, computes `ScrollControlContent.of`,
+  and renders a `TypingPill` (accent edit-icon + `typingLabelText`) for `Typing`, the existing `UnreadPreviewPill`
+  + badge for `Unread`, and a bare FAB for `Plain`; the badge count comes from the `Unread` variant only, so
+  typing hides it. The label→string mapping was extracted to a shared `@Composable typingLabelText(label)` reused
+  by the inline `TypingIndicator` (removes the duplicated `when` over `TypingLabel`).
+- **Tests (+10):** `ScrollControlContentTest` — at-bottom→Hidden even with typing / even with unread; one/two/
+  three typists→Typing(One/Two/Many); typing-beats-unread priority; unread-only→Unread(count, preview);
+  unread-missing-preview→Unread(count, null); nothing→Plain; empty-typing falls through. Full branch sweep of
+  `of`.
+- **Verify:** `gradle :feature:chat:testDebugUnitTest` (146 tasks, `ScrollControlContentTest` 10/10) +
+  `:feature:chat:assembleDebug` both green.
+- **Reviewer:** PASS — diff `apps/android/feature/chat` only; behaviour-through-public-API, no tautologies, every
+  `of` branch exercised incl. the visibility-wins-over-typing arms; SDK-purity/SSOT honoured (pure decision in
+  `:feature:chat`, render exempt Compose glue); DRY win (shared `typingLabelText`); accent/navigation coherence
+  unchanged (`TypingPill` uses the conversation `accentColor`). No dead code — the new content type is consumed
+  by the control.
 
 ### 2026-07-07 — slice `chat-typing-participants-core` ✅ (merged, reviewer PASS)
 - **Slice:** the inline typing indicator (Chat parity §C "Typing indicators"). The incoming-typing roster was
