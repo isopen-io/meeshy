@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Conversation } from '@meeshy/shared/types';
 import type { CallInitiateAck, CallJoinAck } from '@meeshy/shared/types/video-call';
+import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 
 interface UseVideoCallOptions {
   /**
@@ -36,22 +37,6 @@ interface UseVideoCallReturn {
   isCallSupported: boolean;
   error: string | null;
 }
-
-/**
- * Configuration des contraintes média
- */
-const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
-};
-
-const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
-  width: { ideal: 640, max: 1280 },
-  height: { ideal: 480, max: 720 },
-  frameRate: { ideal: 24, max: 30 },
-  facingMode: 'user',
-};
 
 /**
  * Hook pour gérer les appels vidéo
@@ -83,10 +68,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
 
     try {
       // Demander les permissions média (vidéo uniquement pour un appel vidéo)
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: AUDIO_CONSTRAINTS,
-        video: isVideo ? VIDEO_CONSTRAINTS : false,
-      });
+      stream = await navigator.mediaDevices.getUserMedia(getCallMediaConstraints(type));
 
       // Stocker le stream pour réutilisation
       (window as any).__preauthorizedMediaStream = stream;
@@ -96,7 +78,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
 
       if (!socket?.connected) {
         toast.error('Connection error. Please try again.');
-        cleanupStream(stream);
+        stopPreauthorizedStream(stream);
         return;
       }
 
@@ -143,7 +125,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       });
       toast.success('Starting call...');
     } catch (error: unknown) {
-      cleanupStream(stream);
+      stopPreauthorizedStream(stream);
       handleMediaError(error);
     }
   }, [conversation, user]);
@@ -202,16 +184,6 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
     isCallSupported,
     error,
   };
-}
-
-/**
- * Nettoie un MediaStream
- */
-function cleanupStream(stream: MediaStream | null): void {
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
-    delete (window as any).__preauthorizedMediaStream;
-  }
 }
 
 /**
