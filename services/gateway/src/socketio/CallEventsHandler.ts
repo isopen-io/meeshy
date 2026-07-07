@@ -588,6 +588,15 @@ export class CallEventsHandler {
         // until its own client-side timeout (see resolveCallEndedRooms).
         await this.broadcastCallEnded(io, leftSession.id, leftSession.conversationId, dcEndedEvent);
         await this.postCallSummary(leftSession.id);
+        if (dcStatus === 'missed') {
+          /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+          this.handleMissedCall(leftSession.id).catch((err) => {
+            logger.error('❌ handleMissedCall failed after disconnect-grace leave', {
+              callId: leftSession.id,
+              err
+            });
+          });
+        }
       }
 
       logger.info('✅ Socket: Auto-left call on disconnect', {
