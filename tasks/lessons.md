@@ -976,3 +976,25 @@ disait « emits to the user room ».
 `ROOMS.user(id)` — jamais l'id nu (réservé aux anonymes). Un test qui assert une room à id nu pour un event
 destiné aux enregistrés encode probablement un bug ; croiser avec les `socket.join` de `AuthHandler` avant de
 faire confiance à l'assertion.
+
+## Leçon 72 — Fix `emitWithSeq` room absorbé par une session parallèle sur `main` avant le merge de MA PR → doublon fermé (2026-07-06, itération 116)
+
+**Contexte** : j'ai diagnostiqué + corrigé le bug `emitWithSeq` (émission `notification:new` vers l'id NU
+au lieu de `ROOMS.user(id)`, cf. Leçon 71), ouvert la PR #1585, CI passée au vert après correction du test
+`SocialNotifications`. MAIS pendant ce temps une session parallèle avait déjà landé EXACTEMENT le même fix
+sur `main` (probablement via #1588/#1596) : `main` a `io.to(ROOMS.user(userId)).emit(...)` identique, et son
+test `SocialNotifications` a MÊME une assertion négative en plus (`not.toHaveBeenCalledWith(AUTHOR_ID)`) que
+ma branche n'avait pas. jcnm a fermé #1585 sans merge pour éviter une régression de couverture (les tests de
+`main` sont un sur-ensemble strict des miens). Vérifié moi-même : `git show origin/main:.../emitWithSeq.ts`
+confirme le fix déjà présent.
+
+**Règle réutilisable** : dans ce repo, plusieurs agents travaillent en parallèle sur le même stack temps réel.
+AVANT d'ouvrir une PR sur un bug « évident et bien ciblé », `git fetch origin main` PUIS `git show
+origin/main:<fichier>` sur les fichiers exacts que je vais toucher — un fix aussi net a de bonnes chances
+d'avoir déjà été trouvé par un jumeau. Le coût du fetch+show est trivial vs. le travail gâché d'une PR
+doublon. Corollaire : quand un doublon est confirmé, NE PAS rouvrir ni réémettre une PR ; laisser la version
+de `main` (souvent légèrement supérieure, ici l'assertion négative en plus) et se retirer proprement.
+
+**Note process** : `main` a beaucoup bougé pendant la session (7f28c533 → e19cd6f6 → 7c667048) — le « main
+stale » perçu au départ était juste un fetch pas encore rafraîchi. Toujours re-fetch `main` juste avant de
+décider d'une PR/merge, pas seulement en début de session.
