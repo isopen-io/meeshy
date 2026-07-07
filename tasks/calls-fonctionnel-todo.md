@@ -1845,3 +1845,79 @@ pour une future session avec toolchain Swift), audit gateway, audit web.
 - **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
   CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
   travers tous les événements call.
+
+## Vague 25 — `forceEndOrphanedCallSession` était le 4e writer terminal à ignorer `answeredAt` (gateway) + field-name mort `poorStreak`/`goodStreak` (web, TS2353) (2026-07-07)
+
+Point d'entrée : routine calling-feature. `git log` confirme HEAD (`119ccd8`) inchangé côté calling depuis
+la Vague 24 (seul commit intermédiaire : un fix translator emoji, hors scope). Deux agents d'exploration
+dédiés (gateway, web — lecture seule, mandatés à falsifier tout candidat contre ce fichier + `lessons.md`)
+lancés en parallèle ; iOS non ré-audité cette session (pas de toolchain Swift/Xcode dans cet environnement).
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallService.forceEndOrphanedCallSession()`
+  (`CallService.ts:338`) lisait seulement `{ startedAt, conversationId }` et écrivait
+  inconditionnellement `status: CallStatus.ended` — contrairement à ses 3 siblings structurels
+  (`endCall`/`leaveCall`/`markCallAsMissed`) qui branchent tous sur `answeredAt` (`wasPreAnswered`) pour
+  résoudre en `missed` un appel jamais décroché. Cette méthode est le filet de sécurité de dernier
+  recours de `CallEventsHandler` : (1) le catch du disconnect-handler quand `leaveCall()` échoue et 0
+  participant ne reste, (2) `forceEndOrphanedCallAfterOptimisticBroadcast` — appelée à la fois quand
+  `resolveParticipantIdFromCall` échoue à résoudre l'appelant sur `call:end`, et depuis le catch-all de ce
+  même handler. **Scénario concret** : A appelle B ; avant que B décroche, le socket de A tombe pendant que
+  sa ligne `Participant` de conversation est temporairement non résolue (course de membership), ou
+  `endCall()` lève une exception (ex. `NOT_A_PARTICIPANT` déjà consommé par un autre writer terminal
+  concurrent). Le gateway force-termine la session en `status: ended` au lieu de `missed`, et
+  `handleMissedCall()` → `createMissedCallNotifications()` n'est jamais invoqué sur AUCUN des 3 sites
+  d'appel — B ne reçoit aucune notification/badge d'appel manqué persisté pour un appel qui a réellement
+  sonné sans jamais être décroché, et l'historique affiche un `status: ended`/`endReason` incohérent avec
+  `direction: missed` (dérivé indépendamment de `answeredAt` par `deriveCallDirection`). Le test existant
+  (`CallService.test.ts`, ex-ligne 4694) confirmait le bug : il asserte `status: CallStatus.ended`
+  inconditionnellement, mock `findUnique` sans jamais sélectionner `answeredAt`.
+  **Fix** : `forceEndOrphanedCallSession` sélectionne désormais `answeredAt`, calcule `wasPreAnswered =
+  !session.answeredAt`, branche `status`/`endReason` exactement comme `endCall()` (une raison explicite
+  non-`completed` est préservée ; seule la raison par défaut `completed` est normalisée en `missed`), et
+  retourne `{ status, endReason }` en plus de `{ duration, conversationId }`. Les 3 sites d'appel dans
+  `CallEventsHandler.ts` invoquent désormais `this.handleMissedCall(callId)` quand
+  `forceEnded.status === CallStatus.missed` (même pattern try/catch-jamais-rejeté que les autres
+  sites), et le `reason` du `CallEndedEvent` diffusé utilise `forceEnded.endReason` (résolu) au lieu du
+  paramètre brut hardcodé. **Tests TDD** : `CallService.test.ts` — test existant adapté (mock avec
+  `answeredAt` réel → statut `ended` toujours correctement asserté) + 2 nouveaux cas (`answeredAt: null` →
+  `missed` avec raison explicite préservée / raison par défaut normalisée). `CallEventsHandler-
+  disconnect.test.ts` — 2 nouveaux cas (`handleMissedCall` appelé quand `status === missed`, PAS appelé
+  quand `status === ended`). RED confirmé par `git stash` du seul diff source (4 échecs : 3 sur
+  `CallService.test.ts`, 1 sur `CallEventsHandler-disconnect.test.ts`), GREEN restauré. Suite gateway
+  filtrée `.*[Cc]all.*\.test\.ts$` : 31/31 suites, 874/874 tests verts. `tsc --noEmit` gateway : 0 erreur.
+- **[BUG RÉEL (type-correctness), web, CONFIRMÉ + CORRIGÉ]** `apps/web/hooks/use-adaptive-degradation.ts:95,104`
+  — les branches catch de `suspend()`/`resume()` écrivaient `poorStreak: 0`/`goodStreak: 0`, deux champs
+  qui n'existent PAS sur `DegradationState` (seuls `poorSince`/`goodSince` existent,
+  `lib/calls/adaptive-degradation.ts:37-45`) — confirmé `tsc --noEmit` TS2353 "Object literal may only
+  specify known properties" sur les 2 lignes, isolé via `git stash` du seul fichier source (2 erreurs
+  présentes avant le fix, absentes après ; 1534→1532 sur le compte total du projet, aucune erreur
+  nouvelle ailleurs). **Falsification du scénario de reproduction** : l'hypothèse initiale (un rejet
+  répété hammer `getUserMedia()`/`disableVideoSend()` toutes les ~2s) a été tracée pas-à-pas contre
+  `reduceDegradation` — invalidée : chaque transition optimiste (`suspend-video`/`resume-video`) met déjà
+  `poorSince`/`goodSince` à `null` de façon SYNCHRONE avant même l'appel async, et le flag `state.sending`
+  empêche structurellement que le champ concerné soit repeuplé pendant la fenêtre d'attente (les ticks
+  reçus pendant que `sending` est encore à sa valeur optimiste retombent tous dans la branche qui ne
+  touche PAS le champ que le catch tente de réinitialiser). Confirmé empiriquement : un test reproduisant
+  exactement le scénario proposé passe IDENTIQUEMENT sur le code bogué et corrigé (`git stash` du seul
+  fichier source, suite inchangée 7/7 verte dans les deux cas) — donc AUCUN impact runtime observable
+  actuellement, uniquement un bug de type mort/latent (fragile si `reduceDegradation` change un jour sa
+  logique de reset optimiste). Fix conservé (noms de champs corrects, dette de type réelle, `tsc` RED→GREEN
+  comme preuve de régression pour ce type de bug) mais le rapport initial de l'agent d'audit surestimait la
+  gravité runtime — corrigé ici pour ne pas polluer un futur audit avec une fausse causalité. 2 nouveaux
+  tests de comportement ajoutés (`use-adaptive-degradation.test.tsx`) couvrant les branches catch
+  (auparavant 0% de couverture) : revert + retry après un rejet de `suspend()`/`resume()` — passent sur
+  les deux versions (couverture, pas régression), utiles pour verrouiller le comportement si
+  `reduceDegradation` évolue. Suite web filtrée `.*([Cc]all|webrtc|quality|degradation).*\.test\.` :
+  24/24 suites, 452/452 tests verts.
+- **iOS (lecture seule, aucun changement)** : non ré-audité cette session au-delà de la confirmation
+  qu'aucun commit iOS n'a touché les fichiers d'appel depuis la Vague 24.
+- **Règle réutilisable** : quand un candidat de bug repose sur "un champ n'est jamais réinitialisé", ne
+  pas se contenter de la preuve `tsc`/lecture statique — tracer l'ENTIÈRE fenêtre temporelle entre la
+  transition optimiste et le catch (quels ticks peuvent arriver entre les deux, quelle branche du FSM ils
+  empruntent) avant d'écrire le scénario de reproduction dans le rapport. Un bug de type peut être réel et
+  valoir d'être corrigé (dette, fragilité future) sans que le scénario runtime dramatique décrit soit
+  falsifiable — les deux affirmations (bug de type / impact runtime) doivent être vérifiées et rapportées
+  séparément, jamais fusionnées par défaut.
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call.

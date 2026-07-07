@@ -4691,9 +4691,10 @@ describe('CallService - createCallSummaryMessage', () => {
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('force-ends an active session: bumps version, tags endReason, marks remaining participants left, releases the claim', async () => {
+    it('force-ends an active, already-answered session: status=ended, bumps version, tags endReason, marks remaining participants left, releases the claim', async () => {
       const startedAt = new Date(Date.now() - 42_000);
-      mockPrisma.callSession.findUnique.mockResolvedValue({ startedAt, conversationId: 'conv-123' });
+      const answeredAt = new Date(Date.now() - 30_000);
+      mockPrisma.callSession.findUnique.mockResolvedValue({ startedAt, conversationId: 'conv-123', answeredAt });
 
       const callSessionUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
       const callParticipantUpdateMany = jest.fn().mockResolvedValue({ count: 2 });
@@ -4706,6 +4707,8 @@ describe('CallService - createCallSummaryMessage', () => {
 
       expect(result?.conversationId).toBe('conv-123');
       expect(result?.duration).toBeGreaterThanOrEqual(42);
+      expect(result?.status).toBe(CallStatus.ended);
+      expect(result?.endReason).toBe(CallEndReason.connectionLost);
       expect(callSessionUpdateMany).toHaveBeenCalledWith({
         where: { id: 'call-123', status: { in: expect.any(Array) } },
         data: expect.objectContaining({
@@ -4721,6 +4724,64 @@ describe('CallService - createCallSummaryMessage', () => {
       expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
         where: { id: 'conv-123', activeCallId: 'call-123' },
         data: { activeCallId: null }
+      });
+    });
+
+    // Audit Vague 25 — forceEndOrphanedCallSession was the 4th terminal
+    // writer in this file to unconditionally resolve to `ended`, unlike its
+    // 3 siblings (endCall/leaveCall/markCallAsMissed) which all branch on
+    // `answeredAt`. A ringing call force-ended by the disconnect-cleanup or
+    // call:end-failure paths must resolve to `missed` so the callee gets a
+    // missed-call notification, exactly like its siblings.
+    it('force-ends a never-answered (ringing) session: status=missed, preserves an explicit non-default endReason', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue({
+        startedAt: new Date(Date.now() - 8_000),
+        conversationId: 'conv-123',
+        answeredAt: null
+      });
+
+      const callSessionUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+      mockPrisma.$transaction.mockImplementation(async (cb: any) => cb({
+        callSession: { updateMany: callSessionUpdateMany },
+        callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+      }));
+
+      const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.connectionLost);
+
+      expect(result?.status).toBe(CallStatus.missed);
+      expect(result?.endReason).toBe(CallEndReason.connectionLost);
+      expect(callSessionUpdateMany).toHaveBeenCalledWith({
+        where: { id: 'call-123', status: { in: expect.any(Array) } },
+        data: expect.objectContaining({
+          status: CallStatus.missed,
+          endReason: CallEndReason.connectionLost
+        })
+      });
+    });
+
+    it('force-ends a never-answered (ringing) session with the default reason: normalizes endReason to missed too', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue({
+        startedAt: new Date(Date.now() - 8_000),
+        conversationId: 'conv-123',
+        answeredAt: null
+      });
+
+      const callSessionUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+      mockPrisma.$transaction.mockImplementation(async (cb: any) => cb({
+        callSession: { updateMany: callSessionUpdateMany },
+        callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+      }));
+
+      const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.completed);
+
+      expect(result?.status).toBe(CallStatus.missed);
+      expect(result?.endReason).toBe(CallEndReason.missed);
+      expect(callSessionUpdateMany).toHaveBeenCalledWith({
+        where: { id: 'call-123', status: { in: expect.any(Array) } },
+        data: expect.objectContaining({
+          status: CallStatus.missed,
+          endReason: CallEndReason.missed
+        })
       });
     });
 

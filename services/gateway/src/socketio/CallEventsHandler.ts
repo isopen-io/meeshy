@@ -654,14 +654,15 @@ export class CallEventsHandler {
           if (forceEnded) {
             logger.info('✅ Socket: Force-ended call after disconnect error', {
               callId: participation.callSessionId,
-              duration: forceEnded.duration
+              duration: forceEnded.duration,
+              status: forceEnded.status
             });
 
             const dcForceEndedEvent: CallEndedEvent = {
               callId: participation.callSessionId,
               duration: forceEnded.duration,
               endedBy: userId,
-              reason: CallEndReason.connectionLost
+              reason: forceEnded.endReason
             };
             await this.broadcastCallEnded(
               io,
@@ -670,6 +671,15 @@ export class CallEventsHandler {
               dcForceEndedEvent
             );
             await this.postCallSummary(participation.callSessionId);
+            if (forceEnded.status === CallStatus.missed) {
+              /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+              this.handleMissedCall(participation.callSessionId).catch((err) => {
+                logger.error('❌ handleMissedCall failed after force-cleanup on disconnect error', {
+                  callId: participation.callSessionId,
+                  err
+                });
+              });
+            }
           }
         }
 
@@ -764,7 +774,17 @@ export class CallEventsHandler {
    */
   private async forceEndOrphanedCallAfterOptimisticBroadcast(callId: string, reason?: string): Promise<void> {
     try {
-      await this.callService.forceEndOrphanedCallSession(callId, (reason || 'completed') as CallEndReason);
+      const forceEnded = await this.callService.forceEndOrphanedCallSession(callId, (reason || 'completed') as CallEndReason);
+      if (forceEnded?.status === CallStatus.missed) {
+        // Mirror the sibling call:end/call:leave paths (see their doc
+        // comments): a call force-ended before it was ever answered must
+        // still notify the other party it was missed, not just resolve the
+        // DB row — otherwise the callee never sees a missed-call banner/badge.
+        /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+        await this.handleMissedCall(callId).catch((err) => {
+          logger.error('❌ handleMissedCall failed after force-end orphaned call', { callId, err });
+        });
+      }
     } catch (err) {
       logger.error('❌ Failed to force-end orphaned call after call:end failure', { callId, error: err });
     }
