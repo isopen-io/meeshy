@@ -9,11 +9,14 @@ import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.CallCue
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -39,7 +42,10 @@ class CallViewModelTest {
     private val events = MutableSharedFlow<CallEvent>(extraBufferCapacity = 64)
     private val incomingOffers = MutableSharedFlow<WaitingCall>(extraBufferCapacity = 16)
     private val endedCalls = MutableSharedFlow<CallEndedSignal>(extraBufferCapacity = 16)
+    private val iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(extraBufferCapacity = 8)
     private val signalManager: CallSignalManager = mockk(relaxed = true)
+    private val coordinator: WebRtcCallCoordinator = mockk(relaxed = true)
+    private val sessionRepository: SessionRepository = mockk(relaxed = true)
 
     /** Test-driven auto-dismiss countdown: emit once to fire the 15 s timeout. */
     private val waitingTimerFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
@@ -92,6 +98,8 @@ class CallViewModelTest {
         every { signalManager.events } returns events
         every { signalManager.incomingOffers } returns incomingOffers
         every { signalManager.endedCalls } returns endedCalls
+        every { signalManager.iceServersRefreshed } returns iceServersRefreshed
+        every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
     }
@@ -101,7 +109,9 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = CallViewModel(signalManager, ticker, tones, telecom, qualitySampler, waitingTimer)
+    private fun vm() = CallViewModel(
+        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
+    )
 
     @Test
     fun `starts idle`() {

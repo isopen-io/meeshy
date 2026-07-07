@@ -43,6 +43,7 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -74,6 +75,30 @@ fun CallScreen(
             .background(MeeshyTheme.tokens.backgroundPrimary),
         contentAlignment = Alignment.Center,
     ) {
+        if (state.isVideoCall) {
+            val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
+            remoteVideo?.let { track ->
+                VideoRenderer(
+                    track = track,
+                    eglContext = viewModel.eglBaseContext,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            viewModel.localVideoTrack?.let { local ->
+                VideoRenderer(
+                    track = local,
+                    eglContext = viewModel.eglBaseContext,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(MeeshySpacing.lg)
+                        .size(width = 108.dp, height = 148.dp)
+                        .clip(RoundedCornerShape(MeeshyRadius.md)),
+                    mirror = true,
+                    overlay = true,
+                )
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -84,21 +109,23 @@ fun CallScreen(
             Spacer(Modifier.height(MeeshySpacing.xl))
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    modifier = Modifier
-                        .size(96.dp)
-                        .clip(CircleShape)
-                        .background(accent),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = state.peerName.take(1).uppercase(),
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                    )
+                if (!state.isVideoCall) {
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(CircleShape)
+                            .background(accent),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = state.peerName.take(1).uppercase(),
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Spacer(Modifier.height(MeeshySpacing.lg))
                 }
-                Spacer(Modifier.height(MeeshySpacing.lg))
                 Text(
                     text = state.peerName,
                     style = MaterialTheme.typography.headlineSmall,

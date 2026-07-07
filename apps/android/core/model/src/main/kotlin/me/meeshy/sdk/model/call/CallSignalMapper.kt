@@ -65,6 +65,25 @@ object CallSignalMapper {
     }.getOrNull()
 
     /**
+     * Decode a `call:signal` frame into its full [CallSignalEnvelope] — the SDP or
+     * ICE payload the WebRTC engine consumes. The FSM-facing [map] keeps only a
+     * marker (and drops offers/candidates); this parallel, total, side-effect-free
+     * decode is the WebRTC data path. `null` on a malformed frame.
+     */
+    fun signalEnvelope(rawJson: String): CallSignalEnvelope? = runCatching {
+        json.decodeFromString<CallSignalEnvelope>(rawJson)
+    }.getOrNull()
+
+    /**
+     * Decode a `call:ice-servers-refreshed` frame into the fresh STUN/TURN servers
+     * the callee's WebRTC engine needs (the caller already has them from the
+     * initiate ACK). `null` on a malformed frame.
+     */
+    fun iceServersRefreshed(rawJson: String): List<SocketIceServer>? = runCatching {
+        json.decodeFromString<IceServersRefreshedPayload>(rawJson).iceServers
+    }.getOrNull()
+
+    /**
      * Decode an inbound teardown frame (`call:ended` / `call:missed`) into the
      * identity-carrying [CallEndedSignal] — the ended call's id plus the
      * [CallEvent] the FSM reduces iff that id is the *active* call's — or `null`

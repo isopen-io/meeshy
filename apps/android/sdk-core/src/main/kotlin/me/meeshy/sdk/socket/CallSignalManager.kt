@@ -10,7 +10,9 @@ import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallQualityReport
+import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalMapper
+import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.WaitingCall
 import org.json.JSONObject
 import javax.inject.Inject
@@ -72,6 +74,26 @@ class CallSignalManager @Inject constructor(
     private val _endedCalls = MutableSharedFlow<CallEndedSignal>(replay = 0, extraBufferCapacity = 16)
     val endedCalls: SharedFlow<CallEndedSignal> = _endedCalls.asSharedFlow()
 
+    /**
+     * The **data-carrying** decode of each inbound `call:signal` frame — the full
+     * SDP offer/answer or ICE candidate the WebRTC engine consumes. [events]
+     * deliberately keeps only the FSM marker ([CallEvent.RemoteAnswer] for an
+     * answer; offers/candidates are inert to the FSM), discarding the payload; this
+     * parallel stream carries it so the app-side WebRTC coordinator can apply
+     * remote descriptions and add candidates. Hot, no replay — like [events].
+     */
+    private val _incomingSignals = MutableSharedFlow<CallSignalEnvelope>(replay = 0, extraBufferCapacity = 128)
+    val incomingSignals: SharedFlow<CallSignalEnvelope> = _incomingSignals.asSharedFlow()
+
+    /**
+     * Fresh STUN/TURN servers pushed by the gateway in reply to [emitRequestIceServers].
+     * The caller gets its ICE servers in the initiate ACK; the callee — whose
+     * `call:initiated` frame carries none — requests them on accept and configures
+     * the WebRTC engine once they land here. Hot, no replay.
+     */
+    private val _iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(replay = 0, extraBufferCapacity = 8)
+    val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.asSharedFlow()
+
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
     }
@@ -126,6 +148,47 @@ class CallSignalManager @Inject constructor(
     /** Forward an SDP/ICE [signal] to the peer through the gateway relay. */
     fun emitSignal(callId: String, signal: JSONObject) =
         socketManager.emit("call:signal", JSONObject().put("callId", callId).put("signal", signal))
+
+    /** Send the local SDP offer (caller, after the peer joins). iOS payload parity. */
+    fun emitOffer(callId: String, sdp: String, to: String, from: String, negotiationId: Int) =
+        emitSignal(callId, sdpSignal("offer", sdp, to, from, negotiationId))
+
+    /** Send the local SDP answer (callee, in response to the remote offer). */
+    fun emitAnswer(callId: String, sdp: String, to: String, from: String, negotiationId: Int) =
+        emitSignal(callId, sdpSignal("answer", sdp, to, from, negotiationId))
+
+    /**
+     * Send one local ICE candidate. `sdpMLineIndex` MUST be a JSON number — the
+     * gateway validates it as `z.number()` and drops the whole signal otherwise,
+     * so ICE would never start and the call would hang in `new`.
+     */
+    fun emitIceCandidate(
+        callId: String,
+        candidate: String,
+        sdpMLineIndex: Int,
+        sdpMid: String?,
+        to: String,
+        from: String,
+        negotiationId: Int,
+    ) {
+        val signal = JSONObject()
+            .put("type", "ice-candidate")
+            .put("candidate", candidate)
+            .put("sdpMLineIndex", sdpMLineIndex)
+            .put("to", to)
+            .put("from", from)
+            .put("negotiationId", negotiationId)
+        sdpMid?.let { signal.put("sdpMid", it) }
+        emitSignal(callId, signal)
+    }
+
+    private fun sdpSignal(type: String, sdp: String, to: String, from: String, negotiationId: Int): JSONObject =
+        JSONObject()
+            .put("type", type)
+            .put("sdp", sdp)
+            .put("to", to)
+            .put("from", from)
+            .put("negotiationId", negotiationId)
 
     // --- WebRTC-plumbing emits (parity with iOS MessageSocketManager) ---
 
@@ -188,6 +251,12 @@ class CallSignalManager @Inject constructor(
             if (event == INITIATED_EVENT) {
                 CallSignalMapper.incomingOffer(raw)?.let(_incomingOffers::tryEmit)
             }
+            if (event == SIGNAL_EVENT) {
+                CallSignalMapper.signalEnvelope(raw)?.let(_incomingSignals::tryEmit)
+            }
+            if (event == ICE_SERVERS_REFRESHED_EVENT) {
+                CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::tryEmit)
+            }
             CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::tryEmit)
         }
     }
@@ -199,9 +268,16 @@ class CallSignalManager @Inject constructor(
         /** The single inbound frame that also carries incoming-offer identity. */
         const val INITIATED_EVENT = "call:initiated"
 
+        /** The inbound frame carrying the SDP/ICE payload the WebRTC engine consumes. */
+        const val SIGNAL_EVENT = "call:signal"
+
+        /** The gateway's reply to [emitRequestIceServers], carrying fresh TURN/STUN. */
+        const val ICE_SERVERS_REFRESHED_EVENT = "call:ice-servers-refreshed"
+
         val INBOUND_EVENTS = listOf(
             INITIATED_EVENT,
-            "call:signal",
+            SIGNAL_EVENT,
+            ICE_SERVERS_REFRESHED_EVENT,
             "call:participant-joined",
             "call:ended",
             "call:missed",
