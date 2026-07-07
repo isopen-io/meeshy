@@ -405,6 +405,71 @@ describe('useMessageTranslations', () => {
 
       expect(processed.content).toBe('Bonjour (premium)');
     });
+
+    it('should keep the premium translation when a newer basic translation exists (quality over recency)', () => {
+      const user = createTestUser({ systemLanguage: 'fr' });
+      const olderDate = new Date('2024-01-01T00:00:00Z').toISOString();
+      const newerDate = new Date('2024-01-02T00:00:00Z').toISOString();
+
+      const message = createTestMessage({
+        content: 'Hello',
+        originalLanguage: 'en',
+        translations: [
+          {
+            targetLanguage: 'fr',
+            translatedContent: 'Bonjour (premium)',
+            translationModel: 'premium',
+            confidenceScore: 0.95,
+            createdAt: olderDate,
+          },
+          {
+            targetLanguage: 'fr',
+            translatedContent: 'Bonjour (basic)',
+            translationModel: 'basic',
+            confidenceScore: 0.8,
+            createdAt: newerDate,
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+      const processed = result.current.processMessageWithTranslations(message);
+
+      expect(processed.translations.filter(t => t.language === 'fr').length).toBe(1);
+      expect(processed.content).toBe('Bonjour (premium)');
+    });
+
+    it('should keep the medium translation when a newer basic translation exists (respects the model tier)', () => {
+      const user = createTestUser({ systemLanguage: 'fr' });
+      const olderDate = new Date('2024-01-01T00:00:00Z').toISOString();
+      const newerDate = new Date('2024-01-02T00:00:00Z').toISOString();
+
+      const message = createTestMessage({
+        content: 'Hello',
+        originalLanguage: 'en',
+        translations: [
+          {
+            targetLanguage: 'fr',
+            translatedContent: 'Bonjour (medium)',
+            translationModel: 'medium',
+            confidenceScore: 0.9,
+            createdAt: olderDate,
+          },
+          {
+            targetLanguage: 'fr',
+            translatedContent: 'Bonjour (basic)',
+            translationModel: 'basic',
+            confidenceScore: 0.8,
+            createdAt: newerDate,
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+      const processed = result.current.processMessageWithTranslations(message);
+
+      expect(processed.content).toBe('Bonjour (medium)');
+    });
   });
 
   describe('processMessageWithTranslations — cache keyed by preferred language', () => {
