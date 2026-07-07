@@ -1,4 +1,4 @@
-package me.meeshy.app.notifications
+package me.meeshy.ui.format
 
 import java.time.Instant
 import java.time.ZoneId
@@ -8,14 +8,13 @@ import java.time.format.FormatStyle
 import java.util.Locale
 
 /**
- * Compact, locale-aware label for a notification's ISO-8601 timestamp.
- *
- * The gateway sends `state.createdAt` as a raw instant (`2026-07-07T06:56:34.215Z`);
- * rendering it verbatim is jarring, so this mirrors the iOS notification timestamp by
- * formatting it in the viewer's zone and locale. Falls back to the raw string when the
- * value is not a parseable instant, so a malformed timestamp never blanks the row.
+ * Compact, locale-aware label for an ISO-8601 instant such as a post or notification
+ * timestamp. The gateway sends raw instants (`2026-07-07T06:56:34.215Z`); rendering
+ * them verbatim is jarring, so this formats them in the viewer's zone and locale.
+ * Falls back to the raw value when it is not a parseable instant, so a malformed
+ * timestamp never blanks the row.
  */
-fun notificationTimeLabel(
+fun shortDateTimeLabel(
     iso: String,
     zone: ZoneId = ZoneId.systemDefault(),
     locale: Locale = Locale.getDefault(),

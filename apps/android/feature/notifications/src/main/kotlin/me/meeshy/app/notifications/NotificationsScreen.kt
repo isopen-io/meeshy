@@ -41,6 +41,7 @@ import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.format.shortDateTimeLabel
 import me.meeshy.ui.component.chrome.MeeshyTopBar
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -159,7 +160,7 @@ private fun NotificationItem(
                     )
                 }
                 Text(
-                    text = notificationTimeLabel(notification.state.createdAt),
+                    text = shortDateTimeLabel(notification.state.createdAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MeeshyTheme.tokens.textMuted,
                 )

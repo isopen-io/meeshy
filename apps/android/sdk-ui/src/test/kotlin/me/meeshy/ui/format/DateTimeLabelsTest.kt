@@ -1,15 +1,15 @@
-package me.meeshy.app.notifications
+package me.meeshy.ui.format
 
 import com.google.common.truth.Truth.assertThat
 import java.time.ZoneId
 import java.util.Locale
 import org.junit.Test
 
-class NotificationTimeLabelTest {
+class DateTimeLabelsTest {
 
     @Test
     fun `formats an ISO instant to a locale-aware short label in the viewer zone`() {
-        val label = notificationTimeLabel(
+        val label = shortDateTimeLabel(
             iso = "2026-07-07T06:56:34.215Z",
             zone = ZoneId.of("Europe/Paris"),
             locale = Locale.FRANCE,
@@ -21,6 +21,6 @@ class NotificationTimeLabelTest {
 
     @Test
     fun `falls back to the raw value when the timestamp is not a parseable instant`() {
-        assertThat(notificationTimeLabel("not-a-date")).isEqualTo("not-a-date")
+        assertThat(shortDateTimeLabel("not-a-date")).isEqualTo("not-a-date")
     }
 }
