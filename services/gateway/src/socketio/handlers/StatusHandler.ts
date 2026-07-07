@@ -177,38 +177,6 @@ export class StatusHandler {
   }
 
   /**
-   * Returns the conversations where `userId` was recently typing (throttle
-   * map entry exists within TTL) and simultaneously clears those entries so
-   * the caller can broadcast `typing:stop` on behalf of a disconnected socket
-   * without waiting for the 15-second safety timer on every client.
-   *
-   * Also returns the cached identity so the caller can compose the stop event
-   * without an extra DB round-trip. Returns `null` identity when the user has
-   * no cache entry (never typed this session or cache already evicted).
-   */
-  drainActiveTypingState(userId: string): {
-    conversationIds: string[];
-    identity: { username: string; displayName: string } | null;
-  } {
-    const stale = Date.now() - StatusHandler.TYPING_THROTTLE_TTL_MS;
-    const conversationIds: string[] = [];
-    const prefix = `${userId}:`;
-    for (const [key, ts] of this.typingThrottleMap) {
-      if (!key.startsWith(prefix)) continue;
-      if (ts >= stale) {
-        conversationIds.push(key.slice(prefix.length));
-      }
-      this.typingThrottleMap.delete(key);
-    }
-    const cacheKey = `user:${userId}`;
-    const cached = this.identityCache.get(cacheKey);
-    const identity = cached
-      ? { username: cached.username, displayName: cached.displayName }
-      : null;
-    return { conversationIds, identity };
-  }
-
-  /**
    * Gère l'événement typing:start
    */
   async handleTypingStart(socket: Socket, data: { conversationId: string }): Promise<void> {
