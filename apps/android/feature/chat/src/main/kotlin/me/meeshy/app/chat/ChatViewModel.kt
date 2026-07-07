@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.LocallyHiddenMessages
 import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
@@ -23,6 +24,7 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
@@ -88,6 +90,7 @@ class ChatViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
     private val clock: CacheClock,
+    private val draftStore: ConversationDraftStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -108,9 +111,20 @@ class ChatViewModel @Inject constructor(
     private var isEmittingTyping = false
     private var typingReemitJob: Job? = null
     private var typingIdleJob: Job? = null
+    private var lastPersistedDraft: ConversationDraft? = null
+    private var draftPersistJob: Job? = null
 
     init {
         viewModelScope.launch { markConversationRead() }
+
+        viewModelScope.launch {
+            val stored = draftStore.load(conversationId)
+            lastPersistedDraft = stored?.takeIf { it.text.isNotBlank() }
+            _state.update { current ->
+                val restored = DraftAutosave.restore(stored, current.draft, current.isEditing)
+                if (restored != null) current.copy(draft = restored) else current
+            }
+        }
 
         viewModelScope.launch {
             emojiUsageStore.usage.collect { usage ->
@@ -299,6 +313,43 @@ class ChatViewModel @Inject constructor(
         } else {
             startTypingEmission()
         }
+        persistDraft(value)
+    }
+
+    /**
+     * Best-effort auto-save of the new-message composer to the durable
+     * [draftStore] (iOS `ConversationDraftManager`). Never persists while an
+     * edit is in flight — the edit content is not a draft — and skips the write
+     * entirely when the store already matches ([DraftAutosave.resolve] → [DraftPersist.None]).
+     * The single [draftPersistJob] coalesces rapid keystrokes to a last-write-wins.
+     */
+    private fun persistDraft(rawText: String) {
+        if (_state.value.isEditing) return
+        val decision = DraftAutosave.resolve(
+            conversationId = conversationId,
+            rawText = rawText,
+            nowIso = java.time.Instant.ofEpochMilli(clock.nowMillis()).toString(),
+            previous = lastPersistedDraft,
+        )
+        lastPersistedDraft = when (decision) {
+            is DraftPersist.Save -> decision.draft
+            is DraftPersist.Clear -> null
+            DraftPersist.None -> return
+        }
+        draftPersistJob?.cancel()
+        draftPersistJob = viewModelScope.launch {
+            try {
+                when (decision) {
+                    is DraftPersist.Save -> draftStore.save(decision.draft)
+                    is DraftPersist.Clear -> draftStore.clear(decision.conversationId)
+                    DraftPersist.None -> Unit
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Draft persistence is best-effort; a failed write never disrupts composing.
+            }
+        }
     }
 
     /**
@@ -362,6 +413,7 @@ class ChatViewModel @Inject constructor(
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = _state.value.replyingToMessageId
         _state.update { it.copy(draft = "", replyingToMessageId = null, mention = it.mention.reset()) }
+        persistDraft("")
         viewModelScope.launch {
             try {
                 messageRepository.sendOptimistic(

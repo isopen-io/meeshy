@@ -662,7 +662,26 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `chat-edit-time-window`** — the 2-hour edit window is now enforced (Chat parity
+**Just shipped (2026-07-07): `chat-draft-autosave`** — per-conversation text draft auto-save/restore is now
+live (Chat parity §C "Draft auto-save/restore"). The orphan `ConversationDraft` model is wired end-to-end: pure
+`:feature:chat` `DraftAutosave` (blank purges / non-blank saves raw / unchanged writes nothing; restore seeds an
+idle empty composer only, never clobbering an in-flight edit or already-typed text) + durable `:sdk-core`
+`ConversationDraftStore` (DataStore, per-conversation key, corrupt→miss; port of iOS `ConversationDraftManager`).
+`ChatViewModel` restores on open, auto-saves on `onDraftChange` (guarded off during edit, coalesced
+last-write-wins), purges on send — composer already binds `state.draft` so no `ChatScreen` change. +32 tests. See
+run log. **Pending draft follow-ups:** reply-ref persistence (iOS app-side `DraftStore`) and
+language/effects/blur/ephemeral (those composer features are not built on Android yet).
+
+**Recommended next candidates:**
+- **`chat-draft-reply-ref`** — extend the draft to carry `replyToId` so a half-typed reply survives navigation
+  (iOS `DraftStore` stores the reply reference alongside the text). Composer already carries
+  `replyingToMessageId`; needs a `replyToId` field on the persisted draft + restore that re-arms the reply pill.
+  Small, pure-core-rich follow-up to this slice.
+- **`chat-draft-list-ordering`** — surface the draft in the Conversations list (parity §B "Draft-aware ordering:
+  drafts float to top" + a "Draft: …" preview). Needs the draft store read from `:feature:conversations` and a
+  pure ordering rule (draft-bearing conversations sort above by draft `updatedAt`).
+
+**Earlier — `chat-edit-time-window` (2026-07-07)** — the 2-hour edit window is now enforced (Chat parity
 §C — feature-parity "send, edit, delete … 2h window"; iOS `ConversationScreen` offers Edit only while
 `Date().timeIntervalSince(createdAt) < 2h`). Android's `startEdit`/Edit action had **no** window: any own
 SYNCED message stayed editable forever. New pure `:core:model` `MessageEditability.canEdit(isOwn,
@@ -1214,6 +1233,53 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `chat-draft-autosave` ✅ (reviewer PASS)
+- **Slice:** per-conversation text draft auto-save/restore (Chat parity §C "Draft auto-save/restore"; iOS
+  `ConversationDraftManager` save/draft/clear + `ConversationScreen.persistDraft` empty-purge-on-blank +
+  restore-in-`onAppear`). Android had an orphan `ConversationDraft` model and no persistence at all: a composer
+  half-typed then navigated-away was lost. Now the draft survives navigation and process death, restores the
+  instant the conversation opens (cache-first, no flash), and self-purges when emptied or sent.
+- **Pure core (`:feature:chat`, `DraftAutosave.kt`):** `object DraftAutosave` (the app-side "when" decision).
+  `resolve(conversationId, rawText, nowIso, previous): DraftPersist` → `Save(ConversationDraft)` /
+  `Clear(conversationId)` / `None`: blank text over a stored non-blank draft → `Clear`; blank over nothing (or an
+  already-blank stored) → `None` (no redundant write); non-blank identical to stored → `None` (idempotent);
+  non-blank differing → `Save` with the **raw** text preserved (leading/trailing whitespace kept so a restore
+  returns exactly what was typed), timestamped `nowIso`. `restore(stored, currentDraft, isEditing): String?` →
+  the text to seed the composer, or `null` to leave it: restores only into an **idle empty** composer — never
+  clobbers an in-flight edit (`isEditing`) nor text already typed while the async load was in flight; a
+  blank-text stored draft is ignored.
+- **Durable store (`:sdk-core`, `ConversationDraftStore.kt`):** stateless building block (port of iOS
+  `ConversationDraftManager`). `interface ConversationDraftStore { suspend load/save/clear }` + `InMemory…`
+  (tests/previews) + `DataStoreConversationDraftStore` (Preferences DataStore, SOTA over SharedPreferences;
+  per-conversation key `draft:<id>`, `ConversationDraft` JSON via the shared `Json`; a corrupt/legacy payload
+  decodes to `null` = cache miss, never crashes the composer). Provided via
+  `SdkModule.providesConversationDraftStore` (own `meeshy_conversation_drafts` DataStore file), mirroring the
+  theme/language/notification store providers.
+- **Wiring (`:feature:chat`, `ChatViewModel`):** injects `ConversationDraftStore`; an `init` launch loads the
+  stored draft and `DraftAutosave.restore`s it into state (composer already binds `value = state.draft`, so it
+  paints with **no** `ChatScreen` change — non-dead-end). `onDraftChange` now calls `persistDraft`: guarded off
+  while `isEditing` (edit content is not a draft — proven by a test that edits without overwriting the stored
+  new-message draft), resolves the decision, and applies it through a single coalescing `draftPersistJob`
+  (last-write-wins; `CancellationException` rethrown; write failures swallowed — persistence is best-effort and
+  never disrupts composing). `send()` purges the stored draft after clearing the composer (non-edit path only).
+  `updatedAt` = `Instant.ofEpochMilli(clock.nowMillis())` ISO (injected `CacheClock`, no wall-clock in logic).
+- **Tests (+32):** `DraftAutosaveTest` (13) — every `resolve` arm (save-raw / whitespace-preserved / differ /
+  identical-None / clear / whitespace-only-clear / blank-no-prev-None / blank-over-blank-None) + every `restore`
+  arm (idle-restore / null / blank-stored-ignored / typed-not-clobbered / editing-not-clobbered).
+  `ConversationDraftStoreTest` (13) — InMemory (miss / seed / round-trip / replace / per-conversation isolation /
+  targeted clear / absent-clear no-op) + DataStore (miss / round-trip / fresh-wrapper-reads-persisted /
+  targeted clear / corrupt→miss). `ChatViewModelTest` (+6) — restore-on-open, empty-on-open, typing-auto-saves,
+  clearing-purges, sending-purges, editing-never-overwrites-the-stored-draft.
+- **Verify:** system `gradle assembleDebug testDebugUnitTest` (943 tasks) green — new suites green, whole JVM
+  suite green.
+- **Reviewer:** PASS — diff `apps/android` only (`:sdk-core` + `:feature:chat`); behaviour-through-public-API
+  (decision object + store + VM state/store side-effects), no tautologies, full branch sweep incl. the
+  idempotent `None` arms and the restore-guard paths, plus the corrupt-payload failure path; SDK-purity/SSOT
+  honoured — the durable store is a stateless building block in `:sdk-core` (like `ThemeStore`), the "when to
+  save / what to restore" product decision is a pure atom in `:feature:chat`, and the composer render is exempt
+  Compose glue that needed no change; instant-app cache-first restore, UDF immutable state, best-effort
+  cancellation-safe persistence; no floor lowered, no test weakened.
 
 ### 2026-07-07 — slice `chat-delete-for-me-vs-everyone` ✅ (reviewer PASS)
 - **Slice:** split delete into iOS's two paths (Chat parity §C "send, edit, delete … for-me / for-everyone").

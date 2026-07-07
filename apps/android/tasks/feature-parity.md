@@ -419,7 +419,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ChatViewModel` recomputes on `onDraftChange`, exposes `onMentionSelected`, resets on send; `ChatScreen`
       renders a neutral accent-avatar suggestion strip above the composer. +40 tests. **Pending:** debounced
       backend `/mentions` API merge over the local roster (online enrichment).
-- [ ] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral)
+- [◐] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text draft done**
+      (slice `chat-draft-autosave`, 2026-07-07): pure `:feature:chat` `DraftAutosave` SSOT (blank composer
+      purges, non-blank saves raw, unchanged writes nothing → `Save`/`Clear`/`None`; restore seeds an idle empty
+      composer only, never clobbering an in-flight edit or already-typed text) + durable `:sdk-core`
+      `ConversationDraftStore` (DataStore-backed, per-conversation key, corrupt→miss; port of iOS
+      `ConversationDraftManager`). `ChatViewModel` restores on open, auto-saves on `onDraftChange` (guarded off
+      during edit, coalesced last-write-wins), purges on send. +32 tests. **Pending:** reply-ref persistence
+      (iOS app-side `DraftStore`) and the language/effects/blur/ephemeral fields (those composer features are not
+      yet built on Android — no state to persist).
 - [ ] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress
 - [◐] In-conversation message search (translation-match aware) + jump-to-result — core+wiring done
       (`chat-search-highlight-wiring` 2026-07-06): pure `:feature:chat` `ChatSearch` SSOT over the opaque
