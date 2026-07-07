@@ -1600,6 +1600,80 @@ describe('MessageReadStatusService', () => {
 
       expect(result.get(testMessageId)).toEqual(expect.objectContaining({ receivedCount: 0, readCount: 0 }));
     });
+
+    // Parity with the single-message siblings (getMessageReadStatus /
+    // getMessageStatusDetails), which enumerate the UNION of cursors + frozen
+    // MessageStatusEntry rows. cleanupObsoleteCursors deletes a cursor whose
+    // lastReadMessageId points at a now-deleted message but NEVER touches the
+    // write-once frozen entry — so a valid delivery/read receipt survives its
+    // cursor. This batch method must still count it, otherwise it under-reports
+    // relative to the single-message endpoint for the exact same data.
+    it('counts a frozen receipt whose cursor was deleted by cleanup (union parity)', async () => {
+      const msgCreatedAt = new Date('2025-01-01T10:00:00Z');
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: msgCreatedAt, senderId: 'sender-1' }
+      ]);
+      // Both recipients are active members.
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId },
+        { id: testParticipantId2 }
+      ]);
+      // Only participant1 still has a cursor — participant2's was cleaned up.
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        {
+          participantId: testParticipantId,
+          lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
+          lastReadAt: new Date('2025-01-01T10:06:00Z')
+        }
+      ]);
+      // participant2's write-once frozen receipt for THIS message survived.
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          messageId: testMessageId,
+          participantId: testParticipantId2,
+          deliveredAt: new Date('2025-01-01T10:04:00Z'),
+          receivedAt: new Date('2025-01-01T10:04:00Z'),
+          readAt: new Date('2025-01-01T10:07:00Z')
+        }
+      ]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      // Both recipients counted — identical to getMessageReadStatus for the same data.
+      expect(result.get(testMessageId)).toEqual(
+        expect.objectContaining({ receivedCount: 2, readCount: 2 })
+      );
+    });
+
+    // A frozen entry for a participant who is no longer active must be ignored,
+    // mirroring getMessageReadStatus's `if (!participant) continue` gate.
+    it('ignores a frozen receipt from a participant who is no longer active', async () => {
+      const msgCreatedAt = new Date('2025-01-01T10:00:00Z');
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: msgCreatedAt, senderId: 'sender-1' }
+      ]);
+      // Only participant1 is still active.
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      // Frozen entry belongs to an inactive/removed participant2.
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          messageId: testMessageId,
+          participantId: testParticipantId2,
+          deliveredAt: new Date('2025-01-01T10:04:00Z'),
+          receivedAt: new Date('2025-01-01T10:04:00Z'),
+          readAt: new Date('2025-01-01T10:07:00Z')
+        }
+      ]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      expect(result.get(testMessageId)).toEqual(
+        expect.objectContaining({ receivedCount: 0, readCount: 0 })
+      );
+    });
   });
 
   // ==============================================
