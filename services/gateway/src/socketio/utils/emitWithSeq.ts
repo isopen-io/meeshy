@@ -1,4 +1,5 @@
 import type { Server } from 'socket.io';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { SequenceService } from '../../services/SequenceService';
 
 /**
@@ -11,10 +12,12 @@ import type { SequenceService } from '../../services/SequenceService';
  * 91234 → 4 events manqués ») — supérieure au gap recovery temporel actuel,
  * notamment pour l'ordering multi-device.
  *
- * Contrat : n'enrichit QUE les émissions vers UN destinataire (room = userId),
- * car `_seq` est per-user (`SequenceService.nextSeq(userId)`). Les broadcasts
- * room multi-destinataires (`message:new`) exigent un fan-out per-user distinct
- * → A2.2.
+ * Contrat : n'enrichit QUE les émissions vers UN destinataire (room =
+ * `ROOMS.user(userId)`), car `_seq` est per-user (`SequenceService.nextSeq(userId)`).
+ * Les registered sockets ne joignent QUE `ROOMS.user(id)` (= `user:${id}`, voir
+ * `AuthHandler._authenticateJWTUser`) — émettre vers le room brut `userId` ciblerait
+ * un room vide et l'event temps réel serait perdu. Les broadcasts room
+ * multi-destinataires (`message:new`) exigent un fan-out per-user distinct → A2.2.
  *
  * Backward-compat : le champ `_seq` est purement additif ; un client qui ne le
  * décode pas l'ignore. Si l'allocation de séquence échoue, l'event est émis
@@ -36,5 +39,5 @@ export async function emitWithSeq(
     seq = undefined;
   }
   const enriched = seq === undefined ? payload : { ...payload, _seq: seq };
-  io.to(userId).emit(event, enriched);
+  io.to(ROOMS.user(userId)).emit(event, enriched);
 }
