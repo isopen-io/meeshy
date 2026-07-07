@@ -97,13 +97,6 @@ fun ConversationListScreen(
     MeeshyBackground {
     Scaffold(
         containerColor = Color.Transparent,
-        floatingActionButton = {
-            FloatingGradientFab(
-                onClick = onNewConversation,
-                icon = Icons.AutoMirrored.Filled.Chat,
-                contentDescription = stringResource(R.string.conversations_new),
-            )
-        },
         topBar = {
             LargeTopAppBar(
                 colors = TopAppBarDefaults.largeTopAppBarColors(

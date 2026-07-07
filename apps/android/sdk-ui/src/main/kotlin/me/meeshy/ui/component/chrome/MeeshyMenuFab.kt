@@ -4,6 +4,7 @@ import androidx.compose.animation.core.EaseOutBack
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -91,6 +92,10 @@ public fun MeeshyMenuFab(
             if (progress > 0.01f) {
                 MenuItemRow(
                     item = item,
+                    onClick = {
+                        expanded = false
+                        item.onSelect()
+                    },
                     modifier = Modifier.graphicsLayer {
                         val scale = lerp(0.3f, 1f, progress)
                         scaleX = scale
@@ -113,9 +118,12 @@ public fun MeeshyMenuFab(
 }
 
 @Composable
-private fun MenuItemRow(item: RadialMenuItem, modifier: Modifier = Modifier) {
+private fun MenuItemRow(item: RadialMenuItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val tokens = MeeshyTheme.tokens
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = modifier.clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(MeeshyRadius.pill))

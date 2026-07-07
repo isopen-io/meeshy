@@ -2,21 +2,12 @@ package me.meeshy.app.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.PeopleOutline
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -40,6 +32,9 @@ import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoginScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallScreen
+import me.meeshy.ui.component.chrome.MeeshyMenuFab
+import me.meeshy.ui.component.chrome.RadialMenuItem
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
@@ -84,52 +79,36 @@ object Routes {
         CallRoute.path(conversationId, peerName, isVideo)
 }
 
-private data class TabItem(
-    val route: String,
-    val label: String,
-    val selectedIcon: @Composable () -> Unit,
-    val unselectedIcon: @Composable () -> Unit,
-)
-
+/**
+ * iOS parity (Option A): the bottom tab bar is replaced by the radial [MeeshyMenuFab].
+ * Each item navigates to a top-level destination with the same save/restore-state
+ * semantics the tab bar used, plus a "new conversation" shortcut.
+ */
 @Composable
-private fun rememberTabs(): List<TabItem> {
+private fun rememberRadialMenuItems(navController: NavController): List<RadialMenuItem> {
     val messages = stringResource(R.string.tab_messages)
     val feed = stringResource(R.string.tab_feed)
     val calls = stringResource(R.string.tab_calls)
     val activity = stringResource(R.string.tab_activity)
     val profile = stringResource(R.string.tab_profile)
-    return remember(messages, feed, calls, activity, profile) {
+    val newConversation = stringResource(R.string.menu_new_conversation)
+    return remember(messages, feed, calls, activity, profile, newConversation) {
+        fun tab(route: String): () -> Unit = {
+            navController.navigate(route) {
+                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
         listOf(
-            TabItem(
-                route = Routes.CONVERSATIONS,
-                label = messages,
-                selectedIcon = { Icon(Icons.Filled.ChatBubble, contentDescription = messages) },
-                unselectedIcon = { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = messages) },
-            ),
-            TabItem(
-                route = Routes.FEED,
-                label = feed,
-                selectedIcon = { Icon(Icons.Filled.Home, contentDescription = feed) },
-                unselectedIcon = { Icon(Icons.Outlined.Home, contentDescription = feed) },
-            ),
-            TabItem(
-                route = Routes.CALLS,
-                label = calls,
-                selectedIcon = { Icon(Icons.Filled.Call, contentDescription = calls) },
-                unselectedIcon = { Icon(Icons.Outlined.Call, contentDescription = calls) },
-            ),
-            TabItem(
-                route = Routes.NOTIFICATIONS,
-                label = activity,
-                selectedIcon = { Icon(Icons.Filled.Notifications, contentDescription = activity) },
-                unselectedIcon = { Icon(Icons.Outlined.Notifications, contentDescription = activity) },
-            ),
-            TabItem(
-                route = Routes.SETTINGS,
-                label = profile,
-                selectedIcon = { Icon(Icons.Filled.Settings, contentDescription = profile) },
-                unselectedIcon = { Icon(Icons.Outlined.Settings, contentDescription = profile) },
-            ),
+            RadialMenuItem(Icons.AutoMirrored.Filled.Chat, newConversation, MeeshyPalette.Indigo500) {
+                navController.navigate(Routes.NEW_CONVERSATION)
+            },
+            RadialMenuItem(Icons.Filled.ChatBubble, messages, MeeshyPalette.Indigo500, onSelect = tab(Routes.CONVERSATIONS)),
+            RadialMenuItem(Icons.Filled.Home, feed, MeeshyPalette.Success, onSelect = tab(Routes.FEED)),
+            RadialMenuItem(Icons.Filled.Call, calls, MeeshyPalette.Info, onSelect = tab(Routes.CALLS)),
+            RadialMenuItem(Icons.Filled.Notifications, activity, MeeshyPalette.Warning, onSelect = tab(Routes.NOTIFICATIONS)),
+            RadialMenuItem(Icons.Filled.Settings, profile, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
         )
     }
 }
@@ -147,10 +126,10 @@ fun MeeshyApp(
 
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route
-    val showBottomBar = currentRoute in tabRoutes
+    val showMenuFab = currentRoute in tabRoutes
 
     val startDestination = remember(authState.isAuthenticated) { if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN }
-    val tabs = rememberTabs()
+    val radialItems = rememberRadialMenuItems(navController)
 
     // Deep-link from a notification tap / full-screen call intent: navigate once
     // the graph is live and the user is authenticated, then mark it consumed so a
@@ -165,27 +144,9 @@ fun MeeshyApp(
 
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        bottomBar = {
-            if (showBottomBar) {
-                NavigationBar {
-                    tabs.forEach { tab ->
-                        val selected = currentRoute == tab.route
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                if (!selected) {
-                                    navController.navigate(tab.route) {
-                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            icon = { if (selected) tab.selectedIcon() else tab.unselectedIcon() },
-                            label = { Text(tab.label) },
-                        )
-                    }
-                }
+        floatingActionButton = {
+            if (showMenuFab) {
+                MeeshyMenuFab(items = radialItems)
             }
         },
     ) { padding ->

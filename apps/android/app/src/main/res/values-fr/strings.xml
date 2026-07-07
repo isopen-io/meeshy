@@ -7,6 +7,7 @@
     <string name="tab_feed">Fil d\'actualité</string>
     <string name="tab_activity">Activité</string>
     <string name="tab_profile">Profil</string>
+    <string name="menu_new_conversation">Nouveau</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Bon retour</string>

@@ -7,6 +7,7 @@
     <string name="tab_feed">Feed</string>
     <string name="tab_activity">Atividade</string>
     <string name="tab_profile">Perfil</string>
+    <string name="menu_new_conversation">Novo</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Bem-vindo de volta</string>
