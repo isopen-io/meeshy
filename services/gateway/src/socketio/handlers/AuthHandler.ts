@@ -272,9 +272,18 @@ export class AuthHandler {
 
     // Join rooms before registering — see matching comment in
     // _authenticateJWTUser for why registration must come last.
+    // The personal room MUST use ROOMS.user(...) — the same convention the JWT
+    // path uses (`socket.join(ROOMS.user(user.id))`) and, critically, the only
+    // room every personal-event emitter targets (`io.to(ROOMS.user(participant
+    // .userId ?? participant.id))` for CONVERSATION_UNREAD_UPDATED, mentions,
+    // etc.). Joining the bare `socketUser.id` room left the anonymous socket in
+    // a room no emitter ever addresses, so `conversation:unread-updated` (and
+    // any other personal broadcast that falls back to `participant.id`) never
+    // reached anonymous participants — their unread badge stayed stale until a
+    // manual REST refetch.
     try {
       if (socketUser.id && typeof socketUser.id === 'string') {
-        await socket.join(socketUser.id);
+        await socket.join(ROOMS.user(socketUser.id));
       }
     } catch (error) {
       logger.error('failed to join personal room for anonymous user', { anonymousId: socketUser.id, error });
