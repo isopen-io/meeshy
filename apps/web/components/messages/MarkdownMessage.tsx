@@ -16,6 +16,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MermaidDiagram } from '@/components/markdown/MermaidDiagram';
 import { normalizeMarkdown } from './normalize-markdown';
+import { preprocessContent } from './preprocess-content';
 
 interface MarkdownMessageProps {
   content: string;
@@ -24,28 +25,6 @@ interface MarkdownMessageProps {
   onLinkClick?: (url: string, isTracking: boolean) => void;
   isOwnMessage?: boolean; // Pour adapter les couleurs en fonction de l'expéditeur
 }
-
-/**
- * Prétraite le contenu du message pour transformer les liens spéciaux m+TOKEN
- * en liens markdown avant le rendu par ReactMarkdown
- */
-const preprocessContent = (content: string): string => {
-  const parts = parseMessageLinks(content);
-
-  return parts.map(part => {
-    // Transformer les liens m+TOKEN en liens markdown
-    if (part.type === 'mshy-link' && part.trackingUrl) {
-      return `[${part.content}](${part.trackingUrl})`;
-    }
-    // Transformer les liens de tracking complets en markdown s'ils ne sont pas déjà formatés
-    if (part.type === 'tracking-link' && part.trackingUrl && !content.includes(`[`) && !content.includes(`](${part.trackingUrl})`)) {
-      // Ne transformer que si le lien n'est pas déjà dans un format markdown
-      return part.content;
-    }
-    // Garder le reste tel quel (texte brut et URLs qui seront gérées par ReactMarkdown)
-    return part.content;
-  }).join('');
-};
 
 /**
  * Component to render message content with ReactMarkdown support
