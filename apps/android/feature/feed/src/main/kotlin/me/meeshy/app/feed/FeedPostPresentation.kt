@@ -40,6 +40,7 @@ data class FeedPostPresentation(
     val repostCount: Int,
     val isPinned: Boolean,
     val isEdited: Boolean,
+    val isReel: Boolean,
 )
 
 object FeedPostBuilder {
@@ -79,6 +80,7 @@ object FeedPostBuilder {
             repostCount = post.repostCount ?: 0,
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,
+            isReel = post.type.equals("reel", ignoreCase = true),
         )
     }
 

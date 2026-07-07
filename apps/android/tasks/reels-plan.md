@@ -26,8 +26,10 @@ ReelFeedAutoplayCoordinator,ReelFeedLayout}.swift`, `ViewModels/ReelsViewModel.s
       Item radial « Réels » (PlayCircle/Error) → `reels()`. Build vert. **A/B vidéo réelle
       NON vérifié** : émulateur wedgé (mémoire hôte ~110 MB, shell KO, screencap 0o) — à
       refaire quand l'émulateur récupère (libérer RAM hôte / rebooter l'AVD `-gpu host`).
-- [ ] **P5 — intégration Feed** : les réels apparaissent dans le Feed (carte réel cliquable
-      qui ouvre l'overlay Réels au bon seed) — « les deux » (écran dédié + dans le Feed).
+- [x] **P5 — intégration Feed (code ; A/B différé)** : `FeedPostPresentation.isReel` (post.type
+      ==reel) ; bandeau réel (PlayCircle indigo + « Réel ») sur les cartes reel ; tap sur un
+      reel → overlay Réels au seed (onClick gaté : non-reels inertes, pas de détail post).
+      Build+tests verts. A/B différé (émulateur wedgé). string feed_reel ×4.
 - [ ] **P6 — boutons flottants « comme iOS »** : aligner le menu radial + le lancement
       Réels (long-press bouton Feed du menu radial) + actions de création (story/post/réel)
       telles qu'iOS les expose (RootView + RootViewComponents).

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Card
@@ -127,7 +128,9 @@ fun FeedScreen(
                         PostCard(
                             post = post,
                             onLike = { viewModel.toggleLike(post.id) },
-                            onClick = { onPostClick(post.id) },
+                            // Only reels open the full-screen reel overlay; regular
+                            // posts have no detail screen yet, so tapping is inert.
+                            onClick = { if (post.isReel) onPostClick(post.id) },
                         )
                     }
                     if (state.isLoadingMore) {
@@ -241,6 +244,33 @@ private fun PostCard(
             if (post.images.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.md))
                 PostImageGrid(images = post.images)
+            }
+
+            if (post.isReel) {
+                Spacer(Modifier.height(MeeshySpacing.md))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(MeeshyRadius.lg))
+                        .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayCircle,
+                            contentDescription = null,
+                            tint = MeeshyPalette.Indigo500,
+                            modifier = Modifier.size(48.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.feed_reel),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MeeshyTheme.tokens.textSecondary,
+                            modifier = Modifier.padding(top = MeeshySpacing.xs),
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(MeeshySpacing.sm))
