@@ -511,7 +511,12 @@ describe('CallService', () => {
         where: { id: zombieCall.id, status: { in: expect.arrayContaining([CallStatus.active]) } },
         data: expect.objectContaining({
           status: CallStatus.ended,
-          endReason: 'garbageCollected'
+          endReason: 'garbageCollected',
+          // Terminal write protocol (see endCall/markCallAsMissed): every
+          // terminal writer must bump `version`, else a version-guarded
+          // writer that read this row a moment earlier can still clobber
+          // this terminal state right after.
+          version: { increment: 1 }
         })
       });
     });
@@ -2636,6 +2641,62 @@ describe('CallService - initiateCall phantom cleanup & transaction', () => {
     expect(phantomTxCalled).toBe(true);
     expect(createTxCalled).toBe(true);
     expect(result).toBeDefined();
+  });
+
+  it('phantom cleanup: bumps `version` on the terminal write (terminal-write protocol)', async () => {
+    const staleCallId = 'stale-call-version';
+    const staleStartedAt = new Date(Date.now() - 5 * 60_000);
+    const staleParticipation = {
+      id: 'stale-part-version',
+      callSessionId: staleCallId,
+      leftAt: null,
+      callSession: {
+        id: staleCallId,
+        startedAt: staleStartedAt,
+        conversationId: 'conv-other',
+        status: CallStatus.active,
+        answeredAt: staleStartedAt
+      }
+    };
+    const mockConversation = createMockConversation();
+    const newCall = createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([staleParticipation]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    const staleCallSessionUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+    mockPrisma.$transaction
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: staleCallSessionUpdateMany }
+        };
+        return cb(tx);
+      })
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const session = { id: 'call-123' };
+        const tx = {
+          callSession: { create: jest.fn().mockResolvedValue(session) },
+          callParticipant: { create: jest.fn().mockResolvedValue({}) }
+        };
+        return cb(tx);
+      });
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(staleCallSessionUpdateMany).toHaveBeenCalledWith({
+      where: { id: staleCallId, status: { in: expect.arrayContaining([CallStatus.active]) } },
+      data: expect.objectContaining({ version: { increment: 1 } })
+    });
   });
 
   it('phantom cleanup: uses `now` as fallback when staleSession.startedAt is null', async () => {
