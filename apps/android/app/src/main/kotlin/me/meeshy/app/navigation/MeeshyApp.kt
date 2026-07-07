@@ -1,5 +1,7 @@
 package me.meeshy.app.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -16,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,14 +33,20 @@ import androidx.navigation.navDeepLink
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.R
 import android.net.Uri
+import kotlinx.coroutines.delay
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoginScreen
 import me.meeshy.app.calls.CallHistoryScreen
+import me.meeshy.app.calls.CallPill
+import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallScreen
+import me.meeshy.app.calls.CallStatus
+import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
 import me.meeshy.ui.component.chrome.MeeshyMenuFab
 import me.meeshy.ui.component.chrome.RadialMenuItem
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
@@ -129,6 +138,14 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
 
 private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.CALLS, Routes.NOTIFICATIONS, Routes.SETTINGS)
 
+/**
+ * A call that ends while minimised leaves the full-screen [CallScreen] un-composed,
+ * so its own auto-dismiss never fires. This app-level settle window brings the
+ * Activity-scoped [CallViewModel] back to idle after the ended beat, so the next
+ * call can start (parity with [CallScreen]'s CALL_ENDED_AUTO_DISMISS_MS).
+ */
+private const val CALL_ENDED_MINIMISED_SETTLE_MS = 1500L
+
 @Composable
 fun MeeshyApp(
     launchRoute: String? = null,
@@ -137,11 +154,30 @@ fun MeeshyApp(
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
     val incomingCallViewModel: IncomingCallViewModel = hiltViewModel()
+    // Hoisted to the MeeshyApp root → resolved against the Activity's ViewModelStore
+    // (like [authViewModel] above), NOT the CALL destination's back-stack entry. This
+    // is what lets the call survive minimisation: leaving the CALL screen clears only
+    // that entry's store, never this Activity-scoped instance, so the WebRTC session
+    // and every collector in [CallViewModel] stay alive while the conversation shows.
+    val callViewModel: CallViewModel = hiltViewModel()
     val authState by authViewModel.state.collectAsStateWithLifecycle()
+    val callState by callViewModel.state.collectAsStateWithLifecycle()
 
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route
     val showMenuFab = currentRoute in tabRoutes
+    val onCallScreen = currentRoute == CallRoute.PATTERN
+
+    // Settle a call that ended while minimised: [CallScreen]'s own auto-dismiss only
+    // runs while it is composed, so an ended call left in the pill would strand the
+    // Activity-scoped FSM in ENDED and block the next call. The pill has already
+    // vanished (ENDED is not a pill status); this only resets the state machine.
+    LaunchedEffect(callState.status, onCallScreen) {
+        if (callState.status == CallStatus.ENDED && !onCallScreen) {
+            delay(CALL_ENDED_MINIMISED_SETTLE_MS)
+            callViewModel.dismiss()
+        }
+    }
 
     val startDestination = remember(authState.isAuthenticated) { if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN }
     val radialItems = rememberRadialMenuItems(navController)
@@ -176,6 +212,7 @@ fun MeeshyApp(
             }
         },
     ) { padding ->
+      Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
@@ -330,9 +367,42 @@ fun MeeshyApp(
                         callId = args?.getString(CallRoute.CALL_ID_ARG)?.let(Uri::decode),
                         incoming = args?.getBoolean(CallRoute.INCOMING_ARG) ?: false,
                     ),
+                    // Activity-scoped instance (see the hoist above) → the CALL
+                    // destination re-attaches to the live call instead of spinning
+                    // up a nav-scoped one that would die on the next pop.
+                    viewModel = callViewModel,
+                    // Minimise → open the DM with the call still running. popUpTo the
+                    // CALL entry (inclusive) so the back stack never accumulates stale
+                    // call screens that a Back press could re-enter (and re-initiate).
+                    onMinimize = {
+                        navController.navigate(Routes.chat(callViewModel.activeConfig.conversationId)) {
+                            popUpTo(CallRoute.PATTERN) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
                     onClose = { navController.popBackStack() },
                 )
             }
         }
+
+        // Minimised-call pill: a full-width banner pinned under the status bar,
+        // shown only for a live, non-incoming call while off the CALL screen. A tap
+        // rebuilds the CALL route from the live config and re-opens the full screen;
+        // the Activity-scoped [callViewModel] is reused, so `start()` is inert.
+        if (CallPillPresenter.shouldShow(callState.status, onCallScreen)) {
+            CallPill(
+                state = callState,
+                onClick = {
+                    navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
+                        launchSingleTop = true
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(padding)
+                    .padding(top = MeeshySpacing.sm),
+            )
+        }
+      }
     }
 }

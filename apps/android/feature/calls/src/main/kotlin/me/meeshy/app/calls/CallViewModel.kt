@@ -95,6 +95,15 @@ class CallViewModel @Inject constructor(
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
+    /**
+     * The immutable inputs of the call currently in flight. Read by the app shell
+     * ([MeeshyApp]) to rebuild the call route when the floating pill re-opens a
+     * minimised call — the Activity-scoped instance is reused on arrival, so the
+     * screen's re-entrant [start] is inert and the live call is left untouched.
+     * Reflects the last [start] config, or [CallConfig.EMPTY] while idle.
+     */
+    val activeConfig: CallConfig get() = config
+
     init {
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)

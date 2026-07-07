@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Videocam
@@ -74,6 +75,7 @@ private fun hasSelfPermission(context: Context, permission: String): Boolean =
 fun CallScreen(
     config: CallConfig,
     onClose: () -> Unit,
+    onMinimize: () -> Unit = {},
     viewModel: CallViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -221,6 +223,26 @@ fun CallScreen(
                 onAnswer = viewModel::acceptWaitingSwap,
                 modifier = Modifier.align(Alignment.TopCenter),
             )
+        }
+
+        // Minimise affordance — parity with iOS's collapse-to-pill. Offered only
+        // for a live, non-incoming call (the same phases that surface the floating
+        // pill); [onMinimize] opens the conversation while the Activity-scoped
+        // CallViewModel keeps the call alive. On a video call the chevron rides the
+        // remote feed, so it stays white for contrast.
+        if (CallPillPresenter.isMinimizable(state.status)) {
+            IconButton(
+                onClick = onMinimize,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(MeeshySpacing.sm),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    contentDescription = stringResource(R.string.call_action_minimize),
+                    tint = if (state.isVideoCall) Color.White else MeeshyTheme.tokens.textPrimary,
+                )
+            }
         }
     }
 }

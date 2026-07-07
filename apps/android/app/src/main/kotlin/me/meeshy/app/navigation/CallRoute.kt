@@ -90,6 +90,30 @@ object CallRoute {
         )
 
     /**
+     * Rebuild the route that re-opens a still-in-flight call from the floating
+     * pill (the minimise → tap-to-return round trip). An **outgoing** call
+     * re-enters through [path]; an **incoming** one through [incoming] so its
+     * server [CallConfig.callId] and non-outgoing direction survive the round trip.
+     * Either way the Activity-scoped `CallViewModel` is reused on arrival, so the
+     * screen's re-entrant `start()` is inert and the live call is left untouched.
+     */
+    fun reopen(config: CallConfig): String =
+        if (config.isOutgoing) {
+            path(
+                conversationId = config.conversationId,
+                peerName = config.peerName,
+                isVideo = config.isVideo,
+            )
+        } else {
+            incoming(
+                callId = config.callId,
+                conversationId = config.conversationId,
+                callerName = config.peerName,
+                isVideo = config.isVideo,
+            )
+        }
+
+    /**
      * Re-dial route from a call-journal row: the natural "tap a past call to
      * call back" gesture. Threads the record's own conversation, its resolved
      * [CallRecord.displayName] and its media type straight into [path], so the
