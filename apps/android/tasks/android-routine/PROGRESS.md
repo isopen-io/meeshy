@@ -694,13 +694,25 @@ the cap; SDK-purity honoured — the "how many chips / overflow count" product d
 `:feature:chat`, the overlap/ring render is exempt Compose glue; accent-coherent visuals, degrades to initials, no
 dead code — the stack + chip are consumed by `ChatScreen`).
 
+**Just shipped (2026-07-07): `chat-delete-for-me-vs-everyone`** — the delete action split into iOS's two paths.
+Android previously had ONE delete (unconditional server-delete, own only). Now: pure `:core:model`
+`MessageDeletability.canDeleteForEveryone(isOwn, createdAtMillis, nowMillis, windowMillis=2h)` SSOT (port of iOS
+`ConversationCommandHandler.canDeleteForEveryone`; **inclusive `<=`** window — boundary instant still deletable —
+unlike the exclusive edit window; future/unknown createdAt permissive, non-own → false), and pure `:sdk-core`
+`LocallyHiddenMessages` value object (`hide`/`isHidden`/`visible`; `hide` idempotent + blank-guarded, returns the
+same instance on no-op so persistence skips redundant writes) backed by the durable
+`SharedPrefsLocallyHiddenMessagesStore` (`putStringSet`, port of iOS `LocallyHiddenMessagesStore` UserDefaults set)
+provided via `SdkModule`. Wired: `ChatViewModel.deleteForEveryone` keeps the server round-trip; `deleteForMe` hides
+locally with zero network; the hidden set is `.combine`d into the message-stream so `filterNot { hidden.isHidden(id) }`
+drops the bubble the instant it is hidden. `ChatScreen` gates "Delete for everyone" on own+window and offers
+"Delete for me" on any delivered message. Shipping both halves together avoided the regression of window-gating the
+server-delete while leaving old own-messages with no delete option. +23 tests. See run log.
+
 **Recommended next candidates:**
-- **`chat-delete-for-me-vs-everyone`** — split delete into "for everyone" (own + within 2h, via a new
-  `MessageEditability`-style `canDeleteForEveryone`) vs "for me" (local-only tombstone). Needs a local-only
-  delete path in `MessageRepository`/outbox; if the wire only supports one delete kind, defer.
 - **`chat-read-status-sheet`** — tap the delivery checks → a "seen by / delivered to" breakdown sheet
-  (iOS `onShowReadStatus` → detail sheet "Vues" tab). Needs a per-recipient read model on the wire; if the
-  gateway payload only carries counts, defer and pick the next item.
+  (iOS `onShowReadStatus` → detail sheet "Vues" tab). Needs a per-recipient read model on the wire; **deferred** —
+  the Android wire carries only `deliveredCount`/`readCount`/`readByAllAt` (counts, no per-recipient breakdown),
+  so a faithful sheet is not yet buildable app-side.
 Then resume **Profile/Settings §K/§L** (only avatar/banner upload remains in §K).
 
 **Earlier recommendation (2026-07-06, after `chat-mention-autocomplete`):** the remaining highest-value Chat
@@ -1202,6 +1214,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `chat-delete-for-me-vs-everyone` ✅ (reviewer PASS)
+- **Slice:** split delete into iOS's two paths (Chat parity §C "send, edit, delete … for-me / for-everyone").
+  Android had ONE delete: an unconditional server-delete, offered only for own messages with no window. iOS
+  offers "Delete for everyone" (own + within 2h → server round-trip) **and** "Delete for me" (WhatsApp-style
+  local-only hide, any message, never reaches the server). Shipped both halves together on purpose: window-gating
+  the server-delete without a local-hide would strand old own-messages with no delete option (a regression).
+- **Pure core (`:core:model`, `MessageDeletability.kt`):** `object MessageDeletability` beside
+  `MessageEditability`. `const DELETE_FOR_EVERYONE_WINDOW_MILLIS = 2h`; `canDeleteForEveryone(isOwn,
+  createdAtMillis: Long?, nowMillis, windowMillis) → Boolean`: `!isOwn → false`; `createdAtMillis == null → true`
+  (window unprovable + server enforces its own); else `nowMillis - createdAtMillis <= windowMillis` — **inclusive
+  `<=`** per iOS `ConversationCommandHandler.canDeleteForEveryone`, unlike the exclusive `<` edit window, so the
+  exact boundary instant is still deletable. Future createdAt (clock skew) → still deletable.
+- **Pure core (`:sdk-core`, `LocallyHiddenMessagesStore.kt`):** `data class LocallyHiddenMessages(ids: Set<String>)`
+  — `isHidden(id)`, `visible(ordered): List<String>` (order-preserving filter), `hide(id)` (blank-guarded +
+  idempotent, returns `this` on no-op so a persistence layer can skip a redundant write on a referential check —
+  mirrors iOS's `guard inserted else return`). Store interface + `InMemory…` (tests) + `SharedPrefs…`
+  (`putStringSet`, durable, port of iOS `LocallyHiddenMessagesStore` UserDefaults set), mirroring
+  `EmojiUsageStore`. Provided via `SdkModule.providesLocallyHiddenMessagesStore`.
+- **Wiring:** `ChatViewModel` injects `LocallyHiddenMessagesStore`; the message-stream 5-combine is
+  `.combine(locallyHiddenStore.hidden)` and `toBubbles` runs `filterNot { hidden.isHidden(it.message.id) }` before
+  building bubbles, so hiding a message drops its bubble at once. `deleteMessage` → `deleteForEveryone` (unchanged
+  server round-trip). New `deleteForMe(id)` = `locallyHiddenStore.hide(id)` + close the sheet, zero network.
+  `ChatScreen` computes `canDeleteForEveryone` alongside `canEdit` (shared `nowMillis`/`createdAtMillis`), shows
+  "Delete for everyone" when `isOutgoing && isActionable && canDeleteForEveryone` and "Delete for me" when
+  `isActionable` (any delivered message, own or others'); both `MeeshyPalette.Error`. Strings replaced
+  `chat_action_delete` with `chat_action_delete_for_everyone` / `_for_me` across en/fr/es/pt.
+- **Tests (+23):** `MessageDeletabilityTest` (10) — window constant, moments-ago deletable, at-boundary still
+  deletable (inclusive), one-ms-past not, well-past not, someone-else never, future-createdAt deletable,
+  null-createdAt own deletable, null-createdAt other not, caller window override. `LocallyHiddenMessagesTest`
+  (10) — empty hides nothing, hide marks, others stay visible, idempotent same-instance, blank no-op
+  same-instance, accumulate two, visible filters+order, visible over empty, visible none-hidden identity, visible
+  keeps unhidden duplicates. `ChatViewModelTest` (+3) — `deleteForMe` local-hides with no `deleteOptimistic`
+  round-trip + closes sheet, a pre-hidden id never appears in the bubble list, `deleteForEveryone` delegates +
+  closes sheet.
+- **Verify:** system `gradle assembleDebug testDebugUnitTest` (943 tasks) green — new suites green, whole JVM
+  suite green.
+- **Reviewer:** PASS — diff `apps/android` only (`:core:model` + `:sdk-core` + `:feature:chat`);
+  behaviour-through-public-API (predicate + value object + VM state), no tautologies, full branch sweep incl. the
+  inclusive boundary and the same-instance no-op paths; SDK-purity/SSOT honoured (stateless predicate in
+  `:core:model`, pure set value + durable store in `:sdk-core` like `EmojiUsageStore`, "when to offer which
+  delete" product decision in the exempt Compose glue); UX coherence (two clearly-labelled destructive actions,
+  no dead end — an old own-message keeps "Delete for me"); no floor lowered, no test weakened.
 
 ### 2026-07-07 — slice `chat-edit-time-window` ✅ (merged, reviewer PASS)
 - **Slice:** enforce the 2-hour message-edit window (Chat parity §C "send, edit, delete … 2h window"; iOS

@@ -14,6 +14,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
+import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
+import me.meeshy.sdk.chat.SharedPrefsLocallyHiddenMessagesStore
 import me.meeshy.sdk.language.DataStoreInterfaceLanguageStore
 import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.net.MeeshyApi
@@ -44,6 +46,12 @@ object SdkModule {
     @Singleton
     fun providesEmojiUsageStore(@ApplicationContext context: Context): EmojiUsageStore =
         SharedPrefsEmojiUsageStore(context)
+
+    @Provides
+    @Singleton
+    fun providesLocallyHiddenMessagesStore(
+        @ApplicationContext context: Context,
+    ): LocallyHiddenMessagesStore = SharedPrefsLocallyHiddenMessagesStore(context)
 
     @Provides
     @Singleton

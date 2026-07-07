@@ -100,6 +100,7 @@ import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
@@ -408,12 +409,19 @@ fun ChatScreen(
         state.messages.firstOrNull { it.messageId == id }
     }
     if (actionTarget != null) {
+        val nowMillis = System.currentTimeMillis()
+        val createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso)
         MessageActionsSheet(
             bubble = actionTarget,
             canEdit = MessageEditability.canEdit(
                 isOwn = actionTarget.isOutgoing,
-                createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso),
-                nowMillis = System.currentTimeMillis(),
+                createdAtMillis = createdAtMillis,
+                nowMillis = nowMillis,
+            ),
+            canDeleteForEveryone = MessageDeletability.canDeleteForEveryone(
+                isOwn = actionTarget.isOutgoing,
+                createdAtMillis = createdAtMillis,
+                nowMillis = nowMillis,
             ),
             ownReactions = state.ownReactions[actionTarget.messageId] ?: emptySet(),
             quickReactions = state.quickReactions,
@@ -421,7 +429,8 @@ fun ChatScreen(
             onReact = { emoji -> viewModel.toggleReaction(actionTarget.messageId, emoji) },
             onExpandPicker = { viewModel.openEmojiPicker(actionTarget.messageId) },
             onEdit = { viewModel.startEdit(actionTarget.messageId) },
-            onDelete = { viewModel.deleteMessage(actionTarget.messageId) },
+            onDeleteForEveryone = { viewModel.deleteForEveryone(actionTarget.messageId) },
+            onDeleteForMe = { viewModel.deleteForMe(actionTarget.messageId) },
             onReply = { viewModel.startReply(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
@@ -857,13 +866,15 @@ private fun ChatSearchBar(
 private fun MessageActionsSheet(
     bubble: BubbleContent,
     canEdit: Boolean,
+    canDeleteForEveryone: Boolean,
     ownReactions: Set<String>,
     quickReactions: List<String>,
     accentColor: Color,
     onReact: (String) -> Unit,
     onExpandPicker: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit,
+    onDeleteForEveryone: () -> Unit,
+    onDeleteForMe: () -> Unit,
     onReply: () -> Unit,
     onToggleOriginal: () -> Unit,
     onDismiss: () -> Unit,
@@ -926,12 +937,20 @@ private fun MessageActionsSheet(
                     onClick = onEdit,
                 )
             }
-            if (bubble.isOutgoing && isActionable) {
+            if (bubble.isOutgoing && isActionable && canDeleteForEveryone) {
                 SheetAction(
                     icon = Icons.Filled.Delete,
-                    label = stringResource(R.string.chat_action_delete),
+                    label = stringResource(R.string.chat_action_delete_for_everyone),
                     tint = MeeshyPalette.Error,
-                    onClick = onDelete,
+                    onClick = onDeleteForEveryone,
+                )
+            }
+            if (isActionable) {
+                SheetAction(
+                    icon = Icons.Filled.Delete,
+                    label = stringResource(R.string.chat_action_delete_for_me),
+                    tint = MeeshyPalette.Error,
+                    onClick = onDeleteForMe,
                 )
             }
         }

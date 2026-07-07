@@ -1297,3 +1297,16 @@ Append-only log of gotchas and decisions that save time next run.
   `store.preferences.value`, so a single toggle never clobbers the others (tested by the
   successive-toggles-compose case). Screen: push is the **master** — sub-toggles `enabled = pushEnabled`
   so a coherent parent/child relationship, no dead ends.
+
+## 2026-07-07 — Kotlin `combine` arity cap (5 typed flows) — chain, don't widen
+- `ChatViewModel`'s message-stream already `combine`d **5** flows (the typed-overload ceiling:
+  messagesStream, currentUser, ownReactions, showingOriginal, recipientCount). Adding a 6th (the
+  locally-hidden set for `chat-delete-for-me-vs-everyone`) can't extend the same call — the 6-arg
+  `combine` is the untyped `vararg`/`Array<*>` form and would lose all the types.
+- **Fix:** keep the typed 5-combine producing `BubbleInputs`, then `.combine(store.hidden) { inputs,
+  hidden -> inputs to hidden }` and destructure in `collect`. Preserves full typing, no `Array` casts.
+  Prefer this two-stage chain over promoting to the vararg overload whenever you cross 5 sources.
+- **Local-only "delete for me" pattern:** a durable `SharedPrefs…StringSet` store exposed as
+  `StateFlow<LocallyHiddenMessages>`, `.combine`d into the stream, and applied as a pure
+  `filterNot { hidden.isHidden(id) }` before building bubbles — no repo/outbox/network touched. The
+  pure set value returns `this` on a no-op `hide` so the SharedPrefs layer skips redundant writes.

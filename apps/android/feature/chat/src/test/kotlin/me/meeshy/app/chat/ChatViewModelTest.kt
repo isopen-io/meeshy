@@ -24,6 +24,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.InMemoryLocallyHiddenMessagesStore
+import me.meeshy.sdk.chat.LocallyHiddenMessages
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
@@ -98,6 +100,7 @@ class ChatViewModelTest {
         val conversations: ConversationRepository,
         val socket: MessageSocketManager,
         val emojiUsage: InMemoryEmojiUsageStore,
+        val locallyHidden: InMemoryLocallyHiddenMessagesStore,
     )
 
     private fun viewModel(
@@ -113,6 +116,7 @@ class ChatViewModelTest {
         currentUser: MeeshyUser? = null,
         conversation: ApiConversation? = null,
         nowMillis: Long = FIXED_NOW,
+        hidden: LocallyHiddenMessages = LocallyHiddenMessages(),
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -127,6 +131,7 @@ class ChatViewModelTest {
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
+        val locallyHidden = InMemoryLocallyHiddenMessagesStore(hidden)
         val fixedNow = nowMillis
         val clock = object : CacheClock {
             override fun nowMillis(): Long = fixedNow
@@ -138,6 +143,7 @@ class ChatViewModelTest {
                 session,
                 reactions,
                 emojiUsage,
+                locallyHidden,
                 socket,
                 workManager,
                 MeeshyConfig(),
@@ -150,6 +156,7 @@ class ChatViewModelTest {
             conversations,
             socket,
             emojiUsage,
+            locallyHidden,
         )
     }
 
@@ -882,18 +889,46 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun deleteMessage_delegates_and_closes_the_sheet() = runTest(dispatcher) {
+    fun deleteForEveryone_delegates_to_the_repository_and_closes_the_sheet() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         coEvery { h.repo.deleteOptimistic(any()) } returns true
         advanceUntilIdle()
 
         h.vm.onMessageLongPress("m1")
-        h.vm.deleteMessage("m1")
+        h.vm.deleteForEveryone("m1")
         advanceUntilIdle()
 
         coVerify { h.repo.deleteOptimistic("m1") }
         assertThat(h.vm.state.value.actionMessageId).isNull()
         coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun deleteForMe_hides_the_message_locally_without_any_server_round_trip() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.messages.map { it.messageId }).containsExactly("m1", "m2")
+
+        h.vm.onMessageLongPress("m2")
+        h.vm.deleteForMe("m2")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.map { it.messageId }).containsExactly("m1")
+        assertThat(h.locallyHidden.hidden.value.isHidden("m2")).isTrue()
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+        coVerify(exactly = 0) { h.repo.deleteOptimistic(any()) }
+    }
+
+    @Test
+    fun a_previously_hidden_message_never_appears_in_the_bubble_list() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            hidden = LocallyHiddenMessages(setOf("m1")),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.map { it.messageId }).containsExactly("m2")
     }
 
     @Test

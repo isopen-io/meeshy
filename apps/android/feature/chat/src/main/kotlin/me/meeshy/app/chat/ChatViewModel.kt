@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.LocallyHiddenMessages
+import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
@@ -81,6 +83,7 @@ class ChatViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val reactionRepository: ReactionRepository,
     private val emojiUsageStore: EmojiUsageStore,
+    private val locallyHiddenStore: LocallyHiddenMessagesStore,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
@@ -165,10 +168,13 @@ class ChatViewModel @Inject constructor(
             ) { result, user, own, originals, recipients ->
                 BubbleInputs(result, user, own, originals, recipients)
             }
-                .collect { (result, user, own, originals, recipients) ->
+                .combine(locallyHiddenStore.hidden) { inputs, hidden -> inputs to hidden }
+                .collect { (inputs, hidden) ->
+                    val (result, user, own, originals, recipients) = inputs
                     latestMessages = result.valueOrNull() ?: latestMessages
                     _state.update { current ->
-                        val next = current.applyResult(result, user, own, originals, config.socketUrl, recipients)
+                        val next =
+                            current.applyResult(result, user, own, originals, config.socketUrl, recipients, hidden)
                         next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
                 }
@@ -511,7 +517,12 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(editingMessageId = null, draft = "") }
     }
 
-    fun deleteMessage(messageId: String) {
+    /**
+     * "Delete for everyone" — a server round-trip that tombstones the message
+     * for all participants. Only offered for an own message within the
+     * [me.meeshy.sdk.model.MessageDeletability] window (gated in the UI).
+     */
+    fun deleteForEveryone(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
         viewModelScope.launch {
             try {
@@ -524,6 +535,16 @@ class ChatViewModel @Inject constructor(
                 _state.update { it.copy(errorMessage = e.message) }
             }
         }
+    }
+
+    /**
+     * "Delete for me" — hides the message locally only (WhatsApp-style), never
+     * reaching the server. The durable [locallyHiddenStore] emits the new hidden
+     * set, which the message stream re-filters, so the bubble disappears at once.
+     */
+    fun deleteForMe(messageId: String) {
+        _state.update { it.copy(actionMessageId = null) }
+        locallyHiddenStore.hide(messageId)
     }
 
     private fun applyEdit(messageId: String, content: String) {
@@ -616,22 +637,23 @@ private fun ChatUiState.applyResult(
     showingOriginal: Set<String>,
     mediaBaseUrl: String,
     recipientCount: Int,
+    hidden: LocallyHiddenMessages,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
         ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = false,
         errorMessage = null,
     )
     is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = false,
     )
     is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount)
+        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden)
             ?: messages,
         ownReactions = ownReactions,
         isSyncing = true,
@@ -651,7 +673,8 @@ private fun List<LocalMessage>.toBubbles(
     showingOriginal: Set<String>,
     mediaBaseUrl: String,
     recipientCount: Int,
-): List<BubbleContent> = map { local ->
+    hidden: LocallyHiddenMessages,
+): List<BubbleContent> = filterNot { hidden.isHidden(it.message.id) }.map { local ->
     BubbleContentBuilder.build(
         message = local.message,
         currentUserId = currentUser?.id,

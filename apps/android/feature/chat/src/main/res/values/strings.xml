@@ -16,7 +16,8 @@
     <string name="chat_action_show_original">See original</string>
     <string name="chat_action_show_translation">See translation</string>
     <string name="chat_action_edit">Edit</string>
-    <string name="chat_action_delete">Delete</string>
+    <string name="chat_action_delete_for_everyone">Delete for everyone</string>
+    <string name="chat_action_delete_for_me">Delete for me</string>
     <string name="chat_editing_label">Editing message</string>
     <string name="chat_cancel_edit">Cancel edit</string>
     <string name="chat_react_with">React with %1$s</string>

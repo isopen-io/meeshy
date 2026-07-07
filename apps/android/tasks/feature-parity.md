@@ -338,7 +338,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (refusing to edit merely because the wire omitted a timestamp is a worse gap). `ChatViewModel` injects
       `CacheClock` and gates `startEdit` (own + within window); `ChatScreen` hides the Edit sheet action once
       the window has passed (Delete stays available) (slice `chat-edit-time-window`, 2026-07-07, +13 tests).
-      **Pending:** delete for-me vs for-everyone split (needs a local-only delete path), forward.
+      **Delete for-me vs for-everyone split now shipped** (slice `chat-delete-for-me-vs-everyone`, 2026-07-07,
+      +23 tests): pure `:core:model` `MessageDeletability.canDeleteForEveryone(isOwn, createdAtMillis, nowMillis,
+      windowMillis=2h)` SSOT (port of iOS `ConversationCommandHandler.canDeleteForEveryone`, **inclusive `<=`**
+      window unlike the exclusive edit window) + pure `:sdk-core` `LocallyHiddenMessages` value object
+      (`hide`/`isHidden`/`visible`, idempotent, same-instance-on-no-op) backed by the durable
+      `SharedPrefsLocallyHiddenMessagesStore` (port of iOS `LocallyHiddenMessagesStore` UserDefaults set).
+      `ChatViewModel.deleteForEveryone` keeps the server round-trip; `deleteForMe` hides locally (no network),
+      the hidden set threads into the message-stream combine so the bubble disappears at once; `ChatScreen`
+      offers "Delete for everyone" (own + within window) and "Delete for me" (any delivered message).
+      **Pending:** forward.
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
 - [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
       `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine
