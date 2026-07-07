@@ -23,6 +23,7 @@ import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallQualitySample
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.ConnectionQuality
@@ -102,6 +103,8 @@ class CallViewModelTest {
         every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
+        coEvery { signalManager.emitJoinAwaitingAck(any()) } returns
+            CallJoinResult.Success(emptyList())
     }
 
     @After
@@ -346,7 +349,7 @@ class CallViewModelTest {
         vm.start(incomingAudio) // callId comes from the incoming config
         vm.accept()
 
-        verify(exactly = 1) { signalManager.emitJoin("call-9") }
+        coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-9") }
     }
 
     @Test
@@ -851,7 +854,7 @@ class CallViewModelTest {
         vm.acceptWaitingSwap()
         vm.accept()
 
-        verify(exactly = 1) { signalManager.emitJoin("call-77") }
+        coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-77") }
     }
 
     @Test

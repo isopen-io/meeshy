@@ -161,6 +161,11 @@ class WebRtcCallCoordinator @Inject constructor(
         when (signal.type) {
             "offer" -> {
                 val sdp = signal.sdp ?: return
+                // The offer's sender is our reply target. An incoming call carries no
+                // peerId through the ring/route (CallConfig.peerId is blank), so the
+                // answer + ICE candidates would otherwise be sent with a blank `to`
+                // and the gateway rejects the whole signal ("to field is required").
+                signal.from?.takeIf { it.isNotBlank() }?.let { peerId = it }
                 signal.negotiationId?.let { negotiationId = it }
                 engine.setRemoteDescription(SessionDescription(SessionDescription.Type.OFFER, sdp))
                 val answer = engine.createAnswer()

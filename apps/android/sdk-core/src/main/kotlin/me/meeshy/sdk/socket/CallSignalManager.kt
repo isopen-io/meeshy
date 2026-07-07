@@ -9,6 +9,8 @@ import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallJoinAckParser
+import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallQualityReport
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalMapper
@@ -128,7 +130,28 @@ class CallSignalManager @Inject constructor(
         return raw?.let(CallInitiateAckParser::parse) ?: CallInitiateResult.Timeout
     }
 
-    /** Join the call room after answering / on reconnect. */
+    /**
+     * Join the call room and AWAIT the gateway ACK (parity with iOS
+     * `emitCallJoinWithAck`). The ACK confirms room membership — so the follow-up
+     * media setup is not rejected `NOT_A_PARTICIPANT` ("Not in call room") — and it
+     * carries the callee's per-user ICE servers, sparing a racing
+     * `call:request-ice-servers` round-trip that the not-yet-joined room rejects.
+     * No ACK within [JOIN_ACK_TIMEOUT_MS] yields [CallJoinResult.Failure].
+     */
+    suspend fun emitJoinAwaitingAck(callId: String): CallJoinResult {
+        val raw = withTimeoutOrNull(JOIN_ACK_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                socketManager.emit("call:join", JSONObject().put("callId", callId)) { args ->
+                    if (continuation.isActive) {
+                        continuation.resume((args.firstOrNull() as? JSONObject)?.toString())
+                    }
+                }
+            }
+        }
+        return CallJoinAckParser.parse(raw)
+    }
+
+    /** Join the call room after answering / on reconnect (fire-and-forget). */
     fun emitJoin(callId: String) = emit("call:join", callId)
 
     /** Leave the call room without ending the call for the peer. */
@@ -264,6 +287,9 @@ class CallSignalManager @Inject constructor(
     private companion object {
         /** Matches the iOS `emitCallInitiate` 10 s ACK budget. */
         const val INITIATE_ACK_TIMEOUT_MS = 10_000L
+
+        /** ACK budget for `call:join`; a bit above the iOS 3 s to tolerate the emulator. */
+        const val JOIN_ACK_TIMEOUT_MS = 5_000L
 
         /** The single inbound frame that also carries incoming-offer identity. */
         const val INITIATED_EVENT = "call:initiated"

@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
@@ -119,7 +120,7 @@ class CallViewModel @Inject constructor(
         if (event is CallEvent.ParticipantJoined) coordinator.onParticipantJoined()
     }
 
-    /** The callee's requested ICE servers landed → open its media connection. */
+    /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */
     private fun onIceServersRefreshed(iceServers: List<SocketIceServer>) {
         if (!awaitingIncomingIce) return
         awaitingIncomingIce = false
@@ -182,9 +183,20 @@ class CallViewModel @Inject constructor(
      */
     fun accept() {
         dispatch(CallEvent.LocalAnswer)
-        emitIfIdentified(signalManager::emitJoin)
-        awaitingIncomingIce = true
-        emitIfIdentified(signalManager::emitRequestIceServers)
+        if (callId.isBlank()) return
+        // Join WITH the ACK (parity with iOS emitCallJoinWithAck): the ACK confirms
+        // this socket is in the call room AND carries the callee's ICE servers, so
+        // media opens straight away. The prior fire-and-forget join + immediate
+        // call:request-ice-servers raced the not-yet-joined room -> NOT_A_PARTICIPANT
+        // ("Not in call room") the instant the user answered.
+        viewModelScope.launch {
+            when (val result = signalManager.emitJoinAwaitingAck(callId)) {
+                is CallJoinResult.Success -> coordinator.startIncoming(
+                    viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo, ::onMediaConnected,
+                )
+                is CallJoinResult.Failure -> dispatch(CallEvent.ConnectionFailed(result.message))
+            }
+        }
     }
 
     /** Local user declines an incoming call — reject the FSM and end it on the wire. */
