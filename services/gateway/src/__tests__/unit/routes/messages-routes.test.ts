@@ -255,6 +255,7 @@ const makePrisma = () => ({
     findMany: jest.fn().mockResolvedValue([]),
   },
   messageStatusEntry: {
+    findMany: jest.fn().mockResolvedValue([]),
     updateMany: jest.fn().mockResolvedValue({}),
   },
 });
@@ -825,6 +826,35 @@ describe('GET /conversations/:id/messages', () => {
     const body = reply._body;
     expect(body.data[0].deliveredCount).toBeGreaterThan(0);
     expect(body.data[0].readCount).toBeGreaterThan(0);
+  });
+
+  it('frozen MessageStatusEntry counted even when the cursor was cleaned up (union parity with read-status endpoints)', async () => {
+    const msgCreatedAt = new Date('2024-06-01');
+    const msg = makeMessage({ createdAt: msgCreatedAt });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    prisma.participant.findMany.mockResolvedValue([
+      { id: PART_ID },
+      { id: 'other-part' },
+    ]);
+    // Cursor for the recipient was deleted by cleanupObsoleteCursors — only the
+    // write-once frozen receipt survives. The mono-message and batch read-status
+    // endpoints still count it; the list route must agree.
+    prisma.conversationReadCursor.findMany.mockResolvedValue([]);
+    prisma.messageStatusEntry.findMany.mockResolvedValue([
+      {
+        messageId: MSG_ID,
+        participantId: 'other-part',
+        deliveredAt: new Date('2024-06-02'),
+        receivedAt: new Date('2024-06-02'),
+        readAt: new Date('2024-06-02'),
+      },
+    ]);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const body = reply._body;
+    expect(body.data[0].deliveredCount).toBe(1);
+    expect(body.data[0].readCount).toBe(1);
   });
 
   it('with user reactions: currentUserReactions populated from reaction.findMany', async () => {
