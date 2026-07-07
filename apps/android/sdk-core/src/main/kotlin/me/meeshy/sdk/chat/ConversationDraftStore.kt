@@ -4,8 +4,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.ConversationDraft
 
@@ -27,23 +31,32 @@ public interface ConversationDraftStore {
 
     /** Removes the stored draft for [conversationId] (no-op when absent). */
     public suspend fun clear(conversationId: String)
+
+    /**
+     * A live view of every persisted draft, keyed by conversation id. Re-emits on
+     * each save/clear so a conversation list can float draft-bearing rows to the
+     * top reactively. Corrupt/legacy entries are silently omitted.
+     */
+    public fun observeAll(): Flow<Map<String, ConversationDraft>>
 }
 
 /** Volatile [ConversationDraftStore] — for tests and previews. */
 public class InMemoryConversationDraftStore(
     initial: Map<String, ConversationDraft> = emptyMap(),
 ) : ConversationDraftStore {
-    private val drafts: MutableMap<String, ConversationDraft> = initial.toMutableMap()
+    private val drafts: MutableStateFlow<Map<String, ConversationDraft>> = MutableStateFlow(initial.toMap())
 
-    override suspend fun load(conversationId: String): ConversationDraft? = drafts[conversationId]
+    override suspend fun load(conversationId: String): ConversationDraft? = drafts.value[conversationId]
 
     override suspend fun save(draft: ConversationDraft) {
-        drafts[draft.conversationId] = draft
+        drafts.update { it + (draft.conversationId to draft) }
     }
 
     override suspend fun clear(conversationId: String) {
-        drafts.remove(conversationId)
+        drafts.update { it - conversationId }
     }
+
+    override fun observeAll(): Flow<Map<String, ConversationDraft>> = drafts.asStateFlow()
 }
 
 /**
@@ -69,6 +82,14 @@ public class DataStoreConversationDraftStore(
     override suspend fun clear(conversationId: String) {
         dataStore.edit { prefs -> prefs.remove(keyFor(conversationId)) }
     }
+
+    override fun observeAll(): Flow<Map<String, ConversationDraft>> =
+        dataStore.data.map { prefs ->
+            prefs.asMap().entries
+                .filter { (key, value) -> key.name.startsWith(KEY_PREFIX) && value is String }
+                .mapNotNull { (_, value) -> decode(value as String) }
+                .associateBy { it.conversationId }
+        }
 
     private fun keyFor(conversationId: String) = stringPreferencesKey("$KEY_PREFIX$conversationId")
 

@@ -17,6 +17,7 @@
     <string name="conversations_preview_file">📎 Fichier</string>
     <string name="conversations_preview_location">📍 Localisation</string>
     <string name="conversations_preview_you">Vous</string>
+    <string name="conversations_preview_draft_prefix">Brouillon : </string>
     <string name="conversations_preview_sender_format">%1$s : %2$s</string>
     <string name="conversations_search">Rechercher</string>
     <string name="conversations_search_hint">Rechercher des conversations</string>
