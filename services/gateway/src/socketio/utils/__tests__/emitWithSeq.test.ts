@@ -6,6 +6,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { emitWithSeq } from '../emitWithSeq';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { Server } from 'socket.io';
 import type { SequenceService } from '../../../services/SequenceService';
 
@@ -16,7 +17,7 @@ function makeIO() {
 }
 
 describe('emitWithSeq', () => {
-  it('stamps a monotonically increasing _seq and emits to the user room', async () => {
+  it('stamps a monotonically increasing _seq and emits to the per-user room', async () => {
     const { io, to, emit } = makeIO();
     let counter = 0;
     const seq = { nextSeq: jest.fn<() => Promise<number>>(async () => ++counter) } as unknown as SequenceService;
@@ -24,7 +25,11 @@ describe('emitWithSeq', () => {
     await emitWithSeq(io, seq, 'u1', 'notification:new', { title: 'hi' });
     await emitWithSeq(io, seq, 'u1', 'notification:new', { title: 'again' });
 
-    expect(to).toHaveBeenCalledWith('u1');
+    // MUST target `ROOMS.user(userId)` (`user:u1`) — the room registered users
+    // join at auth. Emitting to the bare id (`u1`) reaches no registered socket,
+    // silently dropping the real-time `notification:new` toast.
+    expect(to).toHaveBeenCalledWith(ROOMS.user('u1'));
+    expect(to).not.toHaveBeenCalledWith('u1');
     expect(emit).toHaveBeenNthCalledWith(1, 'notification:new', { title: 'hi', _seq: 1 });
     expect(emit).toHaveBeenNthCalledWith(2, 'notification:new', { title: 'again', _seq: 2 });
   });
