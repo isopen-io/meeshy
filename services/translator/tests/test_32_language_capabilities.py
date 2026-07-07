@@ -552,6 +552,37 @@ class TestRequireStt:
         assert all(svc.can_transcribe(c) for c in alts), \
             f"All alternatives must be STT-capable, got: {alts}"
 
+    def test_stt_alternatives_prefer_same_region(self):
+        svc = make_service()
+        # An STT-less African language must surface African STT-capable
+        # alternatives (same region), not European ones by dict-insertion order.
+        svc._capabilities["afrnostt"] = LanguageCapability(
+            code="afrnostt", name="AfrNoSTT", native_name="AfrNoSTT",
+            tts_supported=True, tts_engine=TTSEngine.MMS,
+            stt_supported=False, stt_engine=STTEngine.NONE,
+            region="Africa",
+        )
+        with pytest.raises(LanguageCapabilityError) as exc_info:
+            svc.require_stt("afrnostt")
+        alts = exc_info.value.available_alternatives
+        assert len(alts) > 0, "Expected at least one alternative STT-capable language"
+        assert all(svc.get_capability(c).region == "Africa" for c in alts), \
+            f"Same-region alternatives expected, got: {[(c, svc.get_capability(c).region) for c in alts]}"
+
+    def test_stt_alternatives_fall_back_when_region_has_no_match(self):
+        svc = make_service()
+        # A region with no other STT-capable language must still yield
+        # alternatives (fallback to any STT-capable language), not an empty list.
+        svc._capabilities["isolate"] = LanguageCapability(
+            code="isolate", name="Isolate", native_name="Isolate",
+            stt_supported=False, region="Atlantis",
+        )
+        with pytest.raises(LanguageCapabilityError) as exc_info:
+            svc.require_stt("isolate")
+        alts = exc_info.value.available_alternatives
+        assert len(alts) > 0, "Expected fallback alternatives when region has no STT sibling"
+        assert all(svc.can_transcribe(c) for c in alts)
+
 
 class TestRequireTts:
     def test_success(self):
@@ -620,6 +651,17 @@ class TestRequireVoiceCloning:
         assert isinstance(alts, list)
         assert len(alts) > 0
         assert all("(" in a for a in alts)  # format: "code (Name)"
+
+    def test_no_cloning_alternatives_are_cloning_capable(self):
+        svc = make_service()
+        with pytest.raises(LanguageCapabilityError) as exc_info:
+            svc.require_voice_cloning("am")
+        alts = exc_info.value.available_alternatives
+        assert len(alts) > 0
+        for a in alts:
+            code = a.split(" ", 1)[0]
+            assert svc.get_capability(code).tts_voice_cloning is True, \
+                f"Alternative {a!r} must support voice cloning"
 
     def test_lingala_voice_cloning_succeeds(self):
         svc = make_service()
