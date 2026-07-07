@@ -89,6 +89,12 @@ struct FloatingCallPillView: View {
     // when reduce motion is on, collapse it to a simple cross-fade.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Suit le drag horizontal en direct pour l'offset + fondu visuels ; ne
+    /// persiste rien (contrairement à `bubbleEdge`/`bubbleVerticalFraction`
+    /// sur `CallManager`, qui ne concernent que la bulle repliée).
+    @State private var pillDragOffset: CGFloat = 0
+    @State private var pillDragStartTime: Date?
+
     private let pillHeight: CGFloat = 64
 
     var body: some View {
@@ -138,6 +144,9 @@ struct FloatingCallPillView: View {
         // elle est pleine largeur.
         .frame(maxWidth: 560)
         .padding(.horizontal, 10)
+        .offset(x: pillDragOffset)
+        .opacity(pillDragOpacity)
+        .simultaneousGesture(collapseDragGesture)
         .contentShape(Rectangle())
         .onTapGesture {
             expandToFullScreen()
@@ -149,6 +158,9 @@ struct FloatingCallPillView: View {
         )
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
+            collapseToBubble(exitTranslation: 1)
+        }
     }
 
     // MARK: - User Info
@@ -275,6 +287,57 @@ struct FloatingCallPillView: View {
         .pressable()
         .accessibilityLabel(String(localized: "call.pill.hangup", defaultValue: "Raccrocher"))
         .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
+    }
+
+    // MARK: - Collapse Gesture
+
+    private var pillDragOpacity: Double {
+        let progress = min(abs(pillDragOffset) / 300, 1.0)
+        return 1.0 - Double(progress) * 0.6
+    }
+
+    private var collapseDragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                if pillDragStartTime == nil { pillDragStartTime = Date() }
+                pillDragOffset = value.translation.width
+            }
+            .onEnded { value in
+                // iOS 16 floor — `DragGesture.Value.velocity` is iOS 17+, so
+                // velocity is approximated from elapsed wall-clock time
+                // instead (no existing precedent in this codebase uses the
+                // iOS 17 API either).
+                let elapsed = pillDragStartTime.map { Date().timeIntervalSince($0) } ?? 0
+                let velocityWidth = elapsed > 0 ? Double(value.translation.width) / elapsed : 0
+                pillDragStartTime = nil
+
+                if CallBubbleGestureResolver.shouldCollapse(
+                    translationWidth: value.translation.width,
+                    velocityWidth: CGFloat(velocityWidth)
+                ) {
+                    collapseToBubble(exitTranslation: value.translation.width)
+                } else {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.7)) {
+                        pillDragOffset = 0
+                    }
+                    HapticFeedback.light()
+                }
+            }
+    }
+
+    private func collapseToBubble(exitTranslation: CGFloat) {
+        HapticFeedback.success()
+        let exitOffset: CGFloat = exitTranslation >= 0 ? 500 : -500
+        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.25)) {
+            pillDragOffset = exitOffset
+        }
+        Task { @MainActor in
+            if !reduceMotion {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+            callManager.displayMode = .bubble
+            pillDragOffset = 0
+        }
     }
 
     // MARK: - Actions
