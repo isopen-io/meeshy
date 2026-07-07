@@ -74,7 +74,12 @@ const createMockCallService = (hasData = true) => ({
 const createMockIo = () => {
   const to = jest.fn().mockReturnThis() as MockFn;
   const emit = jest.fn() as MockFn;
-  const mock = { to, emit } as any;
+  // `in(room).fetchSockets()` — used by the room-eviction cleanup mirrored
+  // from the client-driven call:end/call:leave/call:force-leave handlers.
+  // Defaults to an empty room so existing broadcast-only tests are unaffected.
+  const fetchSockets = jest.fn().mockResolvedValue([]) as MockFn;
+  const inRoom = jest.fn().mockReturnValue({ fetchSockets }) as MockFn;
+  const mock = { to, emit, in: inRoom } as any;
   // Make `to(...)` return an object with `emit`
   to.mockReturnValue({ emit });
   return mock;
@@ -1518,6 +1523,74 @@ describe('CallCleanupService', () => {
         expect.stringContaining('No Socket.IO server'),
         expect.objectContaining({ callId: 'call-noio' })
       );
+    });
+
+    // Vague 21 (2026-07-07) — every client-driven termination path (call:end,
+    // call:leave, call:force-leave) evicts sockets from `ROOMS.call(callId)`
+    // right after broadcasting call:ended; forceEndCall (GC) never did,
+    // leaving still-connected sockets permanently joined to a dead call room.
+    // Tracked as an open item in tasks/calls-fonctionnel-todo.md.
+    describe('room cleanup (GC must mirror the client-driven leave-room behavior)', () => {
+      it('evicts every socket still in the call room after force-ending a call', async () => {
+        const io = createMockIo();
+        const service = new CallCleanupService(prisma as any);
+        service.attachSocketServer(io);
+
+        const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-room-cleanup');
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([staleCall])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]);
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-room-cleanup' });
+        setupTransactionPassthrough(prisma);
+
+        const socketA = { leave: jest.fn() };
+        const socketB = { leave: jest.fn() };
+        const fetchSockets = jest.fn().mockResolvedValue([socketA, socketB]);
+        (io.in as MockFn).mockReturnValue({ fetchSockets });
+
+        await service.runCleanup();
+
+        expect(io.in).toHaveBeenCalledWith('call:call-room-cleanup');
+        expect(socketA.leave).toHaveBeenCalledWith('call:call-room-cleanup');
+        expect(socketB.leave).toHaveBeenCalledWith('call:call-room-cleanup');
+      });
+
+      it('does not throw and still reports the call as cleaned when the room is already empty', async () => {
+        const io = createMockIo();
+        const service = new CallCleanupService(prisma as any);
+        service.attachSocketServer(io);
+
+        const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-room-empty');
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([staleCall])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]);
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-room-empty' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(1);
+        expect(result.errors).toBe(0);
+      });
+
+      it('skips room cleanup without throwing when no io is attached', async () => {
+        const service = new CallCleanupService(prisma as any);
+        // No attachSocketServer call.
+
+        const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-room-noio');
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([staleCall])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]);
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-room-noio' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result).toEqual({ cleaned: 1, errors: 0 });
+      });
     });
 
     it('calls callService.clearHeartbeats after transaction when callService provided', async () => {

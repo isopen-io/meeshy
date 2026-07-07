@@ -11,6 +11,7 @@
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import type { Server as SocketIOServer } from 'socket.io';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { logger } from '../utils/logger';
 import type { CallService } from './CallService';
@@ -537,6 +538,15 @@ export class CallCleanupService {
       const rooms = await resolveCallEndedRooms(this.prisma, callId, session?.conversationId);
       this.io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
       logger.info('[CallCleanupService] Broadcast call:ended', { callId, endReason, conversationId: session?.conversationId });
+
+      // Vague 21 (2026-07-07) — every client-driven termination path
+      // (call:end, call:leave, call:force-leave) evicts sockets from
+      // `ROOMS.call(callId)` right after this same broadcast; this GC path
+      // never did, leaving still-connected sockets permanently joined to a
+      // dead call room until they disconnect. Mirrors CallEventsHandler's
+      // call:end room cleanup exactly.
+      const socketsInCallRoom = await this.io.in(ROOMS.call(callId)).fetchSockets();
+      await Promise.all(socketsInCallRoom.map((s) => s.leave(ROOMS.call(callId))));
     } else {
       logger.warn('[CallCleanupService] No Socket.IO server attached — clients will not receive call:ended', { callId });
     }

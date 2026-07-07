@@ -1665,3 +1665,34 @@ caméra" au sens des guidelines plateforme.
   chemin JOIN iOS dans cette session, candidat pour une prochaine passe iOS dédiée.
 - **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non vidée,
   `negotiate()` guard spéculatif, threading TTL complet.
+
+## Vague 22 — `forceEndCall` ne vidait jamais la room Socket.IO du call GC-terminé (2026-07-07)
+
+Point d'entrée : routine calling-feature. Un agent d'exploration dédié (lecture seule) a re-vérifié la
+piste basse-priorité notée Vague 13 et reconfirmée "reste ouvert" depuis (Vagues 13/19/20) contre `HEAD`
+avant tout fix — toujours vrai, aucun commit entre-temps ne l'avait traité.
+
+- **[FIX RÉEL, gateway, TDD]** Les trois chemins de terminaison client (`call:end`, `call:leave`,
+  `call:force-leave`, tous dans `CallEventsHandler.ts`) font systématiquement `fetchSockets()` +
+  `s.leave(ROOMS.call(callId))` sur la room `call:<id>` juste après le broadcast `call:ended`.
+  `CallCleanupService.forceEndCall` (le tier GC — cron 60s : ringing>120s→missed,
+  connecting>90s→failed, active>2h ou heartbeat stale>120s→ended) ne le faisait JAMAIS : un socket
+  encore connecté au moment où GC réclame un appel zombie restait membre de la room `call:<id>`
+  indéfiniment, jusqu'à sa propre déconnexion. Sur un process long-lived (Redis adapter en scale
+  horizontal notamment), c'est une fuite de membership de room non bornée, pas seulement le risque
+  cosmétique de `call:ended` fantôme redondant déjà noté Vague 13. Fix : même paire d'appels
+  `this.io.in(ROOMS.call(callId)).fetchSockets()` / `Promise.all(sockets.map(s => s.leave(...)))`
+  ajoutée dans `forceEndCall`, juste après le broadcast existant — miroir exact du bloc
+  `CallEventsHandler.ts` (`call:end`, lignes ~2650-2652). 3 tests TDD (`CallCleanupService.test.ts`,
+  nouveau describe `room cleanup`) : évince chaque socket restée dans la room après un force-end,
+  ne jette pas quand la room est déjà vide, ne tente aucun accès `io` quand aucun serveur Socket.IO
+  n'est attaché. RED confirmé (revert du seul fix source → le test d'éviction échoue, `io.in` jamais
+  appelé ; les deux autres tests passent déjà car ils n'assertent que l'absence de throw/le compte
+  `cleaned`, comportement inchangé par le fix).
+- **Vérification (gateway)** : suite filtrée `*[Cc]all*` : 31/31 suites, 866/866 tests verts (+3 vs
+  Vague 20). `tsc --noEmit` gateway : 0 erreur (client Prisma généré + `packages/shared` buildé
+  proprement cette session).
+- **iOS/Android/web (lecture seule, aucun changement)** : aucun fichier touché hors gateway cette
+  session ; pas de nouvelle zone candidate identifiée côté client par l'agent d'exploration pour ce tour.
+- **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, `negotiate()` guard `makingOffer`
+  spéculatif, threading complet du `ttl` TURN à travers tous les événements call (voir Vague 20 item 4).
