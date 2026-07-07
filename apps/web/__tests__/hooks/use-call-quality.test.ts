@@ -597,6 +597,37 @@ describe('useCallQuality', () => {
       expect(mockSocketEmit).not.toHaveBeenCalled();
     });
 
+    it('still emits at 10s even though qualityStats gets a new object reference on every poll tick (regression: interval must not be re-armed by qualityStats updates)', async () => {
+      // Default updateInterval (1000ms) means qualityStats is replaced with a
+      // NEW object every 1s — a real render + effect flush must happen
+      // between each poll tick (unlike a single jest.advanceTimersByTime(10_000)
+      // call, which fires all due timers before React ever re-renders and so
+      // cannot expose a dependency-array bug that only bites across separate
+      // renders).
+      const mockPC = makeMockPeerConnection();
+
+      renderHook(() =>
+        useCallQuality({
+          peerConnection: mockPC as unknown as RTCPeerConnection,
+          callId: 'call-123',
+        })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+
+      for (let i = 0; i < 10; i++) {
+        await act(async () => {
+          jest.advanceTimersByTime(1000);
+          await Promise.resolve();
+        });
+      }
+
+      expect(mockSocketEmit).toHaveBeenCalledWith(
+        expect.stringContaining('quality'),
+        expect.objectContaining({ callId: 'call-123' })
+      );
+    });
+
     it('does not emit when socket is null', async () => {
       mockGetSocket.mockReturnValue(null);
 

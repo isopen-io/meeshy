@@ -11,7 +11,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { logger } from '@/utils/logger';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
@@ -183,30 +183,48 @@ export function useCallQuality({
     };
   }, [peerConnection, updateInterval, updateStats]);
 
-  // Emit quality report to server every 10 seconds
+  // Keep the latest sample in a ref so the 10s report interval below can read
+  // it without being torn down every time a new sample arrives (see effect
+  // comment).
+  const qualityStatsRef = useRef(qualityStats);
+  qualityStatsRef.current = qualityStats;
+
+  // Emit quality report to server every 10 seconds.
+  //
+  // Deliberately keyed on `callId` ONLY, not `qualityStats`: the monitoring
+  // effect above produces a brand-new `qualityStats` object every
+  // `updateInterval` tick (as fast as 2s for real callers, see
+  // VideoCallInterface). If this effect depended on `qualityStats`, React
+  // would tear down and recreate the `setInterval` on every tick — a fresh
+  // 10s timer created at T never survives to fire before being cleared at
+  // T+2s, so `CALL_QUALITY_REPORT` would never actually reach the socket in
+  // production (only fake-timer tests that flush ticks synchronously in one
+  // batch could hide this). Read the latest sample from the ref instead.
   useEffect(() => {
-    if (!callId || !qualityStats) return;
+    if (!callId) return;
 
     const socket = meeshySocketIOService.getSocket();
     const interval = setInterval(() => {
+      const stats = qualityStatsRef.current;
+      if (!stats) return;
       socket?.emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, {
         callId,
         stats: {
-          level: qualityStats.level,
+          level: stats.level,
           // ?? right-hand sides are unreachable: newStats always populates every field.
-          rtt: qualityStats.rtt ?? /* istanbul ignore next */ 0,
-          packetLoss: qualityStats.packetLoss ?? /* istanbul ignore next */ 0,
-          bitrate: qualityStats.bitrate ?? /* istanbul ignore next */ { audio: 0, video: 0 },
-          jitter: qualityStats.jitter ?? /* istanbul ignore next */ 0,
-          timestamp: qualityStats.timestamp ?? /* istanbul ignore next */ new Date(),
-          bytesSent: qualityStats.bytesSent ?? /* istanbul ignore next */ 0,
-          bytesReceived: qualityStats.bytesReceived ?? /* istanbul ignore next */ 0,
+          rtt: stats.rtt ?? /* istanbul ignore next */ 0,
+          packetLoss: stats.packetLoss ?? /* istanbul ignore next */ 0,
+          bitrate: stats.bitrate ?? /* istanbul ignore next */ { audio: 0, video: 0 },
+          jitter: stats.jitter ?? /* istanbul ignore next */ 0,
+          timestamp: stats.timestamp ?? /* istanbul ignore next */ new Date(),
+          bytesSent: stats.bytesSent ?? /* istanbul ignore next */ 0,
+          bytesReceived: stats.bytesReceived ?? /* istanbul ignore next */ 0,
         },
       });
     }, 10_000);
 
     return () => clearInterval(interval);
-  }, [callId, qualityStats]);
+  }, [callId]);
 
   return {
     qualityStats,

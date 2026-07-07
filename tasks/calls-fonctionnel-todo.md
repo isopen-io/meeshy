@@ -1696,3 +1696,75 @@ avant tout fix — toujours vrai, aucun commit entre-temps ne l'avait traité.
   session ; pas de nouvelle zone candidate identifiée côté client par l'agent d'exploration pour ce tour.
 - **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, `negotiate()` guard `makingOffer`
   spéculatif, threading complet du `ttl` TURN à travers tous les événements call (voir Vague 20 item 4).
+
+## Vague 23 — gap protocole `version` sur 2 sites `initiateCall` (gateway) + `call:quality-report` web jamais réellement émis (2026-07-07)
+
+Point d'entrée : routine calling-feature. `git log` confirme aucun commit sur les fichiers gateway/web
+calling depuis `b4b5a8a1` (Vague 20, déjà mergé sur `main` — cette branche pointait déjà sur le même
+commit que `origin/main`). Deux agents d'exploration dédiés (gateway, web — lecture seule, mandatés à
+falsifier tout candidat contre ce fichier + `lessons.md` avant de rapporter) lancés en parallèle.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallService.initiateCall()` — les deux écritures
+  terminales de nettoyage pré-initiate (phantom-cleanup cross-conversation, `CallService.ts:773-781`, et
+  nettoyage zombie same-conversation, `:824-832`) ne bumpaient PAS `version`, contrairement à TOUS les
+  autres writers terminaux du fichier (`forceEndOrphanedCallSession`, `updateCallStatus`,
+  `joinCallAttempt`, `leaveCall` (les 2 branches), `endCall`, `markCallAsMissed`) qui portent tous
+  explicitement le commentaire "terminal write protocol : tout writer terminal DOIT bumper `version`,
+  même un writer gardé par statut plutôt que par version — sinon un writer version-gardé qui a lu la ligne
+  juste avant peut encore matcher son `version` périmé et écraser cet état terminal juste après". Ces deux
+  sites précèdent probablement l'introduction du protocole (ils ne s'appellent pas `forceEndX`, donc
+  invisibles aux sweeps "grep tous les `forceEnd*`" des vagues 13/15/17/19/20) et le commentaire de test
+  existant (`CallService.test.ts:112`, "Version-guarded writes (updateCallStatus/initiateCall zombie
+  cleanup) default to 'lock won'") montre que l'équipe elle-même les considère déjà comme faisant partie
+  de la famille version-gardée — confirmant un oubli, pas un choix. Scénario concret : un appel
+  fantôme/zombie (par définition à clients peu fiables — exactement les scénarios de churn déjà chassés
+  dans ce backlog) est force-terminé par un de ces deux sweeps sans bump de version ; un writer légitime
+  concurrent sur le MÊME appel (retry `call:leave`/`call:end` en retard, `updateCallStatus` déclenché par
+  une SDP-answer tardive, ou le callback de ringing-timeout) qui a lu la ligne un instant plus tôt détient
+  encore l'ancienne version inchangée et son propre `updateMany` version-gardé réussit — écrasant l'état
+  terminal qui vient d'être écrit (mauvais `endReason`/`duration`/`endedAt`, un 2e `call:ended`
+  contradictoire, voire une résurrection vers un statut non-terminal via `updateCallStatus`). Exactement la
+  classe de bug "résurrection version-guard" que le protocole existe pour fermer.
+  **Fix** : `version: { increment: 1 }` ajouté aux deux `data` des `updateMany`, miroir exact des autres
+  writers terminaux. **Tests TDD** : assertion `version` ajoutée au test existant `should cleanup zombie
+  call before initiating new call` + nouveau test dédié `phantom cleanup: bumps version on the terminal
+  write` (capture les args du `tx.callSession.updateMany` mocké). RED confirmé (`git stash` du seul fix
+  source → les 2 échouent, `data` sans `version`), GREEN restauré. Suite `CallService.test.ts` : 178/178
+  (+1). Suite gateway filtrée sur les 31 fichiers `*[Cc]all*` (via `bunx jest --testPathPatterns`, `bun
+  test` natif crashe sur un module NAPI sans rapport avec ce diff — `uv_async_init` non supporté par le
+  runtime bun sur cet hôte, contournement : passer par `bunx jest`) : 31/31 suites, 864/864 tests verts
+  (863 + 1 nouveau). `tsc --noEmit` gateway : 0 erreur.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ]** `apps/web/hooks/use-call-quality.ts` — l'effet qui arme
+  l'intervalle 10s d'émission de `CLIENT_EVENTS.CALL_QUALITY_REPORT` dépendait de `[callId, qualityStats]`.
+  Or `qualityStats` est un NOUVEL objet à chaque tick du monitoring (`updateInterval`, 2000ms pour le seul
+  appelant réel `VideoCallInterface.tsx`) — chaque changement de référence démonte et recrée le
+  `setInterval` de 10s, qui n'a donc jamais l'occasion de survivre jusqu'à son propre déclenchement (un
+  timer de 10s armé à T est toujours nettoyé à T+2s avant de pouvoir tirer). **Conséquence : le client web
+  n'émettait jamais réellement `call:quality-report` en production**, ce qui rend inopérants côté web à la
+  fois le suivi `qualityDegradedStreaks` du gateway (tout le sujet du leak-fix de la Vague 15 — sans objet
+  pour web puisque l'entrée n'est jamais créée) et la télémétrie "data/qualité réseau" persistée sur le
+  résumé d'appel que les commentaires du code attribuent explicitement à cet event. **Pourquoi ça a survécu
+  aux tests** : le test existant (`emits CALL_QUALITY_REPORT every 10s`) fait un seul
+  `jest.advanceTimersByTime(10_000)` — les fake timers de Jest déclenchent tous les callbacks dus en un
+  seul batch synchrone, sans laisser React re-rendre/reflow les effets entre chaque tick de 2s ; l'effet
+  dépendant de `qualityStats` n'est donc recréé qu'UNE fois pendant tout le test au lieu de 5 fois comme en
+  production réelle — artefact de fake-timer identique en substance à l'"illusory coverage" déjà documenté
+  côté iOS (source-grep) mais ici une variante timer JS. Le contraste : `use-adaptive-degradation.ts`
+  documente et gère EXPLICITEMENT la même sémantique "nouvel objet à chaque tick" via un `lastSampleRef`
+  plutôt que comme dépendance d'effet nue — preuve que le pattern était compris ailleurs dans le fichier
+  voisin, juste raté ici. **Fix** : nouveau `qualityStatsRef` (mis à jour à chaque render, miroir du
+  pattern `actionsRef` déjà utilisé dans `use-adaptive-degradation.ts`) ; l'effet d'émission ne dépend plus
+  que de `[callId]` et lit `qualityStatsRef.current` à l'intérieur du callback d'intervalle. **Test TDD**
+  (`use-call-quality.test.ts`) : nouveau cas qui avance le temps par pas de 1s (`updateInterval` par défaut)
+  dans des `act()` SÉPARÉS (donc avec un vrai flush de rendu/effet entre chaque tick, contrairement à
+  l'ancien test single-shot) — reproduit exactement la fenêtre de production. RED confirmé (`git stash` du
+  seul fix source → 0 appel à `emit` après 10×1s), GREEN restauré. Suite `use-call-quality.test.ts` :
+  40/40 (+1). Suite web filtrée `*[Cc]all*`/`*webrtc*`/`*quality*` : 21 suites, 428/428 tests verts (+1 vs
+  Vague 20). `tsc --noEmit` web : 1513 erreurs avant/après (identique, confirmé par comparaison directe
+  `git stash`), aucune nouvelle.
+- **iOS (lecture seule, aucun changement)** : non audité cette session au-delà de la confirmation qu'aucun
+  commit iOS n'a touché les fichiers d'appel depuis la Vague 20 (pas de toolchain Swift/Xcode dans cet
+  environnement Linux).
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call (`forceEndCall` room Socket.IO résolu par la Vague 22 ci-dessus).
