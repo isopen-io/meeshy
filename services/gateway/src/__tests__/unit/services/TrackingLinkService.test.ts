@@ -241,6 +241,22 @@ describe('createTrackingLink', () => {
     );
   });
 
+  it('succeeds when the final (10th) candidate is the first unique one', async () => {
+    // 9 collisions then a free token: the last of the maxAttempts=10 candidates
+    // must still be validated and returned, not discarded with a spurious error.
+    const findUnique = jest.fn();
+    for (let i = 0; i < 9; i++) findUnique.mockResolvedValueOnce(LINK_FIXTURE); // collide 9×
+    findUnique.mockResolvedValueOnce(null); // 10th candidate is free
+    const create = jest.fn().mockResolvedValue(LINK_FIXTURE);
+    const prisma = makePrisma({ trackingLink: { findUnique, create } });
+    const svc = new TrackingLinkService(prisma);
+
+    await expect(svc.createTrackingLink({ originalUrl: 'https://x.com' })).resolves.toBeDefined();
+
+    expect(findUnique).toHaveBeenCalledTimes(10); // all 10 candidates checked
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   it('sets shortUrl as /l/<token>', async () => {
     const create = jest.fn().mockResolvedValue(LINK_FIXTURE);
     const prisma = makePrisma({ trackingLink: { findUnique: jest.fn().mockResolvedValue(null), create } });
