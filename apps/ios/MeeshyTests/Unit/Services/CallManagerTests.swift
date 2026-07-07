@@ -2132,19 +2132,31 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
         )
     }
 
-    func test_endCurrentAndAnswerPending_clearsPendingInsideTask() throws {
+    /// Superseded 2026-07-07 (Finding 1 fix): `pendingIncomingCall` is now
+    /// cleared SYNCHRONOUSLY at the top of `endCurrentAndAnswerPending`,
+    /// before `endCall()` runs — not inside the settle Task. This is a
+    /// *stronger* re-entrancy guard than the original (which cleared it only
+    /// after the Task completed 0.5s later): a second `endCurrentAndAnswerPending()`
+    /// call during that window now sees `pendingIncomingCall == nil` immediately
+    /// and no-ops via its own leading guard, instead of racing to re-read a
+    /// value that was still populated. Revalidation-before-answering is now
+    /// the dedicated `answeringPendingCallId` token's job (see
+    /// `test_endCurrentAndAnswerPending_revalidatesPendingBeforeAnswering`).
+    func test_endCurrentAndAnswerPending_clearsPendingSynchronouslyBeforeEndCall() throws {
         let source = try callManagerSource()
         guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
             XCTFail("endCurrentAndAnswerPending not found"); return
         }
-        guard let taskRange = body.range(of: "Task {") else {
-            XCTFail("Task { not found in endCurrentAndAnswerPending"); return
+        guard let clearRange = body.range(of: "pendingIncomingCall = nil"),
+              let endCallRange = body.range(of: "endCall()") else {
+            XCTFail("Expected pendingIncomingCall to be cleared before endCall()"); return
         }
-        let insideTask = String(body[taskRange.lowerBound...])
-        XCTAssertTrue(
-            insideTask.contains("pendingIncomingCall = nil"),
-            "pendingIncomingCall must be cleared INSIDE the Task, after handleIncomingCallNotification, " +
-            "to avoid a second endCurrentAndAnswerPending() racing with the first"
+        XCTAssertLessThan(
+            clearRange.lowerBound,
+            endCallRange.lowerBound,
+            "pendingIncomingCall must be cleared BEFORE endCall() runs, so a re-entrant " +
+            "endCurrentAndAnswerPending() call during the settle sleep no-ops immediately " +
+            "via its own leading guard rather than racing on a still-populated value."
         )
     }
 
