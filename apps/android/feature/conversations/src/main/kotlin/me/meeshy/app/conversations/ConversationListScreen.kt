@@ -68,6 +68,7 @@ import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
+import me.meeshy.ui.component.CollapsibleSection
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.chrome.FloatingGradientFab
@@ -176,17 +177,54 @@ fun ConversationListScreen(
                         onRefresh = viewModel::refresh,
                         modifier = Modifier.fillMaxSize(),
                     ) {
+                        val pinned = state.conversations.filter { it.preferences?.isPinned == true }
+                        val others = state.conversations.filterNot { it.preferences?.isPinned == true }
+                        val row: @Composable (ApiConversation) -> Unit = { conversation ->
+                            ConversationRow(
+                                conversation = conversation,
+                                currentUserId = state.currentUserId,
+                                onClick = { onConversationClick(conversation.id) },
+                                onTogglePin = { viewModel.togglePin(conversation.id) },
+                                onToggleMute = { viewModel.toggleMute(conversation.id) },
+                                onToggleArchive = { viewModel.toggleArchive(conversation.id) },
+                                onMarkRead = { viewModel.markRead(conversation.id) },
+                            )
+                        }
+                        // Sections (parity iOS): Épingles first, then Mes conversations.
+                        // Section bodies compose eagerly (few items on a real account);
+                        // revisit for lazy paging if a user has hundreds of threads.
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(state.conversations, key = { it.id }) { conversation ->
-                                ConversationRow(
-                                    conversation = conversation,
-                                    currentUserId = state.currentUserId,
-                                    onClick = { onConversationClick(conversation.id) },
-                                    onTogglePin = { viewModel.togglePin(conversation.id) },
-                                    onToggleMute = { viewModel.toggleMute(conversation.id) },
-                                    onToggleArchive = { viewModel.toggleArchive(conversation.id) },
-                                    onMarkRead = { viewModel.markRead(conversation.id) },
-                                )
+                            if (pinned.isNotEmpty()) {
+                                item(key = "section-pinned") {
+                                    CollapsibleSection(
+                                        title = stringResource(R.string.conversations_section_pinned),
+                                        count = pinned.size,
+                                        iconContainerColor = MeeshyPalette.Error,
+                                        icon = {
+                                            Icon(
+                                                Icons.Filled.PushPin,
+                                                contentDescription = null,
+                                                tint = MeeshyPalette.White,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        },
+                                    ) { pinned.forEach { row(it) } }
+                                }
+                            }
+                            item(key = "section-all") {
+                                CollapsibleSection(
+                                    title = stringResource(R.string.conversations_section_all),
+                                    count = others.size,
+                                    iconContainerColor = MeeshyPalette.Indigo500,
+                                    icon = {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.Chat,
+                                            contentDescription = null,
+                                            tint = MeeshyPalette.White,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    },
+                                ) { others.forEach { row(it) } }
                             }
                         }
                     }
