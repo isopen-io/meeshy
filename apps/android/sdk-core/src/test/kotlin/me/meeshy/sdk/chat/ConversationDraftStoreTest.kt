@@ -142,6 +142,24 @@ class ConversationDraftStoreTest {
     }
 
     @Test
+    fun dataStore_round_trips_the_reply_reference_alongside_the_text() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d6.preferences_pb")), json)
+        val replyDraft = ConversationDraft(
+            conversationId = "c1",
+            text = "re: salut",
+            updatedAt = "2026-07-07T12:00:00Z",
+            replyToId = "m1",
+        )
+
+        store.save(replyDraft)
+
+        assertThat(store.load("c1")).isEqualTo(replyDraft)
+
+        scope.cancel()
+    }
+
+    @Test
     fun dataStore_clear_removes_only_the_targeted_conversation() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d4.preferences_pb")), json)

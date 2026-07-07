@@ -662,7 +662,28 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `chat-draft-autosave`** — per-conversation text draft auto-save/restore is now
+**Just shipped (2026-07-07): `chat-draft-reply-ref`** — the persisted draft now carries its reply reference so a
+half-typed (or freshly-armed) reply survives leaving and reopening the conversation (iOS app-side `DraftStore`
+reply-reference parity). `ConversationDraft` gained a nullable `replyToId`. Pure `:feature:chat` `DraftAutosave`
+was extended: a draft is now *meaningful* when it holds text **or** an armed reply, so a reply armed on an empty
+composer is persisted (rather than dropped) and cancelling that reply on an empty composer purges the draft; the
+reference is normalised (trim/blank→null); `resolve` still writes nothing when text **and** reply are both
+unchanged. `restore` now returns a `DraftRestore(text, replyToId)` snapshot (null = leave the composer untouched)
+that re-arms a reply-only draft with empty text or a half-typed reply with both — still idle-guarded (never
+clobbers an in-flight edit or already-typed text). `ChatViewModel` persists the reply on `startReply`/`cancelReply`
+(alongside the existing `onDraftChange`/`send` writes) and re-arms `replyingToMessageId` on open; the durable
+DataStore store round-trips the reference. +16 tests (`DraftAutosaveTest` +10 reply-branch: armed-empty / text+reply
+/ trim+blank-drop / only-reply-changes / identical-none / cancel-clears-reply-only / drop-reply-keeps-text +
+restore re-arm / both / trim+blank / neither→null; `ChatViewModelTest` +5: arm persists ref, type-under-reply
+persists text+ref, stored reply re-arms on open, cancel-on-empty purges, send purges; `ConversationDraftStoreTest`
++1 durable reply round-trip). `assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3; the lone
+`InterfaceLanguageStoreTest` DataStore-timeout flake passed on isolated re-run — unrelated to drafts). Reviewer:
+PASS (diff apps/android only; behaviour-through-public-API, no tautologies, boundary coverage on the meaningful/
+identical/normalise branches; SDK-purity honoured — the "when a reply counts as a draft" product decision is a pure
+atom in `:feature:chat`, the model carrier is `:core:model`, the bytes are `:sdk-core`; UDF immutable snapshot on
+restore, cache-first re-arm on open, no dead end — the re-armed reply is sendable/cancellable).
+
+**Earlier — `chat-draft-autosave` (2026-07-07)** — per-conversation text draft auto-save/restore is now
 live (Chat parity §C "Draft auto-save/restore"). The orphan `ConversationDraft` model is wired end-to-end: pure
 `:feature:chat` `DraftAutosave` (blank purges / non-blank saves raw / unchanged writes nothing; restore seeds an
 idle empty composer only, never clobbering an in-flight edit or already-typed text) + durable `:sdk-core`
@@ -1233,6 +1254,40 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-07 — slice `chat-draft-reply-ref` ✅ (reviewer PASS)
+- **Slice:** persist the reply reference alongside the per-conversation draft (Chat parity §C "Draft
+  auto-save/restore … + reply"; iOS app-side `DraftStore` stores the reply reference next to the text). After
+  `chat-draft-autosave` only the text survived navigation — a reply armed (or half-typed under a reply) was lost.
+  Now the reply survives leaving and reopening the conversation, and the composer re-arms the reply pill on open.
+- **Model (`:core:model`, `ConversationDraft.kt`):** added `replyToId: String? = null` (serialised, back-compat —
+  a legacy payload with no field decodes to `null`).
+- **Pure core (`:feature:chat`, `DraftAutosave.kt`):** `resolve` gained a `replyToId` param and now treats a
+  draft as *meaningful* when `rawText.isNotBlank() || reply != null` — so a reply armed on an **empty** composer is
+  `Save`d (text `""` + reference) instead of dropped, and cancelling a reply on an empty composer `Clear`s a
+  reply-only stored draft; the reference is normalised (trim, blank→`null`); the idempotent `None` now requires
+  **both** text and reply unchanged. `restore` return type changed `String?` → `DraftRestore(text, replyToId)?`
+  (null = leave the composer untouched): re-arms a reply-only draft (empty text + reply) or a half-typed reply
+  (both), normalising the stored reference; still idle-guarded (never clobbers an in-flight edit or already-typed
+  text; a draft with neither text nor reply → `null`). New `data class DraftRestore`.
+- **Wiring (`:feature:chat`, `ChatViewModel`):** `persistDraft(rawText, replyToId)` now threads the armed reply;
+  `startReply` persists after arming (only on the found-message success path), `cancelReply` persists after
+  clearing, `onDraftChange`/`send` pass the current/`null` reply. `init` restore sets both `draft` and
+  `replyingToMessageId` from the `DraftRestore` snapshot; `lastPersistedDraft` seed now counts a reply-only stored
+  draft as meaningful. The composer reply pill derives reactively from `replyingToMessageId` + loaded messages, so
+  no `ChatScreen` change — the pill re-appears once messages load (non-dead-end).
+- **Tests (+16):** `DraftAutosaveTest` (+10) — reply arms: armed-empty-persisted, text+reply-persisted,
+  trim+blank-drop, only-reply-changes-still-saves, identical-text+reply-None, cancel-on-empty-clears-reply-only,
+  drop-reply-keeps-text; restore: re-arm-reply-only, both-text-and-reply, trim+blank-ref, neither→null. (Existing
+  text-only `resolve`/`restore` tests ported to the richer API, none weakened.) `ChatViewModelTest` (+5) —
+  arming-persists-ref, typing-under-reply-persists-text+ref, stored-reply-re-arms-on-open, cancel-on-empty-purges,
+  send-purges-reply-draft. `ConversationDraftStoreTest` (+1) — durable DataStore round-trips the reference.
+- **Verify:** system `gradle assembleDebug testDebugUnitTest` (943 tasks) green. One flake
+  (`InterfaceLanguageStoreTest` DataStore `TimeoutCancellationException` under full parallel load) passed on
+  isolated re-run — unrelated to this diff (interface-language store, not drafts). Reviewer gate: **PASS** — diff
+  `apps/android` only; behaviour through the public API; no tautologies; boundary coverage on the meaningful /
+  identical / normalise branches; SDK-purity honoured (decision in `:feature:chat`, carrier in `:core:model`,
+  bytes in `:sdk-core`); UDF immutable restore snapshot; cache-first re-arm.
 
 ### 2026-07-07 — slice `chat-draft-autosave` ✅ (reviewer PASS)
 - **Slice:** per-conversation text draft auto-save/restore (Chat parity §C "Draft auto-save/restore"; iOS
