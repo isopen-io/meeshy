@@ -1,5 +1,38 @@
 # Audit 360° — Sous-systeme Appels Audio/Video Meeshy
 
+> **Statut au 2026-07-07** (session `claude/loving-thompson-l09qhh`, pas d'acces
+> Xcode/simulateur ni SSH prod dans cet environnement) :
+> - **Re-sweep complet des P0/P1** via 5 agents Explore paralleles (lifecycle/
+>   audio/CallKit iOS, WebRTC/codec/UI/gateway, gateway securite/authz) contre
+>   le code actuel de `main`. Resultat identique au 2026-07-04/05 : **tout est
+>   FIXED sauf P0-1, P1-11, et P1-13 (partiel)** — aucune regression, aucun
+>   nouveau P0/P1 trouve.
+> - **P1-16** : confirme deja FIXE sur `main` (commit `c97aa4ed`, poursuivi par
+>   un agent concurrent au-dela de mon propre correctif candidat identique —
+>   `CallEffectsOverlay` recoit aussi `callManager` du parent desormais, plus
+>   nettoyage de code mort `colorScheme`/`isDark`). Mon brouillon de fix
+>   local pour ce meme point a ete abandonne (deja present, evite un doublon).
+> - **P0-1 — ATTENTION pour les prochaines sessions** : j'ai commence a
+>   reimplementer le pattern template+sed (`turnserver.prod.conf` + substitution
+>   `TURN_SECRET` a l'entrypoint coturn de `docker-compose.prod.yml`), verifie
+>   syntaxiquement (`docker compose config --quiet`) et fonctionnellement (script
+>   shell isole, 4 cas testes). **Avant de pousser, j'ai trouve que ce pattern
+>   exact avait deja ete tente (commit `71b4b64a`) puis delibarement revert** —
+>   voir `docs/superpowers/specs/2026-05-11-docker-compose-prod-reconciliation-design.md`
+>   §8.2 : `config/turnserver.prod.conf` **n'existe pas sur le serveur prod reel**,
+>   et le chemin relatif y resout incorrectement une fois deploye. Reintroduire
+>   ce pattern sans d'abord deposer le fichier template + faire la rotation de
+>   secret **cote serveur (SSH)** casserait le demarrage de coturn (pire que
+>   l'etat actuel : secret errone silencieux → aujourd'hui calls degradent vers
+>   STUN-only ; apres ce "fix" mal coordonne → coturn ne demarre plus du tout).
+>   **J'ai annule mon brouillon avant de commiter.** P0-1 reste, comme documente
+>   le 2026-07-04/05, une tache necessitant un humain avec acces prod SSH pour
+>   coordonner : rotation du secret + depot de `config/turnserver.prod.conf` sur
+>   `/opt/meeshy/production/` + ce meme diff compose, en un seul changement
+>   atomique cote serveur ET repo.
+> - **Aucun changement de code pousse cette session** — rien de surete et non
+>   deja fait n'a ete trouve dans le perimetre accessible sans Xcode/SSH prod.
+>
 > **Statut au 2026-07-04** : verification systematique des 5 P0 + 18 P1
 > contre `main` (branche `claude/eager-hamilton-nykzoy`). **4/5 P0 et 28/31
 > P1 sont fixes** (deux mois de commits `fix(ios/calls)`/`feat(calls)`
