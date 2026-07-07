@@ -177,8 +177,8 @@ fun ConversationListScreen(
                         onRefresh = viewModel::refresh,
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        val pinned = state.conversations.filter { it.preferences?.isPinned == true }
-                        val others = state.conversations.filterNot { it.preferences?.isPinned == true }
+                        val pinned = state.conversations.filter { it.resolvedPreferences?.isPinned == true }
+                        val others = state.conversations.filterNot { it.resolvedPreferences?.isPinned == true }
                         val row: @Composable (ApiConversation) -> Unit = { conversation ->
                             ConversationRow(
                                 conversation = conversation,
@@ -300,7 +300,7 @@ private fun ConversationRow(
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
 ) {
-    val prefs = conversation.preferences
+    val prefs = conversation.resolvedPreferences
     val isPinned = prefs?.isPinned == true
     val isMuted = prefs?.isMuted == true
     val isArchived = prefs?.isArchived == true

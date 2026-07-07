@@ -72,4 +72,36 @@ class ConversationAccentTest {
 
         assertThat(direct.displayTitle(currentUserId = "me")).isEqualTo("Conversation")
     }
+
+    @Test
+    fun `resolvedPreferences reads the server userPreferences row`() {
+        val conv = ApiConversation(
+            id = "c7",
+            userPreferences = listOf(ApiConversationPreferences(isPinned = true, customName = "Sany")),
+        )
+
+        assertThat(conv.resolvedPreferences?.isPinned).isTrue()
+        assertThat(conv.resolvedPreferences?.customName).isEqualTo("Sany")
+    }
+
+    @Test
+    fun `resolvedPreferences lets an optimistic override win over the server row`() {
+        val conv = ApiConversation(
+            id = "c8",
+            preferences = ApiConversationPreferences(isPinned = false),
+            userPreferences = listOf(ApiConversationPreferences(isPinned = true)),
+        )
+
+        assertThat(conv.resolvedPreferences?.isPinned).isFalse()
+    }
+
+    @Test
+    fun `displayTitle uses the customName from userPreferences`() {
+        val conv = ApiConversation(
+            id = "c9",
+            userPreferences = listOf(ApiConversationPreferences(customName = "Sany")),
+        )
+
+        assertThat(conv.displayTitle()).isEqualTo("Sany")
+    }
 }

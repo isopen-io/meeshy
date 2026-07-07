@@ -144,7 +144,7 @@ class ConversationListViewModel @Inject constructor(
     }
 
     private fun prefsOf(id: String) =
-        rawConversations.firstOrNull { it.id == id }?.preferences
+        rawConversations.firstOrNull { it.id == id }?.resolvedPreferences
 
     /**
      * Runs an optimistic preference mutation and schedules an outbox flush only

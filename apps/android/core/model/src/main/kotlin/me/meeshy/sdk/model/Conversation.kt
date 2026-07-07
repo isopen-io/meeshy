@@ -24,8 +24,17 @@ data class ApiConversation(
     val autoTranslateEnabled: Boolean? = null,
     val isActive: Boolean? = null,
     val preferences: ApiConversationPreferences? = null,
+    val userPreferences: List<ApiConversationPreferences> = emptyList(),
 ) {
     val memberCount: Int get() = participants.size
+
+    /**
+     * The effective per-user preferences. The gateway sends the signed-in user's
+     * row as `userPreferences[0]`; [preferences] is only ever set locally by an
+     * optimistic mutation, so an in-flight override wins over the server value.
+     */
+    val resolvedPreferences: ApiConversationPreferences?
+        get() = preferences ?: userPreferences.firstOrNull()
 }
 
 @Serializable

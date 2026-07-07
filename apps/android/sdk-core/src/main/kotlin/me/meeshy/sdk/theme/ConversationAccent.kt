@@ -30,7 +30,7 @@ private val directConversationTypes = setOf("direct", "dm")
  */
 fun ApiConversation.displayTitle(currentUserId: String? = null): String {
     title?.takeIf { it.isNotBlank() }?.let { return it }
-    preferences?.customName?.takeIf { it.isNotBlank() }?.let { return it }
+    resolvedPreferences?.customName?.takeIf { it.isNotBlank() }?.let { return it }
     if (type.lowercase() in directConversationTypes) {
         otherParticipantName(currentUserId)?.let { return it }
     }
