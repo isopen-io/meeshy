@@ -486,7 +486,7 @@ describe('LocationHandler', () => {
   // =========================================================================
 
   describe('anonymous user handling', () => {
-    it('uses participantId for anonymous users', async () => {
+    it('verifies the session participant belongs to the target conversation', async () => {
       const anonUser = createMockUser({
         id: 'anon-token',
         isAnonymous: true,
@@ -506,7 +506,39 @@ describe('LocationHandler', () => {
       await handler.handleLocationShare(socket, data as any, callback);
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-      expect(mockPrisma.participant.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.participant.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: 'anon-participant-1',
+            conversationId: NORMALIZED_ID,
+            isActive: true,
+          }),
+        })
+      );
+    });
+
+    it('rejects an anonymous participant not belonging to the target conversation', async () => {
+      mockPrisma.participant.findFirst.mockResolvedValue(null);
+      const anonUser = createMockUser({
+        id: 'anon-token',
+        isAnonymous: true,
+        participantId: 'anon-participant-1',
+      });
+      connectedUsers.set('anon-token', anonUser);
+      socketToUser.set('anon-socket', 'anon-token');
+
+      const callback = jest.fn();
+      const socket = createMockSocket('anon-socket');
+      const data = {
+        conversationId: CONVERSATION_ID,
+        latitude: 48.8566,
+        longitude: 2.3522,
+      };
+
+      await handler.handleLocationShare(socket, data as any, callback);
+
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Not a participant in this conversation' });
+      expect(mockIO.emit).not.toHaveBeenCalled();
     });
   });
 });
