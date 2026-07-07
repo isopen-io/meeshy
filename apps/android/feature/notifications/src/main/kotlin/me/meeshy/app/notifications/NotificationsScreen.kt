@@ -159,7 +159,7 @@ private fun NotificationItem(
                     )
                 }
                 Text(
-                    text = notification.state.createdAt,
+                    text = notificationTimeLabel(notification.state.createdAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MeeshyTheme.tokens.textMuted,
                 )
