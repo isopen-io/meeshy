@@ -151,10 +151,8 @@ fun ConversationListScreen(
         ) {
             ConnectionBannerStrip(state.banner)
             header()
-            ConversationFilterBar(
-                selected = state.selectedFilter,
-                onSelect = viewModel::selectFilter,
-            )
+            // iOS parity: no Material filter chips on the conversation list — the
+            // filter state stays (defaults to ALL) but the chip row is not rendered.
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     state.showSkeleton -> SkeletonList()
