@@ -91,6 +91,63 @@ class TypingParticipantsTest {
     }
 
     @Test
+    fun started_carries_the_resolved_avatar_url_onto_the_participant() {
+        val next = TypingParticipants.started(
+            emptyList(),
+            userId = "u1",
+            name = "Alice",
+            avatarUrl = "https://cdn/alice.png",
+        )
+
+        assertThat(next.single().avatarUrl).isEqualTo("https://cdn/alice.png")
+    }
+
+    @Test
+    fun started_normalises_a_blank_avatar_url_to_null() {
+        val next = TypingParticipants.started(
+            emptyList(),
+            userId = "u1",
+            name = "Alice",
+            avatarUrl = "   ",
+        )
+
+        assertThat(next.single().avatarUrl).isNull()
+    }
+
+    @Test
+    fun started_trims_surrounding_whitespace_from_the_avatar_url() {
+        val next = TypingParticipants.started(
+            emptyList(),
+            userId = "u1",
+            name = "Alice",
+            avatarUrl = "  alice.png  ",
+        )
+
+        assertThat(next.single().avatarUrl).isEqualTo("alice.png")
+    }
+
+    @Test
+    fun started_refreshes_a_stale_avatar_when_the_same_user_types_again() {
+        val current = listOf(TypingParticipant("u1", "Alice", avatarUrl = null))
+
+        val next = TypingParticipants.started(
+            current,
+            userId = "u1",
+            name = "Alice",
+            avatarUrl = "alice.png",
+        )
+
+        assertThat(next.single().avatarUrl).isEqualTo("alice.png")
+    }
+
+    @Test
+    fun started_defaults_the_avatar_url_to_null_when_omitted() {
+        val next = TypingParticipants.started(emptyList(), userId = "u1", name = "Alice")
+
+        assertThat(next.single().avatarUrl).isNull()
+    }
+
+    @Test
     fun stopped_removes_the_matching_user() {
         val current = listOf(participant("u1", "Alice"), participant("u2", "Bob"))
 

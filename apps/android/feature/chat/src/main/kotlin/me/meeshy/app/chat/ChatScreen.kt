@@ -220,14 +220,23 @@ fun ChatScreen(
                                     modifier = Modifier.padding(start = MeeshySpacing.sm),
                                 )
                             }
-                            ChatHeaderSubtitleRow(
-                                subtitle = ChatHeaderSubtitle.of(
-                                    memberCount = state.memberCount,
-                                    isGroup = state.isGroup,
-                                    typing = state.typingParticipants,
-                                ),
-                                accentColor = accentColor,
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                            ) {
+                                TypingAvatarCluster(
+                                    stack = TypingAvatarStack.of(state.typingParticipants),
+                                    accentColor = accentColor,
+                                )
+                                ChatHeaderSubtitleRow(
+                                    subtitle = ChatHeaderSubtitle.of(
+                                        memberCount = state.memberCount,
+                                        isGroup = state.isGroup,
+                                        typing = state.typingParticipants,
+                                    ),
+                                    accentColor = accentColor,
+                                )
+                            }
                         }
                     },
                     navigationIcon = {
@@ -717,6 +726,58 @@ private fun ChatHeaderSubtitleRow(subtitle: ChatHeaderSubtitle, accentColor: Col
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.padding(start = MeeshySpacing.md),
     )
+}
+
+/**
+ * Overlapping avatar chips of who is composing, shown in the header beside the typing
+ * subtitle (iOS parity — avatars, not just the name). The count and truncation are
+ * decided by the pure [TypingAvatarStack]; this only overlaps the chips and renders a
+ * "+N" pill for the overflow. Each chip carries a surface-coloured ring so the overlap
+ * reads cleanly; avatars degrade to accent-tinted initials.
+ */
+@Composable
+private fun TypingAvatarCluster(stack: TypingAvatarStack, accentColor: Color) {
+    if (stack.visible.isEmpty()) return
+    val ringColor = MeeshyTheme.tokens.backgroundPrimary
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy((-6).dp),
+    ) {
+        stack.visible.forEach { chip ->
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(ringColor)
+                    .padding(1.5.dp),
+            ) {
+                MeeshyAvatar(name = chip.name, size = 20.dp, containerColor = accentColor)
+            }
+        }
+        if (stack.overflow > 0) {
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(ringColor)
+                    .padding(1.5.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(MeeshyTheme.tokens.backgroundSecondary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "+${stack.overflow}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+            }
+        }
+    }
 }
 
 private fun unreadPreviewIcon(kind: UnreadPreviewKind): ImageVector? = when (kind) {

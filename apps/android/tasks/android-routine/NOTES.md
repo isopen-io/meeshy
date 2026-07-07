@@ -3,6 +3,19 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-07 (`chat-typing-header-avatars`): resolve socket-payload gaps from the roster the VM already holds,
+  and cover the flaky-suite timeout.** The `typing:start` `TypingEvent` carries no avatar, so the header-avatar
+  chip's URL has to come from the conversation participants. The `ChatViewModel` conversation collector already
+  builds `mentionRoster`/`recipientCount` from `conversation.participants`; add one more derived field
+  (`avatarByUserId = participants.associate { (it.userId ?: it.id) to it.avatar }`) and read it in the typing
+  collector — no new stream, no new repo. Keep the "how many chips + overflow" decision a pure `:core`-style
+  atom (`TypingAvatarStack.of`, in `:feature:chat`), test every cap branch incl. zero/negative → all-overflow,
+  and leave the overlap/ring render as exempt Compose glue. **Flaky-suite gotcha:** a *full*
+  `gradle assembleDebug testDebugUnitTest` occasionally fails `:sdk-core`
+  `NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` with a 5000 ms
+  `TimeoutCancellationException` — it's a real DataStore-backed test whose 5 s `first()` wait starves under the
+  parallel-module test load, **not** a regression. Re-run that single test/module in isolation to confirm green
+  (it passes in ~4 s), then re-run the full suite; don't chase it as a slice failure.
 - **2026-07-07 (`chat-edit-time-window`): a time source is already in the Hilt graph — inject it, don't
   `System.currentTimeMillis()` inside a ViewModel.** `SdkModule.providesCacheClock()` binds `CacheClock`
   (`@Singleton`), so a VM that needs "now" can add `private val clock: CacheClock` to its `@Inject constructor`

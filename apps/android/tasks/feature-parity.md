@@ -451,8 +451,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       direct chat shows nothing; **typing supersedes the member count** (iOS `ConversationHeaderState`
       typing-dot parity), and a non-positive count never renders "0 members". `ChatViewModel` now exposes
       `memberCount`/`isGroup`; `ChatScreen` renders the subtitle under the title (typing in `accentColor`,
-      members in `textSecondary`) (slice `chat-typing-header`, 2026-07-07, +11 tests). **Pending:** avatar
-      chips.
+      members in `textSecondary`) (slice `chat-typing-header`, 2026-07-07, +11 tests). **Header avatar chips
+      now live** — pure `:feature:chat` `TypingAvatarStack.of(participants, maxVisible=3) → visible chips +
+      overflow count` SSOT (roster-order, cap-truncation, `+N` overflow, negative/zero cap → all overflow),
+      with `TypingParticipant` extended to carry a roster-resolved `avatarUrl` (blank→null); `ChatViewModel`
+      builds an `avatarByUserId` map from the conversation participants and resolves each `typing:start`'s
+      avatar (the socket payload carries none), and `ChatScreen` renders overlapping accent-tinted avatar
+      chips beside the subtitle (slice `chat-typing-header-avatars`, 2026-07-07, +20 tests). Closes iOS parity
+      (avatars, not just the name).
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background
