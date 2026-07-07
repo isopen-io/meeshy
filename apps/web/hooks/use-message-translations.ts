@@ -6,6 +6,15 @@ import {
 } from '@/utils/user-language-preferences';
 import { LRUCache } from '@/lib/lru-cache';
 
+const TRANSLATION_MODEL_RANK: Record<TranslationModel, number> = {
+  premium: 3,
+  medium: 2,
+  basic: 1,
+};
+
+const translationModelRank = (model?: string): number =>
+  (model && TRANSLATION_MODEL_RANK[model as TranslationModel]) || 0;
+
 type RawTranslation = {
   targetLanguage?: string;
   language?: string;
@@ -127,11 +136,17 @@ export function useMessageTranslations({
         const content = t.translatedContent || t.content;
         const currentTimestamp = new Date(t.createdAt || message.createdAt);
         
-        // CORRECTION: Améliorer la logique de déduplication des traductions
+        // Dédup ordre-indépendant : la qualité du modèle prime (premium > medium >
+        // basic), la récence ne départage que les ex æquo de qualité. Empêche une
+        // traduction basic/medium plus récente de rétrograder une premium déjà retenue.
         const existingTranslation = translationsMap.get(language ?? '');
+        const currentRank = translationModelRank(t.translationModel);
+        const existingRank = existingTranslation
+          ? translationModelRank(existingTranslation.translationModel)
+          : -1;
         const shouldReplace = !existingTranslation ||
-          currentTimestamp > new Date(existingTranslation.timestamp) ||
-          (t.translationModel === 'premium' && existingTranslation.confidence < 0.95);
+          currentRank > existingRank ||
+          (currentRank === existingRank && currentTimestamp > new Date(existingTranslation.timestamp));
 
         if (shouldReplace) {
           const translation: BubbleTranslation = {
