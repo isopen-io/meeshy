@@ -202,7 +202,7 @@ private fun UserRow(
                         .background(MeeshyPalette.White)
                         .padding(2.dp)
                         .clip(CircleShape)
-                        .background(MeeshyPalette.Success),
+                        .background(MeeshyPalette.Warning), // orange : présent (règle présence)
                 )
             }
         }

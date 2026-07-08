@@ -526,6 +526,103 @@ class ChatViewModelTest {
         assertThat(h.vm.state.value.scrollToMessageId).isNull()
     }
 
+    @Test
+    fun the_pinned_sheet_lists_every_pin_newest_first() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.pinnedMessages.map { it.messageId })
+            .containsExactly("m2", "m1").inOrder()
+    }
+
+    @Test
+    fun opening_the_pinned_sheet_with_pins_shows_it() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.openPinnedSheet()
+
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isTrue()
+    }
+
+    @Test
+    fun opening_the_pinned_sheet_with_nothing_pinned_is_inert() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.openPinnedSheet()
+
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isFalse()
+    }
+
+    @Test
+    fun tapping_a_pinned_row_scrolls_to_it_and_closes_the_sheet() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openPinnedSheet()
+
+        h.vm.onPinnedMessageTap("m1")
+
+        assertThat(h.vm.state.value.scrollToMessageId).isEqualTo("m1")
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isFalse()
+    }
+
+    @Test
+    fun tapping_an_unknown_pinned_row_is_inert() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openPinnedSheet()
+
+        h.vm.onPinnedMessageTap("ghost")
+
+        assertThat(h.vm.state.value.scrollToMessageId).isNull()
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isTrue()
+    }
+
+    @Test
+    fun closing_the_pinned_sheet_dismisses_it() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openPinnedSheet()
+
+        h.vm.closePinnedSheet()
+
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isFalse()
+    }
+
+    @Test
+    fun the_pinned_sheet_auto_closes_when_the_last_pin_drains_while_open() = runTest(dispatcher) {
+        // Standing invariant, not just an open()-time guard: unpinning (self, a peer,
+        // or a deletion) while the sheet is already showing must not leave a dead-end
+        // empty sheet — and must not silently resurrect it on a later, unrelated pin.
+        val stream = MutableStateFlow<CacheResult<List<LocalMessage>>>(
+            CacheResult.Fresh(
+                listOf(
+                    synced(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "first pin", pinnedAt = "2026-07-08T10:00:00Z")),
+                    synced(ApiMessage(id = "m2", conversationId = "c1", senderId = "other", content = "newest pin", pinnedAt = "2026-07-08T11:00:00Z")),
+                ),
+                ageMillis = 0,
+            ),
+        )
+        val h = harness(stream, currentUser = me)
+        advanceUntilIdle()
+        h.vm.openPinnedSheet()
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isTrue()
+
+        // Both pins removed — e.g. a peer unpinned m2 and this user unpinned m1.
+        stream.value = CacheResult.Fresh(
+            listOf(
+                synced(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "first pin", pinnedAt = null)),
+                synced(ApiMessage(id = "m2", conversationId = "c1", senderId = "other", content = "newest pin", pinnedAt = null)),
+            ),
+            ageMillis = 0,
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.pinnedMessages).isEmpty()
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isFalse()
+    }
+
     private fun deletedStream() = flowOf(
         CacheResult.Fresh(
             listOf(

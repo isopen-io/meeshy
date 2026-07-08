@@ -228,11 +228,11 @@ public struct UserIdentityBar: View {
             if state != .offline {
                 HStack(spacing: 4) {
                     Circle()
-                        .fill(state == .online ? MeeshyColors.success : MeeshyColors.warning)
+                        .fill(state == .away ? Color(hex: "9CA3AF") : MeeshyColors.warning)
                         .frame(width: 6, height: 6)
-                    Text(state == .online ? "En ligne" : "Absent")
+                    Text(state == .online ? "En ligne" : (state == .recent ? "Actif récemment" : "Absent"))
                         .font(.system(size: 11))
-                        .foregroundColor(state == .online ? MeeshyColors.success : MeeshyColors.warning)
+                        .foregroundColor(state == .away ? Color(hex: "9CA3AF") : MeeshyColors.warning)
                 }
             }
 

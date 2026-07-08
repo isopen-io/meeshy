@@ -737,7 +737,22 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-08): `chat-pin-toggle`** — the pin/unpin **action**, completing message pinning
+**Just shipped (2026-07-08): `chat-pinned-messages-sheet`** — the pinned-messages **list sheet**, the last
+half of Chat §C "Pin/unpin message". Pure `:feature:chat` `PinnedMessagesList.of(messages) →
+List<PinnedMessageRow>` SSOT lists every pin newest-first, sharing the banner's exact pin predicate /
+snippet / sender projection — `PinnedMessages.of` now derives the banner from `list.first()` + `list.size`
+(one filter/sort, banner and sheet can never diverge). `ChatUiState.pinnedMessages`/`isPinnedSheetOpen` +
+VM `openPinnedSheet` (inert when empty) / `closePinnedSheet` / `onPinnedMessageTap` (scroll-to + close;
+unknown id inert). Banner gains a trailing "see all" affordance (count > 1) opening a `ModalBottomSheet`
+list; each row jumps to its pin. +20 tests. See run log.
+**Recommended next (highest value, Chat §C):**
+- **`chat-forward-message`** — the remaining half of §C send/edit/delete/reply/forward: pure forward-target
+  validation + optimistic send into a chosen conversation.
+- **reply thread overlay** — a focused reply-thread sheet listing a parent's replies (the `ReplyThreads`
+  grouping is already the SSOT; mirror this slice's sheet wiring).
+- **starred/bookmarked messages list** — a distinct §C feature from pins (needs a star/bookmark toggle).
+
+**Earlier (2026-07-08): `chat-pin-toggle`** — the pin/unpin **action**, completing message pinning
 end-to-end on Android. Pure `:core:model` `MessagePinToggle.resolve → PinAction` (Pin | Unpin | Unavailable;
 pinned = non-blank `pinnedAt`, not owner/window-gated, deleted → Unavailable) drives a long-press
 "Épingler"/"Retirer" sheet action → `ChatViewModel.togglePin` → `MessageRepository.setPinnedOptimistic`
@@ -1443,6 +1458,42 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-08 — slice `chat-pinned-messages-sheet` ✅ impl + reviewer PASS
+- **Rule #0 first:** the one open Android PR, **#1722** (`conversations-draft-aware-ordering`), was
+  `mergeable_state: dirty` with **no CI run** (branched off a pre-pin `main`). Investigation showed it is
+  **fully superseded**: `DraftAwareOrdering.kt` and `sdk-core/ConversationDraftStore.kt` on `main` are
+  byte-identical to the branch, and `main` additionally carries `discardDraft` + `DraftDiscard.kt` (a later
+  slice). Merging it would have *removed* `discardDraft` — a regression — so it was **closed as superseded**
+  (comment + close), not merged. No content lost; `main` left green.
+- **Parity:** §C "Pin/unpin message" — the pinned-messages **list sheet** (the banner shows one at a time;
+  the sheet lists every pin, tap-to-jump). iOS parity; Android had only the single-pin banner.
+- **Pure core (TDD, `:feature:chat`):** `PinnedMessagesList.of(messages) → List<PinnedMessageRow>` — every
+  non-deleted, non-blank-`pinnedAt` message, ordered newest-pin first (`sortedByDescending` on parsed epoch;
+  **stable** so equal instants keep list order and an unparseable instant sinks to the end via `Long.MIN_VALUE`).
+  Refactor unifies the SSOT: `PinnedMessages.of` (banner) now = `list.firstOrNull()` featured + `list.size`
+  count, reusing one shared `toRow()`/`snippet()` (trimmed text › Image › File › Empty; blank sender → null).
+  The old `maxByStable` is gone — `sortedByDescending(...).first()` is provably equal (stable sort keeps the
+  first max-key element). Existing `PinnedMessagesTest` (banner) stayed green, proving behaviour preserved.
+  +14 tests (`PinnedMessagesListTest`: empty, no-pin, blank-pin, deleted-excluded, single-field-map, newest-
+  first order, stable ties, unparseable-sinks, text>media, image>file, file-only, empty-preview, blank-sender
+  →null, banner==first+size cross-check).
+- **VM + state:** `ChatUiState.pinnedMessages` (derived) + `isPinnedSheetOpen`; `openPinnedSheet` (inert when
+  nothing pinned — no empty sheet), `closePinnedSheet`, `onPinnedMessageTap` (scroll-to + close; an id not
+  among the pins is inert, never a crash). +6 tests (`ChatViewModelTest`: list-newest-first, open-with-pins,
+  open-empty-inert, tap-row-scrolls+closes, tap-unknown-inert, close-dismisses).
+- **Wiring (exempt Compose glue):** `PinnedBannerStrip` gains a trailing "see all" `IconButton` (shown only
+  when `count > 1`) → `openPinnedSheet`; a new `PinnedMessagesSheet` `ModalBottomSheet` lists the rows (accent
+  pin glyph, sender, snippet, tap → jump), dividers between rows, `heightIn(max = 420.dp)`. New string
+  `chat_pinned_sheet_title` × en/fr/es/pt. Banner tap still jumps to the newest pin (unchanged).
+- **Verify:** `:feature:chat:testDebugUnitTest` — `PinnedMessagesListTest` 14/14, `ChatViewModelTest` 111/111,
+  0 failures; `:app:assembleDebug` green (system Gradle 8.14.3). +20 tests total.
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API (`PinnedMessagesList.of`,
+  `openPinnedSheet`/`onPinnedMessageTap`), no tautologies, boundary coverage on empty/blank/deleted/stable-tie/
+  unparseable/unknown-id/empty-sheet; SDK-purity honoured — the "which pins / how ordered / which preview"
+  product decision is a pure `:feature` atom, the sheet is exempt Compose glue; **SSOT** — banner and sheet
+  derive from one `PinnedMessagesList`; UDF immutable state; accent-coherent; natural tap gesture; no dead end
+  (every row jumps).
 
 ### 2026-07-08 — slice `chat-pinned-banner` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/chat-pinned-banner` (off latest `origin/main`).

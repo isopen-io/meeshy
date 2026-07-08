@@ -503,13 +503,13 @@ private fun statMetricLabel(metric: StatMetric): Int = when (metric) {
     StatMetric.MEMBER_DAYS -> R.string.profile_stat_member_days
 }
 
-/** Presence dot colours (semantic, static per the design system): green online, amber away. */
-private val OnlineIndicator = Color(0xFF34D399)
-private val AwayIndicator = Color(0xFFFBBF24)
+/** Presence dot colours : orange (actif <= 5min), gris (absent 5-30min). */
+private val OnlineIndicator = Color(0xFFFBBF24)
+private val AwayIndicator = Color(0xFF9CA3AF)
 
 /** The dot colour for a resolved presence, or null when no dot should show (offline/unknown). */
 private fun presenceDotColor(state: PresenceState?): Color? = when (state) {
-    PresenceState.ONLINE -> OnlineIndicator
+    PresenceState.ONLINE, PresenceState.RECENT -> OnlineIndicator
     PresenceState.AWAY -> AwayIndicator
     PresenceState.OFFLINE, null -> null
 }

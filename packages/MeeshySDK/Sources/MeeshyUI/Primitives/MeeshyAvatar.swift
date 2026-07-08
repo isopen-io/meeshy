@@ -480,9 +480,9 @@ public struct MeeshyAvatar: View {
 
     private var dotColor: Color {
         switch effectivePresence {
-        case .online: return MeeshyColors.success
-        case .away: return MeeshyColors.warning
-        case .offline: return .clear
+        case .online, .recent: return MeeshyColors.warning // orange : actif <= 5min
+        case .away: return Color(hex: "9CA3AF")            // gris : absent 5-30min
+        case .offline: return .clear                        // aucun dot au-dela de 30min
         }
     }
 

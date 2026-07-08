@@ -34,9 +34,9 @@ public enum class StoryRingState { None, Unread, Read }
  * Pure so it stays unit-testable off Compose. Mirrors iOS `MeeshyAvatar.dotColor`.
  */
 internal fun meeshyPresenceDotColor(presence: PresenceState): Color? = when (presence) {
-    PresenceState.ONLINE -> MeeshyPalette.Success
-    PresenceState.AWAY -> MeeshyPalette.Warning
-    PresenceState.OFFLINE -> null
+    PresenceState.ONLINE, PresenceState.RECENT -> MeeshyPalette.Warning // orange : actif <= 5min
+    PresenceState.AWAY -> MeeshyPalette.Neutral400                      // gris : absent 5-30min
+    PresenceState.OFFLINE -> null                                       // aucun dot au-dela de 30min
 }
 
 /**

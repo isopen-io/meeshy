@@ -439,7 +439,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `PIN_MESSAGE`/`UNPIN_MESSAGE` outbox row on the shared `pin` lane (a pin+unpin of the same message
       annihilates, a repeat supersedes — reuses the block/unblock `terminalToggle` coalescer), a
       `MessageApi.pin`/`unpin` (PUT/DELETE) worker sender, and an `onExhausted` conversation refresh that
-      reconciles a dead flip with server truth. +31 tests. **Pending:** the full pinned-messages list sheet.
+      reconciles a dead flip with server truth. +31 tests. **Pinned-messages list sheet done** (slice
+      `chat-pinned-messages-sheet`, 2026-07-08): the pure `:feature:chat` `PinnedMessagesList.of(messages) →
+      List<PinnedMessageRow>` SSOT lists every currently-pinned message newest-pin first (same pin predicate
+      / snippet / sender projection as the banner — `PinnedMessages.of` now derives the banner from
+      `list.first()` + `list.size`, so banner and sheet can never disagree; stable ties keep list order, an
+      unparseable instant sinks to the end). `ChatUiState.pinnedMessages` + `isPinnedSheetOpen`;
+      `ChatViewModel.openPinnedSheet` (inert when nothing pinned), `closePinnedSheet`, `onPinnedMessageTap`
+      (scroll-to + close; an id not among the pins is inert). The banner grows a trailing affordance (shown
+      only when count > 1) that opens a `ModalBottomSheet` list — each row taps to jump to that pin. +20
+      tests. **Pending:** starred/bookmarked messages list (a distinct feature from pins).
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle + **tap-aperçu → scroll vers l'original**
       (`ReplyJumpResolver`, inerte si original paginé hors écran) + **swipe-to-reply**

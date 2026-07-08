@@ -5,17 +5,22 @@ import me.meeshy.sdk.model.PresenceState
 import me.meeshy.ui.theme.MeeshyPalette
 import org.junit.Test
 
-/** Parity plan §4.3: the presence dot maps online→green, away→warning, offline→no dot. */
+/** Presence dot rule (parity web/iOS): online+recent → orange, away → gray, offline → no dot. */
 class MeeshyAvatarTest {
 
     @Test
-    fun `online presence is the success green`() {
-        assertThat(meeshyPresenceDotColor(PresenceState.ONLINE)).isEqualTo(MeeshyPalette.Success)
+    fun `online presence is the orange warning colour`() {
+        assertThat(meeshyPresenceDotColor(PresenceState.ONLINE)).isEqualTo(MeeshyPalette.Warning)
     }
 
     @Test
-    fun `away presence is the warning colour`() {
-        assertThat(meeshyPresenceDotColor(PresenceState.AWAY)).isEqualTo(MeeshyPalette.Warning)
+    fun `recent presence is the orange warning colour`() {
+        assertThat(meeshyPresenceDotColor(PresenceState.RECENT)).isEqualTo(MeeshyPalette.Warning)
+    }
+
+    @Test
+    fun `away presence is the neutral gray`() {
+        assertThat(meeshyPresenceDotColor(PresenceState.AWAY)).isEqualTo(MeeshyPalette.Neutral400)
     }
 
     @Test

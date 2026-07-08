@@ -36,6 +36,7 @@
     <string name="chat_unread_attachment">Adjunto</string>
     <string name="chat_unread_new_message">Nuevo mensaje</string>
     <string name="chat_pinned_title">Mensaje fijado</string>
+    <string name="chat_pinned_sheet_title">Mensajes fijados</string>
     <string name="chat_pinned_count">%1$d mensajes fijados</string>
     <string name="chat_pinned_message">Mensaje fijado</string>
     <string name="chat_pinned_you">Tú</string>
