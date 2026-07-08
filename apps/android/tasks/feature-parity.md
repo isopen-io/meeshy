@@ -313,7 +313,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       « Vous » pour soi) + unread badge + **draft preview** done (slice
       `conversations-draft-aware-ordering`, 2026-07-07 : `draftPreview` accent-teinté
       « Brouillon : … » prime sur le last-message quand un brouillon utile existe ;
-      reply-only → préfixe + « … ») ; ephemeral/expired/hidden/view-once/
+      reply-only → préfixe + « … ») ; **discard-draft** done (slice
+      `conversations-draft-discard`, 2026-07-08 : action contextuelle « Supprimer le
+      brouillon » offerte seulement sur une ligne portant un brouillon *utile* — pure
+      `DraftDiscard.isDiscardable`/`afterDiscard` `:feature:conversations` + effacement
+      optimiste `ConversationListViewModel.discardDraft` (retrait immédiat de l'état,
+      `draftStore.clear`, rollback si échec) ; la ligne perd son aperçu et redescend
+      sous le groupe flottant) ; ephemeral/expired/hidden/view-once/
       typing, activity-heat, tags, presence/story-ring/mood pending
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,

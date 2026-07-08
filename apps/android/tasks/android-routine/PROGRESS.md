@@ -662,7 +662,15 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-08): `conversations-cold-start-error-card`** — the conversation-list empty arms
+**Just shipped (2026-07-08): `conversations-draft-discard`** — a contextual "Discard draft" action
+(long-press menu, offered only on a draft-bearing row) backed by a pure `DraftDiscard.isDiscardable`/
+`afterDiscard` SSOT + optimistic `ConversationListViewModel.discardDraft` (instant state removal,
+`draftStore.clear`, rollback on failure). The row loses its "Brouillon : …" preview and sinks out of the
+floated group immediately; the reactive `observeAll` collector reconciles the durable store. +12 tests.
+See run log. **Recommended next:** `conversations-communities-carousel` / §B "Communities carousel +
+category filter chips" (larger), or move into Profile/Settings §K/§L follow-ups.
+
+**Earlier — `conversations-cold-start-error-card`** — the conversation-list empty arms
 (Error / FilteredEmpty / ColdEmpty) rendered as a bare `CenteredMessage` (secondary label + plain retry
 button); iOS shows an iconified card (glyph + title + subtitle + Réessayer). New pure
 `:feature:conversations` `EmptyStateVisual.of(content): EmptyStateVisual?` SSOT maps each non-list
@@ -1317,6 +1325,57 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-08 — slice `conversations-draft-discard` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/conversations-draft-discard`
+- **Parity:** §B draft lifecycle — the conversation list floated draft-bearing rows and
+  showed a "Brouillon : …" preview, but a stale/unwanted draft could only be cleared by
+  reopening the conversation and deleting the text. Added a **discard-draft** affordance so a
+  draft can be thrown away straight from the list, and verified the draft *mutation* round-trip
+  (a draft cleared in the store re-orders the list reactively via the existing `observeAll`
+  collector).
+- **Added (production):**
+  - `DraftDiscard.kt` (`:feature:conversations`, pure SSOT) — `isDiscardable(id, draftsById)`
+    (offer the action **only** when the row holds a *meaningful* draft — the shared
+    `ConversationDraft.isMeaningful` rule that also floats/previews it) + `afterDiscard(id,
+    draftsById)` (removes the entry when present, returns the **same instance** when absent so a
+    no-op discard never forces a recomposition; removes even a persisted non-meaningful entry).
+  - `ConversationListViewModel.discardDraft(id)` — snapshot → gate on `isDiscardable` (inert
+    otherwise) → optimistic `afterDiscard` + `withVisible` (row loses its preview and sinks out
+    of the floated group instantly) → `draftStore.clear(id)` in `viewModelScope`
+    (`CancellationException` rethrown; a failed clear rolls the optimistic removal back and
+    surfaces `errorMessage`). `draftStore` promoted to a stored field.
+  - `ConversationListScreen` — long-press context menu gains a **"Discard draft"** item
+    (`DeleteSweep` glyph), rendered only when `draft?.isMeaningful == true`; threaded
+    `onDiscardDraft` + `hasDraft` down through `ConversationRow`/`ConversationRowContent`.
+    4 new strings × 4 locales (en/fr/es/pt).
+- **Tests:** +8 `DraftDiscardTest` (discardable: meaningful text / reply-only armed; not
+  discardable: absent / blank-non-reply; afterDiscard: removes only that entry / same-instance
+  when absent / removes persisted non-meaningful / last-draft→empty) ; +4
+  `ConversationListViewModelTest` (discard clears preview + sinks the row + clears the durable
+  store; optimistic feedback before the store settles; inert on a non-meaningful draft — store
+  untouched, no error; unknown conversation id changes nothing).
+- **Edge cases covered:** empty / single / last-entry maps; absent + unknown ids (inert);
+  meaningful vs blank vs reply-only; idempotent no-op discard (same instance); optimistic
+  update + rollback-on-failure; cancellation-safe `viewModelScope` work.
+- **UX note (deviation, justified):** iOS surfaces discard via swipe, but the list's two swipe
+  directions are already committed to pin (StartToEnd) / archive (EndToStart) — the primary list
+  swipes. Rather than overload a swipe, discard lives in the existing long-press context menu
+  (also a natural gesture), shown contextually only for draft-bearing rows. Coherent with the
+  pin/mute/archive/mark-read menu already there; no swipe-direction conflict.
+- **Verify:** `:feature:conversations:testDebugUnitTest` green; full `assembleDebug` +
+  `testDebugUnitTest` across modules → all green **except** the documented
+  `NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` DataStore
+  5s-timeout flake (in `:sdk-core`, untouched by this diff), which passes on isolated re-run
+  (`BUILD SUCCESSFUL in 4s`).
+- **Reviewer:** PASS — diff `apps/android` (only `:feature:conversations`) only; behaviour
+  through the public API, no tautologies, near-total branch coverage on the pure rule + both
+  gate/rollback VM paths; SDK-purity honoured (the "when can you discard / what remains" product
+  decision is a pure atom in `:feature:conversations`; the `ConversationDraftStore.clear` byte
+  op stays the `:sdk-core` seam; the menu render is exempt Compose glue); single source of truth
+  (`isMeaningful`); Instant-App (optimistic removal + rollback, no spinner); UDF immutable state,
+  pure transitions; accent-coherent list, natural long-press gesture, no dead end (discard leaves
+  a coherent, draft-free row).
 
 ### 2026-07-08 — slice `conversations-empty-state-content` ✅ impl + reviewer PASS (merged)
 - **Parity:** §B "Cold-start skeletons + error-with-retry empty state". Both renders (skeleton + error+retry card)

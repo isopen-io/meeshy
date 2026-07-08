@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.MarkChatRead
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Notifications
@@ -71,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.CollapsibleSection
@@ -168,6 +170,7 @@ fun ConversationListScreen(
                                 onToggleMute = { viewModel.toggleMute(conversation.id) },
                                 onToggleArchive = { viewModel.toggleArchive(conversation.id) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
+                                onDiscardDraft = { viewModel.discardDraft(conversation.id) },
                             )
                         }
                         // Sections (parity iOS): Épingles first, then Mes conversations.
@@ -307,6 +310,7 @@ private fun ConversationRow(
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onDiscardDraft: () -> Unit,
 ) {
     val prefs = conversation.resolvedPreferences
     val isPinned = prefs?.isPinned == true
@@ -348,6 +352,7 @@ private fun ConversationRow(
             onToggleMute = onToggleMute,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
+            onDiscardDraft = onDiscardDraft,
         )
     }
 }
@@ -366,6 +371,7 @@ private fun ConversationRowContent(
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onDiscardDraft: () -> Unit,
 ) {
     val title = conversation.displayTitle(currentUserId)
     var menuExpanded by remember { mutableStateOf(false) }
@@ -469,10 +475,12 @@ private fun ConversationRowContent(
             isMuted = isMuted,
             isArchived = isArchived,
             hasUnread = conversation.unreadCount > 0,
+            hasDraft = draft?.isMeaningful == true,
             onTogglePin = onTogglePin,
             onToggleMute = onToggleMute,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
+            onDiscardDraft = onDiscardDraft,
         )
     }
 }
@@ -485,10 +493,12 @@ private fun ConversationContextMenu(
     isMuted: Boolean,
     isArchived: Boolean,
     hasUnread: Boolean,
+    hasDraft: Boolean,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onDiscardDraft: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
@@ -525,6 +535,13 @@ private fun ConversationContextMenu(
                 text = { Text(stringResource(R.string.conversations_action_mark_read)) },
                 leadingIcon = { Icon(Icons.Filled.MarkChatRead, contentDescription = null) },
                 onClick = { onMarkRead(); onDismiss() },
+            )
+        }
+        if (hasDraft) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_discard_draft)) },
+                leadingIcon = { Icon(Icons.Filled.DeleteSweep, contentDescription = null) },
+                onClick = { onDiscardDraft(); onDismiss() },
             )
         }
         DropdownMenuItem(
