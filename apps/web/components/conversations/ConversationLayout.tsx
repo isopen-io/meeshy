@@ -233,8 +233,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   // Activer les notifications push FCM
   useFCMNotifications({ autoSyncToken: true });
 
-  // Sync Socket.IO events avec le cache React Query
-  useSocketCacheSync({ conversationId: effectiveSelectedId, enabled: !!effectiveSelectedId });
+  // Sync Socket.IO events avec le cache React Query — reste actif sur la vue
+  // liste (sans sélection) pour que lastMessage/unread et les caches de messages
+  // continuent d'être alimentés par les événements socket.
+  useSocketCacheSync({ conversationId: effectiveSelectedId, enabled: true });
   useInvalidateOnReconnect();
   useAutoRetryFailedMessages();
 

@@ -7,6 +7,7 @@ import { conversationsService } from '@/services/conversations.service';
 import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { useConversationsPaginationRQ } from '@/hooks/queries/use-conversations-pagination-rq';
+import { useSocketCacheSync } from '@/hooks/queries';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 
 // Mock next/dynamic to return components directly without lazy loading
@@ -443,6 +444,12 @@ describe('ConversationLayout', () => {
 
       expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     });
+
+    it('should keep socket cache sync enabled on the list view (no conversation selected)', () => {
+      render(<ConversationLayout />);
+
+      expect(useSocketCacheSync).toHaveBeenCalledWith({ conversationId: null, enabled: true });
+    });
   });
 
   describe('With Selected Conversation', () => {
@@ -461,6 +468,12 @@ describe('ConversationLayout', () => {
       render(<ConversationLayout />);
 
       expect(screen.getByTestId('conversation-header')).toBeInTheDocument();
+    });
+
+    it('should keep socket cache sync enabled with the selected conversation id', () => {
+      render(<ConversationLayout />);
+
+      expect(useSocketCacheSync).toHaveBeenCalledWith({ conversationId: 'conv-1', enabled: true });
     });
 
     it('should render conversation messages when conversation selected', () => {

@@ -458,6 +458,59 @@ describe('useSocketCacheSync', () => {
     });
   });
 
+  describe('List view — conversationId: null, enabled: true', () => {
+    it('still updates the conversation list caches (lastMessage + reorder) on message:new', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      const otherConversation = { ...mockConversation, id: 'conv-2', title: 'Other' } as Conversation;
+      queryClient.setQueryData(['conversations', 'list', undefined], [otherConversation, mockConversation]);
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [otherConversation, mockConversation], pagination: { total: 2, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
+
+      const newMessage = createMockMessage('msg-new', 'From the list view', 'conv-1');
+      act(() => {
+        newMessageCallback?.(newMessage);
+      });
+
+      const listCache = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[];
+      expect(listCache[0].id).toBe('conv-1');
+      expect(listCache[0].lastMessage?.id).toBe('msg-new');
+
+      const infiniteCache = queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: { conversations: Conversation[] }[];
+      };
+      const orderedIds = infiniteCache.pages.flatMap((p) => p.conversations.map((c) => c.id));
+      expect(orderedIds[0]).toBe('conv-1');
+      expect(infiniteCache.pages[0].conversations[0].lastMessage?.id).toBe('msg-new');
+    });
+
+    it('still writes into an existing messages cache entry on message:new', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
+
+      const newMessage = createMockMessage('msg-new', 'While browsing the list', 'conv-1');
+      act(() => {
+        newMessageCallback?.(newMessage);
+      });
+
+      const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      expect(cachedData.pages[0].messages[0].id).toBe('msg-new');
+      expect(cachedData.pages[0].messages).toHaveLength(3);
+    });
+  });
+
   describe('Message Edited Handler', () => {
     it('should update edited message in cache', () => {
       const { wrapper, queryClient } = createWrapperWithClient();

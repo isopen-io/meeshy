@@ -10,7 +10,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useEffect } from 'react';
-import { useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useQueryClient, useInfiniteQuery, useIsRestoring, focusManager } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { apiService } from '@/services/api.service';
@@ -54,6 +54,10 @@ export interface ConversationMessagesRQReturn {
   markMessageFailed: (tempId: string) => void;
   removeOptimisticMessage: (tempId: string) => void;
 }
+
+const CATCH_UP_PAGE_LIMIT = 50;
+const CATCH_UP_MAX_PAGES = 5;
+const FOCUS_CATCH_UP_DEBOUNCE_MS = 1_000;
 
 // Instance du service anonyme (créée à la demande)
 let anonymousChatServiceInstance: AnonymousChatService | null = null;
@@ -519,11 +523,74 @@ export function useConversationMessagesRQ(
     });
   }, [queryClient, conversationId, queryKey]);
 
-  // Sync messages missed during a socket disconnection gap.
-  // Fires when the socket transitions false → true (reconnect), not on initial mount.
-  // Uses the `after` watermark to fetch only messages newer than the local cache's
-  // newest entry — avoids the destructive full-page replacement that caused the
-  // "message appears then disappears" regression (see refetchOnReconnect: false comment).
+  // Non-destructive catch-up: fetch only messages newer than the newest cached
+  // entry (`after` watermark) and prepend the genuinely-new ones. A full refetch()
+  // REPLACES the cached pages and can drop socket-added messages (see the
+  // refetchOnWindowFocus: false comment above) — this path never does that,
+  // except as a last-resort fallback when the gap exceeds CATCH_UP_MAX_PAGES pages.
+  const syncInFlightRef = useRef(false);
+
+  const syncNewerMessages = useCallback(async () => {
+    if (!conversationId || linkId || syncInFlightRef.current) return;
+
+    const cached = queryClient.getQueryData<typeof data>(queryKey);
+    if (!cached) return;
+
+    const newestCreatedAtMs = (messages: Message[]): number =>
+      messages.reduce((max, m) => {
+        const t = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+        return t > max ? t : max;
+      }, 0);
+
+    let watermarkMs = newestCreatedAtMs(cached.pages.flatMap(p => p.messages));
+    if (watermarkMs === 0) return;
+
+    syncInFlightRef.current = true;
+    try {
+      for (let iteration = 0; iteration < CATCH_UP_MAX_PAGES; iteration++) {
+        const after = new Date(watermarkMs).toISOString();
+        const result = await conversationsService.getMessages(
+          conversationId, 1, CATCH_UP_PAGE_LIMIT, null, undefined, after
+        );
+        const missed = result.messages ?? [];
+        if (missed.length === 0) return;
+
+        const current = queryClient.getQueryData<typeof data>(queryKey);
+        if (!current) return;
+
+        const cachedIds = new Set(current.pages.flatMap(p => p.messages.map(m => m.id)));
+        const genuinelyNew = missed.filter(m => !cachedIds.has(m.id));
+        if (genuinelyNew.length > 0) {
+          queryClient.setQueryData(queryKey, (old: typeof data) => {
+            if (!old) return old;
+            return {
+              ...old,
+              pages: old.pages.map((page, i) =>
+                i === 0
+                  ? { ...page, messages: [...genuinelyNew, ...page.messages] }
+                  : page
+              ),
+            };
+          });
+        }
+
+        const hasMore = result.hasMore === true || missed.length === CATCH_UP_PAGE_LIMIT;
+        if (!hasMore) return;
+
+        const newestFetchedMs = newestCreatedAtMs(missed);
+        if (newestFetchedMs <= watermarkMs) break;
+        watermarkMs = newestFetchedMs;
+      }
+      await refetch();
+    } catch {
+      // Silent — socket events will carry new messages going forward
+    } finally {
+      syncInFlightRef.current = false;
+    }
+  }, [conversationId, linkId, queryClient, queryKey, refetch]);
+
+  // Trigger 1 — socket reconnect: catch up on messages missed during the
+  // disconnection gap. Fires on the false → true edge only, not on initial mount.
   const { isSocketConnected } = useConnectionStatus();
   const prevSocketConnectedRef = useRef<boolean | null>(null);
 
@@ -532,49 +599,44 @@ export function useConversationMessagesRQ(
     prevSocketConnectedRef.current = isSocketConnected;
 
     const isReconnect = prev === false && isSocketConnected === true;
-    if (!isReconnect || !conversationId || linkId) return;
+    if (!isReconnect) return;
 
-    const sync = async () => {
-      const cached = queryClient.getQueryData<typeof data>(queryKey);
-      if (!cached) return;
+    void syncNewerMessages();
+  }, [isSocketConnected, syncNewerMessages]);
 
-      const allCached = cached.pages.flatMap(p => p.messages);
-      if (allCached.length === 0) return;
+  // Trigger 2 — conversation open/mount: the socket may already be connected
+  // (no reconnect edge) while the cached entry is stale. Waits for the async
+  // IndexedDB cache restore (useIsRestoring) so an F5 doesn't race the persister;
+  // cold opens (no cache entry) are handled by the initial queryFn fetch.
+  const isRestoring = useIsRestoring();
 
-      const newestMs = allCached.reduce((max, m) => {
-        const t = m.createdAt ? new Date(m.createdAt).getTime() : 0;
-        return t > max ? t : max;
-      }, 0);
-      if (newestMs === 0) return;
+  useEffect(() => {
+    if (isRestoring || !enabled || !conversationId || linkId) return;
+    if (!queryClient.getQueryData(queryKey)) return;
 
-      try {
-        const after = new Date(newestMs).toISOString();
-        const result = await conversationsService.getMessages(conversationId, 1, 50, null, undefined, after);
-        const missed = result.messages ?? [];
-        if (missed.length === 0) return;
+    void syncNewerMessages();
+  }, [isRestoring, enabled, conversationId, linkId, queryClient, queryKey, syncNewerMessages]);
 
-        const cachedIds = new Set(allCached.map(m => m.id));
-        const genuinelyNew = missed.filter(m => !cachedIds.has(m.id));
-        if (genuinelyNew.length === 0) return;
+  // Trigger 3 — window focus: safety net replacing the destructive
+  // refetchOnWindowFocus (disabled above). Debounced so rapid tab switches
+  // coalesce into one catch-up.
+  useEffect(() => {
+    if (!enabled || !conversationId || linkId) return;
 
-        queryClient.setQueryData(queryKey, (old: typeof data) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page, i) =>
-              i === 0
-                ? { ...page, messages: [...genuinelyNew, ...page.messages] }
-                : page
-            ),
-          };
-        });
-      } catch {
-        // Silent — socket events will carry new messages going forward
-      }
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = focusManager.subscribe((focused) => {
+      if (!focused) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void syncNewerMessages();
+      }, FOCUS_CATCH_UP_DEBOUNCE_MS);
+    });
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribe();
     };
-
-    sync();
-  }, [isSocketConnected, conversationId, linkId, queryClient, queryKey]);
+  }, [enabled, conversationId, linkId, syncNewerMessages]);
 
   return {
     messages,
