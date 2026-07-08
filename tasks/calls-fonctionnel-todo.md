@@ -2181,3 +2181,42 @@ seule, mandatés à croiser tout candidat contre ce fichier + `lessons.md`.
   device réel), C6 (court-circuit dédup cosmétique), CALL-DIAG retagging, threading complet du `ttl` TURN
   à travers tous les événements call, `call:force-leave` server-emit ambiguïté (voir ci-dessus), 5 findings
   iOS structurels listés ci-dessus (nécessitent Xcode).
+
+## Vague 29 — 4 des 8 findings iOS UI/accessibilité de la Vague 28 corrigés mécaniquement (lecture seule, toujours pas de toolchain Swift) (2026-07-08)
+
+Toujours pas de Swift/Xcode dans cet environnement — seuls les 4 findings de la Vague 28 qui sont des
+édits mécaniques, à un seul fichier, vérifiables intégralement par lecture (renommage de paramètre,
+changement de constante numérique, déplacement de modifier) ont été appliqués. Les 2 restants (route
+`switchCamera`/`toggleSpeaker` optimiste, tests source-reflection `CallManagerTests`) et le finding
+landscape/Dynamic-Type d'`IncomingCallView`/`CallWaitingBannerView` (nécessite un nouveau pattern
+`verticalSizeClass` jamais utilisé ailleurs dans la codebase — pas un simple mirroring, donc hors
+scope sans compilateur pour vérifier le layout réel) restent des follow-ups Xcode.
+
+- **[FIX RÉEL, iOS, mécanique] `BubbleCallNoticeView`/`CallSummaryDetailSheet` hardcodaient
+  `MeeshyColors.indigo500`** au lieu de recevoir l'accent de la conversation — violation de la règle
+  documentée (`apps/ios/CLAUDE.md` "Conversation Accent Color" : tout composant conversation-context DOIT
+  utiliser `accentColor`, jamais une couleur codée en dur). Fix : nouveau paramètre `accentHex: String`
+  (mirroring exact de `BubbleQuotedReply.accentHex`), threadé dans `CallNoticePresentation.tint` (cas
+  `.completed`), `callBackButton`, `qualityRow`/`detailRow` (icônes). `ThemedMessageBubble.swift:200`
+  passe désormais `accentHex: contactColor` (même valeur que tous les autres sous-composants Bubble).
+  `qualityColor` (indigo400 pour le palier "bonne" qualité réseau) intentionnellement PAS touché — c'est
+  une échelle sémantique à 4 paliers (excellent/bonne/moyenne/faible), pas une teinte de conversation.
+- **[FIX RÉEL, iOS, mécanique] `CallsTab.CallRowDialButton` (40×40pt) et les filter chips (~27-30pt de
+  haut) sous le tap target minimum HIG (44×44pt).** Fix : `CallRowDialButton.frame` 40→44 ; les chips
+  gardent leur taille visuelle (padding horizontal 14/vertical 7 inchangé) mais gagnent
+  `.frame(minHeight: 44).contentShape(Rectangle())` pour élargir la zone tactile sans changer l'esthétique
+  du pill compact.
+- **[FIX RÉEL, iOS, mécanique] `CallsTab.CallJournalRow`'s `.accessibilityElement(children: .combine)`
+  groupait TOUTE la ligne (bouton nom/avatar + `CallRowDialButton`) en un seul élément VoiceOver** — le
+  menu "Rappeler" (avec son propre `accessibilityLabel`/`Hint`) devenait inatteignable, absorbé dans le
+  libellé combiné de la ligne. Fix : le `.accessibilityElement(children: .combine)` +
+  `.accessibilityLabel` (+ le `.contentShape(Rectangle())` associé) sont maintenant scopés au seul
+  `Button(action: onTap)` (nom/avatar/direction) ; `CallRowDialButton` reste un élément VoiceOver séparé
+  et atteignable, hors du HStack combiné.
+- **[FIX RÉEL, iOS, mécanique] `CallDetailSheet`/`CallSummaryDetailSheet` sans plafond de largeur
+  iPad/Mac** — sur une fenêtre large, les `Spacer()` des `redialButtons`/`detailRow`/`callBackButton`
+  s'étirent bord à bord au lieu de rester un enregistrement centré et lisible. Fix : mirroring du
+  plafond déjà établi par `FloatingCallPillView` (560pt) — `.frame(maxWidth: 560).frame(maxWidth:
+  .infinity)` sur le VStack de contenu des deux sheets (cap puis centrage explicite, indépendant du
+  comportement par défaut du `ScrollView` sur l'axe perpendiculaire). Pleine largeur inchangée sur
+  iPhone (<560pt).
