@@ -1084,6 +1084,43 @@ describe('RedisDeliveryQueue (memory/Redis reconciliation)', () => {
     expect(internalMap.has('user-recon')).toBe(false);
   });
 
+  test('drain — replays events in FIFO enqueuedAt order when a later edit fell back to memory after its `new` reached Redis', async () => {
+    // A transient Redis blip BETWEEN two enqueues for the SAME message: the
+    // `new` reached Redis while it was healthy, then the follow-up `edited`
+    // fell back to memory when Redis briefly errored. Memory-first concatenation
+    // would replay `edited` before `new` — the recipient's client drops an edit
+    // for a message it hasn't received yet. They must replay in enqueue order.
+    const newEntry = makePayload({
+      messageId: 'M',
+      eventType: 'new',
+      enqueuedAt: '2026-01-01T00:00:00.000Z',
+    });
+    const editedEntry = makePayload({
+      messageId: 'M',
+      eventType: 'edited',
+      enqueuedAt: '2026-01-01T00:00:01.000Z',
+    });
+
+    const healthyRedis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
+    const failingRedis = makeMockRedis({ eval: jest.fn().mockRejectedValue(new Error('conn reset')) });
+    const recoveredRedis = makeMockRedis({ eval: jest.fn().mockResolvedValue([JSON.stringify(newEntry)]) });
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(healthyRedis)   // enqueue `new` → Redis
+      .mockReturnValueOnce(failingRedis)   // enqueue `edited` → memory fallback
+      .mockReturnValue(recoveredRedis);    // drain once Redis is back
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-order', newEntry);
+    await queue.enqueue('user-order', editedEntry);
+
+    const drained = await queue.drain('user-order');
+
+    expect(drained.map(e => e.eventType ?? 'new')).toEqual(['new', 'edited']);
+    expect(drained.map(e => e.messageId)).toEqual(['M', 'M']);
+  });
+
   test('cleanup — expires memory-queued entries even when Redis is reachable, instead of leaving them until process restart', async () => {
     const staleDuringOutage = makePayload({
       messageId: 'stale-during-outage',

@@ -21,6 +21,12 @@ struct CallDetailSheet: View {
                 details
             }
             .padding(20)
+            // iPad/Mac width cap — mirrors FloatingCallPillView's established
+            // 560pt ceiling: without it, `redialButtons`/`detailRow`'s Spacer()
+            // stretch edge-to-edge on a wide sheet instead of reading as a
+            // centered, compact record. Full width on iPhone (<560pt).
+            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity)
         }
         .background(theme.backgroundPrimary.ignoresSafeArea())
         .presentationDetents([.medium, .large])

@@ -60,6 +60,18 @@ describe('attachments i18n', () => {
     expect(body).toContain('+1🎵');
     expect(body).toContain('📷 Foto');
   });
+  it('roule Ko → Mo au bord du mébioctet (jamais "1024 Ko")', () => {
+    // 1_048_500 o < 1 Mio mais /1024 = 1023.93 → .toFixed(0) rendait "1024 Ko".
+    // Le tier doit basculer sur la valeur ARRONDIE, comme formatCallDataSize.
+    const label = formatSingleAttachmentLabelI18n('fr', { type: 'audio', fileSize: 1_048_500 });
+    expect(label).not.toContain('1024 Ko');
+    expect(label).toContain('1.0 Mo');
+  });
+  it('garde les Ko sous le bord de rollover', () => {
+    // 500_000 / 1024 = 488.28 → "488 Ko" (aucune régression du tier Ko).
+    expect(formatSingleAttachmentLabelI18n('fr', { type: 'audio', fileSize: 500_000 }))
+      .toContain('488 Ko');
+  });
 });
 
 function makeContentHarness(usersById: Record<string, any>) {

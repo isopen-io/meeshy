@@ -591,6 +591,16 @@ struct RootView: View {
                     onReject: { callManager.rejectPendingCall() },
                     onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
                 )
+                // Audit Vague 27 — a 3rd caller superseding a 2nd (still
+                // pending) one overwrites `pendingIncomingCall` in place
+                // without ever setting `showCallWaitingBanner` back to
+                // false-then-true, so SwiftUI reused this view's identity:
+                // `onAppear`'s 15s auto-dismiss Task (armed for the 2nd
+                // caller) kept counting down unchanged and auto-rejected the
+                // 3rd caller ~5-10s early. Keying identity to the pending
+                // call forces a remount (fresh `onAppear`/timer) on every
+                // supersession.
+                .id(callManager.pendingIncomingCall?.callId)
                 .padding(.top, MeeshySpacing.sm)
             }
         }

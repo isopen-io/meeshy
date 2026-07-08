@@ -884,6 +884,79 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun arming_a_reply_persists_the_reply_reference_to_the_durable_store() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.startReply("m1")
+        advanceUntilIdle()
+
+        val stored = h.draftStore.load("c1")
+        assertThat(stored?.replyToId).isEqualTo("m1")
+        assertThat(stored?.text).isEmpty()
+    }
+
+    @Test
+    fun typing_under_an_armed_reply_persists_text_alongside_the_reply_reference() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.startReply("m1")
+        h.vm.onDraftChange("re: salut")
+        advanceUntilIdle()
+
+        val stored = h.draftStore.load("c1")
+        assertThat(stored?.text).isEqualTo("re: salut")
+        assertThat(stored?.replyToId).isEqualTo("m1")
+    }
+
+    @Test
+    fun a_stored_reply_draft_re_arms_the_reply_when_the_conversation_opens() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf(
+                "c1" to ConversationDraft(conversationId = "c1", text = "re: salut", replyToId = "m1"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("re: salut")
+        assertThat(h.vm.state.value.replyingToMessageId).isEqualTo("m1")
+    }
+
+    @Test
+    fun cancelling_a_reply_on_an_empty_composer_purges_the_stored_draft() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf("c1" to ConversationDraft(conversationId = "c1", text = "", replyToId = "m1")),
+        )
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.replyingToMessageId).isEqualTo("m1")
+
+        h.vm.cancelReply()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.replyingToMessageId).isNull()
+        assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
+    fun sending_a_reply_purges_the_persisted_reply_draft() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        h.vm.startReply("m1")
+        h.vm.onDraftChange("re: salut")
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
     fun startEdit_and_startReply_are_mutually_exclusive() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()

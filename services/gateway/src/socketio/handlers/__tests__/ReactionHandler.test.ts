@@ -236,6 +236,35 @@ describe('ReactionHandler', () => {
       ]));
     });
 
+    it('replies idempotent success without broadcasting or notifying when addReaction reports unchanged (no-op re-react)', async () => {
+      // A duplicate reaction:add for an emoji the participant already has
+      // (optimistic double-fire, socket retry after a lost ACK, second device
+      // echo) is a DB no-op. The handler must reply success but skip both the
+      // REACTION_ADDED broadcast and the author notification — otherwise every
+      // participant gets a redundant fan-out and the author is re-notified for
+      // a reaction that never changed. Mirrors the already-absent remove guard.
+      const { notifyReactionAdded } = require('../../../services/notifications/reactionNotify');
+      const { handler, io } = buildHandler({
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({
+            reaction: { id: 'reaction-1', emoji: '👍' },
+            replacedEmojis: [],
+            unchanged: true,
+          }),
+          createUpdateEvent: jest.fn<any>(),
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: { id: 'reaction-1', emoji: '👍' } }));
+      // Nothing changed — no broadcast to the conversation room, no notification.
+      expect(io.to).not.toHaveBeenCalled();
+      expect(notifyReactionAdded).not.toHaveBeenCalled();
+    });
+
     it('returns error on service exception without crashing', async () => {
       const { handler } = buildHandler({
         reactionService: { addReaction: jest.fn<any>().mockRejectedValue(new Error('db down')), createUpdateEvent: jest.fn<any>() },

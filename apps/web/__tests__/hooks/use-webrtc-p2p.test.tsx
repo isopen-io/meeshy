@@ -305,6 +305,25 @@ describe('useWebRTCP2P', () => {
       expect(onError).toHaveBeenCalled();
     });
 
+    // P1 leak fix: the peer connection was already created + registered
+    // (createPeerConnection/addPeerConnection above) by the time
+    // service.createOffer() throws — without cleanup it stays open and
+    // registered forever.
+    it('closes and deregisters the orphaned peer connection when offer creation fails', async () => {
+      mockCreateOffer.mockRejectedValue(new Error('Offer failed'));
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+    });
+
     it('should throw error if userId not available', async () => {
       const { result } = renderHook(() =>
         useWebRTCP2P({ callId: mockCallId, userId: undefined })
@@ -406,6 +425,76 @@ describe('useWebRTCP2P', () => {
       expect(mockAddIceCandidate).toHaveBeenCalledWith(
         expect.objectContaining({ candidate: 'candidate:early' })
       );
+    });
+
+    // P1 leak fix: handleOffer's peer connection is already created +
+    // registered (createPeerConnection/addPeerConnection) by the time
+    // service.createAnswer() throws.
+    it('closes and deregisters the orphaned peer connection when answering an incoming offer fails', async () => {
+      mockCreateAnswer.mockRejectedValue(new Error('Answer failed'));
+
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+
+      const signalHandler = getSignalHandler();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp' },
+        });
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+    });
+  });
+
+  describe('Participant cleanup on rejoin (removeParticipant)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    it('closes the service, clears buffered ICE candidates/remote-description state, and deregisters the peer connection', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      // Establish a real connection + buffer a candidate before the answer,
+      // so there is queued/established state to actually verify gets cleared.
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      const signalHandler = getSignalHandler();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: {
+            type: 'ice-candidate', from: mockTargetUserId, to: mockUserId,
+            candidate: 'candidate:queued', sdpMLineIndex: 0, sdpMid: '0',
+          },
+        });
+      });
+      expect(mockAddIceCandidate).not.toHaveBeenCalled(); // confirms it's queued, not yet applied
+
+      act(() => {
+        result.current.removeParticipant(mockTargetUserId);
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+
+      // A rejoin's answer must NOT drain the old queue against the fresh
+      // service — the candidate above must have been dropped, not carried
+      // over to whatever connection gets created next for this participant.
+      mockAddIceCandidate.mockClear();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp' },
+        });
+      });
+      expect(mockAddIceCandidate).not.toHaveBeenCalled();
     });
   });
 

@@ -278,13 +278,22 @@ describe('MentionService', () => {
       expect(mentions).not.toContain(longUsername);
     });
 
-    it('should handle email-like patterns correctly', () => {
+    it('should NOT treat an @ glued after a word (email address) as a mention', () => {
       const content = 'Contact john@example.com for info';
       const mentions = service.extractMentions(content);
 
-      // Should extract 'john' as a mention (before @)
-      // but actually the regex /@(\w+)/ captures after @, so it gets 'example'
-      expect(mentions).toContain('example');
+      // `@example` is part of an email address, not a mention. Same left boundary as the
+      // SSOT parseMentions/hasMentions (mention-parser.ts): a `@` preceded by a name char
+      // belongs to an email — extracting `example` would fire a spurious mention notification.
+      expect(mentions).toEqual([]);
+    });
+
+    it('extracts a real mention but ignores an adjacent email fragment', () => {
+      const content = 'ping @alice about john@example.com';
+      const mentions = service.extractMentions(content);
+
+      expect(mentions).toContain('alice');
+      expect(mentions).not.toContain('example');
     });
   });
 

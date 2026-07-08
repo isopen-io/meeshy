@@ -59,6 +59,12 @@ export function useCallQuality({
     []
   );
 
+  // Previous quality level, tracked outside React state purely so the
+  // "level changed" debug log below can compare against it without making
+  // `updateStats` depend on `qualityStats?.level` (see that dependency's
+  // removal below for why).
+  const previousLevelRef = useRef<ConnectionQualityLevel | undefined>(undefined);
+
   /**
    * Get stats from peer connection
    */
@@ -69,27 +75,25 @@ export function useCallQuality({
     try {
       const stats = await peerConnection.getStats();
 
-      let packetLoss = 0;
       let rtt = 0;
       let audioBitrate = 0;
       let videoBitrate = 0;
       let jitter = 0;
-      // Cumulative byte counters (summed across all RTP streams) — reported so
-      // the gateway can persist real "data spent" on the call-summary message.
+      // Cumulative counters summed across ALL inbound RTP streams (audio +
+      // video). Packet loss is aggregated the same way as the byte counters so
+      // a lossy stream can never be masked by a healthy one iterated after it —
+      // reassigning per-report kept only the last stream's loss.
+      let totalPacketsLost = 0;
+      let totalPacketsReceived = 0;
       let bytesSent = 0;
       let bytesReceived = 0;
 
       // Parse WebRTC stats
       stats.forEach((report) => {
         if (report.type === 'inbound-rtp') {
-          // Calculate packet loss
-          const packetsLost = report.packetsLost || 0;
-          const packetsReceived = report.packetsReceived || 0;
-          const totalPackets = packetsLost + packetsReceived;
-
-          if (totalPackets > 0) {
-            packetLoss = (packetsLost / totalPackets) * 100;
-          }
+          // Accumulate packet loss across every inbound stream
+          totalPacketsLost += report.packetsLost || 0;
+          totalPacketsReceived += report.packetsReceived || 0;
 
           // Get jitter
           if (report.jitter !== undefined) {
@@ -125,6 +129,11 @@ export function useCallQuality({
         }
       });
 
+      // Overall inbound packet-loss percentage across all streams
+      const totalPackets = totalPacketsLost + totalPacketsReceived;
+      const packetLoss =
+        totalPackets > 0 ? (totalPacketsLost / totalPackets) * 100 : 0;
+
       // Calculate quality level
       const level = calculateQualityLevel(packetLoss, rtt);
 
@@ -145,18 +154,29 @@ export function useCallQuality({
 
       setQualityStats(newStats);
 
-      // Log quality changes
-      if (qualityStats?.level !== level) {
+      // Log quality changes. Audit Vague 27 — this used to compare against
+      // `qualityStats?.level` directly, which made this a dependency of
+      // `updateStats` and gave it a fresh identity on every REAL quality
+      // transition. The monitoring effect below depends on `updateStats` and
+      // unconditionally fires it once per effect run ("Initial update"), so
+      // a level flip tore the interval down and fired an extra out-of-band
+      // getStats() call — independent of `updateInterval`, and capable of
+      // chaining into a tight loop if that extra call itself yields another
+      // different level (exactly the noisy-connection case this monitor
+      // exists to catch). Reading/writing a ref instead keeps `updateStats`
+      // stable across ticks.
+      if (previousLevelRef.current !== level) {
         logger.info('[useCallQuality]', 'Quality level changed', {
-          from: qualityStats?.level,
+          from: previousLevelRef.current,
           to: level,
           stats: newStats,
         });
       }
+      previousLevelRef.current = level;
     } catch (error) {
       logger.error('[useCallQuality]', 'Failed to get stats', { error });
     }
-  }, [peerConnection, calculateQualityLevel, qualityStats?.level]);
+  }, [peerConnection, calculateQualityLevel]);
 
   /**
    * Start monitoring when peer connection is available

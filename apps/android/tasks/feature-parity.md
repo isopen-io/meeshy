@@ -291,7 +291,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Cache-first instant load done ; pull-to-refresh done (`PullToRefreshBox`,
       spinner gated sur le geste utilisateur — les revalidations SWR de fond
       restent silencieuses) ; cursor-based infinite scroll / branding pending
-- [ ] Sectioned list with collapsible user categories + pinned section + drag-to-category
+- [~] Sectioned list with collapsible user categories + pinned section + drag-to-category —
+      **pinned section done** (slice `conversations-section-model`, 2026-07-08): the pinned/others
+      split, previously scattered `filter`/`filterNot` glue inside `ConversationListScreen`, is now
+      the pure `:feature:conversations` `ConversationSections.of(conversations)` SSOT
+      (Pinned first → All), each `ConversationSection` preserving the incoming (draft/filter) order.
+      An **empty section is omitted**, so an all-pinned account no longer shows a phantom empty
+      "Mes conversations" header. Rendered via the existing `CollapsibleSection` (collapse state is
+      its own saved UI state). +9 tests. **Reste**: collapsible *user categories* (needs category
+      metadata) + drag-to-category.
 - [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
       — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
       (port fidèle de `filterConversations` : soft-delete masqué partout, archivés
@@ -310,10 +318,52 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Hard-press conversation preview popover
 - [~] Conversation row: rich last-message preview done (labels type média
       📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,
-      « Vous » pour soi) + unread badge done ; ephemeral/expired/hidden/view-once/
-      draft/typing, activity-heat, tags, presence/story-ring/mood pending
-- [ ] Draft-aware ordering (drafts float to top); bump-to-top on send/receive
-- [ ] Cold-start skeletons + error-with-retry empty state
+      « Vous » pour soi) + unread badge + **draft preview** done (slice
+      `conversations-draft-aware-ordering`, 2026-07-07 : `draftPreview` accent-teinté
+      « Brouillon : … » prime sur le last-message quand un brouillon utile existe ;
+      reply-only → préfixe + « … ») ; **discard-draft** done (slice
+      `conversations-draft-discard`, 2026-07-08 : action contextuelle « Supprimer le
+      brouillon » offerte seulement sur une ligne portant un brouillon *utile* — pure
+      `DraftDiscard.isDiscardable`/`afterDiscard` `:feature:conversations` + effacement
+      optimiste `ConversationListViewModel.discardDraft` (retrait immédiat de l'état,
+      `draftStore.clear`, rollback si échec) ; la ligne perd son aperçu et redescend
+      sous le groupe flottant) ; ephemeral/expired/hidden/view-once/
+      typing, activity-heat, tags, presence/story-ring/mood pending
+- [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
+      **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
+      2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
+      draftsById)` fait flotter en tête toute conversation portant un brouillon
+      *utile* (`ConversationDraft.isMeaningful` SSOT `:core:model` — texte non vide
+      **ou** reply armé), triées par `updatedAt` desc (null en dernier du groupe,
+      tri stable) ; le reste garde son ordre en dessous. `ConversationDraftStore`
+      gagne `observeAll()` (`:sdk-core`, InMemory StateFlow + DataStore préfixe-scan,
+      entrée corrompue omise) ; `ConversationListViewModel` collecte les brouillons
+      et les applique dans `withVisible` après le filtre. La split épinglés-en-tête
+      de l'écran reste au-dessus (Épingles > brouillons > reste). +23 tests.
+      **Reste** : bump-to-top on send/receive (déjà couvert par refresh backend).
+- [x] Cold-start skeletons + error-with-retry empty state — the skeleton + error+retry
+      renders existed but the *decision* lived as an untestable scattered `when` inside
+      `ConversationListScreen` (with a redundant `conversations.isEmpty() &&` guard). Slice
+      `conversations-empty-state-content` (2026-07-08) lifts it into the pure
+      `:feature:conversations` `ConversationListContent.of(state)` SSOT (sealed
+      Populated | Skeleton | Error(message) | FilteredEmpty | ColdEmpty). Cache-first
+      (ARCHITECTURE.md §4): a populated list wins over a stale skeleton flag **or** a
+      background sync error, so on-screen data is never hidden; only an empty list falls
+      through to skeleton → error(+retry) → filtered-empty → cold-empty in precedence
+      order. The screen renders straight from the reducer. +11 tests
+      (`ConversationListContentTest`, every branch + the two cache-first overrides + the
+      skeleton-over-error / error-over-filter precedence + blank-search-is-cold boundary).
+      **Card upgrade** (slice `conversations-cold-start-error-card`, 2026-07-08): the three
+      empty arms (Error / FilteredEmpty / ColdEmpty) rendered as a bare secondary label +
+      plain retry button; iOS shows an iconified card (glyph + title + subtitle + Réessayer).
+      New pure `:feature:conversations` `EmptyStateVisual.of(content)` SSOT maps each non-list
+      arm → `{glyph, title, subtitle, cta?}` (enum-keyed copy so the choice is JVM-testable,
+      free of `R` ids; the server error travels as a trimmed `Literal`, blank/empty → generic
+      `Resource(ErrorSubtitle)`, still retryable; Populated/Skeleton → null). Rendered on a
+      `MeeshyGlassSurface` card — error glyph tints `MeeshyPalette.Error`, the others accent
+      Indigo — with the retry wired to `refresh`. +8 tests (`EmptyStateVisualTest`: error
+      literal / trim / blank-fallback / empty-fallback / filtered / cold / populated-null /
+      skeleton-null).
 - [x] Connection-health banner — `SocketManager.connectionState` (StateFlow
       DISCONNECTED/CONNECTING/CONNECTED) → mapping pur `bannerFor` (la reconnexion
       prime sur le sync) → strip animée sous l'app bar (Hors ligne / Reconnexion… /
@@ -419,15 +469,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ChatViewModel` recomputes on `onDraftChange`, exposes `onMentionSelected`, resets on send; `ChatScreen`
       renders a neutral accent-avatar suggestion strip above the composer. +40 tests. **Pending:** debounced
       backend `/mentions` API merge over the local roster (online enrichment).
-- [◐] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text draft done**
+- [◐] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text + reply-ref done**
       (slice `chat-draft-autosave`, 2026-07-07): pure `:feature:chat` `DraftAutosave` SSOT (blank composer
       purges, non-blank saves raw, unchanged writes nothing → `Save`/`Clear`/`None`; restore seeds an idle empty
       composer only, never clobbering an in-flight edit or already-typed text) + durable `:sdk-core`
       `ConversationDraftStore` (DataStore-backed, per-conversation key, corrupt→miss; port of iOS
       `ConversationDraftManager`). `ChatViewModel` restores on open, auto-saves on `onDraftChange` (guarded off
-      during edit, coalesced last-write-wins), purges on send. +32 tests. **Pending:** reply-ref persistence
-      (iOS app-side `DraftStore`) and the language/effects/blur/ephemeral fields (those composer features are not
-      yet built on Android — no state to persist).
+      during edit, coalesced last-write-wins), purges on send. +32 tests. **Reply-ref persistence done**
+      (slice `chat-draft-reply-ref`, 2026-07-07): `ConversationDraft` gained a `replyToId`; `DraftAutosave.resolve`
+      now treats a draft as *meaningful* when it holds text **or** an armed reply (a reply armed on an empty
+      composer persists and survives navigation; cancelling it on an empty composer purges), normalising the
+      reference (trim/blank→null); `DraftAutosave.restore` returns a `DraftRestore(text, replyToId)` snapshot that
+      re-arms a reply-only or half-typed reply draft. `ChatViewModel` persists on `startReply`/`cancelReply`/
+      `onDraftChange` and re-arms `replyingToMessageId` on open; the durable store round-trips the reference. +16
+      tests. **Pending:** the language/effects/blur/ephemeral fields (those composer features are not yet built on
+      Android — no state to persist).
 - [ ] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress
 - [◐] In-conversation message search (translation-match aware) + jump-to-result — core+wiring done
       (`chat-search-highlight-wiring` 2026-07-06): pure `:feature:chat` `ChatSearch` SSOT over the opaque

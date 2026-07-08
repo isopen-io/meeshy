@@ -370,6 +370,15 @@ final class CallManager: ObservableObject {
     /// (i.e. a new call already grabbed `currentCallId`/`remoteUserId` between
     /// the ended transition and the timer firing).
     private var settleToken: UUID?
+    /// Audit 2026-07-07 — `endCurrentAndAnswerPending`'s revalidation guard used
+    /// to read `pendingIncomingCall`, but `endCall()` (called earlier in the same
+    /// function) synchronously drives `endCallInternal`, which unconditionally
+    /// nils `pendingIncomingCall` for an unrelated reason (dropping a stale busy
+    /// banner). That made the revalidation guard always fail, so "End & Answer"
+    /// never answered the waiting call. This dedicated token survives the
+    /// `endCall()` side effect and is cleared only by `clearPendingIncomingCall`
+    /// (remote cancellation) or once consumed.
+    private var answeringPendingCallId: String?
     /// Audit P1-12 — direction tracking for CallKit timer reporting.
     /// `reportOutgoingCall(_:connectedAt:)` is for the caller side only;
     /// the callee's elapsed timer is started by CallKit when CXAnswerCallAction
@@ -991,6 +1000,7 @@ final class CallManager: ObservableObject {
             // timestamp in Recents) — every other reportCall site in this file passes
             // Date(); this synthesized busy-path report ends right now, so do the same.
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+            rejectSupersededPendingCall(replacingWithCallId: callId)
             pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo, iceServers: iceServers, conversationId: conversationId)
             showCallWaitingBanner = true
             Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
@@ -1231,6 +1241,7 @@ final class CallManager: ObservableObject {
         resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
+            rejectSupersededPendingCall(replacingWithCallId: callId)
             pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo, iceServers: iceServers, conversationId: conversationId)
             showCallWaitingBanner = true
             HapticFeedback.medium()
@@ -2024,6 +2035,18 @@ final class CallManager: ObservableObject {
         Logger.calls.info("Rejected pending call: \(pending.callId)")
     }
 
+    /// Audit 2026-07-07 (Finding 2) — `pendingIncomingCall` holds a single
+    /// waiting call, not a queue. A third caller arriving while a second is
+    /// already waiting used to silently overwrite `pendingIncomingCall`,
+    /// leaving the second caller ringing forever with no local signal. Mirror
+    /// `rejectPendingCall()`'s socket signal for the call being displaced so
+    /// its caller sees a clean end instead of a silent local drop.
+    private func rejectSupersededPendingCall(replacingWithCallId newCallId: String) {
+        guard let superseded = pendingIncomingCall, superseded.callId != newCallId else { return }
+        MessageSocketManager.shared.emitCallEnd(callId: superseded.callId)
+        Logger.calls.info("Superseded waiting call ended: \(superseded.callId) (replaced by \(newCallId))")
+    }
+
     /// Audit 2026-07-02 (bug 3) — the caller of the WAITING call hung up (or it
     /// was answered/force-ended elsewhere) before the user acted on the banner.
     /// Every terminal socket listener guards on `currentCallId` (the ACTIVE
@@ -2034,12 +2057,17 @@ final class CallManager: ObservableObject {
         guard pendingIncomingCall?.callId == callId else { return }
         pendingIncomingCall = nil
         showCallWaitingBanner = false
+        if answeringPendingCallId == callId {
+            answeringPendingCallId = nil
+        }
         Logger.calls.info("Waiting call ended remotely — call-waiting banner dismissed (callId=\(callId))")
     }
 
     func endCurrentAndAnswerPending() {
         guard let pending = pendingIncomingCall else { return }
         showCallWaitingBanner = false
+        pendingIncomingCall = nil
+        answeringPendingCallId = pending.callId
 
         endCall()
 
@@ -2048,8 +2076,12 @@ final class CallManager: ObservableObject {
             guard let self else { return }
             // The waiting call may have been ended, answered elsewhere, or
             // replaced by a newer incoming call while we were asleep — only
-            // answer if it's still the exact call the user acted on.
-            guard self.pendingIncomingCall?.callId == pending.callId else { return }
+            // answer if it's still the exact call the user acted on. `endCall()`
+            // above unconditionally nils `pendingIncomingCall` as a side effect
+            // (unrelated busy-banner cleanup), so this dedicated token — not
+            // `pendingIncomingCall` — is the source of truth for revalidation.
+            guard self.answeringPendingCallId == pending.callId else { return }
+            self.answeringPendingCallId = nil
             self.handleIncomingCallNotification(
                 callId: pending.callId,
                 fromUserId: pending.fromUserId,
@@ -2058,7 +2090,6 @@ final class CallManager: ObservableObject {
                 iceServers: pending.iceServers,
                 conversationId: pending.conversationId
             )
-            self.pendingIncomingCall = nil
         }
     }
 

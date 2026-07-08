@@ -15,6 +15,11 @@
 export function truncateFilename(filename: string, maxLength: number = 32): string {
   if (filename.length <= maxLength) return filename;
 
+  // An ellipsis form ("x...") needs at least 1 content char + "..." = 4 chars.
+  // Below that budget any ellipsis output can only overrun maxLength, so degrade
+  // to a bare slice — honoring the documented "never exceeds maxLength" invariant.
+  if (maxLength <= 3) return filename.slice(0, Math.max(0, maxLength));
+
   const dot = filename.lastIndexOf('.');
   const head = (budget: number) => `${filename.slice(0, Math.max(1, budget))}...`;
 
@@ -33,6 +38,18 @@ export function truncateFilename(filename: string, maxLength: number = 32): stri
   return `${filename.slice(0, nameBudget)}....${ext}`;
 }
 
+/**
+ * Tronque `text` en signalant s'il a été tronqué (pour rendre un « voir plus »).
+ *
+ * CONTRAT — distinct de {@link truncateFilename} :
+ * - `maxLength` est un budget de **contenu**, PAS une longueur totale. L'ellipse
+ *   `...` est ajoutée EN SUS, donc `truncated` peut atteindre `maxLength + 3`.
+ *   (`truncateFilename`, à l'inverse, garantit de ne JAMAIS dépasser `maxLength`.)
+ * - L'espace de fin est trimé avant l'ellipse (« hello » et non « hello  … »).
+ * - `isTruncated` vaut `true` dès que `text.length > maxLength`.
+ *
+ * @example truncateText('hello world foo', 6) → { truncated: 'hello...', isTruncated: true }  // 8 > 6
+ */
 export function truncateText(
   text: string,
   maxLength: number

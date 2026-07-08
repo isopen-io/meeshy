@@ -86,6 +86,12 @@ export class WebRTCService {
   private makingOffer = false;
   private isSettingRemoteAnswerPending = false;
   private ignoreOffer = false;
+  // Set when negotiate({iceRestart:true}) is dropped by the makingOffer
+  // guard because an unrelated renegotiation (e.g. A/V switch) is already in
+  // flight. Without this, a colliding ICE restart is discarded with no
+  // retry and the connection can be stranded in 'failed' forever — replayed
+  // from negotiate()'s finally block once the in-flight offer settles.
+  private pendingIceRestart = false;
   // Auto-renegotiation (onnegotiationneeded → negotiate) is suppressed during
   // the initial explicit offer/answer to avoid a duplicate first offer. It is
   // armed once the connection is established so mid-call media changes (A/V
@@ -331,6 +337,7 @@ export class WebRTCService {
       this.makingOffer = false;
       this.isSettingRemoteAnswerPending = false;
       this.ignoreOffer = false;
+      this.pendingIceRestart = false;
 
       // Create RTCPeerConnection (prefer server-provided TURN servers over config defaults)
       this.peerConnection = new RTCPeerConnection({
@@ -761,9 +768,19 @@ export class WebRTCService {
       throw new Error('Peer connection not initialized');
     }
     if (this.makingOffer) {
-      logger.debug('[WebRTCService] negotiate() skipped: offer already in flight', {
-        participantId: this.participantId,
-      });
+      if (options.iceRestart) {
+        // Do not drop this on the floor: a colliding ICE restart must still
+        // happen once the in-flight offer settles, or the connection can be
+        // stranded in 'failed' with no further recovery signal.
+        this.pendingIceRestart = true;
+        logger.warn('[WebRTCService] negotiate() iceRestart deferred: offer already in flight', {
+          participantId: this.participantId,
+        });
+      } else {
+        logger.debug('[WebRTCService] negotiate() skipped: offer already in flight', {
+          participantId: this.participantId,
+        });
+      }
       return;
     }
     try {
@@ -790,6 +807,15 @@ export class WebRTCService {
       throw err;
     } finally {
       this.makingOffer = false;
+      if (this.pendingIceRestart) {
+        this.pendingIceRestart = false;
+        logger.info('[WebRTCService] Replaying deferred ICE restart after in-flight offer settled', {
+          participantId: this.participantId,
+        });
+        void this.negotiate({ iceRestart: true }).catch((error) => {
+          logger.error('[WebRTCService] Deferred ICE restart replay failed', { error });
+        });
+      }
     }
   }
 
@@ -1163,6 +1189,7 @@ export class WebRTCService {
     this.makingOffer = false;
     this.isSettingRemoteAnswerPending = false;
     this.ignoreOffer = false;
+    this.pendingIceRestart = false;
 
     logger.info('[WebRTCService]', 'Connection closed and cleaned up');
   }

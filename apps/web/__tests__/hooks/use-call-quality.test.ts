@@ -171,6 +171,47 @@ describe('useCallQuality', () => {
       expect(mockPC.getStats.mock.calls.length).toBeGreaterThan(callsAfterMount);
     });
 
+    // Audit Vague 27 — `updateStats` depended on `qualityStats?.level` purely
+    // for a debug-log comparison, giving it a fresh identity on every REAL
+    // quality-level transition. The monitoring effect below depends on
+    // `updateStats` and unconditionally calls it once on every effect run
+    // ("Initial update") — so a level flip tore the interval down and fired
+    // an extra out-of-band getStats() call, independent of updateInterval.
+    // On a genuinely fluctuating connection this can chain through
+    // microtasks into a tight loop, spiking CPU/battery exactly when the
+    // network is already unstable.
+    it('does not re-fire updateStats purely because the quality level changed between polls', async () => {
+      let excellent = true;
+      const mockPC = {
+        getStats: jest.fn().mockImplementation(() => {
+          const report = excellent
+            ? makeStatsReport({ packetsLost: 0, packetsReceived: 100, rtt: 0.05 })
+            : makeStatsReport({ packetsLost: 20, packetsReceived: 80, rtt: 0.4 });
+          excellent = !excellent;
+          return Promise.resolve(report);
+        }),
+      };
+
+      renderHook(() =>
+        useCallQuality({
+          peerConnection: mockPC as unknown as RTCPeerConnection,
+          // Large enough that the setInterval tick itself never fires within
+          // this test — any extra call must come from the effect rebuilding.
+          updateInterval: 999_999,
+        })
+      );
+
+      // Flush the initial mount call plus any microtask-chained re-fires a
+      // level-flip-triggered effect rebuild would cause.
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockPC.getStats).toHaveBeenCalledTimes(1);
+    });
+
     it('clears the interval when peerConnection becomes null', async () => {
       const mockPC = makeMockPeerConnection();
 
@@ -300,6 +341,31 @@ describe('useCallQuality', () => {
 
       await act(async () => { await Promise.resolve(); });
 
+      expect(result.current.qualityStats?.level).toBe('poor');
+    });
+
+    it('aggregates packet loss across all inbound streams (a lossy audio stream is not masked by a healthy video stream)', async () => {
+      // audio: 20 lost / 80 received (20% loss) ; video: 0 lost / 100 received.
+      // Reassigning per-report kept only the last (video) stream → 0% → 'excellent'.
+      // Aggregated: 20 lost / 200 total = 10% loss → 'poor'.
+      const mockPC = {
+        getStats: jest.fn().mockResolvedValue({
+          forEach: (cb: Function) => {
+            cb({ type: 'inbound-rtp', kind: 'audio', packetsLost: 20, packetsReceived: 80, jitter: 0, bytesReceived: 3000 });
+            cb({ type: 'inbound-rtp', kind: 'video', packetsLost: 0, packetsReceived: 100, jitter: 0, bytesReceived: 10000 });
+            cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.05 });
+            cb({ type: 'outbound-rtp', bytesSent: 2000 });
+          },
+        }),
+      };
+
+      const { result } = renderHook(() =>
+        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+
+      expect(result.current.qualityStats?.packetLoss).toBe(10);
       expect(result.current.qualityStats?.level).toBe('poor');
     });
 

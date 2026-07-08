@@ -2234,6 +2234,14 @@ export class MeeshySocketIOManager {
         return;
       }
 
+      if (result.unchanged) {
+        // Idempotent no-op: the agent already had exactly this emoji on the
+        // message. Skip the REACTION_ADDED broadcast and author notification —
+        // nothing changed. Parity with the human socket/REST add paths.
+        logger.info(`[Agent] Reaction unchanged (already present) — conv=${reaction.conversationId} msg=${reaction.targetMessageId}`);
+        return;
+      }
+
       const updateEvent = await reactionService.createUpdateEvent(
         reaction.targetMessageId,
         reaction.emoji,

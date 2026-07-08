@@ -57,8 +57,8 @@ function makeIo() {
 
 function makeService(overrides: Record<string, any> = {}) {
   return {
-    addAttachmentReaction: jest.fn<any>().mockResolvedValue(undefined),
-    removeAttachmentReaction: jest.fn<any>().mockResolvedValue(undefined),
+    addAttachmentReaction: jest.fn<any>().mockResolvedValue({ changed: true }),
+    removeAttachmentReaction: jest.fn<any>().mockResolvedValue(true),
     getReactionSummary: jest.fn<any>().mockResolvedValue({ '👍': 1 }),
     resolveConversationId: jest.fn<any>().mockResolvedValue(CONV_ID),
     ...overrides,
@@ -310,6 +310,27 @@ describe('AttachmentReactionHandler', () => {
       const emittedData = (toRoom.emit as jest.Mock).mock.calls[0][1] as any;
       expect(emittedData.reactionSummary).toEqual(summary);
     });
+
+    it('idempotent no-op re-add (changed:false) — replies success but does NOT re-broadcast', async () => {
+      // The participant already had exactly this emoji on this attachment
+      // (optimistic double-fire, a socket retry after a lost ACK, or a second
+      // device echoing the same tap). Nothing changed in the DB, so we must not
+      // re-emit ATTACHMENT_REACTION_ADDED to every socket in the room — mirrors
+      // ReactionHandler's `unchanged` guard (iter 134).
+      const service = makeService({
+        addAttachmentReaction: jest.fn<any>().mockResolvedValue({ changed: false }),
+      });
+      const cb = jest.fn();
+      const { handler, io } = makeHandler({ service });
+      const socket = makeSocket();
+
+      await handler.handleAdd(socket, validData, cb);
+
+      const toRoom = (io as any)._toRoom;
+      expect(toRoom.emit).not.toHaveBeenCalled();
+      expect(service.getReactionSummary).not.toHaveBeenCalled();
+      expect(cb).toHaveBeenCalledWith({ success: true });
+    });
   });
 
   // ── handleRemove ──────────────────────────────────────────────────────────
@@ -365,6 +386,28 @@ describe('AttachmentReactionHandler', () => {
 
       expect(service.addAttachmentReaction).not.toHaveBeenCalled();
       expect(service.removeAttachmentReaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('idempotent already-absent remove (returns false) — replies success but does NOT broadcast', async () => {
+      // The reaction is already gone (a retry after a lost ACK, a double-tap, or
+      // a second device echoing the un-react). Re-emitting ATTACHMENT_REACTION_
+      // REMOVED would clear the indicator for peers who never had it, and
+      // replying error would make the client roll its optimistic un-react back
+      // and re-show a reaction that is gone. Mirrors ReactionHandler's
+      // already-absent guard.
+      const service = makeService({
+        removeAttachmentReaction: jest.fn<any>().mockResolvedValue(false),
+      });
+      const cb = jest.fn();
+      const { handler, io } = makeHandler({ service });
+      const socket = makeSocket();
+
+      await handler.handleRemove(socket, validData, cb);
+
+      const toRoom = (io as any)._toRoom;
+      expect(toRoom.emit).not.toHaveBeenCalled();
+      expect(service.getReactionSummary).not.toHaveBeenCalled();
+      expect(cb).toHaveBeenCalledWith({ success: true });
     });
   });
 });

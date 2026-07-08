@@ -662,7 +662,111 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `chat-draft-autosave`** — per-conversation text draft auto-save/restore is now
+**Just shipped (2026-07-08): `conversations-section-model`** — the conversation-list pinned/others
+section split, previously scattered `filter { isPinned }` / `filterNot` glue inside
+`ConversationListScreen`, is now the pure `:feature:conversations` `ConversationSections.of()` SSOT
+(`ConversationSection(kind: PINNED|ALL, items)` — Pinned first, then All, each preserving the incoming
+draft/filter order). An **empty section is omitted**, fixing a real wart: an all-pinned account no longer
+renders a phantom empty "Mes conversations" header. The screen renders `ConversationSections.of(state.
+conversations)` via the existing `CollapsibleSection` (its collapse state stays its own saved UI state);
+kind→title/icon/color are three tiny exempt mapping helpers. +9 tests. See run log. **Recommended next:**
+`conversations-communities-carousel` / §B "Communities carousel + category filter chips" (larger), the
+**collapsible user categories** follow-on to this slice (needs category-name metadata), or move into
+Profile/Settings §K/§L follow-ups.
+
+**Earlier — `conversations-draft-discard` (2026-07-08)** — a contextual "Discard draft" action
+(long-press menu, offered only on a draft-bearing row) backed by a pure `DraftDiscard.isDiscardable`/
+`afterDiscard` SSOT + optimistic `ConversationListViewModel.discardDraft` (instant state removal,
+`draftStore.clear`, rollback on failure). The row loses its "Brouillon : …" preview and sinks out of the
+floated group immediately; the reactive `observeAll` collector reconciles the durable store. +12 tests.
+See run log. **Recommended next:** `conversations-communities-carousel` / §B "Communities carousel +
+category filter chips" (larger), or move into Profile/Settings §K/§L follow-ups.
+
+**Earlier — `conversations-cold-start-error-card`** — the conversation-list empty arms
+(Error / FilteredEmpty / ColdEmpty) rendered as a bare `CenteredMessage` (secondary label + plain retry
+button); iOS shows an iconified card (glyph + title + subtitle + Réessayer). New pure
+`:feature:conversations` `EmptyStateVisual.of(content): EmptyStateVisual?` SSOT maps each non-list
+`ConversationListContent` arm → `{glyph: EmptyStateGlyph, title: EmptyStateCopy, subtitle:
+EmptyStateSubtitle?, cta: EmptyStateCopy?}`. Copy is enum-keyed (`EmptyStateCopy` → `R.string` resolved in
+the screen) so the copy/icon decision stays pure and JVM-testable, free of Android resource ids; only the
+dynamic server error text travels as a `Literal` — **trimmed**, and a **blank/empty** message falls back to
+a generic `Resource(ErrorSubtitle)` while staying retryable. The two list-bearing arms (Populated / Skeleton)
+have no card → `null`. Wired: `ConversationListScreen` collapses the three `CenteredMessage` arms into a
+single `EmptyStateCard(EmptyStateVisual.of(content))` — a `MeeshyGlassSurface` card with the glyph in a
+tinted disc (error → `MeeshyPalette.Error`, others → accent Indigo), title + subtitle, and an optional retry
+`Button` wired to `viewModel::refresh`; `CenteredMessage` removed (no other caller). Icons: `CloudOff` /
+`SearchOff` / auto-mirrored `Chat`. 4 new strings × 4 locales (en/fr/es/pt). +8 tests (`EmptyStateVisualTest`:
+error-literal / trim / blank→fallback / empty→fallback / filtered / cold / populated-null / skeleton-null).
+`:feature:conversations:testDebugUnitTest` + `:app:assembleDebug` green (system Gradle 8.14.3; wrapper
+download is 403-blocked in this container — use `/opt/gradle` directly). Reviewer: PASS (diff apps/android
+only; behaviour-through-public-API `EmptyStateVisual.of`, no tautologies, boundary coverage on the trim/
+blank/empty error-subtitle branches + all five arms; SDK-purity honoured — the "what does an empty arm look
+like" copy/icon product decision is a pure atom in `:feature:conversations`, the glass card is exempt Compose
+glue; cache-first preserved (Populated still wins upstream), accent-coherent palette, no dead end — the card
+retries).
+
+**Recommended next candidates (highest value first):**
+- **`conversations-draft-list-mutation`** — surface the draft *mutation* end-to-end (a draft typed in Chat then
+  sent/cleared re-orders the list) + a "swipe-to-discard-draft" affordance (pure discard rule + optimistic clear).
+- **`conversations-communities-carousel`** / §B "Communities carousel + category filter chips" — larger.
+
+---
+
+**Earlier — `conversations-empty-state-content`** — the conversation-list empty/loading/error/
+filtered decision is now a pure, fully-covered `ConversationListContent.of(state)` sealed SSOT (checks parity §B
+"Cold-start skeletons + error-with-retry empty state"). Cache-first: populated data wins over a stale skeleton flag
+or a background error. The screen renders straight from the reducer; +11 tests. See run log.
+
+**Recommended next candidates (highest value first):**
+- **`conversations-cold-start-error-card`** — the retry empty state is a bare centred `Button`. iOS shows an
+  iconified error card (glyph + title + subtitle + Réessayer). Pure `EmptyStateVisual.of(content)` mapping the
+  `ConversationListContent` arms (Error/FilteredEmpty/ColdEmpty) → {icon, title, subtitle, cta?} so the copy/icon
+  choice is testable, then a coherent `MeeshyGlassSurface` card. Natural follow-on to this slice.
+- **`conversations-draft-list-mutation`** — surface the draft *mutation* end-to-end (a draft typed in Chat then
+  sent/cleared re-orders the list) + a "swipe-to-discard-draft" affordance (pure discard rule + optimistic clear).
+- **`conversations-communities-carousel`** / §B "Communities carousel + category filter chips" — larger.
+
+**Earlier — `conversations-draft-aware-ordering` (2026-07-07)** — the conversation list now floats
+draft-bearing rows to the top (parity §B "drafts float to top") and shows an accent "Brouillon : …" preview. Pure
+`:feature:conversations` `DraftAwareOrdering.apply` (float by `ConversationDraft.isMeaningful`, sort by draft
+`updatedAt` desc, stable, non-drafts keep order) + `draftPreview`; `ConversationDraft.isMeaningful` extracted as the
+`:core:model` SSOT (now consumed by `DraftAutosave` too); `ConversationDraftStore.observeAll()` added to `:sdk-core`
+(InMemory StateFlow + DataStore prefix-scan, corrupt-omitted); `ConversationListViewModel` collects the drafts and
+applies the ordering in `withVisible` after the filter; the screen's Épingles-first split stays above (Épinglés >
+brouillons > reste). +23 tests. See run log.
+
+**Recommended next candidates (highest value first):**
+- **`conversations-draft-list-mutation`** — surface the draft *mutation* end-to-end so a draft typed in Chat and a
+  send/clear immediately re-orders the list. `observeAll()` already makes it reactive; verify the round-trip and add
+  a "swipe-to-discard-draft" affordance on a draft-bearing row (pure discard rule + optimistic clear via the store).
+- **`conversations-cold-start-skeleton`** — parity §B "Cold-start skeletons + error-with-retry empty state": the
+  skeleton flag exists (`showSkeleton`), but the error state has no retry CTA. Pure `EmptyStateContent.of(state)`
+  → {Skeleton | Error(retry) | Filtered-empty | Cold-empty} and an error card with a Réessayer button.
+- **`chat-draft-language-effects`** — the remaining draft-autosave gap (§C "text + reply + language + effects + blur
+  + ephemeral"): once those composer features exist on Android, persist them in `ConversationDraft`.
+
+**Earlier — `chat-draft-reply-ref` (2026-07-07)** — the persisted draft now carries its reply reference so a
+half-typed (or freshly-armed) reply survives leaving and reopening the conversation (iOS app-side `DraftStore`
+reply-reference parity). `ConversationDraft` gained a nullable `replyToId`. Pure `:feature:chat` `DraftAutosave`
+was extended: a draft is now *meaningful* when it holds text **or** an armed reply, so a reply armed on an empty
+composer is persisted (rather than dropped) and cancelling that reply on an empty composer purges the draft; the
+reference is normalised (trim/blank→null); `resolve` still writes nothing when text **and** reply are both
+unchanged. `restore` now returns a `DraftRestore(text, replyToId)` snapshot (null = leave the composer untouched)
+that re-arms a reply-only draft with empty text or a half-typed reply with both — still idle-guarded (never
+clobbers an in-flight edit or already-typed text). `ChatViewModel` persists the reply on `startReply`/`cancelReply`
+(alongside the existing `onDraftChange`/`send` writes) and re-arms `replyingToMessageId` on open; the durable
+DataStore store round-trips the reference. +16 tests (`DraftAutosaveTest` +10 reply-branch: armed-empty / text+reply
+/ trim+blank-drop / only-reply-changes / identical-none / cancel-clears-reply-only / drop-reply-keeps-text +
+restore re-arm / both / trim+blank / neither→null; `ChatViewModelTest` +5: arm persists ref, type-under-reply
+persists text+ref, stored reply re-arms on open, cancel-on-empty purges, send purges; `ConversationDraftStoreTest`
++1 durable reply round-trip). `assembleDebug` + full `testDebugUnitTest` green (system Gradle 8.14.3; the lone
+`InterfaceLanguageStoreTest` DataStore-timeout flake passed on isolated re-run — unrelated to drafts). Reviewer:
+PASS (diff apps/android only; behaviour-through-public-API, no tautologies, boundary coverage on the meaningful/
+identical/normalise branches; SDK-purity honoured — the "when a reply counts as a draft" product decision is a pure
+atom in `:feature:chat`, the model carrier is `:core:model`, the bytes are `:sdk-core`; UDF immutable snapshot on
+restore, cache-first re-arm on open, no dead end — the re-armed reply is sendable/cancellable).
+
+**Earlier — `chat-draft-autosave` (2026-07-07)** — per-conversation text draft auto-save/restore is now
 live (Chat parity §C "Draft auto-save/restore"). The orphan `ConversationDraft` model is wired end-to-end: pure
 `:feature:chat` `DraftAutosave` (blank purges / non-blank saves raw / unchanged writes nothing; restore seeds an
 idle empty composer only, never clobbering an in-flight edit or already-typed text) + durable `:sdk-core`
@@ -1233,6 +1337,193 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-08 — slice `conversations-section-model` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/conversations-section-model`
+- **Parity:** §B "Sectioned list … pinned section". The conversation list already split into a
+  Pinned section + an "All" section, but the split lived as scattered `filter { isPinned }` /
+  `filterNot` glue directly inside the `ConversationListScreen` Composable — untestable, and it
+  rendered a **phantom empty "Mes conversations" header** whenever every conversation was pinned
+  (the `section-all` `item` had no `isNotEmpty` gate, unlike the pinned one).
+- **Added (production):**
+  - `ConversationSections.kt` (`:feature:conversations`, pure SSOT) — `ConversationSectionKind`
+    (`PINNED` | `ALL`), `ConversationSection(kind, items)`, and `ConversationSections.of(
+    conversations) → List<ConversationSection>`: partitions on `resolvedPreferences?.isPinned`,
+    Pinned section first then All, each preserving the incoming (draft-floated / filtered) order,
+    and **omits any empty section** (no phantom All header on an all-pinned account; no phantom
+    Pinned header on a pin-free one).
+  - `ConversationListScreen` — the inline `pinned`/`others` split is gone; the `LazyColumn` now
+    iterates `ConversationSections.of(state.conversations)` and renders each via the existing
+    `CollapsibleSection`. Three tiny private mapping helpers (`ConversationSectionKind.titleRes()`
+    / `.icon()` / `.containerColor()`) keep the header visuals (Épingles → red PushPin, Mes
+    conversations → indigo Chat) exactly as before. No string/resource changes.
+- **Tests:** +9 `ConversationSectionsTest` — empty→no sections; no-pinned→single ALL in order;
+  all-pinned→single PINNED, no phantom ALL (the wart fix); mixed→PINNED then ALL; interleaved
+  input preserves each group's relative order; single pinned; single non-pinned; pin resolved from
+  `userPreferences[0]`; no-preferences row treated as not pinned.
+- **Edge cases covered:** empty / single each side / all-pinned / pin-free / interleaving order;
+  both preference sources (`preferences` optimistic override + `userPreferences`); absent prefs.
+- **Verify:** `:feature:conversations:testDebugUnitTest` (`ConversationSectionsTest`) green, then full
+  `assembleDebug` + `testDebugUnitTest` across all modules → **BUILD SUCCESSFUL** (system Gradle
+  8.14.3; wrapper download 403-blocked in this container — used `/opt/gradle` directly).
+- **Reviewer:** PASS — diff `apps/android` only (only `:feature:conversations`); behaviour through
+  the public `ConversationSections.of` API, no tautologies, near-total branch coverage on both
+  partition arms + both empty-omission branches + order preservation; SDK-purity honoured (the
+  "how the list sections" product decision is a pure atom in `:feature:conversations`; the render is
+  exempt Compose glue); single source of truth (the split no longer duplicated in the Composable);
+  UDF preserved; accent-coherent headers unchanged; no dead code (the reducer + three helpers are
+  all consumed by the screen; the wart-fix is user-visible).
+
+### 2026-07-08 — slice `conversations-draft-discard` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/conversations-draft-discard`
+- **Parity:** §B draft lifecycle — the conversation list floated draft-bearing rows and
+  showed a "Brouillon : …" preview, but a stale/unwanted draft could only be cleared by
+  reopening the conversation and deleting the text. Added a **discard-draft** affordance so a
+  draft can be thrown away straight from the list, and verified the draft *mutation* round-trip
+  (a draft cleared in the store re-orders the list reactively via the existing `observeAll`
+  collector).
+- **Added (production):**
+  - `DraftDiscard.kt` (`:feature:conversations`, pure SSOT) — `isDiscardable(id, draftsById)`
+    (offer the action **only** when the row holds a *meaningful* draft — the shared
+    `ConversationDraft.isMeaningful` rule that also floats/previews it) + `afterDiscard(id,
+    draftsById)` (removes the entry when present, returns the **same instance** when absent so a
+    no-op discard never forces a recomposition; removes even a persisted non-meaningful entry).
+  - `ConversationListViewModel.discardDraft(id)` — snapshot → gate on `isDiscardable` (inert
+    otherwise) → optimistic `afterDiscard` + `withVisible` (row loses its preview and sinks out
+    of the floated group instantly) → `draftStore.clear(id)` in `viewModelScope`
+    (`CancellationException` rethrown; a failed clear rolls the optimistic removal back and
+    surfaces `errorMessage`). `draftStore` promoted to a stored field.
+  - `ConversationListScreen` — long-press context menu gains a **"Discard draft"** item
+    (`DeleteSweep` glyph), rendered only when `draft?.isMeaningful == true`; threaded
+    `onDiscardDraft` + `hasDraft` down through `ConversationRow`/`ConversationRowContent`.
+    4 new strings × 4 locales (en/fr/es/pt).
+- **Tests:** +8 `DraftDiscardTest` (discardable: meaningful text / reply-only armed; not
+  discardable: absent / blank-non-reply; afterDiscard: removes only that entry / same-instance
+  when absent / removes persisted non-meaningful / last-draft→empty) ; +4
+  `ConversationListViewModelTest` (discard clears preview + sinks the row + clears the durable
+  store; optimistic feedback before the store settles; inert on a non-meaningful draft — store
+  untouched, no error; unknown conversation id changes nothing).
+- **Edge cases covered:** empty / single / last-entry maps; absent + unknown ids (inert);
+  meaningful vs blank vs reply-only; idempotent no-op discard (same instance); optimistic
+  update + rollback-on-failure; cancellation-safe `viewModelScope` work.
+- **UX note (deviation, justified):** iOS surfaces discard via swipe, but the list's two swipe
+  directions are already committed to pin (StartToEnd) / archive (EndToStart) — the primary list
+  swipes. Rather than overload a swipe, discard lives in the existing long-press context menu
+  (also a natural gesture), shown contextually only for draft-bearing rows. Coherent with the
+  pin/mute/archive/mark-read menu already there; no swipe-direction conflict.
+- **Verify:** `:feature:conversations:testDebugUnitTest` green; full `assembleDebug` +
+  `testDebugUnitTest` across modules → all green **except** the documented
+  `NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` DataStore
+  5s-timeout flake (in `:sdk-core`, untouched by this diff), which passes on isolated re-run
+  (`BUILD SUCCESSFUL in 4s`).
+- **Reviewer:** PASS — diff `apps/android` (only `:feature:conversations`) only; behaviour
+  through the public API, no tautologies, near-total branch coverage on the pure rule + both
+  gate/rollback VM paths; SDK-purity honoured (the "when can you discard / what remains" product
+  decision is a pure atom in `:feature:conversations`; the `ConversationDraftStore.clear` byte
+  op stays the `:sdk-core` seam; the menu render is exempt Compose glue); single source of truth
+  (`isMeaningful`); Instant-App (optimistic removal + rollback, no spinner); UDF immutable state,
+  pure transitions; accent-coherent list, natural long-press gesture, no dead end (discard leaves
+  a coherent, draft-free row).
+
+### 2026-07-08 — slice `conversations-empty-state-content` ✅ impl + reviewer PASS (merged)
+- **Parity:** §B "Cold-start skeletons + error-with-retry empty state". Both renders (skeleton + error+retry card)
+  already existed, but the *decision* of which body region to show lived as a scattered `when` inside
+  `ConversationListScreen` — untestable Composable glue, with a redundant `conversations.isEmpty() &&` guard on the
+  filtered-empty and cold-empty arms (already implied by the branch order). No pure coverage of the decision.
+- **Pure core (TDD):** `ConversationListContent.of(state)` (`:feature:conversations`) — a sealed SSOT
+  (`Populated | Skeleton | Error(message) | FilteredEmpty | ColdEmpty`). **Cache-first (ARCHITECTURE.md §4):** a
+  populated list wins first, so a stale `showSkeleton` flag **or** a background sync `errorMessage` never hides data
+  already on screen (an improvement over the old screen, which tested `showSkeleton` before the list). Only an empty
+  visible list falls through: `showSkeleton` → `errorMessage` (carries the message for the retry card) →
+  `isFilteredEmpty` (reuses the existing derived predicate — no re-implementation) → `ColdEmpty`. +11 tests
+  (`ConversationListContentTest`): data→Populated, cache-first data-over-skeleton, cache-first data-over-error,
+  cold-skeleton, empty+error carries message, skeleton-over-error precedence, error-over-active-filter precedence,
+  filter-narrows-to-nothing→FilteredEmpty, non-blank-search→FilteredEmpty, blank-search-on-ALL→ColdEmpty boundary,
+  bare-empty→ColdEmpty.
+- **Wiring:** `ConversationListScreen`'s body `when` now switches on `ConversationListContent.of(state)` and renders
+  each arm (Compose glue, exempt); the redundant `conversations.isEmpty() &&` guards are gone. No VM/state-shape
+  change, no new strings, no DI change.
+- **Verify:** `gradle assembleDebug testDebugUnitTest` (system Gradle 8.14.3) — BUILD SUCCESSFUL (943 tasks). +11 tests.
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API, no tautologies; every branch + both
+  cache-first overrides + the two precedence orderings + the blank-search boundary covered; SDK-purity honoured (the
+  "which region" product decision is a pure `:feature` atom, the render stays exempt screen glue); UDF, cache-first,
+  single-source (reuses `isFilteredEmpty`), no dead end.
+
+### 2026-07-07 — slice `conversations-draft-aware-ordering` ✅ impl + reviewer PASS
+- **Parity:** §B "Draft-aware ordering (drafts float to top)" + the draft row preview. iOS floats a conversation
+  the user has started (unsent) composing to the top of the list and shows an accent "Draft: …" preview; Android
+  ordered purely by backend recency and never surfaced the draft.
+- **Pure cores (TDD):**
+  - `ConversationDraft.isMeaningful` (`:core:model`) — the shared SSOT for "a draft worth surfacing/persisting"
+    (non-blank text **or** an armed, non-blank reply). `DraftAutosave` (`:feature:chat`) was refactored to consume
+    it in both `resolve` (the had-draft/clear branch) and `restore` (the inert-draft guard) — one definition of
+    "meaningful", not three. +4 tests (`ConversationDraftTest`).
+  - `DraftAwareOrdering.apply(conversations, draftsById)` (`:feature:conversations`) — floats every conversation
+    whose id has a *meaningful* draft to the top, ordered by draft `updatedAt` desc (a null timestamp sorts last
+    within the floated group; the sort is stable so equal/absent timestamps and every non-draft row keep their
+    incoming order). Empty drafts / drafts for absent conversations are no-ops. +10 tests (`DraftAwareOrderingTest`:
+    empty list, no-drafts identity, single float, relative-order preserved, updatedAt-desc, null-timestamp-last,
+    stable-ties, inert-no-float, reply-only-floats, ghost-id-ignored).
+  - `draftPreview(draft, labels)` (`:feature:conversations`) — the accent "Brouillon : …" row line (trimmed text),
+    or the prefix + "…" for a reply-only draft, or `null` (→ falls back to `lastMessagePreview`). +4 tests.
+- **Seam + wiring:** `ConversationDraftStore.observeAll(): Flow<Map<String, ConversationDraft>>` (`:sdk-core`) —
+  InMemory now StateFlow-backed (reactive), DataStore maps over `data` scanning the `draft:` key prefix and omitting
+  a corrupt entry. +4 tests (2 InMemory, 2 DataStore incl. corrupt-omitted). `ConversationListViewModel` injects
+  the store (already in the Hilt graph — zero DI change), collects `observeAll()` into `state.drafts`, and
+  `withVisible` now applies `DraftAwareOrdering` after `ConversationFilters`. `ConversationListScreen` threads the
+  per-row draft and renders the accent draft preview (Compose glue, exempt). +1 VM test (draft floats to top). New
+  string `conversations_preview_draft_prefix` in en/fr/es/pt.
+- **Coherence:** the screen's Épingles-first split stays above the floated group → **Épinglés > brouillons > reste**,
+  a coherent hierarchy; the draft preview reuses the conversation `accentColor` (no hardcoded colour).
+- **Verify:** `gradle assembleDebug testDebugUnitTest` (system Gradle 8.14.3) — green. +23 tests total.
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API, no tautologies; boundary coverage on
+  the float/sort/meaningful branches; SDK-purity honoured (the "when to float / how to sort" product rule is a pure
+  `:feature` atom, the store is a stateless `:sdk-core` seam, the model predicate is `:core:model` SSOT); UDF
+  immutable state, cache-first (no spinner), no dead end.
+
+### 2026-07-07 — slice `chat-draft-reply-ref` ✅ impl + reviewer PASS · ⚠ merge blocked-on-infra (PR #1633 open)
+- **Merge status:** implementation complete, reviewer PASS, local `assembleDebug testDebugUnitTest` green. **Merge is
+  blocked by an external GitHub-hosted-runner incident**, not by this diff: every CI job that `sudo apt-get update`s
+  (Voice API Tests, Test Python (translator)) aborts with exit 100 because `packages.microsoft.com` serves an
+  invalid/unsigned `InRelease` (`Clearsigned file isn't valid, got 'NOSPLIT'` / `is no longer signed`) — a
+  fleet-wide apt-mirror signing failure that would break the same jobs on `main`. The JS/TS + Android-relevant
+  checks (Security, Quality (bun), Test web/gateway/shared/agent, Prisma) all pass. The maintainer merged `main`
+  into the branch (cfea06e); a subsequent empty-commit re-trigger (47dc4c0) hit the identical apt error, so the
+  incident is still ongoing. A ~19-min probe cron re-triggers CI and will squash-merge (re-verifying apps/android
+  scope) the moment the apt step recovers; if a probe ever fails for a reason implicating this diff it stops and
+  reports. **Do not merge past the red apt jobs.**
+- **Slice:** persist the reply reference alongside the per-conversation draft (Chat parity §C "Draft
+  auto-save/restore … + reply"; iOS app-side `DraftStore` stores the reply reference next to the text). After
+  `chat-draft-autosave` only the text survived navigation — a reply armed (or half-typed under a reply) was lost.
+  Now the reply survives leaving and reopening the conversation, and the composer re-arms the reply pill on open.
+- **Model (`:core:model`, `ConversationDraft.kt`):** added `replyToId: String? = null` (serialised, back-compat —
+  a legacy payload with no field decodes to `null`).
+- **Pure core (`:feature:chat`, `DraftAutosave.kt`):** `resolve` gained a `replyToId` param and now treats a
+  draft as *meaningful* when `rawText.isNotBlank() || reply != null` — so a reply armed on an **empty** composer is
+  `Save`d (text `""` + reference) instead of dropped, and cancelling a reply on an empty composer `Clear`s a
+  reply-only stored draft; the reference is normalised (trim, blank→`null`); the idempotent `None` now requires
+  **both** text and reply unchanged. `restore` return type changed `String?` → `DraftRestore(text, replyToId)?`
+  (null = leave the composer untouched): re-arms a reply-only draft (empty text + reply) or a half-typed reply
+  (both), normalising the stored reference; still idle-guarded (never clobbers an in-flight edit or already-typed
+  text; a draft with neither text nor reply → `null`). New `data class DraftRestore`.
+- **Wiring (`:feature:chat`, `ChatViewModel`):** `persistDraft(rawText, replyToId)` now threads the armed reply;
+  `startReply` persists after arming (only on the found-message success path), `cancelReply` persists after
+  clearing, `onDraftChange`/`send` pass the current/`null` reply. `init` restore sets both `draft` and
+  `replyingToMessageId` from the `DraftRestore` snapshot; `lastPersistedDraft` seed now counts a reply-only stored
+  draft as meaningful. The composer reply pill derives reactively from `replyingToMessageId` + loaded messages, so
+  no `ChatScreen` change — the pill re-appears once messages load (non-dead-end).
+- **Tests (+16):** `DraftAutosaveTest` (+10) — reply arms: armed-empty-persisted, text+reply-persisted,
+  trim+blank-drop, only-reply-changes-still-saves, identical-text+reply-None, cancel-on-empty-clears-reply-only,
+  drop-reply-keeps-text; restore: re-arm-reply-only, both-text-and-reply, trim+blank-ref, neither→null. (Existing
+  text-only `resolve`/`restore` tests ported to the richer API, none weakened.) `ChatViewModelTest` (+5) —
+  arming-persists-ref, typing-under-reply-persists-text+ref, stored-reply-re-arms-on-open, cancel-on-empty-purges,
+  send-purges-reply-draft. `ConversationDraftStoreTest` (+1) — durable DataStore round-trips the reference.
+- **Verify:** system `gradle assembleDebug testDebugUnitTest` (943 tasks) green. One flake
+  (`InterfaceLanguageStoreTest` DataStore `TimeoutCancellationException` under full parallel load) passed on
+  isolated re-run — unrelated to this diff (interface-language store, not drafts). Reviewer gate: **PASS** — diff
+  `apps/android` only; behaviour through the public API; no tautologies; boundary coverage on the meaningful /
+  identical / normalise branches; SDK-purity honoured (decision in `:feature:chat`, carrier in `:core:model`,
+  bytes in `:sdk-core`); UDF immutable restore snapshot; cache-first re-arm.
 
 ### 2026-07-07 — slice `chat-draft-autosave` ✅ (reviewer PASS)
 - **Slice:** per-conversation text draft auto-save/restore (Chat parity §C "Draft auto-save/restore"; iOS

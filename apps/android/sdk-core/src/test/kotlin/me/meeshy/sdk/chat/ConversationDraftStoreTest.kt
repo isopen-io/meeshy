@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.ConversationDraft
@@ -102,6 +103,30 @@ class ConversationDraftStoreTest {
         assertThat(store.load("missing")).isNull()
     }
 
+    @Test
+    fun inMemory_observeAll_reflects_saves_and_clears() = runBlocking {
+        val store = InMemoryConversationDraftStore()
+
+        store.save(draft("c1", "one"))
+        store.save(draft("c2", "two"))
+        assertThat(store.observeAll().first().keys).containsExactly("c1", "c2")
+
+        store.clear("c1")
+        val after = store.observeAll().first()
+        assertThat(after.keys).containsExactly("c2")
+        assertThat(after.getValue("c2").text).isEqualTo("two")
+    }
+
+    @Test
+    fun inMemory_observeAll_starts_from_the_initial_seed() = runBlocking {
+        val store = InMemoryConversationDraftStore(mapOf("c1" to draft("c1", "seeded")))
+
+        val all = store.observeAll().first()
+
+        assertThat(all.keys).containsExactly("c1")
+        assertThat(all.getValue("c1")).isEqualTo(draft("c1", "seeded"))
+    }
+
     // ---- DataStoreConversationDraftStore (durable) ----
 
     @Test
@@ -142,6 +167,24 @@ class ConversationDraftStoreTest {
     }
 
     @Test
+    fun dataStore_round_trips_the_reply_reference_alongside_the_text() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d6.preferences_pb")), json)
+        val replyDraft = ConversationDraft(
+            conversationId = "c1",
+            text = "re: salut",
+            updatedAt = "2026-07-07T12:00:00Z",
+            replyToId = "m1",
+        )
+
+        store.save(replyDraft)
+
+        assertThat(store.load("c1")).isEqualTo(replyDraft)
+
+        scope.cancel()
+    }
+
+    @Test
     fun dataStore_clear_removes_only_the_targeted_conversation() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d4.preferences_pb")), json)
@@ -165,6 +208,42 @@ class ConversationDraftStoreTest {
         val store = DataStoreConversationDraftStore(backing, json)
 
         assertThat(store.load("c1")).isNull()
+
+        scope.cancel()
+    }
+
+    @Test
+    fun dataStore_observeAll_returns_every_persisted_draft_keyed_by_conversation() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d7.preferences_pb")), json)
+        store.save(draft("c1", "one"))
+        store.save(draft("c2", "two"))
+
+        val all = store.observeAll().first()
+
+        assertThat(all.keys).containsExactly("c1", "c2")
+        assertThat(all.getValue("c1").text).isEqualTo("one")
+        assertThat(all.getValue("c2").text).isEqualTo("two")
+
+        scope.cancel()
+    }
+
+    @Test
+    fun dataStore_observeAll_omits_a_corrupt_entry_instead_of_crashing() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val backing = newDataStore(scope, tmp.newFile("d8.preferences_pb"))
+        backing.edit { prefs ->
+            prefs[stringPreferencesKey("draft:c1")] = json.encodeToString(
+                ConversationDraft.serializer(),
+                draft("c1", "valid"),
+            )
+            prefs[stringPreferencesKey("draft:c2")] = "{ not json"
+        }
+        val store = DataStoreConversationDraftStore(backing, json)
+
+        val all = store.observeAll().first()
+
+        assertThat(all.keys).containsExactly("c1")
 
         scope.cancel()
     }

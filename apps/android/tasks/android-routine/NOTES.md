@@ -3,6 +3,29 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-07 (`conversations-draft-aware-ordering`): an expression-body `= runBlocking { … }` JVM test must NOT
+  end on a Truth assertion that returns a value.** `Truth.assertThat(x).containsExactly(…)` returns an `Ordered`
+  (and `.inOrder()`/`.isInstanceOf()` also return non-Unit), so a test written `@Test fun t() = runBlocking { …;
+  assertThat(m).containsExactly(k, v) }` makes the method's return type `Ordered`, and JUnit rejects the whole class
+  at load time with `InvalidTestClassError: Method t() should be void` — which fails **every** test in that class,
+  not just the offender (the report shows one `initializationError`, easy to misread as a single flake). Fixes:
+  end the block on a void-returning assertion (`.isEqualTo(...)` returns void in Truth's Java API), split the map
+  assertion into `assertThat(m.keys).containsExactly(k)` **then** `assertThat(m.getValue(k)).isEqualTo(v)`, or give
+  the function a block body `{ … }` (block bodies are always Unit — this is why the sibling non-`runBlocking` tests
+  using `{ assertThat(...).containsExactly(...) }` never tripped it). Note `runBlocking { … isEqualTo }` is fine
+  because `isEqualTo` is void; only the collection/ordering matchers bite.
+- **2026-07-07 (`conversations-draft-aware-ordering`): a store that a list needs to observe wholesale needs an
+  `observeAll()`, and a shared "is this meaningful" predicate belongs in `:core:model`, not duplicated per feature.**
+  The conversation list had to know *which* conversations carry a draft — a per-id `load()` can't drive that, so
+  `ConversationDraftStore` grew `observeAll(): Flow<Map<..>>` (InMemory backed by a `MutableStateFlow` so it's
+  reactive; DataStore maps over `data` filtering the `draft:` key prefix and `value is String`, decoding each,
+  corrupt→omitted). The "does a draft count" rule already lived inline in `:feature:chat` `DraftAutosave` twice;
+  extracting `val ConversationDraft.isMeaningful` to `:core:model` and having both `DraftAutosave` and the new
+  `:feature:conversations` ordering/preview consume it kept one definition. Semantics matched exactly
+  (`text.isNotBlank() || !replyToId.isNullOrBlank()` == the old `restore` guard; the `resolve` had-draft check used
+  `replyToId != null` but a stored draft is always reply-normalised, so equivalent) — the existing chat suite stayed
+  green. The "when to float / how to sort / which preview" product decision is a pure `:feature` atom
+  (`DraftAwareOrdering`, `draftPreview`); the row overlap/tint is exempt Compose glue.
 - **2026-07-07 (`chat-draft-autosave`): DataStore test files must end `.preferences_pb`, and use the explicit
   serializer for `encodeToString`/`decodeFromString`.** Two traps in one slice: (1) `PreferenceDataStoreFactory
   .create { file }` throws `IllegalStateException` at construction unless the produced file's extension is exactly

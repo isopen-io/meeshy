@@ -430,9 +430,28 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       // Mark participant as disconnected
       setDisconnectedParticipants((prev) => new Set(prev).add(participantId));
 
+      // Snapshot the connection at leave-time so the delayed cleanup below can
+      // detect a same-session rejoin (network blip, tab reload) within the
+      // grace window and skip tearing down the *new* connection that already
+      // replaced this one in the store.
+      const connectionAtLeave = useCallStore.getState().peerConnections.get(participantId);
+
       // Remove their stream and peer connection after 2 seconds
       setTimeout(() => {
-        const { removeRemoteStream, removePeerConnection } = useCallStore.getState();
+        const { peerConnections, removeRemoteStream, removePeerConnection } = useCallStore.getState();
+
+        if (peerConnections.get(participantId) !== connectionAtLeave) {
+          // Participant already rejoined and got a fresh RTCPeerConnection
+          // registered under the same id — leave it (and the offer guard
+          // below) alone, only clear the stale disconnected-banner flag.
+          setDisconnectedParticipants((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(participantId);
+            return newSet;
+          });
+          return;
+        }
+
         removeRemoteStream(participantId);
         removePeerConnection(participantId);
 

@@ -2132,19 +2132,31 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
         )
     }
 
-    func test_endCurrentAndAnswerPending_clearsPendingInsideTask() throws {
+    /// Superseded 2026-07-07 (Finding 1 fix): `pendingIncomingCall` is now
+    /// cleared SYNCHRONOUSLY at the top of `endCurrentAndAnswerPending`,
+    /// before `endCall()` runs — not inside the settle Task. This is a
+    /// *stronger* re-entrancy guard than the original (which cleared it only
+    /// after the Task completed 0.5s later): a second `endCurrentAndAnswerPending()`
+    /// call during that window now sees `pendingIncomingCall == nil` immediately
+    /// and no-ops via its own leading guard, instead of racing to re-read a
+    /// value that was still populated. Revalidation-before-answering is now
+    /// the dedicated `answeringPendingCallId` token's job (see
+    /// `test_endCurrentAndAnswerPending_revalidatesPendingBeforeAnswering`).
+    func test_endCurrentAndAnswerPending_clearsPendingSynchronouslyBeforeEndCall() throws {
         let source = try callManagerSource()
         guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
             XCTFail("endCurrentAndAnswerPending not found"); return
         }
-        guard let taskRange = body.range(of: "Task {") else {
-            XCTFail("Task { not found in endCurrentAndAnswerPending"); return
+        guard let clearRange = body.range(of: "pendingIncomingCall = nil"),
+              let endCallRange = body.range(of: "endCall()") else {
+            XCTFail("Expected pendingIncomingCall to be cleared before endCall()"); return
         }
-        let insideTask = String(body[taskRange.lowerBound...])
-        XCTAssertTrue(
-            insideTask.contains("pendingIncomingCall = nil"),
-            "pendingIncomingCall must be cleared INSIDE the Task, after handleIncomingCallNotification, " +
-            "to avoid a second endCurrentAndAnswerPending() racing with the first"
+        XCTAssertLessThan(
+            clearRange.lowerBound,
+            endCallRange.lowerBound,
+            "pendingIncomingCall must be cleared BEFORE endCall() runs, so a re-entrant " +
+            "endCurrentAndAnswerPending() call during the settle sleep no-ops immediately " +
+            "via its own leading guard rather than racing on a still-populated value."
         )
     }
 
@@ -2164,12 +2176,22 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
         )
     }
 
-    /// Audit 2026-07-02 (bug 3 follow-up): the waiting call can be ended,
-    /// answered elsewhere, or replaced by a newer incoming call during the
-    /// 0.5s settle sleep. The Task must re-validate that `pendingIncomingCall`
-    /// still matches the captured `pending.callId` BEFORE routing it to
-    /// `handleIncomingCallNotification` — otherwise it answers a torn-down or
-    /// wrong call, presenting a phantom ringing/connecting UI.
+    /// Audit 2026-07-02 (bug 3 follow-up), corrected 2026-07-07 (Finding 1):
+    /// the waiting call can be ended, answered elsewhere, or replaced by a
+    /// newer incoming call during the 0.5s settle sleep. The Task must
+    /// re-validate before routing it to `handleIncomingCallNotification` —
+    /// otherwise it answers a torn-down or wrong call, presenting a phantom
+    /// ringing/connecting UI.
+    ///
+    /// The original guard read `self.pendingIncomingCall?.callId`, but
+    /// `endCall()` (invoked earlier in this same function) synchronously
+    /// drives `endCallInternal`, which unconditionally nils
+    /// `pendingIncomingCall` for an unrelated reason (dropping a stale busy
+    /// banner when the ACTIVE call ends). That made the guard compare `nil
+    /// == pending.callId`, which is always false — "End & Answer" never
+    /// answered the waiting call, on every single invocation. The guard must
+    /// use a dedicated token (`answeringPendingCallId`) that survives
+    /// `endCall()`'s side effect.
     func test_endCurrentAndAnswerPending_revalidatesPendingBeforeAnswering() throws {
         let source = try callManagerSource()
         guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
@@ -2181,10 +2203,128 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
         }
         let beforeHandle = String(body[taskRange.upperBound..<handleRange.lowerBound])
         XCTAssertTrue(
+            beforeHandle.contains("self.answeringPendingCallId == pending.callId"),
+            "endCurrentAndAnswerPending's Task must guard `self.answeringPendingCallId == " +
+            "pending.callId` (NOT `self.pendingIncomingCall?.callId`, which endCall() already " +
+            "nils as a side effect) before calling handleIncomingCallNotification."
+        )
+        XCTAssertFalse(
             beforeHandle.contains("self.pendingIncomingCall?.callId == pending.callId"),
-            "endCurrentAndAnswerPending's Task must guard `self.pendingIncomingCall?.callId == " +
-            "pending.callId` before calling handleIncomingCallNotification — the waiting call may " +
-            "have been ended/answered/replaced during the settle sleep."
+            "endCurrentAndAnswerPending's revalidation guard must NOT read pendingIncomingCall — " +
+            "endCall() nils it synchronously before the Task runs, making that guard always false."
+        )
+    }
+
+    /// The revalidation token must be set BEFORE endCall() runs (endCall's
+    /// synchronous CallKit/socket teardown must not race a not-yet-armed
+    /// guard), and endCall() itself must not clear it — only the settle
+    /// Task (on success) or clearPendingIncomingCall (on remote cancellation)
+    /// may consume it.
+    func test_endCurrentAndAnswerPending_armsTokenBeforeEndCall() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        guard let armRange = body.range(of: "answeringPendingCallId = pending.callId"),
+              let endCallRange = body.range(of: "endCall()") else {
+            XCTFail("Expected answeringPendingCallId to be armed before endCall()"); return
+        }
+        XCTAssertLessThan(
+            armRange.lowerBound,
+            endCallRange.lowerBound,
+            "answeringPendingCallId must be armed with pending.callId BEFORE endCall() runs."
+        )
+    }
+
+    func test_clearPendingIncomingCall_alsoClearsAnsweringToken() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func clearPendingIncomingCall", in: source) else {
+            XCTFail("clearPendingIncomingCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("answeringPendingCallId = nil"),
+            "clearPendingIncomingCall (the remote-cancellation path) must also clear " +
+            "answeringPendingCallId, or a stale token could let a torn-down call be answered."
+        )
+    }
+}
+
+// MARK: - Call waiting: superseding a still-pending call
+
+/// Audit 2026-07-07 (Finding 2): `pendingIncomingCall` holds a single waiting
+/// call, not a queue. Both busy-path incoming-call sites used to overwrite it
+/// unconditionally — if a third caller arrived while a second was already
+/// waiting, the second caller's call was silently dropped locally (no signal
+/// sent, left ringing until the gateway's own ~60s timeout). Both sites must
+/// now reject the call being displaced via the same socket signal
+/// `rejectPendingCall()` already uses, before overwriting `pendingIncomingCall`.
+@MainActor
+final class CallWaitingSupersedeTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_rejectSupersededPendingCall_helperExists_andSignalsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func rejectSupersededPendingCall", in: source) else {
+            XCTFail("rejectSupersededPendingCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: superseded.callId)"),
+            "rejectSupersededPendingCall must emit call:end for the call being displaced, mirroring rejectPendingCall()."
+        )
+        XCTAssertTrue(
+            body.contains("superseded.callId != newCallId"),
+            "rejectSupersededPendingCall must not reject the same call it's about to become (idempotent re-delivery)."
+        )
+    }
+
+    func test_reportIncomingVoIPCall_busyPath_rejectsSupersededBeforeOverwriting() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found"); return
+        }
+        guard let rejectRange = body.range(of: "rejectSupersededPendingCall(replacingWithCallId: callId)"),
+              let overwriteRange = body.range(of: "pendingIncomingCall = (callId: callId, fromUserId: callerUserId") else {
+            XCTFail("Expected rejectSupersededPendingCall before the busy-path pendingIncomingCall overwrite"); return
+        }
+        XCTAssertLessThan(
+            rejectRange.lowerBound,
+            overwriteRange.lowerBound,
+            "reportIncomingVoIPCall must reject any already-waiting call BEFORE overwriting pendingIncomingCall."
+        )
+    }
+
+    func test_handleIncomingCallNotification_busyPath_rejectsSupersededBeforeOverwriting() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func handleIncomingCallNotification", in: source) else {
+            XCTFail("handleIncomingCallNotification not found"); return
+        }
+        guard let rejectRange = body.range(of: "rejectSupersededPendingCall(replacingWithCallId: callId)"),
+              let overwriteRange = body.range(of: "pendingIncomingCall = (callId: callId, fromUserId: fromUserId") else {
+            XCTFail("Expected rejectSupersededPendingCall before the busy-path pendingIncomingCall overwrite"); return
+        }
+        XCTAssertLessThan(
+            rejectRange.lowerBound,
+            overwriteRange.lowerBound,
+            "handleIncomingCallNotification must reject any already-waiting call BEFORE overwriting pendingIncomingCall."
         )
     }
 }

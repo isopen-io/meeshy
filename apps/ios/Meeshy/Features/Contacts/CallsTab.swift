@@ -50,6 +50,11 @@ struct CallsTab: View {
                 .padding(.vertical, 7)
                 .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
                 .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
+                // The capsule stays visually compact, but the tappable area is
+                // widened to the 44x44pt HIG minimum (frame + contentShape) —
+                // the visible pill was ~27-30pt tall, under the tap-target floor.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -154,6 +159,14 @@ private struct CallJournalRow: View, Equatable {
                 }
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            // Scoped to this Button only — grouping the WHOLE row (including
+            // CallRowDialButton) under one combined element, as before, swallowed
+            // the redial Menu entirely: VoiceOver could never reach "Rappeler"
+            // (found in accessibility audit 2026-07-06/08). CallRowDialButton
+            // keeps its own accessibilityLabel/Hint as a separate, reachable element.
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(name), \(accessibilityDirection)")
 
             if let peer = record.peer {
                 CallRowDialButton(
@@ -166,9 +179,6 @@ private struct CallJournalRow: View, Equatable {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name), \(accessibilityDirection)")
     }
 
     private var directionIcon: String {
@@ -213,7 +223,8 @@ private struct CallRowDialButton: View {
             Image(systemName: defaultIsVideo ? "video.fill" : "phone.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
+                // 44x44 — Apple HIG minimum tap target (was 40x40).
+                .frame(width: 44, height: 44)
                 .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
         }
         .accessibilityLabel(String(localized: "calls.redial", defaultValue: "Rappeler", bundle: .main))
