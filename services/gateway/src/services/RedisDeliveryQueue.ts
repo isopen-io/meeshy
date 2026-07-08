@@ -201,7 +201,13 @@ export class RedisDeliveryQueue {
       }
     }
 
-    return memoryEntries;
+    // Sort by enqueuedAt for the same reason the Redis-backed path does (line
+    // above): a mutable event superseded in place (see enqueue()) keeps its
+    // original, earlier array slot but carries a NEWER enqueuedAt, so raw array
+    // order can disagree with chronological order. Returning unsorted here would
+    // replay a re-added reaction (or a later edit) BEFORE an intervening remove,
+    // converging the reconnecting offline user to a state the sender never had.
+    return [...memoryEntries].sort(byEnqueuedAt);
   }
 
   async peek(userId: string, limit?: number): Promise<QueuedMessagePayload[]> {

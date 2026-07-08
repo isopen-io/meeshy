@@ -1005,6 +1005,47 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     expect(drained[1].payload.content).toBe('goodbye');
   });
 
+  test('supersede (memory): drain replays in enqueuedAt (FIFO) order after an in-place supersede reorders the array', async () => {
+    // Pure-memory path (Redis unavailable). A reaction re-added after a remove
+    // is superseded IN PLACE at its original (earlier) array slot but carries a
+    // NEWER enqueuedAt. Array order and chronological order now disagree, so the
+    // memory drain MUST sort by enqueuedAt exactly like the Redis-backed path —
+    // otherwise the reconnecting offline user replays add→add→remove and loses a
+    // reaction the sender actually kept.
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const addA = makePayload({
+      messageId: 'M', eventType: 'reaction-added',
+      dedupKey: 'M:A:👍', enqueuedAt: '2026-01-01T00:00:00.000Z',
+    });
+    const addB = makePayload({
+      messageId: 'M', eventType: 'reaction-added',
+      dedupKey: 'M:B:❤️', enqueuedAt: '2026-01-01T00:00:01.000Z',
+    });
+    const removeA = makePayload({
+      messageId: 'M', eventType: 'reaction-removed',
+      dedupKey: 'M:A:👍', enqueuedAt: '2026-01-01T00:00:02.000Z',
+    });
+    const reAddA = makePayload({
+      messageId: 'M', eventType: 'reaction-added',
+      dedupKey: 'M:A:👍', enqueuedAt: '2026-01-01T00:00:03.000Z',
+    });
+
+    await queue.enqueue('user-offline', addA);
+    await queue.enqueue('user-offline', addB);
+    await queue.enqueue('user-offline', removeA);
+    await queue.enqueue('user-offline', reAddA); // supersedes addA in place at slot 0
+
+    const drained = await queue.drain('user-offline');
+    expect(drained.map(e => e.enqueuedAt)).toEqual([
+      '2026-01-01T00:00:01.000Z', // addB
+      '2026-01-01T00:00:02.000Z', // removeA
+      '2026-01-01T00:00:03.000Z', // reAddA (superseded addA, newest content)
+    ]);
+    // Final replayed reaction for A is an ADD, applied after its REMOVE.
+    expect(drained[drained.length - 1].dedupKey).toBe('M:A:👍');
+    expect(drained[drained.length - 1].eventType).toBe('reaction-added');
+  });
+
   test('dedup (memory): two different reactors on the same message both queue, when dedupKey differs', async () => {
     const queue = new RedisDeliveryQueue(makeCacheStore(null));
     const reactorA = makePayload({
