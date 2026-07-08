@@ -1,13 +1,15 @@
 package me.meeshy.app.chat
 
 /**
- * A minimal, opaque projection of a message for reply-jump resolution: its own id
- * and the id of the message it quotes (`null` when it is not a reply). Keeping this
- * SDK-agnostic keeps [ReplyJumpResolver] a pure, fully-testable decision.
+ * A minimal, opaque projection of a message for reply-jump / reply-thread
+ * resolution: its own id, the id of the message it quotes (`null` when it is not
+ * a reply), and whether it has been deleted. Keeping this SDK-agnostic keeps
+ * [ReplyJumpResolver] and [ReplyThreads] pure, fully-testable decisions.
  */
 data class ReplyLink(
     val id: String,
     val replyToId: String?,
+    val isDeleted: Boolean = false,
 )
 
 /** Where a tap on a message's quoted-reply preview should take the user. */

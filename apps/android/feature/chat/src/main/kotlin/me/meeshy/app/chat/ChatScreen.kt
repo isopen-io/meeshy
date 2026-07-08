@@ -84,6 +84,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -133,6 +134,10 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val listItems = remember(state.messages) {
         buildChatListItems(state.messages, ZoneId.systemDefault())
+    }
+
+    val replyThreads = remember(state.messages) {
+        ReplyThreads.of(state.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) })
     }
 
     // Auto-scroll on a new message only when the user is already at the
@@ -350,6 +355,14 @@ fun ChatScreen(
                                             onReplyPreviewClick = {
                                                 viewModel.onReplyPreviewTap(bubble.messageId)
                                             },
+                                        )
+                                    }
+                                    replyThreads.threadFor(bubble.messageId)?.let { thread ->
+                                        ReplyCountPill(
+                                            count = thread.count,
+                                            isOutgoing = bubble.isOutgoing,
+                                            accentColor = accentColor,
+                                            onClick = { viewModel.onReplyCountTap(bubble.messageId) },
                                         )
                                     }
                                     if (bubble.deliveryStatus == DeliveryStatus.Failed) {
@@ -692,6 +705,51 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
                 .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.7f))
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         )
+    }
+}
+
+/**
+ * The reply-count pill under a message that has quoted replies (parity with iOS's
+ * reply-count affordance). Accent-tinted, aligned to the message's own side, and
+ * tappable — tapping jumps to the earliest reply in the thread (no dead end). The
+ * "which messages have a thread / how many / which reply anchors it" decision is the
+ * pure [ReplyThreads] SSOT; this is only the render.
+ */
+@Composable
+private fun ReplyCountPill(
+    count: Int,
+    isOutgoing: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        contentAlignment = if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            modifier = Modifier
+                .clip(RoundedCornerShape(MeeshyRadius.pill))
+                .clickable(onClick = onClick)
+                .background(accentColor.copy(alpha = 0.12f))
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = pluralStringResource(R.plurals.chat_reply_count, count, count),
+                style = MaterialTheme.typography.labelMedium,
+                color = accentColor,
+            )
+        }
     }
 }
 

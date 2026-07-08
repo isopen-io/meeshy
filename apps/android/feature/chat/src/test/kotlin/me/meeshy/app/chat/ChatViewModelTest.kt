@@ -1483,6 +1483,65 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun tapping_the_reply_count_pill_scrolls_to_the_first_reply_in_the_thread() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.onReplyCountTap("orig")
+
+        assertThat(vm.state.value.scrollToMessageId).isEqualTo("answer")
+    }
+
+    @Test
+    fun tapping_the_reply_count_on_a_message_with_no_replies_is_inert() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.onReplyCountTap("plain")
+
+        assertThat(vm.state.value.scrollToMessageId).isNull()
+    }
+
+    @Test
+    fun tapping_the_reply_count_on_a_parent_with_several_replies_anchors_on_the_earliest() =
+        runTest(dispatcher) {
+            val (vm, _, _) = viewModel(
+                flowOf(
+                    CacheResult.Fresh(
+                        listOf(
+                            synced(ApiMessage(id = "orig", conversationId = "c1", senderId = "other", content = "root")),
+                            synced(
+                                ApiMessage(
+                                    id = "first",
+                                    conversationId = "c1",
+                                    senderId = "other",
+                                    content = "first reply",
+                                    replyTo = ApiMessageReplyPreview(id = "orig", content = "root"),
+                                ),
+                            ),
+                            synced(
+                                ApiMessage(
+                                    id = "second",
+                                    conversationId = "c1",
+                                    senderId = "other",
+                                    content = "second reply",
+                                    replyTo = ApiMessageReplyPreview(id = "orig", content = "root"),
+                                ),
+                            ),
+                        ),
+                        ageMillis = 0,
+                    ),
+                ),
+                currentUser = me,
+            )
+            advanceUntilIdle()
+
+            vm.onReplyCountTap("orig")
+
+            assertThat(vm.state.value.scrollToMessageId).isEqualTo("first")
+        }
+
+    @Test
     fun opening_reaction_details_shows_the_sheet_immediately_while_the_fetch_is_in_flight() =
         runTest(dispatcher) {
             val h = harness(flowOf(CacheResult.Empty), currentUser = me)

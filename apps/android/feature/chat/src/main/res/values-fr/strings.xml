@@ -45,4 +45,8 @@
     <string name="chat_reactions_all">Toutes</string>
     <string name="chat_reactions_you">Vous</string>
     <string name="chat_reactions_empty">Personne pour l’instant</string>
+    <plurals name="chat_reply_count">
+        <item quantity="one">%1$d réponse</item>
+        <item quantity="other">%1$d réponses</item>
+    </plurals>
 </resources>
