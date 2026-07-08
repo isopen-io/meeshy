@@ -5679,6 +5679,26 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
         )
     }
 
+    /// `.cancel()` alone is cooperative and `createOffer()`/`performICERestart()`
+    /// have no `Task.isCancelled` checks — without also awaiting the PREVIOUS
+    /// `iceRestartTask` instance, a coalesced reconnect trigger (same `attempt`,
+    /// `attemptReconnection`'s `.coalesce` path) can re-arm this task while the
+    /// previous one is still mid-flight inside `createOffer()`, and both can call
+    /// `pc.offer(for:)`/`setLocalDescription` concurrently — the exact race this
+    /// PR fixes for the other three video-transition tasks, left open here.
+    func test_scheduleICERestart_awaitsPreviousIceRestartTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            "scheduleICERestart must await the PREVIOUS in-flight iceRestartTask (not just .cancel() it) before " +
+            "calling performICERestart() — cancellation is cooperative and createOffer() has no isCancelled check."
+        )
+    }
+
     // MARK: The video-transition family must await iceRestartTask
 
     func test_toggleVideo_awaitsIceRestartTask() throws {

@@ -4501,9 +4501,10 @@ extension CallManager: WebRTCServiceDelegate {
         scheduleICERestart(attempt: reconnectAttempt, backoffSeconds: backoffSeconds)
     }
 
-    /// (Re-)arms the ICE restart for `attempt`. Cancels any in-flight restart
-    /// task first — prevents two concurrent restart offers from corrupting the
-    /// perfect-negotiation state machine.
+    /// (Re-)arms the ICE restart for `attempt`. Cancels the in-flight restart
+    /// task first, then awaits it (in addition to the video-transition family)
+    /// before actuating — `.cancel()` alone is cooperative and doesn't stop a
+    /// restart already inside `createOffer()`, which has no re-entrancy guard.
     @MainActor
     private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {
         // Audit finding — chain onto the video-transition family too (mirrors
@@ -4516,11 +4517,20 @@ extension CallManager: WebRTCServiceDelegate {
         let previousToggle = videoToggleTask
         let previousHold = holdVideoTask
         let previousSurvival = survivalVideoTask
+        // Also chain onto the PREVIOUS iceRestartTask instance itself, not just
+        // `.cancel()` it. Cancellation is cooperative and neither
+        // `performICERestart()` nor `createOffer()` check `Task.isCancelled` —
+        // without this await, a coalesced reconnect trigger (same `attempt`,
+        // `attemptReconnection`'s `.coalesce` path) re-arms this task while the
+        // previous one may still be mid-flight inside `createOffer()`, and both
+        // can call `pc.offer(for:)`/`setLocalDescription` concurrently.
+        let previousICERestart = iceRestartTask
         iceRestartTask?.cancel()
         iceRestartTask = Task { @MainActor [weak self] in
             await previousToggle?.value
             await previousHold?.value
             _ = await previousSurvival?.value
+            await previousICERestart?.value
             // Re-validate after the chained awaits: the call may have ended, or a
             // newer reconnect cycle may have already taken over, while this task
             // was waiting behind another renegotiation.
