@@ -32,8 +32,15 @@ class FriendPresenceTest {
     }
 
     @Test
-    fun `presenceState is away when online but stale`() {
+    fun `presenceState stays online when connected with a stale timestamp`() {
+        // isOnline backend est autoritatif : connecte = vert.
         assertThat(user(isOnline = true, lastActiveAt = iso(now - 600_000)).presenceState(now))
+            .isEqualTo(PresenceState.ONLINE)
+    }
+
+    @Test
+    fun `presenceState is away when disconnected but active 10 minutes ago`() {
+        assertThat(user(isOnline = false, lastActiveAt = iso(now - 600_000)).presenceState(now))
             .isEqualTo(PresenceState.AWAY)
     }
 

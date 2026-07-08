@@ -62,7 +62,7 @@ public struct AvatarConfig {
     public let accentColor: String
     public let context: AvatarContext
     public let moodEmoji: String?
-    public let presenceState: PresenceState
+    public let presenceState: PresenceState?
     public let storyRingState: StoryRingState
     public let onTap: (() -> Void)?
     public let onViewProfile: (() -> Void)?
@@ -74,7 +74,7 @@ public struct AvatarConfig {
         accentColor: String,
         context: AvatarContext = .messageBubble,
         moodEmoji: String? = nil,
-        presenceState: PresenceState = .offline,
+        presenceState: PresenceState? = nil,
         storyRingState: StoryRingState = .none,
         onTap: (() -> Void)? = nil,
         onViewProfile: (() -> Void)? = nil,
@@ -225,15 +225,15 @@ public struct UserIdentityBar: View {
                 .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
 
         case .presence(let state):
-            if state != .offline {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(state == .away ? Color(hex: "9CA3AF") : MeeshyColors.warning)
-                        .frame(width: 6, height: 6)
-                    Text(state == .online ? "En ligne" : (state == .recent ? "Actif récemment" : "Absent"))
-                        .font(.system(size: 11))
-                        .foregroundColor(state == .away ? Color(hex: "9CA3AF") : MeeshyColors.warning)
-                }
+            // Couleurs + libellé via le mapping central (PresenceStyle) :
+            // vert online/recent, orange away, gris offline.
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(state.dotColor)
+                    .frame(width: 6, height: 6)
+                Text(state.localizedLabel)
+                    .font(.system(size: 11))
+                    .foregroundColor(state.dotColor)
             }
 
         case .memberSince(let value):
@@ -413,7 +413,7 @@ extension UserIdentityBar {
         activeFlag: String?,
         onFlagTap: ((String) -> Void)?,
         onTranslateTap: (() -> Void)?,
-        presenceState: PresenceState = .offline,
+        presenceState: PresenceState? = nil,
         moodEmoji: String? = nil,
         storyRingState: StoryRingState = .none,
         onAvatarTap: (() -> Void)?,
@@ -539,7 +539,6 @@ extension UserIdentityBar {
             url: avatarURL,
             accentColor: accentColor,
             context: .postComment,
-            presenceState: .offline,
             contextMenuItems: contextMenuItems
         )
 
@@ -595,7 +594,6 @@ extension UserIdentityBar {
             url: avatarURL,
             accentColor: accentColor,
             context: .userListItem,
-            presenceState: .offline,
             contextMenuItems: contextMenuItems
         )
 

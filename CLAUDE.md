@@ -370,6 +370,14 @@ accent = hueShift(primary, −30°)
 - Rule: ALL conversation-context components MUST use `accentColor`, never hardcode colors
 - Semantic colors (error, success) remain static via `MeeshyColors`
 
+### User Presence (source de vérité + palette)
+États dérivés de `isOnline` (backend, autoritatif — actif < 1 min) + `lastActiveAt` (décroissance 60s/5min/30min) :
+`online`/`recent` → **vert** `#34D399` (pulse sur online) · `away` → **orange** `#FBBF24` · `offline` → **gris** `#9CA3AF` · aucune donnée → aucun dot.
+- Source de vérité TS : `packages/shared/utils/user-presence.ts` (`getUserPresenceStatus`) ; miroirs : iOS `UserPresence.state(now:)` (PresenceModels.swift), Android `Presence.kt` — toute évolution touche les 3 sites
+- Mapping couleur CENTRAL (ne jamais redéclarer localement) : web `PRESENCE_DOT_CLASS`/`PRESENCE_BADGE_CLASS` (`apps/web/lib/user-status.ts`), iOS `PresenceState.dotColor` (`MeeshyUI/Theme/PresenceStyle.swift`), Android `meeshyPresenceDotColor` (`MeeshyAvatar.kt`)
+- **typing:start reçu = preuve d'activité** : les clients forcent localement online (iOS `PresenceManager.noteActivity`, web `TypingService` → user-store) — une personne qui écrit est TOUJOURS verte
+- `nil`/absence de donnée ≠ `offline` : offline connu = dot gris, pas de donnée = pas de dot
+
 ### API Response Format (all services)
 ```typescript
 { success: boolean, data?: T, error?: { code, message }, pagination?: PaginationMeta }

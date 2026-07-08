@@ -607,7 +607,7 @@ extension ThemedConversationRow: @MainActor Equatable {
 
 private struct ConversationAvatarView: View {
     let conversation: Conversation
-    let presenceState: PresenceState
+    let presenceState: PresenceState?
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
     var onViewStory: (() -> Void)? = nil
@@ -655,7 +655,7 @@ private struct ConversationAvatarView: View {
                 avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,
-                presenceState: (isDirect && moodStatus == nil) ? presenceState : .offline,
+                presenceState: (isDirect && moodStatus == nil) ? presenceState : nil,
                 // DM : tap → story (si non lu) ou profil via la logique MeeshyAvatar handleTap()
                 // Groupe : tap → infos conversation directement via onTap
                 onTap: isDirect ? nil : onViewConversationInfo,

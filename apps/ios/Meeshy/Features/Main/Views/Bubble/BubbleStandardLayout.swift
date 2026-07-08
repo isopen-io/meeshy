@@ -49,7 +49,7 @@ struct BubbleStandardLayout: View {
     let textTranslations: [MessageTranslation]
     let preferredTranslation: MessageTranslation?
     let showAvatar: Bool
-    let presenceState: PresenceState
+    let presenceState: PresenceState?
     let senderMoodEmoji: String?
     let senderStoryRingState: StoryRingState
     let allAudioItems: [ConversationViewModel.AudioItem]

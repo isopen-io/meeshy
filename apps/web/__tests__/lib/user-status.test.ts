@@ -1,20 +1,25 @@
 /**
- * Tests for user-status module.
+ * Tests for user-status module (façade web de @meeshy/shared/utils/user-presence).
  *
- * Regle produit (identique web / iOS / Android), decroissance temporelle sur lastActiveAt :
- *   delta <= 60s   -> 'online'  (orange, pulse)
- *   delta <= 5min  -> 'recent'  (orange)
- *   delta <= 30min -> 'away'    (gris)
- *   delta > 30min  -> 'offline' (aucun indicateur)
+ * Regle produit (identique web / iOS / Android) :
+ *   isOnline === true (backend, actif < 1min) -> 'online' (VERT, pulse) — autoritatif
+ *   delta <= 60s   -> 'online'  (vert, pulse)
+ *   delta <= 5min  -> 'recent'  (vert)
+ *   delta <= 30min -> 'away'    (orange)
+ *   delta > 30min  -> 'offline' (gris)
  *
- * isOnline ne sert que de fallback quand lastActiveAt est absent.
+ * Garde anti-stale : isOnline=true avec lastActiveAt > 30min est une donnée
+ * incohérente -> la décroissance temporelle l'emporte (offline).
  */
 
 import {
   getUserStatus,
-  isPresenceVisible,
   isPresenceActive,
   isPresencePulsing,
+  presenceTone,
+  presenceTextClass,
+  PRESENCE_DOT_CLASS,
+  PRESENCE_BADGE_CLASS,
   PRESENCE_ONLINE_WINDOW_MS,
   PRESENCE_RECENT_WINDOW_MS,
   PRESENCE_AWAY_WINDOW_MS,
@@ -53,9 +58,17 @@ describe('User Status Module', () => {
       });
     });
 
-    describe('No lastActiveAt (fallback on isOnline flag)', () => {
+    describe('isOnline backend flag is authoritative for online', () => {
       it('returns online when isOnline true and no lastActiveAt', () => {
         expect(getUserStatus({ isOnline: true } as any)).toBe('online');
+      });
+      it('returns online when isOnline true even with minutes-old lastActiveAt', () => {
+        expect(getUserStatus({ isOnline: true, lastActiveAt: minutesAgo(3) } as any)).toBe('online');
+        expect(getUserStatus({ isOnline: true, lastActiveAt: minutesAgo(10) } as any)).toBe('online');
+        expect(getUserStatus({ isOnline: true, lastActiveAt: minutesAgo(30) } as any)).toBe('online');
+      });
+      it('anti-stale guard: ignores isOnline when lastActiveAt is beyond 30min', () => {
+        expect(getUserStatus({ isOnline: true, lastActiveAt: minutesAgo(31) } as any)).toBe('offline');
       });
       it('returns offline when isOnline false and no lastActiveAt', () => {
         expect(getUserStatus({ isOnline: false } as any)).toBe('offline');
@@ -68,7 +81,7 @@ describe('User Status Module', () => {
       });
     });
 
-    describe('Time decay on lastActiveAt (drives the color regardless of isOnline)', () => {
+    describe('Time decay on lastActiveAt when disconnected', () => {
       it('returns online when active in the last 60 seconds', () => {
         expect(getUserStatus({ lastActiveAt: secondsAgo(10) } as any)).toBe('online');
       });
@@ -89,14 +102,14 @@ describe('User Status Module', () => {
       });
     });
 
-    describe('Freshly disconnected users still decay by time (the reported bug fix)', () => {
-      it('shows recent (orange) 3min after disconnect, not away', () => {
+    describe('Freshly disconnected users still decay by time', () => {
+      it('shows recent (vert) 3min after disconnect, not away', () => {
         expect(getUserStatus({ isOnline: false, lastActiveAt: minutesAgo(3) } as any)).toBe('recent');
       });
-      it('shows away (gris) 10min after disconnect, not orange', () => {
+      it('shows away (orange) 10min after disconnect', () => {
         expect(getUserStatus({ isOnline: false, lastActiveAt: minutesAgo(10) } as any)).toBe('away');
       });
-      it('shows offline (rien) 31min after disconnect', () => {
+      it('shows offline (gris) 31min after disconnect', () => {
         expect(getUserStatus({ isOnline: false, lastActiveAt: minutesAgo(31) } as any)).toBe('offline');
       });
     });
@@ -137,13 +150,7 @@ describe('User Status Module', () => {
   });
 
   describe('presence helpers', () => {
-    it('isPresenceVisible: everything except offline', () => {
-      expect(isPresenceVisible('online')).toBe(true);
-      expect(isPresenceVisible('recent')).toBe(true);
-      expect(isPresenceVisible('away')).toBe(true);
-      expect(isPresenceVisible('offline')).toBe(false);
-    });
-    it('isPresenceActive (orange): online + recent only', () => {
+    it('isPresenceActive (vert): online + recent only', () => {
       expect(isPresenceActive('online')).toBe(true);
       expect(isPresenceActive('recent')).toBe(true);
       expect(isPresenceActive('away')).toBe(false);
@@ -154,6 +161,39 @@ describe('User Status Module', () => {
       expect(isPresencePulsing('recent')).toBe(false);
       expect(isPresencePulsing('away')).toBe(false);
       expect(isPresencePulsing('offline')).toBe(false);
+    });
+    it('presenceTone: vert (success) actif, orange (warning) away, gris (muted) offline', () => {
+      expect(presenceTone('online')).toBe('success');
+      expect(presenceTone('recent')).toBe('success');
+      expect(presenceTone('away')).toBe('warning');
+      expect(presenceTone('offline')).toBe('muted');
+    });
+  });
+
+  describe('central color maps (single source for every presence component)', () => {
+    it('dot: vert emerald pour online/recent, orange amber pour away, gris pour offline', () => {
+      expect(PRESENCE_DOT_CLASS.online).toBe('bg-emerald-400 animate-pulse');
+      expect(PRESENCE_DOT_CLASS.recent).toBe('bg-emerald-400');
+      expect(PRESENCE_DOT_CLASS.away).toBe('bg-amber-400');
+      expect(PRESENCE_DOT_CLASS.offline).toBe('bg-gray-400');
+    });
+    it('only online pulses', () => {
+      const pulsing = (Object.keys(PRESENCE_DOT_CLASS) as UserStatus[]).filter(s =>
+        PRESENCE_DOT_CLASS[s].includes('animate-pulse')
+      );
+      expect(pulsing).toEqual(['online']);
+    });
+    it('badge variant follows the same palette', () => {
+      expect(PRESENCE_BADGE_CLASS.online).toContain('bg-emerald-400');
+      expect(PRESENCE_BADGE_CLASS.recent).toContain('bg-emerald-400');
+      expect(PRESENCE_BADGE_CLASS.away).toContain('bg-amber-400');
+      expect(PRESENCE_BADGE_CLASS.offline).toContain('bg-gray-400');
+    });
+    it('presenceTextClass maps status to tone text classes', () => {
+      expect(presenceTextClass('online')).toContain('emerald');
+      expect(presenceTextClass('recent')).toContain('emerald');
+      expect(presenceTextClass('away')).toContain('amber');
+      expect(presenceTextClass('offline')).toContain('gray');
     });
   });
 

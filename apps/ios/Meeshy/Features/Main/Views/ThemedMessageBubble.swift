@@ -54,7 +54,7 @@ struct ThemedMessageBubble: View {
     var textTranslations: [MessageTranslation] = []
     var preferredTranslation: MessageTranslation? = nil
     var showAvatar: Bool = true
-    var presenceState: PresenceState = .offline
+    var presenceState: PresenceState? = nil
     var senderMoodEmoji: String? = nil
     var senderStoryRingState: StoryRingState = .none
     var onViewStory: (() -> Void)? = nil

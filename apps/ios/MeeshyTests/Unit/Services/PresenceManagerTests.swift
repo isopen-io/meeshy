@@ -50,20 +50,30 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(presence.state, PresenceState.online)
     }
 
-    func test_state_whenActiveWithin5min_returnsRecent() {
+    func test_state_whenConnectedWithStaleTimestamp_staysOnline() {
+        // isOnline backend est autoritatif : connecte = vert, meme si le
+        // dernier lastActiveAt date de quelques minutes.
         let borderDate = Date().addingTimeInterval(-240) // 4 min
         let presence = AppUserPresence(isOnline: true, lastActiveAt: borderDate)
+        XCTAssertEqual(presence.state, PresenceState.online)
+    }
+
+    func test_state_whenDisconnectedWithin5min_returnsRecent() {
+        let borderDate = Date().addingTimeInterval(-240) // 4 min
+        let presence = AppUserPresence(isOnline: false, lastActiveAt: borderDate)
         XCTAssertEqual(presence.state, PresenceState.recent)
     }
 
-    func test_state_whenInactiveBetween5And30min_returnsAway() {
+    func test_state_whenDisconnectedBetween5And30min_returnsAway() {
         let staleDate = Date().addingTimeInterval(-600) // 10 min
-        let presence = AppUserPresence(isOnline: true, lastActiveAt: staleDate)
+        let presence = AppUserPresence(isOnline: false, lastActiveAt: staleDate)
         XCTAssertEqual(presence.state, PresenceState.away)
     }
 
     func test_state_whenInactiveOver30min_returnsOffline() {
-        let veryStaleDate = Date().addingTimeInterval(-3600) // 60 min : plus aucun dot
+        // Garde anti-stale : isOnline=true avec lastActiveAt > 30min est une
+        // donnee incoherente -> la decroissance temporelle prime.
+        let veryStaleDate = Date().addingTimeInterval(-3600) // 60 min : dot gris
         let presence = AppUserPresence(isOnline: true, lastActiveAt: veryStaleDate)
         XCTAssertEqual(presence.state, PresenceState.offline)
     }
@@ -89,9 +99,33 @@ final class PresenceManagerTests: XCTestCase {
 
     func test_presenceState_knownAwayUser_returnsAway() {
         let staleDate = Date().addingTimeInterval(-600)
-        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: staleDate)
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: staleDate)
         let state = sut.presenceState(for: "user-1")
         XCTAssertEqual(state, PresenceState.away)
+    }
+
+    // MARK: - noteActivity(userId:) — typing = signal de presence
+
+    func test_noteActivity_unknownUser_becomesOnline() {
+        sut.noteActivity(userId: "typer-1")
+        XCTAssertEqual(sut.presenceState(for: "typer-1"), PresenceState.online)
+    }
+
+    func test_noteActivity_staleUser_bumpsBackToOnline() {
+        sut.presenceMap["typer-1"] = AppUserPresence(
+            isOnline: false,
+            lastActiveAt: Date().addingTimeInterval(-600)
+        )
+        XCTAssertEqual(sut.presenceState(for: "typer-1"), PresenceState.away)
+
+        sut.noteActivity(userId: "typer-1")
+
+        XCTAssertEqual(sut.presenceState(for: "typer-1"), PresenceState.online)
+    }
+
+    func test_noteActivity_emptyUserId_isIgnored() {
+        sut.noteActivity(userId: "")
+        XCTAssertTrue(sut.presenceMap.isEmpty)
     }
 
     // MARK: - resolvedState(userId:isOnline:lastActiveAt:)
@@ -107,9 +141,10 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(state, PresenceState.online)
     }
 
-    func test_resolvedState_unknownUserOnlineInactive_returnsAway() {
+    func test_resolvedState_unknownUserOnlineInactive_returnsOnline() {
+        // isOnline autoritatif : le snapshot REST dit connecte -> vert.
         let state = sut.resolvedState(userId: "unknown", isOnline: true, lastActiveAt: Date().addingTimeInterval(-600))
-        XCTAssertEqual(state, PresenceState.away)
+        XCTAssertEqual(state, PresenceState.online)
     }
 
     func test_resolvedState_unknownUserOfflineRecent_returnsAway() {
@@ -272,10 +307,15 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_seed_preservesLastActiveAt_awayState() {
+        // isOnline=false ici (pas true) : depuis la garde anti-stale (isOnline
+        // autoritatif jusqu'a 30min), un membre connecte resterait "online"
+        // meme avec un lastActiveAt vieux de 10min — cf.
+        // test_state_whenConnectedWithStaleTimestamp_staysOnline. La decroissance
+        // vers "away" ne s'observe que pour un membre deconnecte.
         let activeDate = Date().addingTimeInterval(-600)
         let conversations = [makeConversation(members: [
             makeMemberJSON(userId: "me", isOnline: true, lastActiveAt: nil),
-            makeMemberJSON(userId: "other-1", isOnline: true, lastActiveAt: activeDate)
+            makeMemberJSON(userId: "other-1", isOnline: false, lastActiveAt: activeDate)
         ])]
 
         sut.seed(from: conversations, currentUserId: "me")

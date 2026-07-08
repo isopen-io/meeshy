@@ -17,10 +17,20 @@ export interface AvatarProps {
   className?: string;
 }
 
-const presenceDotColors: Record<Exclude<AvatarPresence, 'offline'>, string> = {
-  online: 'bg-[var(--gp-warning)] animate-pulse', // actif <= 60s : orange + pulse
-  recent: 'bg-[var(--gp-warning)]', // actif <= 5min : orange
-  away: 'bg-gray-400', // absent 5-30min : gris
+/**
+ * Mapping présence -> dot du design system v2. Couleurs FIXES (pas les tokens
+ * thème --gp-success/--gp-warning, qui varient light/dark pour d'autres
+ * usages comme Badge) : la présence doit rendre le même hex exact que le web
+ * classique (PRESENCE_DOT_CLASS), iOS (MeeshyColors.success/.warning) et
+ * Android (MeeshyPalette.Success/Warning), quel que soit le thème actif.
+ * Vert = online/recent, orange = away, gris = offline.
+ * Consommé aussi par ConversationItem — ne pas redéclarer.
+ */
+export const presenceDotClassV2: Record<AvatarPresence, string> = {
+  online: 'bg-emerald-400 animate-pulse', // actif <= 60s : vert + pulse (#34D399)
+  recent: 'bg-emerald-400', // actif <= 5min : vert (#34D399)
+  away: 'bg-amber-400', // absent 5-30min : orange (#FBBF24)
+  offline: 'bg-gray-400', // hors ligne > 30min : gris (#9CA3AF)
 };
 
 const sizeMap = {
@@ -42,7 +52,11 @@ const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
     const s = sizeMap[size];
     const px = pixelSizeMap[size];
     const initial = name.charAt(0).toUpperCase();
-    const effectivePresence: AvatarPresence = presence ?? (isOnline ? 'online' : 'offline');
+    // Dot rendu UNIQUEMENT si le caller fournit une donnée de présence
+    // (presence ou isOnline). Absence de donnée = pas de dot — un avatar de
+    // commentaire/post sans info présence ne doit pas afficher « hors ligne ».
+    const effectivePresence: AvatarPresence | null =
+      presence ?? (isOnline === undefined ? null : isOnline ? 'online' : 'offline');
 
     // Attachment avatars arrive as relative paths (`/api/v1/attachments/file/…`).
     // Resolve them to the gateway origin so next/image fetches from the API host
@@ -80,11 +94,11 @@ const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
             {initial}
           </div>
         )}
-        {effectivePresence !== 'offline' && (
+        {effectivePresence && (
           <div
             className={cn(
               'absolute rounded-full border-[var(--gp-surface)]',
-              presenceDotColors[effectivePresence],
+              presenceDotClassV2[effectivePresence],
               s.dot,
               s.dotPos
             )}
