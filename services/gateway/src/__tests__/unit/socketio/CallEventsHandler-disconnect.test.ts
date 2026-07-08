@@ -384,14 +384,21 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
   });
 
   // -------------------------------------------------------------------------
-  // ZOMBIE-SOCKET GUARD (2026-07-02) — a stale socket from a previous session
-  // expiring must NOT tear down calls the user is actively on through another
-  // live socket (prod: two expired zombies of atabeth killed call 6a464c61
-  // mid-ring while the active socket was still receiving messages).
+  // ZOMBIE-SOCKET GUARD (2026-07-02, scoped per-call 2026-07-08) — a stale
+  // socket from a previous session expiring must NOT tear down a call the
+  // user is actively on through another live socket (prod: two expired
+  // zombies of atabeth killed call 6a464c61 mid-ring while the active socket
+  // was still receiving messages).
+  //
+  // ANSWERED calls check the CALL room specifically (an unrelated idle
+  // second device that never joined this call must not mask a crashed
+  // in-call device — Audit finding, gateway iteration 2026-07-08). Pre-answer
+  // calls have no call-room membership yet, so they still fall back to the
+  // original blanket "any live socket in the user room" signal.
   // -------------------------------------------------------------------------
 
   describe('zombie-socket guard: other live sockets for the same user', () => {
-    it('does nothing (no leave, no grace, no DB scan) when the user room still has a live socket', async () => {
+    it('answered call: skips grace/cleanup when the user still has a live socket in the CALL room', async () => {
       mockLeaveCallDc.mockResolvedValue({
         id: CALL_ID,
         conversationId: CONV_ID,
@@ -403,10 +410,43 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
 
       const prisma = makePrisma();
       const { socket, handlers } = makeSocket();
-      // On 'disconnect' the closing socket has already left its rooms — any
-      // member left in the user room is a DIFFERENT, live connection.
+      const roomEmit = jest.fn();
+      const io = {
+        to: jest.fn().mockReturnValue({ emit: roomEmit }),
+        // getUserId in these tests always resolves to USER_ID regardless of
+        // socket id, so any non-empty fetchSockets result for the call room
+        // reads as "this user is still in the call room".
+        in: jest.fn().mockReturnValue({ fetchSockets: jest.fn().mockResolvedValue([{ id: 'still-in-call-room' }]) }),
+      };
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(mockLeaveCallDc).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+
+    it('answered call: an unrelated live socket in the USER room alone does not suppress cleanup', async () => {
+      const leftSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'active',
+        duration: null,
+        endReason: null,
+        mode: 'p2p',
+      };
+      mockLeaveCallDc.mockResolvedValue(leftSession);
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      // An unrelated idle second device is present in the user's global
+      // presence room, but never joined THIS call's room — must not be
+      // treated as proof the user is still on this call.
       const { io, roomEmit } = makeIo(
-        new Map([[ROOMS.user(USER_ID), new Set(['other-live-socket'])]])
+        new Map([[ROOMS.user(USER_ID), new Set(['unrelated-idle-device'])]])
       );
 
       const handler = new CallEventsHandler(prisma);
@@ -414,13 +454,14 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       await handlers['disconnect']();
       await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
-      expect(prisma.callParticipant.findMany).not.toHaveBeenCalled();
-      expect(mockLeaveCallDc).not.toHaveBeenCalled();
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-      expect(roomEmit).not.toHaveBeenCalled();
+      expect(prisma.callParticipant.findMany).toHaveBeenCalled();
+      expect(roomEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.PARTICIPANT_LEFT,
+        expect.objectContaining({ callId: CALL_ID })
+      );
     });
 
-    it('proceeds with normal disconnect cleanup when the user room is empty', async () => {
+    it('proceeds with normal disconnect cleanup when the user has no live sockets anywhere', async () => {
       const leftSession = {
         id: CALL_ID,
         conversationId: CONV_ID,
@@ -445,6 +486,37 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
         CALL_EVENTS.PARTICIPANT_LEFT,
         expect.objectContaining({ callId: CALL_ID })
       );
+    });
+
+    it('pre-answer call: skips grace/cleanup when the user room still has a live socket (no call-room membership yet)', async () => {
+      mockLeaveCallDc.mockResolvedValue({
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'ringing',
+        duration: null,
+        endReason: null,
+        mode: 'p2p',
+      });
+
+      const prisma = makePrisma();
+      (prisma.callParticipant.findMany as jest.MockedFunction<any>).mockResolvedValue([
+        makeActiveParticipation({ callSession: { id: CALL_ID, conversationId: CONV_ID, status: 'ringing', mode: 'p2p' } }),
+      ]);
+      const { socket, handlers } = makeSocket();
+      // On 'disconnect' the closing socket has already left its rooms — any
+      // member left in the user room is a DIFFERENT, live connection.
+      const { io, roomEmit } = makeIo(
+        new Map([[ROOMS.user(USER_ID), new Set(['other-live-socket'])]])
+      );
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(mockLeaveCallDc).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(roomEmit).not.toHaveBeenCalled();
     });
   });
 

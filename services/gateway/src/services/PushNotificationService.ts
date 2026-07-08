@@ -79,6 +79,12 @@ export interface SendPushOptions {
   types?: ('apns' | 'fcm' | 'voip')[];
   // Optional: target specific platforms
   platforms?: ('ios' | 'android' | 'web')[];
+  // Skip the DND-hours/days check in `isPushAllowed` — for call-management
+  // pushes only (incoming VoIP ring, its silent cancel, answered-elsewhere).
+  // A DND schedule is meant for message notifications; every comparable
+  // product (FaceTime, WhatsApp, Signal) still rings through it. Does NOT
+  // bypass `pushEnabled: false`, which is an explicit opt-out of all push.
+  bypassDnd?: boolean;
 }
 
 // ============================================
@@ -270,7 +276,7 @@ export class PushNotificationService {
   /**
    * Vérifie si les push sont autorisés selon UserPreferences.notification
    */
-  private async isPushAllowed(userId: string): Promise<boolean> {
+  private async isPushAllowed(userId: string, bypassDnd = false): Promise<boolean> {
     try {
       const userPrefs = await this.prisma.userPreferences.findUnique({
         where: { userId },
@@ -282,7 +288,7 @@ export class PushNotificationService {
       if (!prefs.pushEnabled) return false;
 
       // Vérifier DND
-      if (prefs.dndEnabled) {
+      if (prefs.dndEnabled && !bypassDnd) {
         const now = new Date();
         const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
         const start = prefs.dndStartTime;
@@ -324,10 +330,10 @@ export class PushNotificationService {
       return [];
     }
 
-    const { userId, payload, types, platforms } = options;
+    const { userId, payload, types, platforms, bypassDnd } = options;
 
     // Vérifier les préférences push utilisateur (UserPreferences.notification)
-    const pushAllowed = await this.isPushAllowed(userId);
+    const pushAllowed = await this.isPushAllowed(userId, bypassDnd);
     if (!pushAllowed) {
       pushLogger.info('Push blocked by user preferences', { userId });
       return [];
@@ -463,6 +469,7 @@ export class PushNotificationService {
       },
       types: ['voip'],
       platforms: ['ios'],
+      bypassDnd: true,
     });
   }
 

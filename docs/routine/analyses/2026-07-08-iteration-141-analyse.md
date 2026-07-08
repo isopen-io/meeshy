@@ -1,106 +1,92 @@
 # Iteration 141 — Analyse d'optimisation (2026-07-08)
 
 ## Protocole (démarrage)
-`main` @ `1a90e77` (dernier merge PR #1657). Branche `claude/brave-archimedes-k2nlps` recréée depuis
-`origin/main`. PR #1658 (iter 140) est ouverte et documente que la surface *pure-helper* est propre ; ce
-cycle prend **141** et élargit la revue à la couche **services métier** de la gateway (`services/gateway/src/services`),
-non couverte récemment. Fan-out multi-agents sur gateway/services + shared/web.
+`main` @ `5946ece` (dernier merge PR #1658, revue iter 140 ; les iters 139/140 ont été prises en parallèle —
+web/audio `snapToScale` F105 et revue helpers). Branche `claude/loving-fermat-we83q3` rebasée sur
+`origin/main`. Ce cycle prend **141**. Revue fan-out distribuée (Priorité 1/2) sur le pipeline temps réel
+`services/gateway/socketio` — idempotence & filtrage des événements dupliqués (Phase 2 de la mission).
 
-## Cible : F109 — `PushNotificationService.isPushAllowed` : la tranche du matin d'une fenêtre DND nocturne est rattachée au mauvais jour calendaire
+## Cible : R-AR1 — `attachment:reaction` re-broadcast sur un add/remove no-op : la garde d'idempotence d'iter 134 (réactions message) n'avait jamais été appliquée au miroir pièce-jointe
 
 ### Current state
-`services/gateway/src/services/PushNotificationService.ts:284-300`. Porte d'entrée unique de tous les push
-(message / mention / réaction) via `sendToUser` (l.321). Le mode Ne-Pas-Déranger combine deux critères :
-un **ensemble de jours** (`dndDays`) et une **fenêtre horaire** (`dndStartTime` → `dndEndTime`). La fenêtre
-par défaut est `22:00` → `08:00` (source : `packages/shared/types/preferences/notification.ts:80-81`), donc
-**nocturne** (`start > end`).
+`AttachmentReactionHandler` est explicitement le « Miroir de ReactionHandler » (en-tête, l.2-3). Le chemin
+message-level a été durci en iter 134 (`a28d540`) : sur un re-react identique (`unchanged`) ou un remove
+déjà-absent (`count === 0`), on répond `success` **sans** re-broadcaster. Le miroir pièce-jointe ne le
+faisait pas.
 
+`services/gateway/src/services/AttachmentReactionService.ts` (avant fix) :
 ```ts
-if (prefs.dndEnabled) {
-  const now = new Date();
-  if (prefs.dndDays && prefs.dndDays.length > 0) {
-    const dayMap = ['sun','mon','tue','wed','thu','fri','sat'] as const;
-    const today = dayMap[now.getUTCDay()];
-    if (!prefs.dndDays.includes(today as any)) return true; // ← jour COURANT
-  }
-  const currentTime = ...;                       // UTC HH:MM
-  const start = prefs.dndStartTime;              // '22:00'
-  const end   = prefs.dndEndTime;                // '08:00'
-  if (start > end) {                             // fenêtre nocturne
-    if (currentTime >= start || currentTime < end) return false;
-  } else {
-    if (currentTime >= start && currentTime < end) return false;
-  }
-}
-return true;
+async addAttachmentReaction(o): Promise<void> { /* upsert, retour void */ }
+async removeAttachmentReaction(o): Promise<void> { /* deleteMany, { count } jeté, retour void */ }
 ```
+`services/gateway/src/socketio/handlers/AttachmentReactionHandler.ts:108-132` (avant fix) : après l'appel
+service, le handler émet **inconditionnellement** `ATTACHMENT_REACTION_ADDED` / `ATTACHMENT_REACTION_REMOVED`
+à toute la room `conversation:<id>`.
 
 ### Problems identified
-Une fenêtre nocturne `22:00 → 08:00` **déborde sur le lendemain**. Sa tranche du matin (`00:00 → 08:00`)
-appartient logiquement à la nuit qui a **commencé la veille**. Or le filtre `dndDays` est évalué contre le
-**jour courant** (`now.getUTCDay()`), donc la tranche du matin est rattachée au mauvais jour.
+Le service retournait `void` — il jetait l'information « quelque chose a-t-il changé ? ». Le handler
+re-broadcastait donc même quand l'état DB n'avait pas bougé.
 
-Semantique voulue : `dndDays: ['mon']` + `22:00→08:00` = « silence du **lundi soir** au **mardi matin** ».
+- **Remove no-op** : le participant P n'a pas (ou plus) la réaction 👍 sur la PJ A (déjà retirée, retry après
+  un ACK perdu, ou 2e device qui rejoue le tap). Le client émet `attachment:reaction:remove`. `deleteMany`
+  matche 0 ligne, mais le handler émet quand même `ATTACHMENT_REACTION_REMOVED {action:'remove', emoji:'👍'}`
+  à toute la room. Le chemin canonique message n'émet rien ici.
+- **Add no-op** : P a déjà réagi 👍 sur A ; un double-fire ré-émet `attachment:reaction:add`. Rien ne change
+  en DB (l'upsert `update:{ emoji }` est un no-op), mais `ATTACHMENT_REACTION_ADDED` est re-broadcast — le
+  spam exact qu'iter 134 avait supprimé pour les messages.
 
 ### Root causes
-Le test de `dndDays` ignore le fait que la fenêtre traverse minuit : pour la tranche du matin, le jour
-pertinent est le jour de **début** de la fenêtre (`veille`), pas le jour courant.
+Divergence de contrat entre deux implémentations sœurs : `ReactionService` retourne `{ unchanged }` /
+`count > 0` et `ReactionHandler` early-return dessus ; `AttachmentReactionService` retournait `void` et
+`AttachmentReactionHandler` broadcastait toujours. Le durcissement iter 134 n'a été porté que sur le chemin
+message.
 
 ### Business impact
-Reproductible avec les **réglages par défaut** dès qu'un utilisateur active le DND avec un sous-ensemble
-de jours. Deux symptômes opposés, tous deux visibles en prod :
-
-- **Mardi 07:00 UTC** (`dndDays: ['mon']`) : `today='tue'` absent de `dndDays` → `return true` → push
-  **DÉLIVRÉ**. Mais c'est exactement la fin de la nuit de lundi voulue silencieuse → devrait être **bloqué**.
-  L'utilisateur est réveillé pendant ses heures calmes.
-- **Lundi 07:00 UTC** (`dndDays: ['mon']`) : `today='mon'` ∈ `dndDays` et `currentTime < end` → `return false`
-  → push **BLOQUÉ**. Mais c'est la fin de la nuit de dimanche (non sélectionnée) → devrait être **délivré**.
-  L'utilisateur est silencié un jour qu'il n'a pas choisi.
+Deux régressions UX visibles côté client, atteignables en prod (optimistic UI + multi-device = double-fire
+courant) :
+1. **Remove déjà-absent** → le client qui vient d'ôter sa réaction reçoit un echo `remove` d'un état déjà
+   atteint ; pire, un `success:false` (comportement d'erreur ailleurs) aurait fait *rollback* de
+   l'optimistic un-react et ré-affiché une réaction pourtant partie.
+2. **Add identique** → tous les participants de la conversation reçoivent un `ATTACHMENT_REACTION_ADDED`
+   redondant, retraité par chaque client, pour une réaction qui n'a pas changé d'état.
 
 ### Technical impact
-Erreur de logique calendaire pure. Masquée quand `dndDays` est vide (tous les jours → jamais de rattachement
-erroné) et quand la fenêtre est intra-journée (`start <= end`, pas de débordement). Se manifeste sur toute
-fenêtre nocturne combinée à un `dndDays` partiel — le cas d'usage le plus courant du DND.
+Trafic Socket.IO inutile (fan-out room entière) + retraitement client sur des no-op. Défaut de correctness
+d'idempotence sur un chemin temps réel. Non masqué : aucun test ne couvrait le no-op avant ce cycle.
 
 ### Risk assessment
-Faible. La correction ne change QUE la tranche du matin d'une fenêtre nocturne quand `dndDays` est non vide —
-c.-à-d. exactement les cas aujourd'hui faux. Les 5 tests DND existants (jour intra-fenêtre, hors-fenêtre,
-crossover soir, crossover milieu de journée) restent verts (vérifié) car aucun ne teste la tranche du matin.
+Faible. 2 fichiers, ~40 lignes. Aucun autre appelant des deux méthodes service (grep : seul le handler les
+appelle). Les chemins nominaux (add frais, swap d'emoji, remove effectif) restent inchangés — seuls les
+no-op cessent de broadcaster.
 
 ### Proposed improvements
-Restructurer : calculer d'abord l'appartenance à la fenêtre (`inWindow`), puis, si `inWindow` et `dndDays`
-non vide, tester `dndDays` contre le **jour de début** de la fenêtre — la veille (`(getUTCDay()+6)%7`) pour la
-tranche du matin (`overnight && currentTime < end`), sinon le jour courant. Bloquer si `inWindow`.
-
-Note : la comparaison horaire reste en UTC (cohérente avec l'existant). L'ambiguïté UTC-vs-heure-locale de
-`dndStartTime/dndEndTime` est un sujet séparé, non traité ici pour rester minimal et prouvable.
+Aligner le miroir sur le contrat message :
+- `addAttachmentReaction` lit l'emoji précédent via `findUnique` sur la clé `(attachmentId, participantId)` ;
+  si identique → retourne `{ changed: false }` sans upsert. Sinon upsert + `{ changed: true }`.
+- `removeAttachmentReaction` retourne `deleteMany(...).count > 0`.
+- Le handler early-return (`callback?.({ success: true })`) sur `!changed` / `!removed`, avant `getReactionSummary`
+  et l'emit — miroir de `ReactionHandler.ts:117-127` (add unchanged) et `236-245` (remove absent).
 
 ### Expected benefits
-DND correct pour le cas d'usage nominal (silence nocturne sur jours choisis). Plus de push intempestif la nuit
-ni de silence un jour non sélectionné.
+- Plus aucun re-broadcast `ATTACHMENT_REACTION_ADDED/REMOVED` sur un no-op (parité stricte avec le message).
+- Plus de rollback optimistic possible sur un un-react déjà appliqué.
+- Couverture nette : no-op add/remove au niveau service **et** handler (10 tests ajoutés).
 
 ### Implementation complexity
-Triviale : réécriture du bloc DND (une fonction pure de `Date`), + 2 tests de non-régression (les deux sens
-du bug).
+Faible. Le contrat cible existe déjà (ReactionService/ReactionHandler) et sert de spécification exacte.
 
 ### Validation criteria
-- `PushNotificationService.test.ts` : 5 tests DND existants verts + 2 nouveaux (tranche du matin bloquée quand
-  jour de début sélectionné ; tranche du matin autorisée quand jour de début non sélectionné).
-- `tsc --noEmit` gateway propre.
-- Suite gateway complète verte.
+- **RED prouvé** : service `void` → `{ changed }` indéfini → handler broadcaste toujours ; 10 nouveaux tests
+  échouent (emit non attendu / retour non conforme).
+- **GREEN** : 72/72 sur les 4 suites AttachmentReaction. Suite gateway complète 510/510 verte.
+  `tsc --noEmit` exit 0.
+- Non-régression : les 41 tests nominaux préexistants restent verts (add/remove effectifs broadcastent
+  toujours).
 
-## Candidats écartés ce cycle
-- **MediaVideoCard** (match de langue casse-sensible, divergent de ses deux jumeaux) — composant **non câblé**
-  dans l'arbre de rendu actuel (pas de site JSX `<MediaVideoCard>`), donc défaut *latent*, sous le seuil
-  « production-visible » (même barre qui a écarté F108 en iter 140). À reprendre quand la carte sera câblée.
-- **`getUserLanguagePreferences` omet `deviceLocale`** — écart de parité réel avec `resolveUserLanguagesOrdered`,
-  mais reachability faible (nécessite les 3 préférences in-app vides). Noté comme F110 pour un cycle futur.
-- **`smart_segment_merger._merge_group`** coerce `voice_similarity_score: Optional[float]` en booléen via
-  `all(...)` — `merge_short_segments` n'est **appelé nulle part** dans `services/translator/src` (import mort),
-  donc hors périmètre production-visible. La gateway neutralise déjà `false → null` défensivement
-  (`routes/conversations/messages.ts:207,233`).
-
-## Prochaines pistes
-- **F110** : injecter `deviceLocale` dans `getUserLanguagePreferences` (parité `resolveUserLanguagesOrdered`).
-- **F108** : nettoyage code mort `MessageValidator.checkPermissions` (reporté d'iter 140).
-- MediaVideoCard : aligner le match de langue sur ses jumeaux **quand** le composant sera câblé.
+## Backlog mis à jour
+- **F104** (report d'iter 138) : `NotificationService.formatFileSize` — pas de tier « Go » (≥ 1 Gio →
+  `"1024.0 Mo"`). Reachable : `server.ts:744` autorise `maxFileSize: '4 GB'`. Candidat prioritaire pour un
+  prochain cycle ciblé (fonction pure, test adjacent `NotificationService.i18n.test.ts`).
+- **F106 / F107** (report d'iter 139) : `getUserStatus` sémantique away/offline ; daily-timeline off-by-one/TZ.
+- **F102** (report) : `packages/shared/types/attachment.ts:formatFileSize` — fenêtre `1024.00 KB`.
+- **F100 / F98 / F90** (report).

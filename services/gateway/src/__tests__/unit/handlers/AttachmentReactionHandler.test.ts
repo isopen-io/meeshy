@@ -71,8 +71,8 @@ function makePrisma(overrides: Partial<{
 function makeService(summaryOverride?: unknown) {
   return {
     resolveConversationId: jest.fn().mockResolvedValue(VALID_CONV_ID),
-    addAttachmentReaction: jest.fn().mockResolvedValue(undefined),
-    removeAttachmentReaction: jest.fn().mockResolvedValue(undefined),
+    addAttachmentReaction: jest.fn().mockResolvedValue({ changed: true }),
+    removeAttachmentReaction: jest.fn().mockResolvedValue(true),
     getReactionSummary: jest.fn().mockResolvedValue(summaryOverride ?? []),
   } as unknown as import('../../../services/AttachmentReactionService').AttachmentReactionService;
 }
@@ -302,6 +302,36 @@ describe('AttachmentReactionHandler', () => {
         'attachment:reaction-removed',
         expect.objectContaining({ action: 'remove' })
       );
+      expect(cb).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('idempotent no-op re-add (changed:false) — replies success but does NOT re-broadcast', async () => {
+      const fakeIo = makeIo();
+      const service = makeService();
+      (service.addAttachmentReaction as jest.Mock).mockResolvedValue({ changed: false });
+      const deps = makeDeps({ service, io: fakeIo.io as any });
+      const handler = new AttachmentReactionHandler(deps);
+      const cb = jest.fn();
+
+      await handler.handleAdd(makeSocket(), makePayload(), cb);
+
+      expect(fakeIo.emit).not.toHaveBeenCalled();
+      expect(service.getReactionSummary).not.toHaveBeenCalled();
+      expect(cb).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('idempotent already-absent remove (returns false) — replies success but does NOT broadcast', async () => {
+      const fakeIo = makeIo();
+      const service = makeService();
+      (service.removeAttachmentReaction as jest.Mock).mockResolvedValue(false);
+      const deps = makeDeps({ service, io: fakeIo.io as any });
+      const handler = new AttachmentReactionHandler(deps);
+      const cb = jest.fn();
+
+      await handler.handleRemove(makeSocket(), makePayload(), cb);
+
+      expect(fakeIo.emit).not.toHaveBeenCalled();
+      expect(service.getReactionSummary).not.toHaveBeenCalled();
       expect(cb).toHaveBeenCalledWith({ success: true });
     });
   });

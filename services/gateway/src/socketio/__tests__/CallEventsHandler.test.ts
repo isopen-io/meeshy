@@ -77,6 +77,7 @@ jest.mock('../../utils/socket-rate-limiter', () => ({
     MEDIA_TOGGLE: { max: 50, window: 60 },
     CALL_BACKGROUNDED: { max: 20, window: 60 },
     CALL_FOREGROUNDED: { max: 20, window: 60 },
+    PRESENCE_APP_STATE: { max: 30, window: 60 },
   },
 }));
 
@@ -397,6 +398,20 @@ describe('CallEventsHandler', () => {
       const { socket } = setupWithSocket();
       await socket._trigger('presence:app-state', {});
       expect(socket.data.appForeground).toBe(false);
+    });
+
+    it('returns early when no userId (does not set appForeground)', async () => {
+      const { socket, getUserId } = setupWithSocket();
+      getUserId.mockReturnValue(undefined);
+      await socket._trigger('presence:app-state', { foreground: true });
+      expect(socket.data.appForeground).toBeUndefined();
+    });
+
+    it('returns early when rate limit exceeded (does not set appForeground)', async () => {
+      const { socket } = setupWithSocket();
+      mockCheckSocketRateLimit.mockResolvedValue(false);
+      await socket._trigger('presence:app-state', { foreground: true });
+      expect(socket.data.appForeground).toBeUndefined();
     });
   });
 

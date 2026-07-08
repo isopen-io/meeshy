@@ -1,46 +1,57 @@
-# Iteration 141 — Plan d'implémentation (2026-07-08)
+# Iteration 141 — Plan d'implémentation (R-AR1)
 
-## Objectifs
-Corriger F109 : rattacher correctement la tranche du matin d'une fenêtre DND nocturne au jour de **début**
-de la fenêtre dans `PushNotificationService.isPushAllowed`, pour que le mode Ne-Pas-Déranger respecte la
-sémantique « silence de la nuit du jour choisi ».
+## Objectives
+Porter la garde d'idempotence d'iter 134 (réactions message) sur le miroir pièce-jointe : ne plus
+re-broadcaster `ATTACHMENT_REACTION_ADDED/REMOVED` quand l'état DB n'a pas changé (re-react identique ou
+remove déjà-absent).
 
-## Modules affectés
-- `services/gateway/src/services/PushNotificationService.ts` (bloc DND de `isPushAllowed`).
-- `services/gateway/src/__tests__/unit/services/PushNotificationService.test.ts` (2 tests ajoutés).
-- `docs/routine/analyses/2026-07-08-iteration-141-analyse.md`, `docs/routine/plans/2026-07-08-iteration-141-plan.md`.
+## Affected modules
+- `services/gateway/src/services/AttachmentReactionService.ts` — `addAttachmentReaction` retourne
+  `{ changed: boolean }` (détecte l'emoji précédent via `findUnique`) ; `removeAttachmentReaction` retourne
+  `boolean` (`deleteMany.count > 0`).
+- `services/gateway/src/socketio/handlers/AttachmentReactionHandler.ts` — early-return `success` sans emit
+  sur `!changed` / `!removed`.
+- Tests :
+  - `src/socketio/handlers/__tests__/AttachmentReactionHandler.test.ts` (no-op add + no-op remove ; mocks
+    service alignés sur les nouveaux retours).
+  - `src/services/__tests__/AttachmentReactionService.test.ts` (retours `changed`/`boolean` ; `findUnique`
+    ajouté au mock).
+  - `src/__tests__/unit/services/AttachmentReactionService.test.ts` (no-op via `findUnique`, retours remove).
+  - `src/__tests__/unit/handlers/AttachmentReactionHandler.test.ts` (mocks service + no-op add/remove).
 
-## Phases
-1. **RED** — Ajouter 2 tests (tranche du matin bloquée / autorisée selon le jour de début) — échouent sur le code actuel.
-2. **GREEN** — Réécrire le bloc DND : `inWindow` d'abord, puis `dndDays` testé contre le jour de début
-   (`(getUTCDay()+6)%7` pour la tranche du matin nocturne, sinon jour courant), puis `if (inWindow) return false`.
-3. **VALIDATION** — Suite `PushNotificationService.test.ts` complète verte (5 existants + 2 nouveaux), `tsc --noEmit`.
+## Implementation phases
+1. **RED** : nouveaux tests service (retour `{changed}` / `boolean`) + handler (no-op ne broadcaste pas) →
+   échecs prouvés contre le code `void`.
+2. **GREEN** : `findUnique` de l'emoji précédent + retours ; handler early-return miroir de `ReactionHandler`.
+3. **REFACTOR** : aucun — spécification donnée par le chemin message sœur.
+4. Suite AttachmentReaction 72/72 ; suite gateway complète 510/510 ; `tsc --noEmit` exit 0.
 
-## Dépendances
-Aucune (fonction pure de `Date`, aucun changement de schéma / d'API / de contrat externe).
+## Dependencies
+Aucune. Seul le handler appelle les deux méthodes service (grep confirmé). Pas de chemin REST pour les
+réactions pièce-jointe.
 
-## Risques estimés
-Faible. Modification confinée à la tranche du matin d'une fenêtre nocturne avec `dndDays` non vide. Les autres
-branches (fenêtre intra-journée, soir nocturne, hors-fenêtre, `dndDays` vide) sont inchangées.
+## Estimated risks
+Faible. Les chemins nominaux (add frais, swap emoji, remove effectif) restent inchangés ; seuls les no-op
+cessent de broadcaster. Changement de type de retour `void` → `{changed}`/`boolean` sans autre consommateur.
 
-## Stratégie de rollback
-Revert du commit unique. Aucune migration, aucun état persistant modifié.
+## Rollback strategy
+Revert du commit unique.
 
-## Critères de validation
-- [x] 2 tests de non-régression ajoutés (les deux sens du bug).
-- [ ] 5 tests DND existants toujours verts.
-- [ ] `tsc --noEmit` gateway propre.
-- [ ] Suite gateway sans régression.
+## Validation criteria
+- RED→GREEN vert (10 tests ajoutés).
+- Non-régression : 41 tests nominaux préexistants verts.
+- Suite gateway complète 510/510 ; `tsc --noEmit` exit 0.
 
-## Statut d'achèvement
-- [x] Analyse rédigée.
-- [x] Fix implémenté.
-- [x] Tests ajoutés.
-- [ ] Validation locale (bun).
-- [ ] Merge dans `main` + suppression branche.
+## Completion status
+- [x] RED tests écrits (no-op broadcast prouvé)
+- [x] GREEN (service `{changed}`/`boolean` + handler early-return)
+- [x] Suites AttachmentReaction 72/72
+- [x] Suite gateway complète 510/510
+- [ ] Rebase sur origin/main + push + PR #1659 + merge
 
-## Améliorations futures
-- F110 : `deviceLocale` dans `getUserLanguagePreferences`.
-- F108 : nettoyage `MessageValidator.checkPermissions`.
-- Alignement casse du match de langue de `MediaVideoCard` sur ses jumeaux quand le composant sera câblé.
-- Décision produit séparée : `dndStartTime/dndEndTime` en heure locale utilisateur plutôt qu'UTC.
+## Progress tracking
+Itération 141 en cours (rebasée sur `origin/main` @ 5946ece après collision de numéro avec l'iter 139
+web/audio prise en parallèle).
+
+## Future improvements
+Backlog F104 (tier Go NotificationService), F106/F107 (iter 139), F102, F100, F98, F90 — voir analyse 141.
