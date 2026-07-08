@@ -20,7 +20,6 @@ struct WebRTCVideoView: UIViewRepresentable {
         if let track {
             track.add(view)
             context.coordinator.currentTrack = track
-            context.coordinator.renderer = view
         }
         return view
     }
@@ -55,7 +54,6 @@ struct WebRTCVideoView: UIViewRepresentable {
 
     class Coordinator {
         var currentTrack: RTCVideoTrack?
-        var renderer: RTCMTLVideoView?
     }
 }
 

@@ -105,6 +105,20 @@ final class VoIPPushManager: NSObject, ObservableObject {
         logger.info("VoIP push unregistered")
     }
 
+    /// Full teardown for logout: tears down PushKit AND purges the
+    /// keychain-backed registration record + in-memory cooldown snapshot.
+    /// `unregister()` alone leaves the persisted token record intact, so a
+    /// different user logging in on the same device would inherit the
+    /// previous account's VoIP registration until the cooldown naturally
+    /// expired — a cross-account privacy leak on shared devices.
+    func unregisterAndClearToken() async {
+        unregister()
+        await tokenStore.clear()
+        lastRegisteredRecord = nil
+        pendingTokenToRegister = nil
+        logger.info("VoIP push unregistered and token store cleared (logout)")
+    }
+
     /// Forces a fresh PushKit registration cycle, which delivers a new token
     /// via `pushRegistry(_:didUpdate:for:)`. Use this after a token has been
     /// invalidated (e.g., the leaked-push bug burned tokens, or the gateway

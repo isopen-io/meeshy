@@ -43,6 +43,48 @@ describe('emitWithSeq', () => {
     expect(emit).toHaveBeenCalledWith('notification:new', { a: 1, b: 'x', nested: { k: true }, _seq: 42 });
   });
 
+  it('emits _seq in strictly monotonic order even when nextSeq resolutions race', async () => {
+    const { io, emit } = makeIO();
+    // Model the real hazard: the DB assigns distinct, gapless seq values in call
+    // order, but the awaited promises can RESOLVE out of order (concurrent calls
+    // run on different pooled connections). Here the first-allocated seq resolves
+    // slower than the second — so a naive implementation emits _seq=2 before _seq=1.
+    let counter = 0;
+    const seq = {
+      nextSeq: jest.fn<() => Promise<number>>(async () => {
+        const value = ++counter;
+        await new Promise((resolve) => setTimeout(resolve, value === 1 ? 30 : 0));
+        return value;
+      }),
+    } as unknown as SequenceService;
+
+    await Promise.all([
+      emitWithSeq(io, seq, 'u-race', 'notification:new', { n: 'a' }),
+      emitWithSeq(io, seq, 'u-race', 'notification:new', { n: 'b' }),
+    ]);
+
+    const emittedSeqs = emit.mock.calls.map((call) => (call[1] as { _seq: number })._seq);
+    // Emission order MUST match allocation order — otherwise the client advances
+    // lastSeq to the higher value and drops the lower _seq as a stale duplicate.
+    expect(emittedSeqs).toEqual([1, 2]);
+  });
+
+  it('serializes per-user without cross-user head-of-line blocking', async () => {
+    const { io, emit } = makeIO();
+    const seq = {
+      nextSeq: jest.fn<(userId: string) => Promise<number>>(async () => 1),
+    } as unknown as SequenceService;
+
+    await Promise.all([
+      emitWithSeq(io, seq, 'user-a', 'notification:new', { n: 'a' }),
+      emitWithSeq(io, seq, 'user-b', 'notification:new', { n: 'b' }),
+    ]);
+
+    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit).toHaveBeenCalledWith('notification:new', { n: 'a', _seq: 1 });
+    expect(emit).toHaveBeenCalledWith('notification:new', { n: 'b', _seq: 1 });
+  });
+
   it('emits WITHOUT _seq (never blocks) when sequence allocation fails', async () => {
     const { io, emit } = makeIO();
     const seq = { nextSeq: jest.fn<() => Promise<number>>().mockRejectedValue(new Error('mongo down')) } as unknown as SequenceService;

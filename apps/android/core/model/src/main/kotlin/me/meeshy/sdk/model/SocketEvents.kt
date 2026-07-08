@@ -11,6 +11,22 @@ data class MessageDeletedEvent(
     val deletedAt: String? = null,
 )
 
+/** `message:pinned` — a conversation member pinned [messageId]. */
+@Serializable
+data class MessagePinnedEvent(
+    val messageId: String,
+    val conversationId: String,
+    val pinnedAt: String? = null,
+    val pinnedBy: String? = null,
+)
+
+/** `message:unpinned` — a conversation member removed the pin on [messageId]. */
+@Serializable
+data class MessageUnpinnedEvent(
+    val messageId: String,
+    val conversationId: String,
+)
+
 @Serializable
 data class TypingEvent(
     val conversationId: String,
