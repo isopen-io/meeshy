@@ -20,10 +20,11 @@ export type PostVisibilityRecord = {
  * drift between them = documented leak/hole risk).
  *
  * `audienceIds` is the FRIENDS/EXCEPT audience and is intentionally a
- * parameter: the feed passes friends ∪ DM-contacts while single-post fetches
- * pass strict friends — a REAL divergence surfaced by this consolidation,
- * recorded as a pending product decision (story-sota §4). Whoever resolves it
- * changes ONE call site, not a buried copy.
+ * parameter. Both call sites — `PostFeedService.buildVisibilityFilter` (feed)
+ * and `PostService.buildVisibilityFilter` (single-post fetch + view recording)
+ * — now pass friends ∪ DM-contacts, so what a viewer can SEE and what they can
+ * be RECORDED as having viewed are one audience (story-sota §4 divergence
+ * resolved: a DM-contact who can open a story now also registers as a viewer).
  *
  * Kept in sync with `canUserViewPost` below (imperative mirror of the same
  * rules for already-fetched posts).

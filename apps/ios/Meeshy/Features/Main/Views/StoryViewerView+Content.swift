@@ -981,6 +981,17 @@ struct StoryViewersSheet: View {
             .task {
                 await loadViewers()
             }
+            // Temps réel : chaque `story:viewed` de CETTE story (émis par le
+            // gateway vers la feed room de l'auteur) re-fetch la liste enrichie
+            // via `/posts/:id/interactions`. Sans ça, la feuille chargeait une
+            // seule fois (`.task`) et un nouveau viewer n'apparaissait jamais tant
+            // qu'elle restait ouverte — le cœur du « la remontée des vues ne se
+            // fait pas en temps réel ». Le re-fetch est silencieux (pas de spinner :
+            // `loadViewers` ne repasse pas `isLoading` à true).
+            .onReceive(SocialSocketManager.shared.storyViewed) { viewedData in
+                guard viewedData.storyId == story.id else { return }
+                Task { await loadViewers() }
+            }
         }
     }
 
