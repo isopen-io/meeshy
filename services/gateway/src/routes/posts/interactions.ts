@@ -270,8 +270,13 @@ export function registerInteractionRoutes(
       // If this is a story, broadcast the view to the story author
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
-        // Fetch post to check type and get author + viewCount
-        const post = await postService.getPostById(postId);
+        // Fetch post to check type and get author + viewCount. Passe le viewer :
+        // sans lui, `getPostById` applique le filtre PUBLIC-seul et retourne
+        // `null` pour une story FRIENDS (le cas courant) → `broadcastStoryViewed`
+        // ne partait jamais alors que `recordView` (même filtre viewer) avait
+        // bien enregistré la vue. Le viewer vient de passer ce même filtre dans
+        // `recordView`, donc la story est retrouvée ici aussi.
+        const post = await postService.getPostById(postId, viewerId);
         if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
           socialEvents.broadcastStoryViewed({
             storyId: postId,
