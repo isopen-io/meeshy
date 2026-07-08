@@ -139,23 +139,23 @@ fun ConversationListScreen(
             // iOS parity: no Material filter chips on the conversation list — the
             // filter state stays (defaults to ALL) but the chip row is not rendered.
             Box(modifier = Modifier.weight(1f)) {
-                when {
-                    state.showSkeleton -> SkeletonList()
+                when (val content = ConversationListContent.of(state)) {
+                    ConversationListContent.Skeleton -> SkeletonList()
 
-                    state.conversations.isEmpty() && state.errorMessage != null ->
+                    is ConversationListContent.Error ->
                         CenteredMessage(
-                            state.errorMessage!!,
+                            content.message,
                             stringResource(R.string.conversations_retry),
                             viewModel::refresh,
                         )
 
-                    state.conversations.isEmpty() && state.isFilteredEmpty ->
+                    ConversationListContent.FilteredEmpty ->
                         CenteredMessage(stringResource(R.string.conversations_no_results), null, null)
 
-                    state.conversations.isEmpty() ->
+                    ConversationListContent.ColdEmpty ->
                         CenteredMessage(stringResource(R.string.conversations_empty), null, null)
 
-                    else -> PullToRefreshBox(
+                    ConversationListContent.Populated -> PullToRefreshBox(
                         isRefreshing = state.isUserRefreshing,
                         onRefresh = viewModel::refresh,
                         modifier = Modifier.fillMaxSize(),

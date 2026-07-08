@@ -662,7 +662,21 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-07): `conversations-draft-aware-ordering`** — the conversation list now floats
+**Just shipped (2026-07-08): `conversations-empty-state-content`** — the conversation-list empty/loading/error/
+filtered decision is now a pure, fully-covered `ConversationListContent.of(state)` sealed SSOT (checks parity §B
+"Cold-start skeletons + error-with-retry empty state"). Cache-first: populated data wins over a stale skeleton flag
+or a background error. The screen renders straight from the reducer; +11 tests. See run log.
+
+**Recommended next candidates (highest value first):**
+- **`conversations-cold-start-error-card`** — the retry empty state is a bare centred `Button`. iOS shows an
+  iconified error card (glyph + title + subtitle + Réessayer). Pure `EmptyStateVisual.of(content)` mapping the
+  `ConversationListContent` arms (Error/FilteredEmpty/ColdEmpty) → {icon, title, subtitle, cta?} so the copy/icon
+  choice is testable, then a coherent `MeeshyGlassSurface` card. Natural follow-on to this slice.
+- **`conversations-draft-list-mutation`** — surface the draft *mutation* end-to-end (a draft typed in Chat then
+  sent/cleared re-orders the list) + a "swipe-to-discard-draft" affordance (pure discard rule + optimistic clear).
+- **`conversations-communities-carousel`** / §B "Communities carousel + category filter chips" — larger.
+
+**Earlier — `conversations-draft-aware-ordering` (2026-07-07)** — the conversation list now floats
 draft-bearing rows to the top (parity §B "drafts float to top") and shows an accent "Brouillon : …" preview. Pure
 `:feature:conversations` `DraftAwareOrdering.apply` (float by `ConversationDraft.isMeaningful`, sort by draft
 `updatedAt` desc, stable, non-drafts keep order) + `draftPreview`; `ConversationDraft.isMeaningful` extracted as the
@@ -1273,6 +1287,30 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-08 — slice `conversations-empty-state-content` ✅ impl + reviewer PASS (merged)
+- **Parity:** §B "Cold-start skeletons + error-with-retry empty state". Both renders (skeleton + error+retry card)
+  already existed, but the *decision* of which body region to show lived as a scattered `when` inside
+  `ConversationListScreen` — untestable Composable glue, with a redundant `conversations.isEmpty() &&` guard on the
+  filtered-empty and cold-empty arms (already implied by the branch order). No pure coverage of the decision.
+- **Pure core (TDD):** `ConversationListContent.of(state)` (`:feature:conversations`) — a sealed SSOT
+  (`Populated | Skeleton | Error(message) | FilteredEmpty | ColdEmpty`). **Cache-first (ARCHITECTURE.md §4):** a
+  populated list wins first, so a stale `showSkeleton` flag **or** a background sync `errorMessage` never hides data
+  already on screen (an improvement over the old screen, which tested `showSkeleton` before the list). Only an empty
+  visible list falls through: `showSkeleton` → `errorMessage` (carries the message for the retry card) →
+  `isFilteredEmpty` (reuses the existing derived predicate — no re-implementation) → `ColdEmpty`. +11 tests
+  (`ConversationListContentTest`): data→Populated, cache-first data-over-skeleton, cache-first data-over-error,
+  cold-skeleton, empty+error carries message, skeleton-over-error precedence, error-over-active-filter precedence,
+  filter-narrows-to-nothing→FilteredEmpty, non-blank-search→FilteredEmpty, blank-search-on-ALL→ColdEmpty boundary,
+  bare-empty→ColdEmpty.
+- **Wiring:** `ConversationListScreen`'s body `when` now switches on `ConversationListContent.of(state)` and renders
+  each arm (Compose glue, exempt); the redundant `conversations.isEmpty() &&` guards are gone. No VM/state-shape
+  change, no new strings, no DI change.
+- **Verify:** `gradle assembleDebug testDebugUnitTest` (system Gradle 8.14.3) — BUILD SUCCESSFUL (943 tasks). +11 tests.
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API, no tautologies; every branch + both
+  cache-first overrides + the two precedence orderings + the blank-search boundary covered; SDK-purity honoured (the
+  "which region" product decision is a pure `:feature` atom, the render stays exempt screen glue); UDF, cache-first,
+  single-source (reuses `isFilteredEmpty`), no dead end.
 
 ### 2026-07-07 — slice `conversations-draft-aware-ordering` ✅ impl + reviewer PASS
 - **Parity:** §B "Draft-aware ordering (drafts float to top)" + the draft row preview. iOS floats a conversation

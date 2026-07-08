@@ -327,7 +327,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       et les applique dans `withVisible` après le filtre. La split épinglés-en-tête
       de l'écran reste au-dessus (Épingles > brouillons > reste). +23 tests.
       **Reste** : bump-to-top on send/receive (déjà couvert par refresh backend).
-- [ ] Cold-start skeletons + error-with-retry empty state
+- [x] Cold-start skeletons + error-with-retry empty state — the skeleton + error+retry
+      renders existed but the *decision* lived as an untestable scattered `when` inside
+      `ConversationListScreen` (with a redundant `conversations.isEmpty() &&` guard). Slice
+      `conversations-empty-state-content` (2026-07-08) lifts it into the pure
+      `:feature:conversations` `ConversationListContent.of(state)` SSOT (sealed
+      Populated | Skeleton | Error(message) | FilteredEmpty | ColdEmpty). Cache-first
+      (ARCHITECTURE.md §4): a populated list wins over a stale skeleton flag **or** a
+      background sync error, so on-screen data is never hidden; only an empty list falls
+      through to skeleton → error(+retry) → filtered-empty → cold-empty in precedence
+      order. The screen renders straight from the reducer. +11 tests
+      (`ConversationListContentTest`, every branch + the two cache-first overrides + the
+      skeleton-over-error / error-over-filter precedence + blank-search-is-cold boundary).
 - [x] Connection-health banner — `SocketManager.connectionState` (StateFlow
       DISCONNECTED/CONNECTING/CONNECTED) → mapping pur `bannerFor` (la reconnexion
       prime sur le sync) → strip animée sous l'app bar (Hors ligne / Reconnexion… /
