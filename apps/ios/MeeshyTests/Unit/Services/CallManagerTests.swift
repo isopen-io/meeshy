@@ -5598,3 +5598,212 @@ final class CallManagerBubblePositionTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Renegotiation Task Serialization
+
+/// Audit finding: `videoToggleTask`, `holdVideoTask`, and `survivalVideoTask` chain
+/// onto each other's `.value` before actuating a video transition (see the
+/// doc-comment on `survivalVideoTask`), but `iceRestartTask` — a fourth path that
+/// also calls into `webRTCService.createOffer()` via `performICERestart()` — was
+/// never part of that chain. `P2PWebRTCClient.createOffer()` has no re-entrancy
+/// guard: a second concurrent call re-enters `pc.offer(for:)`/`setLocalDescription`
+/// while the first is still in flight, corrupting the perfect-negotiation glare
+/// guard. This is directly reachable: a `CXSetHeldCallAction` (hold) firing at the
+/// same moment as an `NWPathMonitor` interface change (Wi-Fi↔cellular handoff, the
+/// exact trigger a GSM call causes) fires `handleHold`'s renegotiation and
+/// `attemptReconnection`'s ICE-restart renegotiation concurrently.
+///
+/// These are source-level guards (same technique as `CallManagerEarlyJoinTests`
+/// above): exercising the actual concurrent-Task race end-to-end would require
+/// mocking WebRTC's async continuation timing, far beyond this feature's scope.
+@MainActor
+final class CallManagerRenegotiationSerializationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {
+        guard let start = source.range(of: startMarker) else {
+            XCTFail("Marker not found: \(startMarker)")
+            throw XCTSkip()
+        }
+        let end = source.range(of: endMarker, range: start.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    // MARK: scheduleICERestart must await the video-transition family
+
+    func test_scheduleICERestart_awaitsVideoToggleTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousToggle?.value") || body.contains("await previousVideoToggle?.value"),
+            "scheduleICERestart must await the in-flight videoToggleTask before calling performICERestart() — " +
+            "otherwise a manual video toggle and an ICE restart can call createOffer() concurrently."
+        )
+    }
+
+    func test_scheduleICERestart_awaitsHoldVideoTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousHold?.value"),
+            "scheduleICERestart must await the in-flight holdVideoTask before calling performICERestart() — " +
+            "a CallKit hold and a WiFi↔cellular-triggered ICE restart can otherwise race createOffer()."
+        )
+    }
+
+    func test_scheduleICERestart_awaitsSurvivalVideoTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousSurvival?.value"),
+            "scheduleICERestart must await the in-flight survivalVideoTask before calling performICERestart()."
+        )
+    }
+
+    /// `.cancel()` alone is cooperative and `createOffer()`/`performICERestart()`
+    /// have no `Task.isCancelled` checks — without also awaiting the PREVIOUS
+    /// `iceRestartTask` instance, a coalesced reconnect trigger (same `attempt`,
+    /// `attemptReconnection`'s `.coalesce` path) can re-arm this task while the
+    /// previous one is still mid-flight inside `createOffer()`, and both can call
+    /// `pc.offer(for:)`/`setLocalDescription` concurrently — the exact race this
+    /// PR fixes for the other three video-transition tasks, left open here.
+    func test_scheduleICERestart_awaitsPreviousIceRestartTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            "scheduleICERestart must await the PREVIOUS in-flight iceRestartTask (not just .cancel() it) before " +
+            "calling performICERestart() — cancellation is cooperative and createOffer() has no isCancelled check."
+        )
+    }
+
+    // MARK: The video-transition family must await iceRestartTask
+
+    func test_toggleVideo_awaitsIceRestartTask() throws {
+        let body = try body(
+            from: "func toggleVideo() {",
+            to: "func switchCamera() {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            "toggleVideo must await the in-flight iceRestartTask before calling createOffer() — otherwise a " +
+            "manual A/V toggle landing mid-ICE-restart runs two concurrent renegotiations."
+        )
+    }
+
+    func test_handleHold_holdBranch_awaitsIceRestartTask() throws {
+        let fullBody = try body(
+            from: "func handleHold(_ isOnHold: Bool) {",
+            to: "func sendDTMF(digits: String) {",
+            in: try callManagerSource()
+        )
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let holdBranch = String(fullBody[fullBody.startIndex..<elseRange.lowerBound])
+        XCTAssertTrue(
+            holdBranch.contains("await previousICERestart?.value") || holdBranch.contains("await previousIceRestart?.value"),
+            "handleHold's hold branch must await the in-flight iceRestartTask — a CallKit hold firing during an " +
+            "ICE restart (WiFi↔cellular handoff) must not run two concurrent createOffer() calls."
+        )
+    }
+
+    func test_handleHold_unholdBranch_awaitsIceRestartTask() throws {
+        let fullBody = try body(
+            from: "func handleHold(_ isOnHold: Bool) {",
+            to: "func sendDTMF(digits: String) {",
+            in: try callManagerSource()
+        )
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let unholdBranch = String(fullBody[elseRange.upperBound...])
+        XCTAssertTrue(
+            unholdBranch.contains("await previousICERestart?.value") || unholdBranch.contains("await previousIceRestart?.value"),
+            "handleHold's unhold branch must await the in-flight iceRestartTask before renegotiating."
+        )
+    }
+
+    func test_applySurvivalVideoSend_awaitsIceRestartTask() throws {
+        let body = try body(
+            from: "private func applySurvivalVideoSend(enabled: Bool) async -> Bool {",
+            to: "private func actuateSurvivalVideoSend(enabled: Bool, callId: String) async -> Bool {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            "applySurvivalVideoSend must await the in-flight iceRestartTask before actuating a survival " +
+            "downgrade/upgrade — a network-quality-triggered ICE restart can otherwise race it."
+        )
+    }
+
+    func test_thermalCritical_awaitsIceRestartTask() throws {
+        let body = try body(
+            from: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {",
+            to: "} else if state == .serious {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousICERestart?.value") || body.contains("await previousIceRestart?.value"),
+            "Thermal-critical video downgrade must await the in-flight iceRestartTask, matching the other " +
+            "three video-transition sites."
+        )
+    }
+
+    /// Companion to the race fix above: unlike `toggleVideo`/`handleHold`, the
+    /// thermal-critical task never rechecked `Task.isCancelled` after its
+    /// `downgradeFromVideo()` await. If the user re-enables video while this task
+    /// is in flight, `toggleVideo()` cancels it but it runs to completion anyway,
+    /// sending a stale "video off" offer to the peer right after the newer task's
+    /// "video on" offer — a real, avoidable renegotiation glitch and peer-visible
+    /// flicker.
+    func test_thermalCritical_rechecksCancellationAfterDowngrade() throws {
+        let body = try body(
+            from: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {",
+            to: "} else if state == .serious {",
+            in: try callManagerSource()
+        )
+        guard let downgradeRange = body.range(of: "let needsRenegotiation = await self.webRTCService.downgradeFromVideo()") else {
+            XCTFail("Expected downgradeFromVideo() call in thermal-critical handler")
+            return
+        }
+        // The match ends right after the closing `)`, so the remainder starts with
+        // the newline that terminates THIS line — drop it first, otherwise the
+        // first "line" extracted below is always the empty string before it.
+        let afterDowngrade = String(body[downgradeRange.upperBound...]).drop(while: { $0 == "\n" })
+        let nextLine = afterDowngrade
+            .split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+            .first.map(String.init) ?? ""
+        XCTAssertTrue(
+            nextLine.contains("Task.isCancelled"),
+            "The line right after downgradeFromVideo() in the thermal-critical handler must recheck " +
+            "Task.isCancelled, mirroring toggleVideo/handleHold — otherwise a cancelled thermal downgrade " +
+            "still emits a stale renegotiation offer after being superseded."
+        )
+    }
+}

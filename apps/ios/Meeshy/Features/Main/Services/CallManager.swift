@@ -465,17 +465,21 @@ final class CallManager: ObservableObject {
     /// rapid hold→unhold sequence serializes rather than running both concurrently.
     private var holdVideoTask: Task<Void, Never>?
     /// Tracks the in-flight network-survival video suspend/resume Task (see
-    /// `applySurvivalVideoSend`). `videoToggleTask`, `holdVideoTask`, and this one all
-    /// actuate the same camera/transceiver via `webRTCService.upgradeToVideo()` /
-    /// `downgradeFromVideo()`, which never checks `Task.isCancelled` mid-flight — every
-    /// one of the three chains onto the other two's `.value` before proceeding so at
-    /// most one video-transition actuation ever runs at a time.
+    /// `applySurvivalVideoSend`). `videoToggleTask`, `holdVideoTask`, `iceRestartTask`,
+    /// and this one all end up calling `webRTCService.createOffer()` (directly, or via
+    /// `performICERestart()`), which has no re-entrancy guard — a second concurrent
+    /// call re-enters `pc.offer(for:)`/`setLocalDescription` while the first is still
+    /// in flight and corrupts the perfect-negotiation glare guard. Every one of the
+    /// four chains onto the other three's `.value` before proceeding so at most one
+    /// renegotiation actuation ever runs at a time.
     private var survivalVideoTask: Task<Bool, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
     /// In-flight ICE restart task. Tracked so overlapping `attemptReconnection`
     /// calls (e.g. watchdog fires while backoff is sleeping) cancel the previous
     /// attempt before starting the new one — prevents two concurrent restart
-    /// offers from corrupting the perfect-negotiation state machine.
+    /// offers from corrupting the perfect-negotiation state machine. Also part of
+    /// the `videoToggleTask`/`holdVideoTask`/`survivalVideoTask` chain (see
+    /// `survivalVideoTask`'s doc-comment) since it calls `createOffer()` too.
     private var iceRestartTask: Task<Void, Never>?
     /// One-shot stuck-muted fallback (§RC-2): armed when `.connected` is
     /// reached on iPhone/iPad before CallKit delivered `provider:didActivate:`.
@@ -1876,6 +1880,7 @@ final class CallManager: ObservableObject {
         let previousToggle = videoToggleTask
         let previousHold = holdVideoTask
         let previousSurvival = survivalVideoTask
+        let previousICERestart = iceRestartTask
         videoToggleTask?.cancel()
         let target = !isVideoEnabled
         // Optimistic update: reflect intent immediately so rapid double-taps
@@ -1889,10 +1894,13 @@ final class CallManager: ObservableObject {
             // starting ours: `cancel()` above only replaces a same-kind toggle and
             // is cooperative — upgradeToVideo/downgradeFromVideo never observe it
             // mid-flight (they await stopCapture/startCapture) — so without waiting
-            // on hold and survival too, a manual toggle landing mid-hold or
-            // mid-survival-recovery could run two camera/transceiver actuations
-            // concurrently and corrupt state.
+            // on hold, survival, and ICE restart too, a manual toggle landing
+            // mid-hold/mid-survival-recovery/mid-ICE-restart could run two
+            // concurrent camera/transceiver/createOffer() actuations and corrupt
+            // state (audit finding — ICE restart used to be excluded from this
+            // chain, see the doc-comment on `survivalVideoTask`).
             await previousToggle?.value
+            await previousICERestart?.value
             await previousHold?.value
             _ = await previousSurvival?.value
             guard let self, !Task.isCancelled else { return }
@@ -2734,13 +2742,15 @@ final class CallManager: ObservableObject {
                 let previousToggle = videoToggleTask
                 let previousHold = holdVideoTask
                 let previousSurvival = survivalVideoTask
+                let previousICERestart = iceRestartTask
                 holdVideoTask = Task { [weak self] in
                     // Serialize with every other in-flight video-transition path
-                    // (manual toggle, prior hold/unhold, survival suspend/resume) —
-                    // see the doc-comment on `survivalVideoTask`.
+                    // (manual toggle, prior hold/unhold, survival suspend/resume,
+                    // ICE restart) — see the doc-comment on `survivalVideoTask`.
                     await previousHold?.value
                     await previousToggle?.value
                     _ = await previousSurvival?.value
+                    await previousICERestart?.value
                     guard let self, !Task.isCancelled else { return }
                     let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
                     guard !Task.isCancelled else { return }
@@ -2771,12 +2781,14 @@ final class CallManager: ObservableObject {
                     let previousToggle = videoToggleTask
                     let previousHold = holdVideoTask
                     let previousSurvival = survivalVideoTask
+                    let previousICERestart = iceRestartTask
                     holdVideoTask = Task { [weak self] in
                         // Serialize with every other in-flight video-transition path —
                         // see the doc-comment on `survivalVideoTask`.
                         await previousHold?.value
                         await previousToggle?.value
                         _ = await previousSurvival?.value
+                        await previousICERestart?.value
                         guard let self, !Task.isCancelled else { return }
                         do {
                             let needsRenegotiation = try await self.webRTCService.upgradeToVideo()
@@ -4104,11 +4116,13 @@ extension CallManager: ThermalStateMonitorDelegate {
                     let previousToggle = self.videoToggleTask
                     let previousHold = self.holdVideoTask
                     let previousSurvival = self.survivalVideoTask
+                    let previousICERestart = self.iceRestartTask
                     self.videoToggleTask?.cancel()
                     self.videoToggleTask = Task { @MainActor [weak self] in
                         await previousToggle?.value
                         await previousHold?.value
                         _ = await previousSurvival?.value
+                        await previousICERestart?.value
                         guard let self, !Task.isCancelled else { return }
                         // §5.4 — use downgradeFromVideo (sets transceiver direction +
                         // stops capture) rather than enableVideo(false) (track.enabled
@@ -4118,6 +4132,14 @@ extension CallManager: ThermalStateMonitorDelegate {
                         // media-toggled is the only signal it gets — race-prone and
                         // semantically wrong. Mirror the manual toggleVideo() path.
                         let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
+                        guard !Task.isCancelled else { return }
+                        // Audit finding — the line above was missing: without it, an
+                        // in-flight thermal downgrade that got cancelled (e.g. the user
+                        // re-enabled video, which cancels this Task via videoToggleTask)
+                        // ran to completion anyway, emitting a stale "video off" offer to
+                        // the peer right after the newer task's "video on" offer — a
+                        // real, avoidable flicker. Mirrors toggleVideo/handleHold, which
+                        // both recheck cancellation immediately after this same await.
                         self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
                         self.updateAudioSessionModeForCurrentVideoState()
                         self.videoSurvivalController.reset()
@@ -4479,14 +4501,43 @@ extension CallManager: WebRTCServiceDelegate {
         scheduleICERestart(attempt: reconnectAttempt, backoffSeconds: backoffSeconds)
     }
 
-    /// (Re-)arms the ICE restart for `attempt`. Cancels any in-flight restart
-    /// task first — prevents two concurrent restart offers from corrupting the
-    /// perfect-negotiation state machine.
+    /// (Re-)arms the ICE restart for `attempt`. Cancels the in-flight restart
+    /// task first, then awaits it (in addition to the video-transition family)
+    /// before actuating — `.cancel()` alone is cooperative and doesn't stop a
+    /// restart already inside `createOffer()`, which has no re-entrancy guard.
     @MainActor
     private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {
+        // Audit finding — chain onto the video-transition family too (mirrors
+        // toggleVideo/handleHold/applySurvivalVideoSend, see the doc-comment on
+        // `survivalVideoTask`). `performICERestart()` calls `createOffer()` just
+        // like they do, and it has no re-entrancy guard: a CallKit hold firing at
+        // the same moment as a WiFi↔cellular handoff (exactly what a GSM call
+        // causes) used to let a hold renegotiation and an ICE-restart
+        // renegotiation call createOffer() concurrently.
+        let previousToggle = videoToggleTask
+        let previousHold = holdVideoTask
+        let previousSurvival = survivalVideoTask
+        // Also chain onto the PREVIOUS iceRestartTask instance itself, not just
+        // `.cancel()` it. Cancellation is cooperative and neither
+        // `performICERestart()` nor `createOffer()` check `Task.isCancelled` —
+        // without this await, a coalesced reconnect trigger (same `attempt`,
+        // `attemptReconnection`'s `.coalesce` path) re-arms this task while the
+        // previous one may still be mid-flight inside `createOffer()`, and both
+        // can call `pc.offer(for:)`/`setLocalDescription` concurrently.
+        let previousICERestart = iceRestartTask
         iceRestartTask?.cancel()
         iceRestartTask = Task { @MainActor [weak self] in
-            guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
+            await previousToggle?.value
+            await previousHold?.value
+            _ = await previousSurvival?.value
+            await previousICERestart?.value
+            // Re-validate after the chained awaits: the call may have ended, or a
+            // newer reconnect cycle may have already taken over, while this task
+            // was waiting behind another renegotiation.
+            guard let self, !Task.isCancelled,
+                  let callId = self.currentCallId, let userId = self.remoteUserId,
+                  case .reconnecting(let currentAfterChain) = self.callState, currentAfterChain == attempt
+            else { return }
             if backoffSeconds > 0 {
                 try? await Task.sleep(for: .seconds(backoffSeconds))
                 guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
@@ -4846,12 +4897,18 @@ extension CallManager: VideoSurvivalActuating {
         let previousToggle = videoToggleTask
         let previousHold = holdVideoTask
         let previousSurvival = survivalVideoTask
+        let previousICERestart = iceRestartTask
         let task = Task<Bool, Never> { @MainActor [weak self] in
             // Serialize with every other in-flight video-transition path (manual
-            // toggle, CallKit hold/unhold) — see the doc-comment on `survivalVideoTask`.
+            // toggle, CallKit hold/unhold, ICE restart) — see the doc-comment on
+            // `survivalVideoTask`. The `.reconnecting` state guards above already
+            // stop a NEW survival transition from starting once a restart is
+            // under way, but chaining here too closes the reverse window: an ICE
+            // restart beginning while THIS task's own createOffer() is in flight.
             await previousToggle?.value
             await previousHold?.value
             _ = await previousSurvival?.value
+            await previousICERestart?.value
             guard let self, !Task.isCancelled else { return false }
             // Re-validate every guard: state may have changed while this transition
             // was queued behind a concurrent manual toggle or CallKit hold.
