@@ -290,19 +290,28 @@ export class PushNotificationService {
       // Vérifier DND
       if (prefs.dndEnabled && !bypassDnd) {
         const now = new Date();
-        if (prefs.dndDays && prefs.dndDays.length > 0) {
-          const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-          const today = dayMap[now.getUTCDay()];
-          if (!prefs.dndDays.includes(today as any)) return true; // pas DND aujourd'hui
-        }
         const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
         const start = prefs.dndStartTime;
         const end = prefs.dndEndTime;
-        if (start > end) {
-          if (currentTime >= start || currentTime < end) return false;
-        } else {
-          if (currentTime >= start && currentTime < end) return false;
+        const overnight = start > end;
+        const inWindow = overnight
+          ? currentTime >= start || currentTime < end
+          : currentTime >= start && currentTime < end;
+
+        if (inWindow && prefs.dndDays && prefs.dndDays.length > 0) {
+          const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+          // Une fenêtre nocturne (start > end) déborde sur le lendemain : sa
+          // tranche du matin (00:00 → end) appartient à la nuit qui a COMMENCÉ
+          // la veille. Le filtre dndDays doit donc être testé contre le jour de
+          // DÉBUT de la fenêtre, pas contre le jour courant — sinon un matin est
+          // rattaché au mauvais jour (silence quand il faut notifier, et vice-versa).
+          const inMorningTail = overnight && currentTime < end;
+          const windowStartDay =
+            dayMap[inMorningTail ? (now.getUTCDay() + 6) % 7 : now.getUTCDay()];
+          if (!prefs.dndDays.includes(windowStartDay as any)) return true; // jour de début non sélectionné
         }
+
+        if (inWindow) return false;
       }
 
       return true;
