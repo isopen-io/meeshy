@@ -489,6 +489,28 @@ describe('reactionRoutes', () => {
       expect(mockEmit).toHaveBeenCalledWith('reaction:added', updateEvent);
     });
 
+    it('skips broadcast and notification when addReaction reports unchanged (idempotent re-react)', async () => {
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'POST', '/reactions');
+
+      // The participant already had this exact emoji — a duplicate POST (client
+      // retry / offline outbox replay) is a DB no-op. The route must return the
+      // existing reaction WITHOUT broadcasting REACTION_ADDED or firing a push,
+      // otherwise every participant gets a redundant fan-out and the author is
+      // re-notified for a reaction that never changed. 200, not 201 — nothing
+      // was created.
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [], unchanged: true });
+      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
+
+      const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
+      await handler(req, reply);
+      await Promise.resolve();
+
+      expect(mockEmit).not.toHaveBeenCalled();
+      expect(mockNotifyReactionAdded).not.toHaveBeenCalled();
+      expect(reply.statusCode).toBe(200);
+    });
+
     it('skips socket broadcast when socketIOHandler is absent', async () => {
       const { fastify, reply } = setup(false);
       const handler = getHandler(fastify, 'POST', '/reactions');
