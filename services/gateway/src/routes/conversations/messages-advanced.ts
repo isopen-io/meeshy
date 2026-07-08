@@ -1064,6 +1064,13 @@ export function registerMessagesAdvancedRoutes(
         return sendInternalError(reply, 'Failed to add reaction');
       }
 
+      if (addResult.unchanged) {
+        // Idempotent no-op: the participant already had exactly this emoji.
+        // Skip the REACTION_ADDED broadcast (nothing changed) but still report
+        // success. Parity with the socket `reaction:add` handler.
+        return sendSuccess(reply, { added: true, emoji });
+      }
+
       // Broadcast via Socket.IO to all conversation participants
       try {
         const updateEvent = await reactionService.createUpdateEvent(
