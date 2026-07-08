@@ -9,7 +9,13 @@ import MeeshyUI
 /// (`RootView`, `iPadRootView+Sheets`), garde interne symétrique à celle de
 /// `FloatingCallPillView`.
 struct CallBubbleView: View {
-    @ObservedObject private var callManager = CallManager.shared
+    // Audit P1-16 parity (see CallView.swift / FloatingCallPillView.swift) —
+    // injected by the caller instead of a `= CallManager.shared` default, so
+    // the parent's body re-evaluating for unrelated churn (unread counts,
+    // presence, navigation) doesn't tear down and rebuild this view's
+    // objectWillChange subscription. Both mount sites (RootView,
+    // iPadRootView+Sheets) already hold their own @ObservedObject callManager.
+    @ObservedObject var callManager: CallManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var isMenuRevealed = false

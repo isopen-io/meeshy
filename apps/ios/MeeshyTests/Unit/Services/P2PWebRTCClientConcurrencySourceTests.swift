@@ -84,4 +84,34 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
             "switchToCamera must compare sessionGeneration on MainActor after the await."
         )
     }
+
+    // P2PWebRTCClient is not @MainActor, so a bare `Task { [weak self] in ... }` created
+    // from one of its synchronous, non-isolated methods runs on the cooperative pool —
+    // not necessarily serialized with disconnect()'s synchronous property mutations.
+    // These three unstructured tasks must pin themselves to MainActor explicitly.
+
+    func test_toggleVideo_pinsUnstructuredTaskToMainActor() throws {
+        let fn = try body(from: "func toggleVideo(_ enabled: Bool)", to: "var hasLocalVideoTrack")
+        XCTAssertTrue(
+            fn.contains("toggleVideoTask = Task { @MainActor [weak self] in"),
+            "toggleVideo's capturer-restart task must run on @MainActor, serialized with disconnect()."
+        )
+    }
+
+    func test_startDataChannelPing_pinsUnstructuredTaskToMainActor() throws {
+        let fn = try body(from: "private func startDataChannelPing()", to: "private func stopDataChannelPing()")
+        XCTAssertTrue(
+            fn.contains("dataChannelPingTask = Task { @MainActor [weak self] in"),
+            "startDataChannelPing's task must run on @MainActor, serialized with disconnect()."
+        )
+    }
+
+    func test_disconnectAfterFlushingPendingSend_pinsUnstructuredTaskToMainActor() throws {
+        let fn = try body(from: "func disconnectAfterFlushingPendingSend()", to: "deinit {")
+        XCTAssertTrue(
+            fn.contains("Task { @MainActor [weak self] in"),
+            "disconnectAfterFlushingPendingSend's flush-and-disconnect task must run on @MainActor, " +
+            "so its terminal disconnect() call can never race a fresh configure()/disconnect() pair."
+        )
+    }
 }

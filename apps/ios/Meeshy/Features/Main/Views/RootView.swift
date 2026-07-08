@@ -572,11 +572,11 @@ struct RootView: View {
             CallView(callManager: callManager)
         }
         .overlay(alignment: .top) {
-            FloatingCallPillView()
+            FloatingCallPillView(callManager: callManager)
                 .padding(.top, MeeshySpacing.sm)
         }
         .overlay {
-            CallBubbleView()
+            CallBubbleView(callManager: callManager)
         }
         // §7.6 — call-waiting: a 2nd incoming call while one is active. Was dead
         // code (CallManager API + CallWaitingBannerView existed but were never
