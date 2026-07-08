@@ -76,6 +76,39 @@ class DraftAwareOrderingTest {
     }
 
     @Test
+    fun `a whole-second timestamp does not outrank a later sub-second one in the same second`() {
+        // Regression: Instant.toString() (the real source of updatedAt, via
+        // Instant.ofEpochMilli(...).toString()) omits the fractional-second suffix when it's
+        // exactly zero, producing a BARE string like "...T12:34:56Z" for that draft while a
+        // later save within the same second produces "...T12:34:56.500Z". Naive lexicographic
+        // string comparison ranks the bare string higher ('.' < 'Z'), inverting the intended
+        // most-recent-first order. This must sort by actual instant, not by string bytes.
+        val input = listOf(conv("a"), conv("b"))
+        val drafts = mapOf(
+            "a" to draft("a", updatedAt = "2026-07-05T12:34:56Z"),
+            "b" to draft("b", updatedAt = "2026-07-05T12:34:56.500Z"),
+        )
+
+        val out = DraftAwareOrdering.apply(input, drafts)
+
+        // b (12:34:56.500, chronologically later) must float above a (12:34:56.000).
+        assertThat(ids(out)).containsExactly("b", "a").inOrder()
+    }
+
+    @Test
+    fun `an unparseable timestamp sorts last among the floated group, like a missing one`() {
+        val input = listOf(conv("a"), conv("b"), conv("c"))
+        val drafts = mapOf(
+            "a" to draft("a", updatedAt = "not-a-timestamp"),
+            "b" to draft("b", updatedAt = "2026-07-05T00:00:00Z"),
+        )
+
+        val out = DraftAwareOrdering.apply(input, drafts)
+
+        assertThat(ids(out)).containsExactly("b", "a", "c").inOrder()
+    }
+
+    @Test
     fun `equal timestamps keep the incoming relative order (stable sort)`() {
         val input = listOf(conv("a"), conv("b"), conv("c"))
         val ts = "2026-07-05T00:00:00Z"

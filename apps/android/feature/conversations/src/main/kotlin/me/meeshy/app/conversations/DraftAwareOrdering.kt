@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import java.time.Instant
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.isMeaningful
@@ -29,14 +30,18 @@ public object DraftAwareOrdering {
     ): List<ApiConversation> {
         if (draftsById.isEmpty()) return conversations
 
-        val floated = ArrayList<ApiConversation>()
-        val rest = ArrayList<ApiConversation>()
-        conversations.forEach { conversation ->
-            if (draftsById[conversation.id]?.isMeaningful == true) floated.add(conversation) else rest.add(conversation)
-        }
+        val (floated, rest) = conversations.partition { draftsById[it.id]?.isMeaningful == true }
         if (floated.isEmpty()) return conversations
 
-        val orderedFloated = floated.sortedByDescending { draftsById.getValue(it.id).updatedAt ?: "" }
+        // Parse to Instant rather than comparing the raw ISO-8601 strings: Instant.toString()
+        // omits the fractional-second suffix when it's exactly zero (".../56Z" vs ".../56.500Z"),
+        // and '.' sorts lexicographically BEFORE 'Z' — a whole-second timestamp then sorts as
+        // GREATER than a later, sub-second one, silently inverting the "most recent first" order.
+        // Instant is genuinely Comparable by instant, and Kotlin's sortedByDescending already
+        // treats a null/unparseable key as least-of-all, so it still sorts last — same as before.
+        val orderedFloated = floated.sortedByDescending { conversation ->
+            draftsById.getValue(conversation.id).updatedAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        }
         return orderedFloated + rest
     }
 }
