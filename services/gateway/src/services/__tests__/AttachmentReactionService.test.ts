@@ -5,6 +5,11 @@ const makePrismaMock = () => {
   return {
     rows,
     attachmentReaction: {
+      findUnique: jest.fn(async ({ where }: any) => {
+        const key = where.attachment_participant_reaction;
+        return rows.find(r => r.attachmentId === key.attachmentId
+          && r.participantId === key.participantId) ?? null;
+      }),
       findMany: jest.fn(async ({ where }: any) =>
         rows.filter(r => r.attachmentId === where.attachmentId
           && (where.participantId ? r.participantId === where.participantId : true))),
@@ -75,6 +80,31 @@ describe('AttachmentReactionService', () => {
     await svc.removeAttachmentReaction({ attachmentId: 'att1', participantId: 'p1', emoji: '❤️' });
     expect(await svc.getReactionSummary('att1')).toEqual({});
     expect(await svc.getCurrentUserReactions('att1', 'p1')).toEqual([]);
+  });
+
+  it('reports changed=true on a fresh add and changed=false on re-adding the same emoji (idempotent no-op)', async () => {
+    const prisma = makePrismaMock();
+    const svc = new AttachmentReactionService(prisma);
+    expect(await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '👍' }))
+      .toEqual({ changed: true });
+    expect(await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '👍' }))
+      .toEqual({ changed: false });
+  });
+
+  it('reports changed=true when swapping to a different emoji', async () => {
+    const prisma = makePrismaMock();
+    const svc = new AttachmentReactionService(prisma);
+    await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '❤️' });
+    expect(await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '👍' }))
+      .toEqual({ changed: true });
+  });
+
+  it('returns true when a reaction was removed and false when already absent (idempotent)', async () => {
+    const prisma = makePrismaMock();
+    const svc = new AttachmentReactionService(prisma);
+    await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '❤️' });
+    expect(await svc.removeAttachmentReaction({ attachmentId: 'att1', participantId: 'p1', emoji: '❤️' })).toBe(true);
+    expect(await svc.removeAttachmentReaction({ attachmentId: 'att1', participantId: 'p1', emoji: '❤️' })).toBe(false);
   });
 
   it('currentUserReactions is empty for another participant', async () => {
