@@ -6,7 +6,11 @@
     <string name="conversations_logout">Log out</string>
     <string name="conversations_contacts">Contacts</string>
     <string name="conversations_empty">No conversations yet</string>
+    <string name="conversations_empty_subtitle">Start a new conversation to see it here.</string>
     <string name="conversations_retry">Retry</string>
+    <string name="conversations_error_title">Couldn\'t load conversations</string>
+    <string name="conversations_error_subtitle">Check your connection and try again.</string>
+    <string name="conversations_no_results_subtitle">Try a different search or filter.</string>
     <string name="conversations_no_messages">No messages yet</string>
     <string name="conversations_banner_syncing">Syncing…</string>
     <string name="conversations_banner_reconnecting">Reconnecting…</string>
