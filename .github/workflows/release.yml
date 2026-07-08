@@ -19,6 +19,14 @@ on:
       - 'services/*/package.json'
       - 'packages/*/package.json'
 
+# Sérialise les releases par branche : deux pushes rapprochés déclenchaient
+# des runs concurrents qui se volaient le push de version (non fast-forward).
+# Pas de cancel-in-progress : une release entamée va au bout, la suivante
+# trouve les changesets déjà consommés et skip proprement.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
   workflow_dispatch:
     inputs:
       force_release:
