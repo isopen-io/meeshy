@@ -208,4 +208,63 @@ describe('VideoCallInterface (container)', () => {
       }
     });
   });
+
+  // P0 rejoin-race fix: the 2s delayed cleanup used to tear down whatever
+  // RTCPeerConnection was registered under the participant's id at the time it
+  // fired, with no check that it was still the *same* connection scheduled for
+  // removal. A participant who left and rejoined within that 2s window (network
+  // blip, tab reload) gets a brand-new RTCPeerConnection registered under the
+  // same id — the stale timeout must not close it out from under the call.
+  describe('rejoin race — delayed cleanup must not tear down a fresh connection', () => {
+    it('skips removeRemoteStream/removePeerConnection when the participant rejoined before the 2s cleanup fires', () => {
+      jest.useFakeTimers();
+      try {
+        const fakeSocket = { on: jest.fn(), off: jest.fn() };
+        (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+        storeState.peerConnections = new Map();
+
+        render(<VideoCallInterface callId="call1" />);
+
+        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
+
+        // Rejoin before the grace window elapses: a fresh RTCPeerConnection
+        // replaces the (absent) old one under the same participant id.
+        const freshConnection = {} as RTCPeerConnection;
+        storeState.peerConnections = new Map([['peer1', freshConnection]]);
+
+        jest.advanceTimersByTime(2000);
+
+        expect(storeState.removeRemoteStream).not.toHaveBeenCalledWith('peer1');
+        expect(storeState.removePeerConnection).not.toHaveBeenCalledWith('peer1');
+        expect((storeState.peerConnections as Map<string, RTCPeerConnection>).get('peer1')).toBe(freshConnection);
+      } finally {
+        jest.useRealTimers();
+        storeState.peerConnections = new Map();
+      }
+    });
+
+    it('still tears down the connection when the participant does not rejoin', () => {
+      jest.useFakeTimers();
+      try {
+        const fakeSocket = { on: jest.fn(), off: jest.fn() };
+        (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+        const originalConnection = {} as RTCPeerConnection;
+        storeState.peerConnections = new Map([['peer1', originalConnection]]);
+
+        render(<VideoCallInterface callId="call1" />);
+
+        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
+
+        jest.advanceTimersByTime(2000);
+
+        expect(storeState.removeRemoteStream).toHaveBeenCalledWith('peer1');
+        expect(storeState.removePeerConnection).toHaveBeenCalledWith('peer1');
+      } finally {
+        jest.useRealTimers();
+        storeState.peerConnections = new Map();
+      }
+    });
+  });
 });

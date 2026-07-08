@@ -309,6 +309,32 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   }, [localStream, initializeLocalStream, callId]);
 
   /**
+   * Tear down and forget everything about ONE participant's signaling state —
+   * call this when they leave for good (after confirming, at the call site,
+   * that they haven't rejoined within the grace window). Scoped mirror of
+   * `cleanup()` below: without this, a departed participant's stale
+   * `remoteDescriptionSetRef`/`iceCandidateQueueRef` entry survives and
+   * misroutes the *new* connection a same-session rejoin creates — the
+   * rejoin's initial answer gets treated as a renegotiation answer, and its
+   * ICE candidates skip buffering and get silently dropped against a
+   * connection that was never `setRemoteDescription`'d.
+   */
+  const removeParticipant = useCallback(
+    (participantId: string) => {
+      const service = webrtcServicesRef.current.get(participantId);
+      if (service) {
+        service.close();
+        webrtcServicesRef.current.delete(participantId);
+      }
+      iceCandidateQueueRef.current.delete(participantId);
+      remoteDescriptionSetRef.current.delete(participantId);
+      offerInFlightRef.current.delete(participantId);
+      removePeerConnection(participantId);
+    },
+    [removePeerConnection]
+  );
+
+  /**
    * Create and send offer
    */
   const createOffer = useCallback(
@@ -378,13 +404,19 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         logger.error('[useWebRTCP2P]', 'Failed to create offer', { error });
         setConnecting(false);
 
+        // The peer connection may already have been created and registered
+        // (addPeerConnection above) by the time createOffer()/the socket
+        // check/etc. throws — without this it stays open and registered
+        // forever, an orphaned RTCPeerConnection leak.
+        removeParticipant(targetUserId);
+
         const message = error instanceof Error ? error.message : 'Failed to create offer';
         setError(message);
         toast.error(message);
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId]
+    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, removeParticipant]
   );
 
   /**
@@ -457,6 +489,12 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         logger.error('[useWebRTCP2P]', 'Failed to handle offer', { error });
         setConnecting(false);
 
+        // See createOffer's matching comment — the peer connection may
+        // already be registered by the time createAnswer()/the socket
+        // check/etc. throws; without this it leaks, open and registered
+        // forever.
+        removeParticipant(fromUserId);
+
         const message = error instanceof Error ? error.message : 'Failed to handle offer';
         setError(message);
         toast.error(message);
@@ -465,7 +503,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         offerInFlightRef.current.delete(fromUserId);
       }
     },
-    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, drainIceCandidateQueue]
+    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, drainIceCandidateQueue, removeParticipant]
   );
 
   /**
@@ -774,6 +812,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     enableVideo,
     disableVideo,
     applyQualityTier,
+    removeParticipant,
     cleanup,
   };
 }
