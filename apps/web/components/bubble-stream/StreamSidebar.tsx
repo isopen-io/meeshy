@@ -140,7 +140,9 @@ const UserItem = memo(function UserItem({ user }: { user: User }) {
           @{user.username}
         </p>
       </div>
-      <div className={`w-2 h-2 ${PRESENCE_DOT_CLASS[status]} rounded-full`} />
+      {status !== 'offline' && (
+        <div className={`w-2 h-2 ${PRESENCE_DOT_CLASS[status]} rounded-full`} />
+      )}
     </div>
   );
 });
