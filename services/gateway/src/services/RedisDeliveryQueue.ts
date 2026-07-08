@@ -15,16 +15,28 @@ redis.call('DEL', KEYS[1])
 return entries
 `.trim();
 
-// Idempotent enqueue: only push if no entry with the same dedup identity AND
-// eventType already exists. The dedup identity is the entry's `dedupKey` if
-// set, else its `messageId` — a queued 'new' must NOT block a later 'edited'
-// or 'deleted' for the same message — those are distinct events that must
-// all replay on drain, in FIFO order, so the recipient's final state matches
-// the sender's (edit/delete after an offline 'new' must not be dropped).
-// Reactions set `dedupKey` to something finer than messageId (see
-// QueuedMessagePayload.dedupKey) so two different reactors on the same
-// message don't collapse into a single queued entry.
-// Returns 1 when pushed, 0 when the (dedupId, eventType) pair was already present.
+// Idempotent-vs-superseding enqueue, keyed on (dedup identity, eventType).
+// The dedup identity is the entry's `dedupKey` if set, else its `messageId` —
+// a queued 'new' must NOT block a later 'edited' or 'deleted' for the same
+// message — those are distinct events that must all replay on drain, in FIFO
+// order, so the recipient's final state matches the sender's (edit/delete
+// after an offline 'new' must not be dropped). Reactions set `dedupKey` to
+// something finer than messageId (see QueuedMessagePayload.dedupKey) so two
+// different reactors on the same message don't collapse into one entry.
+//
+// 'new' is the only truly IMMUTABLE eventType (a retry of an identical event) —
+// a matching 'new' is dropped (return 0), keeping the first entry. Every other
+// eventType ('edited'/'deleted'/'reaction-added'/'reaction-removed') is
+// MUTABLE: the LATEST payload must win. A message edited twice while a
+// recipient is offline enqueues two 'edited' entries under the same dedup
+// identity; keeping the first would replay stale intermediate content on
+// drain. So a matching mutable entry is SUPERSEDED in place (LSET at its FIFO
+// slot, return 2) rather than dropped — preserving the one-entry-per-(dedup
+// identity, eventType) invariant the drain/prune paths rely on while carrying
+// the newest content and enqueuedAt.
+//
+// Returns 1 when pushed as a new entry, 0 when an identical 'new' was deduped,
+// 2 when a mutable entry was superseded in place.
 // KEYS[1] = queue key, ARGV[1] = serialized entry, ARGV[2] = dedup id,
 // ARGV[3] = TTL, ARGV[4] = normalized eventType
 const ENQUEUE_DEDUP_LUA = `
@@ -36,7 +48,12 @@ for i, entry in ipairs(entries) do
     if decodedDedupId == ARGV[2] then
       local decodedEventType = decoded.eventType or 'new'
       if decodedEventType == ARGV[4] then
-        return 0
+        if ARGV[4] == 'new' then
+          return 0
+        end
+        redis.call('LSET', KEYS[1], i - 1, ARGV[1])
+        redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+        return 2
       end
     end
   end
@@ -114,6 +131,8 @@ export class RedisDeliveryQueue {
         );
         if (pushed === 0) {
           logger.debug('Delivery queue dedup: dedup id already queued', { userId, dedupId, messageId: entry.messageId });
+        } else if (pushed === 2) {
+          logger.debug('Delivery queue supersede: mutable event replaced in place', { userId, dedupId, messageId: entry.messageId, eventType: normalizedEventType(entry) });
         }
         return;
       } catch (error) {
@@ -131,8 +150,16 @@ export class RedisDeliveryQueue {
       }
     }
     const existing = this.memoryQueue.get(userId) ?? [];
-    if (existing.some(e => (e.dedupKey ?? e.messageId) === dedupId && normalizedEventType(e) === normalizedEventType(entry))) {
-      logger.debug('Delivery queue dedup (memory): dedup id+eventType already queued', { userId, dedupId, eventType: normalizedEventType(entry) });
+    const dupIndex = existing.findIndex(e => (e.dedupKey ?? e.messageId) === dedupId && normalizedEventType(e) === normalizedEventType(entry));
+    if (dupIndex !== -1) {
+      if (normalizedEventType(entry) === 'new') {
+        logger.debug('Delivery queue dedup (memory): dedup id+eventType already queued', { userId, dedupId, eventType: normalizedEventType(entry) });
+        return;
+      }
+      // Mutable event (edited/deleted/reaction-*): supersede in place with the
+      // newest payload, mirroring ENQUEUE_DEDUP_LUA's LSET path.
+      this.memoryQueue.set(userId, existing.map((e, i) => (i === dupIndex ? entry : e)));
+      logger.debug('Delivery queue supersede (memory): mutable event replaced in place', { userId, dedupId, eventType: normalizedEventType(entry) });
       return;
     }
     const bounded = existing.length >= MEMORY_QUEUE_MAX_PER_USER

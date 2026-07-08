@@ -986,6 +986,25 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     expect(await queue.size('user-offline')).toBe(1);
   });
 
+  test('supersede (memory): two divergent "edited" events for the same message replay the LATEST content, not the first', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const original = makePayload({ messageId: 'msg-edit-divergent', payload: { content: 'hello' } });
+    const firstEdit = makePayload({ messageId: 'msg-edit-divergent', eventType: 'edited', payload: { content: 'hello world' } });
+    const secondEdit = makePayload({ messageId: 'msg-edit-divergent', eventType: 'edited', payload: { content: 'goodbye' } });
+
+    await queue.enqueue('user-offline', original);
+    await queue.enqueue('user-offline', firstEdit);
+    await queue.enqueue('user-offline', secondEdit);
+
+    // The first edit is superseded in place, not appended as a third entry —
+    // the FIFO slot right after 'new' still carries the edit, just with the
+    // sender's final content.
+    const drained = await queue.drain('user-offline');
+    expect(drained).toHaveLength(2);
+    expect(drained.map(d => d.eventType ?? 'new')).toEqual(['new', 'edited']);
+    expect(drained[1].payload.content).toBe('goodbye');
+  });
+
   test('dedup (memory): two different reactors on the same message both queue, when dedupKey differs', async () => {
     const queue = new RedisDeliveryQueue(makeCacheStore(null));
     const reactorA = makePayload({
@@ -1007,7 +1026,7 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     expect(await queue.size('user-offline')).toBe(2);
   });
 
-  test('dedup (memory): a repeated entry with the same dedupKey IS still deduped', async () => {
+  test('dedup (memory): a repeated entry with the same dedupKey IS still collapsed to one entry', async () => {
     const queue = new RedisDeliveryQueue(makeCacheStore(null));
     const reaction = makePayload({
       messageId: 'msg-reacted',
