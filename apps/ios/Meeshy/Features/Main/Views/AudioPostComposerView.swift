@@ -127,14 +127,14 @@ struct AudioPostComposerView: View {
 
             durationLabel
         }
-        .padding(.vertical, 24)
-        .padding(.horizontal, 20)
+        .padding(.vertical, MeeshySpacing.xxl)
+        .padding(.horizontal, MeeshySpacing.xl)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                         .stroke(MeeshyColors.indigo300.opacity(isDark ? 0.25 : 0.4), lineWidth: 1)
                 )
         )

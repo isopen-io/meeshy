@@ -204,7 +204,7 @@ struct iPadLeftColumnHeader: View {
                         if notificationCount > 0 {
                             Text("\(min(notificationCount, 99))")
                                 // Doctrine 86i : compteur dans une pastille circulaire fixe 16×16 → figé.
-                                .font(.system(size: 9, weight: .bold))
+                                .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(MeeshyColors.error))

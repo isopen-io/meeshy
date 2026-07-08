@@ -113,10 +113,10 @@ struct ChangePasswordView: View {
                 )
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: MeeshyColors.indigo600Hex))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: MeeshyColors.indigo600Hex), lineWidth: 1)
                     )
             )
@@ -158,10 +158,10 @@ struct ChangePasswordView: View {
                 )
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: accentColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: accentColor), lineWidth: 1)
                     )
             )
@@ -251,7 +251,7 @@ struct ChangePasswordView: View {
                 .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(32)
+        .padding(MeeshySpacing.xxxl)
         .background(
             RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)
