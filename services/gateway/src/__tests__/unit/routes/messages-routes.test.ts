@@ -117,6 +117,12 @@ jest.mock('../../../services/PrivacyPreferencesService', () => ({
     shouldShowReadReceipts: (...args: any[]) => mockShouldShowReadReceipts(...args),
   })),
 }));
+const mockResolvePrefsOnly = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+  }),
+}));
 jest.mock('../../../services/messaging/MessagingService', () => ({
   MessagingService: jest.fn().mockImplementation(() => ({
     handleMessage: (...args: any[]) => mockHandleMessage(...args),
@@ -413,6 +419,7 @@ beforeEach(() => {
   mockMarkMessagesAsReceived.mockResolvedValue(undefined);
   mockGetLatestMessageSummary.mockResolvedValue({});
   mockShouldShowReadReceipts.mockResolvedValue(false);
+  mockResolvePrefsOnly.mockResolvedValue(new Map());
   mockHandleMessage.mockResolvedValue({ success: true, data: { id: 'msg-1', conversationId: 'resolved-conv-id' } });
 
   prisma = makePrisma();
@@ -594,6 +601,53 @@ describe('GET /conversations/:id/messages', () => {
     expect(body.data[0].id).toBe(MSG_ID);
     // senderId should be resolved to user ID
     expect(body.data[0].senderId).toBe(USER_ID);
+  });
+
+  it('serves sender presence when showOnlineStatus is visible', async () => {
+    const msg = makeMessage({
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        role: 'USER',
+        language: 'fr',
+        user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true, lastActiveAt: new Date() },
+      },
+    });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const body = reply._body;
+    expect(body.data[0].sender.isOnline).toBe(true);
+    expect(body.data[0].sender.lastActiveAt).not.toBeNull();
+  });
+
+  it('masks sender presence when showOnlineStatus is hidden', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([
+      [USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
+    ]));
+    const msg = makeMessage({
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        role: 'USER',
+        language: 'fr',
+        user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true, lastActiveAt: new Date() },
+      },
+    });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const body = reply._body;
+    expect(body.data[0].sender.isOnline).toBe(false);
+    expect(body.data[0].sender.lastActiveAt).toBeNull();
   });
 
   it('forward watermark mode: after param triggers ascending request', async () => {
@@ -1353,6 +1407,49 @@ describe('GET /conversations/:id/pinned-messages', () => {
     expect(body.data[0].sender.username).toBe('alice');
   });
 
+  it('masks pinned sender presence when showOnlineStatus is hidden', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([
+      [USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
+    ]));
+    const pinnedMsg = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      senderId: PART_ID,
+      content: 'pinned content',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      editedAt: null,
+      deletedAt: null,
+      replyToId: null,
+      forwardedFromId: null,
+      forwardedFromConversationId: null,
+      pinnedAt: new Date(),
+      pinnedBy: USER_ID,
+      isViewOnce: false,
+      isBlurred: false,
+      expiresAt: null,
+      effectFlags: 0,
+      translations: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        user: { id: USER_ID, username: 'alice', firstName: 'Alice', lastName: 'Smith', displayName: 'Alice', avatar: null, isOnline: true },
+      },
+      attachments: [],
+      _count: { reactions: 0, replies: 0 },
+    };
+    prisma.message.findMany.mockResolvedValue([pinnedMsg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(reply._body.data[0].sender.isOnline).toBe(false);
+  });
+
   it('empty pinned messages list', async () => {
     prisma.message.findMany.mockResolvedValue([]);
     prisma.message.count.mockResolvedValue(0);
@@ -1484,6 +1581,36 @@ describe('GET /conversations/:id/messages/search', () => {
     expect(body.data[0].sender.isOnline).toBe(true);
     expect(body.cursorPagination).toBeDefined();
     expect(body.cursorPagination.hasMore).toBe(false);
+  });
+
+  it('masks search result sender presence when showOnlineStatus is hidden', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([
+      [USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
+    ]));
+    const matchMsg = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      content: 'hello world',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      translations: null,
+      createdAt: new Date(),
+      senderId: PART_ID,
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true },
+      },
+    };
+    prisma.message.findMany
+      .mockResolvedValueOnce([matchMsg])
+      .mockResolvedValueOnce([]);
+    const reply = makeReply();
+    await getHandler_()(makeSearchReq('hello'), reply);
+    expect(reply._body.data[0].sender.isOnline).toBe(false);
   });
 
   it('returns merged content+translation matches', async () => {

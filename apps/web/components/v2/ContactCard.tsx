@@ -3,6 +3,7 @@
 import React, { memo, useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { getUserStatus } from '@/lib/user-status';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { Badge } from './Badge';
@@ -49,6 +50,7 @@ export const ContactCard = memo(function ContactCard({
   className,
 }: ContactCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const presence = getUserStatus({ isOnline: contact.isOnline, lastActiveAt: contact.lastActiveAt });
 
   return (
     <div
@@ -63,6 +65,7 @@ export const ContactCard = memo(function ContactCard({
         name={contact.name}
         size="lg"
         isOnline={contact.isOnline}
+        presence={presence}
         languageOrb={
           <LanguageOrb
             code={contact.languageCode}

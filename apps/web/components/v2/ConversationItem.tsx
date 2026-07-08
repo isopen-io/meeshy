@@ -1,6 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
+import { getUserStatus } from '@/lib/user-status';
 import { Badge } from './Badge';
 import { LanguageOrb } from './LanguageOrb';
 import { TypingIndicator } from './TypingIndicator';
@@ -84,6 +85,7 @@ export const ConversationItem = memo(function ConversationItem({
 }: ConversationItemProps): React.JSX.Element {
   const { t } = useI18n('conversations');
   const displayName = conversation.customName || conversation.name;
+  const presence = getUserStatus({ isOnline: conversation.isOnline });
 
   const noop = () => {};
 
@@ -269,10 +271,13 @@ export const ConversationItem = memo(function ConversationItem({
           )}
 
           {/* Indicateur en ligne (conversations directes uniquement) */}
-          {!conversation.isGroup && conversation.isOnline && (
+          {!conversation.isGroup && presence !== 'offline' && (
             <div
               className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300"
-              style={{ background: 'var(--gp-jade-green)', borderColor: 'var(--gp-surface)' }}
+              style={{
+                background: presence === 'away' ? 'var(--gp-warning)' : 'var(--gp-jade-green)',
+                borderColor: 'var(--gp-surface)',
+              }}
             />
           )}
 

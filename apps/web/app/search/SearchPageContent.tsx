@@ -36,8 +36,7 @@ import { buildApiUrl } from '@/lib/config';
 import { useI18n } from '@/hooks/useI18n';
 import { User } from '@/types';
 import { authManager } from '@/services/auth-manager.service';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
+import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
@@ -501,9 +500,9 @@ export function SearchPageContent() {
                                     {getUserInitials(user)}
                                   </AvatarFallback>
                                 </Avatar>
-                                <OnlineIndicator
-                                  isOnline={getUserStatus(user) === 'online'}
-                                  status={getUserStatus(user)}
+                                <ParticipantPresenceIndicator
+                                  userId={user.id}
+                                  fallbackUser={user}
                                   size="md"
                                   className="absolute -bottom-0.5 -right-0.5"
                                 />

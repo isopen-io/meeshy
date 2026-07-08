@@ -178,15 +178,18 @@ extension UserProfileSheet {
     /// Présence affichée sur l'avatar (grand header + barre compacte).
     /// Priorité au `presenceProvider` injecté par l'app — même source temps
     /// réel que la liste de conversations — puis fallback sur le snapshot
-    /// REST `isOnline` du profil chargé quand l'utilisateur n'est pas suivi
-    /// (provider absent ou retour `nil`).
+    /// REST `isOnline` + `lastActiveAt` du profil chargé quand l'utilisateur
+    /// n'est pas suivi (provider absent ou retour `nil`).
     var resolvedPresence: PresenceState {
         if let presenceProvider,
            let userId = resolvedUserId, !userId.isEmpty,
            let live = presenceProvider(userId) {
             return live
         }
-        return displayUser.isOnline == true ? .online : .offline
+        return UserPresence(
+            isOnline: displayUser.isOnline ?? false,
+            lastActiveAt: displayUser.lastActiveAt
+        ).state
     }
 
     /// Couleur du libellé de présence selon l'ancienneté : vert < 5 min,

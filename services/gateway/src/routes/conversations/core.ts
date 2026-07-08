@@ -21,6 +21,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import {
   generateConversationIdentifier,
   ensureUniqueConversationIdentifier
@@ -519,6 +520,17 @@ export function registerCoreRoutes(
       // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
       const presenceChecker = fastify.presenceChecker;
 
+      // Présence des co-participants : montrable (co-participation = contexte
+      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
+      // showLastSeen de chacun — même règle que le broadcast user:status et le
+      // presence:snapshot. Anonymes inchangés.
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        conversations.flatMap((conversation) => [
+          ...conversation.participants.slice(0, 5).map((m: any) => m.userId),
+          conversation.messages[0]?.sender?.userId,
+        ]).filter((uid): uid is string => !!uid)
+      );
+
       // Calculate hasMore. Two strategies:
       //   1. When we have a real `totalCount` (includeCount=true OR
       //      offset===0 — see L401-405), `hasMore = offset + N < total`.
@@ -547,6 +559,9 @@ export function registerCoreRoutes(
           .slice(0, 5)
           .map((m: any) => {
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
+            const vis = m.userId ? presenceVis.get(m.userId) : undefined;
+            const hideOnline = vis?.showOnline === false;
+            const hideLastSeen = vis?.showLastSeenTimestamp === false;
             return {
               ...m,
               // Bannière de profil top-level : le schéma participant (minimal) est
@@ -555,9 +570,14 @@ export function registerCoreRoutes(
               // client ignore `participantBanner` (évite le sur-transfert).
               // Note : `Participant` n'a pas de colonne `banner`, seule `User` en a.
               banner: isDirect ? (m.user?.banner ?? null) : null,
-              isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
+              isOnline: hideOnline ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
+              lastActiveAt: hideLastSeen ? null : m.lastActiveAt,
               user: m.userId
-                ? { ...m.user, isOnline: liveOnline === undefined ? m.user?.isOnline : liveOnline }
+                ? {
+                    ...m.user,
+                    isOnline: hideOnline ? false : (liveOnline === undefined ? m.user?.isOnline : liveOnline),
+                    lastActiveAt: hideLastSeen ? null : m.user?.lastActiveAt
+                  }
                 : null
             };
           });
@@ -587,6 +607,10 @@ export function registerCoreRoutes(
             const msg = conversation.messages[0];
             if (!msg) return null;
             const sender = msg.sender as any;
+            const senderLiveOnline = sender
+              ? presenceChecker?.isOnline(sender.userId ?? sender.id)
+              : undefined;
+            const senderVis = sender?.userId ? presenceVis.get(sender.userId) : undefined;
             return {
               ...msg,
               content: truncateMessagePreview(msg.content),
@@ -597,8 +621,12 @@ export function registerCoreRoutes(
                 lastName: sender.user?.lastName ?? null,
                 displayName: sender.displayName ?? sender.user?.displayName ?? null,
                 avatar: resolveParticipantAvatar(sender),
-                isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
-                lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
+                isOnline: senderVis?.showOnline === false
+                  ? false
+                  : (senderLiveOnline ?? sender.user?.isOnline ?? sender.isOnline ?? null),
+                lastActiveAt: senderVis?.showLastSeenTimestamp === false
+                  ? null
+                  : (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null),
               } : null
             };
           })(),
@@ -764,9 +792,27 @@ export function registerCoreRoutes(
       // (message.groupBy plein scan à froid, TTL 1h) pour un résultat jeté.
       // Les clients consomment les stats via l'event Socket.IO
       // `conversation:stats`, qui se recompute seul (updateOnNewMessage).
+      // Même politique de présence que la liste : override runtime + gate
+      // showOnlineStatus/showLastSeen (cf. GET /conversations).
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        conversation.participants
+          .map((m: any) => m.userId)
+          .filter((uid: string | null): uid is string => !!uid)
+      );
+      const gatedParticipants = conversation.participants.map((m: any) => {
+        const liveOnline = fastify.presenceChecker?.isOnline(m.userId ?? m.id);
+        const vis = m.userId ? presenceVis.get(m.userId) : undefined;
+        return {
+          ...m,
+          isOnline: vis?.showOnline === false ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
+          lastActiveAt: vis?.showLastSeenTimestamp === false ? null : m.lastActiveAt
+        };
+      });
+
       const { _count, ...conversationData } = conversation;
       return sendSuccess(reply, {
         ...conversationData,
+        participants: gatedParticipants,
         title: displayTitle,
         memberCount: _count.participants,
         unreadCount

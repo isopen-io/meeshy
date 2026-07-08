@@ -371,6 +371,7 @@ export function ConversationParticipantsDrawer({
     const user = (participant.userId ? getUserByIdFn(participant.userId) as ParticipantUser : undefined) || rawUser;
     const isCurrentUser = user.id === currentUser.id;
     const prefix = isOnline ? 'online' : 'offline';
+    const status = getUserStatus(user);
 
     return (
       <motion.div
@@ -406,16 +407,12 @@ export function ConversationParticipantsDrawer({
                 </AvatarFallback>
               </Avatar>
             )}
-            {isOnline ? (
-              <OnlineIndicator
-                isOnline={getUserStatus(user) === 'online'}
-                status={getUserStatus(user)}
-                size="md"
-                className="absolute -bottom-0.5 -right-0.5 ring-2 ring-white dark:ring-gray-900"
-              />
-            ) : (
-              <div className="absolute -bottom-0 -right-0 h-3 w-3 bg-gray-400 rounded-full border-2 border-white dark:border-gray-900" />
-            )}
+            <OnlineIndicator
+              isOnline={status === 'online'}
+              status={status}
+              size="md"
+              className="absolute -bottom-0.5 -right-0.5 ring-2 ring-white dark:ring-gray-900"
+            />
           </div>
 
           {/* Nom + pseudo */}

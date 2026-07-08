@@ -9,8 +9,12 @@ import MeeshySDK
 @MainActor
 final class UserProfileSheetPresenceTests: XCTestCase {
 
-    private func makeUser(userId: String? = "64b000000000000000000001", isOnline: Bool? = nil) -> ProfileSheetUser {
-        ProfileSheetUser(userId: userId, username: "alice", isOnline: isOnline)
+    private func makeUser(
+        userId: String? = "64b000000000000000000001",
+        isOnline: Bool? = nil,
+        lastActiveAt: Date? = nil
+    ) -> ProfileSheetUser {
+        ProfileSheetUser(userId: userId, username: "alice", isOnline: isOnline, lastActiveAt: lastActiveAt)
     }
 
     // MARK: - Provider (source temps réel)
@@ -74,6 +78,27 @@ final class UserProfileSheetPresenceTests: XCTestCase {
         XCTAssertEqual(UserProfileSheet(user: makeUser(isOnline: true)).resolvedPresence, .online)
         XCTAssertEqual(UserProfileSheet(user: makeUser(isOnline: false)).resolvedPresence, .offline)
         XCTAssertEqual(UserProfileSheet(user: makeUser(isOnline: nil)).resolvedPresence, .offline)
+    }
+
+    func test_resolvedPresence_noProvider_offlineButRecentlyActive_returnsAway() {
+        let sut = UserProfileSheet(
+            user: makeUser(isOnline: false, lastActiveAt: Date().addingTimeInterval(-600))
+        )
+        XCTAssertEqual(sut.resolvedPresence, .away)
+    }
+
+    func test_resolvedPresence_noProvider_onlineButIdle_returnsAway() {
+        let sut = UserProfileSheet(
+            user: makeUser(isOnline: true, lastActiveAt: Date().addingTimeInterval(-2700))
+        )
+        XCTAssertEqual(sut.resolvedPresence, .away)
+    }
+
+    func test_resolvedPresence_noProvider_offlinePast30min_returnsOffline() {
+        let sut = UserProfileSheet(
+            user: makeUser(isOnline: false, lastActiveAt: Date().addingTimeInterval(-1860))
+        )
+        XCTAssertEqual(sut.resolvedPresence, .offline)
     }
 
     func test_resolvedPresence_usernameOnlyProfile_skipsProviderBeforeIdResolution() {

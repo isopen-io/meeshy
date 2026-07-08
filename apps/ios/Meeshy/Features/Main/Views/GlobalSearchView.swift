@@ -590,7 +590,7 @@ struct GlobalSearchView: View {
                 avatarURL: result.avatar,
                 storyState: storyViewModel.storyRingState(forUserId: result.id),
                 moodEmoji: statusViewModel.statusForUser(userId: result.id)?.moodEmoji,
-                presenceState: result.isOnline ? .online : .offline,
+                presenceState: PresenceManager.shared.resolvedState(userId: result.id, isOnline: result.isOnline),
                 onViewStory: {
                     storyViewerCoordinator.present(StoryViewerRequest(
                         id: result.id,

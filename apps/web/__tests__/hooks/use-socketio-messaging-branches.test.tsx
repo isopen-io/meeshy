@@ -371,7 +371,7 @@ describe('useSocketIOMessaging – branch gap coverage', () => {
         capturedUserStatusCb!({ userId: 'u-1', username: 'alice', isOnline: true });
       });
 
-      expect(onUserStatus).toHaveBeenCalledWith('u-1', 'alice', true);
+      expect(onUserStatus).toHaveBeenCalledWith('u-1', 'alice', true, undefined);
     });
 
     it('calls onUserStatus with isOnline: false for offline transitions', () => {
@@ -383,7 +383,20 @@ describe('useSocketIOMessaging – branch gap coverage', () => {
         capturedUserStatusCb!({ userId: 'u-2', username: 'bob', isOnline: false });
       });
 
-      expect(onUserStatus).toHaveBeenCalledWith('u-2', 'bob', false);
+      expect(onUserStatus).toHaveBeenCalledWith('u-2', 'bob', false, undefined);
+    });
+
+    it('forwards the event lastActiveAt so consumers can refresh stale presence timestamps', () => {
+      const onUserStatus = jest.fn();
+      const lastActiveAt = new Date('2026-07-08T10:00:00Z');
+
+      renderHook(() => useSocketIOMessaging({ onUserStatus }));
+
+      act(() => {
+        capturedUserStatusCb!({ userId: 'u-3', username: 'carol', isOnline: true, lastActiveAt });
+      });
+
+      expect(onUserStatus).toHaveBeenCalledWith('u-3', 'carol', true, lastActiveAt);
     });
 
     it('does not call onUserStatus when callback not provided', () => {
@@ -537,7 +550,7 @@ describe('useSocketIOMessaging – branch gap coverage', () => {
 
       expect(onTranslation).toHaveBeenCalledWith('m1', [{ language: 'fr', text: 'ok' }]);
       expect(onUserTyping).toHaveBeenCalledWith('u1', 'Alice', true, 'c1');
-      expect(onUserStatus).toHaveBeenCalledWith('u2', 'bob', false);
+      expect(onUserStatus).toHaveBeenCalledWith('u2', 'bob', false, undefined);
       expect(onConversationStats).toHaveBeenCalledWith({ count: 10 });
       expect(onConversationOnlineStats).toHaveBeenCalledWith({ onlineCount: 2 });
     });

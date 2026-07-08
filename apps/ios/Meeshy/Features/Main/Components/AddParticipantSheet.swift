@@ -14,6 +14,7 @@ private struct UserSearchResult: Identifiable, Decodable {
     let displayName: String?
     let avatar: String?
     let isOnline: Bool?
+    let lastActiveAt: Date?
 
     var name: String {
         displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").ifEmptyFallback(username)
@@ -187,7 +188,8 @@ struct AddParticipantSheet: View {
                 name: user.name,
                 context: .userListItem,
                 accentColor: color,
-                avatarURL: user.avatar
+                avatarURL: user.avatar,
+                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt)
             )
 
             VStack(alignment: .leading, spacing: 2) {

@@ -44,7 +44,7 @@ struct CallDetailSheet: View {
                 context: .profileSheet,
                 accentColor: color,
                 avatarURL: record.avatarURL,
-                presenceState: (record.peer?.isOnline ?? false) ? .online : .offline
+                presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
             )
             Text(name)
                 .font(MeeshyFont.relative(20, weight: .bold))
