@@ -22,7 +22,9 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.MarkChatRead
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
@@ -142,18 +144,12 @@ fun ConversationListScreen(
                 when (val content = ConversationListContent.of(state)) {
                     ConversationListContent.Skeleton -> SkeletonList()
 
-                    is ConversationListContent.Error ->
-                        CenteredMessage(
-                            content.message,
-                            stringResource(R.string.conversations_retry),
-                            viewModel::refresh,
-                        )
-
-                    ConversationListContent.FilteredEmpty ->
-                        CenteredMessage(stringResource(R.string.conversations_no_results), null, null)
-
+                    is ConversationListContent.Error,
+                    ConversationListContent.FilteredEmpty,
                     ConversationListContent.ColdEmpty ->
-                        CenteredMessage(stringResource(R.string.conversations_empty), null, null)
+                        EmptyStateVisual.of(content)?.let { visual ->
+                            EmptyStateCard(visual = visual, onRetry = viewModel::refresh)
+                        }
 
                     ConversationListContent.Populated -> PullToRefreshBox(
                         isRefreshing = state.isUserRefreshing,
@@ -624,22 +620,80 @@ private fun SkeletonList() {
     }
 }
 
+/**
+ * The iconified empty-state card (parity §B): glyph in a tinted disc + title +
+ * subtitle + optional retry CTA, laid on a [MeeshyGlassSurface]. The copy/icon
+ * choice is the pure [EmptyStateVisual]; this glue only renders it. The error
+ * glyph tints red, the others accent-indigo, keeping the palette coherent.
+ */
 @Composable
-private fun CenteredMessage(message: String, actionLabel: String?, onAction: (() -> Unit)?) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+private fun EmptyStateCard(visual: EmptyStateVisual, onRetry: () -> Unit) {
+    val accent = if (visual.glyph == EmptyStateGlyph.Error) MeeshyPalette.Error else MeeshyPalette.Indigo500
+    Box(
+        modifier = Modifier.fillMaxSize().padding(MeeshySpacing.xl),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
-        if (actionLabel != null && onAction != null) {
-            Button(onClick = onAction, modifier = Modifier.padding(top = MeeshySpacing.lg)) {
-                Text(actionLabel)
+        MeeshyGlassSurface(shape = RoundedCornerShape(MeeshyRadius.lg)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.xl),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(accent.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = visual.glyph.icon(),
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+                Text(
+                    text = stringResource(visual.title.resId()),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MeeshyTheme.tokens.textPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = MeeshySpacing.lg),
+                )
+                visual.subtitle?.let { subtitle ->
+                    Text(
+                        text = when (subtitle) {
+                            is EmptyStateSubtitle.Resource -> stringResource(subtitle.copy.resId())
+                            is EmptyStateSubtitle.Literal -> subtitle.text
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MeeshyTheme.tokens.textSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = MeeshySpacing.sm),
+                    )
+                }
+                visual.cta?.let { cta ->
+                    Button(onClick = onRetry, modifier = Modifier.padding(top = MeeshySpacing.lg)) {
+                        Text(stringResource(cta.resId()))
+                    }
+                }
             }
         }
     }
+}
+
+private fun EmptyStateGlyph.icon() = when (this) {
+    EmptyStateGlyph.Error -> Icons.Filled.CloudOff
+    EmptyStateGlyph.NoResults -> Icons.Filled.SearchOff
+    EmptyStateGlyph.NoConversations -> Icons.AutoMirrored.Filled.Chat
+}
+
+private fun EmptyStateCopy.resId(): Int = when (this) {
+    EmptyStateCopy.ErrorTitle -> R.string.conversations_error_title
+    EmptyStateCopy.ErrorSubtitle -> R.string.conversations_error_subtitle
+    EmptyStateCopy.Retry -> R.string.conversations_retry
+    EmptyStateCopy.FilteredTitle -> R.string.conversations_no_results
+    EmptyStateCopy.FilteredSubtitle -> R.string.conversations_no_results_subtitle
+    EmptyStateCopy.ColdTitle -> R.string.conversations_empty
+    EmptyStateCopy.ColdSubtitle -> R.string.conversations_empty_subtitle
 }

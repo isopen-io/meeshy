@@ -339,6 +339,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       order. The screen renders straight from the reducer. +11 tests
       (`ConversationListContentTest`, every branch + the two cache-first overrides + the
       skeleton-over-error / error-over-filter precedence + blank-search-is-cold boundary).
+      **Card upgrade** (slice `conversations-cold-start-error-card`, 2026-07-08): the three
+      empty arms (Error / FilteredEmpty / ColdEmpty) rendered as a bare secondary label +
+      plain retry button; iOS shows an iconified card (glyph + title + subtitle + Réessayer).
+      New pure `:feature:conversations` `EmptyStateVisual.of(content)` SSOT maps each non-list
+      arm → `{glyph, title, subtitle, cta?}` (enum-keyed copy so the choice is JVM-testable,
+      free of `R` ids; the server error travels as a trimmed `Literal`, blank/empty → generic
+      `Resource(ErrorSubtitle)`, still retryable; Populated/Skeleton → null). Rendered on a
+      `MeeshyGlassSurface` card — error glyph tints `MeeshyPalette.Error`, the others accent
+      Indigo — with the retry wired to `refresh`. +8 tests (`EmptyStateVisualTest`: error
+      literal / trim / blank-fallback / empty-fallback / filtered / cold / populated-null /
+      skeleton-null).
 - [x] Connection-health banner — `SocketManager.connectionState` (StateFlow
       DISCONNECTED/CONNECTING/CONNECTED) → mapping pur `bannerFor` (la reconnexion
       prime sur le sync) → strip animée sous l'app bar (Hors ligne / Reconnexion… /

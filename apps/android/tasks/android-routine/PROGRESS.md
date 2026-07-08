@@ -662,7 +662,37 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-08): `conversations-empty-state-content`** — the conversation-list empty/loading/error/
+**Just shipped (2026-07-08): `conversations-cold-start-error-card`** — the conversation-list empty arms
+(Error / FilteredEmpty / ColdEmpty) rendered as a bare `CenteredMessage` (secondary label + plain retry
+button); iOS shows an iconified card (glyph + title + subtitle + Réessayer). New pure
+`:feature:conversations` `EmptyStateVisual.of(content): EmptyStateVisual?` SSOT maps each non-list
+`ConversationListContent` arm → `{glyph: EmptyStateGlyph, title: EmptyStateCopy, subtitle:
+EmptyStateSubtitle?, cta: EmptyStateCopy?}`. Copy is enum-keyed (`EmptyStateCopy` → `R.string` resolved in
+the screen) so the copy/icon decision stays pure and JVM-testable, free of Android resource ids; only the
+dynamic server error text travels as a `Literal` — **trimmed**, and a **blank/empty** message falls back to
+a generic `Resource(ErrorSubtitle)` while staying retryable. The two list-bearing arms (Populated / Skeleton)
+have no card → `null`. Wired: `ConversationListScreen` collapses the three `CenteredMessage` arms into a
+single `EmptyStateCard(EmptyStateVisual.of(content))` — a `MeeshyGlassSurface` card with the glyph in a
+tinted disc (error → `MeeshyPalette.Error`, others → accent Indigo), title + subtitle, and an optional retry
+`Button` wired to `viewModel::refresh`; `CenteredMessage` removed (no other caller). Icons: `CloudOff` /
+`SearchOff` / auto-mirrored `Chat`. 4 new strings × 4 locales (en/fr/es/pt). +8 tests (`EmptyStateVisualTest`:
+error-literal / trim / blank→fallback / empty→fallback / filtered / cold / populated-null / skeleton-null).
+`:feature:conversations:testDebugUnitTest` + `:app:assembleDebug` green (system Gradle 8.14.3; wrapper
+download is 403-blocked in this container — use `/opt/gradle` directly). Reviewer: PASS (diff apps/android
+only; behaviour-through-public-API `EmptyStateVisual.of`, no tautologies, boundary coverage on the trim/
+blank/empty error-subtitle branches + all five arms; SDK-purity honoured — the "what does an empty arm look
+like" copy/icon product decision is a pure atom in `:feature:conversations`, the glass card is exempt Compose
+glue; cache-first preserved (Populated still wins upstream), accent-coherent palette, no dead end — the card
+retries).
+
+**Recommended next candidates (highest value first):**
+- **`conversations-draft-list-mutation`** — surface the draft *mutation* end-to-end (a draft typed in Chat then
+  sent/cleared re-orders the list) + a "swipe-to-discard-draft" affordance (pure discard rule + optimistic clear).
+- **`conversations-communities-carousel`** / §B "Communities carousel + category filter chips" — larger.
+
+---
+
+**Earlier — `conversations-empty-state-content`** — the conversation-list empty/loading/error/
 filtered decision is now a pure, fully-covered `ConversationListContent.of(state)` sealed SSOT (checks parity §B
 "Cold-start skeletons + error-with-retry empty state"). Cache-first: populated data wins over a stale skeleton flag
 or a background error. The screen renders straight from the reducer; +11 tests. See run log.

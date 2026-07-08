@@ -6,7 +6,11 @@
     <string name="conversations_logout">Cerrar sesión</string>
     <string name="conversations_contacts">Contactos</string>
     <string name="conversations_empty">Aún no hay conversaciones</string>
+    <string name="conversations_empty_subtitle">Inicia una conversación para verla aquí.</string>
     <string name="conversations_retry">Reintentar</string>
+    <string name="conversations_error_title">No se pudieron cargar las conversaciones</string>
+    <string name="conversations_error_subtitle">Revisa tu conexión e inténtalo de nuevo.</string>
+    <string name="conversations_no_results_subtitle">Prueba con otra búsqueda o filtro.</string>
     <string name="conversations_no_messages">Aún no hay mensajes</string>
     <string name="conversations_banner_syncing">Sincronizando…</string>
     <string name="conversations_banner_reconnecting">Reconectando…</string>
