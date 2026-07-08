@@ -47,6 +47,21 @@ function normalizedEventType(entry: QueuedMessagePayload): string {
   return entry.eventType ?? 'new';
 }
 
+// FIFO replay order across the memory-fallback and Redis-backed slices. The two
+// can interleave in time: a message enqueued to Redis while it was healthy may
+// be FOLLOWED by an edit/delete for the SAME message that fell back to memory
+// during a transient Redis blip. Concatenating memory-first would then replay
+// the edit BEFORE the `new` it targets (see the FIFO invariant on ENQUEUE_DEDUP_LUA),
+// and the recipient's client drops an edit for a message it hasn't received yet.
+// Every entry carries a monotonic `enqueuedAt` stamped at enqueue time, so sort
+// by it to restore true FIFO. `Array.prototype.sort` is stable, so entries that
+// share a timestamp keep their memory-before-Redis order — preserving the
+// outage-only reconciliation contract (memory entries queued during a full
+// outage still lead).
+function byEnqueuedAt(a: QueuedMessagePayload, b: QueuedMessagePayload): number {
+  return new Date(a.enqueuedAt).getTime() - new Date(b.enqueuedAt).getTime();
+}
+
 const MEMORY_QUEUE_MAX_USERS = 1000;
 const MEMORY_QUEUE_MAX_PER_USER = 50;
 
@@ -102,11 +117,14 @@ export class RedisDeliveryQueue {
   async drain(userId: string): Promise<QueuedMessagePayload[]> {
     const redis = this.getRedis();
 
-    // Entries stashed here predate anything Redis holds now (they were queued
-    // during a transient Redis outage, before it recovered), so they always
-    // sort first. Pulled out up front so they're never orphaned: without this,
+    // Entries stashed here were queued during a transient Redis outage before
+    // it recovered. Pulled out up front so they're never orphaned: without this,
     // a Redis-reachable drain() would return only the Redis-backed entries and
     // silently leave these sitting in memory forever (see enqueue()'s fallback).
+    // Their FIFO position relative to Redis-backed entries is resolved by
+    // `byEnqueuedAt` below, not by concatenation order — a mid-sequence blip can
+    // leave a memory entry NEWER than a Redis one (e.g. an edit that fell back
+    // to memory after its `new` reached Redis).
     const memoryEntries = this.memoryQueue.get(userId) ?? [];
     this.memoryQueue.delete(userId);
 
@@ -123,7 +141,7 @@ export class RedisDeliveryQueue {
             return [];
           }
         });
-        return [...memoryEntries, ...redisEntries];
+        return [...memoryEntries, ...redisEntries].sort(byEnqueuedAt);
       } catch (error) {
         logger.warn('Redis drain failed, falling back to memory', { userId, error });
       }
