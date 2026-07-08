@@ -1183,3 +1183,73 @@ sinon il est mort. Signature du bug : la branche générique n'a pas de garde d'
 alors qu'une branche plus bas teste précisément ce spécifique. Balayer chaque fonction de classification par
 sous-chaîne et se demander pour chaque paire (générique, spécifique) : « un input du type spécifique contient-il
 aussi le token générique ? » Si oui et que le générique est testé d'abord → le spécifique est inatteignable.
+
+## Leçon 77 — présence : le court-circuit modérateur batch bypassait la désactivation, divergeant du chemin single-target (2026-07-08, routine messaging, iter 144)
+
+`PresenceVisibilityService` a DEUX chemins qui doivent rendre le même verdict (SSOT = helper pur
+`resolvePresenceVisibility`, `packages/shared/utils/presence-visibility.ts`) : `resolveForTarget` (profil unique)
+et `resolveForTargets` (batch, consommé par `/users/presence` + recherche). Le helper pur place
+`targetIsDeactivated || isBlockedEitherWay → HIDDEN` **avant** le check de privilège `isSelf || isGlobalModerator`
+(invariant design §8 : « Compte désactivé → présence masquée **en amont** »).
+
+`resolveForTarget` respecte l'invariant : `if (target.deactivatedAt) return HIDDEN;` est la TOUTE PREMIÈRE ligne,
+donc un modérateur regardant un compte désactivé voit HIDDEN. Mais `resolveForTargets` court-circuitait les
+modérateurs AVANT même de charger `deactivatedAt` :
+```ts
+if (viewer && isGlobalModerator(viewer.role)) {
+  for (const id of uniqueIds) result.set(id, FULL);   // désactivés → FULL, fuite
+  return result;
+}
+const targetRows = await prisma.user.findMany({ ... select: { deactivatedAt: true } }); // trop tard
+```
+**Scénario de fuite** : un modérateur parcourant une LISTE de présence voyait `showOnline/showLastSeen = true`
+pour un compte désactivé, alors que la vue PROFIL unique du même compte masquait correctement (last-seen d'un
+compte désactivé exposé). Divergence directe entre les deux chemins d'un même SSOT.
+
+**Fix** : remonter le fetch `deactivatedAt` (un seul `findMany` batché, pas une requête par-id) AVANT le
+court-circuit modérateur, et y masquer les cibles désactivées : `result.set(id, deactivated.has(id) ? HIDDEN : FULL)`.
+Aligne le batch sur `resolveForTarget` et sur le helper pur. Le check block-pour-modérateur reste inchangé
+(les deux chemins concordent déjà — `resolveForTarget` retourne FULL avant le check block pour un modérateur ;
+§4.2 « pas de requête » l'assume ; pas de divergence interne, donc hors scope de ce correctif conservateur).
+Test RED ajouté : `resolveForTargets(moderator, [désactivé]) → HIDDEN` (échouait FULL avant, vert après ;
+16/16 suite service + 49/49 sur 6 suites présence + 22/22 communities members).
+
+**Règle réutilisable** : quand deux méthodes d'un même service (unique vs batch) doivent partager un SSOT, un
+court-circuit « fast-path » (privilège, cache, rôle) placé AVANT de charger un flag de garde (désactivation,
+blocage, suppression) va bypasser ce flag sur ce seul chemin. Signature du bug : la méthode single-target teste
+le flag en PREMIER, mais la méthode batch teste le privilège en premier et ne charge le flag qu'ensuite. Vérifier
+que TOUT fast-path d'un chemin batch charge et honore les mêmes gardes « en amont » que son jumeau single-target —
+sinon la liste fuite ce que le détail masque.
+
+## Leçon 78 — enqueue offline du delete : on excluait l'AUTEUR au lieu du SUPPRESSEUR (2026-07-08, routine messaging, iter 144)
+
+`MessageHandler.handleMessageDelete` rejoue les suppressions aux destinataires hors-ligne via
+`_enqueueOfflineEventForParticipants(conversationId, senderParticipantId, 'deleted', …)`, dont la boucle saute
+`p.id === senderParticipantId` (l'ACTEUR de l'action) — plus les participants en ligne. L'appel delete passait
+`message.senderId`, c.-à-d. l'**id participant de l'AUTEUR** du message. C'est correct sur `message:send`/`message:edit`
+(seul l'auteur édite → auteur == acteur), mais `handleMessageDelete` autorise aussi admins/modérateurs (de conversation
+OU globaux) à supprimer le message d'AUTRUI. Sur ce chemin auteur ≠ suppresseur.
+
+**Scénario de perte** : auteur A (hors-ligne), modérateur B (en ligne) supprime le message de A. L'emit live
+`message:deleted` part vers la room conversation → A hors-ligne le rate. La boucle d'enqueue atteint A mais
+`p.id === message.senderId` (id participant de A) → `continue` → **A n'est jamais mis en file**. À la reconnexion
+(`_drainPendingMessages`) A ne reçoit pas la suppression et continue d'afficher un message retiré par un modérateur,
+jusqu'à un refetch complet sans rapport. Le `senderParticipantId` était de toute façon **redondant** pour sa raison
+d'être (l'acteur vient d'agir via sa socket → il est en ligne → déjà exclu par `connectedUsers.has`), et donc
+uniquement NUISIBLE quand auteur ≠ acteur.
+
+**Fix** : passer l'id participant du **suppresseur**, pas de l'auteur. Sa ligne participant conversation-scoped est
+déjà chargée (`message.conversation.participants` filtré par `where: { userId, isActive }` = l'utilisateur courant) ;
+ajouter `id` à ce `select` et passer `message.conversation.participants[0]?.id`. Fallback = `undefined` (PAS
+`message.senderId`) : quand le suppresseur est un admin GLOBAL non-participant, `participants` est vide → skip personne
+(l'admin global n'est pas dans la boucle des participants de la conv, et s'il l'était il serait en ligne donc exclu).
+Piège écarté : la proposition initiale `?? message.senderId` réintroduisait le bug pour les deletes d'admin global.
+Test RED : admin supprime le message d'un auteur hors-ligne → 0 enqueue avant, 1 enqueue (auteur) après. 430 tests
+MessageHandler verts, tsc OK.
+
+**Règle réutilisable** : un paramètre « exclure l'acteur » n'est juste que si la variable passée EST l'acteur sur
+TOUS les chemins. Dès qu'une action a plusieurs auteurs possibles (l'auteur du contenu vs. un modérateur agissant
+dessus), ne pas dériver l'« acteur à exclure » d'un champ du CONTENU (`senderId`, `ownerId`, `createdBy`) — le dériver
+de l'IDENTITÉ de l'appelant (participant/utilisateur authentifié courant). Signature du bug : `skip = entity.authorId`
+alors que l'action est autorisée à un tiers. Et si l'exclusion est de toute façon redondante avec une autre garde
+(ici « en ligne »), la retirer ou la fonder sur l'identité de l'appelant — jamais sur le contenu.

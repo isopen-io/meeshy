@@ -730,7 +730,7 @@ export class MessageHandler {
               lastMessageAt: true,
               participants: {
                 where: { userId, isActive: true },
-                select: { role: true },
+                select: { id: true, role: true },
               },
             },
           },
@@ -804,8 +804,16 @@ export class MessageHandler {
       };
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
 
+      // Skip the DELETER, not the author. A moderator/admin may delete another
+      // user's message (`message.senderId` is the author's participant id, not
+      // the actor's) — passing the author here skipped the offline author, who
+      // then never learns their moderated message was removed. The deleter's own
+      // participant id is the conversation-scoped row loaded above; when the
+      // deleter is a global admin who is NOT a participant it is undefined, which
+      // skips nobody (the online deleter is already excluded by the presence check).
+      const deleterParticipantId = message.conversation.participants[0]?.id;
       this._enqueueOfflineEventForParticipants(
-        message.conversationId, message.senderId, 'deleted', validated.messageId, deletedPayload
+        message.conversationId, deleterParticipantId, 'deleted', validated.messageId, deletedPayload
       ).catch((err) => handlerLogger.warn('offline enqueue (delete) failed', { error: err }));
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
