@@ -30,7 +30,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,19 +37,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.FriendRequestUser
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.presenceState
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyTheme
-
-/** Presence dot colours : orange (actif <= 5min), gris (absent 5-30min). */
-private val OnlineIndicator = Color(0xFFFBBF24)
-private val AwayIndicator = Color(0xFF9CA3AF)
 
 /**
  * The Contacts (all-friends) tab — the online-first friend list with a filter
@@ -152,7 +147,7 @@ private fun FriendRow(friend: FriendRequestUser) {
                 )
             }
         }
-        presenceDotColor(friend.presenceState(System.currentTimeMillis()))?.let { dot ->
+        meeshyPresenceDotColor(friend.presenceState(System.currentTimeMillis()))?.let { dot ->
             Surface(
                 color = dot,
                 shape = CircleShape,
@@ -162,13 +157,6 @@ private fun FriendRow(friend: FriendRequestUser) {
             ) {}
         }
     }
-}
-
-/** The dot colour for a resolved presence, or null when no dot should show (offline). */
-private fun presenceDotColor(state: PresenceState): Color? = when (state) {
-    PresenceState.ONLINE, PresenceState.RECENT -> OnlineIndicator
-    PresenceState.AWAY -> AwayIndicator
-    PresenceState.OFFLINE -> null
 }
 
 @Composable

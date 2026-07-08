@@ -48,6 +48,17 @@ final class PresenceManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Typing = signal de présence le plus fort : l'émetteur est actif LÀ,
+        // MAINTENANT. Le gateway persiste lastActiveAt sur typing:start mais ne
+        // rebroadcaste pas de user:status — sans ce bump local, la pastille
+        // décroissait (vert → orange → gris) pendant que « X écrit… » s'affichait.
+        MessageSocketManager.shared.typingStarted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.noteActivity(userId: event.userId)
+            }
+            .store(in: &cancellables)
+
         // After a socket reconnect we may have missed N status flips while we
         // were disconnected. The gateway re-emits `presence:snapshot` only on
         // a fresh auth, so trigger a REST refresh defensively — it covers the
@@ -109,6 +120,14 @@ final class PresenceManager: ObservableObject {
 
     func presenceState(for userId: String) -> PresenceState {
         presenceMap[userId]?.state ?? .offline
+    }
+
+    /// Preuve d'activité immédiate observée côté client (typing:start reçu) :
+    /// force l'état online local pour cet utilisateur, sans attendre le
+    /// prochain user:status / snapshot du gateway.
+    func noteActivity(userId: String) {
+        guard !userId.isEmpty else { return }
+        presenceMap[userId] = UserPresence(isOnline: true, lastActiveAt: Date())
     }
 
     /// Présence temps réel si l'utilisateur est suivi par le manager, `nil`

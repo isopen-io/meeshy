@@ -51,3 +51,11 @@ aucune modif gateway nécessaire) :
 
 Bug "points orange pendant 30min" corrigé partout. Reste optionnel : push origin (déploiement web),
 device-test visuel, pulse Android (non implémenté — Android n'avait pas de pulse).
+
+
+## Addendum 2026-07-08 (soir) — correction palette (JC)
+La règle ci-dessus avait inversé la sémantique couleur (« Actif = dot orange »).
+Décision produit JC : **vert = online/recent (isOnline backend autoritatif + typing),
+orange = away 5-30min, gris = offline**. Les seuils 60s/5min/30min restent valides.
+Implémenté sur les 3 plateformes + source de vérité `packages/shared/utils/user-presence.ts`.
+Voir `tasks/presence-green-palette-todo.md` pour le détail.

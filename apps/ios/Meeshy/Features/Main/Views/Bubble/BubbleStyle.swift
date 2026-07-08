@@ -13,7 +13,7 @@ struct BubbleStyle: Equatable {
     let isLastReceivedMessage: Bool
     let showAvatar: Bool
     let isDirect: Bool
-    let presenceState: PresenceState
+    let presenceState: PresenceState?
     let senderMoodEmoji: String?
     let senderStoryRingState: StoryRingState
     let highlightSearchTerm: String?

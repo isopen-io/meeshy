@@ -3,10 +3,10 @@ import Foundation
 // MARK: - Presence State
 
 public enum PresenceState: Equatable, Sendable {
-    case online   // orange + pulse — actif dans les 60 dernieres secondes
-    case recent   // orange — actif <= 5min
-    case away     // gris — actif <= 30min
-    case offline  // aucun dot — > 30min (ou pas de lastActiveAt & deconnecte)
+    case online   // vert + pulse — connecté (isOnline backend) ou actif <= 60s
+    case recent   // vert — actif <= 5min
+    case away     // orange — actif <= 30min
+    case offline  // gris — > 30min (ou pas de donnée & deconnecté)
 }
 
 // MARK: - User Presence
@@ -22,16 +22,22 @@ public struct UserPresence: Codable, Sendable {
 
     public var state: PresenceState { state(now: Date()) }
 
-    /// Regle produit (identique web / Android), decroissance temporelle pure sur
-    /// lastActiveAt (gele par le gateway a la deconnexion) :
-    ///   <= 60s   -> online  (orange, pulse)
-    ///   <= 5min  -> recent  (orange)
-    ///   <= 30min -> away    (gris)
-    ///   > 30min  -> offline (aucun dot)
-    /// isOnline ne sert que de fallback quand lastActiveAt est absent.
+    /// Regle produit (source de verite partagee : `packages/shared/utils/user-presence.ts`,
+    /// miroir Android `Presence.kt`) :
+    ///   isOnline == true -> online (vert, pulse) — le flag backend est autoritatif
+    ///                       (maintenu par le gateway pour toute session active),
+    ///                       garde anti-stale : ignore si lastActiveAt > 30min
+    ///   <= 60s   -> online  (vert, pulse)
+    ///   <= 5min  -> recent  (vert)
+    ///   <= 30min -> away    (orange)
+    ///   > 30min  -> offline (gris)
+    /// lastActiveAt est gele par le gateway a la deconnexion, donc la
+    /// decroissance vert -> orange -> gris demarre au dernier instant
+    /// d'activite reelle.
     public func state(now: Date) -> PresenceState {
-        guard let last = lastActiveAt else { return isOnline ? .online : .offline }
-        let elapsed = now.timeIntervalSince(last)
+        let elapsed = lastActiveAt.map { now.timeIntervalSince($0) }
+        if isOnline, elapsed.map({ $0 <= 1800 }) ?? true { return .online }
+        guard let elapsed else { return .offline }
         if elapsed <= 60 { return .online }
         if elapsed <= 300 { return .recent }
         if elapsed <= 1800 { return .away }

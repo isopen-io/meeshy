@@ -4,13 +4,14 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * Locks the canonical presence-dot rule shared with web (`getUserStatus`) and iOS
- * (`UserPresence.state`), pure time decay on lastActiveAt (frozen by the gateway on
- * disconnect):
- *   <= 60s   -> ONLINE  (orange, pulse)
- *   <= 5min  -> RECENT  (orange)
- *   <= 30min -> AWAY    (gray)
- *   > 30min  -> OFFLINE (no dot); isOnline is only a fallback when no timestamp.
+ * Locks the canonical presence rule shared with web
+ * (`packages/shared/utils/user-presence.ts`) and iOS (`UserPresence.state`):
+ *   isOnline == true -> ONLINE (GREEN, pulse) — the backend flag is authoritative,
+ *                       anti-stale guard: ignored when lastActiveAt > 30min
+ *   <= 60s   -> ONLINE  (green, pulse)
+ *   <= 5min  -> RECENT  (green)
+ *   <= 30min -> AWAY    (orange)
+ *   > 30min  -> OFFLINE (gray); no data + disconnected -> OFFLINE.
  */
 class PresenceTest {
 
@@ -19,7 +20,7 @@ class PresenceTest {
     private fun iso(epochMillis: Long): String =
         java.time.Instant.ofEpochMilli(epochMillis).toString()
 
-    // MARK: - Fallback on isOnline when no reliable timestamp
+    // MARK: - isOnline backend flag is authoritative
 
     @Test
     fun `state is offline when disconnected with no last active`() {
@@ -45,57 +46,73 @@ class PresenceTest {
             .isEqualTo(PresenceState.ONLINE)
     }
 
-    // MARK: - Time decay drives the dot regardless of isOnline
+    @Test
+    fun `connected user stays online even with a minutes-old last active`() {
+        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 60_001)).state(now))
+            .isEqualTo(PresenceState.ONLINE)
+        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 600_000)).state(now))
+            .isEqualTo(PresenceState.ONLINE)
+        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 1_800_000)).state(now))
+            .isEqualTo(PresenceState.ONLINE)
+    }
+
+    @Test
+    fun `anti-stale guard - isOnline is ignored when last active is beyond 30 minutes`() {
+        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 1_800_001)).state(now))
+            .isEqualTo(PresenceState.OFFLINE)
+    }
+
+    // MARK: - Time decay when disconnected
 
     @Test
     fun `state is online when active within the last 60 seconds`() {
-        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 20_000)).state(now))
+        assertThat(UserPresence(isOnline = false, lastActiveAt = iso(now - 20_000)).state(now))
             .isEqualTo(PresenceState.ONLINE)
     }
 
     @Test
     fun `state is online at exactly the 60 second boundary`() {
-        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 60_000)).state(now))
+        assertThat(UserPresence(isOnline = false, lastActiveAt = iso(now - 60_000)).state(now))
             .isEqualTo(PresenceState.ONLINE)
     }
 
     @Test
     fun `state is recent just past 60 seconds`() {
-        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 60_001)).state(now))
+        assertThat(UserPresence(isOnline = false, lastActiveAt = iso(now - 60_001)).state(now))
             .isEqualTo(PresenceState.RECENT)
     }
 
     @Test
     fun `state is recent at exactly the five minute boundary`() {
-        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 300_000)).state(now))
+        assertThat(UserPresence(isOnline = false, lastActiveAt = iso(now - 300_000)).state(now))
             .isEqualTo(PresenceState.RECENT)
     }
 
     @Test
     fun `state is away just past the five minute boundary`() {
-        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 300_001)).state(now))
+        assertThat(UserPresence(isOnline = false, lastActiveAt = iso(now - 300_001)).state(now))
             .isEqualTo(PresenceState.AWAY)
     }
 
     @Test
     fun `state is away at exactly the thirty minute boundary`() {
-        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 1_800_000)).state(now))
+        assertThat(UserPresence(isOnline = false, lastActiveAt = iso(now - 1_800_000)).state(now))
             .isEqualTo(PresenceState.AWAY)
     }
 
     @Test
     fun `state is offline just past the thirty minute boundary`() {
-        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now - 1_800_001)).state(now))
+        assertThat(UserPresence(isOnline = false, lastActiveAt = iso(now - 1_800_001)).state(now))
             .isEqualTo(PresenceState.OFFLINE)
     }
 
     @Test
     fun `state is online when last active is in the future`() {
-        assertThat(UserPresence(isOnline = true, lastActiveAt = iso(now + 120_000)).state(now))
+        assertThat(UserPresence(isOnline = false, lastActiveAt = iso(now + 120_000)).state(now))
             .isEqualTo(PresenceState.ONLINE)
     }
 
-    // MARK: - Freshly disconnected users decay by time (the reported bug fix)
+    // MARK: - Freshly disconnected users decay by time
 
     @Test
     fun `state is recent when disconnected but active 3 minutes ago`() {

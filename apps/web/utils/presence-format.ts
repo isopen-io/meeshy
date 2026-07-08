@@ -1,4 +1,6 @@
 import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
+import { getUserPresenceStatus, presenceTone } from '@meeshy/shared/utils/user-presence';
+import { PRESENCE_TEXT_CLASS } from '@/lib/user-status';
 
 type Translate = (key: string, params?: Record<string, unknown>) => string;
 
@@ -37,21 +39,17 @@ export function formatPresenceLabel(o: FormatPresenceLabelOptions): string {
   return o.t('status.lastSeenDateTime', { date, time });
 }
 
-const PRESENCE_COLORS = {
-  active: 'text-orange-500 dark:text-orange-400', // actif <= 5 min : orange
-  away: 'text-gray-500 dark:text-gray-400', // absent > 5 min : gris
-} as const;
-
 /**
- * Couleur du libellé selon l'ancienneté (regle Prisme presence) :
- * orange <= 5 min (actif), gris au-dela. Aucune couleur "en ligne" verte.
+ * Couleur du libellé selon la règle de présence canonique : vert quand actif
+ * (online/recent), orange en absence courte (away), gris hors ligne. Délègue
+ * le calcul d'état à `getUserPresenceStatus` (source de vérité partagée) et
+ * le mapping couleur à `PRESENCE_TEXT_CLASS` (mapping central web).
  */
 export function presenceColorClass(
   lastActiveAt: Date | string | number,
-  _isOnline?: boolean | null,
+  isOnline?: boolean | null,
   now?: number,
 ): string {
-  const minutesAgo = ((now ?? Date.now()) - new Date(lastActiveAt).getTime()) / 60_000;
-  if (minutesAgo <= 5) return PRESENCE_COLORS.active;
-  return PRESENCE_COLORS.away;
+  const status = getUserPresenceStatus({ isOnline, lastActiveAt }, now ?? Date.now());
+  return PRESENCE_TEXT_CLASS[presenceTone(status)];
 }

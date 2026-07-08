@@ -366,7 +366,6 @@ private struct MyStoryButton: View {
                     avatarURL: myGroup.flatMap { latestStoryThumbnailURL($0) } ?? currentUser?.avatar,
                     storyState: storyState,
                     moodEmoji: myMoodEmoji,
-                    presenceState: .offline,
                     onTap: {
                         if hasMyStory {
                             onViewMyStory()
