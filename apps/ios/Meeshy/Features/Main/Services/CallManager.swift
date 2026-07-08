@@ -117,6 +117,13 @@ final class CallManager: ObservableObject {
     @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published private(set) var remoteUserId: String?
     @Published private(set) var remoteUsername: String?
+    /// Conversation (DM) qui héberge l'appel courant, quand elle est connue.
+    /// Renseignée pour les appels sortants (`startCall`) et les appels entrants
+    /// livrés par socket (`CallOfferData.conversationId`). Peut rester `nil` pour
+    /// un appel entrant réveillé par un push VoIP dont le payload ne la contient
+    /// pas — l'affordance « ouvrir la conversation » dans l'écran d'appel se
+    /// masque alors gracieusement plutôt que de deviner.
+    @Published private(set) var conversationId: String?
     @Published var isVideoEnabled: Bool = false {
         didSet { if isVideoEnabled != oldValue { updateProximityMonitoring() } }
     }
@@ -207,7 +214,7 @@ final class CallManager: ObservableObject {
     @Published private(set) var availableCameras: [CameraDeviceOption] = []
     /// §7.1 — uniqueID of the active capture camera (drives the picker's check).
     @Published private(set) var selectedCameraId: String?
-    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?)?
+    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?, conversationId: String?)?
 
     // MARK: - Audio Guard (DEBUG override for tests)
 
@@ -753,6 +760,7 @@ final class CallManager: ObservableObject {
             currentCallId = nil
             remoteUserId = nil
             remoteUsername = nil
+            conversationId = nil
             callDuration = 0
             isVideoEnabled = false
             isRemoteVideoEnabled = true
@@ -796,6 +804,7 @@ final class CallManager: ObservableObject {
         // gateway-issued ObjectId once the ACK lands.
         remoteUserId = userId
         remoteUsername = displayName
+        self.conversationId = conversationId
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
@@ -952,7 +961,7 @@ final class CallManager: ObservableObject {
 
     // MARK: - VoIP Push Incoming Call
 
-    func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil) {
+    func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
         resetEndedStateForNewCall()
         lastCallWasOutgoing = false
         // The VoIP-push path ALWAYS uses CallKit — Apple mandates a synchronous
@@ -992,7 +1001,7 @@ final class CallManager: ObservableObject {
             // Date(); this synthesized busy-path report ends right now, so do the same.
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
             rejectSupersededPendingCall(replacingWithCallId: callId)
-            pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo, iceServers: iceServers)
+            pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo, iceServers: iceServers, conversationId: conversationId)
             showCallWaitingBanner = true
             Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
             HapticFeedback.medium()
@@ -1003,6 +1012,7 @@ final class CallManager: ObservableObject {
         currentCallId = callId
         remoteUserId = callerUserId
         remoteUsername = callerName
+        self.conversationId = conversationId
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
@@ -1227,12 +1237,12 @@ final class CallManager: ObservableObject {
 
     @Published var showCallWaitingBanner = false
 
-    func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil) {
+    func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
         resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
             rejectSupersededPendingCall(replacingWithCallId: callId)
-            pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo, iceServers: iceServers)
+            pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo, iceServers: iceServers, conversationId: conversationId)
             showCallWaitingBanner = true
             HapticFeedback.medium()
             return
@@ -1242,6 +1252,7 @@ final class CallManager: ObservableObject {
         currentCallId = callId
         remoteUserId = fromUserId
         remoteUsername = fromUsername
+        self.conversationId = conversationId
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
@@ -2076,7 +2087,8 @@ final class CallManager: ObservableObject {
                 fromUserId: pending.fromUserId,
                 fromUsername: pending.fromUsername,
                 isVideo: pending.isVideo,
-                iceServers: pending.iceServers
+                iceServers: pending.iceServers,
+                conversationId: pending.conversationId
             )
         }
     }
@@ -3141,6 +3153,7 @@ final class CallManager: ObservableObject {
                 self.currentCallId = nil
                 self.remoteUserId = nil
                 self.remoteUsername = nil
+                self.conversationId = nil
                 self.callDuration = 0
                 self.isVideoEnabled = false
                 self.isMuted = false
@@ -3438,7 +3451,8 @@ final class CallManager: ObservableObject {
                     fromUserId: event.initiator.userId,
                     fromUsername: callerName,
                     isVideo: isVideo,
-                    iceServers: dynamicIceServers
+                    iceServers: dynamicIceServers,
+                    conversationId: event.conversationId
                 )
             }
             .store(in: &cancellables)

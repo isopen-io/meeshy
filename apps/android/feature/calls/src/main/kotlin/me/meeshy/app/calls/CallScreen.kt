@@ -1,5 +1,10 @@
 package me.meeshy.app.calls
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Videocam
@@ -27,25 +33,36 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+
+private const val CALL_ENDED_AUTO_DISMISS_MS = 1500L
+
+private fun hasSelfPermission(context: Context, permission: String): Boolean =
+    ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
 /**
  * The minimal 1:1 call screen — pure glue over [CallViewModel]. It starts the
@@ -58,12 +75,51 @@ import me.meeshy.ui.theme.hexColor
 fun CallScreen(
     config: CallConfig,
     onClose: () -> Unit,
+    onMinimize: () -> Unit = {},
     viewModel: CallViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    // Runtime media permissions (mic always, camera for video). WebRTC capture
+    // records silence / fails without RECORD_AUDIO, and it is never granted by
+    // default. Mirrors iOS, where AVAudioSession prompts for the mic at first media
+    // access: an OUTGOING call gates its start on the grant; an INCOMING call rings
+    // first (no prompt) and gates accept — matching iOS's ask-at-answer flow.
+    val context = LocalContext.current
+    val requiredPermissions = remember(config.isVideo) { CallPermissions.required(config.isVideo) }
+    val pendingMediaAction = remember { mutableStateOf<(() -> Unit)?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        // The mic is the vital minimum; the camera is optional (video degrades to audio).
+        val micGranted = grants[Manifest.permission.RECORD_AUDIO]
+            ?: hasSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+        if (micGranted) pendingMediaAction.value?.invoke()
+        pendingMediaAction.value = null
+    }
+
+    fun withMediaPermissions(action: () -> Unit) {
+        if (hasSelfPermission(context, Manifest.permission.RECORD_AUDIO)) {
+            action()
+        } else {
+            pendingMediaAction.value = action
+            permissionLauncher.launch(requiredPermissions)
+        }
+    }
+
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
-        viewModel.start(config)
+        if (config.isOutgoing) withMediaPermissions { viewModel.start(config) } else viewModel.start(config)
+    }
+
+    // Auto-dismiss a settled call after a short beat so the "Call ended" screen does
+    // not linger (parity with iOS's 1.5 s settle → full-screen cover close). The
+    // manual close button on the ended view remains for an immediate back-out.
+    LaunchedEffect(state.isEnded) {
+        if (state.isEnded) {
+            delay(CALL_ENDED_AUTO_DISMISS_MS)
+            viewModel.dismiss()
+            onClose()
+        }
     }
 
     val accent = hexColor(DynamicColorGenerator.colorForName(config.peerId.ifBlank { config.peerName }))
@@ -74,6 +130,30 @@ fun CallScreen(
             .background(MeeshyTheme.tokens.backgroundPrimary),
         contentAlignment = Alignment.Center,
     ) {
+        if (state.isVideoCall) {
+            val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
+            remoteVideo?.let { track ->
+                VideoRenderer(
+                    track = track,
+                    eglContext = viewModel.eglBaseContext,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            viewModel.localVideoTrack?.let { local ->
+                VideoRenderer(
+                    track = local,
+                    eglContext = viewModel.eglBaseContext,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(MeeshySpacing.lg)
+                        .size(width = 108.dp, height = 148.dp)
+                        .clip(RoundedCornerShape(MeeshyRadius.md)),
+                    mirror = true,
+                    overlay = true,
+                )
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -84,21 +164,23 @@ fun CallScreen(
             Spacer(Modifier.height(MeeshySpacing.xl))
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    modifier = Modifier
-                        .size(96.dp)
-                        .clip(CircleShape)
-                        .background(accent),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = state.peerName.take(1).uppercase(),
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                    )
+                if (!state.isVideoCall) {
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(CircleShape)
+                            .background(accent),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = state.peerName.take(1).uppercase(),
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Spacer(Modifier.height(MeeshySpacing.lg))
                 }
-                Spacer(Modifier.height(MeeshySpacing.lg))
                 Text(
                     text = state.peerName,
                     style = MaterialTheme.typography.headlineSmall,
@@ -121,7 +203,7 @@ fun CallScreen(
             CallControls(
                 state = state,
                 accent = accent,
-                onAccept = viewModel::accept,
+                onAccept = { withMediaPermissions { viewModel.accept() } },
                 onDecline = viewModel::decline,
                 onHangUp = viewModel::hangUp,
                 onToggleMute = viewModel::toggleMute,
@@ -141,6 +223,26 @@ fun CallScreen(
                 onAnswer = viewModel::acceptWaitingSwap,
                 modifier = Modifier.align(Alignment.TopCenter),
             )
+        }
+
+        // Minimise affordance — parity with iOS's collapse-to-pill. Offered only
+        // for a live, non-incoming call (the same phases that surface the floating
+        // pill); [onMinimize] opens the conversation while the Activity-scoped
+        // CallViewModel keeps the call alive. On a video call the chevron rides the
+        // remote feed, so it stays white for contrast.
+        if (CallPillPresenter.isMinimizable(state.status)) {
+            IconButton(
+                onClick = onMinimize,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(MeeshySpacing.sm),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    contentDescription = stringResource(R.string.call_action_minimize),
+                    tint = if (state.isVideoCall) Color.White else MeeshyTheme.tokens.textPrimary,
+                )
+            }
         }
     }
 }

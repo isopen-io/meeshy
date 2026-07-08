@@ -45,7 +45,7 @@ class CallStateMachineTest {
 
     @Test
     fun `outgoing ringing advances to offering when the peer joins`() {
-        assertThat(reduce(CallState.Ringing(isOutgoing = true), CallEvent.ParticipantJoined))
+        assertThat(reduce(CallState.Ringing(isOutgoing = true), CallEvent.ParticipantJoined()))
             .isEqualTo(CallState.Offering)
     }
 
@@ -94,7 +94,7 @@ class CallStateMachineTest {
         val outgoing = CallState.Ringing(isOutgoing = true)
         assertThat(reduce(outgoing, CallEvent.Reject)).isEqualTo(outgoing)
         val incoming = CallState.Ringing(isOutgoing = false)
-        assertThat(reduce(incoming, CallEvent.ParticipantJoined)).isEqualTo(incoming)
+        assertThat(reduce(incoming, CallEvent.ParticipantJoined())).isEqualTo(incoming)
     }
 
     // --- Offering -----------------------------------------------------------
@@ -227,7 +227,7 @@ class CallStateMachineTest {
     fun `the full outgoing happy path folds to connected`() {
         val events = listOf(
             CallEvent.StartOutgoing,
-            CallEvent.ParticipantJoined,
+            CallEvent.ParticipantJoined(),
             CallEvent.RemoteAnswer,
             CallEvent.MediaConnected,
         )

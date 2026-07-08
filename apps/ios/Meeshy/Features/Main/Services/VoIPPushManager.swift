@@ -204,6 +204,11 @@ extension VoIPPushManager: PKPushRegistryDelegate {
 
         let callerUserId = data["callerUserId"] as? String ?? ""
 
+        // Conversation (DM) hosting the call, when the push payload carries it.
+        // Optional: older gateway builds omit it — the in-call "open
+        // conversation" affordance simply hides itself when it is absent.
+        let conversationId = (data["conversationId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+
         // Backend sends `isVideo` as a string ("true"/"false") because APNs
         // payloads are Record<string,string>, but older builds may still send
         // it as a Bool. Accept both for forward compatibility.
@@ -245,7 +250,8 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                 callerUserId: callerUserId,
                 callerName: displayName,
                 isVideo: isVideo,
-                iceServers: iceServers
+                iceServers: iceServers,
+                conversationId: conversationId
             )
         }
 

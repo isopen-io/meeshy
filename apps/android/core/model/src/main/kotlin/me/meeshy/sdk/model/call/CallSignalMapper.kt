@@ -29,8 +29,8 @@ object CallSignalMapper {
                 CallEvent.ReceiveIncoming
             }
             "call:participant-joined" -> {
-                json.decodeFromString<CallParticipantPayload>(rawJson)
-                CallEvent.ParticipantJoined
+                val payload = json.decodeFromString<CallParticipantPayload>(rawJson)
+                CallEvent.ParticipantJoined(payload.participant?.userId)
             }
             "call:signal" -> mapSignal(json.decodeFromString<CallSignalEnvelope>(rawJson))
             // `call:ended` / `call:missed` are **identity-gated** teardown — decoded
@@ -62,6 +62,25 @@ object CallSignalMapper {
      */
     fun incomingOffer(rawJson: String): WaitingCall? = runCatching {
         WaitingCall.from(json.decodeFromString<CallInitiatedPayload>(rawJson))
+    }.getOrNull()
+
+    /**
+     * Decode a `call:signal` frame into its full [CallSignalEnvelope] — the SDP or
+     * ICE payload the WebRTC engine consumes. The FSM-facing [map] keeps only a
+     * marker (and drops offers/candidates); this parallel, total, side-effect-free
+     * decode is the WebRTC data path. `null` on a malformed frame.
+     */
+    fun signalEnvelope(rawJson: String): CallSignalEnvelope? = runCatching {
+        json.decodeFromString<CallSignalEnvelope>(rawJson)
+    }.getOrNull()
+
+    /**
+     * Decode a `call:ice-servers-refreshed` frame into the fresh STUN/TURN servers
+     * the callee's WebRTC engine needs (the caller already has them from the
+     * initiate ACK). `null` on a malformed frame.
+     */
+    fun iceServersRefreshed(rawJson: String): List<SocketIceServer>? = runCatching {
+        json.decodeFromString<IceServersRefreshedPayload>(rawJson).iceServers
     }.getOrNull()
 
     /**

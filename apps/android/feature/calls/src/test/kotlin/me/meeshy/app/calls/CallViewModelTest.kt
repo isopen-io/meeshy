@@ -9,17 +9,21 @@ import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.CallCue
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallQualitySample
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.ConnectionQuality
@@ -39,7 +43,10 @@ class CallViewModelTest {
     private val events = MutableSharedFlow<CallEvent>(extraBufferCapacity = 64)
     private val incomingOffers = MutableSharedFlow<WaitingCall>(extraBufferCapacity = 16)
     private val endedCalls = MutableSharedFlow<CallEndedSignal>(extraBufferCapacity = 16)
+    private val iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(extraBufferCapacity = 8)
     private val signalManager: CallSignalManager = mockk(relaxed = true)
+    private val coordinator: WebRtcCallCoordinator = mockk(relaxed = true)
+    private val sessionRepository: SessionRepository = mockk(relaxed = true)
 
     /** Test-driven auto-dismiss countdown: emit once to fire the 15 s timeout. */
     private val waitingTimerFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
@@ -92,8 +99,12 @@ class CallViewModelTest {
         every { signalManager.events } returns events
         every { signalManager.incomingOffers } returns incomingOffers
         every { signalManager.endedCalls } returns endedCalls
+        every { signalManager.iceServersRefreshed } returns iceServersRefreshed
+        every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
+        coEvery { signalManager.emitJoinAwaitingAck(any()) } returns
+            CallJoinResult.Success(emptyList())
     }
 
     @After
@@ -101,7 +112,9 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = CallViewModel(signalManager, ticker, tones, telecom, qualitySampler, waitingTimer)
+    private fun vm() = CallViewModel(
+        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
+    )
 
     @Test
     fun `starts idle`() {
@@ -174,7 +187,7 @@ class CallViewModelTest {
         val vm = vm()
         vm.start(outgoingVideo)
 
-        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.ParticipantJoined())
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
 
         vm.onSignal(CallEvent.RemoteAnswer)
@@ -188,7 +201,7 @@ class CallViewModelTest {
     fun `a remote hang-up ends the call`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
-        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.ParticipantJoined())
         vm.onSignal(CallEvent.RemoteAnswer)
         vm.onSignal(CallEvent.MediaConnected)
         vm.onSignal(CallEvent.RemoteHangUp)
@@ -336,7 +349,7 @@ class CallViewModelTest {
         vm.start(incomingAudio) // callId comes from the incoming config
         vm.accept()
 
-        verify(exactly = 1) { signalManager.emitJoin("call-9") }
+        coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-9") }
     }
 
     @Test
@@ -395,7 +408,7 @@ class CallViewModelTest {
         val vm = vm()
         vm.start(outgoingVideo)
 
-        events.emit(CallEvent.ParticipantJoined)
+        events.emit(CallEvent.ParticipantJoined())
         events.emit(CallEvent.RemoteAnswer)
         events.emit(CallEvent.MediaConnected)
 
@@ -420,7 +433,7 @@ class CallViewModelTest {
         vm.start(outgoingVideo)
         assertThat(vm.state.value.durationLabel).isNull()
 
-        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.ParticipantJoined())
         vm.onSignal(CallEvent.RemoteAnswer)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
         assertThat(vm.state.value.durationLabel).isNull()
@@ -503,7 +516,7 @@ class CallViewModelTest {
         emitQuality(rttMs = 40.0) // no collector while ringing → ignored
         assertThat(vm.state.value.connectionQuality).isNull()
 
-        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.ParticipantJoined())
         vm.onSignal(CallEvent.RemoteAnswer)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
         assertThat(vm.state.value.connectionQuality).isNull()
@@ -585,7 +598,7 @@ class CallViewModelTest {
     fun `an outgoing call stops the ringback and cues connected when media flows`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
-        vm.onSignal(CallEvent.ParticipantJoined) // → offering: ringback continues
+        vm.onSignal(CallEvent.ParticipantJoined()) // → offering: ringback continues
         vm.onSignal(CallEvent.RemoteAnswer)      // → connecting: ringback stops
         vm.onSignal(CallEvent.MediaConnected)    // → connected: connected cue
 
@@ -674,7 +687,7 @@ class CallViewModelTest {
     fun `an answered outgoing call goes active once and dedupes the media edges`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
-        vm.onSignal(CallEvent.ParticipantJoined) // → offering: still dialing, no report
+        vm.onSignal(CallEvent.ParticipantJoined()) // → offering: still dialing, no report
         vm.onSignal(CallEvent.RemoteAnswer)      // → connecting: active
         vm.onSignal(CallEvent.MediaConnected)    // → connected: already active, no report
 
@@ -841,7 +854,7 @@ class CallViewModelTest {
         vm.acceptWaitingSwap()
         vm.accept()
 
-        verify(exactly = 1) { signalManager.emitJoin("call-77") }
+        coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-77") }
     }
 
     @Test

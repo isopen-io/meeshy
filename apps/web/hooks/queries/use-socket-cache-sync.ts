@@ -191,16 +191,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         }
       );
 
-      // Update simple messages list
-      queryClient.setQueryData<Message[]>(
-        queryKeys.messages.list(targetConversationId),
-        (old) => {
-          if (!old) return [message];
-          if (old.some((m) => m.id === message.id)) return old;
-          return [message, ...old];
-        }
-      );
-
       // Update ALL conversation list variants with latest message AND move to top
       queryClient.setQueriesData<Conversation[]>(
         { queryKey: queryKeys.conversations.lists() },
