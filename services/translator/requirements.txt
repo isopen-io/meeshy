@@ -125,8 +125,9 @@ soxr==1.1.0  # Requis par transformers/audio_utils pour chatterbox-tts
 # ✓ Python 3.11-3.13 compatible
 # ✓ Used for languages not supported by Chatterbox (e.g., Lingala)
 # Set TTS_MODEL=vits
-# Note: 202412 est la dernière version compatible numpy<2.0 (avant 202509 qui nécessite numpy>=2.2)
-espnet==202511
+# Note: 202412 est la dernière version compatible numpy<2.0 (202509+ et 202511 nécessitent numpy>=2.0).
+# NE PAS bumper : conflit avec le pin numpy<1.24.0 ci-dessus → build translator KO (cf. CI Docker #2074).
+espnet==202412
 espnet-model-zoo==0.1.7
 
 # ─────────────────────────────────────────────────────────────────────────────────

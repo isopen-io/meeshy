@@ -141,6 +141,12 @@ updates:
     allow:
       - dependency-type: "direct"
       - dependency-type: "indirect"
+    ignore:
+      # espnet 202509+/202511 exigent numpy>=2.0, incompatible avec le pin
+      # numpy<1.24.0 (ESPnet 202412 + chatterbox-tts). Un bump casse le build
+      # Docker translator (cf. #1539 → CI Docker #2074). Rester sur 202412.
+      - dependency-name: "espnet"
+      - dependency-name: "espnet-model-zoo"
 
   # Package Shared (Prisma/Types)
   - package-ecosystem: "npm"
