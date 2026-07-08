@@ -82,10 +82,13 @@ struct BubbleExpandableText: View, Equatable {
                     // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
                     // creusait ~16pt de vide au-dessus ET en dessous du libellé
                     // avant la date (feedback produit 2026-07-08). La cible
-                    // tactile reste ~40pt via le contentShape étendu (-8pt).
+                    // tactile atteint les 44pt HIG via un contentShape étendu
+                    // UNIQUEMENT vers le bas (`DownwardExtendedTapShape`, +20pt)
+                    // — jamais vers le haut, pour ne pas mordre sur le texte
+                    // tronqué / les liens juste au-dessus.
                     .frame(maxWidth: .infinity, minHeight: 24, alignment: .trailing)
                     .padding(.trailing, 48)
-                    .contentShape(Rectangle().inset(by: -8))
+                    .contentShape(DownwardExtendedTapShape(extraBottom: 20))
                     .textSelection(.disabled)
                     .highPriorityGesture(
                         TapGesture()

@@ -196,7 +196,10 @@ struct BubbleSwipeContainer<Content: View>: View {
                 guard BubbleSwipeResistance.shouldEngage(
                     translationWidth: h,
                     translationHeight: value.translation.height,
-                    isScrubbing: isMediaScrubbing || isInlinePagingActive,
+                    isScrubbing: BubbleSwipeResistance.isGestureOwnershipClaimed(
+                        mediaScrubbing: isMediaScrubbing,
+                        inlinePaging: isInlinePagingActive
+                    ),
                     resistance: resistance
                 ) else { return }
                 let zone: CGFloat = 72

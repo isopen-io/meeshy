@@ -625,7 +625,12 @@ public struct AudioPlayerView: View {
     /// `true` pendant le drag de scrub sur la waveform. Publié via
     /// `MediaScrubbingPreferenceKey` pour que l'hôte (conteneur de swipe de
     /// bulle côté app) désengage ses gestes horizontaux le temps du scrub.
-    @State private var isUserScrubbing = false
+    /// `@GestureState` (pas `@State`) : SwiftUI le remet à `false`
+    /// automatiquement si le drag est interrompu (appel entrant, arbitrage
+    /// perdu face au parent) même quand `.onEnded` ne se déclenche jamais —
+    /// un `@State` manuel resterait bloqué à `true` et désengagerait le swipe
+    /// reply/forward de la bulle indéfiniment.
+    @GestureState private var isUserScrubbing = false
 
     private var isDark: Bool { theme.mode.isDark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
@@ -1449,15 +1454,16 @@ public struct AudioPlayerView: View {
                     // zero-distance case: it seeks to the tapped point on `.onEnded`.
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
+                            .updating($isUserScrubbing) { _, state, _ in
+                                state = true
+                            }
                             .onChanged { value in
-                                if !isUserScrubbing { isUserScrubbing = true }
                                 player.seek(to: Self.scrubFraction(
                                     locationX: value.location.x, width: geo.size.width))
                             }
                             .onEnded { value in
                                 player.seek(to: Self.scrubFraction(
                                     locationX: value.location.x, width: geo.size.width))
-                                isUserScrubbing = false
                                 HapticFeedback.light()
                             }
                     )

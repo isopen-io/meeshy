@@ -16,7 +16,11 @@ internal struct _InlineOverlayControls: View {
     let controls: MeeshyVideoPlayer.ControlSet
     let onExpand: (() -> Void)?
 
-    @State private var isSeeking = false
+    /// `@GestureState` (pas `@State`) : remis à `false` automatiquement par
+    /// SwiftUI si le drag est interrompu, même sans `.onEnded` — voir la
+    /// même règle documentée sur `AudioPlayerView.isUserScrubbing`, qui
+    /// publie dans la même `MediaScrubbingPreferenceKey`.
+    @GestureState private var isSeeking = false
     @State private var seekValue: Double = 0
 
     private var accent: Color { Color(hex: accentColor) }
@@ -209,14 +213,15 @@ internal struct _InlineOverlayControls: View {
             // réagit dès le touch pour un positionnement libre immédiat.
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($isSeeking) { _, state, _ in
+                        state = true
+                    }
                     .onChanged { value in
-                        isSeeking = true
                         seekValue = max(0, min(1, value.location.x / geo.size.width))
                     }
                     .onEnded { value in
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
                         manager.seek(to: fraction * manager.duration)
-                        isSeeking = false
                         seekValue = 0
                     }
             )

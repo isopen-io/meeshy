@@ -302,10 +302,12 @@ struct FeedPostCard: View {
                                 // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
                                 // creusait ~14pt de vide au-dessus et en dessous du libellé
                                 // avant la rangée d'actions (même correctif que le « Voir
-                                // plus » des bulles, 2026-07-08). Cible tactile ~40pt
-                                // conservée via le contentShape étendu (-8pt).
+                                // plus » des bulles, 2026-07-08). Cible tactile 44pt HIG via
+                                // un contentShape étendu UNIQUEMENT vers le bas
+                                // (`DownwardExtendedTapShape`, +20pt) — vers le texte du post
+                                // au-dessus, jamais.
                                 .frame(minHeight: 24)
-                                .contentShape(Rectangle().inset(by: -8))
+                                .contentShape(DownwardExtendedTapShape(extraBottom: 20))
                                 .textSelection(.disabled)
                                 .highPriorityGesture(
                                     TapGesture()
