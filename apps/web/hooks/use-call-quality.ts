@@ -65,6 +65,17 @@ export function useCallQuality({
   // removal below for why).
   const previousLevelRef = useRef<ConnectionQualityLevel | undefined>(undefined);
 
+  // Previous inbound cumulative byte counters + sample time, tracked outside
+  // React state so `bitrate` can be derived as a RATE (delta over elapsed time)
+  // rather than from the ever-growing cumulative `bytesReceived` counter. Reset
+  // to null whenever the peer connection changes so a rate is never computed
+  // across two different calls (see the monitoring effect's cleanup).
+  const previousInboundRef = useRef<{
+    audioBytes: number;
+    videoBytes: number;
+    timestamp: number;
+  } | null>(null);
+
   /**
    * Get stats from peer connection
    */
@@ -76,9 +87,12 @@ export function useCallQuality({
       const stats = await peerConnection.getStats();
 
       let rtt = 0;
-      let audioBitrate = 0;
-      let videoBitrate = 0;
       let jitter = 0;
+      // Current cumulative inbound bytes, summed per kind across all streams of
+      // that kind, plus the sample time — used below to derive the bitrate rate.
+      let audioBytesReceived = 0;
+      let videoBytesReceived = 0;
+      let sampleTimestamp = 0;
       // Cumulative counters summed across ALL inbound RTP streams (audio +
       // video). Packet loss is aggregated the same way as the byte counters so
       // a lossy stream can never be masked by a healthy one iterated after it —
@@ -95,18 +109,25 @@ export function useCallQuality({
           totalPacketsLost += report.packetsLost || 0;
           totalPacketsReceived += report.packetsReceived || 0;
 
-          // Get jitter
+          // Worst-case jitter across every inbound stream — aggregated like the
+          // packet-loss counters above so a jittery stream is never masked by a
+          // calmer one iterated after it (iteration order is spec-undefined).
           if (report.jitter !== undefined) {
-            jitter = report.jitter * 1000; // Convert to ms
+            jitter = Math.max(jitter, report.jitter * 1000); // ms
+          }
+
+          if (typeof report.timestamp === 'number') {
+            sampleTimestamp = report.timestamp;
           }
 
           bytesReceived += report.bytesReceived || 0;
 
-          // Get bitrate
+          // Accumulate cumulative bytes per kind; the bitrate rate is derived
+          // from their delta after the loop.
           if (report.kind === 'audio') {
-            audioBitrate = (report.bytesReceived || 0) * 8 / 1000; // kbps
+            audioBytesReceived += report.bytesReceived || 0;
           } else if (report.kind === 'video') {
-            videoBitrate = (report.bytesReceived || 0) * 8 / 1000; // kbps
+            videoBytesReceived += report.bytesReceived || 0;
           }
         }
 
@@ -133,6 +154,29 @@ export function useCallQuality({
       const totalPackets = totalPacketsLost + totalPacketsReceived;
       const packetLoss =
         totalPackets > 0 ? (totalPacketsLost / totalPackets) * 100 : 0;
+
+      // Bitrate is a RATE: the delta of the monotonic `bytesReceived` counter
+      // over the wall-clock interval between samples (report.timestamp, robust
+      // to updateInterval drift) — NOT the cumulative counter itself, which
+      // only grows and would make the reported bitrate climb without bound over
+      // the call's duration. The first sample has no predecessor, so its rate is
+      // 0; a counter reset (renegotiation) yields a negative delta, clamped to 0.
+      // Result unit is kbps: (bytes·8 bits) / (elapsed ms) = kbits/s.
+      const previousInbound = previousInboundRef.current;
+      const elapsedMs = previousInbound ? sampleTimestamp - previousInbound.timestamp : 0;
+      const bitrateKbps = (current: number, previous: number): number =>
+        elapsedMs > 0 ? (Math.max(0, current - previous) * 8) / elapsedMs : 0;
+      const audioBitrate = previousInbound
+        ? bitrateKbps(audioBytesReceived, previousInbound.audioBytes)
+        : 0;
+      const videoBitrate = previousInbound
+        ? bitrateKbps(videoBytesReceived, previousInbound.videoBytes)
+        : 0;
+      previousInboundRef.current = {
+        audioBytes: audioBytesReceived,
+        videoBytes: videoBytesReceived,
+        timestamp: sampleTimestamp,
+      };
 
       // Calculate quality level
       const level = calculateQualityLevel(packetLoss, rtt);
@@ -184,6 +228,7 @@ export function useCallQuality({
   useEffect(() => {
     if (!peerConnection) {
       setQualityStats(null);
+      previousInboundRef.current = null;
       return;
     }
 
@@ -199,6 +244,9 @@ export function useCallQuality({
 
     return () => {
       clearInterval(interval);
+      // Drop the previous-sample snapshot so a fresh peer connection never
+      // computes a bitrate delta straddling two different calls.
+      previousInboundRef.current = null;
       logger.debug('[useCallQuality]', 'Stopped quality monitoring');
     };
   }, [peerConnection, updateInterval, updateStats]);
