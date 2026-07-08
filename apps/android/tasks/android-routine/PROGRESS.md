@@ -692,6 +692,14 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
+**⏳ AWAITING MERGE (2026-07-08): `chat-reaction-who-reacted-sheet` — PR [#1663](https://github.com/isopen-io/meeshy/pull/1663) OPEN.**
+Code-complete, `apps/android`-only diff, local `assembleDebug`+`testDebugUnitTest` green, reviewer PASS.
+CI: **12 of 14 checks green** (Security, Quality-bun, Prisma, shared/web/gateway/agent tests, all voice/audio
+jobs); only `Build (bun)` and `Test Python (translator)` — both unrelated to the android diff — were still
+in-flight when the **GitHub MCP token expired mid-poll** (non-interactive session can't re-auth). **NEXT RUN
+STEP 0: re-check PR #1663 CI, and squash-merge it to `main` before starting a new slice** (per the routine's
+"merge the open PR first" rule). Nothing is blocked on the code — only on GitHub re-authorization.
+
 **Just shipped (2026-07-08): `chat-reaction-who-reacted-sheet`** — long-press a reaction chip →
 who-reacted bottom sheet, driven by the pure `:feature:chat` `ReactionBreakdown.of()` SSOT (emoji
 tabs by count desc, leading "All" tab when ≥2 emojis, self floated + flagged "Vous", honest counts,
