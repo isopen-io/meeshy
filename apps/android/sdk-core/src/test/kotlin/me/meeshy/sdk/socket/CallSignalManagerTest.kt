@@ -88,7 +88,7 @@ class CallSignalManagerTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
             deliver(handlers, "call:participant-joined", """{"callId":"c1"}""")
-            assertThat(awaitItem()).isEqualTo(CallEvent.ParticipantJoined)
+            assertThat(awaitItem()).isEqualTo(CallEvent.ParticipantJoined())
             cancelAndIgnoreRemainingEvents()
         }
     }

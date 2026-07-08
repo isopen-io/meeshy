@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
@@ -20,7 +21,9 @@ import me.meeshy.sdk.model.call.CallWaitingReducer
 import me.meeshy.sdk.model.call.CallWaitingState
 import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.sdk.model.call.TelecomCallPolicy
+import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.WaitingCall
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -46,12 +49,20 @@ import javax.inject.Inject
 @HiltViewModel
 class CallViewModel @Inject constructor(
     private val signalManager: CallSignalManager,
+    private val coordinator: WebRtcCallCoordinator,
+    private val sessionRepository: SessionRepository,
     private val ticker: CallSecondsTicker,
     private val toneController: CallToneController,
     private val telecomReporter: TelecomCallReporter,
     private val qualitySampler: CallQualitySampler,
     private val waitingTimer: CallWaitingTimer,
 ) : ViewModel() {
+
+    /** The local user id used as the `from` on every outbound WebRTC signal. */
+    private val selfId: String get() = sessionRepository.currentUser.value?.id.orEmpty()
+
+    /** Set on accept; the callee starts its media once fresh ICE servers land. */
+    private var awaitingIncomingIce: Boolean = false
 
     private var config: CallConfig = CallConfig.EMPTY
     private var media: CallMedia = CallMedia()
@@ -84,9 +95,18 @@ class CallViewModel @Inject constructor(
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
+    /**
+     * The immutable inputs of the call currently in flight. Read by the app shell
+     * ([MeeshyApp]) to rebuild the call route when the floating pill re-opens a
+     * minimised call — the Activity-scoped instance is reused on arrival, so the
+     * screen's re-entrant [start] is inert and the live call is left untouched.
+     * Reflects the last [start] config, or [CallConfig.EMPTY] while idle.
+     */
+    val activeConfig: CallConfig get() = config
+
     init {
         viewModelScope.launch {
-            signalManager.events.collect(::dispatch)
+            signalManager.events.collect(::onRemoteEvent)
         }
         viewModelScope.launch {
             signalManager.incomingOffers.collect(::onIncomingOffer)
@@ -94,7 +114,32 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             signalManager.endedCalls.collect(::onRemoteEnded)
         }
+        viewModelScope.launch {
+            signalManager.iceServersRefreshed.collect(::onIceServersRefreshed)
+        }
     }
+
+    /**
+     * Fold a remote FSM event, then drive the WebRTC media: the caller sends its
+     * SDP offer only once the peer has actually joined the room ([CallEvent
+     * .ParticipantJoined]) — offering earlier races the callee's connection.
+     */
+    private fun onRemoteEvent(event: CallEvent) {
+        dispatch(event)
+        if (event is CallEvent.ParticipantJoined) coordinator.onParticipantJoined(event.peerId)
+    }
+
+    /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */
+    private fun onIceServersRefreshed(iceServers: List<SocketIceServer>) {
+        if (!awaitingIncomingIce) return
+        awaitingIncomingIce = false
+        coordinator.startIncoming(
+            viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo, ::onMediaConnected,
+        )
+    }
+
+    /** WebRTC reports the media path is up → advance the FSM to Connected. */
+    private fun onMediaConnected() = dispatch(CallEvent.MediaConnected)
 
     /**
      * Begin a call for [config]. Inert unless the FSM is idle, so a re-entrant
@@ -126,7 +171,13 @@ class CallViewModel @Inject constructor(
         dispatch(CallEvent.StartOutgoing)
         viewModelScope.launch {
             when (val result = signalManager.emitInitiate(config.conversationId, config.isVideo)) {
-                is CallInitiateResult.Success -> callId = result.ack.callId
+                is CallInitiateResult.Success -> {
+                    callId = result.ack.callId
+                    coordinator.startOutgoing(
+                        viewModelScope, callId, result.ack.iceServers, config.peerId, selfId,
+                        config.isVideo, ::onMediaConnected,
+                    )
+                }
                 is CallInitiateResult.ServerError -> dispatch(CallEvent.ConnectionFailed(result.message))
                 CallInitiateResult.Timeout -> dispatch(CallEvent.ConnectionFailed(INITIATE_TIMED_OUT))
                 CallInitiateResult.Malformed -> dispatch(CallEvent.ConnectionFailed(INITIATE_MALFORMED))
@@ -134,22 +185,41 @@ class CallViewModel @Inject constructor(
         }
     }
 
-    /** Local user accepts an incoming call — answer the FSM and join the call room. */
+    /**
+     * Local user accepts an incoming call — answer the FSM, join the room, and
+     * request fresh ICE servers (absent from the `call:initiated` frame); the media
+     * connection opens in [onIceServersRefreshed] once they arrive.
+     */
     fun accept() {
         dispatch(CallEvent.LocalAnswer)
-        emitIfIdentified(signalManager::emitJoin)
+        if (callId.isBlank()) return
+        // Join WITH the ACK (parity with iOS emitCallJoinWithAck): the ACK confirms
+        // this socket is in the call room AND carries the callee's ICE servers, so
+        // media opens straight away. The prior fire-and-forget join + immediate
+        // call:request-ice-servers raced the not-yet-joined room -> NOT_A_PARTICIPANT
+        // ("Not in call room") the instant the user answered.
+        viewModelScope.launch {
+            when (val result = signalManager.emitJoinAwaitingAck(callId)) {
+                is CallJoinResult.Success -> coordinator.startIncoming(
+                    viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo, ::onMediaConnected,
+                )
+                is CallJoinResult.Failure -> dispatch(CallEvent.ConnectionFailed(result.message))
+            }
+        }
     }
 
     /** Local user declines an incoming call — reject the FSM and end it on the wire. */
     fun decline() {
         dispatch(CallEvent.Reject)
         emitIfIdentified(signalManager::emitEnd)
+        coordinator.end()
     }
 
     /** Local user hangs up an active call — end the FSM and the call on the wire. */
     fun hangUp() {
         dispatch(CallEvent.LocalHangUp)
         emitIfIdentified(signalManager::emitEnd)
+        coordinator.end()
     }
 
     /** Feed a signalling/remote event directly (peer joined, answer, stall, remote end…). */
@@ -159,13 +229,20 @@ class CallViewModel @Inject constructor(
     fun toggleMute() {
         media = media.copy(isMuted = !media.isMuted)
         publish()
+        coordinator.setMuted(media.isMuted)
         emitIfIdentified { signalManager.emitToggleAudio(it, enabled = !media.isMuted) }
     }
+
+    /** Video tracks + EGL context for [CallScreen]'s renderers (video calls only). */
+    val eglBaseContext get() = coordinator.eglBaseContext
+    val localVideoTrack get() = coordinator.localVideoTrack
+    val remoteVideoTracks get() = coordinator.remoteVideoTracks
 
     /** Toggle the local camera (only meaningful on a video call) and signal the peer. */
     fun toggleCamera() {
         media = media.copy(isCameraOn = !media.isCameraOn)
         publish()
+        coordinator.setCameraEnabled(media.isCameraOn)
         emitIfIdentified { signalManager.emitToggleVideo(it, enabled = media.isCameraOn) }
     }
 
@@ -240,6 +317,7 @@ class CallViewModel @Inject constructor(
     private fun onRemoteEnded(signal: CallEndedSignal) {
         if (callId.isNotBlank() && signal.callId == callId) {
             dispatch(signal.event)
+            coordinator.end()
             return
         }
         val pending = waiting.pending ?: return

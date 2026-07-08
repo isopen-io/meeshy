@@ -326,3 +326,4 @@ apps/ios/test-results*/
 
 # publish-monthly-digest : annonces + état runtime (ne pas committer)
 scripts/announcements/
+apps/android/tasks/webrtc-parity/

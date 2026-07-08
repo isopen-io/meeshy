@@ -1,5 +1,7 @@
 package me.meeshy.app.navigation
 
+import me.meeshy.sdk.model.call.WaitingCall
+
 /**
  * The primitive launch inputs a notification tap / full-screen call intent carries.
  * [MainActivity] extracts these from the Android `Intent` extras (thin, untestable
@@ -44,4 +46,30 @@ object LaunchRouter {
         !extras.conversationId.isNullOrBlank() -> Routes.chat(extras.conversationId)
         else -> null
     }
+
+    /**
+     * Route a **socket-delivered** incoming-call offer — the foreground path, where
+     * the app is open and the realtime socket (not FCM) carries `call:initiated`.
+     * Rings by deep-linking into the incoming-call screen exactly like the push path
+     * ([route]/[CallRoute.incoming]), reusing the same [LaunchExtras] plumbing.
+     *
+     * Gated on **not already being on the call screen**: a second offer arriving
+     * mid-call is the call-waiting scenario, owned by `CallViewModel`'s banner, so
+     * this yields `null` and leaves the active call screen in place. The offer's
+     * [WaitingCall.callId] is always non-blank (the mapper drops idless frames), so
+     * the produced route always adopts the server id — the screen answers rather
+     * than re-initiates.
+     */
+    fun routeIncomingSocketOffer(offer: WaitingCall, currentRoute: String?): String? =
+        if (currentRoute == CallRoute.PATTERN) {
+            null
+        } else {
+            route(
+                LaunchExtras(
+                    callId = offer.callId,
+                    callerName = offer.callerName,
+                    isVideo = offer.isVideo,
+                ),
+            )
+        }
 }

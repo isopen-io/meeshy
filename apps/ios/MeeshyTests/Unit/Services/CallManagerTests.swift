@@ -3822,8 +3822,8 @@ final class CallManagerArmTurnCredentialsAfterConfigureTests: XCTestCase {
         // WebRTC — neither should call scheduleTURNCredentialRefresh directly, which
         // would always wait for the periodic cadence even with a STUN-only fallback.
         let signatures = [
-            "func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil)",
-            "func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil)"
+            "func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil)",
+            "func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil)"
         ]
         for signature in signatures {
             guard let body = functionBody(source, signature: signature) else {
@@ -4773,7 +4773,7 @@ final class CallWaitingAndFailureTeardownTests: XCTestCase {
     func test_pendingIncomingCall_carriesIceServers() throws {
         let source = try callManagerSource()
         XCTAssertTrue(
-            source.contains("iceServers: [IceServer]?)?"),
+            source.contains("iceServers: [IceServer]?, conversationId: String?)?"),
             "pendingIncomingCall must store the iceServers that arrived with the waiting call — " +
             "otherwise End & Answer configures the PeerConnection STUN-only and CGNAT/symmetric-NAT " +
             "callers get no media after the hand-off"
@@ -4782,7 +4782,7 @@ final class CallWaitingAndFailureTeardownTests: XCTestCase {
 
     func test_busyPaths_storeIceServersInPendingCall() throws {
         let source = try callManagerSource()
-        let occurrences = source.components(separatedBy: "iceServers: iceServers)").count - 1
+        let occurrences = source.components(separatedBy: "iceServers: iceServers, conversationId: conversationId)").count - 1
         XCTAssertGreaterThanOrEqual(
             occurrences, 2,
             "both busy paths (reportIncomingVoIPCall + handleIncomingCallNotification) must persist " +

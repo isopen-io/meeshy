@@ -17,6 +17,7 @@ room = "2.6.1"
 datastore = "1.1.1"
 coil = "2.7.0"
 media3 = "1.4.1"
+streamWebrtc = "1.3.10"
 securityCrypto = "1.1.0-alpha06"
 hilt = "2.52"
 hiltNavigationCompose = "1.2.0"
@@ -39,6 +40,7 @@ androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
 androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
+stream-webrtc = { module = "io.getstream:stream-webrtc-android", version.ref = "streamWebrtc" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }

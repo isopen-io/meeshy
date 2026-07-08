@@ -55,13 +55,26 @@ data class CallSignalEnvelope(
     val signal: CallSignalPayload,
 )
 
+/** `call:ice-servers-refreshed` — fresh STUN/TURN servers for the WebRTC engine. */
+@Serializable
+data class IceServersRefreshedPayload(
+    val callId: String? = null,
+    val iceServers: List<SocketIceServer> = emptyList(),
+    val ttl: Int? = null,
+)
+
 /** `call:participant-joined` — the peer joined the room; the caller now offers. */
 @Serializable
 data class CallParticipantPayload(
     val callId: String,
-    val participantId: String? = null,
-    val userId: String? = null,
+    val participant: CallParticipantRef? = null,
     val mode: String? = null,
+)
+
+/** The nested participant object a `call:participant-joined` frame carries. */
+@Serializable
+data class CallParticipantRef(
+    val userId: String? = null,
 )
 
 /** `call:ended` — the definitive teardown, carrying the end [reason]. */

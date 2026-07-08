@@ -3,6 +3,7 @@ package me.meeshy.app.navigation
 import android.net.Uri
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.app.calls.CallConfig
+import me.meeshy.sdk.model.call.WaitingCall
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -98,5 +99,42 @@ class LaunchRouterTest {
     @Test
     fun `blank call id and blank conversation id yields no route`() {
         assertThat(LaunchRouter.route(LaunchExtras(callId = "", conversationId = ""))).isNull()
+    }
+
+    // --- Socket-delivered incoming offer (foreground path) ---
+
+    @Test
+    fun `a socket incoming offer while idle rings the incoming-call screen`() {
+        val route = LaunchRouter.routeIncomingSocketOffer(
+            offer = WaitingCall(callId = "call-xyz", callerId = "u1", callerName = "Bob", isVideo = true),
+            currentRoute = Routes.CONVERSATIONS,
+        )!!
+
+        val config = configOf(route)
+        assertThat(config.callId).isEqualTo("call-xyz")
+        assertThat(config.peerName).isEqualTo("Bob")
+        assertThat(config.isVideo).isTrue()
+        assertThat(config.isOutgoing).isFalse()
+    }
+
+    @Test
+    fun `a socket incoming offer while already on the call screen yields no route`() {
+        val route = LaunchRouter.routeIncomingSocketOffer(
+            offer = WaitingCall(callId = "call-2", callerId = "u2", callerName = "Carol", isVideo = false),
+            currentRoute = CallRoute.PATTERN,
+        )
+
+        assertThat(route).isNull()
+    }
+
+    @Test
+    fun `a socket incoming offer with no current route still rings`() {
+        val route = LaunchRouter.routeIncomingSocketOffer(
+            offer = WaitingCall(callId = "call-3", callerId = "u3", callerName = "Dave", isVideo = false),
+            currentRoute = null,
+        )!!
+
+        assertThat(configOf(route).callId).isEqualTo("call-3")
+        assertThat(configOf(route).isOutgoing).isFalse()
     }
 }

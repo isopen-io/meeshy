@@ -69,7 +69,7 @@ function getAnonymousChatService(linkId: string): AnonymousChatService {
 /**
  * Fonction pour récupérer les messages via les services existants
  */
-async function fetchMessagesFromService(
+export async function fetchMessagesFromService(
   conversationId: string,
   pageParam: number | string,
   limit: number,
