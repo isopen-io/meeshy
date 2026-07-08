@@ -2,6 +2,7 @@
 <resources>
     <string name="bubble_message_deleted">Message deleted</string>
     <string name="bubble_edited">edited</string>
+    <string name="bubble_forwarded">Forwarded</string>
     <string name="bubble_translated">Translated</string>
     <string name="bubble_status_pending">Pending</string>
     <string name="bubble_status_sent">Sent</string>

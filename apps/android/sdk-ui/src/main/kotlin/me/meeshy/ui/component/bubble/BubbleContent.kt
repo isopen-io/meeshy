@@ -59,4 +59,5 @@ public data class BubbleContent(
     val files: List<BubbleFile> = emptyList(),
     val emojiOnlyCount: Int = 0,
     val pinnedAtIso: String? = null,
+    val isForwarded: Boolean = false,
 )

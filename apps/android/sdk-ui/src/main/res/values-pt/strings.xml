@@ -2,6 +2,7 @@
 <resources>
     <string name="bubble_message_deleted">Mensagem excluída</string>
     <string name="bubble_edited">editado</string>
+    <string name="bubble_forwarded">Encaminhada</string>
     <string name="bubble_translated">Traduzido</string>
     <string name="bubble_status_pending">Pendente</string>
     <string name="bubble_status_sent">Enviada</string>

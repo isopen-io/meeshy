@@ -26,6 +26,8 @@ private fun message(
     readCount: Int = 0,
     readByAllAt: String? = null,
     pinnedAt: String? = null,
+    forwardedFromId: String? = null,
+    forwardedFromConversationId: String? = null,
 ) = ApiMessage(
     id = id,
     conversationId = "c1",
@@ -40,6 +42,8 @@ private fun message(
     readCount = readCount,
     readByAllAt = readByAllAt,
     pinnedAt = pinnedAt,
+    forwardedFromId = forwardedFromId,
+    forwardedFromConversationId = forwardedFromConversationId,
 )
 
 class BubbleContentBuilderTest {
@@ -518,6 +522,61 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.pinnedAtIso).isNull()
+    }
+
+    @Test
+    fun `a message forwarded from another message is flagged forwarded`() {
+        val content = BubbleContentBuilder.build(
+            message(forwardedFromId = "orig-msg", forwardedFromConversationId = "orig-conv"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isTrue()
+    }
+
+    @Test
+    fun `a message with no forward origin is not flagged forwarded`() {
+        val content = BubbleContentBuilder.build(
+            message(forwardedFromId = null),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isFalse()
+    }
+
+    @Test
+    fun `a blank forward origin id is not flagged forwarded`() {
+        val content = BubbleContentBuilder.build(
+            message(forwardedFromId = "   "),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isFalse()
+    }
+
+    @Test
+    fun `a forward flagged only by conversation id is not forwarded`() {
+        val content = BubbleContentBuilder.build(
+            message(forwardedFromId = null, forwardedFromConversationId = "orig-conv"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isFalse()
+    }
+
+    @Test
+    fun `a deleted message is never flagged forwarded`() {
+        val content = BubbleContentBuilder.build(
+            message(deletedAt = "2026-07-08T09:00:00Z", forwardedFromId = "orig-msg"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isFalse()
     }
 
 }
