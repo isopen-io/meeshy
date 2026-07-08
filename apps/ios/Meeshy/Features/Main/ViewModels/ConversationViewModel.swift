@@ -357,6 +357,37 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// Validation du popup de traduction automatique à l'envoi d'un audio
+    /// sans consentement : accorde en un geste le consentement de définition
+    /// du profil vocal (`voiceRecordingConsent`) ET la traduction utilisant
+    /// ce profil (`voiceCloningConsent`), puis active les features audio
+    /// correspondantes côté préférences (transcription, traduction audio,
+    /// génération TTS, profil vocal) — synchronisées au backend via l'outbox
+    /// des préférences. Retourne `false` (avec toast) si l'octroi échoue.
+    func grantVoiceAutoTranslationConsent() async -> Bool {
+        do {
+            _ = try await VoiceProfileService.shared.grantConsent(
+                voiceCloningConsent: true, birthDate: nil
+            )
+            UserPreferencesManager.shared.updateAudio { audio in
+                audio.transcriptionEnabled = true
+                audio.audioTranslationEnabled = true
+                audio.ttsEnabled = true
+                audio.voiceProfileEnabled = true
+            }
+            voiceConsentMissing = false
+            return true
+        } catch {
+            Logger.messages.error("grantVoiceAutoTranslationConsent failed: \(error.localizedDescription, privacy: .public)")
+            FeedbackToastManager.shared.showError(
+                String(localized: "conversation.voiceConsent.grantFailed",
+                       defaultValue: "Impossible d'activer la traduction automatique. Réessayez depuis les Réglages.",
+                       bundle: .main)
+            )
+            return false
+        }
+    }
+
     // MARK: - Audio Continuous Playback (Phase 4)
 
     /// Attachments already played to completion. Excluded from the auto-built

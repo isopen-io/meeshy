@@ -11,6 +11,17 @@ import os
 // MARK: - Recording, Sending & Attachment Handlers
 extension ConversationView {
 
+    /// Décision pure et testable du popup de consentement vocal à l'envoi
+    /// (2026-07-08) : uniquement quand le send contient de l'audio, que le
+    /// consentement vocal manque, et qu'on n'a pas déjà proposé cette session.
+    nonisolated static func shouldPromptVoiceConsent(
+        hasAudio: Bool,
+        consentMissing: Bool,
+        alreadyPrompted: Bool
+    ) -> Bool {
+        hasAudio && consentMissing && !alreadyPrompted
+    }
+
     // MARK: - Recording Functions
     func startRecording() {
         audioRecorder.startRecording()
@@ -70,6 +81,21 @@ extension ConversationView {
             text: text,
             hasReply: refId != nil
         )
+
+        // Popup consentement vocal (2026-07-08) : un envoi contenant de
+        // l'audio sans consentement vocal validé propose UNE fois par session
+        // la traduction automatique (profil vocal + traduction avec la voix).
+        // On interrompt AVANT toute mutation du composer : la décision du
+        // popup relance ce même send avec un état intact.
+        if Self.shouldPromptVoiceConsent(
+            hasAudio: plan.contains { $0.kind == .audio },
+            consentMissing: viewModel.voiceConsentMissing,
+            alreadyPrompted: composerState.voiceConsentPromptedThisSession
+        ) {
+            composerState.voiceConsentPromptedThisSession = true
+            composerState.showVoiceAutoTranslateConsent = true
+            return
+        }
 
         if attachments.isEmpty {
             // Text-only send: clear UI immediately
@@ -361,32 +387,36 @@ extension ConversationView {
                     // par clientMessageId côté gateway évite tout doublon).
                     _ = try? await viewModel.messagePersistence.applyEvent(
                         localId: send.tempId, event: .sendFailed(error))
-                    let requeued: Bool
+                    var requeued = false
                     if send.group.kind == .audio {
                         let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
-                        requeued = !urls.isEmpty && (try? await OfflineQueue.shared.enqueueAudios(
-                            sourceAudioURLs: urls,
-                            conversationId: viewModel.conversationId,
-                            content: nil,
-                            clientMessageId: send.tempId,
-                            originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
-                        )) != nil
+                        if !urls.isEmpty {
+                            requeued = (try? await OfflineQueue.shared.enqueueAudios(
+                                sourceAudioURLs: urls,
+                                conversationId: viewModel.conversationId,
+                                content: nil,
+                                clientMessageId: send.tempId,
+                                originalLanguage: lang,
+                                replyToId: send.group.carriesReply ? replyId : nil
+                            )) != nil
+                        }
                     } else {
                         let pairs: [(url: URL, kind: String)] = send.group.attachments.compactMap { att in
                             guard let url = mediaFiles[att.id] else { return nil }
                             let kind = AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)).rawValue
                             return (url, kind)
                         }
-                        requeued = !pairs.isEmpty && (try? await OfflineQueue.shared.enqueueMedia(
-                            sourceMediaURLs: pairs.map { $0.url },
-                            kinds: pairs.map { $0.kind },
-                            conversationId: viewModel.conversationId,
-                            content: nil,
-                            clientMessageId: send.tempId,
-                            originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
-                        )) != nil
+                        if !pairs.isEmpty {
+                            requeued = (try? await OfflineQueue.shared.enqueueMedia(
+                                sourceMediaURLs: pairs.map { $0.url },
+                                kinds: pairs.map { $0.kind },
+                                conversationId: viewModel.conversationId,
+                                content: nil,
+                                clientMessageId: send.tempId,
+                                originalLanguage: lang,
+                                replyToId: send.group.carriesReply ? replyId : nil
+                            )) != nil
+                        }
                     }
                     if requeued {
                         anySuccess = true

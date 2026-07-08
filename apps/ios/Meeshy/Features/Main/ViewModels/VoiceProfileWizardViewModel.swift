@@ -42,7 +42,7 @@ final class VoiceProfileWizardViewModel: ObservableObject {
         error = nil
 
         do {
-            _ = try await service.grantConsent(ageVerification: ageVerified, birthDate: nil)
+            _ = try await service.grantConsent(voiceCloningConsent: false, birthDate: nil)
             currentStep = .recording
         } catch {
             self.error = "Erreur lors de l'enregistrement du consentement."

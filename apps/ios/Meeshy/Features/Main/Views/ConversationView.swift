@@ -125,6 +125,12 @@ struct ConversationComposerState {
     var actionAlert: String? = nil
     var forwardMessage: Message? = nil
     var showConversationInfo = false
+
+    // Popup consentement vocal à l'envoi d'audio (2026-07-08) : proposé UNE
+    // fois par session de conversation ; quelle que soit la décision, l'envoi
+    // repart — le refus envoie l'audio sans transcription/traduction.
+    var showVoiceAutoTranslateConsent = false
+    var voiceConsentPromptedThisSession = false
     
     // Attachment state
     var pendingAttachments: [MessageAttachment] = []
@@ -582,6 +588,33 @@ struct ConversationView: View {
             .alert(String(localized: "conversation.view.action_selected", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
                 Button(String(localized: "common.ok", bundle: .main)) { composerState.actionAlert = nil }
             } message: { Text(composerState.actionAlert ?? "") }
+            // Popup consentement vocal (2026-07-08) : envoi d'un audio sans
+            // consentement validé → proposer la traduction automatique. La
+            // validation accorde le consentement de définition du profil
+            // vocal ET la traduction utilisant ce profil, puis relance
+            // l'envoi ; « Plus tard » envoie tel quel (le composer n'a pas
+            // encore été vidé quand ce popup interrompt le send).
+            .alert(
+                String(localized: "conversation.voiceConsent.title",
+                       defaultValue: "Traduction automatique des vocaux", bundle: .main),
+                isPresented: $composerState.showVoiceAutoTranslateConsent
+            ) {
+                Button(String(localized: "conversation.voiceConsent.accept",
+                              defaultValue: "Activer", bundle: .main)) {
+                    Task {
+                        _ = await viewModel.grantVoiceAutoTranslationConsent()
+                        sendMessageWithAttachments()
+                    }
+                }
+                Button(String(localized: "conversation.voiceConsent.later",
+                              defaultValue: "Plus tard", bundle: .main), role: .cancel) {
+                    sendMessageWithAttachments()
+                }
+            } message: {
+                Text(String(localized: "conversation.voiceConsent.message",
+                            defaultValue: "Autorisez la définition de votre profil vocal pour que vos messages vocaux soient transcrits et traduits automatiquement dans la langue de chaque destinataire — y compris avec votre voix.",
+                            bundle: .main))
+            }
             .confirmationDialog(
                 String(localized: "conversation.view.delete_message.title", bundle: .main),
                 isPresented: Binding(

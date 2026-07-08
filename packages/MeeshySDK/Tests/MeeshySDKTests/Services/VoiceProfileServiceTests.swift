@@ -19,12 +19,15 @@ final class VoiceProfileServiceTests: XCTestCase {
 
     // MARK: - Helpers
 
+    // Wire format gateway : le schema de réponse Fastify ne sérialise que les
+    // trois timestamps (voir services/gateway/src/routes/voice-profile.ts) —
+    // les booléens (hasConsent, voiceCloningEnabled…) sont dérivés côté SDK.
     private func makeConsentStatus(hasConsent: Bool = true) -> VoiceConsentStatus {
-        let json: [String: Any] = [
-            "hasConsent": hasConsent,
-            "ageVerified": true,
-            "voiceCloningEnabled": false
+        var json: [String: Any] = [
+            "voiceCloningEnabledAt": NSNull(),
+            "ageVerificationConsentAt": "2026-01-01T00:00:00Z"
         ]
+        json["voiceRecordingConsentAt"] = hasConsent ? "2026-01-01T00:00:00Z" : NSNull()
         let data = try! JSONSerialization.data(withJSONObject: json)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -32,9 +35,11 @@ final class VoiceProfileServiceTests: XCTestCase {
     }
 
     private func makeConsentResponse() -> VoiceConsentResponse {
-        let json: [String: Any] = ["success": true]
+        let json: [String: Any] = ["voiceRecordingConsentAt": "2026-01-01T00:00:00Z"]
         let data = try! JSONSerialization.data(withJSONObject: json)
-        return try! JSONDecoder().decode(VoiceConsentResponse.self, from: data)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try! decoder.decode(VoiceConsentResponse.self, from: data)
     }
 
     private func makeVoiceProfile() -> VoiceProfile {
@@ -104,12 +109,12 @@ final class VoiceProfileServiceTests: XCTestCase {
         let response = APIResponse<VoiceConsentResponse>(success: true, data: consentResponse, error: nil)
         mock.stub("/voice-profile/consent", result: response)
 
-        let result = try await service.grantConsent(ageVerification: true, birthDate: "2000-01-01")
+        let result = try await service.grantConsent(voiceCloningConsent: true, birthDate: "2000-01-01")
 
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/voice-profile/consent")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
-        XCTAssertTrue(result.success)
+        XCTAssertNotNil(result.consentedAt)
     }
 
     // MARK: - revokeConsent

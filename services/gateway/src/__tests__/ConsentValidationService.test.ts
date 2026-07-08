@@ -120,7 +120,9 @@ describe('ConsentValidationService', () => {
 
       expect(status.hasDataProcessingConsent).toBe(true);
       expect(status.hasVoiceDataConsent).toBe(false);
-      expect(status.canTranslateText).toBe(false); // textTranslationEnabledAt missing in prefs
+      // Traduction texte = cœur du Prisme Linguistique : active par défaut
+      // dès que le consentement de traitement des données est accordé.
+      expect(status.canTranslateText).toBe(true);
     });
 
     it('hasVoiceDataConsent requires hasDataProcessingConsent', async () => {
@@ -164,11 +166,14 @@ describe('ConsentValidationService', () => {
       expect(status.canTranscribeAudio).toBe(true);
     });
 
-    it('canTranscribeAudio false when audioTranscriptionEnabledAt missing in prefs', async () => {
+    it('canTranscribeAudio false when transcriptionEnabled is explicitly disabled', async () => {
       process.env.NODE_ENV = 'test';
+      // Le AudioPreferenceSchema stocke des BOOLÉENS (transcriptionEnabled,
+      // défaut true) — plus des timestamps que rien n'écrivait. Le gate
+      // ne tombe à false que sur un opt-out explicite.
       const prisma = makePrisma(
         { dataProcessingConsentAt: NOW, voiceDataConsentAt: NOW, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
-        { audio: {}, application: {} }
+        { audio: { transcriptionEnabled: false }, application: {} }
       );
       const svc = new ConsentValidationService(prisma);
       const status = await svc.getConsentStatus(userId);
@@ -207,7 +212,7 @@ describe('ConsentValidationService', () => {
       expect(status.canTranslateAudio).toBe(true);
     });
 
-    it('canTranslateAudio false when transcription missing even with translation flags', async () => {
+    it('canTranslateAudio false when transcription disabled even with translation flags', async () => {
       process.env.NODE_ENV = 'test';
       const prisma = makePrisma(
         { dataProcessingConsentAt: NOW, voiceDataConsentAt: NOW, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
@@ -215,7 +220,7 @@ describe('ConsentValidationService', () => {
           audio: {
             textTranslationEnabledAt: NOW,
             audioTranslationEnabledAt: NOW,
-            // audioTranscriptionEnabledAt missing
+            transcriptionEnabled: false,
           },
           application: {}
         }
@@ -259,11 +264,24 @@ describe('ConsentValidationService', () => {
       expect(status.canUseVoiceCloning).toBe(true);
     });
 
-    it('canUseVoiceCloning false when voiceCloningConsentAt missing', async () => {
+    it('User.voiceCloningEnabledAt (POST /voice-profile/consent) vaut consentement clonage', async () => {
       process.env.NODE_ENV = 'test';
       const prisma = makePrisma(
         { dataProcessingConsentAt: NOW, voiceDataConsentAt: NOW, voiceProfileConsentAt: NOW, voiceCloningEnabledAt: NOW },
-        { audio: {}, application: {} } // voiceCloningConsentAt absent
+        { audio: {}, application: {} } // applicationPrefs.voiceCloningConsentAt absent
+      );
+      const svc = new ConsentValidationService(prisma);
+      const status = await svc.getConsentStatus(userId);
+
+      expect(status.hasVoiceCloningConsent).toBe(true);
+      expect(status.canUseVoiceCloning).toBe(true);
+    });
+
+    it('canUseVoiceCloning false when no cloning consent anywhere', async () => {
+      process.env.NODE_ENV = 'test';
+      const prisma = makePrisma(
+        { dataProcessingConsentAt: NOW, voiceDataConsentAt: NOW, voiceProfileConsentAt: NOW, voiceCloningEnabledAt: null },
+        { audio: {}, application: {} }
       );
       const svc = new ConsentValidationService(prisma);
       const status = await svc.getConsentStatus(userId);
@@ -307,7 +325,8 @@ describe('ConsentValidationService', () => {
       const status = await svc.getConsentStatus(userId);
 
       expect(status.hasDataProcessingConsent).toBe(true);
-      expect(status.canTranscribeAudio).toBe(false); // audioTranscriptionEnabledAt missing
+      // Défaut schema transcriptionEnabled=true + chaîne voix accordée.
+      expect(status.canTranscribeAudio).toBe(true);
     });
   });
 
