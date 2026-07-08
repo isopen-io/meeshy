@@ -2752,11 +2752,23 @@ final class CallManagerHoldTests: XCTestCase {
             XCTFail("Could not isolate handleHold body"); return
         }
         let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
+        // Audit finding (fixed) — this test previously asserted the PRESENCE of
+        // `try? await … upgradeToVideo()`, which is exactly the bug: `try?`
+        // discarded a camera-permission failure, leaving isVideoEnabled stuck at
+        // true with no video track and no user feedback. The fix wraps the call
+        // in a do/catch instead (see CallManagerHoldTaskTrackingTests's newer
+        // coverage in CallManagerTests.swift for the full catch-branch checks).
         XCTAssertTrue(
+            body.contains("try await self.webRTCService.upgradeToVideo()") ||
+            body.contains("try await self?.webRTCService.upgradeToVideo()"),
+            "handleHold's unhold path must capture upgradeToVideo()'s needsRenegotiation " +
+            "return value inside a do/catch — not discard it with `try?`")
+        XCTAssertFalse(
             body.contains("try? await self.webRTCService.upgradeToVideo()") ||
             body.contains("try? await self?.webRTCService.upgradeToVideo()"),
-            "handleHold's unhold path must capture upgradeToVideo()'s needsRenegotiation " +
-            "return value instead of discarding it with `_ =`")
+            "handleHold's unhold path must not use `try?` here — a camera-permission " +
+            "failure must not be silently discarded, leaving isVideoEnabled stuck at true " +
+            "with no video track and no user feedback.")
         XCTAssertTrue(
             body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)"),
             "handleHold's unhold path must follow a needed renegotiation with " +
@@ -3296,7 +3308,14 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
         guard let fnRange = source.range(of: "private func adjustBitrate(") else {
             XCTFail("adjustBitrate not found in WebRTCService"); return
         }
-        let fnBody = String(source[fnRange.upperBound...].prefix(3000))
+        // Bound to the next top-level function rather than a fixed character
+        // count — a fixed prefix(3000) started failing once the
+        // JitterBitrateCapTracker hysteresis addition (see WebRTCTypes.swift)
+        // pushed applyAudioEncoding past the window, even though the code
+        // was still correct. A function-boundary window can't regress that
+        // way as the body grows.
+        let nextFnRange = source.range(of: "\n    private func ", range: fnRange.upperBound..<source.endIndex)
+        let fnBody = String(source[fnRange.upperBound..<(nextFnRange?.lowerBound ?? source.endIndex)])
 
         XCTAssertTrue(
             fnBody.contains("client.applyAudioEncoding(maxBitrateBps:"),
