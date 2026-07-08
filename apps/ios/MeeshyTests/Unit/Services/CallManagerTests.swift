@@ -4367,6 +4367,46 @@ final class CallManagerAnalyticsTests: XCTestCase {
             "reconnectAttempt (the live, per-cycle FSM retry budget zeroed on every reconnect)."
         )
     }
+
+    // MARK: - Regression 2026-07-08: analyticsEffectsUsed was declared and
+    // serialized into every analytics payload but no call site ever inserted
+    // into it, so `effectsUsed` silently reported `[]` for every call regardless
+    // of which video filters were active. The quality-tick handler already polls
+    // `webRTCService.videoFilters.config` once per sample (see
+    // analyticsVideoFiltersUsed above) — that is the only natural hook point,
+    // since the filter UI mutates the config directly via bindings with no
+    // dedicated CallManager setter to intercept.
+
+    private func didCollectStatsBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "didCollectStats stats: CallStats") else { return nil }
+        let bodyEnd = source.range(
+            of: "\n    nonisolated static func connectionQualityLabel",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    func test_didCollectStats_populatesAnalyticsEffectsUsedFromFilterConfig() throws {
+        let source = try callManagerSource()
+        guard let body = didCollectStatsBody(in: source) else {
+            XCTFail("didCollectStats not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(#"analyticsEffectsUsed.insert("backgroundBlur")"#),
+            "didCollectStats must insert \"backgroundBlur\" into analyticsEffectsUsed when " +
+            "filterConfig.backgroundBlurEnabled is set — otherwise the field stays empty forever."
+        )
+        XCTAssertTrue(
+            body.contains(#"analyticsEffectsUsed.insert("skinSmoothing")"#),
+            "didCollectStats must insert \"skinSmoothing\" into analyticsEffectsUsed when " +
+            "filterConfig.skinSmoothingEnabled is set."
+        )
+        XCTAssertTrue(
+            body.contains(#"analyticsEffectsUsed.insert("colorFilter")"#),
+            "didCollectStats must insert \"colorFilter\" into analyticsEffectsUsed when a " +
+            "color-grading preset (filterConfig.isEnabled) is active."
+        )
+    }
 }
 
 // MARK: - CXCallUpdate hasVideo on A/V toggle (audit Phase 3)

@@ -76,14 +76,18 @@ enum CallPillStatus: Equatable {
 /// cache-first (Instant App) et l'état de connexion est porté par des glyphes
 /// code couleur, pas par du texte.
 struct FloatingCallPillView: View {
-    // Use the singleton directly via @ObservedObject like the rest of the
-    // app (RootView, CallView). The previous @EnvironmentObject form
-    // crashed at launch because the pill is mounted as a `.overlay` on
-    // the RootView/iPadRootView ZStack — SwiftUI does NOT propagate
-    // environment objects into overlay closures by default, and the app
-    // does not inject CallManager via `.environmentObject(...)` either
-    // (the singleton is the only source of truth).
-    @ObservedObject private var callManager = CallManager.shared
+    // Audit P1-16 parity (see CallView.swift) — injected by the caller
+    // (RootView/iPadRootView already hold their own @ObservedObject
+    // callManager to gate the adjacent fullScreenCover) instead of a
+    // `= CallManager.shared` default. A defaulted @ObservedObject is
+    // reassigned — and its objectWillChange subscription torn down and
+    // rebuilt — every time the parent's body re-evaluates for churn
+    // unrelated to the call (unread counts, presence, navigation), and
+    // both mount sites are top-level containers that re-evaluate often.
+    // (@EnvironmentObject was tried before and crashed at launch: the pill
+    // is mounted as a `.overlay` closure, which SwiftUI does NOT propagate
+    // environment objects into — hence explicit injection, not environment.)
+    @ObservedObject var callManager: CallManager
     // Audit P2-iOS-9 — respect the user's Reduce Motion preference. The
     // slide-in/-out spring animation is the primary animation concern here;
     // when reduce motion is on, collapse it to a simple cross-fade.

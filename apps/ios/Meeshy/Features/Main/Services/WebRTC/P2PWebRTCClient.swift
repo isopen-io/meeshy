@@ -875,7 +875,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // suspended inside startCapture/stopCapture it finishes atomically —
         // the new task then runs after and leaves the camera in the correct state.
         toggleVideoTask?.cancel()
-        toggleVideoTask = Task { [weak self] in
+        // @MainActor on the Task literal: this function is a synchronous, non-isolated
+        // entry point (P2PWebRTCClient is not @MainActor), so a bare `Task { }` here
+        // would run on the cooperative pool, not necessarily on the same queue as
+        // disconnect()'s synchronous videoCapturer/sessionGeneration mutations. Pinning
+        // the task to MainActor keeps it serialized with every other mutation site.
+        toggleVideoTask = Task { @MainActor [weak self] in
             guard let self, !Task.isCancelled else { return }
             if enabled {
                 await self.restartCapturerIfStopped()
@@ -1154,7 +1159,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     private func startDataChannelPing() {
         stopDataChannelPing()
-        dataChannelPingTask = Task { [weak self] in
+        // @MainActor: keeps every transcriptionDataChannel read/send serialized with
+        // disconnect()'s synchronous teardown of the same property (see toggleVideo).
+        dataChannelPingTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(QualityThresholds.dataChannelPingIntervalSeconds))
                 guard !Task.isCancelled, let self else { break }
@@ -1215,7 +1222,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let generation = sessionGeneration
         let pollInterval = Duration.milliseconds(QualityThresholds.dataChannelFlushPollIntervalMilliseconds)
         let deadline = ContinuousClock.now + .milliseconds(QualityThresholds.dataChannelFlushTimeoutMilliseconds)
-        Task { [weak self] in
+        // @MainActor: this task's own disconnect() call at the end must never race a
+        // fresh configure()/disconnect() pair from a rapid redial, both of which mutate
+        // sessionGeneration/peerConnection synchronously on MainActor.
+        Task { @MainActor [weak self] in
             while ContinuousClock.now < deadline {
                 guard let self, self.sessionGeneration == generation else { return }
                 guard (self.transcriptionDataChannel?.bufferedAmount ?? 0) > 0 else { break }

@@ -55,4 +55,64 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
             "letting CallView default to CallManager.shared on every reconstruction."
         )
     }
+
+    // 2026-07-08 — FloatingCallPillView and CallBubbleView reintroduced the exact
+    // anti-pattern this file guards CallView against: both are mounted as bare
+    // `.overlay` closures directly on RootView/iPadRootView (top-level containers
+    // whose body re-evaluates for unread-count/presence/navigation churn having
+    // nothing to do with an active call), so a defaulted `= CallManager.shared`
+    // tore down and rebuilt their objectWillChange subscription on every such
+    // unrelated re-render.
+
+    func test_floatingCallPillView_doesNotDefaultCallManagerToSharedInstance() throws {
+        let source = try source(of: "Views/FloatingCallPillView.swift")
+        XCTAssertFalse(
+            source.contains("@ObservedObject var callManager = CallManager.shared"),
+            "FloatingCallPillView must not default `callManager` to `CallManager.shared` " +
+            "at declaration — that resubscribes on every unrelated parent re-render."
+        )
+        XCTAssertTrue(
+            source.contains("@ObservedObject var callManager: CallManager"),
+            "FloatingCallPillView must declare `callManager` as an injected " +
+            "(non-defaulted) ObservedObject so callers pass their own instance down."
+        )
+    }
+
+    func test_callBubbleView_doesNotDefaultCallManagerToSharedInstance() throws {
+        let source = try source(of: "Views/CallBubbleView.swift")
+        XCTAssertFalse(
+            source.contains("@ObservedObject var callManager = CallManager.shared"),
+            "CallBubbleView must not default `callManager` to `CallManager.shared` " +
+            "at declaration — that resubscribes on every unrelated parent re-render."
+        )
+        XCTAssertTrue(
+            source.contains("@ObservedObject var callManager: CallManager"),
+            "CallBubbleView must declare `callManager` as an injected (non-defaulted) " +
+            "ObservedObject so callers pass their own instance down."
+        )
+    }
+
+    func test_rootView_injectsOwnCallManagerIntoPillAndBubble() throws {
+        let source = try source(of: "Views/RootView.swift")
+        XCTAssertTrue(
+            source.contains("FloatingCallPillView(callManager: callManager)"),
+            "RootView must pass its own `callManager` into FloatingCallPillView."
+        )
+        XCTAssertTrue(
+            source.contains("CallBubbleView(callManager: callManager)"),
+            "RootView must pass its own `callManager` into CallBubbleView."
+        )
+    }
+
+    func test_iPadRootView_injectsOwnCallManagerIntoPillAndBubble() throws {
+        let source = try source(of: "Views/iPadRootView+Sheets.swift")
+        XCTAssertTrue(
+            source.contains("FloatingCallPillView(callManager: callManager)"),
+            "iPadRootView must pass its own `callManager` into FloatingCallPillView."
+        )
+        XCTAssertTrue(
+            source.contains("CallBubbleView(callManager: callManager)"),
+            "iPadRootView must pass its own `callManager` into CallBubbleView."
+        )
+    }
 }

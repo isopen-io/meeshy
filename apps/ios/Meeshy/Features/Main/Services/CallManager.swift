@@ -4316,8 +4316,20 @@ extension CallManager: WebRTCServiceDelegate {
             self.analyticsSampleCount += 1
             self.analyticsPacketLossSum += packetLossPercent
             self.analyticsMaxPacketLoss = max(self.analyticsMaxPacketLoss, packetLossPercent)
-            if self.webRTCService.videoFilters.config.isEnabled {
+            // Mirrors analyticsVideoFiltersUsed's polling above it: analyticsEffectsUsed
+            // was declared and serialized into the analytics payload but never actually
+            // populated (no call site ever inserted into it), so every call silently
+            // reported effectsUsed: []. Record the concrete effects the config exposes.
+            let filterConfig = self.webRTCService.videoFilters.config
+            if filterConfig.isEnabled {
                 self.analyticsVideoFiltersUsed = true
+                self.analyticsEffectsUsed.insert("colorFilter")
+            }
+            if filterConfig.backgroundBlurEnabled {
+                self.analyticsEffectsUsed.insert("backgroundBlur")
+            }
+            if filterConfig.skinSmoothingEnabled {
+                self.analyticsEffectsUsed.insert("skinSmoothing")
             }
 
             // Feed the graceful-degradation survival layer. One sample per quality

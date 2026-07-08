@@ -145,11 +145,11 @@ extension iPadRootView {
                 CallView(callManager: callManager)
             }
             .overlay(alignment: .top) {
-                FloatingCallPillView()
+                FloatingCallPillView(callManager: callManager)
                     .padding(.top, 8)
             }
             .overlay {
-                CallBubbleView()
+                CallBubbleView(callManager: callManager)
             }
             // §7.6 — call-waiting banner (2nd incoming call during an active one).
             .overlay(alignment: .top) {
