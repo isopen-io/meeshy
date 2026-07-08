@@ -30,18 +30,18 @@ import me.meeshy.ui.theme.NunitoFontFamily
 public enum class StoryRingState { None, Unread, Read }
 
 /**
- * CENTRAL presence-dot colour mapping for [presence], or `null` when the caller
- * has no presence data at all. Pure so it stays unit-testable off Compose.
- * Mirrors iOS `PresenceState.dotColor` (PresenceStyle.swift) and web
- * `PRESENCE_DOT_CLASS`: green = online/recent, orange = away, gray = offline.
+ * CENTRAL presence-dot colour mapping for [presence], or `null` when no dot
+ * should render. Pure so it stays unit-testable off Compose. Mirrors iOS
+ * (MeeshyAvatar renders green online/recent, orange away, and NOTHING for
+ * offline) and the web `PRESENCE_DOT_CLASS` consumers (which skip offline
+ * dots): green = online/recent, orange = away, offline/no-data = no dot.
  * Every surface (contacts, profile, new-conversation) MUST consume this —
  * never redeclare the palette locally.
  */
 public fun meeshyPresenceDotColor(presence: PresenceState?): Color? = when (presence) {
     PresenceState.ONLINE, PresenceState.RECENT -> MeeshyPalette.Success // vert : connecté / actif <= 5min
     PresenceState.AWAY -> MeeshyPalette.Warning                          // orange : absent 5-30min
-    PresenceState.OFFLINE -> MeeshyPalette.Neutral400                    // gris : hors ligne > 30min
-    null -> null                                                          // aucune donnée de présence
+    PresenceState.OFFLINE, null -> null                                 // hors ligne / aucune donnée : aucun dot
 }
 
 /**

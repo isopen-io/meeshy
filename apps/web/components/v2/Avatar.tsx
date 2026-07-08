@@ -94,7 +94,7 @@ const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
             {initial}
           </div>
         )}
-        {effectivePresence && (
+        {effectivePresence && effectivePresence !== 'offline' && (
           <div
             className={cn(
               'absolute rounded-full border-[var(--gp-surface)]',

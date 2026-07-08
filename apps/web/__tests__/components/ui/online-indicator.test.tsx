@@ -56,22 +56,18 @@ describe('OnlineIndicator', () => {
       expect(dot?.className).not.toContain('bg-emerald-400');
     });
 
-    it('renders a gray dot (offline) when long-disconnected (over 30 min)', () => {
+    it('renders no dot (offline) when long-disconnected (over 30 min)', () => {
       const { container } = render(
         <OnlineIndicator isOnline={false} lastActiveAt={minutesAgo(45)} />
       );
 
-      const dot = getDot(container);
-      expect(dot?.className).toContain('bg-gray-400');
-      expect(dot?.title).toBe('Hors ligne - Il y a 45 min');
+      expect(getDot(container)).toBeNull();
     });
 
-    it('renders a gray dot (offline) when isOnline is false without any lastActiveAt', () => {
+    it('renders no dot (offline) when isOnline is false without any lastActiveAt', () => {
       const { container } = render(<OnlineIndicator isOnline={false} />);
 
-      const dot = getDot(container);
-      expect(dot?.className).toContain('bg-gray-400');
-      expect(dot?.title).toBe('Hors ligne');
+      expect(getDot(container)).toBeNull();
     });
   });
 
@@ -86,12 +82,12 @@ describe('OnlineIndicator', () => {
       expect(dot?.className).not.toContain('bg-emerald-400');
     });
 
-    it('renders a gray dot when the explicit status is offline', () => {
+    it('renders nothing when the explicit status is offline', () => {
       const { container } = render(
         <OnlineIndicator isOnline={true} lastActiveAt={minutesAgo(1)} status="offline" />
       );
 
-      expect(getDot(container)?.className).toContain('bg-gray-400');
+      expect(getDot(container)).toBeNull();
     });
   });
 });

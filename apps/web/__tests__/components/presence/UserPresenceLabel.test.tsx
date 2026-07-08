@@ -64,8 +64,8 @@ describe('UserPresenceLabel', () => {
       useUserStore.getState().updateUserStatus('user-1', { isOnline: false, lastActiveAt: thirtyFiveMinutesAgo });
     });
 
-    // Au-dela de 30min (offline) : dot gris + libellé « Hors ligne ».
-    expect(screen.getByText('Hors ligne')).toBeInTheDocument();
+    // Au-dela de 30min (offline) : plus aucune info de presence (ni dot ni label).
+    expect(screen.queryByText('Hors ligne')).not.toBeInTheDocument();
     expect(screen.queryByText('En ligne')).not.toBeInTheDocument();
   });
 

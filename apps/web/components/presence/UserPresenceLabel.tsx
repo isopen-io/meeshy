@@ -35,10 +35,14 @@ export const UserPresenceLabel = memo(function UserPresenceLabel({
     offline: t('status.offline'),
   };
 
+  // Au-dela de 30min (offline) : plus aucune info de presence, sauf texte custom.
+  if (status === 'offline' && !children) return null;
+
   return (
     <div className={`flex items-center space-x-2 ${className ?? ''}`}>
-      <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${PRESENCE_DOT_CLASS[status]}`} />
-
+      {status !== 'offline' && (
+        <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${PRESENCE_DOT_CLASS[status]}`} />
+      )}
       <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
         {children ?? labels[status]}
       </span>

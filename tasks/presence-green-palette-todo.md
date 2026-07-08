@@ -43,3 +43,18 @@ Règle produit validée par JC :
 - **Non vérifié sur ce runner (Linux)** : compile Swift + suites XCTest (UserPresenceStateTests,
   PresenceStyleTests, PresenceManagerTests, UserProfileSheetPresenceTests, IdentityBarElementTests)
   et gradle testDebugUnitTest — à valider par la CI iOS/Android.
+
+## Follow-up 2026-07-08 (soir 2) — offline = aucun point (décision JC)
+Après review, question posée à JC : afficher un point gris pour les offline (>30min) ou rien ?
+Réponse : **Aucun point** (standard WhatsApp/Telegram, footprint minimal).
+- Le gris `#9CA3AF` reste DÉFINI dans les maps centrales (`PRESENCE_DOT_CLASS.offline`,
+  `presenceDotClassV2.offline`, `PresenceState.offline.dotColor`) pour les affichages
+  labellisés explicites (en-têtes de section « Hors ligne », badge story-intro), mais
+  les dots d'avatar ne le rendent jamais.
+- Sites gardés `!= offline` : web OnlineIndicator (return null), UserPresenceBadge (null),
+  UserPresenceLabel (dot masqué), Avatar v2, ConversationItem ; iOS MeeshyAvatar
+  (`effectivePresence` renvoie nil sur `.offline`) ; Android `meeshyPresenceDotColor(OFFLINE)=null`.
+- Tests alignés : online-indicator, Avatar v2, UserPresence{Badge,Label},
+  ParticipantPresenceIndicator (web) ; MeeshyAvatarTest (Android, OFFLINE→null).
+- Branche repartie de `main` (PR #1729 déjà mergée) avec les 3 correctifs de suivi
+  (hue drift web, NaN lastActiveAt shared, stale iOS seed test) déjà intégrés.

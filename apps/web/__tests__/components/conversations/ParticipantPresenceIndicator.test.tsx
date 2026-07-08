@@ -57,9 +57,9 @@ describe('ParticipantPresenceIndicator', () => {
       useUserStore.getState().updateUserStatus('user-1', { isOnline: false, lastActiveAt: thirtyFiveMinutesAgo });
     });
 
-    // Au-dela de 30min : dot gris « Hors ligne ».
+    // Au-dela de 30min (offline) : plus aucun indicateur de presence.
     expect(screen.queryByTitle('En ligne')).not.toBeInTheDocument();
-    expect(screen.getByTitle(/Hors ligne/)).toBeInTheDocument();
+    expect(screen.queryByTitle(/Hors ligne/)).not.toBeInTheDocument();
   });
 
   it('falls back to the provided user when the store does not know the user yet', () => {
@@ -73,11 +73,11 @@ describe('ParticipantPresenceIndicator', () => {
     expect(screen.getByTitle('En ligne')).toBeInTheDocument();
   });
 
-  it('renders the gray offline dot when neither the store nor the fallback resolve a user', () => {
-    render(<ParticipantPresenceIndicator userId="unknown-user" />);
+  it('renders nothing (offline) when neither the store nor the fallback resolve a user', () => {
+    const { container } = render(<ParticipantPresenceIndicator userId="unknown-user" />);
 
-    // offline => dot gris « Hors ligne ».
-    expect(screen.getByTitle('Hors ligne')).toBeInTheDocument();
+    // offline => aucun indicateur affiché.
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('recomputes relative status decay on the store tick (online → away without any user mutation)', () => {
