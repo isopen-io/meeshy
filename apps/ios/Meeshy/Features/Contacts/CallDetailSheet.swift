@@ -10,6 +10,9 @@ struct CallDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
+    private var unknownCallerFallback: String {
+        String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main)
+    }
 
     var body: some View {
         ScrollView {
@@ -36,7 +39,7 @@ struct CallDetailSheet: View {
     // MARK: - Header
 
     private var header: some View {
-        let name = record.displayName(fallback: String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
+        let name = record.displayName(fallback: unknownCallerFallback)
         let color = DynamicColorGenerator.colorForName(name)
         return VStack(spacing: 10) {
             MeeshyAvatar(
@@ -86,7 +89,7 @@ struct CallDetailSheet: View {
             guard let peer = record.peer else { return }
             CallStarter.start(
                 userId: peer.userId,
-                displayName: record.displayName(fallback: String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main)),
+                displayName: record.displayName(fallback: unknownCallerFallback),
                 isVideo: isVideo,
                 conversationId: record.conversationId
             )
