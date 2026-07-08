@@ -3215,7 +3215,11 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
         guard let fnRange = source.range(of: "private func scheduleICERestart(") else {
             XCTFail("scheduleICERestart() not found"); return
         }
-        let fnBody = String(source[fnRange.upperBound...].prefix(1500))
+        // Widened from 1500 (audit finding — scheduleICERestart now also chains
+        // onto videoToggleTask/holdVideoTask/survivalVideoTask before arming the
+        // restart, see the doc-comment on `survivalVideoTask`; the extra
+        // capture/await lines push the post-backoff guard further into the body).
+        let fnBody = String(source[fnRange.upperBound...].prefix(3000))
 
         // The post-backoff guard must pattern-match on `.reconnecting` (not just
         // isActive) to detect a natural recovery during the sleep window.
