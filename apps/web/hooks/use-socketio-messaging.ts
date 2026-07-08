@@ -21,7 +21,7 @@ export interface UseSocketIOMessagingOptions {
   onMessageEdited?: (message: Message) => void;
   onMessageDeleted?: (messageId: string) => void;
   onUserTyping?: (userId: string, username: string, isTyping: boolean, conversationId: string) => void;
-  onUserStatus?: (userId: string, username: string, isOnline: boolean) => void;
+  onUserStatus?: (userId: string, username: string, isOnline: boolean, lastActiveAt?: Date | null) => void;
   onTranslation?: (messageId: string, translations: any[]) => void;
   onTranslationFailed?: (data: TranslationFailedEventData) => void;
   onConversationStats?: (data: any) => void;
@@ -147,7 +147,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     
     if (onUserStatus) {
       const unsub = meeshySocketIOService.onUserStatus((event: UserStatusEvent) => {
-        onUserStatus(event.userId, event.username, event.isOnline);
+        onUserStatus(event.userId, event.username, event.isOnline, event.lastActiveAt);
       });
       unsubscribers.push(unsub);
     }

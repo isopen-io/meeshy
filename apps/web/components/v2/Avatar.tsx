@@ -5,14 +5,22 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
 
+export type AvatarPresence = 'online' | 'away' | 'offline';
+
 export interface AvatarProps {
   src?: string | null;
   name: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   isOnline?: boolean;
+  presence?: AvatarPresence;
   languageOrb?: React.ReactNode;
   className?: string;
 }
+
+const presenceDotColors: Record<Exclude<AvatarPresence, 'offline'>, string> = {
+  online: 'bg-[var(--gp-jade-green)]',
+  away: 'bg-[var(--gp-warning)]',
+};
 
 const sizeMap = {
   sm: { container: 'w-8 h-8', text: 'text-sm', dot: 'w-2.5 h-2.5 border-[1.5px]', dotPos: '-bottom-0.5 -right-0.5' },
@@ -29,10 +37,11 @@ const pixelSizeMap: Record<keyof typeof sizeMap, number> = {
 };
 
 const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
-  ({ src, name, size = 'md', isOnline, languageOrb, className }, ref) => {
+  ({ src, name, size = 'md', isOnline, presence, languageOrb, className }, ref) => {
     const s = sizeMap[size];
     const px = pixelSizeMap[size];
     const initial = name.charAt(0).toUpperCase();
+    const effectivePresence: AvatarPresence = presence ?? (isOnline ? 'online' : 'offline');
 
     // Attachment avatars arrive as relative paths (`/api/v1/attachments/file/…`).
     // Resolve them to the gateway origin so next/image fetches from the API host
@@ -70,10 +79,11 @@ const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
             {initial}
           </div>
         )}
-        {isOnline && (
+        {effectivePresence !== 'offline' && (
           <div
             className={cn(
-              'absolute rounded-full border-[var(--gp-surface)] bg-[var(--gp-jade-green)]',
+              'absolute rounded-full border-[var(--gp-surface)]',
+              presenceDotColors[effectivePresence],
               s.dot,
               s.dotPos
             )}

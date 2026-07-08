@@ -239,7 +239,7 @@ struct DiscoverTab: View {
                 accentColor: color,
                 avatarURL: user.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
-                presenceState: user.isOnline == true ? .online : .offline,
+                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline),
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
             .onTapGesture {

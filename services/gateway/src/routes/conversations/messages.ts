@@ -41,6 +41,7 @@ import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
@@ -1059,6 +1060,15 @@ export function registerMessagesRoutes(
         }
       }
 
+      // Présence des expéditeurs : soumise aux préférences showOnlineStatus/
+      // showLastSeen — même règle que le broadcast user:status et le
+      // presence:snapshot (co-participation = accès déjà garanti).
+      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        messages
+          .map((message: any) => message.sender?.userId)
+          .filter((uid: string | null | undefined): uid is string => !!uid)
+      );
+
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
       const mappedMessages = messages.map((message: any) => {
         // Construire l'objet de réponse aligné avec GatewayMessage
@@ -1144,8 +1154,12 @@ export function registerMessagesRoutes(
             // are no longer fetched (messageSenderUserSelect trims them).
             displayName: message.sender.displayName ?? message.sender.user?.displayName ?? null,
             avatar: resolveParticipantAvatar(message.sender),
-            isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
-            lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
+            isOnline: senderPresenceVis.get(message.sender.userId ?? '')?.showOnline === false
+              ? false
+              : (message.sender.user?.isOnline ?? message.sender.isOnline ?? null),
+            lastActiveAt: senderPresenceVis.get(message.sender.userId ?? '')?.showLastSeenTimestamp === false
+              ? null
+              : (message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null),
           } : null,
           attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, consumptionMap),
           _count: message._count
@@ -2221,6 +2235,12 @@ export function registerMessagesRoutes(
         }
       });
 
+      const pinnedPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        pinnedMessages
+          .map((message: any) => message.sender?.userId)
+          .filter((uid: string | null | undefined): uid is string => !!uid)
+      );
+
       const formattedMessages = pinnedMessages.map((message: any) => {
         const sender = message.sender;
         return {
@@ -2254,7 +2274,9 @@ export function registerMessagesRoutes(
             username: sender.user?.username ?? null,
             firstName: sender.user?.firstName ?? null,
             lastName: sender.user?.lastName ?? null,
-            isOnline: sender.user?.isOnline ?? false
+            isOnline: pinnedPresenceVis.get(sender.userId ?? '')?.showOnline === false
+              ? false
+              : (sender.user?.isOnline ?? false)
           } : null,
           attachments: message.attachments || [],
           reactionCount: message._count?.reactions ?? 0,
@@ -2546,6 +2568,12 @@ export function registerMessagesRoutes(
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
+      const searchPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        results
+          .map((msg: any) => msg.sender?.userId)
+          .filter((uid: string | null | undefined): uid is string => !!uid)
+      );
+
       // Transform translations JSON → array format for SDK compatibility and
       // flatten the participant `sender` (username/isOnline come from the nested
       // `user` relation) so the userMinimalSchema serializer keeps them.
@@ -2559,7 +2587,9 @@ export function registerMessagesRoutes(
             displayName: sender.displayName ?? sender.user?.displayName ?? null,
             avatar: resolveParticipantAvatar(sender),
             username: sender.user?.username ?? null,
-            isOnline: sender.user?.isOnline ?? false
+            isOnline: searchPresenceVis.get(sender.userId ?? '')?.showOnline === false
+              ? false
+              : (sender.user?.isOnline ?? false)
           } : null,
           translations: msg.translations
             ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)

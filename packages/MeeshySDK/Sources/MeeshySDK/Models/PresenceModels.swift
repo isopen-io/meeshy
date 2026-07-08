@@ -3,14 +3,14 @@ import Foundation
 // MARK: - Presence State
 
 public enum PresenceState: Equatable, Sendable {
-    case online   // green — lastActive < 5min
-    case away     // orange — lastActive > 5min but isOnline
-    case offline  // no dot
+    case online   // green — isOnline && lastActive < 5min
+    case away     // orange — isOnline && inactive >= 5min, or disconnected < 30min
+    case offline  // no dot — disconnected >= 30min (or no lastActiveAt)
 }
 
 // MARK: - User Presence
 
-public struct UserPresence: Sendable {
+public struct UserPresence: Codable, Sendable {
     public let isOnline: Bool
     public let lastActiveAt: Date?
 
@@ -20,8 +20,9 @@ public struct UserPresence: Sendable {
     }
 
     public var state: PresenceState {
-        guard isOnline else { return .offline }
-        guard let last = lastActiveAt else { return .online }
-        return Date().timeIntervalSince(last) > 300 ? .away : .online
+        guard let last = lastActiveAt else { return isOnline ? .online : .offline }
+        let elapsed = Date().timeIntervalSince(last)
+        if isOnline { return elapsed < 300 ? .online : .away }
+        return elapsed < 1800 ? .away : .offline
     }
 }

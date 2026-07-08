@@ -131,7 +131,6 @@ struct KeypadTab: View {
     private func resultRow(_ user: UserSearchResult) -> some View {
         let name = user.displayName ?? user.username
         let color = DynamicColorGenerator.colorForName(name)
-        let isOnline = user.isOnline ?? false
 
         return HStack(spacing: 14) {
             Button {
@@ -143,7 +142,7 @@ struct KeypadTab: View {
                         context: .userListItem,
                         accentColor: color,
                         avatarURL: user.avatar,
-                        presenceState: isOnline ? .online : .offline
+                        presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline)
                     )
                     VStack(alignment: .leading, spacing: 3) {
                         Text(name)

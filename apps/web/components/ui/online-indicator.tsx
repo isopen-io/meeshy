@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { getUserStatus } from '@/lib/user-status';
 
 interface OnlineIndicatorProps {
   isOnline: boolean;
@@ -43,8 +44,8 @@ export function OnlineIndicator({
     offline: 'Hors ligne',
   };
 
-  // Déterminer le statut effectif
-  const effectiveStatus = status || (isOnline ? 'online' : 'offline');
+  // Déterminer le statut effectif — sans prop status, dériver via la règle canonique
+  const effectiveStatus = status ?? getUserStatus({ isOnline, lastActiveAt });
 
   // Générer le tooltip
   let finalTooltip = tooltip || defaultTooltips[effectiveStatus];
