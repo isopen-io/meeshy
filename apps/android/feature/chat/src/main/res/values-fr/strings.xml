@@ -16,7 +16,8 @@
     <string name="chat_action_show_original">Voir l’original</string>
     <string name="chat_action_show_translation">Voir la traduction</string>
     <string name="chat_action_edit">Modifier</string>
-    <string name="chat_action_delete">Supprimer</string>
+    <string name="chat_action_delete_for_everyone">Supprimer pour tout le monde</string>
+    <string name="chat_action_delete_for_me">Supprimer pour moi</string>
     <string name="chat_editing_label">Modification du message</string>
     <string name="chat_cancel_edit">Annuler la modification</string>
     <string name="chat_react_with">Réagir avec %1$s</string>
@@ -25,9 +26,13 @@
     <string name="chat_date_yesterday">Hier</string>
     <string name="chat_date_day_before_yesterday">Avant-hier</string>
     <string name="chat_scroll_to_bottom">Aller au dernier message</string>
+    <string name="chat_unread_photo">Photo</string>
+    <string name="chat_unread_attachment">Pièce jointe</string>
+    <string name="chat_unread_new_message">Nouveau message</string>
     <string name="chat_typing_one">%1$s est en train d\'écrire…</string>
     <string name="chat_typing_two">%1$s et %2$s sont en train d\'écrire…</string>
     <string name="chat_typing_many">%1$d personnes sont en train d\'écrire…</string>
+    <string name="chat_header_members">%1$d membres</string>
     <string name="chat_search">Rechercher des messages</string>
     <string name="chat_search_hint">Rechercher dans cette conversation</string>
     <string name="chat_search_close">Fermer la recherche</string>

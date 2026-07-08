@@ -41,8 +41,11 @@ import java.util.Locale
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallDirection
 import me.meeshy.sdk.model.call.CallRecord
+import androidx.compose.material3.TopAppBarDefaults
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -60,10 +63,16 @@ fun CallHistoryScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    MeeshyBackground {
     Scaffold(
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MeeshyTheme.tokens.textPrimary,
+                ),
                 title = { Text(stringResource(R.string.call_history_title)) },
                 actions = {
                     CallHistoryFilters(
@@ -96,6 +105,7 @@ fun CallHistoryScreen(
                 }
             }
         }
+    }
     }
 }
 
@@ -174,7 +184,7 @@ private fun DirectionIcon(direction: CallDirection) {
         CallDirection.MISSED -> Triple(
             Icons.AutoMirrored.Filled.CallMissed,
             R.string.call_history_missed,
-            MaterialTheme.colorScheme.error,
+            MeeshyPalette.Error,
         )
     }
     Icon(
@@ -220,7 +230,7 @@ private fun CallHistoryEmpty(missedOnly: Boolean) {
 
 @Composable
 private fun CallRecord.nameColor(): Color =
-    if (isMissed) MaterialTheme.colorScheme.error else MeeshyTheme.tokens.textPrimary
+    if (isMissed) MeeshyPalette.Error else MeeshyTheme.tokens.textPrimary
 
 /** Duration and data volume, `·`-separated; empty for a zero-duration missed call. */
 private fun CallRecord.subtitle(): String =

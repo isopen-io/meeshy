@@ -11,7 +11,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { logger } from '@/utils/logger';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
@@ -59,6 +59,12 @@ export function useCallQuality({
     []
   );
 
+  // Previous quality level, tracked outside React state purely so the
+  // "level changed" debug log below can compare against it without making
+  // `updateStats` depend on `qualityStats?.level` (see that dependency's
+  // removal below for why).
+  const previousLevelRef = useRef<ConnectionQualityLevel | undefined>(undefined);
+
   /**
    * Get stats from peer connection
    */
@@ -69,27 +75,25 @@ export function useCallQuality({
     try {
       const stats = await peerConnection.getStats();
 
-      let packetLoss = 0;
       let rtt = 0;
       let audioBitrate = 0;
       let videoBitrate = 0;
       let jitter = 0;
-      // Cumulative byte counters (summed across all RTP streams) — reported so
-      // the gateway can persist real "data spent" on the call-summary message.
+      // Cumulative counters summed across ALL inbound RTP streams (audio +
+      // video). Packet loss is aggregated the same way as the byte counters so
+      // a lossy stream can never be masked by a healthy one iterated after it —
+      // reassigning per-report kept only the last stream's loss.
+      let totalPacketsLost = 0;
+      let totalPacketsReceived = 0;
       let bytesSent = 0;
       let bytesReceived = 0;
 
       // Parse WebRTC stats
       stats.forEach((report) => {
         if (report.type === 'inbound-rtp') {
-          // Calculate packet loss
-          const packetsLost = report.packetsLost || 0;
-          const packetsReceived = report.packetsReceived || 0;
-          const totalPackets = packetsLost + packetsReceived;
-
-          if (totalPackets > 0) {
-            packetLoss = (packetsLost / totalPackets) * 100;
-          }
+          // Accumulate packet loss across every inbound stream
+          totalPacketsLost += report.packetsLost || 0;
+          totalPacketsReceived += report.packetsReceived || 0;
 
           // Get jitter
           if (report.jitter !== undefined) {
@@ -125,6 +129,11 @@ export function useCallQuality({
         }
       });
 
+      // Overall inbound packet-loss percentage across all streams
+      const totalPackets = totalPacketsLost + totalPacketsReceived;
+      const packetLoss =
+        totalPackets > 0 ? (totalPacketsLost / totalPackets) * 100 : 0;
+
       // Calculate quality level
       const level = calculateQualityLevel(packetLoss, rtt);
 
@@ -145,18 +154,29 @@ export function useCallQuality({
 
       setQualityStats(newStats);
 
-      // Log quality changes
-      if (qualityStats?.level !== level) {
+      // Log quality changes. Audit Vague 27 — this used to compare against
+      // `qualityStats?.level` directly, which made this a dependency of
+      // `updateStats` and gave it a fresh identity on every REAL quality
+      // transition. The monitoring effect below depends on `updateStats` and
+      // unconditionally fires it once per effect run ("Initial update"), so
+      // a level flip tore the interval down and fired an extra out-of-band
+      // getStats() call — independent of `updateInterval`, and capable of
+      // chaining into a tight loop if that extra call itself yields another
+      // different level (exactly the noisy-connection case this monitor
+      // exists to catch). Reading/writing a ref instead keeps `updateStats`
+      // stable across ticks.
+      if (previousLevelRef.current !== level) {
         logger.info('[useCallQuality]', 'Quality level changed', {
-          from: qualityStats?.level,
+          from: previousLevelRef.current,
           to: level,
           stats: newStats,
         });
       }
+      previousLevelRef.current = level;
     } catch (error) {
       logger.error('[useCallQuality]', 'Failed to get stats', { error });
     }
-  }, [peerConnection, calculateQualityLevel, qualityStats?.level]);
+  }, [peerConnection, calculateQualityLevel]);
 
   /**
    * Start monitoring when peer connection is available
@@ -183,30 +203,48 @@ export function useCallQuality({
     };
   }, [peerConnection, updateInterval, updateStats]);
 
-  // Emit quality report to server every 10 seconds
+  // Keep the latest sample in a ref so the 10s report interval below can read
+  // it without being torn down every time a new sample arrives (see effect
+  // comment).
+  const qualityStatsRef = useRef(qualityStats);
+  qualityStatsRef.current = qualityStats;
+
+  // Emit quality report to server every 10 seconds.
+  //
+  // Deliberately keyed on `callId` ONLY, not `qualityStats`: the monitoring
+  // effect above produces a brand-new `qualityStats` object every
+  // `updateInterval` tick (as fast as 2s for real callers, see
+  // VideoCallInterface). If this effect depended on `qualityStats`, React
+  // would tear down and recreate the `setInterval` on every tick — a fresh
+  // 10s timer created at T never survives to fire before being cleared at
+  // T+2s, so `CALL_QUALITY_REPORT` would never actually reach the socket in
+  // production (only fake-timer tests that flush ticks synchronously in one
+  // batch could hide this). Read the latest sample from the ref instead.
   useEffect(() => {
-    if (!callId || !qualityStats) return;
+    if (!callId) return;
 
     const socket = meeshySocketIOService.getSocket();
     const interval = setInterval(() => {
+      const stats = qualityStatsRef.current;
+      if (!stats) return;
       socket?.emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, {
         callId,
         stats: {
-          level: qualityStats.level,
+          level: stats.level,
           // ?? right-hand sides are unreachable: newStats always populates every field.
-          rtt: qualityStats.rtt ?? /* istanbul ignore next */ 0,
-          packetLoss: qualityStats.packetLoss ?? /* istanbul ignore next */ 0,
-          bitrate: qualityStats.bitrate ?? /* istanbul ignore next */ { audio: 0, video: 0 },
-          jitter: qualityStats.jitter ?? /* istanbul ignore next */ 0,
-          timestamp: qualityStats.timestamp ?? /* istanbul ignore next */ new Date(),
-          bytesSent: qualityStats.bytesSent ?? /* istanbul ignore next */ 0,
-          bytesReceived: qualityStats.bytesReceived ?? /* istanbul ignore next */ 0,
+          rtt: stats.rtt ?? /* istanbul ignore next */ 0,
+          packetLoss: stats.packetLoss ?? /* istanbul ignore next */ 0,
+          bitrate: stats.bitrate ?? /* istanbul ignore next */ { audio: 0, video: 0 },
+          jitter: stats.jitter ?? /* istanbul ignore next */ 0,
+          timestamp: stats.timestamp ?? /* istanbul ignore next */ new Date(),
+          bytesSent: stats.bytesSent ?? /* istanbul ignore next */ 0,
+          bytesReceived: stats.bytesReceived ?? /* istanbul ignore next */ 0,
         },
       });
     }, 10_000);
 
     return () => clearInterval(interval);
-  }, [callId, qualityStats]);
+  }, [callId]);
 
   return {
     qualityStats,

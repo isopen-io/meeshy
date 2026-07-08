@@ -106,14 +106,34 @@ export class AttachmentReactionHandler {
       }
 
       if (action === 'add') {
-        await this.deps.service.addAttachmentReaction({
+        const { changed } = await this.deps.service.addAttachmentReaction({
           attachmentId: data.attachmentId, messageId: data.messageId,
           participantId: resolved.participantId, emoji: data.emoji,
         });
+        if (!changed) {
+          // Idempotent no-op: the participant already had exactly this emoji on
+          // this attachment (optimistic double-fire, a socket retry after a lost
+          // ACK, or a second device echoing the same tap). Reply success but
+          // skip the ATTACHMENT_REACTION_ADDED broadcast — re-emitting it spams
+          // every socket in the conversation room. Mirrors ReactionHandler's
+          // `unchanged` guard (iter 134).
+          callback?.({ success: true });
+          return;
+        }
       } else {
-        await this.deps.service.removeAttachmentReaction({
+        const removed = await this.deps.service.removeAttachmentReaction({
           attachmentId: data.attachmentId, participantId: resolved.participantId, emoji: data.emoji,
         });
+        if (!removed) {
+          // Idempotent: the reaction is already absent. Reply success (nothing
+          // changed, no broadcast) — re-emitting ATTACHMENT_REACTION_REMOVED
+          // would clear the indicator for peers who still hold their own, and
+          // replying error would make the client roll its optimistic un-react
+          // back and re-show a reaction that is gone. Mirrors ReactionHandler's
+          // already-absent guard.
+          callback?.({ success: true });
+          return;
+        }
       }
 
       const reactionSummary = await this.deps.service.getReactionSummary(data.attachmentId);

@@ -338,24 +338,47 @@ export class CallService {
   async forceEndOrphanedCallSession(
     callId: string,
     endReason: CallEndReason
-  ): Promise<{ duration: number; conversationId: string } | null> {
+  ): Promise<{ duration: number; conversationId: string; status: CallStatus; endReason: CallEndReason } | null> {
     const session = await this.prisma.callSession.findUnique({
       where: { id: callId },
-      select: { startedAt: true, conversationId: true }
+      select: { startedAt: true, conversationId: true, answeredAt: true }
     });
     if (!session) return null;
 
     const now = new Date();
-    const duration = Math.max(0, Math.floor((now.getTime() - session.startedAt.getTime()) / 1000));
+
+    // Audit Vague 25 — mirror endCall()'s wasPreAnswered handling (see its
+    // doc comment): a call force-ended before it was ever answered (e.g. the
+    // caller's own participant row can't be resolved, or endCall() itself
+    // threw, while the callee never picked up) must resolve to `missed`, not
+    // `ended` — otherwise the callee gets no missed-call notification and
+    // call history shows a phantom "completed" 0-duration call. `answeredAt`
+    // is the authoritative "was ever answered" signal, stamped once on the
+    // SDP answer. An explicit non-default reason (e.g. connectionLost) is
+    // preserved; only the generic default `completed` is normalized to
+    // `missed`, same rule as endCall().
+    const wasPreAnswered = !session.answeredAt;
+    const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
+    const targetEndReason = wasPreAnswered && endReason === CallEndReason.completed
+      ? CallEndReason.missed
+      : endReason;
+    // Audit Vague 27 — anchor duration on answeredAt (talk time), exactly
+    // like endCall()'s `call.answeredAt ? … : 0`. This was the one terminal
+    // writer still anchoring on startedAt unconditionally (ring+talk time),
+    // producing a duration inconsistent with the same real-world call ending
+    // via a different path (e.g. the explicit "End Call" button).
+    const duration = wasPreAnswered
+      ? 0
+      : Math.max(0, Math.floor((now.getTime() - session.answeredAt!.getTime()) / 1000));
 
     const ended = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.callSession.updateMany({
         where: { id: callId, status: { in: ACTIVE_STATUSES } },
         data: {
-          status: CallStatus.ended,
+          status: targetStatus,
           endedAt: now,
           duration,
-          endReason,
+          endReason: targetEndReason,
           version: { increment: 1 }
         }
       });
@@ -385,7 +408,7 @@ export class CallService {
     this.clearRingingTimeout(callId);
     await this.releaseActiveCallClaim(session.conversationId, callId);
 
-    return { duration, conversationId: session.conversationId };
+    return { duration, conversationId: session.conversationId, status: targetStatus, endReason: targetEndReason };
   }
 
   /**
@@ -776,7 +799,12 @@ export class CallService {
                 status: CallStatus.ended,
                 endedAt: now,
                 duration: Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000)),
-                endReason: CallEndReason.garbageCollected
+                endReason: CallEndReason.garbageCollected,
+                // Terminal write protocol: every terminal writer MUST bump `version`
+                // (see endCall/markCallAsMissed) — otherwise a version-guarded writer
+                // that read this row a moment earlier still matches its stale `version`
+                // and clobbers this terminal state right after.
+                version: { increment: 1 }
               }
             });
           });
@@ -827,7 +855,12 @@ export class CallService {
             status: CallStatus.ended,
             endedAt: now,
             duration,
-            endReason: CallEndReason.garbageCollected
+            endReason: CallEndReason.garbageCollected,
+            // Terminal write protocol: every terminal writer MUST bump `version`
+            // (see endCall/markCallAsMissed) — otherwise a version-guarded writer
+            // that read this row a moment earlier still matches its stale `version`
+            // and clobbers this terminal state right after.
+            version: { increment: 1 }
           }
         });
 
@@ -1059,6 +1092,16 @@ export class CallService {
       );
     }
 
+    // Privacy gate (audit 2026-07-07): the joiner's isVideoEnabled must be
+    // derived from the call's actual media type, exactly like the
+    // initiator's is at create time above — never trust `settings.videoEnabled`
+    // on its own. Without this, a stale or malicious client answering an
+    // AUDIO call with `videoEnabled: true` gets recorded (and, via the web
+    // client, actually transmits) live camera video the callee never
+    // consented to for this call.
+    const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
+    const isVideoCall = metadataType === 'video';
+
     // Join call in transaction, guarded by an optimistic-lock claim on
     // CallSession.version so a concurrent joiner can't silently slip past
     // the cap check above (see joinCallAttempt's doc comment).
@@ -1074,7 +1117,7 @@ export class CallService {
           role: ParticipantRole.participant,
           leftAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
-          isVideoEnabled: settings?.videoEnabled ?? true
+          isVideoEnabled: isVideoCall ? (settings?.videoEnabled ?? true) : false
         }
       });
 
@@ -1206,6 +1249,15 @@ export class CallService {
       const idemNow = new Date();
       // Same `answeredAt` criterion as the main path below (2026-07-03).
       const idemPreAnswered = !existing.answeredAt;
+      // Audit Vague 27 — anchor duration on answeredAt (talk time), mirroring
+      // endCall()'s `call.answeredAt ? … : 0`. This idempotent branch was
+      // still anchoring on startedAt unconditionally (ring+talk time),
+      // producing a duration inconsistent with the same real-world call
+      // ending via a different path (e.g. the main leaveCall branch, or the
+      // explicit "End Call" button).
+      const idemDuration = idemPreAnswered
+        ? 0
+        : Math.max(0, Math.floor((idemNow.getTime() - existing.answeredAt!.getTime()) / 1000));
       // Version-guarded (see endCall()'s doc comment): a racing terminal
       // writer (call:end, force-end) could resolve this same call between
       // the `existing` read above and this write; scope to `existing.version`
@@ -1223,7 +1275,7 @@ export class CallService {
             status: idemPreAnswered ? CallStatus.missed : CallStatus.ended,
             endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
             endedAt: idemNow,
-            duration: Math.max(0, Math.floor((idemNow.getTime() - existing.startedAt.getTime()) / 1000)),
+            duration: idemDuration,
             version: { increment: 1 }
           }
         });
@@ -1357,9 +1409,14 @@ export class CallService {
           data: { leftAt }
         });
 
-        const duration = Math.floor(
-          (leftAt.getTime() - call.startedAt.getTime()) / 1000
-        );
+        // Audit Vague 27 — anchor duration on answeredAt (talk time),
+        // mirroring endCall()'s `call.answeredAt ? … : 0`. This was still
+        // anchoring on startedAt unconditionally (ring+talk time), producing
+        // a duration inconsistent with the same real-world call ending via
+        // a different path (e.g. the explicit "End Call" button).
+        const duration = wasPreAnswered
+          ? 0
+          : Math.max(0, Math.floor((leftAt.getTime() - call.answeredAt!.getTime()) / 1000));
 
         const lock = await tx.callSession.updateMany({
           where: { id: callId, version: call.version },

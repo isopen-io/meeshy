@@ -6,6 +6,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { emitWithSeq } from '../emitWithSeq';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { Server } from 'socket.io';
 import type { SequenceService } from '../../../services/SequenceService';
 
@@ -24,7 +25,11 @@ describe('emitWithSeq', () => {
     await emitWithSeq(io, seq, 'u1', 'notification:new', { title: 'hi' });
     await emitWithSeq(io, seq, 'u1', 'notification:new', { title: 'again' });
 
-    expect(to).toHaveBeenCalledWith('u1');
+    // Registered sockets only ever join `ROOMS.user(id)` (= `user:${id}`), so a
+    // user-scoped event MUST target that room. Emitting to the raw `userId`
+    // room delivers to nobody — the real-time notification would be lost.
+    expect(to).toHaveBeenCalledWith(ROOMS.user('u1'));
+    expect(to).not.toHaveBeenCalledWith('u1');
     expect(emit).toHaveBeenNthCalledWith(1, 'notification:new', { title: 'hi', _seq: 1 });
     expect(emit).toHaveBeenNthCalledWith(2, 'notification:new', { title: 'again', _seq: 2 });
   });

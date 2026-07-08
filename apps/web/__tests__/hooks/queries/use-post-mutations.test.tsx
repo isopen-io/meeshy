@@ -126,6 +126,20 @@ function seedFeed(queryClient: QueryClient) {
   });
 }
 
+function seedReels(queryClient: QueryClient, posts = [mockPost], seed = 'foryou') {
+  queryClient.setQueryData(['posts', 'list', 'reels', seed], {
+    pages: [{ data: posts }],
+    pageParams: [undefined],
+  });
+}
+
+function getReels(queryClient: QueryClient, seed = 'foryou'): Array<typeof mockPost> {
+  const data = queryClient.getQueryData<{ pages: { data: Array<typeof mockPost> }[] }>([
+    'posts', 'list', 'reels', seed,
+  ]);
+  return data?.pages.flatMap((p) => p.data) ?? [];
+}
+
 function seedMultiPostFeed(queryClient: QueryClient) {
   const post2 = { ...mockPost, id: 'post-2', likeCount: 0, bookmarkCount: 0 };
   queryClient.setQueryData(['posts', 'list', 'infinite', 'feed'], {
@@ -230,6 +244,37 @@ describe('useDeletePostMutation', () => {
 
     const data = qc.getQueryData<{ pages: { data: unknown[] }[] }>(['posts', 'list', 'infinite', 'feed']);
     expect(data?.pages[0].data).toHaveLength(1);
+  });
+
+  it('optimistically removes post from reels threads', async () => {
+    const qc = createQueryClient();
+    const reel2 = { ...mockPost, id: 'post-2' };
+    seedReels(qc, [mockPost, reel2]);
+    mockDeletePost.mockResolvedValue({ success: true, data: { deleted: true } });
+
+    const { result } = renderHook(() => useDeletePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess || result.current.isPending).toBe(true));
+    expect(getReels(qc).map((p) => p.id)).toEqual(['post-2']);
+  });
+
+  it('restores reels threads on error', async () => {
+    const qc = createQueryClient();
+    seedReels(qc);
+    mockDeletePost.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useDeletePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(getReels(qc).map((p) => p.id)).toEqual(['post-1']);
   });
 });
 
@@ -465,6 +510,45 @@ describe('useUpdatePostMutation', () => {
 
     const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
     expect(data?.pages[0].data[0].content).toBe('Hello world');
+  });
+
+  it('optimistically patches post content in reels threads', async () => {
+    const qc = createQueryClient();
+    seedReels(qc);
+
+    let resolveUpdate: (v: unknown) => void;
+    mockUpdatePost.mockImplementation(() => new Promise(r => { resolveUpdate = r; }));
+
+    const { result } = renderHook(() => useUpdatePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => {
+      result.current.mutate({ postId: 'post-1', data: { content: 'Reel content' } });
+    });
+
+    await waitFor(() => {
+      const reel = getReels(qc)[0];
+      expect(reel.content).toBe('Reel content');
+      expect(reel.isEdited).toBe(true);
+    });
+
+    await act(async () => {
+      resolveUpdate!({ success: true, data: {} });
+    });
+  });
+
+  it('restores reels threads on error', async () => {
+    const qc = createQueryClient();
+    seedReels(qc);
+    mockUpdatePost.mockRejectedValue(new Error('Server error'));
+
+    const { result } = renderHook(() => useUpdatePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1', data: { content: 'Updated' } });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(getReels(qc)[0].content).toBe('Hello world');
   });
 
   it('invalidates detail and list queries on settled', async () => {

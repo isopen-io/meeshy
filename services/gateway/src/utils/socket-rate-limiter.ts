@@ -154,6 +154,17 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute — mirrors CALL_RECONNECTING/CALL_RECONNECTED
     keyPrefix: 'socket:call:check-active'
   },
+  // Gateway calling-stack audit 2026-07-08 — `presence:app-state` was the one
+  // remaining call-adjacent handler with zero throttling (no getUserId check
+  // either, unlike every sibling). Impact per-event is minimal (sets a flag
+  // on the socket, no DB write, no broadcast), but scenePhase transitions can
+  // fire in bursts on a flaky device — a generous per-minute budget only
+  // catches scripted flooding, not normal foreground/background churn.
+  PRESENCE_APP_STATE: {
+    maxRequests: 30,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:presence:app-state'
+  },
   REACTION_ADD: {
     maxRequests: 30,
     windowMs: 60000, // 1 minute — prevents emoji spam floods

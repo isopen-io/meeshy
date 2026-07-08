@@ -1,10 +1,8 @@
 package me.meeshy.app.notifications
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -26,7 +23,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,6 +40,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.format.shortDateTimeLabel
+import me.meeshy.ui.component.chrome.MeeshyTopBar
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -58,46 +59,52 @@ fun NotificationsScreen(
         state.errorMessage?.let { snackbar.showSnackbar(it) }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.notifications_title)) },
-                actions = {
-                    if (state.notifications.any { !it.state.isRead }) {
-                        TextButton(onClick = viewModel::markAllRead) {
-                            Text(stringResource(R.string.notifications_mark_all_read))
+    MeeshyBackground {
+        Scaffold(
+            topBar = {
+                MeeshyTopBar(
+                    title = stringResource(R.string.notifications_title),
+                    actions = {
+                        if (state.notifications.any { !it.state.isRead }) {
+                            TextButton(onClick = viewModel::markAllRead) {
+                                Text(stringResource(R.string.notifications_mark_all_read))
+                            }
                         }
+                    },
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbar) },
+            containerColor = Color.Transparent,
+        ) { padding ->
+            PullToRefreshBox(
+                isRefreshing = state.isSyncing,
+                onRefresh = viewModel::load,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            ) {
+                when {
+                    state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = MeeshyPalette.Indigo500)
                     }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbar) },
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
-    ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = state.isSyncing,
-            onRefresh = viewModel::load,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            when {
-                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-                state.notifications.isEmpty() -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(stringResource(R.string.notifications_empty), style = MaterialTheme.typography.bodyLarge)
-                }
-                else -> LazyColumn {
-                    items(state.notifications, key = { it.id }) { notification ->
-                        NotificationItem(
-                            notification = notification,
-                            onTap = { viewModel.markAsRead(notification.id) },
+                    state.notifications.isEmpty() -> Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.notifications_empty),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MeeshyTheme.tokens.textSecondary,
                         )
-                        HorizontalDivider()
+                    }
+                    else -> LazyColumn {
+                        items(state.notifications, key = { it.id }) { notification ->
+                            NotificationItem(
+                                notification = notification,
+                                onTap = { viewModel.markAsRead(notification.id) },
+                            )
+                            HorizontalDivider(color = MeeshyTheme.tokens.inputBorder.copy(alpha = 0.4f))
+                        }
                     }
                 }
             }
@@ -113,8 +120,7 @@ private fun NotificationItem(
     val isUnread = !notification.state.isRead
     Surface(
         onClick = onTap,
-        color = if (isUnread) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-        else MaterialTheme.colorScheme.surface,
+        color = if (isUnread) MeeshyPalette.Indigo500.copy(alpha = 0.12f) else Color.Transparent,
     ) {
         Row(
             modifier = Modifier
@@ -133,6 +139,7 @@ private fun NotificationItem(
                         text = notification.actor?.displayName ?: notification.actor?.username
                             ?: stringResource(R.string.notifications_system_sender),
                         style = MaterialTheme.typography.labelMedium,
+                        color = MeeshyTheme.tokens.textPrimary,
                         fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
                     )
                     if (isUnread) {
@@ -141,7 +148,7 @@ private fun NotificationItem(
                             Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
+                                .background(MeeshyPalette.Indigo500),
                         )
                     }
                 }
@@ -149,13 +156,13 @@ private fun NotificationItem(
                     Text(
                         text = it,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MeeshyTheme.tokens.textSecondary,
                     )
                 }
                 Text(
-                    text = notification.state.createdAt,
+                    text = shortDateTimeLabel(notification.state.createdAt),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textMuted,
                 )
             }
         }

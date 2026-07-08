@@ -458,11 +458,17 @@ class LanguageCapabilitiesService:
             )
 
         if not cap.stt_supported:
-            # Find similar languages with STT
-            similar_with_stt = [
-                c for c, cap in self._capabilities.items()
-                if cap.stt_supported and cap.region == cap.region
-            ][:5]
+            # Prefer STT-capable languages from the same region; fall back to
+            # any STT-capable language when the region has no other match.
+            same_region = [
+                c for c, other in self._capabilities.items()
+                if other.stt_supported and other.region == cap.region
+            ]
+            any_stt = [
+                c for c, other in self._capabilities.items()
+                if other.stt_supported
+            ]
+            similar_with_stt = (same_region or any_stt)[:5]
 
             raise LanguageCapabilityError(
                 message=f"Speech-to-text (transcription) is not available for {cap.name} ({code}). "
@@ -511,11 +517,12 @@ class LanguageCapabilitiesService:
         cap = self.require_tts(code)  # First check TTS
 
         if not cap.tts_voice_cloning:
-            # Find languages with voice cloning in same region
+            # Voice cloning is an engine capability (Chatterbox/XTTS/VITS), not
+            # a regional one — list every cloning-capable language as fallback.
             cloning_languages = [
-                f"{c} ({self._capabilities[c].name})"
-                for c, cap in self._capabilities.items()
-                if cap.tts_voice_cloning
+                f"{c} ({other.name})"
+                for c, other in self._capabilities.items()
+                if other.tts_voice_cloning
             ][:10]
 
             raise LanguageCapabilityError(

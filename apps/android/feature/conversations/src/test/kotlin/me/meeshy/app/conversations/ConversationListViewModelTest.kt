@@ -20,9 +20,12 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -76,7 +79,8 @@ class ConversationListViewModelTest {
     private fun viewModel(
         repo: ConversationRepository,
         connection: SocketManager = connectionSocket(),
-    ) = ConversationListViewModel(repo, socketManager(), workManager, connection, session())
+        draftStore: ConversationDraftStore = InMemoryConversationDraftStore(),
+    ) = ConversationListViewModel(repo, socketManager(), workManager, draftStore, connection, session())
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
@@ -89,6 +93,100 @@ class ConversationListViewModelTest {
         assertThat(vm.state.value.conversations).hasSize(1)
         assertThat(vm.state.value.showSkeleton).isFalse()
         assertThat(vm.state.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun a_conversation_with_a_stored_draft_floats_to_the_top() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2"), ApiConversation(id = "c3")),
+                    ageMillis = 0,
+                ),
+            ),
+        )
+        val draftStore = InMemoryConversationDraftStore(
+            mapOf("c3" to ConversationDraft(conversationId = "c3", text = "unsent")),
+        )
+        val vm = viewModel(repo, draftStore = draftStore)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("c3", "c1", "c2").inOrder()
+        assertThat(vm.state.value.draftFor("c3")?.text).isEqualTo("unsent")
+    }
+
+    @Test
+    fun discarding_a_draft_clears_the_preview_and_sinks_the_row() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2"), ApiConversation(id = "c3")),
+                    ageMillis = 0,
+                ),
+            ),
+        )
+        val draftStore = InMemoryConversationDraftStore(
+            mapOf("c3" to ConversationDraft(conversationId = "c3", text = "unsent")),
+        )
+        val vm = viewModel(repo, draftStore = draftStore)
+        advanceUntilIdle()
+
+        vm.discardDraft("c3")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.draftFor("c3")).isNull()
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("c1", "c2", "c3").inOrder()
+        assertThat(draftStore.load("c3")).isNull()
+    }
+
+    @Test
+    fun discarding_a_draft_gives_instant_optimistic_feedback_before_the_store_settles() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        val draftStore = InMemoryConversationDraftStore(
+            mapOf("c1" to ConversationDraft(conversationId = "c1", text = "unsent")),
+        )
+        val vm = viewModel(repo, draftStore = draftStore)
+        advanceUntilIdle()
+
+        // No advanceUntilIdle: the optimistic state update is synchronous.
+        vm.discardDraft("c1")
+
+        assertThat(vm.state.value.draftFor("c1")).isNull()
+    }
+
+    @Test
+    fun discarding_when_no_meaningful_draft_exists_is_a_no_op() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        val blank = ConversationDraft(conversationId = "c1", text = "   ")
+        val draftStore = InMemoryConversationDraftStore(mapOf("c1" to blank))
+        val vm = viewModel(repo, draftStore = draftStore)
+        advanceUntilIdle()
+
+        vm.discardDraft("c1")
+        advanceUntilIdle()
+
+        // The inert draft is left untouched — the affordance is never offered for it.
+        assertThat(draftStore.load("c1")).isEqualTo(blank)
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun discarding_an_unknown_conversation_changes_nothing() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.discardDraft("does-not-exist")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("c1")
+        assertThat(vm.state.value.errorMessage).isNull()
     }
 
     @Test

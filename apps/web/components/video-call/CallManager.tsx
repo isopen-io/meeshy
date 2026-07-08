@@ -23,6 +23,7 @@ import type {
   CallError,
 } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 
 const CALL_TIMEOUT_MS = 30000; // 30 seconds
 
@@ -41,6 +42,8 @@ export function CallManager() {
     reset,
     removeRemoteStream,
     removePeerConnection,
+    startHeartbeat,
+    stopHeartbeat,
   } = useCallStore();
 
   const [incomingCall, setIncomingCall] = useState<CallInitiatedEvent | null>(null);
@@ -121,6 +124,27 @@ export function CallManager() {
     startCallTimeout(currentCall.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCall?.id, currentCall?.status, currentCall?.initiatorId, user?.id]);
+
+  /**
+   * CALL-RESILIENCE — client heartbeat liveness contract (audit Vague 26,
+   * sibling drift). `CallCleanupService`'s gateway GC tier force-ends any
+   * call whose participants show no fresh heartbeat for >120s, using
+   * `call:heartbeat` (15s interval, `startHeartbeat`/`stopHeartbeat` in
+   * call-store.ts) as the liveness signal — iOS emits it for every call via
+   * `CallManager.startHeartbeat()`. This component never called the store's
+   * `startHeartbeat` action anywhere: a web↔web call had zero heartbeat
+   * entries from either side, which the GC's post-restart DB fallback
+   * treats identically to a genuine zombie once the one-time boot grace
+   * window passes — a healthy P2P call longer than ~2 minutes would be
+   * force-ended server-side with `endReason: heartbeatTimeout`. Starts the
+   * moment a call becomes active, stops the moment it ends (both driven by
+   * `isInCall`, which `setCurrentCall`/`reset` already toggle).
+   */
+  useEffect(() => {
+    if (!isInCall || !currentCall?.id) return;
+    startHeartbeat(currentCall.id);
+    return () => stopHeartbeat();
+  }, [isInCall, currentCall?.id, startHeartbeat, stopHeartbeat]);
 
   /**
    * Handle incoming call
@@ -354,6 +378,9 @@ export function CallManager() {
 
     logger.debug('[CallManager]', 'Accepting call - callId: ' + incomingCall.callId);
 
+    const isVideoCall = incomingCall.type === 'video';
+    let stream: MediaStream | null = null;
+
     try {
       // Clear timeout since we're accepting
       clearCallTimeout();
@@ -362,6 +389,21 @@ export function CallManager() {
       import('@/utils/ringtone').then(({ stopRingtone }) => {
         stopRingtone();
       });
+
+      // Privacy fix (audit 2026-07-07): acquire local media BEFORE joining,
+      // gated on the call's ACTUAL type — mirrors the caller's own
+      // pre-authorization in use-video-call.ts's startCall. Previously the
+      // callee never called getUserMedia here at all; VideoCallInterface's
+      // mount effect fell back to unconditional audio+video constraints
+      // (DEFAULT_MEDIA_CONSTRAINTS in webrtc-service.ts) regardless of call
+      // type, so an audio-only call still activated the callee's camera and
+      // transmitted live video with no consent. Handing the stream off via
+      // `__preauthorizedMediaStream` reuses the same Safari-compatible path
+      // VideoCallInterface already checks on mount — no changes needed there.
+      stream = await navigator.mediaDevices.getUserMedia(
+        getCallMediaConstraints(isVideoCall ? 'video' : 'audio')
+      );
+      (window as any).__preauthorizedMediaStream = stream;
 
       // Join call via Socket.IO - CallInterface will initialize local stream
       const socket = meeshySocketIOService.getSocket();
@@ -386,7 +428,7 @@ export function CallManager() {
             callId: incomingCall.callId,
             settings: {
               audioEnabled: true,
-              videoEnabled: true,
+              videoEnabled: isVideoCall,
             },
           },
           resolve
@@ -423,6 +465,10 @@ export function CallManager() {
 
       logger.info('[CallManager]', 'Call accepted - callId: ' + incomingCall.callId);
     } catch (error: unknown) {
+      // A failure anywhere after getUserMedia succeeded (no socket, rejected
+      // join ack) must not leave the mic/camera hot with nothing consuming
+      // the stream.
+      stopPreauthorizedStream(stream);
       logger.error('[CallManager]', 'Failed to accept call: ' + (error?.message || 'Unknown error'));
       toast.error(t('calls.toasts.joinFailed'));
       setIncomingCall(null);

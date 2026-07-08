@@ -3,7 +3,7 @@ package me.meeshy.sdk.net.api
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.LoginRequest
-import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
 import retrofit2.http.Body
@@ -21,5 +21,5 @@ interface AuthApi {
     suspend fun refresh(@Body body: RefreshTokenRequest): ApiResponse<AuthSession>
 
     @GET("auth/me")
-    suspend fun me(): ApiResponse<MeeshyUser>
+    suspend fun me(): ApiResponse<MeEnvelope>
 }

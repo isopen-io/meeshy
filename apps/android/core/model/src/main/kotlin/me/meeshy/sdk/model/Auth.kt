@@ -28,6 +28,12 @@ data class AuthSession(
     val expiresIn: Int? = null,
 )
 
+/** Payload of `GET /auth/me` — the identity is nested under `user`, not at the top level. */
+@Serializable
+data class MeEnvelope(
+    val user: MeeshyUser,
+)
+
 @Serializable
 data class RefreshTokenRequest(
     val sessionToken: String,

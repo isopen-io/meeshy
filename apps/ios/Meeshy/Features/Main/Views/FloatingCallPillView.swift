@@ -89,10 +89,11 @@ struct FloatingCallPillView: View {
     // when reduce motion is on, collapse it to a simple cross-fade.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Avatar réel du correspondant — cache-first UNIQUEMENT (le refresh API +
-    // la persistance cache sont déjà faits par CallView.resolveRemoteProfile ;
-    // la bannière se contente de servir le cache, même stale, sans réseau).
-    @State private var remoteProfile: MeeshyUser?
+    /// Suit le drag horizontal en direct pour l'offset + fondu visuels ; ne
+    /// persiste rien (contrairement à `bubbleEdge`/`bubbleVerticalFraction`
+    /// sur `CallManager`, qui ne concernent que la bulle repliée).
+    @State private var pillDragOffset: CGFloat = 0
+    @State private var pillLastDragSample: (time: Date, translationWidth: CGFloat)?
 
     private let pillHeight: CGFloat = 64
 
@@ -107,9 +108,6 @@ struct FloatingCallPillView: View {
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.75), value: callManager.displayMode)
                 .zIndex(999)
-                .task(id: callManager.remoteUserId) {
-                    await resolveRemoteProfile(userId: callManager.remoteUserId)
-                }
         }
     }
 
@@ -117,7 +115,7 @@ struct FloatingCallPillView: View {
 
     private var pillContent: some View {
         HStack(spacing: 12) {
-            pillLeadingVisual
+            CallParticipantVisual(diameter: 44)
             userInfoSection
             Spacer(minLength: 8)
             controlButtons
@@ -146,6 +144,9 @@ struct FloatingCallPillView: View {
         // elle est pleine largeur.
         .frame(maxWidth: 560)
         .padding(.horizontal, 10)
+        .offset(x: pillDragOffset)
+        .opacity(pillDragOpacity)
+        .simultaneousGesture(collapseDragGesture)
         .contentShape(Rectangle())
         .onTapGesture {
             expandToFullScreen()
@@ -157,80 +158,8 @@ struct FloatingCallPillView: View {
         )
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
         .accessibilityAddTraits(.isButton)
-    }
-
-    // MARK: - Leading Visual (remote video thumbnail or avatar)
-
-    /// §7.6 — whenever the peer's video is flowing, show the live remote feed
-    /// as a small thumbnail so the user still sees their interlocutor (a
-    /// return-to-call pill that drops the video is a major gap). Keyed on the
-    /// REMOTE stream only — the peer may have escalated an audio call to video
-    /// while the local camera stays off. Falls back to the avatar when the
-    /// peer's camera is off / no track yet. Only one renderer is live at a
-    /// time: CallView is dismounted while in `.pip`, so this does not
-    /// double-render the remote track.
-    @ViewBuilder
-    private var pillLeadingVisual: some View {
-        if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
-            CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
-                )
-                .accessibilityHidden(true)
-        } else {
-            avatarView
-        }
-    }
-
-    // MARK: - Avatar
-
-    private var avatarView: some View {
-        let name = callManager.remoteUsername ?? "?"
-        let initial = String(name.prefix(1)).uppercased()
-
-        return ZStack {
-            Circle()
-                .fill(MeeshyColors.brandGradient)
-
-            Text(initial)
-                .font(.system(.callout, design: .rounded).weight(.bold))
-                .foregroundColor(.white)
-
-            // Vraie photo de profil par-dessus le fallback initiale (le
-            // dégradé + initiale restent visibles pendant le chargement).
-            if let avatar = remoteProfile?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: 44, height: 44),
-                    thumbHash: remoteProfile?.avatarThumbHash
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
-            }
-        }
-        .frame(width: 44, height: 44)
-        .accessibilityHidden(true)
-    }
-
-    /// Résolution cache-first de l'avatar (Instant App) : `.fresh`/`.stale`
-    /// servis immédiatement, pas d'appel réseau ici — CallView rafraîchit et
-    /// ré-alimente le cache quand l'appel passe en plein écran.
-    private func resolveRemoteProfile(userId: String?) async {
-        guard let userId, !userId.isEmpty else {
-            remoteProfile = nil
-            return
-        }
-        switch await CacheCoordinator.shared.profiles.load(for: userId) {
-        case .fresh(let users, _), .stale(let users, _):
-            remoteProfile = users.first
-        case .expired, .empty:
-            break
+        .accessibilityAction(named: String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
+            collapseToBubble(exitTranslation: 1)
         }
     }
 
@@ -358,6 +287,71 @@ struct FloatingCallPillView: View {
         .pressable()
         .accessibilityLabel(String(localized: "call.pill.hangup", defaultValue: "Raccrocher"))
         .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
+    }
+
+    // MARK: - Collapse Gesture
+
+    private var pillDragOpacity: Double {
+        let progress = min(abs(pillDragOffset) / 300, 1.0)
+        return 1.0 - Double(progress) * 0.6
+    }
+
+    private var collapseDragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                // Sample BEFORE updating pillDragOffset, so onEnded can diff
+                // against the second-to-last position — an instantaneous
+                // velocity estimate, not one diluted by a slow start earlier
+                // in the same gesture.
+                pillLastDragSample = (Date(), pillDragOffset)
+                pillDragOffset = value.translation.width
+            }
+            .onEnded { value in
+                // iOS 16 floor — `DragGesture.Value.velocity` is iOS 17+, so
+                // velocity is approximated from elapsed wall-clock time
+                // instead (no existing precedent in this codebase uses the
+                // iOS 17 API either).
+                let velocityWidth: CGFloat
+                if let sample = pillLastDragSample {
+                    let elapsed = Date().timeIntervalSince(sample.time)
+                    velocityWidth = elapsed > 0 ? (value.translation.width - sample.translationWidth) / CGFloat(elapsed) : 0
+                } else {
+                    velocityWidth = 0
+                }
+                pillLastDragSample = nil
+
+                if CallBubbleGestureResolver.shouldCollapse(
+                    translationWidth: value.translation.width,
+                    velocityWidth: velocityWidth
+                ) {
+                    collapseToBubble(exitTranslation: value.translation.width)
+                } else {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.7)) {
+                        pillDragOffset = 0
+                    }
+                    HapticFeedback.light()
+                }
+            }
+    }
+
+    private func collapseToBubble(exitTranslation: CGFloat) {
+        HapticFeedback.success()
+        let exitOffset: CGFloat = exitTranslation >= 0 ? 500 : -500
+        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.25)) {
+            pillDragOffset = exitOffset
+        }
+        Task { @MainActor in
+            if !reduceMotion {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+            // The call can end during this 250ms exit animation (user hangs
+            // up immediately after swiping, remote hangs up, etc.) — guard
+            // against flipping displayMode to .bubble for a call that's no
+            // longer active, matching CallBubbleView's own display guard.
+            guard callManager.callState.isActive else { return }
+            callManager.displayMode = .bubble
+            pillDragOffset = 0
+        }
     }
 
     // MARK: - Actions

@@ -61,7 +61,7 @@ class SessionRepository @Inject constructor(
             return
         }
         when (val result = apiCall { authApi.me() }) {
-            is NetworkResult.Success -> _currentUser.value = result.data
+            is NetworkResult.Success -> _currentUser.value = result.data.user
             is NetworkResult.Failure -> Unit
         }
     }

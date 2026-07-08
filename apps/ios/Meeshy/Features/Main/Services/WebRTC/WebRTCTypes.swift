@@ -820,7 +820,12 @@ extension CallEndReason {
 enum CallDisplayMode: Sendable {
     case fullScreen
     case pip
+    case bubble
 }
+
+/// Bord horizontal d'ancrage de la bulle d'appel repliée (`CallBubbleView`),
+/// mis à jour au relâchement du drag de repositionnement.
+enum BubbleHorizontalEdge: Sendable { case leading, trailing }
 
 // MARK: - Quality Thresholds
 

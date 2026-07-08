@@ -452,6 +452,10 @@ export class MessageReadStatusService {
     conversationId: string,
     latestMessageId?: string
   ): Promise<void> {
+    // Hoisted so the catch below can release the dedup key when the write
+    // fails — a poisoned key would otherwise swallow every retry within the
+    // TTL and silently drop the delivery receipt.
+    let dedupKey: string | undefined;
     try {
       // Resolve the effective target message id BEFORE the dedup gate. When the
       // caller omits latestMessageId, the dedup key must reflect the ACTUAL
@@ -474,7 +478,7 @@ export class MessageReadStatusService {
       // Keyed by the RESOLVED messageId so a genuinely newer message always
       // produces a distinct key and is never swallowed by the TTL gate — only
       // identical repeats (same message within the TTL) are deduped.
-      const dedupKey = `${participantId}:${conversationId}:received:${messageId}`;
+      dedupKey = `${participantId}:${conversationId}:received:${messageId}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -545,6 +549,12 @@ export class MessageReadStatusService {
         `[MessageReadStatus] Participant ${participantId} received update in conversation ${conversationId}`
       );
     } catch (error) {
+      // Release the dedup key so a retry within the TTL is not swallowed by the
+      // gate — the failed attempt recorded nothing, so the receipt must still
+      // be markable. Deleting an already-cleared / never-set key is a no-op.
+      if (dedupKey) {
+        MessageReadStatusService.recentActionCache.delete(dedupKey);
+      }
       logger.error(
         "[MessageReadStatus] Error marking messages as received:",
         error
@@ -562,6 +572,10 @@ export class MessageReadStatusService {
     conversationId: string,
     latestMessageId?: string
   ): Promise<void> {
+    // Hoisted so the catch below can release the dedup key when the write
+    // fails — a poisoned key would otherwise swallow every retry within the
+    // TTL and silently drop the read receipt.
+    let dedupKey: string | undefined;
     try {
       // Resolve the effective target message id BEFORE the dedup gate. When the
       // caller omits latestMessageId, the dedup key must reflect the ACTUAL
@@ -583,7 +597,7 @@ export class MessageReadStatusService {
       // Keyed by the RESOLVED messageId so a genuinely newer message always
       // produces a distinct key and is never swallowed by the TTL gate — only
       // identical repeats (same message within the TTL) are deduped.
-      const dedupKey = `${participantId}:${conversationId}:read:${messageId}`;
+      dedupKey = `${participantId}:${conversationId}:read:${messageId}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -601,18 +615,21 @@ export class MessageReadStatusService {
       // fenêtre du gel. Une erreur ici ne doit pas faire échouer le marquage
       // (on retombe sur `null` = gel depuis l'origine, lui-même résilient).
       let prevReadAt: Date | null = null;
+      let prevDeliveredAt: Date | null = null;
       let cursorExists = false;
       try {
         const prevCursor = await this.prisma.conversationReadCursor.findUnique({
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastReadAt: true },
+          select: { lastReadAt: true, lastDeliveredAt: true },
         });
         prevReadAt = prevCursor?.lastReadAt ?? null;
+        prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
         cursorExists = prevCursor != null;
       } catch {
         prevReadAt = null;
+        prevDeliveredAt = null;
       }
 
       // Out-of-order read receipt (e.g. a second, staler device catching up
@@ -651,6 +668,36 @@ export class MessageReadStatusService {
         field: "readAt",
       });
 
+      // Read implies delivered: a message can never be read without first having
+      // been delivered. When a recipient opens a conversation whose newest
+      // message was never marked received (they were offline when it arrived, so
+      // no delivery receipt / auto-deliver ran), advancing only the read cursor
+      // leaves the delivery frontier behind the read frontier — the sender then
+      // sees the "read" tick ahead of the "delivered" tick (readCount > deliveredCount),
+      // an impossible state. Also advance the delivery cursor and freeze
+      // deliveredAt/receivedAt for the same window. Both operations are idempotent
+      // (the cursor guard no-ops when delivery is already ahead; the freeze is
+      // write-once), so this is a cheap no-op on the healthy delivered-then-read path.
+      const deliveredAdvanced = await this._advanceCursor({
+        participantId,
+        conversationId,
+        messageId,
+        now,
+        cursorExists: true,
+        idField: "lastDeliveredMessageId",
+        atField: "lastDeliveredAt",
+        resetUnreadCount: false,
+      });
+      if (deliveredAdvanced) {
+        await this.freezeMessageStatus({
+          participantId,
+          conversationId,
+          since: prevDeliveredAt,
+          at: now,
+          field: "deliveredAt",
+        });
+      }
+
       logger.info(
         `[MessageReadStatus] Participant ${participantId} marked conversation ${conversationId} as read`
       );
@@ -679,6 +726,12 @@ export class MessageReadStatusService {
         );
       }
     } catch (error) {
+      // Release the dedup key so a retry within the TTL is not swallowed by the
+      // gate — the failed attempt recorded nothing, so the receipt must still
+      // be markable. Deleting an already-cleared / never-set key is a no-op.
+      if (dedupKey) {
+        MessageReadStatusService.recentActionCache.delete(dedupKey);
+      }
       logger.error(
         "[MessageReadStatus] Error marking messages as read:",
         error
@@ -1046,6 +1099,37 @@ export class MessageReadStatusService {
 
       // Only consider cursors from active participants
       const activeCursors = cursors.filter(c => activeParticipantIds.has(c.participantId));
+      const cursorByParticipant = new Map(activeCursors.map(c => [c.participantId, c]));
+
+      // Précision absolue : les dates FIGÉES par message (write-once) priment sur
+      // la dérivation curseur — même règle que `getMessageReadStatus` /
+      // `getMessageStatusDetails`. Sans cette union, un curseur supprimé par
+      // `cleanupObsoleteCursors` (son `lastReadMessageId` pointe vers un message
+      // effacé) ferait disparaître un reçu de livraison/lecture figé toujours
+      // valide → cette variante batch sous-comptait par rapport aux deux
+      // méthodes mono-message pour EXACTEMENT les mêmes données.
+      const frozenEntries = await this.prisma.messageStatusEntry.findMany({
+        where: { messageId: { in: messageIds }, conversationId },
+        select: {
+          messageId: true,
+          participantId: true,
+          deliveredAt: true,
+          receivedAt: true,
+          readAt: true,
+        },
+      });
+      const frozenByMessage = new Map<
+        string,
+        Map<string, { deliveredAt: Date | null; receivedAt: Date | null; readAt: Date | null }>
+      >();
+      for (const e of frozenEntries) {
+        let inner = frozenByMessage.get(e.messageId);
+        if (!inner) {
+          inner = new Map();
+          frozenByMessage.set(e.messageId, inner);
+        }
+        inner.set(e.participantId, e);
+      }
 
       const statusMap = new Map<
         string,
@@ -1057,18 +1141,40 @@ export class MessageReadStatusService {
         let receivedCount = 0;
         let readCount = 0;
 
-        for (const cursor of activeCursors) {
-          if (cursor.participantId === msg.senderId) continue;
+        // Union des participants ayant un curseur actif ET de ceux ayant un reçu
+        // figé actif pour CE message (sender exclu). Un participant figé-seul
+        // (curseur nettoyé) reste compté ; un figé dont le participant n'est plus
+        // actif est ignoré — parité exacte avec `getMessageReadStatus`.
+        const frozenForMsg = frozenByMessage.get(msg.id);
+        const evaluatedParticipantIds = new Set<string>();
+        for (const c of activeCursors) {
+          if (c.participantId !== msg.senderId) evaluatedParticipantIds.add(c.participantId);
+        }
+        if (frozenForMsg) {
+          for (const participantId of frozenForMsg.keys()) {
+            if (participantId !== msg.senderId && activeParticipantIds.has(participantId)) {
+              evaluatedParticipantIds.add(participantId);
+            }
+          }
+        }
 
-          if (
-            cursor.lastDeliveredAt &&
-            cursor.lastDeliveredAt >= msg.createdAt
-          ) {
-            receivedCount++;
-          }
-          if (cursor.lastReadAt && cursor.lastReadAt >= msg.createdAt) {
-            readCount++;
-          }
+        for (const participantId of evaluatedParticipantIds) {
+          const cursor = cursorByParticipant.get(participantId);
+          const cursorDelivered =
+            cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt
+              ? cursor.lastDeliveredAt
+              : null;
+          const cursorRead =
+            cursor?.lastReadAt && cursor.lastReadAt >= msg.createdAt
+              ? cursor.lastReadAt
+              : null;
+
+          const frozen = frozenForMsg?.get(participantId);
+          const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
+          const readAt = frozen?.readAt ?? cursorRead;
+
+          if (receivedAt) receivedCount++;
+          if (readAt) readCount++;
         }
 
         statusMap.set(msg.id, { totalMembers, receivedCount, readCount });

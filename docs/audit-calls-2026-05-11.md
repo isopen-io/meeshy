@@ -1,5 +1,121 @@
 # Audit 360° — Sous-systeme Appels Audio/Video Meeshy
 
+> **Statut au 2026-07-08** (session `claude/loving-thompson-ccnlsc`, pas d'acces
+> Xcode/simulateur ni SSH prod dans cet environnement — memes contraintes que la
+> session precedente) :
+> - **Premier audit approfondi cote WEB** (jusqu'ici les audits se concentraient
+>   sur iOS + gateway ; la colonne "Web" du tableau ci-dessous etait a 0 sans
+>   qu'un audit dedie n'ait jamais tourne sur `apps/web/hooks/use-webrtc-p2p.ts`,
+>   `stores/call-store.ts`, `components/video-calls/*`). Deux bugs reels trouves
+>   et corriges, avec tests :
+>   - **P0-WEB-1** — `VideoCallInterface.tsx` : le cleanup différé (2s) sur
+>     `CALL_PARTICIPANT_LEFT` fermait la RTCPeerConnection **fraîchement
+>     rétablie** si le participant rejoignait dans la fenêtre de grâce (network
+>     blip, tab reload) — aucune vérification d'identité de connexion avant de
+>     détruire. Fix : snapshot de la connexion au moment du leave, comparaison
+>     d'identité au moment du timeout ; si différente (rejoin détecté), on ne
+>     touche ni au stream ni à la connexion ni au guard `offersCreatedFor`.
+>   - **P1-WEB-2** — `use-webrtc-p2p.ts` : `remoteDescriptionSetRef` /
+>     `iceCandidateQueueRef` / `webrtcServicesRef` n'étaient jamais nettoyés par
+>     participant (seulement au `cleanup()` global) → un rejoin héritait de
+>     l'état signaling du participant précédent (réponse initiale traitée comme
+>     renégociation, ICE candidates silencieusement droppés). Fix : nouvelle
+>     fonction `removeParticipant(id)` exportée par le hook, appelée par
+>     `VideoCallInterface` uniquement quand le rejoin N'est PAS détecté.
+>   - **P1-WEB-3** — même fichier : `createOffer`/`handleOffer` ne fermaient pas
+>     la RTCPeerConnection déjà enregistrée (`addPeerConnection`) si
+>     `createOffer()`/`createAnswer()` levait une exception après coup — fuite
+>     silencieuse. Fix : `removeParticipant(id)` dans les deux blocs `catch`.
+>   - **P2-WEB-4** (identifié, non corrigé) — `CallControls.tsx`
+>     `handleSpeakerToggle` ne fait que flipper un state local, aucun routage
+>     audio réel (`setSinkId`). Non corrigé cette session : nécessite de
+>     remonter l'état jusqu'aux éléments `<video>` de `VideoStream.tsx` (3
+>     fichiers à toucher), `setSinkId` n'est pas supporté par tous les
+>     navigateurs, et aucun matériel audio réel n'est disponible dans cet
+>     environnement pour vérifier un routage correct — un fix mal vérifié sur ce
+>     chemin risquerait de casser l'audio d'appels réels, pire que le no-op
+>     actuel (inoffensif). Backlog pour une session avec verification manuelle.
+>   - Non retenus (nécessitent un vrai navigateur/device pour verifier sans
+>     risque de faux-positif) : focus trap sur les overlays plein-ecran
+>     (accessibilite), race `ensureLocalStream`/`createOffer` concurrents
+>     (latent, masque par `isCallSupported` limitant a 1 pair), absence de
+>     verification `signal.from` contre `participants[]` cote client.
+> - **Re-sweep gateway ciblé** (5 fichiers : `CallEventsHandler.ts`,
+>   `CallService.ts`, `TURNCredentialService.ts`, `PushNotificationService.ts`,
+>   `call-schemas.ts`) contre le code actuel — tous les P0-4/5, P1-20/21/22,
+>   P2-GW-1/2/5 confirmes deja fixes (commentaires `Audit P2-GW-*` en place).
+>   Trois nouveaux problèmes trouvés et corrigés :
+>   - **P1-GW-5** — le guard "zombie-socket" sur `disconnect` bloquait
+>     **tout** grace/cleanup pour TOUS les appels de l'utilisateur dès qu'un
+>     AUTRE socket (même non lié à l'appel) restait dans `ROOMS.user(userId)`.
+>     Un device idle (iPad jamais entré dans l'appel) masquait un device
+>     crashé en plein appel → jamais nettoyé, jamais même par le GC 2h (le
+>     pair restait heartbeat-frais). Fix : scinder le check par statut d'appel
+>     — les appels **répondus** (active/reconnecting) vérifient désormais la
+>     présence dans `ROOMS.call(callId)` spécifiquement (mirroring
+>     `onDisconnectGraceExpired`'s propre logique) ; les appels **pré-réponse**
+>     (ringing/initiated) gardent l'ancien check global sur `ROOMS.user`
+>     (aucune room d'appel a checker avant reponse — c'est le scenario exact
+>     que le fix zombie-socket 2026-07-02 visait, non regresse).
+>   - **P1-GW-6** — `isPushAllowed` bloquait TOUTE push pendant les heures DND
+>     de l'utilisateur, y compris la sonnerie VoIP entrante, son annulation
+>     silencieuse (`call_cancel`) et le signal `call_answered_elsewhere` —
+>     aucun produit d'appel comparable (FaceTime, WhatsApp, Signal) ne
+>     bloque les appels via DND. Fix : nouveau flag `bypassDnd` sur
+>     `SendPushOptions`, applique aux 3 sites d'appel (jamais a
+>     `pushEnabled: false`, qui reste un opt-out explicite total).
+>   - **P2-GW-7** — `presence:app-state` restait le seul handler `call:*`-
+>     adjacent sans check `getUserId`/rate-limit (tous les autres en ont un
+>     depuis les sweeps 2026-07-03/07-05). Impact mineur (flag socket-local,
+>     pas d'ecriture DB) mais corrige par coherence : nouveau
+>     `SOCKET_RATE_LIMITS.PRESENCE_APP_STATE` (30/min).
+>   - Identifies mais **non corriges** (necessitent verification device/prod
+>     non disponible ici) : reap GC à un seul participant stale sur 2 en P2P
+>     (actuellement `getStaleHeartbeats`/`hasFreshLiveness` exigent que TOUS
+>     les participants soient stale), shape d'erreur d'ack `call:initiate`/
+>     `call:join` non conforme au type documente (`as unknown as` sur du texte
+>     brut au lieu de `{code, message}`), `postCallSummary` retry bloque l'ack
+>     de `call:end` de l'ender (~6s worst-case).
+> - **Verification complete** : `bun run test:coverage` gateway (510/510
+>   suites, 13865/13866 tests, 1 skip pre-existant) + suite Jest complete web
+>   (445/445 suites, 11020/11041 tests, 21 skips pre-existants) + `tsc --noEmit`
+>   gateway (0 erreur) + `tsc --noEmit` web (1201 erreurs, **identique avant/
+>   apres** — dette pre-existante non liee a cette session, verifiee par diff
+>   du compte d'erreurs sur `main` vs cette branche).
+>
+> **Statut au 2026-07-07** (session `claude/loving-thompson-l09qhh`, pas d'acces
+> Xcode/simulateur ni SSH prod dans cet environnement) :
+> - **Re-sweep complet des P0/P1** via 5 agents Explore paralleles (lifecycle/
+>   audio/CallKit iOS, WebRTC/codec/UI/gateway, gateway securite/authz) contre
+>   le code actuel de `main`. Resultat identique au 2026-07-04/05 : **tout est
+>   FIXED sauf P0-1, P1-11, et P1-13 (partiel)** — aucune regression, aucun
+>   nouveau P0/P1 trouve.
+> - **P1-16** : confirme deja FIXE sur `main` (commit `c97aa4ed`, poursuivi par
+>   un agent concurrent au-dela de mon propre correctif candidat identique —
+>   `CallEffectsOverlay` recoit aussi `callManager` du parent desormais, plus
+>   nettoyage de code mort `colorScheme`/`isDark`). Mon brouillon de fix
+>   local pour ce meme point a ete abandonne (deja present, evite un doublon).
+> - **P0-1 — ATTENTION pour les prochaines sessions** : j'ai commence a
+>   reimplementer le pattern template+sed (`turnserver.prod.conf` + substitution
+>   `TURN_SECRET` a l'entrypoint coturn de `docker-compose.prod.yml`), verifie
+>   syntaxiquement (`docker compose config --quiet`) et fonctionnellement (script
+>   shell isole, 4 cas testes). **Avant de pousser, j'ai trouve que ce pattern
+>   exact avait deja ete tente (commit `71b4b64a`) puis delibarement revert** —
+>   voir `docs/superpowers/specs/2026-05-11-docker-compose-prod-reconciliation-design.md`
+>   §8.2 : `config/turnserver.prod.conf` **n'existe pas sur le serveur prod reel**,
+>   et le chemin relatif y resout incorrectement une fois deploye. Reintroduire
+>   ce pattern sans d'abord deposer le fichier template + faire la rotation de
+>   secret **cote serveur (SSH)** casserait le demarrage de coturn (pire que
+>   l'etat actuel : secret errone silencieux → aujourd'hui calls degradent vers
+>   STUN-only ; apres ce "fix" mal coordonne → coturn ne demarre plus du tout).
+>   **J'ai annule mon brouillon avant de commiter.** P0-1 reste, comme documente
+>   le 2026-07-04/05, une tache necessitant un humain avec acces prod SSH pour
+>   coordonner : rotation du secret + depot de `config/turnserver.prod.conf` sur
+>   `/opt/meeshy/production/` + ce meme diff compose, en un seul changement
+>   atomique cote serveur ET repo.
+> - **Aucun changement de code pousse cette session** — rien de surete et non
+>   deja fait n'a ete trouve dans le perimetre accessible sans Xcode/SSH prod.
+>
 > **Statut au 2026-07-04** : verification systematique des 5 P0 + 18 P1
 > contre `main` (branche `claude/eager-hamilton-nykzoy`). **4/5 P0 et 28/31
 > P1 sont fixes** (deux mois de commits `fix(ios/calls)`/`feat(calls)`

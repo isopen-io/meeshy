@@ -46,6 +46,7 @@ import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.theme.MeeshyTheme
 
 /** Presence dot colours (semantic, kept static per the design system): green online, amber away. */
 private val OnlineIndicator = Color(0xFF34D399)
@@ -145,7 +146,7 @@ private fun FriendRow(friend: FriendRequestUser) {
                 Text(
                     text = "@$it",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -177,7 +178,7 @@ private fun ErrorState(onRetry: () -> Unit) {
             Text(
                 text = stringResource(R.string.contacts_list_error),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
             Spacer(Modifier.width(12.dp))
             Button(onClick = onRetry) { Text(stringResource(R.string.contacts_list_retry)) }
@@ -191,7 +192,7 @@ private fun EmptyMessage(message: String) {
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.padding(32.dp),
         )
     }

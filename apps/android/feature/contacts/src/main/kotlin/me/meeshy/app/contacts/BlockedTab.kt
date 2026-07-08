@@ -37,6 +37,7 @@ import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * The Blocked tab — the blocklist with confirm-to-unblock, driven by
@@ -61,7 +62,7 @@ fun BlockedTab(
                 Text(
                     text = stringResource(R.string.contacts_blocked_empty),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                     modifier = Modifier.padding(32.dp),
                 )
             }
@@ -133,7 +134,7 @@ private fun BlockedRow(
                 Text(
                     text = "@$it",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MeeshyTheme.tokens.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -153,7 +154,7 @@ private fun BlockedErrorState(onRetry: () -> Unit) {
             Text(
                 text = stringResource(R.string.contacts_blocked_error),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
             Spacer(Modifier.width(12.dp))
             Button(onClick = onRetry) { Text(stringResource(R.string.contacts_list_retry)) }

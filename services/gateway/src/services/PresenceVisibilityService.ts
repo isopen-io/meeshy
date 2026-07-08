@@ -14,9 +14,12 @@ const FULL: PresenceVisibility = { showOnline: true, showLastSeenTimestamp: true
 
 /**
  * Résout la visibilité de la présence (lastActiveAt/isOnline) d'une cible pour
- * un observateur donné. Orchestration I/O (blocage, amitié, affiliation,
- * co-participation, préférences) déléguée à la politique pure
- * resolvePresenceVisibility.
+ * un observateur donné. Orchestration I/O (blocage, amitié, co-participation,
+ * préférences) déléguée à la politique pure resolvePresenceVisibility.
+ *
+ * Seule une amitié acceptée (FriendRequest status=accepted) compte comme
+ * "connecté" — une relation d'affiliation/parrainage seule ne suffit plus à
+ * révéler isOnline/lastActiveAt à un non-ami.
  *
  * @see docs/superpowers/specs/2026-06-30-profile-last-seen-visibility-design.md
  */
@@ -59,8 +62,8 @@ export class PresenceVisibilityService {
   }
 
   /**
-   * Version batchée pour les listes (/users/presence, search). ~6 requêtes
-   * groupées pour N cibles au lieu de N×4.
+   * Version batchée pour les listes (/users/presence, search). Requêtes
+   * groupées pour N cibles au lieu de N appels individuels.
    */
   async resolveForTargets(
     viewer: PresenceViewer,
@@ -102,34 +105,19 @@ export class PresenceVisibilityService {
       if (uniqueIds.includes(bid)) blocked.add(bid);
     }
 
-    const [friends, affiliates] = await Promise.all([
-      this.prisma.friendRequest.findMany({
-        where: {
-          status: 'accepted',
-          OR: [
-            { senderId: viewerId, receiverId: { in: uniqueIds } },
-            { senderId: { in: uniqueIds }, receiverId: viewerId },
-          ],
-        },
-        select: { senderId: true, receiverId: true },
-      }),
-      this.prisma.affiliateRelation.findMany({
-        where: {
-          status: 'completed',
-          OR: [
-            { affiliateUserId: viewerId, referredUserId: { in: uniqueIds } },
-            { affiliateUserId: { in: uniqueIds }, referredUserId: viewerId },
-          ],
-        },
-        select: { affiliateUserId: true, referredUserId: true },
-      }),
-    ]);
+    const friends = await this.prisma.friendRequest.findMany({
+      where: {
+        status: 'accepted',
+        OR: [
+          { senderId: viewerId, receiverId: { in: uniqueIds } },
+          { senderId: { in: uniqueIds }, receiverId: viewerId },
+        ],
+      },
+      select: { senderId: true, receiverId: true },
+    });
     const connected = new Set<string>();
     for (const f of friends as Array<{ senderId: string; receiverId: string }>) {
       connected.add(f.senderId === viewerId ? f.receiverId : f.senderId);
-    }
-    for (const a of affiliates as Array<{ affiliateUserId: string; referredUserId: string }>) {
-      connected.add(a.affiliateUserId === viewerId ? a.referredUserId : a.affiliateUserId);
     }
 
     let sharesConvo = new Set<string>();
@@ -220,19 +208,7 @@ export class PresenceVisibilityService {
       },
       select: { id: true },
     });
-    if (friend) return true;
-
-    const affiliate = await this.prisma.affiliateRelation.findFirst({
-      where: {
-        status: 'completed',
-        OR: [
-          { affiliateUserId: a, referredUserId: b },
-          { affiliateUserId: b, referredUserId: a },
-        ],
-      },
-      select: { id: true },
-    });
-    return !!affiliate;
+    return !!friend;
   }
 
   private async sharesConversation(a: string, b: string): Promise<boolean> {

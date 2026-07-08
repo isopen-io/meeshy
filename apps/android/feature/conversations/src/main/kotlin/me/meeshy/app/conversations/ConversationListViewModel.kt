@@ -11,8 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -33,8 +35,12 @@ data class ConversationListUiState(
     val selectedFilter: ConversationFilter = ConversationFilter.ALL,
     val searchText: String = "",
     val isSearchActive: Boolean = false,
+    val drafts: Map<String, ConversationDraft> = emptyMap(),
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
+
+    /** The persisted draft for [conversationId], if the composer holds one — drives the row's "Draft: …" preview. */
+    fun draftFor(conversationId: String): ConversationDraft? = drafts[conversationId]
 
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
@@ -47,6 +53,7 @@ class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
+    private val draftStore: ConversationDraftStore,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -80,6 +87,12 @@ class ConversationListViewModel @Inject constructor(
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
                 _state.update { it.copy(currentUserId = user?.id).withVisible(rawConversations) }
+            }
+        }
+
+        viewModelScope.launch {
+            draftStore.observeAll().collect { drafts ->
+                _state.update { it.copy(drafts = drafts).withVisible(rawConversations) }
             }
         }
 
@@ -143,8 +156,31 @@ class ConversationListViewModel @Inject constructor(
         runPrefMutation { repository.markReadOptimistic(id) }
     }
 
+    /**
+     * Discards a conversation's unsent draft (context-menu action, offered only on
+     * a draft-bearing row). Optimistically drops the draft from state so the row
+     * loses its "Brouillon : …" preview and sinks out of the floated group
+     * immediately, then clears the durable store (the reactive `observeAll` stream
+     * re-emits the same cleared map). A no-op when the row holds nothing meaningful;
+     * a failed clear rolls the optimistic removal back.
+     */
+    fun discardDraft(id: String) {
+        val snapshot = _state.value.drafts
+        if (!DraftDiscard.isDiscardable(id, snapshot)) return
+        _state.update { it.copy(drafts = DraftDiscard.afterDiscard(id, it.drafts)).withVisible(rawConversations) }
+        viewModelScope.launch {
+            try {
+                draftStore.clear(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(drafts = snapshot, errorMessage = e.message).withVisible(rawConversations) }
+            }
+        }
+    }
+
     private fun prefsOf(id: String) =
-        rawConversations.firstOrNull { it.id == id }?.preferences
+        rawConversations.firstOrNull { it.id == id }?.resolvedPreferences
 
     /**
      * Runs an optimistic preference mutation and schedules an outbox flush only
@@ -201,7 +237,12 @@ private fun CacheResult<List<ApiConversation>>.rawListOr(
  * cache list, applying the active filter, search query and current user identity.
  */
 private fun ConversationListUiState.withVisible(raw: List<ApiConversation>): ConversationListUiState =
-    copy(conversations = ConversationFilters.apply(raw, selectedFilter, searchText, currentUserId))
+    copy(
+        conversations = DraftAwareOrdering.apply(
+            ConversationFilters.apply(raw, selectedFilter, searchText, currentUserId),
+            drafts,
+        ),
+    )
 
 /**
  * Maps a [CacheResult]'s SWR flags onto the screen state — skeleton only on a

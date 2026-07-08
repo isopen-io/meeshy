@@ -142,6 +142,12 @@ export class MessagingService {
           corr
         );
         if (earlyHit) {
+          // Flag the in-process dedup marker so the caller (MessageHandler)
+          // suppresses the `message:new` re-broadcast / agent-notify / stats
+          // side effects. Without it, a sequential retry on the same
+          // clientMessageId re-broadcasts the bubble to every recipient. This
+          // mirrors the P2002 concurrent-retry path in MessageProcessor.saveMessage.
+          (earlyHit as { isDuplicate?: boolean }).isDuplicate = true;
           const translations = (earlyHit as { translations?: unknown }).translations;
           if (this.isTranslationsEmpty(translations)) {
             void this.queueTranslation(earlyHit, earlyHit.originalLanguage ?? 'fr').catch((err) =>

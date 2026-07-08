@@ -26,7 +26,7 @@ interface DraggableParticipantOverlayProps {
 }
 
 export function DraggableParticipantOverlay({
-  _participantId,
+  participantId: _participantId,
   stream,
   participantName,
   isAudioEnabled = true,

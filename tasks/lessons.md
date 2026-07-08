@@ -1,5 +1,26 @@
 # Lessons
 
+## Leçon 74 — Un audit gateway/web-only "SERVER_EVENTS.X, jamais émis" ne prouve pas que X est mort si iOS n'a pas été grep (2026-07-08)
+En auditant `SERVER_EVENTS.CALL_FORCE_LEAVE` (`packages/shared/types/socketio-events.ts`), un agent
+d'exploration scopé gateway+web a rapporté "aucun émetteur, aucun consommateur, commentaire source dit
+'no emitter yet'" — j'ai supprimé la déclaration TS. Un grep `apps/ios` fait APRÈS coup (pas fait par
+l'agent, ni par moi avant d'agir) a révélé `MessageSocketManager.swift:3052`
+(`socket.on("call:force-leave")`, publie via un `PassthroughSubject` Combine) + `CallManager.swift:3689`
+(abonnement réel) + une suite de tests dédiée (`CallManagerTests.swift:3230-3276`, vérifie le teardown et
+le report CallKit) — un récepteur RÉEL et TESTÉ, pas mort du tout côté client, juste jamais déclenché
+parce que le serveur ne l'émet jamais. Restauré avant tout commit. **Règle : dans un repo cross-platform
+(iOS + web + gateway) où un seul côté définit le contrat serveur→client (`packages/shared`), un audit
+"jamais émis" scopé à gateway/web ne peut PAS conclure "mort" — il ne voit que la moitié émettrice. Avant
+de supprimer/modifier une déclaration `SERVER_EVENTS.X`/`CLIENT_EVENTS.X` sur la base d'un grep
+gateway+web, grep AUSSI `apps/ios` et `packages/MeeshySDK` pour un `socket.on("...")`/`socket.emit("...")`
+correspondant** — la vraie conclusion peut être "receiver mort des deux côtés" (à supprimer) OU "gap
+d'implémentation serveur avec un client déjà prêt" (à décider : implémenter l'émission, ou supprimer le
+récepteur en connaissance de cause), et ces deux verdicts appellent des actions opposées. Corollaire :
+quand une suite de tests existe UNIQUEMENT pour un chemin qui semble mort ("pourquoi teste-t-on un
+comportement jamais déclenché ?"), c'est un signal fort d'un gap d'implémentation ailleurs plutôt que de
+code réellement mort — un vrai mort n'aurait généralement pas justifié l'investissement de 6 tests dédiés
+dans une suite existante.
+
 ## Leçon 58 — L'offline delivery queue ne savait rejouer que `message:new` (2026-07-03/04)
 Suite directe de la Leçon 57 : une fois `MessageHandler`/`MeeshySocketIOManager` capables
 d'enqueue les nouveaux messages pour les destinataires hors-ligne, l'audit suivant a montré que
@@ -953,3 +974,179 @@ lancé **directement** dans `packages/shared` a réussi en **643 ms**. Le blocag
 turbo, pas de Prisma. **Règle** : si le `generate` via turbo/bun postinstall traîne anormalement, le tuer et
 lancer `npx prisma generate` + `bun run build` directement dans `packages/shared` (les 2 prérequis de parité
 CI documentés dans CLAUDE.md) — beaucoup plus rapide et observable.
+
+## Leçon 71 — `getConversationReadStatuses` (batch) ne consultait que les curseurs, ses jumelles mono-message consultent l'UNION curseurs + reçus figés — sous-comptage après `cleanupObsoleteCursors` (2026-07-07, routine messaging)
+
+**Contexte** : trois méthodes de `MessageReadStatusService` calculent le statut livré/lu par message
+pour la même conversation. `getMessageReadStatus` et `getMessageStatusDetails` énumèrent l'UNION des
+participants ayant un curseur ET de ceux ayant un `MessageStatusEntry` figé (write-once) pour CE message —
+précisément pour survivre à `cleanupObsoleteCursors`, qui supprime un `ConversationReadCursor` dont le
+`lastReadMessageId` pointe vers un message effacé mais **ne touche jamais** le reçu figé. La jumelle batch
+`getConversationReadStatuses` (route `GET /conversations/:id/read-statuses`) ne bouclait QUE sur les curseurs
+actifs → après nettoyage d'un curseur, un reçu de livraison/lecture figé toujours valide disparaissait du
+comptage. Résultat client-observable : l'endpoint batch renvoyait `receivedCount`/`readCount` **strictement
+inférieurs** à l'endpoint mono-message pour EXACTEMENT les mêmes données.
+
+**Fix** : mirroring de la logique d'union. `getConversationReadStatuses` fetch désormais
+`messageStatusEntry.findMany({ messageId: { in }, conversationId })`, indexe `messageId → participantId →
+entry`, et boucle sur l'union `{curseurs actifs} ∪ {reçus figés de participants actifs}` (sender exclu, figé
+d'un participant inactif ignoré — parité exacte avec le `if (!participant) continue` de `getMessageReadStatus`).
+Par participant : `receivedAt = frozen.receivedAt ?? frozen.deliveredAt ?? cursorDelivered`,
+`readAt = frozen.readAt ?? cursorRead` — copie littérale des lignes 944-955 de la jumelle mono-message.
+158/158 sur la suite du service + 188/188 avec la suite de route, tsc gateway 0 erreur. RED prouvé par
+`git stash` du seul source : le test "union parity" tombe à `receivedCount:1` au lieu de 2.
+
+**Règle réutilisable** : quand une famille de méthodes calcule la MÊME grandeur (ici statut par message),
+toute variante batch/agrégée doit être vérifiée contre la source de vérité mono-message — un durcissement
+(ici l'union curseur+figé introduite pour `cleanupObsoleteCursors`) appliqué aux jumelles mono-message mais
+oublié sur la variante batch est la signature exacte du sibling-drift que ce backlog trouve à répétition.
+
+## Leçon 72 — un bug de type (`tsc` TS2353 sur un champ inexistant) n'implique pas automatiquement l'impact runtime dramatique qu'il semble suggérer — tracer la fenêtre temporelle avant d'écrire le scénario (2026-07-07, routine calling-feature, Vague 25)
+
+Un agent d'audit web a rapporté `apps/web/hooks/use-adaptive-degradation.ts` : les branches catch de
+`suspend()`/`resume()` écrivaient `poorStreak: 0`/`goodStreak: 0` — deux champs qui n'existent PAS sur
+`DegradationState` (seuls `poorSince`/`goodSince` existent). Le rapport affirmait un scénario dramatique :
+un rejet de `resume()` (ex. `getUserMedia()` refusé) laisserait `goodSince` à sa valeur périmée, provoquant
+un re-déclenchement immédiat de `resume-video` au tick suivant — martèlement de `getUserMedia()` toutes les
+~2s. `tsc --noEmit` confirmait bien 2 erreurs TS2353 réelles (isolées par `git stash` du seul fichier
+source : présentes avant, absentes après le fix, aucune erreur nouvelle ailleurs sur le reste du projet).
+Mais un test noir reproduisant exactement le scénario proposé **passait identiquement sur le code bogué et
+corrigé** — aucune différence de comportement observable. Cause : chaque transition optimiste
+(`suspend-video`/`resume-video`) dans `reduceDegradation` met déjà `poorSince`/`goodSince` à `null` de façon
+SYNCHRONE avant même l'appel async, et le flag `state.sending` (déjà basculé à sa valeur optimiste au moment
+où l'action async démarre) fait que tout tick reçu PENDANT la fenêtre d'attente retombe systématiquement
+dans la branche du FSM qui NE touche PAS le champ que le catch tente de réinitialiser (sending=true pendant
+l'attente de `resume()` → seule la branche qui manipule `poorSince` est atteignable, jamais celle qui
+manipule `goodSince`, et inversement pour `suspend()`). Le champ mal nommé est donc, dans la structure
+ACTUELLE du FSM, un no-op runtime pur — un vrai bug de type/dette de code (fragile si `reduceDegradation`
+change un jour sa logique de reset optimiste) mais PAS le bug comportemental décrit.
+
+**Règle réutilisable** : une preuve `tsc`/lecture statique ("un champ n'est jamais réinitialisé") ne suffit
+pas à valider un scénario de reproduction runtime — tracer explicitement TOUTE la fenêtre temporelle entre
+la transition optimiste et le moment où le catch s'exécute (quels ticks/événements peuvent survenir entre
+les deux, et dans quelle branche du FSM ils tombent étant donné l'état DÉJÀ optimistement modifié) avant
+d'écrire un scénario de reproduction dans un rapport d'audit. Mieux : falsifier empiriquement avec un test
+qui s'exécute sur le code bogué ET corrigé (`git stash` du seul fichier source, comme pour n'importe quelle
+preuve RED/GREEN) — si le test passe des deux côtés, le scénario n'est pas confirmé, même si le bug de type
+sous-jacent est réel et vaut d'être corrigé. Les deux affirmations (bug de type statique / impact runtime
+dynamique) sont indépendantes et doivent être vérifiées et rapportées séparément — ne jamais assumer que la
+seconde découle automatiquement de la première. Le fix reste justifié (dette de type réelle, corrige un
+TS2353, prépare le terrain si le FSM change), mais le rapport final doit refléter la gravité réelle, pas
+la gravité initialement supposée par l'agent d'audit.
+
+## Leçon 73 — le durcissement union curseur+reçu figé (Leçon 71) avait UNE quatrième jumelle non traitée : le calcul INLINE des compteurs dans la route liste `GET /messages` — la plus chaude de toutes (2026-07-07, routine messaging)
+
+**Contexte** : Leçon 71 a corrigé le sous-comptage de `getConversationReadStatuses` (batch) en l'alignant
+sur l'union `{curseurs actifs} ∪ {reçus figés actifs}` déjà présente dans `getMessageReadStatus` /
+`getMessageStatusDetails`. Mais le calcul des `deliveredCount`/`readCount` par message existe AUSSI en
+quatrième exemplaire : inliné dans le handler `GET /conversations/:id/messages`
+(`routes/conversations/messages.ts:988-1022`), pas dans le service. Ce quatrième site ne bouclait QUE sur
+`conversationReadCursor.findMany` — jamais `messageStatusEntry`. Après `cleanupObsoleteCursors` (supprime un
+curseur dont le `lastReadMessageId` pointe vers un message effacé, sans toucher le reçu figé write-once), la
+liste rendait `deliveredCount:0`/`readCount:0` (aucun tick ✓✓) alors que `GET /messages/:id/read-status` et
+`GET /conversations/:id/read-statuses` renvoyaient `1` pour EXACTEMENT le même message — incohérence sur le
+chemin le plus fréquenté (chaque ouverture de conversation).
+
+**Fix** : mirroring littéral de la boucle union de `getConversationReadStatuses` dans la route — troisième
+`Promise.all` fetch `messageStatusEntry.findMany({ conversationId, messageId: { in: messageIds } })`, index
+`messageId → participantId → entry`, union `evaluatedParticipantIds` (sender exclu, figé d'un participant
+inactif ignoré), puis `deliveredAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered`,
+`readAt = frozen?.readAt ?? cursorRead`. 172/172 route + 210/210 suites read-status siblings. RED prouvé par
+`git stash` du seul source : le test "union parity" tombe à `deliveredCount:0` au lieu de 1.
+
+**Règle réutilisable** : quand une leçon corrige une « jumelle oubliée » d'une famille de méthodes, GREPPER
+tous les sites qui recalculent la même grandeur — pas seulement les méthodes du service. Un calcul INLINE
+dans une route (ici un handler de 30 lignes qui n'appelle même pas le service partagé) est un site jumeau
+invisible pour une recherche par nom de méthode ; ici la même grandeur (statut livré/lu par message) était
+implémentée QUATRE fois — trois dans `MessageReadStatusService`, une inlinée dans la route. Le durcissement
+appliqué aux trois du service mais oublié sur l'inline-route est la signature exacte du sibling-drift, et le
+site inline est souvent le PLUS chaud (rendu direct de la liste). Idéalement : déléguer la route au service
+plutôt que dupliquer la logique — mais à défaut, tout durcissement d'une grandeur doit balayer les copies
+inline autant que les méthodes nommées.
+## Leçon 73 — deux garde-fous « corrects isolément » sur le même champ partagé peuvent s'annuler mutuellement : `endCurrentAndAnswerPending()` ne répondait JAMAIS à l'appel en attente (2026-07-07, routine calling-feature, Vague 26)
+
+`CallManager.endCurrentAndAnswerPending()` (iOS, "End & Answer" sur la bannière de mise en attente) appelle
+`endCall()` puis, après 0.5s, revalide `pendingIncomingCall?.callId == pending.callId` avant de router vers
+`handleIncomingCallNotification`. Ce garde a été ajouté (audit 2026-07-02, "bug 3 follow-up") spécifiquement
+pour éviter de répondre à un appel déjà raccroché/répondu ailleurs pendant le sleep — correct en isolation,
+et testé par une assertion string-search qui vérifie juste la PRÉSENCE de la condition dans le corps de la
+fonction. Mais `endCall()` (appelé 3 lignes plus haut, dans la MÊME fonction) déclenche synchronement
+`endCallInternal()`, qui neutralise inconditionnellement `pendingIncomingCall = nil` — pour une raison sans
+rapport (audit P2-iOS-1 : effacer une bannière "busy" pointant vers une room fantôme quand l'appel ACTIF se
+termine pour SES propres raisons). Résultat : le garde de revalidation comparait toujours `nil ==
+pending.callId`, donc toujours faux — "End & Answer" ne répondait JAMAIS à l'appelant en attente, à chaque
+invocation, silencieusement (pas de crash, pas de log d'erreur, l'appelant en attente restait à sonner
+jusqu'au timeout gateway ~60s). Aucun test ne l'a détecté car toute la suite `CallManagerTests.swift` est
+faite d'assertions par recherche de sous-chaîne dans le source (le manager est un singleton trop lourd à
+instancier avec de vraies dépendances) — chaque garde individuel testait sa PROPRE présence, jamais
+l'interaction entre `endCall()` et le guard qui s'exécute après. Fix : un token dédié
+(`answeringPendingCallId`), armé AVANT `endCall()`, qui survit à son effet de bord et sert seul de source de
+vérité pour la revalidation — `pendingIncomingCall` reste réservé à son rôle originel (état de la bannière).
+
+**Règle réutilisable** : quand deux correctifs distincts (souvent d'audits différents, à des dates
+différentes) touchent le MÊME champ mutable partagé pour des raisons différentes dans le même fichier —
+l'un l'annule pour raison A, l'autre le relit pour raison B quelques lignes plus loin — leur composition
+n'est PAS garantie même si chacun est correct isolément et même si chacun a son propre test. Tracer l'ordre
+d'exécution RÉEL (pas juste la présence syntaxique) de toute fonction qui (a) appelle une autre fonction
+connue pour muter un champ partagé, PUIS (b) relit ce même champ quelques lignes/un `Task.sleep` plus tard
+pour une décision différente. Quand une suite de tests ne peut instancier le système réel (singleton lourd,
+dépendances réseau) et se rabat sur des assertions string-search par fonction, chaque garde testé
+individuellement donne un FAUX sentiment de couverture — la seule protection réelle contre ce genre de
+collision inter-correctifs est un champ de revalidation DÉDIÉ (jamais réutiliser un champ que d'autres
+chemins de code ont le droit de muter pour leur propre compte) plutôt qu'un test qui vérifierait
+l'interaction (impossible à écrire dans ce style de test sans instancier le vrai objet).
+
+## Leçon 74 — le chemin `add` d'une paire add/remove n'exposait pas le no-op que `remove` signale déjà : `reaction:add` re-broadcastait + re-notifiait sur une ré-réaction identique (2026-07-08, routine messaging, iter 134)
+
+`ReactionService.removeReaction()` retourne un `boolean` (`false` = rien supprimé) et TOUS ses consommateurs
+(handler socket, route REST, DELETE conversation) respectent ce faux pour court-circuiter avant le broadcast
+`REACTION_REMOVED` — garde idempotente explicite, testée. Mais `addReaction()` retournait
+`{ reaction, replacedEmojis }` où le no-op (le participant a DÉJÀ exactement cet emoji, ligne 102) renvoyait
+`replacedEmojis: []` — **strictement indiscernable** d'une première réaction authentique (elle aussi
+`replacedEmojis: []`). Les 4 consommateurs (`ReactionHandler.handleReactionAdd`, `handleAgentReaction` dans
+`MeeshySocketIOManager`, `routes/reactions.ts`, `routes/conversations/messages-advanced.ts`) broadcastaient
+donc `REACTION_ADDED` à toute la room ET (3 d'entre eux) firaient `notifyReactionAdded` à chaque ré-envoi
+d'un emoji déjà posé — un cas de routine (double-fire optimiste, retry socket après ACK perdu, second device
+qui écho le même tap). Effet net : fan-out redondant à tous les participants + (une fois la fenêtre anti-spam
+écoulée) seconde notif « X a réagi 👍 » pour une seule réaction logique qui n'a jamais changé d'état.
+
+**Fix** : rendre le service seule source de vérité du « rien n'a changé » — ajouter `unchanged: boolean` à
+`AddReactionResult` (`true` sur le retour no-op, `false` sur l'upsert réel), et une garde dans les 4
+consommateurs qui répond succès mais saute broadcast + notif quand `unchanged` (miroir exact de la garde
+`removed === false`). REST : 200 (pas 201, rien n'a été créé) sur le no-op.
+
+**Règle réutilisable** : quand une opération et son inverse (add/remove, subscribe/unsubscribe,
+acquire/release) forment une paire et que l'un des deux expose déjà un signal « no-op / rien fait » respecté
+par ses appelants, VÉRIFIER que l'autre l'expose aussi — l'asymétrie (un côté durci contre l'idempotence,
+l'autre non) est une signature de sibling-drift (cf. Leçon 72). Le piège spécifique ici : le no-op renvoyait
+la MÊME forme de données qu'un succès réel (`replacedEmojis: []` des deux côtés), donc aucun appelant ne
+POUVAIT distinguer les deux même en le voulant — un no-op silencieux doit toujours être rendu observable par
+le type de retour, jamais laissé se confondre avec le cas nominal. Corollaire test : une garde d'idempotence
+n'est prouvée que par un test qui compte les effets de bord (broadcast/notif appelés exactement 0 fois sur le
+no-op) — vérifié RED ici en retirant la garde (io.to appelé 1× au lieu de 0×).
+
+## Leçon 75 — `drain()` concaténait la queue mémoire AVANT Redis : un `edited` retombé en mémoire rejouait avant son `new` resté dans Redis (2026-07-08, routine messaging, iter 136)
+
+`RedisDeliveryQueue.drain()` retournait `[...memoryEntries, ...redisEntries]` en s'appuyant sur un commentaire
+affirmant que les entrées mémoire « prédatent toujours » ce que Redis contient (elles n'y arrivent que par
+fallback pendant une panne Redis). Vrai UNIQUEMENT si Redis était down dès le départ. Faux sur un blip Redis
+EN MILIEU de séquence : (1) Redis sain → `enqueue('new', M)` va dans Redis ; (2) blip transitoire →
+`enqueue('edited', M)` throw dans `redis.eval`, catché, retombe en MÉMOIRE ; (3) Redis récupère → `drain()`
+renvoie `[edited (mémoire), new (redis)]`. `_drainPendingMessages` (MeeshySocketIOManager) rejoue les events
+au client dans CET ordre → le client reçoit `MESSAGE_EDITED` AVANT `MESSAGE_NEW` → l'edit cible un message
+qu'il n'a pas encore → edit perdu, contenu pré-edit figé. Violation directe de l'invariant FIFO documenté sur
+`ENQUEUE_DEDUP_LUA` (« edit/delete après un `new` offline ne doivent pas être perdus, rejeu FIFO »).
+
+**Fix** : chaque entrée porte déjà un `enqueuedAt` monotone (ISO, stampé à l'enqueue par les 3 appelants). Trier
+la fusion par `enqueuedAt` croissant au lieu de concaténer mémoire-d'abord. `Array.prototype.sort` étant stable,
+les égalités de timestamp gardent l'ordre mémoire-avant-Redis — le test de réconciliation panne-totale (mémoire
+enqueuée plus tôt en wall-clock) reste vert, et l'ordre up→down→up est corrigé. Bonus : `_emitDeliveryForDrainedMessages`
+qui dérive le « dernier message » de l'ordre d'itération devient correct lui aussi.
+
+**Règle réutilisable** : un commentaire qui justifie un ordre par « X précède toujours Y » cache souvent une
+hypothèse temporelle non testée (« la panne a commencé au début »). Dès qu'un buffer de repli (mémoire, retry,
+dead-letter) peut recevoir des entrées PENDANT une séquence déjà partiellement écrite dans le canal principal,
+son contenu peut être plus RÉCENT que le canal — ne jamais présumer l'ordre par la source, toujours trier par la
+clé temporelle monotone que les entrées portent déjà. Test : reproduire le blip milieu-de-séquence (channel sain
+→ channel qui throw → channel récupéré) avec des `enqueuedAt` explicitement ordonnés, et asserter l'ordre de rejeu
+(RED = ['edited','new'], GREEN = ['new','edited']).

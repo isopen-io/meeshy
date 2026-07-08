@@ -1330,6 +1330,16 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
           (callId, conversationId, duration) =>
             callEventsHandler.sendMissedCallCancellationPushForTerminatedCall(callId, conversationId, duration)
         );
+        // Sibling-drift fix (2026-07-07) — GC tier 1 (initiated/ringing > 120s
+        // → missed) now also creates the persisted missed-call notification
+        // for unresponded participants, matching the in-process ringing-
+        // timeout path (`handleMissedCall`). Calls `createMissedCallNotifications`
+        // directly, NOT `handleMissedCall` — GC's own transaction already
+        // performed the terminal `missed` write, so re-running
+        // `markCallAsMissed` here would be redundant.
+        this.callCleanupService.setMissedCallNotificationCallback(
+          (callId) => callEventsHandler.createMissedCallNotifications(callId)
+        );
         // CALL-RESILIENCE (item H) — re-arm the in-process ringing timers a
         // crash/restart wiped, so pre-answer calls interrupted by the restart
         // resolve to `missed` (with their push notification) on the nominal

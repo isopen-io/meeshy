@@ -64,6 +64,7 @@ public fun MessageBubble(
     onLongPress: (() -> Unit)? = null,
     onReactionClick: ((String) -> Unit)? = null,
     onImageClick: ((Int) -> Unit)? = null,
+    onReplyPreviewClick: (() -> Unit)? = null,
     mentionDisplayNames: Map<String, String>? = null,
     highlightTerm: String? = null,
     trackedLinks: Map<String, String>? = null,
@@ -111,6 +112,7 @@ public fun MessageBubble(
                     senderName = content.replyToSenderName,
                     previewText = content.replyToText ?: stringResource(R.string.bubble_message_deleted),
                     accentColor = onColor,
+                    onClick = onReplyPreviewClick?.takeIf { content.replyToId != null },
                     modifier = Modifier.padding(bottom = MeeshySpacing.xs),
                 )
             }
@@ -359,10 +361,12 @@ private fun ReplyPreview(
     previewText: String,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .let { base -> if (onClick == null) base else base.clickable(onClick = onClick) }
             .background(accentColor.copy(alpha = 0.12f))
             .padding(vertical = MeeshySpacing.xs),
     ) {

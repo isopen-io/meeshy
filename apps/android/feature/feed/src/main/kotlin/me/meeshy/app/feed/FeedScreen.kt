@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Card
@@ -37,6 +38,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +63,10 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.format.shortDateTimeLabel
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -78,16 +84,22 @@ fun FeedScreen(
         state.errorMessage?.let { snackbar.showSnackbar(it) }
     }
 
+    MeeshyBackground {
     Scaffold(
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MeeshyTheme.tokens.textPrimary,
+                ),
                 title = {
                     Text(stringResource(R.string.feed_title), fontWeight = FontWeight.Bold)
                 },
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        containerColor = Color.Transparent,
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.isSyncing,
@@ -116,7 +128,9 @@ fun FeedScreen(
                         PostCard(
                             post = post,
                             onLike = { viewModel.toggleLike(post.id) },
-                            onClick = { onPostClick(post.id) },
+                            // Only reels open the full-screen reel overlay; regular
+                            // posts have no detail screen yet, so tapping is inert.
+                            onClick = { if (post.isReel) onPostClick(post.id) },
                         )
                     }
                     if (state.isLoadingMore) {
@@ -139,6 +153,7 @@ fun FeedScreen(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -148,23 +163,29 @@ private fun PostCard(
     onClick: () -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
-    Card(
-        onClick = onClick,
+    MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        colors = CardDefaults.cardColors(containerColor = MeeshyTheme.tokens.backgroundSecondary),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(
-                    model = post.authorAvatarUrl,
-                    contentDescription = post.authorName ?: unknownAuthor,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f)),
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    MeeshyAvatar(
+                        name = post.authorName ?: unknownAuthor,
+                        size = 40.dp,
+                    )
+                    if (!post.authorAvatarUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = post.authorAvatarUrl,
+                            contentDescription = post.authorName ?: unknownAuthor,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape),
+                        )
+                    }
+                }
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -183,7 +204,7 @@ private fun PostCard(
                     }
                     post.createdAtIso?.let {
                         Text(
-                            text = it,
+                            text = shortDateTimeLabel(it),
                             style = MaterialTheme.typography.bodySmall,
                             color = MeeshyTheme.tokens.textSecondary,
                         )
@@ -223,6 +244,33 @@ private fun PostCard(
             if (post.images.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.md))
                 PostImageGrid(images = post.images)
+            }
+
+            if (post.isReel) {
+                Spacer(Modifier.height(MeeshySpacing.md))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(MeeshyRadius.lg))
+                        .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayCircle,
+                            contentDescription = null,
+                            tint = MeeshyPalette.Indigo500,
+                            modifier = Modifier.size(48.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.feed_reel),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MeeshyTheme.tokens.textSecondary,
+                            modifier = Modifier.padding(top = MeeshySpacing.xs),
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(MeeshySpacing.sm))

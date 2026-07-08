@@ -14,6 +14,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
+import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.chat.DataStoreConversationDraftStore
+import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
+import me.meeshy.sdk.chat.SharedPrefsLocallyHiddenMessagesStore
 import me.meeshy.sdk.language.DataStoreInterfaceLanguageStore
 import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.net.MeeshyApi
@@ -47,6 +51,12 @@ object SdkModule {
 
     @Provides
     @Singleton
+    fun providesLocallyHiddenMessagesStore(
+        @ApplicationContext context: Context,
+    ): LocallyHiddenMessagesStore = SharedPrefsLocallyHiddenMessagesStore(context)
+
+    @Provides
+    @Singleton
     fun providesThemeStore(@ApplicationContext context: Context): ThemeStore {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
@@ -73,6 +83,19 @@ object SdkModule {
             context.preferencesDataStoreFile("meeshy_notifications")
         }
         return DataStoreNotificationPreferencesStore(dataStore, scope)
+    }
+
+    @Provides
+    @Singleton
+    fun providesConversationDraftStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): ConversationDraftStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_conversation_drafts")
+        }
+        return DataStoreConversationDraftStore(dataStore, json)
     }
 
     @Provides

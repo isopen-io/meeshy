@@ -16,7 +16,8 @@
     <string name="chat_action_show_original">Ver original</string>
     <string name="chat_action_show_translation">Ver tradução</string>
     <string name="chat_action_edit">Editar</string>
-    <string name="chat_action_delete">Excluir</string>
+    <string name="chat_action_delete_for_everyone">Excluir para todos</string>
+    <string name="chat_action_delete_for_me">Excluir para mim</string>
     <string name="chat_editing_label">Editando mensagem</string>
     <string name="chat_cancel_edit">Cancelar edição</string>
     <string name="chat_react_with">Reagir com %1$s</string>
@@ -27,7 +28,11 @@
     <string name="chat_typing_one">%1$s está digitando…</string>
     <string name="chat_typing_two">%1$s e %2$s estão digitando…</string>
     <string name="chat_typing_many">%1$d pessoas estão digitando…</string>
+    <string name="chat_header_members">%1$d membros</string>
     <string name="chat_scroll_to_bottom">Ir para a última mensagem</string>
+    <string name="chat_unread_photo">Foto</string>
+    <string name="chat_unread_attachment">Anexo</string>
+    <string name="chat_unread_new_message">Nova mensagem</string>
     <string name="chat_search">Pesquisar mensagens</string>
     <string name="chat_search_hint">Pesquisar nesta conversa</string>
     <string name="chat_search_close">Fechar a pesquisa</string>

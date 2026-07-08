@@ -8,6 +8,9 @@
     <string name="tab_calls">Calls</string>
     <string name="tab_activity">Activity</string>
     <string name="tab_profile">Profile</string>
+    <string name="menu_new_conversation">New</string>
+    <string name="menu_reels">Reels</string>
+    <string name="menu_contacts">Contacts</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Welcome back</string>
@@ -24,7 +27,7 @@
     <string name="chat_retry">Retry</string>
 
     <!-- Conversation list screen -->
-    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_title">Meeshy Chats</string>
     <string name="conversations_logout">Log out</string>
     <string name="conversations_empty">No conversations yet</string>
     <string name="conversations_retry">Retry</string>

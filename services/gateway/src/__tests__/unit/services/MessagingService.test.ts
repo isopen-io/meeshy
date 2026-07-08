@@ -270,6 +270,27 @@ describe('MessagingService', () => {
       expect(response.metadata.performance).toBeDefined();
     });
 
+    it('flags an early-dedup hit as isDuplicate and skips re-save', async () => {
+      // Sequential retry: a message with this clientMessageId already exists.
+      // The early-dedup branch must set the in-process `isDuplicate` marker so
+      // the socket layer suppresses the `message:new` re-broadcast — otherwise
+      // every recipient gets the bubble twice. Regression guard.
+      const existing = {
+        ...createMockMessage(),
+        translations: [{ language: 'fr', content: 'bonjour' }]
+      };
+      mockPrisma.message.findFirst.mockResolvedValueOnce(existing);
+
+      const response = await service.handleMessage(
+        { ...validRequest, clientMessageId: 'cmid-retry-123' },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect((response.data as { isDuplicate?: boolean }).isDuplicate).toBe(true);
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+
     it('should return error for invalid request (empty content)', async () => {
       const invalidRequest: MessageRequest = {
         conversationId: testConversationId,

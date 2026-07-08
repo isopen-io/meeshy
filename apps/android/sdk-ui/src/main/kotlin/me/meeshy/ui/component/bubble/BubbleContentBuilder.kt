@@ -3,6 +3,8 @@ package me.meeshy.ui.component.bubble
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.DeliveryStatusResolver
+import me.meeshy.sdk.model.DeliveryTier
 
 public object BubbleContentBuilder {
 
@@ -16,6 +18,7 @@ public object BubbleContentBuilder {
         ownReactions: Set<String> = emptySet(),
         showOriginal: Boolean = false,
         mediaBaseUrl: String? = null,
+        recipientCount: Int = 0,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -25,10 +28,18 @@ public object BubbleContentBuilder {
             !isOutgoing -> DeliveryStatus.Sent
             isFailed -> DeliveryStatus.Failed
             isPending -> DeliveryStatus.Pending
-            message.readByAllAt != null -> DeliveryStatus.Read
-            message.readCount > 0 -> DeliveryStatus.Read
-            message.deliveredCount > 0 -> DeliveryStatus.Delivered
-            else -> DeliveryStatus.Sent
+            else -> when (
+                DeliveryStatusResolver.resolve(
+                    deliveredCount = message.deliveredCount,
+                    readCount = message.readCount,
+                    recipientCount = recipientCount,
+                    readByAllAt = message.readByAllAt,
+                )
+            ) {
+                DeliveryTier.Read -> DeliveryStatus.Read
+                DeliveryTier.Delivered -> DeliveryStatus.Delivered
+                DeliveryTier.Sent -> DeliveryStatus.Sent
+            }
         }
         val reactions = message.reactionSummary
             ?.map { (emoji, count) ->
@@ -78,6 +89,7 @@ public object BubbleContentBuilder {
             createdAtIso = message.createdAt,
             deliveryStatus = deliveryStatus,
             reactions = reactions,
+            replyToId = message.replyTo?.id,
             replyToText = replyToText,
             replyToDeleted = replyToDeleted,
             replyToSenderName = message.replyTo?.senderDisplayName,

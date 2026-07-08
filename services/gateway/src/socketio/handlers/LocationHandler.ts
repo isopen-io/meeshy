@@ -74,13 +74,13 @@ export class LocationHandler {
         return;
       }
 
-      const participantId = await this._resolveParticipantId(context, data.conversationId);
+      const normalizedId = await this.normalizeConversationId(data.conversationId);
+
+      const participantId = await this._resolveParticipantId(context, normalizedId);
       if (!participantId) {
         this._sendError(callback, 'Not a participant in this conversation');
         return;
       }
-
-      const normalizedId = await this.normalizeConversationId(data.conversationId);
 
       const eventData: LocationSharedEventData = {
         messageId: this._generateTempId(),
@@ -131,13 +131,14 @@ export class LocationHandler {
         return;
       }
 
-      const participantId = await this._resolveParticipantId(context, data.conversationId);
+      const normalizedId = await this.normalizeConversationId(data.conversationId);
+
+      const participantId = await this._resolveParticipantId(context, normalizedId);
       if (!participantId) {
         this._sendError(callback, 'Not a participant in this conversation');
         return;
       }
 
-      const normalizedId = await this.normalizeConversationId(data.conversationId);
       const now = new Date();
       const expiresAt = new Date(now.getTime() + data.durationMinutes * 60_000);
 
@@ -173,10 +174,10 @@ export class LocationHandler {
 
       if (!this._validateCoordinates(data.latitude, data.longitude)) return;
 
-      const participantId = await this._resolveParticipantId(context, data.conversationId);
-      if (!participantId) return;
-
       const normalizedId = await this.normalizeConversationId(data.conversationId);
+
+      const participantId = await this._resolveParticipantId(context, normalizedId);
+      if (!participantId) return;
 
       const eventData: LocationLiveUpdatedEventData = {
         conversationId: normalizedId,
@@ -207,10 +208,10 @@ export class LocationHandler {
       const allowed = await this.rateLimiter.checkLimit(context.userId, SOCKET_RATE_LIMITS.LOCATION_LIVE_STOP);
       if (!allowed) return;
 
-      const participantId = await this._resolveParticipantId(context, data.conversationId);
-      if (!participantId) return;
-
       const normalizedId = await this.normalizeConversationId(data.conversationId);
+
+      const participantId = await this._resolveParticipantId(context, normalizedId);
+      if (!participantId) return;
 
       const eventData: LocationLiveStoppedEventData = {
         conversationId: normalizedId,
@@ -243,7 +244,14 @@ export class LocationHandler {
     context: { userId: string; isAnonymous: boolean; participantId?: string },
     conversationId: string
   ): Promise<string | undefined> {
-    if (context.isAnonymous) return context.participantId;
+    if (context.isAnonymous) {
+      if (!context.participantId) return undefined;
+      const participant = await this.prisma.participant.findFirst({
+        where: { id: context.participantId, conversationId, isActive: true },
+        select: { id: true },
+      });
+      return participant?.id;
+    }
 
     const participant = await this.prisma.participant.findFirst({
       where: { userId: context.userId, conversationId, isActive: true },

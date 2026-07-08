@@ -51,13 +51,20 @@ describe('resolveParticipant', () => {
     expect(result).toBeNull();
   });
 
-  it('returns anonymous participant when user is anonymous', async () => {
+  it('returns anonymous participant when active in the requested conversation', async () => {
     mockGetConnectedUser.mockReturnValueOnce(
       makeConnectedResult({ isAnonymous: true, participantId: 'part-123', displayName: 'Guest#42' }, 'anon-id')
     );
 
+    const prisma = makePrisma();
+    prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'part-123',
+      displayName: 'Guest#42',
+      nickname: null,
+    });
+
     const result = await resolveParticipant({
-      prisma: makePrisma(),
+      prisma,
       userIdOrToken: 'anon-token',
       conversationId: 'conv-1',
       connectedUsers: makeConnectedUsers(),
@@ -69,6 +76,33 @@ describe('resolveParticipant', () => {
       isAnonymous: true,
       displayName: 'Guest#42',
     });
+    expect(prisma.participant.findFirst).toHaveBeenCalledWith({
+      where: { id: 'part-123', conversationId: 'conv-1', isActive: true },
+      select: { id: true, displayName: true, nickname: true },
+    });
+  });
+
+  it('returns null when anonymous participant is not part of the requested conversation', async () => {
+    mockGetConnectedUser.mockReturnValueOnce(
+      makeConnectedResult({ isAnonymous: true, participantId: 'part-123', displayName: 'Guest#42' }, 'anon-id')
+    );
+
+    const prisma = makePrisma();
+    // Anon is bound to conv-1 but requests conv-OTHER → no active row matches.
+    prisma.participant.findFirst.mockResolvedValueOnce(null);
+
+    const result = await resolveParticipant({
+      prisma,
+      userIdOrToken: 'anon-token',
+      conversationId: 'conv-OTHER',
+      connectedUsers: makeConnectedUsers(),
+    });
+
+    expect(result).toBeNull();
+    expect(prisma.participant.findFirst).toHaveBeenCalledWith({
+      where: { id: 'part-123', conversationId: 'conv-OTHER', isActive: true },
+      select: { id: true, displayName: true, nickname: true },
+    });
   });
 
   it('uses user.id as participantId when participantId is missing for anonymous user', async () => {
@@ -76,8 +110,15 @@ describe('resolveParticipant', () => {
       makeConnectedResult({ id: 'anon-id', socketId: 'anon-id', isAnonymous: true, participantId: undefined, displayName: undefined }, 'anon-id')
     );
 
+    const prisma = makePrisma();
+    prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'anon-id',
+      displayName: null,
+      nickname: null,
+    });
+
     const result = await resolveParticipant({
-      prisma: makePrisma(),
+      prisma,
       userIdOrToken: 'anon-token',
       conversationId: 'conv-1',
       connectedUsers: makeConnectedUsers(),
@@ -89,6 +130,32 @@ describe('resolveParticipant', () => {
       isAnonymous: true,
       displayName: 'Anonymous User',
     });
+    expect(prisma.participant.findFirst).toHaveBeenCalledWith({
+      where: { id: 'anon-id', conversationId: 'conv-1', isActive: true },
+      select: { id: true, displayName: true, nickname: true },
+    });
+  });
+
+  it('prefers the DB participant nickname over the in-memory display name for anonymous users', async () => {
+    mockGetConnectedUser.mockReturnValueOnce(
+      makeConnectedResult({ isAnonymous: true, participantId: 'part-123', displayName: 'stale-name' }, 'anon-id')
+    );
+
+    const prisma = makePrisma();
+    prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'part-123',
+      displayName: 'Fresh Display',
+      nickname: 'FreshNick',
+    });
+
+    const result = await resolveParticipant({
+      prisma,
+      userIdOrToken: 'anon-token',
+      conversationId: 'conv-1',
+      connectedUsers: makeConnectedUsers(),
+    });
+
+    expect(result?.displayName).toBe('FreshNick');
   });
 
   it('returns null when registered user has no matching participant in conversation', async () => {

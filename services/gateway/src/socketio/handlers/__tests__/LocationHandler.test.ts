@@ -208,7 +208,7 @@ describe('LocationHandler', () => {
       expect(cb).toHaveBeenCalledWith({ success: false, error: 'Not a participant in this conversation' });
     });
 
-    it('uses participantId from connectedUser for anonymous users', async () => {
+    it('verifies anonymous participant belongs to the target conversation before broadcasting', async () => {
       mockGetConnectedUser.mockReturnValue({
         user: {
           id: USER_ID, isAnonymous: true, participantId: PARTICIPANT_ID,
@@ -216,15 +216,55 @@ describe('LocationHandler', () => {
         },
         realUserId: USER_ID,
       });
+      const prisma = makePrisma({ id: PARTICIPANT_ID });
       const cb = jest.fn();
-      const { handler, io } = makeHandler();
+      const { handler, io } = makeHandler({ prisma });
       const socket = makeSocket();
 
       await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, cb);
 
-      // Anonymous user: no DB query needed, uses participantId from session
-      expect((makePrisma() as any).participant.findFirst).not.toHaveBeenCalled();
+      // Anonymous membership is scoped to THIS conversation (id + conversationId + isActive)
+      expect(prisma.participant.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: PARTICIPANT_ID,
+            conversationId: NORMALIZED_CONV_ID,
+            isActive: true,
+          }),
+        })
+      );
       expect(io._toRoom.emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_SHARED, expect.anything());
+    });
+
+    it('rejects anonymous participant that does not belong to the target conversation', async () => {
+      // Security: an anonymous socket whose participant belongs to conversation A
+      // must NOT be able to broadcast into conversation B. findFirst returns null
+      // because the participant is not a member of the requested conversation.
+      mockGetConnectedUser.mockReturnValue({
+        user: {
+          id: USER_ID, isAnonymous: true, participantId: PARTICIPANT_ID,
+          language: 'fr', resolvedLanguages: [], displayName: 'Anon',
+        },
+        realUserId: USER_ID,
+      });
+      const prisma = makePrisma(null);
+      const cb = jest.fn();
+      const { handler, io } = makeHandler({ prisma });
+      const socket = makeSocket();
+
+      await handler.handleLocationShare(socket, { ...VALID_COORDINATES, conversationId: CONV_ID }, cb);
+
+      expect(prisma.participant.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: PARTICIPANT_ID,
+            conversationId: NORMALIZED_CONV_ID,
+            isActive: true,
+          }),
+        })
+      );
+      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Not a participant in this conversation' });
+      expect(io._toRoom.emit).not.toHaveBeenCalled();
     });
 
     it('passes error message from thrown Error to callback', async () => {

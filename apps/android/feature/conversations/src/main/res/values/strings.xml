@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_title">Meeshy Chats</string>
+    <string name="conversations_section_pinned">Pinned</string>
+    <string name="conversations_section_all">My conversations</string>
     <string name="conversations_logout">Log out</string>
     <string name="conversations_contacts">Contacts</string>
     <string name="conversations_empty">No conversations yet</string>
+    <string name="conversations_empty_subtitle">Start a new conversation to see it here.</string>
     <string name="conversations_retry">Retry</string>
+    <string name="conversations_error_title">Couldn\'t load conversations</string>
+    <string name="conversations_error_subtitle">Check your connection and try again.</string>
+    <string name="conversations_no_results_subtitle">Try a different search or filter.</string>
     <string name="conversations_no_messages">No messages yet</string>
     <string name="conversations_banner_syncing">Syncing…</string>
     <string name="conversations_banner_reconnecting">Reconnecting…</string>
@@ -15,6 +21,7 @@
     <string name="conversations_preview_file">📎 File</string>
     <string name="conversations_preview_location">📍 Location</string>
     <string name="conversations_preview_you">You</string>
+    <string name="conversations_preview_draft_prefix">Draft: </string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
     <string name="conversations_search">Search</string>
     <string name="conversations_search_hint">Search conversations</string>
@@ -36,6 +43,7 @@
     <string name="conversations_action_archive">Archive</string>
     <string name="conversations_action_unarchive">Unarchive</string>
     <string name="conversations_action_mark_read">Mark as read</string>
+    <string name="conversations_action_discard_draft">Discard draft</string>
     <string name="conversations_action_more">More actions</string>
     <string name="conversations_badge_pinned">Pinned</string>
     <string name="conversations_badge_muted">Muted</string>

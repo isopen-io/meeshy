@@ -114,6 +114,18 @@ export class ReactionHandler {
 
       const { reaction, replacedEmojis } = addResult;
 
+      if (addResult.unchanged) {
+        // Idempotent no-op: the participant already had exactly this emoji on
+        // this message (optimistic-UI double-fire, a socket retry after a lost
+        // ACK, or a second device echoing the same tap). Nothing changed in the
+        // DB, so reply success but skip the REACTION_ADDED broadcast and the
+        // author notification — re-emitting them spams every participant in the
+        // room and re-notifies the author for a reaction that never changed
+        // state. Mirrors handleReactionRemove's already-absent guard below.
+        if (callback) callback({ success: true, data: reaction });
+        return;
+      }
+
       const message = await this.prisma.message.findUnique({
         where: { id: validated.messageId },
         select: { conversationId: true }

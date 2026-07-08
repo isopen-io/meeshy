@@ -26,13 +26,17 @@ import MeeshyUI
 /// build time). The call-back closure is excluded from equality.
 struct BubbleCallNoticeView: View, Equatable {
     let notice: BubbleContent.CallNotice
+    /// Conversation accent (hex) — mirrors `BubbleQuotedReply.accentHex`. Per
+    /// `apps/ios/CLAUDE.md` "Conversation Accent Color": ALL conversation-context
+    /// components must use the conversation's accent, never a hardcoded brand color.
+    let accentHex: String
     let isDark: Bool
     var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
 
     @State private var showDetails = false
 
     static func == (lhs: BubbleCallNoticeView, rhs: BubbleCallNoticeView) -> Bool {
-        lhs.notice == rhs.notice && lhs.isDark == rhs.isDark
+        lhs.notice == rhs.notice && lhs.accentHex == rhs.accentHex && lhs.isDark == rhs.isDark
     }
 
     private var summary: CallSummaryMetadata { notice.summary }
@@ -78,6 +82,7 @@ struct BubbleCallNoticeView: View, Equatable {
             CallSummaryDetailSheet(
                 summary: summary,
                 isOutgoing: isOutgoing,
+                accentHex: accentHex,
                 timestamp: notice.timestamp,
                 onCallBack: onCallBack
             )
@@ -187,7 +192,7 @@ struct BubbleCallNoticeView: View, Equatable {
     // MARK: - Derived visuals
 
     private var presentation: CallNoticePresentation {
-        CallNoticePresentation(summary: summary, isOutgoing: isOutgoing)
+        CallNoticePresentation(summary: summary, isOutgoing: isOutgoing, accentHex: accentHex)
     }
 
     private var tint: Color { presentation.tint }
@@ -230,10 +235,12 @@ struct BubbleCallNoticeView: View, Equatable {
 private struct CallNoticePresentation {
     let summary: CallSummaryMetadata
     let isOutgoing: Bool
+    /// Conversation accent (hex) — see `BubbleCallNoticeView.accentHex`.
+    let accentHex: String
 
     var tint: Color {
         switch summary.outcome {
-        case .completed: return MeeshyColors.indigo500
+        case .completed: return Color(hex: accentHex)
         case .missed, .rejected: return MeeshyColors.error
         case .failed: return MeeshyColors.warning
         }
@@ -285,6 +292,8 @@ private struct CallNoticePresentation {
 struct CallSummaryDetailSheet: View {
     let summary: CallSummaryMetadata
     let isOutgoing: Bool
+    /// Conversation accent (hex) — see `BubbleCallNoticeView.accentHex`.
+    let accentHex: String
     let timestamp: Date
     var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
 
@@ -301,6 +310,12 @@ struct CallSummaryDetailSheet: View {
                 details
             }
             .padding(20)
+            // iPad/Mac width cap — mirrors FloatingCallPillView's established
+            // 560pt ceiling: without it, `callBackButton`/`detailRow`'s Spacer()
+            // stretch edge-to-edge on a wide sheet instead of reading as a
+            // centered, compact record. Full width on iPhone (<560pt).
+            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity)
         }
         // Liquid Glass (iOS 26) : la conversation transparaît derrière la
         // feuille au lieu d'un aplat opaque — même traitement que
@@ -357,7 +372,7 @@ struct CallSummaryDetailSheet: View {
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
+            .adaptiveGlassProminent(in: Capsule(), tint: Color(hex: accentHex))
         }
         .accessibilityLabel(callBackTitle)
     }
@@ -415,7 +430,7 @@ struct CallSummaryDetailSheet: View {
         HStack(spacing: 12) {
             Image(systemName: "waveform")
                 .font(.subheadline)
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundColor(Color(hex: accentHex))
                 .frame(width: 24)
             Text(String(localized: "calls.detail.quality", defaultValue: "Qualité", bundle: .main))
                 .font(.subheadline)
@@ -436,7 +451,7 @@ struct CallSummaryDetailSheet: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.subheadline)
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundColor(Color(hex: accentHex))
                 .frame(width: 24)
             Text(label)
                 .font(.subheadline)
@@ -453,7 +468,7 @@ struct CallSummaryDetailSheet: View {
     // MARK: - Derived visuals
 
     private var presentation: CallNoticePresentation {
-        CallNoticePresentation(summary: summary, isOutgoing: isOutgoing)
+        CallNoticePresentation(summary: summary, isOutgoing: isOutgoing, accentHex: accentHex)
     }
 
     private var tint: Color { presentation.tint }

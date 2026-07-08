@@ -149,8 +149,11 @@ describe('playNotificationSound', () => {
   });
 
   it('does not play when DND is active (simple same-day window)', async () => {
-    // Freeze time to 14:00 UTC
-    jest.useFakeTimers().setSystemTime(new Date('2026-06-20T14:00:00Z'));
+    // Freeze local time to 14:00 — dndStartTime/dndEndTime compare against
+    // getHours() (local wall clock), so the fake time must be constructed
+    // from local components, not a UTC ISO string (which shifts per runner
+    // timezone and made this test flaky outside UTC, e.g. Europe/Paris).
+    jest.useFakeTimers().setSystemTime(new Date(2026, 5, 20, 14, 0, 0));
 
     const mockCtx = makeMockAudioContext();
     const MockAudioContext = jest.fn().mockReturnValue(mockCtx);
@@ -168,8 +171,8 @@ describe('playNotificationSound', () => {
   });
 
   it('plays when DND window does not cover current time', async () => {
-    // Freeze time to 10:00 UTC
-    jest.useFakeTimers().setSystemTime(new Date('2026-06-20T10:00:00Z'));
+    // Freeze local time to 10:00 (see local-vs-UTC note above)
+    jest.useFakeTimers().setSystemTime(new Date(2026, 5, 20, 10, 0, 0));
 
     const mockCtx = makeMockAudioContext();
     const MockAudioContext = jest.fn().mockReturnValue(mockCtx);
@@ -188,8 +191,8 @@ describe('playNotificationSound', () => {
   });
 
   it('does not play when DND crosses midnight and current time is in window', async () => {
-    // Freeze time to 23:30 UTC
-    jest.useFakeTimers().setSystemTime(new Date('2026-06-20T23:30:00Z'));
+    // Freeze local time to 23:30 (see local-vs-UTC note above)
+    jest.useFakeTimers().setSystemTime(new Date(2026, 5, 20, 23, 30, 0));
 
     const mockCtx = makeMockAudioContext();
     const MockAudioContext = jest.fn().mockReturnValue(mockCtx);

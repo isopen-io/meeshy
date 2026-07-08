@@ -178,6 +178,15 @@ final class CallManager: ObservableObject {
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
     /// masquée pour éviter le doublon visuel au retour au premier plan.
     @Published private(set) var isSystemPiPActive: Bool = false
+    /// Bord d'ancrage de la bulle d'appel repliée (`.bubble` displayMode). Vit
+    /// sur CallManager (pas en `@State` local d'une View) car visible depuis
+    /// deux sites de montage distincts (`RootView`, `iPadRootView`) — même
+    /// rationale que `displayMode` juste au-dessus.
+    @Published var bubbleEdge: BubbleHorizontalEdge = .trailing
+    /// Position verticale de la bulle, en fraction de la zone sûre (0 = haut,
+    /// 1 = bas) — survit à la rotation/redimensionnement, contrairement à un
+    /// point absolu. Proche du haut par défaut, sous la Dynamic Island.
+    @Published var bubbleVerticalFraction: CGFloat = 0.08
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
     /// Outbound video auto-suspended by the graceful-degradation survival layer
@@ -354,6 +363,15 @@ final class CallManager: ObservableObject {
     /// (i.e. a new call already grabbed `currentCallId`/`remoteUserId` between
     /// the ended transition and the timer firing).
     private var settleToken: UUID?
+    /// Audit 2026-07-07 — `endCurrentAndAnswerPending`'s revalidation guard used
+    /// to read `pendingIncomingCall`, but `endCall()` (called earlier in the same
+    /// function) synchronously drives `endCallInternal`, which unconditionally
+    /// nils `pendingIncomingCall` for an unrelated reason (dropping a stale busy
+    /// banner). That made the revalidation guard always fail, so "End & Answer"
+    /// never answered the waiting call. This dedicated token survives the
+    /// `endCall()` side effect and is cleared only by `clearPendingIncomingCall`
+    /// (remote cancellation) or once consumed.
+    private var answeringPendingCallId: String?
     /// Audit P1-12 — direction tracking for CallKit timer reporting.
     /// `reportOutgoingCall(_:connectedAt:)` is for the caller side only;
     /// the callee's elapsed timer is started by CallKit when CXAnswerCallAction
@@ -742,6 +760,8 @@ final class CallManager: ObservableObject {
             isRemoteScreenCapturing = false
             isMuted = false
             isSpeaker = false
+            bubbleEdge = .trailing
+            bubbleVerticalFraction = 0.08
             videoSurvivalController.reset()
             isVideoSuspended = false
             isVideoSuspendedByBackground = false
@@ -971,6 +991,7 @@ final class CallManager: ObservableObject {
             // timestamp in Recents) — every other reportCall site in this file passes
             // Date(); this synthesized busy-path report ends right now, so do the same.
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+            rejectSupersededPendingCall(replacingWithCallId: callId)
             pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo, iceServers: iceServers)
             showCallWaitingBanner = true
             Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
@@ -1210,6 +1231,7 @@ final class CallManager: ObservableObject {
         resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
+            rejectSupersededPendingCall(replacingWithCallId: callId)
             pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo, iceServers: iceServers)
             showCallWaitingBanner = true
             HapticFeedback.medium()
@@ -2002,6 +2024,18 @@ final class CallManager: ObservableObject {
         Logger.calls.info("Rejected pending call: \(pending.callId)")
     }
 
+    /// Audit 2026-07-07 (Finding 2) — `pendingIncomingCall` holds a single
+    /// waiting call, not a queue. A third caller arriving while a second is
+    /// already waiting used to silently overwrite `pendingIncomingCall`,
+    /// leaving the second caller ringing forever with no local signal. Mirror
+    /// `rejectPendingCall()`'s socket signal for the call being displaced so
+    /// its caller sees a clean end instead of a silent local drop.
+    private func rejectSupersededPendingCall(replacingWithCallId newCallId: String) {
+        guard let superseded = pendingIncomingCall, superseded.callId != newCallId else { return }
+        MessageSocketManager.shared.emitCallEnd(callId: superseded.callId)
+        Logger.calls.info("Superseded waiting call ended: \(superseded.callId) (replaced by \(newCallId))")
+    }
+
     /// Audit 2026-07-02 (bug 3) — the caller of the WAITING call hung up (or it
     /// was answered/force-ended elsewhere) before the user acted on the banner.
     /// Every terminal socket listener guards on `currentCallId` (the ACTIVE
@@ -2012,12 +2046,17 @@ final class CallManager: ObservableObject {
         guard pendingIncomingCall?.callId == callId else { return }
         pendingIncomingCall = nil
         showCallWaitingBanner = false
+        if answeringPendingCallId == callId {
+            answeringPendingCallId = nil
+        }
         Logger.calls.info("Waiting call ended remotely — call-waiting banner dismissed (callId=\(callId))")
     }
 
     func endCurrentAndAnswerPending() {
         guard let pending = pendingIncomingCall else { return }
         showCallWaitingBanner = false
+        pendingIncomingCall = nil
+        answeringPendingCallId = pending.callId
 
         endCall()
 
@@ -2026,8 +2065,12 @@ final class CallManager: ObservableObject {
             guard let self else { return }
             // The waiting call may have been ended, answered elsewhere, or
             // replaced by a newer incoming call while we were asleep — only
-            // answer if it's still the exact call the user acted on.
-            guard self.pendingIncomingCall?.callId == pending.callId else { return }
+            // answer if it's still the exact call the user acted on. `endCall()`
+            // above unconditionally nils `pendingIncomingCall` as a side effect
+            // (unrelated busy-banner cleanup), so this dedicated token — not
+            // `pendingIncomingCall` — is the source of truth for revalidation.
+            guard self.answeringPendingCallId == pending.callId else { return }
+            self.answeringPendingCallId = nil
             self.handleIncomingCallNotification(
                 callId: pending.callId,
                 fromUserId: pending.fromUserId,
@@ -2035,7 +2078,6 @@ final class CallManager: ObservableObject {
                 isVideo: pending.isVideo,
                 iceServers: pending.iceServers
             )
-            self.pendingIncomingCall = nil
         }
     }
 
@@ -3047,6 +3089,14 @@ final class CallManager: ObservableObject {
         isVideoSuspended = false
         isVideoSuspendedByBackground = false
         isVideoSuspendedByHold = false
+        // Même rationale que le reset vidéo ci-dessus : `resetEndedStateForNewCall`
+        // ne reset la bulle QUE si le nouvel appel arrive dans la fenêtre de
+        // settle 1,5s (callState encore `.ended`). Le cas ordinaire — un appel
+        // qui démarre plus tard — passe par `callState == .idle`, où ce garde
+        // ne se déclenche jamais. Sans ce reset inconditionnel, la bulle
+        // réapparaît silencieusement à la position de l'appel PRÉCÉDENT.
+        bubbleEdge = .trailing
+        bubbleVerticalFraction = 0.08
         detachSystemPiP()
         Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
                                 duration: callDuration, remote: remoteUsername, reason: reason)

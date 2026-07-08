@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_title">Meeshy Chats</string>
+    <string name="conversations_section_pinned">Fijados</string>
+    <string name="conversations_section_all">Mis conversaciones</string>
     <string name="conversations_logout">Cerrar sesión</string>
     <string name="conversations_contacts">Contactos</string>
     <string name="conversations_empty">Aún no hay conversaciones</string>
+    <string name="conversations_empty_subtitle">Inicia una conversación para verla aquí.</string>
     <string name="conversations_retry">Reintentar</string>
+    <string name="conversations_error_title">No se pudieron cargar las conversaciones</string>
+    <string name="conversations_error_subtitle">Revisa tu conexión e inténtalo de nuevo.</string>
+    <string name="conversations_no_results_subtitle">Prueba con otra búsqueda o filtro.</string>
     <string name="conversations_no_messages">Aún no hay mensajes</string>
     <string name="conversations_banner_syncing">Sincronizando…</string>
     <string name="conversations_banner_reconnecting">Reconectando…</string>
@@ -15,6 +21,7 @@
     <string name="conversations_preview_file">📎 Archivo</string>
     <string name="conversations_preview_location">📍 Ubicación</string>
     <string name="conversations_preview_you">Tú</string>
+    <string name="conversations_preview_draft_prefix">Borrador: </string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
     <string name="conversations_search">Buscar</string>
     <string name="conversations_search_hint">Buscar conversaciones</string>
@@ -36,6 +43,7 @@
     <string name="conversations_action_archive">Archivar</string>
     <string name="conversations_action_unarchive">Desarchivar</string>
     <string name="conversations_action_mark_read">Marcar como leído</string>
+    <string name="conversations_action_discard_draft">Descartar borrador</string>
     <string name="conversations_action_more">Más acciones</string>
     <string name="conversations_badge_pinned">Fijada</string>
     <string name="conversations_badge_muted">Silenciada</string>

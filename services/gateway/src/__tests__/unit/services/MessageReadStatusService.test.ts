@@ -662,6 +662,50 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.messageStatusEntry.updateMany).not.toHaveBeenCalled();
     });
 
+    it('read implies delivered: also advances the delivery cursor to the read message', async () => {
+      // Recipient opens a conversation whose newest message was never delivered
+      // to them (they were offline when it arrived, so no delivery receipt ran).
+      // Reading it must NOT leave the delivery frontier behind the read frontier —
+      // read strictly implies delivered. Otherwise the sender sees the "read"
+      // tick ahead of the "delivered" tick (readCount 1, deliveredCount 0), an
+      // impossible state.
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01'), lastDeliveredAt: null });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      // The delivery cursor is advanced to the same message, not just the read cursor.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            lastDeliveredMessageId: testMessageId,
+            lastDeliveredAt: expect.any(Date)
+          })
+        })
+      );
+    });
+
+    it('read implies delivered: frozen status entries carry deliveredAt/receivedAt, not readAt alone', async () => {
+      // A read-without-prior-delivery must still stamp deliveredAt/receivedAt on
+      // the per-message status entry, so getMessageStatusDetails lists the reader
+      // under BOTH the "delivered" and "read" filters (never read-only).
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      const createStampsDelivered = mockPrisma.messageStatusEntry.createMany.mock.calls
+        .flatMap((call: any[]) => call[0].data)
+        .some((row: any) => row.deliveredAt != null && row.receivedAt != null);
+      const updateStampsDelivered = mockPrisma.messageStatusEntry.updateMany.mock.calls
+        .some((call: any[]) => call[0]?.data && 'deliveredAt' in call[0].data);
+      expect(createStampsDelivered || updateStampsDelivered).toBe(true);
+    });
+
     it('should sync notifications when marking as read', async () => {
       const mockMessage = { id: testMessageId, createdAt: new Date() };
 
@@ -712,8 +756,9 @@ describe('MessageReadStatusService', () => {
       await service.markMessagesAsRead(testParticipantId, testConversationId);
 
       // Second call resolves the same newest message → same key → deduped: the
-      // cursor advance runs exactly once.
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(1);
+      // first mark runs both cursor advances (read + read-implies-delivered),
+      // the deduped second mark adds none.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(2);
     });
 
     it('markMessagesAsReceived advances to a newer message after an argument-less mark deduped, when a newer message arrived', async () => {
@@ -729,6 +774,72 @@ describe('MessageReadStatusService', () => {
           data: expect.objectContaining({ lastDeliveredMessageId: testMessageId2 })
         })
       );
+    });
+  });
+
+  // ==============================================
+  // DEDUP KEY RELEASED ON FAILURE (regression)
+  // ==============================================
+  //
+  // The 2s dedup gate stamps its key with `now` BEFORE the cursor write runs.
+  // If that write throws (transient DB error), the key must be released so a
+  // retry within the TTL can actually record the receipt — otherwise the gate
+  // swallows every retry until the window expires and the delivery/read tick
+  // is silently lost. Burst-dedup on the SUCCESS path is unchanged: the key
+  // is only released when the operation threw.
+
+  describe('dedup key is released when the cursor write fails (regression)', () => {
+    it('markMessagesAsRead retries the advance after a transient failure instead of being suppressed by the dedup gate', async () => {
+      // First advance attempt throws (transient DB error); the mark rejects.
+      mockPrisma.conversationReadCursor.updateMany.mockRejectedValueOnce(
+        new Error('transient db error')
+      );
+
+      await expect(
+        service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId)
+      ).rejects.toThrow('transient db error');
+
+      // A retry for the SAME message, well within the 2s TTL, must reach the DB
+      // again — nothing was recorded by the failed attempt. Without releasing
+      // the poisoned dedup key, this retry would be swallowed at the gate.
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      const readAdvanceCalls = mockPrisma.conversationReadCursor.updateMany.mock.calls.filter(
+        ([arg]: [{ data?: { lastReadMessageId?: string } }]) =>
+          arg?.data?.lastReadMessageId === testMessageId
+      );
+      // Two read-cursor advances: the failed original + the successful retry.
+      expect(readAdvanceCalls).toHaveLength(2);
+    });
+
+    it('markMessagesAsReceived retries the advance after a transient failure instead of being suppressed by the dedup gate', async () => {
+      mockPrisma.conversationReadCursor.updateMany.mockRejectedValueOnce(
+        new Error('transient db error')
+      );
+
+      await expect(
+        service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId)
+      ).rejects.toThrow('transient db error');
+
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
+
+      const deliveredAdvanceCalls = mockPrisma.conversationReadCursor.updateMany.mock.calls.filter(
+        ([arg]: [{ data?: { lastDeliveredMessageId?: string } }]) =>
+          arg?.data?.lastDeliveredMessageId === testMessageId
+      );
+      expect(deliveredAdvanceCalls).toHaveLength(2);
+    });
+
+    it('markMessagesAsRead still dedups a successful mark repeated within the TTL (success path unchanged)', async () => {
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      const readAdvanceCalls = mockPrisma.conversationReadCursor.updateMany.mock.calls.filter(
+        ([arg]: [{ data?: { lastReadMessageId?: string } }]) =>
+          arg?.data?.lastReadMessageId === testMessageId
+      );
+      // The first mark advances; the second is deduped and adds nothing.
+      expect(readAdvanceCalls).toHaveLength(1);
     });
   });
 
@@ -1489,6 +1600,80 @@ describe('MessageReadStatusService', () => {
 
       expect(result.get(testMessageId)).toEqual(expect.objectContaining({ receivedCount: 0, readCount: 0 }));
     });
+
+    // Parity with the single-message siblings (getMessageReadStatus /
+    // getMessageStatusDetails), which enumerate the UNION of cursors + frozen
+    // MessageStatusEntry rows. cleanupObsoleteCursors deletes a cursor whose
+    // lastReadMessageId points at a now-deleted message but NEVER touches the
+    // write-once frozen entry — so a valid delivery/read receipt survives its
+    // cursor. This batch method must still count it, otherwise it under-reports
+    // relative to the single-message endpoint for the exact same data.
+    it('counts a frozen receipt whose cursor was deleted by cleanup (union parity)', async () => {
+      const msgCreatedAt = new Date('2025-01-01T10:00:00Z');
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: msgCreatedAt, senderId: 'sender-1' }
+      ]);
+      // Both recipients are active members.
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId },
+        { id: testParticipantId2 }
+      ]);
+      // Only participant1 still has a cursor — participant2's was cleaned up.
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        {
+          participantId: testParticipantId,
+          lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
+          lastReadAt: new Date('2025-01-01T10:06:00Z')
+        }
+      ]);
+      // participant2's write-once frozen receipt for THIS message survived.
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          messageId: testMessageId,
+          participantId: testParticipantId2,
+          deliveredAt: new Date('2025-01-01T10:04:00Z'),
+          receivedAt: new Date('2025-01-01T10:04:00Z'),
+          readAt: new Date('2025-01-01T10:07:00Z')
+        }
+      ]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      // Both recipients counted — identical to getMessageReadStatus for the same data.
+      expect(result.get(testMessageId)).toEqual(
+        expect.objectContaining({ receivedCount: 2, readCount: 2 })
+      );
+    });
+
+    // A frozen entry for a participant who is no longer active must be ignored,
+    // mirroring getMessageReadStatus's `if (!participant) continue` gate.
+    it('ignores a frozen receipt from a participant who is no longer active', async () => {
+      const msgCreatedAt = new Date('2025-01-01T10:00:00Z');
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: msgCreatedAt, senderId: 'sender-1' }
+      ]);
+      // Only participant1 is still active.
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      // Frozen entry belongs to an inactive/removed participant2.
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          messageId: testMessageId,
+          participantId: testParticipantId2,
+          deliveredAt: new Date('2025-01-01T10:04:00Z'),
+          receivedAt: new Date('2025-01-01T10:04:00Z'),
+          readAt: new Date('2025-01-01T10:07:00Z')
+        }
+      ]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      expect(result.get(testMessageId)).toEqual(
+        expect.objectContaining({ receivedCount: 0, readCount: 0 })
+      );
+    });
   });
 
   // ==============================================
@@ -1863,8 +2048,9 @@ describe('MessageReadStatusService', () => {
       // Second read - should use the guarded cursor-advance path again
       await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
-      // Cursor advance should be called twice (once per markMessagesAsRead call)
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(2);
+      // Each markMessagesAsRead advances two cursors (read + read-implies-delivered);
+      // two calls → four advances.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(4);
       // No messageStatusEntry.upsert in cursor-based approach
       expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
     });
@@ -1943,8 +2129,9 @@ describe('MessageReadStatusService', () => {
 
       await expect(Promise.all(promises)).resolves.not.toThrow();
 
-      // Each user should have their own cursor advanced (cursor-based approach)
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(3);
+      // Each user gets their own read cursor advanced plus the read-implies-delivered
+      // advance → two updateMany per user, three users → six.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(6);
     });
 
     it('should handle concurrent attachment status updates', async () => {
@@ -2066,8 +2253,8 @@ describe('MessageReadStatusService', () => {
 
       await service.markMessagesAsRead(testParticipantId, testConversationId, 'msg-49');
 
-      // Should update cursor once regardless of message count
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(1);
+      // Read + read-implies-delivered → two cursor advances, regardless of message count.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(2);
       expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ participantId: testParticipantId, conversationId: testConversationId }),
@@ -2576,8 +2763,10 @@ describe('MessageReadStatusService', () => {
       // A second, newer message arrives and is read < 2s later: must NOT be dropped by dedup.
       await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId2);
 
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(2);
-      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenLastCalledWith(
+      // Two non-deduped marks, each advancing read + read-implies-delivered cursors → four.
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(4);
+      // The second mark's read cursor advanced to the newer message (not swallowed by dedup).
+      expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ lastReadMessageId: testMessageId2 }),
         })
