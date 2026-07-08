@@ -240,10 +240,12 @@ extension StoryViewerView {
                     horizontalDrag = 0
 
                     if (dx < -60 || predicted < -150) && currentGroupIndex < groups.count - 1 {
-                        // Swipe left -> next group
+                        // Swipe left -> next group. Reprend l'auteur suivant à
+                        // sa première story non lue (parité avec l'aperçu du
+                        // cube), pas systématiquement à la slide 0.
                         groupTransition(forward: true) {
                             currentGroupIndex += 1
-                            currentStoryIndex = 0
+                            currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
                             progress = 0
                         }
                     } else if (dx > 60 || predicted > 150) && currentGroupIndex > 0 {
@@ -313,7 +315,7 @@ extension StoryViewerView {
             }
             groupTransition(forward: true) {
                 currentGroupIndex += 1
-                currentStoryIndex = 0
+                currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
                 progress = 0
             }
         } else {
