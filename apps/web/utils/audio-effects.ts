@@ -33,7 +33,7 @@ export interface AudioEffectProcessor {
 /**
  * Musical scales for auto-tune
  */
-const SCALES = {
+export const SCALES = {
   chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], // All notes
   major: [0, 2, 4, 5, 7, 9, 11], // Major scale
   minor: [0, 2, 3, 5, 7, 8, 10], // Natural minor
@@ -75,19 +75,24 @@ function midiToFrequency(midi: number): number {
 /**
  * Find closest note in scale
  */
-function snapToScale(midiNote: number, scale: number[], transpose: number = 0): number {
+export function snapToScale(midiNote: number, scale: number[], transpose: number = 0): number {
   const noteInOctave = ((midiNote % 12) + 12) % 12;
   const octave = Math.floor(midiNote / 12);
 
-  // Find closest note in scale
+  // Find the closest scale note on the pitch CIRCLE: a note near the top of the
+  // octave (e.g. B, 11) can be closer to a scale note in the octave above (C, 0
+  // → 12) than to any note in its own octave, so each scale note is also tested
+  // wrapped ±12 semitones.
   let closestNote = scale[0];
-  let minDistance = Math.abs(noteInOctave - closestNote);
+  let minDistance = Infinity;
 
   for (const scaleNote of scale) {
-    const distance = Math.abs(noteInOctave - scaleNote);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestNote = scaleNote;
+    for (const candidate of [scaleNote - 12, scaleNote, scaleNote + 12]) {
+      const distance = Math.abs(noteInOctave - candidate);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestNote = candidate;
+      }
     }
   }
 
