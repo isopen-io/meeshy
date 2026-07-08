@@ -63,6 +63,15 @@ describe('getUserPresenceStatus — isOnline backend autoritatif', () => {
     expect(getUserPresenceStatus({ isOnline: false, lastActiveAt: new Date(NOW - 30_000).toISOString() }, NOW)).toBe('online');
     expect(getUserPresenceStatus({ isOnline: false, lastActiveAt: NOW - 400_000 }, NOW)).toBe('away');
   });
+
+  it('lastActiveAt malformé (non-null) traité comme absent, pas comme NaN — parité avec Android isoToEpochMillisOrNull', () => {
+    // new Date('garbage').getTime() est NaN ; toute comparaison `elapsed <= X`
+    // avec NaN vaut false, donc sans garde explicite la fonction retombe sur
+    // 'offline' même si isOnline=true — divergence avec Android, qui traite un
+    // timestamp illisible comme absent (null) et retombe sur isOnline.
+    expect(getUserPresenceStatus({ isOnline: true, lastActiveAt: 'not-a-date' }, NOW)).toBe('online');
+    expect(getUserPresenceStatus({ isOnline: false, lastActiveAt: 'not-a-date' }, NOW)).toBe('offline');
+  });
 });
 
 describe('presenceTone — mapping sémantique unique (vert / orange / gris)', () => {
