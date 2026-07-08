@@ -4,6 +4,7 @@
 
 import { renderHook, act } from '@testing-library/react';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
+import { getUserStatus } from '@/lib/user-status';
 
 const mockOnUserStatus = jest.fn(() => jest.fn());
 const mockOnPresenceSnapshot = jest.fn(() => jest.fn());
@@ -217,6 +218,29 @@ describe('useUserStatusRealtime', () => {
       expect(merged).toHaveLength(2);
       expect(merged[0]).toMatchObject({ id: 'u1', username: 'alice', isOnline: true });
       expect(merged[1]).toMatchObject({ id: 'u2', username: 'bob', isOnline: false });
+    });
+
+    it('should not fabricate a "now" lastActiveAt for a snapshot user with null lastActiveAt', () => {
+      let snapshotCallback: (event: any) => void = () => {};
+
+      (mockOnPresenceSnapshot as any).mockImplementation((callback: any) => {
+        snapshotCallback = callback;
+        return jest.fn();
+      });
+
+      renderHook(() => useUserStatusRealtime());
+
+      // Gateway nulls lastActiveAt for offline contacts who hide "last seen"
+      // (MeeshySocketIOManager _applyPresencePrefs). A missing timestamp must
+      // NOT be substituted with Date.now(), otherwise getUserStatus decays to
+      // 'online' and paints an orange pulsing dot for an offline user.
+      snapshotCallback({
+        users: [{ userId: 'u3', username: 'carol', isOnline: false, lastActiveAt: null }],
+      });
+
+      const merged = (mockMergeParticipants.mock.calls[0] as unknown as [Array<any>])[0];
+      expect(merged[0].lastActiveAt).toBeUndefined();
+      expect(getUserStatus(merged[0])).toBe('offline');
     });
 
     it('should ignore empty snapshots', () => {
