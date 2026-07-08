@@ -43,6 +43,7 @@
     <string name="conversations_action_archive">Arquivar</string>
     <string name="conversations_action_unarchive">Desarquivar</string>
     <string name="conversations_action_mark_read">Marcar como lida</string>
+    <string name="conversations_action_discard_draft">Descartar rascunho</string>
     <string name="conversations_action_more">Mais ações</string>
     <string name="conversations_badge_pinned">Fixada</string>
     <string name="conversations_badge_muted">Silenciada</string>

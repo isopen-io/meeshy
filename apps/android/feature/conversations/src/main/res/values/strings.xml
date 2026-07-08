@@ -43,6 +43,7 @@
     <string name="conversations_action_archive">Archive</string>
     <string name="conversations_action_unarchive">Unarchive</string>
     <string name="conversations_action_mark_read">Mark as read</string>
+    <string name="conversations_action_discard_draft">Discard draft</string>
     <string name="conversations_action_more">More actions</string>
     <string name="conversations_badge_pinned">Pinned</string>
     <string name="conversations_badge_muted">Muted</string>
