@@ -853,33 +853,46 @@ private fun ChatUiState.applyResult(
     mediaBaseUrl: String,
     recipientCount: Int,
     hidden: LocallyHiddenMessages,
-): ChatUiState = when (result) {
-    is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
-        ownReactions = ownReactions,
-        isSyncing = false,
-        showSkeleton = false,
-        errorMessage = null,
-    )
-    is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
-        ownReactions = ownReactions,
-        isSyncing = true,
-        showSkeleton = false,
-    )
-    is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden)
-            ?: messages,
-        ownReactions = ownReactions,
-        isSyncing = true,
-        showSkeleton = result.value == null && messages.isEmpty() && errorMessage == null,
-    )
-    CacheResult.Empty -> copy(
-        messages = emptyList(),
-        ownReactions = ownReactions,
-        isSyncing = false,
-        showSkeleton = errorMessage == null,
-    )
+): ChatUiState {
+    val updated = when (result) {
+        is CacheResult.Fresh -> copy(
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
+            ownReactions = ownReactions,
+            isSyncing = false,
+            showSkeleton = false,
+            errorMessage = null,
+        )
+        is CacheResult.Stale -> copy(
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
+            ownReactions = ownReactions,
+            isSyncing = true,
+            showSkeleton = false,
+        )
+        is CacheResult.Syncing -> copy(
+            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden)
+                ?: messages,
+            ownReactions = ownReactions,
+            isSyncing = true,
+            showSkeleton = result.value == null && messages.isEmpty() && errorMessage == null,
+        )
+        CacheResult.Empty -> copy(
+            messages = emptyList(),
+            ownReactions = ownReactions,
+            isSyncing = false,
+            showSkeleton = errorMessage == null,
+        )
+    }
+    // Standing invariant, not just an open()-time guard (see openPinnedSheet's doc
+    // comment "no empty sheet"): if the last pin drains away — peer/self unpin, or
+    // the pinned message gets deleted — while the sheet is already open, close it
+    // here too. Resetting isPinnedSheetOpen itself (not just hiding the rendering)
+    // matters: a later new pin must require an explicit re-open, not silently
+    // resurrect a sheet the user already dismissed by running out of content.
+    return if (updated.isPinnedSheetOpen && updated.pinnedMessages.isEmpty()) {
+        updated.copy(isPinnedSheetOpen = false)
+    } else {
+        updated
+    }
 }
 
 private fun List<LocalMessage>.toBubbles(
