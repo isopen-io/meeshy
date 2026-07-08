@@ -330,9 +330,11 @@ public struct UserIdentityBar: View {
                 .font(.system(size: 10))
                 .foregroundColor(secondaryColor.opacity(0.7))
         case .slow:
-            // 5s-30s without ACK: warmer "slow send" indicator using the
-            // semantic warning color to nudge the user without alarming them.
-            Image(systemName: "clock.badge.exclamationmark")
+            // 5s-30s without ACK or auto-retry in flight: warmer "slow send"
+            // indicator. Plain clock — spec 2026-07-08
+            // (message-send-failure-retry-flow, règle 2) : aucun glyphe
+            // évoquant un échec tant que l'état n'est pas `.failed`.
+            Image(systemName: "clock")
                 .font(.system(size: 10))
                 .foregroundColor(MeeshyColors.warning)
         case .sent:

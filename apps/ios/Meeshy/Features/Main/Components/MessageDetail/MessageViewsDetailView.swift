@@ -58,6 +58,11 @@ struct MessageViewsDetailView: View {
     // Views sub-filter
     @State private var viewsFilter: ViewsFilter = .sent
 
+    // Historique local des tentatives d'envoi (spec 2026-07-08
+    // message-send-failure-retry-flow) — vide pour les messages reçus
+    // (aucune ligne `send_attempts` locale), la carte ne s'affiche pas.
+    @State private var sendAttempts: [SendAttemptRecord] = []
+
     private var availableViewsFilters: [ViewsFilter] {
         var filters: [ViewsFilter] = [.sent, .delivered, .read, .notSeen]
         let hasAudio = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .audio }
@@ -71,6 +76,7 @@ struct MessageViewsDetailView: View {
         viewsTabContent
             .onAppear {
                 Task {
+                    await loadSendAttempts()
                     await loadReadStatus()
                     await loadAttachmentStatuses()
                 }
@@ -269,6 +275,110 @@ struct MessageViewsDetailView: View {
                     .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
             )
             .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if !sendAttempts.isEmpty {
+                sendAttemptsCard(accent: accent)
+            }
+        }
+    }
+
+    // MARK: - Historique d'envoi (tentatives locales)
+
+    private func sendAttemptsCard(accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(accent.opacity(0.7))
+                Text("Historique d'envoi")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                Text("\(sendAttempts.count) tentative\(sendAttempts.count > 1 ? "s" : "")")
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(theme.textMuted)
+            }
+
+            if let first = sendAttempts.first {
+                metaInfoRow(
+                    icon: "paperplane",
+                    label: "1ère tentative",
+                    value: formatDateTimeFR(first.startedAt),
+                    accent: accent
+                )
+            }
+
+            VStack(spacing: 0) {
+                ForEach(sendAttempts, id: \.attemptNumber) { attempt in
+                    sendAttemptRow(attempt, accent: accent)
+                    if attempt.attemptNumber != sendAttempts.last?.attemptNumber {
+                        metaDivider
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(accent.opacity(0.1), lineWidth: 0.5)
+                )
+        )
+    }
+
+    private func sendAttemptRow(_ attempt: SendAttemptRecord, accent: Color) -> some View {
+        let isSuccess = attempt.outcome == SendAttemptRecord.Outcome.success.rawValue
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.caption2.weight(.medium))
+                .foregroundColor(isSuccess ? MeeshyColors.success : MeeshyColors.error)
+                .frame(width: 16)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("Tentative \(attempt.attemptNumber)")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(theme.textPrimary)
+                    Text(sendAttemptTransportLabel(attempt.transport))
+                        .font(.caption2.weight(.medium))
+                        .foregroundColor(accent.opacity(0.8))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(accent.opacity(0.1)))
+                }
+                if let errorMessage = attempt.errorMessage, !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(.caption2)
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer()
+
+            Text(formatTimeWithSecondsFR(attempt.startedAt))
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundColor(theme.textMuted)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+    }
+
+    private func sendAttemptTransportLabel(_ transport: String) -> String {
+        switch SendAttemptRecord.Transport(rawValue: transport) {
+        case .socketFirst: return "Temps réel"
+        case .rest: return "REST"
+        case .socketFallback: return "Repli temps réel"
+        case .outbox: return "Re-tentative auto"
+        case nil: return transport
         }
     }
 
@@ -758,6 +868,12 @@ struct MessageViewsDetailView: View {
         message.id.count == 24 && message.id.allSatisfy(\.isHexDigit)
     }
 
+    private func loadSendAttempts() async {
+        guard sendAttempts.isEmpty else { return }
+        sendAttempts = (try? await DependencyContainer.shared.messagePersistence
+            .sendAttempts(messageId: message.id)) ?? []
+    }
+
     private func loadReadStatus() async {
         guard readStatusData == nil, !isLoadingReadStatus else { return }
         guard messageHasServerId else { return }
@@ -825,6 +941,10 @@ struct MessageViewsDetailView: View {
 
     private func formatDateTimeFR(_ date: Date) -> String {
         date.formatted(.dateTime.day().month().year().hour().minute())
+    }
+
+    private func formatTimeWithSecondsFR(_ date: Date) -> String {
+        date.formatted(.dateTime.hour().minute().second())
     }
 
     private func formatDuration(_ seconds: Int) -> String {

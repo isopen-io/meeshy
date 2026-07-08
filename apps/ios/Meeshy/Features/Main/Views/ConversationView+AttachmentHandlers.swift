@@ -349,12 +349,54 @@ extension ConversationView {
                     anySuccess = anySuccess || ok
                 } catch {
                     Logger.messages.error("Group upload failed (\(String(describing: send.group.kind))): \(error.localizedDescription)")
-                    // S7 — flip the optimistic bubble to .failed so it stops
-                    // showing a permanent .sending spinner and offers a retry,
-                    // instead of a silent ghost (the offline-visual path reaches
-                    // here because the TUS upload throws with no durable queue).
-                    await viewModel.markOptimisticMediaFailed(
-                        tempId: send.tempId, reason: error.localizedDescription)
+                    // Spec 2026-07-08 (message-send-failure-retry-flow, règle 4) :
+                    // un échec d'upload EN LIGNE rejoint l'outbox durable —
+                    // mêmes re-tentatives automatiques avec backoff que le
+                    // texte — au lieu de basculer la bulle directement en
+                    // `.failed`. `.sendFailed` fait transiter la ligne
+                    // optimiste `.sending` → `.queued` (horloge conservée) ;
+                    // l'indicateur d'échec reste un état terminal atteint par
+                    // `retryExhausted`. Les fichiers déjà uploadés avant
+                    // l'échec seront ré-uploadés au rejeu (le dedup message
+                    // par clientMessageId côté gateway évite tout doublon).
+                    _ = try? await viewModel.messagePersistence.applyEvent(
+                        localId: send.tempId, event: .sendFailed(error))
+                    let requeued: Bool
+                    if send.group.kind == .audio {
+                        let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
+                        requeued = !urls.isEmpty && (try? await OfflineQueue.shared.enqueueAudios(
+                            sourceAudioURLs: urls,
+                            conversationId: viewModel.conversationId,
+                            content: nil,
+                            clientMessageId: send.tempId,
+                            originalLanguage: lang,
+                            replyToId: send.group.carriesReply ? replyId : nil
+                        )) != nil
+                    } else {
+                        let pairs: [(url: URL, kind: String)] = send.group.attachments.compactMap { att in
+                            guard let url = mediaFiles[att.id] else { return nil }
+                            let kind = AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)).rawValue
+                            return (url, kind)
+                        }
+                        requeued = !pairs.isEmpty && (try? await OfflineQueue.shared.enqueueMedia(
+                            sourceMediaURLs: pairs.map { $0.url },
+                            kinds: pairs.map { $0.kind },
+                            conversationId: viewModel.conversationId,
+                            content: nil,
+                            clientMessageId: send.tempId,
+                            originalLanguage: lang,
+                            replyToId: send.group.carriesReply ? replyId : nil
+                        )) != nil
+                    }
+                    if requeued {
+                        anySuccess = true
+                        Logger.messages.info("Group upload failed online — requeued to durable outbox \(send.tempId)")
+                    } else {
+                        // Ré-enfilage impossible (fichiers sources disparus,
+                        // disque plein, encodage) : état terminal, retry manuel.
+                        await viewModel.markOptimisticMediaFailed(
+                            tempId: send.tempId, reason: error.localizedDescription)
+                    }
                 }
             }
 
