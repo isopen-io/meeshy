@@ -92,6 +92,12 @@ class OutboxFlushWorker @AssistedInject constructor(
                     // A hard-exhausted profile edit reverts the optimistic paint to
                     // the gateway's truth so the identity never drifts from the server.
                     OutboxKind.UPDATE_PROFILE -> sessionRepository.refresh()
+                    // A hard-exhausted pin/unpin refreshes the conversation so the
+                    // optimistic pinnedAt flip is reconciled with the server truth.
+                    OutboxKind.PIN_MESSAGE, OutboxKind.UNPIN_MESSAGE ->
+                        runCatching { json.decodeFromString<PinPayload>(row.payload) }
+                            .getOrNull()
+                            ?.let { messageRepository.refresh(it.conversationId) }
                     else -> Unit
                 }
             },
@@ -235,6 +241,22 @@ class OutboxFlushWorker @AssistedInject constructor(
             val body = runCatching { json.decodeFromString<NotificationPreferenceSyncBody>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
             when (apiCall { preferencesApi.updateNotification(body) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.PIN_MESSAGE to MutationSender { row ->
+            val payload = runCatching { json.decodeFromString<PinPayload>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            when (apiCall { messageApi.pin(payload.conversationId, row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UNPIN_MESSAGE to MutationSender { row ->
+            val payload = runCatching { json.decodeFromString<PinPayload>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            when (apiCall { messageApi.unpin(payload.conversationId, row.targetId) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }

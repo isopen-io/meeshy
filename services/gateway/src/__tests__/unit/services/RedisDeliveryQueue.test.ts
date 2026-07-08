@@ -336,16 +336,14 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     expect(await queue.size('user-r')).toBe(1);
   });
 
-  test('cleanup — scans keys and rebuilds list after removing stale entries', async () => {
+  test('cleanup — removes only the stale entry by value, preserving the fresh one', async () => {
     const stale = makePayload({
       messageId: 'stale',
       enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
     });
     const fresh = makePayload({ messageId: 'fresh' });
-    const pipeline = makePipeline();
-    pipeline.exec.mockResolvedValue([[null, 1], [null, 1], [null, 1]]);
 
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
     redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
     redis.lrange.mockResolvedValue([JSON.stringify(stale), JSON.stringify(fresh)]);
 
@@ -353,20 +351,24 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     const removed = await queue.cleanup();
 
     expect(removed).toBe(1);
-    expect(pipeline.del).toHaveBeenCalled();
-    expect(pipeline.rpush).toHaveBeenCalled();
-    expect(pipeline.expire).toHaveBeenCalled();
+    // Value-targeted removal: only the stale entry is passed to LREM — the fresh
+    // one is never in the ARGV list, and the whole key is never DEL'd.
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('LREM'),
+      1,
+      'delivery:queue:user-r',
+      JSON.stringify(stale),
+    );
+    expect(redis.del).not.toHaveBeenCalled();
   });
 
-  test('cleanup — removes entire key when all entries are stale', async () => {
+  test('cleanup — removes every entry by value when all are stale', async () => {
     const stale = makePayload({
       messageId: 'all-stale',
       enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
     });
-    const pipeline = makePipeline();
-    pipeline.exec.mockResolvedValue([[null, 1]]);
 
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
     redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
     redis.lrange.mockResolvedValue([JSON.stringify(stale)]);
 
@@ -374,8 +376,45 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     const removed = await queue.cleanup();
 
     expect(removed).toBe(1);
-    expect(pipeline.del).toHaveBeenCalled();
-    expect(pipeline.rpush).not.toHaveBeenCalled();
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('LREM'),
+      1,
+      'delivery:queue:user-r',
+      JSON.stringify(stale),
+    );
+    expect(redis.del).not.toHaveBeenCalled();
+  });
+
+  test('cleanup — never targets a message enqueued after the snapshot (race regression)', async () => {
+    // The LRANGE snapshot cleanup reads contains only a stale entry. A message
+    // that arrives AFTER that snapshot (a different value) must survive: the
+    // atomic prune removes entries by exact value and never DELs the whole key,
+    // so a concurrently-enqueued message can no longer be silently wiped.
+    const stale = makePayload({
+      messageId: 'stale',
+      enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+    });
+    const concurrent = makePayload({ messageId: 'arrives-during-cleanup' });
+
+    const evalCalls: unknown[][] = [];
+    const redis = makeMockRedis({
+      eval: jest.fn().mockImplementation((...args: unknown[]) => {
+        evalCalls.push(args);
+        return Promise.resolve(1);
+      }),
+    });
+    redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
+    redis.lrange.mockResolvedValue([JSON.stringify(stale)]); // snapshot predates `concurrent`
+
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+    await queue.cleanup();
+
+    const prune = evalCalls.find(a => typeof a[0] === 'string' && (a[0] as string).includes('LREM'));
+    expect(prune).toBeDefined();
+    const targeted = (prune as unknown[]).slice(3);
+    expect(targeted).toContain(JSON.stringify(stale));
+    expect(targeted).not.toContain(JSON.stringify(concurrent));
+    expect(redis.del).not.toHaveBeenCalled();
   });
 
   test('cleanup — falls back to memory when Redis scan throws', async () => {
@@ -462,10 +501,9 @@ describe('RedisDeliveryQueue (branch gap-fill)', () => {
     expect(await queue.drain('user-r')).toEqual([]);
   });
 
-  test('cleanup — returns 0 and skips rebuild when no entries are stale', async () => {
+  test('cleanup — returns 0 and issues no removal when no entries are stale', async () => {
     const fresh = makePayload({ messageId: 'fresh-only', enqueuedAt: new Date().toISOString() });
-    const pipeline = makePipeline();
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
+    const redis = makeMockRedis();
     redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
     redis.lrange.mockResolvedValue([JSON.stringify(fresh)]);
 
@@ -473,8 +511,8 @@ describe('RedisDeliveryQueue (branch gap-fill)', () => {
     const removed = await queue.cleanup();
 
     expect(removed).toBe(0);
-    expect(pipeline.del).not.toHaveBeenCalled();
-    expect(pipeline.rpush).not.toHaveBeenCalled();
+    expect(redis.eval).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
   });
 });
 
@@ -661,65 +699,67 @@ describe('RedisDeliveryQueue (Redis path)', () => {
     expect(redis.llen).toHaveBeenCalled();
   });
 
-  test('cleanup scans Redis keys and removes expired entries', async () => {
+  test('cleanup scans Redis keys and removes expired entries by value', async () => {
     const fresh = makePayload({ messageId: 'fresh', enqueuedAt: new Date().toISOString() });
     const old = makePayload({
       messageId: 'old',
       enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
     });
-    const pipeline = makePipeline([[null, 1]]);
     const redis = makeMockRedis({
       scan: jest.fn().mockResolvedValue(['0', ['delivery:queue:u1']]),
       lrange: jest.fn().mockResolvedValue([JSON.stringify(old), JSON.stringify(fresh)]),
-      pipeline: jest.fn().mockReturnValue(pipeline),
+      eval: jest.fn().mockResolvedValue(1),
     });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     const removed = await queue.cleanup();
 
     expect(removed).toBe(1);
-    expect(pipeline.del).toHaveBeenCalled();
-    expect(pipeline.rpush).toHaveBeenCalled();
-    expect(pipeline.expire).toHaveBeenCalledWith(
-      expect.any(String),
-      DELIVERY_QUEUE_TTL_SECONDS,
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('LREM'),
+      1,
+      'delivery:queue:u1',
+      JSON.stringify(old),
     );
+    expect(redis.del).not.toHaveBeenCalled();
   });
 
   test('cleanup skips key when all entries are fresh (removed === 0)', async () => {
     const fresh = makePayload({ messageId: 'fresh', enqueuedAt: new Date().toISOString() });
-    const pipeline = makePipeline([[null, 1]]);
     const redis = makeMockRedis({
       scan: jest.fn().mockResolvedValue(['0', ['delivery:queue:u-fresh']]),
       lrange: jest.fn().mockResolvedValue([JSON.stringify(fresh)]),
-      pipeline: jest.fn().mockReturnValue(pipeline),
     });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     const removed = await queue.cleanup();
 
     expect(removed).toBe(0);
-    expect(pipeline.exec).not.toHaveBeenCalled();
+    expect(redis.eval).not.toHaveBeenCalled();
   });
 
-  test('cleanup deletes key when all entries are expired and no fresh remain', async () => {
+  test('cleanup removes every entry by value when all are expired', async () => {
     const old = makePayload({
       messageId: 'old',
       enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
     });
-    const pipeline = makePipeline([[null, 1]]);
     const redis = makeMockRedis({
       scan: jest.fn().mockResolvedValue(['0', ['delivery:queue:u-all-old']]),
       lrange: jest.fn().mockResolvedValue([JSON.stringify(old)]),
-      pipeline: jest.fn().mockReturnValue(pipeline),
+      eval: jest.fn().mockResolvedValue(1),
     });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     const removed = await queue.cleanup();
 
     expect(removed).toBe(1);
-    expect(pipeline.del).toHaveBeenCalled();
-    expect(pipeline.rpush).not.toHaveBeenCalled();
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('LREM'),
+      1,
+      'delivery:queue:u-all-old',
+      JSON.stringify(old),
+    );
+    expect(redis.del).not.toHaveBeenCalled();
   });
 
   test('cleanup iterates multiple cursor pages', async () => {
@@ -1033,21 +1073,27 @@ describe('RedisDeliveryQueue (malformed JSON resilience)', () => {
     expect(peeked[0].messageId).toBe('peek-valid');
   });
 
-  test('cleanup — drops malformed entry (counts as stale removal)', async () => {
+  test('cleanup — drops malformed entry by value (counts as stale removal)', async () => {
     const valid = makePayload({ messageId: 'cleanup-valid', enqueuedAt: new Date().toISOString() });
-    const pipeline = makePipeline([[null, 1]]);
     const redis = makeMockRedis({
       scan: jest.fn().mockResolvedValue(['0', ['delivery:queue:u1']]),
       lrange: jest.fn().mockResolvedValue(['{bad-json', JSON.stringify(valid)]),
-      pipeline: jest.fn().mockReturnValue(pipeline),
+      eval: jest.fn().mockResolvedValue(1),
     });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     const removed = await queue.cleanup();
 
-    // Malformed entry is filtered out (removed), valid entry survives
+    // Malformed entry is targeted for removal; the valid fresh entry is never in
+    // the ARGV list, so it survives without a whole-key DEL.
     expect(removed).toBe(1);
-    expect(pipeline.rpush).toHaveBeenCalled(); // valid entry re-pushed
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('LREM'),
+      1,
+      'delivery:queue:u1',
+      '{bad-json',
+    );
+    expect(redis.del).not.toHaveBeenCalled();
   });
 });
 

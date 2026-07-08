@@ -26,6 +26,8 @@ public sealed interface CoalesceDecision {
  * - a reaction toggle (add then remove, or remove then add) cancels itself;
  * - a block/unblock toggle of the same user cancels itself, and a repeated
  *   block (or unblock) keeps only the latest (idempotent terminal state);
+ * - a pin/unpin toggle of the same message cancels itself, and a repeated
+ *   pin (or unpin) keeps only the latest (same idempotent-terminal rule);
  * - a repeated friend request to the same receiver keeps only the latest
  *   (only one request can exist — idempotent send, latest greeting wins);
  * - a repeated profile edit (same user id) keeps only the latest snapshot
@@ -52,8 +54,10 @@ public object OutboxCoalescer {
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_SETTINGS)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
-            OutboxKind.BLOCK_USER -> blockToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)
-            OutboxKind.UNBLOCK_USER -> blockToggle(incoming, sameTarget, OutboxKind.BLOCK_USER, OutboxKind.UNBLOCK_USER)
+            OutboxKind.BLOCK_USER -> terminalToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)
+            OutboxKind.UNBLOCK_USER -> terminalToggle(incoming, sameTarget, OutboxKind.BLOCK_USER, OutboxKind.UNBLOCK_USER)
+            OutboxKind.PIN_MESSAGE -> terminalToggle(incoming, sameTarget, OutboxKind.UNPIN_MESSAGE, OutboxKind.PIN_MESSAGE)
+            OutboxKind.UNPIN_MESSAGE -> terminalToggle(incoming, sameTarget, OutboxKind.PIN_MESSAGE, OutboxKind.UNPIN_MESSAGE)
             OutboxKind.SEND_FRIEND_REQUEST ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.SEND_FRIEND_REQUEST)
             else -> CoalesceDecision.Enqueue(incoming)
@@ -101,13 +105,14 @@ public object OutboxCoalescer {
     }
 
     /**
-     * Coalesces a block-state mutation. Block and unblock are opposite terminal
-     * states (not deltas), so a queued opposite for the same user annihilates —
-     * the pair returns the user to the last-synced server state, exactly like a
-     * reaction toggle. Failing that, a pending same-kind row for the user is
-     * superseded (a repeated block/unblock is idempotent). Otherwise it enqueues.
+     * Coalesces a terminal-state toggle (block/unblock of a user, pin/unpin of a
+     * message). The two kinds are opposite terminal states (not deltas), so a
+     * queued opposite for the same target annihilates — the pair returns the
+     * target to the last-synced server state, exactly like a reaction toggle.
+     * Failing that, a pending same-kind row is superseded (a repeated
+     * block/unblock or pin/unpin is idempotent). Otherwise it enqueues.
      */
-    private fun blockToggle(
+    private fun terminalToggle(
         incoming: OutboxEntity,
         sameTarget: List<OutboxEntity>,
         opposite: OutboxKind,

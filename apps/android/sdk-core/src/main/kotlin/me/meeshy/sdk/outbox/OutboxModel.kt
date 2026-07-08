@@ -18,6 +18,8 @@ public enum class OutboxKind {
     BLOCK_USER,
     UNBLOCK_USER,
     SEND_FRIEND_REQUEST,
+    PIN_MESSAGE,
+    UNPIN_MESSAGE,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -52,6 +54,7 @@ public object OutboxLanes {
     public const val SETTINGS: String = "settings"
     public const val BLOCK: String = "block"
     public const val FRIEND: String = "friend"
+    public const val PIN: String = "pin"
 }
 
 /**
@@ -101,6 +104,10 @@ public object OutboxLaneMap {
         -> OutboxLaneAssignment.Shared(OutboxLanes.BLOCK)
 
         OutboxKind.SEND_FRIEND_REQUEST -> OutboxLaneAssignment.Shared(OutboxLanes.FRIEND)
+
+        OutboxKind.PIN_MESSAGE,
+        OutboxKind.UNPIN_MESSAGE,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.PIN)
     }
 
     /**
@@ -175,6 +182,16 @@ public object OutboxDependencies {
 /** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
 @kotlinx.serialization.Serializable
 public data class ReactionPayload(val emoji: String)
+
+/**
+ * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`
+ * is the message id (so a pin+unpin of the same message coalesces per-message);
+ * the pin/unpin REST route also needs the enclosing conversation id, which the
+ * client already knows at enqueue time, so it travels here rather than being
+ * re-derived from the cache at drain time.
+ */
+@kotlinx.serialization.Serializable
+public data class PinPayload(val conversationId: String)
 
 /**
  * Payload of a `SEND_FRIEND_REQUEST` outbox row. The receiver is the row's

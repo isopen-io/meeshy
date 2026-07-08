@@ -600,18 +600,34 @@ struct PinnedStoryTrailBand: View {
         )
     }
 
+    private var currentUserId: String {
+        AuthManager.shared.currentUser?.id ?? ""
+    }
+
+    /// Le groupe de l'utilisateur courant (sa propre story), non expiré.
+    /// Surfacé en tête du band replié pour un accès rapide « voir / revoir ma
+    /// story » depuis le header une fois la grande trail scrollée hors écran.
+    private var ownGroup: StoryGroup? {
+        let uid = currentUserId
+        guard !uid.isEmpty else { return nil }
+        return viewModel.storyGroups.first { $0.id == uid && !$0.isFullyExpired() }
+    }
+
     private var visibleGroups: [StoryGroup] {
-        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-        return viewModel.storyGroups.filter { $0.id != currentUserId && !$0.isFullyExpired() }
+        let uid = currentUserId
+        return viewModel.storyGroups.filter { $0.id != uid && !$0.isFullyExpired() }
     }
 
     var body: some View {
         let groups = visibleGroups
-        // Occupy space only while revealing AND there is at least one peer story
-        // to surface — otherwise the grande "+Moi" near the top already covers
-        // adding a story, so a pinned band would be redundant.
-        if reveal > 0.001 && !groups.isEmpty {
-            band(groups: groups)
+        let own = ownGroup
+        // Reveal the pinned band as soon as there is ANYTHING to reach from the
+        // collapsed header: the user's own story ring (quick access to view /
+        // re-view it once the big trail scrolled away) and/or peer stories.
+        // Previously it required a peer story, so a user with only their own
+        // story could never open it from the scrolled header.
+        if reveal > 0.001 && (!groups.isEmpty || own != nil) {
+            band(groups: groups, ownGroup: own)
                 .frame(height: Self.bandHeight * reveal, alignment: .top)
                 .opacity(Double(reveal))
                 .clipped()
@@ -634,7 +650,7 @@ struct PinnedStoryTrailBand: View {
         }
     }
 
-    private func band(groups: [StoryGroup]) -> some View {
+    private func band(groups: [StoryGroup], ownGroup: StoryGroup?) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             // `LazyHStack` — même fix que F5 sur la grande trail : un `HStack`
             // montait TOUS les groupes (avatars `.storyTrayCompact` animés en
@@ -643,6 +659,18 @@ struct PinnedStoryTrailBand: View {
             // visibles vivent (et animent).
             LazyHStack(alignment: .top, spacing: 12) {
                 addStoryButton
+                // Sa propre story d'abord (après le "+"), pour un accès direct
+                // « voir ma story » depuis le header replié — même anneau
+                // compact que les pairs.
+                if let ownGroup {
+                    StoryRingCell(
+                        group: ownGroup,
+                        context: .storyTrayCompact,
+                        onViewStory: { presentStory(userId: ownGroup.id) },
+                        onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) }
+                    )
+                    .zoomTransitionSource(id: ownGroup.id, in: zoomNamespace)
+                }
                 ForEach(groups, id: \.id) { group in
                     StoryRingCell(
                         group: group,

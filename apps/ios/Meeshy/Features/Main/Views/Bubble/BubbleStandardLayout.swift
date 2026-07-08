@@ -637,6 +637,12 @@ struct BubbleStandardLayout: View {
                         .compositingGroup()
                         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        // Le pager du carrousel possède le glissement
+                        // horizontal : le BubbleSwipeContainer parent
+                        // désengage reply/forward tant que le carrousel est
+                        // ouvert (retour grille → branche démontée →
+                        // préférence retombe à false).
+                        .preference(key: BubbleInlinePagingPreferenceKey.self, value: true)
                 } else if content.visualHostsReply, let reply = content.reply {
                     // Visual-only reply : conteneur unifié citation + grille,
                     // bordure commune RR16 — aucune chat bubble parasite.

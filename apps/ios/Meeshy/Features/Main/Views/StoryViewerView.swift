@@ -342,6 +342,19 @@ struct StoryViewerView: View {
             ?? group.stories.first(where: { !$0.isExpired(at: now) })
     }
 
+    /// Index d'entrée d'un groupe — MÊME règle que `entryStory` (et que
+    /// l'aperçu du cube inter-groupes) : première slide non-vue non-expirée,
+    /// sinon première non-expirée, sinon 0. Utilisé au commit d'une transition
+    /// FORWARD pour reprendre CHAQUE auteur à sa première story non lue —
+    /// parité avec l'aperçu du cube qui montrait déjà cette slide, et respect
+    /// de la reprise par-utilisateur (si tout est vu → 0, première slide).
+    func entryIndex(of group: StoryGroup) -> Int {
+        let now = Date()
+        if let i = group.stories.firstIndex(where: { !$0.isViewed && !$0.isExpired(at: now) }) { return i }
+        if let i = group.stories.firstIndex(where: { !$0.isExpired(at: now) }) { return i }
+        return 0
+    }
+
     private var neighborCubeGroup: StoryGroup? {
         guard neighborPreviewDirection != 0, !isPreviewMode else { return nil }
         let idx = currentGroupIndex + neighborPreviewDirection

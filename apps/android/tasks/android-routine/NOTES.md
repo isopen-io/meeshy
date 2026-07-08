@@ -3,6 +3,18 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-08 (`chat-pin-toggle`): a new `OutboxKind` and a new Retrofit method each force one compile-time
+  touch-point that a partial diff will otherwise miss.** Adding `PIN_MESSAGE`/`UNPIN_MESSAGE` to the enum makes
+  `OutboxLaneMap.assignmentFor`'s exhaustive `when` a compile error until each kind is mapped to a lane — this is
+  the intended guard (a registered sender can never be stranded off the drain sweep), so lean on it rather than
+  fighting it. Separately, adding `pin`/`unpin` to the `MessageApi` **interface** breaks every hand-written
+  `: MessageApi` test fake (`Class 'FakeMessageApi' is not abstract…`) — there is exactly one such fake
+  (`MessageRepositoryTest`); MockK-relaxed mocks are unaffected. When a terminal-state toggle (pin/unpin) has the
+  same shape as an existing one (block/unblock — opposite terminal states of one target), generalize the coalescer
+  helper (`blockToggle` → `terminalToggle`) instead of copy-pasting; the block call sites already passed
+  (opposite, same) so the rename was mechanical. The optimistic repo flip touches only `pinnedAt` (what the banner
+  SSOT reads); `pinnedBy` is cosmetic and arrives with the `message:pinned` socket refresh, so leaving it null
+  optimistically is correct, not a gap.
 - **2026-07-07 (`conversations-draft-aware-ordering`): an expression-body `= runBlocking { … }` JVM test must NOT
   end on a Truth assertion that returns a value.** `Truth.assertThat(x).containsExactly(…)` returns an `Ordered`
   (and `.inOrder()`/`.isInstanceOf()` also return non-Unit), so a test written `@Test fun t() = runBlocking { …;

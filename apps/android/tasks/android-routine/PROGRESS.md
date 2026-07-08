@@ -17,6 +17,38 @@
 > `ChatScreen` renders a tappable accent `PinnedBannerStrip` above the list. +28 tests. Reviewer PASS. The
 > pin/unpin **action** (optimistic outbox toggle) is the next slice.
 
+> On 2026-07-08 the **pin/unpin action** landed (slice `chat-pin-toggle`, Chat parity §C — feature-parity.md
+> "Pin/unpin message"), completing the pin feature end-to-end on Android alone (the banner read side shipped
+> earlier the same day). The pure `:core:model` `MessagePinToggle.resolve(isDeleted, pinnedAtIso) → PinAction`
+> SSOT (Pin | Unpin | Unavailable) decides the long-press action: a message is *pinned* when its `pinnedAt` is
+> non-blank (the **same** rule `PinnedMessages` reads, so toggle and banner never disagree), pinning is **not**
+> owner-restricted and has **no** window (parity with the gateway, which only checks conversation access — unlike
+> edit/delete), so the sole gate is that a deleted tombstone → `Unavailable`. `ChatViewModel.togglePin` resolves
+> the action, dismisses the sheet, and (when actionable) calls `MessageRepository.setPinnedOptimistic(messageId,
+> pin)` which flips the cached `pinnedAt` **instantly** (set to now on pin, cleared on unpin — banner reacts at
+> once; `pinnedBy` left for the socket refresh), refuses an unsent bubble (requireSynced), and enqueues a durable
+> `PIN_MESSAGE`/`UNPIN_MESSAGE` row on the new shared `pin` lane carrying a `PinPayload(conversationId)`. The
+> coalescer routes both through the generalized `terminalToggle` (renamed from `blockToggle`, now shared by
+> block/unblock **and** pin/unpin): a pin+unpin of the same message annihilates, a repeat supersedes. The
+> `OutboxFlushWorker` gains `messageApi.pin`/`unpin` (PUT/DELETE `conversations/{cid}/messages/{mid}/pin`)
+> senders and an `onExhausted` branch that decodes the payload and `messageRepository.refresh(conversationId)`
+> so a hard-dead flip reconciles with server truth. `ChatScreen`'s `MessageActionsSheet` shows a `PushPin`
+> "Épingler"/"Retirer" row (gated off only for `Unavailable`). EN/FR/ES/PT strings. +31 tests
+> (`MessagePinToggleTest` 9 — isPinned null/empty/whitespace/non-blank, resolve live-pin/live-unpin/live-blank/
+> deleted-unpinned/deleted-pinned; `OutboxCoalescerTest` +5 — pin↔unpin annihilate both ways, repeat-pin
+> supersede, first-pin enqueue, different-message-no-coalesce; `OutboxLaneMapTest` +1 — pin lane; `MessageRepository`
+> +3 — pin stamps+queues PIN on the pin lane with conversationId payload, unpin clears+queues UNPIN, refuses unsent;
+> `ChatViewModelTest` +5 — pin-not-pinned→setPinned(true)+enqueue+dismiss, unpin-pinned→setPinned(false),
+> deleted-inert, unknown-inert, repo-failure→errorMessage). `:core:model` + `:sdk-core`(isolated) + `:feature:chat`
+> `testDebugUnitTest` green, `:app:assembleDebug` green (system Gradle 8.14.3; the pre-existing
+> `InterfaceLanguageStoreTest` DataStore timeout flakes only under parallel load — passes in isolation, unrelated
+> to this diff). Reviewer: PASS (diff apps/android only; behaviour-through-public-API `MessagePinToggle.resolve` /
+> coalescer / `setPinnedOptimistic` / `togglePin`, no tautologies, boundary coverage on blank/deleted/unknown/
+> annihilate/supersede; SDK-purity honoured — the "can/how to toggle" decision is a pure `:core:model` atom, the
+> optimistic cache flip + outbox is `:sdk-core`, the "when to toggle" product wiring is the `:feature:chat` VM, the
+> sheet is exempt Compose glue; SSOT — pin-meaning shared with the banner; instant-app optimistic flip; UDF
+> immutable state; accent-coherent, natural long-press gesture, no dead end — the action pins/unpins live).
+
 > On 2026-07-08 the **who-reacted breakdown sheet** landed (slice `chat-reaction-who-reacted-sheet`, Chat parity §C —
 > feature-parity.md "reaction detail breakdown (who-reacted sheet)"). Reactions were add/remove-only; long-pressing a
 > reaction chip did nothing. iOS opens a sheet listing who reacted, grouped by emoji. New pure `:feature:chat`
@@ -705,18 +737,20 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-08): `chat-pinned-banner`** — the read side of message pinning. The wire now
-carries `pinnedAt`/`pinnedBy`; the socket `message:pinned`/`message:unpinned` events refresh the open
-conversation; the pure `:feature:chat` `PinnedMessages.of(messages) → PinnedBanner?` SSOT features the
-newest live pin (stable tie-break, total count, text›image›file›empty snippet); `ChatScreen` renders a
-tappable accent `PinnedBannerStrip` above the list → `onPinnedBannerTap` jumps to the newest pin. +28
-tests. See run log. **Recommended next (highest value, Chat §C):**
-- **`chat-pin-toggle`** — the pin/unpin **action**: long-press "Épingler"/"Retirer", a durable outbox
-  `PIN_MESSAGE`/`UNPIN_MESSAGE` kind (coalescer latest-wins + worker sender via `MessageApi.pin/unpin`,
-  optimistic `pinnedAt` flip + rollback), completing the pin feature end-to-end on Android alone.
+**Just shipped (2026-07-08): `chat-pin-toggle`** — the pin/unpin **action**, completing message pinning
+end-to-end on Android. Pure `:core:model` `MessagePinToggle.resolve → PinAction` (Pin | Unpin | Unavailable;
+pinned = non-blank `pinnedAt`, not owner/window-gated, deleted → Unavailable) drives a long-press
+"Épingler"/"Retirer" sheet action → `ChatViewModel.togglePin` → `MessageRepository.setPinnedOptimistic`
+(instant `pinnedAt` flip, refuses unsent) + durable `PIN_MESSAGE`/`UNPIN_MESSAGE` outbox row on the shared
+`pin` lane (block/unblock's `terminalToggle` coalescer generalized: annihilate opposite / supersede same) +
+`MessageApi.pin`/`unpin` worker sender + `onExhausted` conversation refresh. +31 tests. See run log.
+**Recommended next (highest value, Chat §C):**
 - **pinned-messages list sheet** — a `GET /pinned-messages`-backed sheet listing every pin (the banner
-  shows one at a time); tapping a row jumps to it.
-- **`chat-forward-message`** / §C forward (the remaining half of send/edit/delete/reply/forward).
+  shows one at a time); tapping a row jumps to it. Only remaining half of §C "Pin/unpin message".
+- **`chat-forward-message`** / §C forward (the remaining half of send/edit/delete/reply/forward) — pure
+  forward-target validation + optimistic send into the chosen conversation.
+- **reply thread overlay** — the remaining half of §C "Reply-count pills + reply thread overlay": a
+  focused reply-thread sheet listing a parent's replies (the `ReplyThreads` grouping is already the SSOT).
 
 **✅ MERGED (2026-07-08): `chat-reaction-who-reacted-sheet` — PR [#1663](https://github.com/isopen-io/meeshy/pull/1663) merged to `main`** (verified: `merged: true`, merged_at 2026-07-08T10:54:40Z).
 
