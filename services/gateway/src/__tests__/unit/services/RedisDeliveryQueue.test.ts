@@ -985,6 +985,41 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
 
     expect(await queue.size('user-offline')).toBe(1);
   });
+
+  test('dedup (memory): two different reactors on the same message both queue, when dedupKey differs', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const reactorA = makePayload({
+      messageId: 'msg-reacted',
+      eventType: 'reaction-added',
+      dedupKey: 'msg-reacted:participant-a:👍',
+    });
+    const reactorB = makePayload({
+      messageId: 'msg-reacted',
+      eventType: 'reaction-added',
+      dedupKey: 'msg-reacted:participant-b:🔥',
+    });
+
+    await queue.enqueue('user-offline', reactorA);
+    await queue.enqueue('user-offline', reactorB);
+
+    // Same messageId+eventType would have collapsed to 1 under the old
+    // messageId-only dedup — the exact bug this dedupKey exists to prevent.
+    expect(await queue.size('user-offline')).toBe(2);
+  });
+
+  test('dedup (memory): a repeated entry with the same dedupKey IS still deduped', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const reaction = makePayload({
+      messageId: 'msg-reacted',
+      eventType: 'reaction-added',
+      dedupKey: 'msg-reacted:participant-a:👍',
+    });
+
+    await queue.enqueue('user-offline', reaction);
+    await queue.enqueue('user-offline', reaction);
+
+    expect(await queue.size('user-offline')).toBe(1);
+  });
 });
 
 describe('RedisDeliveryQueue (Redis dedup via eval, eventType-aware)', () => {
@@ -999,6 +1034,22 @@ describe('RedisDeliveryQueue (Redis dedup via eval, eventType-aware)', () => {
     expect(redis.eval).toHaveBeenNthCalledWith(1, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'new');
     expect(redis.eval).toHaveBeenNthCalledWith(2, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'edited');
     expect(redis.eval).toHaveBeenNthCalledWith(3, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'deleted');
+  });
+
+  test('enqueue passes dedupKey (not messageId) as ARGV[2] when the entry sets one', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-evt', makePayload({
+      messageId: 'msg-reacted',
+      eventType: 'reaction-added',
+      dedupKey: 'msg-reacted:participant-a:👍',
+    }));
+
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String), 1, expect.any(String),
+      expect.any(String), 'msg-reacted:participant-a:👍', expect.any(String), 'reaction-added'
+    );
   });
 });
 
