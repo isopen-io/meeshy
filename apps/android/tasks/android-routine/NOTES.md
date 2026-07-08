@@ -3,6 +3,24 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-08 (`chat-pinned-messages-sheet`): a "featured one" and "list all" of the same collection should be
+  ONE filter/sort, not two.** The banner (`PinnedMessages.of → PinnedBanner?`) and the new sheet
+  (`PinnedMessagesList.of → List<PinnedMessageRow>`) both need "the currently-pinned messages, newest first".
+  Deriving them independently risks the banner saying "3 épinglés" while the sheet shows 2 (or a different
+  featured pin). Fix: `PinnedMessagesList.of` is the single filter+sort+map; `PinnedMessages.of` = `list.first()`
+  featured + `list.size` count. Bonus: the old hand-rolled `maxByStable` (kept the FIRST max-key element on a tie)
+  is provably equal to `sortedByDescending(...).first()` because Kotlin's sort is **stable** (TimSort) — among
+  equal keys the original relative order is preserved, so `first()` is the first max-key element. Deleting the
+  helper and reusing the sort kept the existing banner tests green, which is the proof the refactor was behaviour-
+  preserving. When you find yourself writing a second "find the pinned ones" pass, make the first one return the
+  list and build the scalar from it.
+- **2026-07-08 (rule #0): an open Android PR that is `mergeable_state: dirty` with no CI may be *superseded*, not
+  broken — diff its production files against `main` before trying to merge.** PR #1722 (draft-aware-ordering) was
+  branched off a pre-pin `main`; a later slice (`conversations-draft-list-mutation`) had already absorbed all of
+  it AND added `discardDraft`/`DraftDiscard.kt`. `git diff origin/main <branch> -- <prod files>` showed `main`
+  was a strict superset (merging would *delete* `discardDraft`). Correct move: **close as superseded** with an
+  explanatory comment, never force a redundant merge that regresses `main`. Check `git cat-file -e
+  origin/main:<new-file>` for the slice's marquee file first — if it already exists on `main`, suspect supersession.
 - **2026-07-08 (`chat-pin-toggle`): a new `OutboxKind` and a new Retrofit method each force one compile-time
   touch-point that a partial diff will otherwise miss.** Adding `PIN_MESSAGE`/`UNPIN_MESSAGE` to the enum makes
   `OutboxLaneMap.assignmentFor`'s exhaustive `when` a compile error until each kind is mapped to a lane — this is
