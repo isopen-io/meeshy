@@ -23,7 +23,7 @@ pydantic==2.13.4
 # protobuf>=6.31.1,<7.0.0 — the previous protobuf==5.29.3 pin is unsatisfiable
 # with any of these grpcio-reflection releases (1.76.0, 1.81.1 or 1.82.0 alike
 # require protobuf>=6.3x).
-grpcio==1.76.0
+grpcio==1.81.1
 grpcio-tools==1.76.0
 grpcio-reflection==1.76.0
 protobuf==6.33.6
