@@ -170,7 +170,11 @@ jobs:
       - name: Get new version
         id: get-version
         run: |
-          VERSION=$(jq -r '.version' package.json)
+          # Le package.json racine n'est PAS versionné par changesets (figé à
+          # 1.0.0 → « tag already exists » à chaque release). La version de
+          # release = max des trois services livrés ; updateInternalDependencies:
+          # patch garantit qu'un bump de packages/shared propage un bump ici.
+          VERSION=$(jq -r '.version' apps/web/package.json services/gateway/package.json services/translator/package.json | sort -V | tail -n 1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "📌 New version: $VERSION"
@@ -198,6 +202,17 @@ jobs:
         env:
           TAG_NAME: ${{ steps.get-version.outputs.tag }}
         run: |
+          # Idempotent : un re-run/race peut retrouver un tag déjà posé. S'il
+          # pointe sur HEAD c'est la même release (skip) ; sinon c'est un vrai
+          # conflit de version → échec explicite (le build checkout ce tag).
+          if git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
+            if [ "$(git rev-parse "$TAG_NAME^{commit}")" = "$(git rev-parse HEAD)" ]; then
+              echo "ℹ️  Tag $TAG_NAME déjà posé sur HEAD — skip"
+              exit 0
+            fi
+            echo "::error::Tag $TAG_NAME existe déjà sur un autre commit"
+            exit 1
+          fi
           git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           git push origin "$TAG_NAME"
 
