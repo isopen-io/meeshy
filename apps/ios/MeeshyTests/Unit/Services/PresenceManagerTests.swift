@@ -307,10 +307,15 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_seed_preservesLastActiveAt_awayState() {
+        // isOnline=false ici (pas true) : depuis la garde anti-stale (isOnline
+        // autoritatif jusqu'a 30min), un membre connecte resterait "online"
+        // meme avec un lastActiveAt vieux de 10min — cf.
+        // test_state_whenConnectedWithStaleTimestamp_staysOnline. La decroissance
+        // vers "away" ne s'observe que pour un membre deconnecte.
         let activeDate = Date().addingTimeInterval(-600)
         let conversations = [makeConversation(members: [
             makeMemberJSON(userId: "me", isOnline: true, lastActiveAt: nil),
-            makeMemberJSON(userId: "other-1", isOnline: true, lastActiveAt: activeDate)
+            makeMemberJSON(userId: "other-1", isOnline: false, lastActiveAt: activeDate)
         ])]
 
         sut.seed(from: conversations, currentUserId: "me")
