@@ -44,7 +44,7 @@ numpy>=1.21.0,<1.24.0
 accelerate==1.14.0
 datasets==5.0.0
 # sentencepiece: version gérée par ESPnet (0.1.97 pour espnet 202412)
-huggingface_hub==1.21.0
+huggingface_hub==1.22.0
 safetensors==0.8.0
 peft==0.19.1
 # PIN EXACT — chatterbox-tts 0.1.6 requiert transformers==5.13.0 (cf. uv.lock + pyproject.toml).
