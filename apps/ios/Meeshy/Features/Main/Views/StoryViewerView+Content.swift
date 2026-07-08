@@ -936,6 +936,13 @@ struct StoryViewersSheet: View {
 
     @State private var viewers: [StoryViewerItem] = []
     @State private var isLoading = true
+    // Coalescing anti-course pour le re-fetch temps réel : une rafale de
+    // `story:viewed` ne doit pas lancer N fetches `/interactions` concurrents
+    // (ils peuvent se terminer dans le désordre → liste momentanément périmée).
+    // `isRefreshing` = un seul fetch en vol ; `refreshQueued` = un événement est
+    // arrivé pendant le fetch → on relance EXACTEMENT une fois à la fin.
+    @State private var isRefreshing = false
+    @State private var refreshQueued = false
 
     var body: some View {
         NavigationStack {
@@ -1048,29 +1055,45 @@ struct StoryViewersSheet: View {
     }
 
     private func loadViewers() async {
-        // M1 follow-up: the wire-shape decoding + nullable-field
-        // defaulting now lives in StoryInteractionService.loadViewers.
-        // A nil result here means "couldn't load" (logged at fault level
-        // in the service) — we leave the previous list alone, matching
-        // the prior swallow-and-show-empty behaviour.
-        let snapshots = await StoryInteractionService().loadViewers(storyId: story.id)
-        await MainActor.run {
-            if let snapshots {
-                self.viewers = snapshots.map { s in
-                    StoryViewerItem(
-                        id: s.id,
-                        username: s.username,
-                        displayName: s.displayName,
-                        avatarUrl: s.avatarUrl,
-                        viewedAt: s.viewedAt,
-                        reactionEmoji: s.reactionEmoji,
-                        replyContent: nil,
-                        hasReshared: false
-                    )
-                }
-            }
-            self.isLoading = false
+        // Un seul fetch en vol : si un autre tourne déjà, on note qu'un refresh
+        // est dû (`refreshQueued`) et on sort — le fetch courant le rejouera.
+        let shouldStart = await MainActor.run { () -> Bool in
+            if isRefreshing { refreshQueued = true; return false }
+            isRefreshing = true
+            return true
         }
+        guard shouldStart else { return }
+
+        // Boucle jusqu'à ce qu'aucun événement n'ait été mis en file pendant le
+        // dernier fetch — au plus un refresh de rattrapage, jamais N concurrents.
+        repeat {
+            await MainActor.run { refreshQueued = false }
+            // M1 follow-up: the wire-shape decoding + nullable-field
+            // defaulting now lives in StoryInteractionService.loadViewers.
+            // A nil result here means "couldn't load" (logged at fault level
+            // in the service) — we leave the previous list alone, matching
+            // the prior swallow-and-show-empty behaviour.
+            let snapshots = await StoryInteractionService().loadViewers(storyId: story.id)
+            await MainActor.run {
+                if let snapshots {
+                    self.viewers = snapshots.map { s in
+                        StoryViewerItem(
+                            id: s.id,
+                            username: s.username,
+                            displayName: s.displayName,
+                            avatarUrl: s.avatarUrl,
+                            viewedAt: s.viewedAt,
+                            reactionEmoji: s.reactionEmoji,
+                            replyContent: nil,
+                            hasReshared: false
+                        )
+                    }
+                }
+                self.isLoading = false
+            }
+        } while await MainActor.run(body: { refreshQueued })
+
+        await MainActor.run { isRefreshing = false }
     }
 }
 

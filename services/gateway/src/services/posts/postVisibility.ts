@@ -26,8 +26,13 @@ export type PostVisibilityRecord = {
  * be RECORDED as having viewed are one audience (story-sota §4 divergence
  * resolved: a DM-contact who can open a story now also registers as a viewer).
  *
- * Kept in sync with `canUserViewPost` below (imperative mirror of the same
- * rules for already-fetched posts).
+ * ASYMÉTRIE VOLONTAIRE voir ⊇ interagir : ce filtre (ce qu'un viewer peut VOIR
+ * / dont la vue est ENREGISTRÉE) admet friends ∪ DM-contacts, tandis que
+ * `canUserViewPost` ci-dessous (qui garde RÉAGIR / COMMENTER) reste amis stricts.
+ * Un DM-contact peut donc ouvrir une story FRIENDS et compter comme viewer, mais
+ * pas y réagir. C'est un choix produit (décision 2026-07-08) — les deux ne sont
+ * PAS identiques ; ne pas « réaligner » l'un sur l'autre sans re-décider l'ACL
+ * d'interaction.
  */
 export function buildPostVisibilityOrFilter(
   viewerId: string,
