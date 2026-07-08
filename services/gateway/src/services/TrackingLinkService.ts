@@ -478,8 +478,8 @@ export class TrackingLinkService {
         clicksByLanguage[click.language] = (clicksByLanguage[click.language] || 0) + 1;
       }
 
-      // Par heure (0-23)
-      const hour = click.clickedAt.getHours().toString().padStart(2, '0');
+      // Par heure (0-23, UTC — cohérent avec clicksByDate qui utilise toISOString)
+      const hour = click.clickedAt.getUTCHours().toString().padStart(2, '0');
       clicksByHour[hour] = (clicksByHour[hour] || 0) + 1;
 
       // Par source sociale
