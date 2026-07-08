@@ -30,6 +30,8 @@ import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEditability
+import me.meeshy.sdk.model.MessagePinToggle
+import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
@@ -699,6 +701,36 @@ class ChatViewModel @Inject constructor(
     fun deleteForMe(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
         locallyHiddenStore.hide(messageId)
+    }
+
+    /**
+     * Pin or unpin a message (iOS `ConversationViewModel.togglePin`): the pin
+     * state flips optimistically in the cache and a durable pin/unpin mutation is
+     * queued, so the banner reacts instantly and the server sync/rollback follows.
+     * A deleted (or otherwise unresolvable) bubble is inert — see [MessagePinToggle].
+     */
+    fun togglePin(messageId: String) {
+        val bubble = _state.value.messages.firstOrNull { it.messageId == messageId }
+        val pin = when (MessagePinToggle.resolve(bubble?.isDeleted ?: true, bubble?.pinnedAtIso)) {
+            PinAction.Pin -> true
+            PinAction.Unpin -> false
+            PinAction.Unavailable -> {
+                _state.update { it.copy(actionMessageId = null) }
+                return
+            }
+        }
+        _state.update { it.copy(actionMessageId = null) }
+        viewModelScope.launch {
+            try {
+                if (messageRepository.setPinnedOptimistic(messageId, pin)) {
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
     }
 
     private fun applyEdit(messageId: String, content: String) {

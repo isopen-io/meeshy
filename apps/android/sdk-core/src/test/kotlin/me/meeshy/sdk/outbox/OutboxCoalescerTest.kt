@@ -151,6 +151,50 @@ class OutboxCoalescerTest {
     }
 
     @Test
+    fun `pin then unpin of the same message annihilates the pin`() {
+        val pin = row("p1", OutboxKind.PIN_MESSAGE, "m1")
+        val unpin = row("up1", OutboxKind.UNPIN_MESSAGE, "m1")
+
+        assertThat(OutboxCoalescer.decide(unpin, listOf(pin)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("p1")))
+    }
+
+    @Test
+    fun `unpin then pin of the same message annihilates the unpin`() {
+        val unpin = row("up1", OutboxKind.UNPIN_MESSAGE, "m1")
+        val pin = row("p1", OutboxKind.PIN_MESSAGE, "m1")
+
+        assertThat(OutboxCoalescer.decide(pin, listOf(unpin)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("up1")))
+    }
+
+    @Test
+    fun `a repeated pin of the same message keeps the latest`() {
+        val first = row("p1", OutboxKind.PIN_MESSAGE, "m1")
+        val second = row("p2", OutboxKind.PIN_MESSAGE, "m1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("p1"), second))
+    }
+
+    @Test
+    fun `a first pin of a message is enqueued`() {
+        val pin = row("p1", OutboxKind.PIN_MESSAGE, "m1")
+
+        assertThat(OutboxCoalescer.decide(pin, emptyList()))
+            .isEqualTo(CoalesceDecision.Enqueue(pin))
+    }
+
+    @Test
+    fun `pinning a different message is not coalesced`() {
+        val pinM1 = row("p1", OutboxKind.PIN_MESSAGE, "m1")
+        val unpinM2 = row("up2", OutboxKind.UNPIN_MESSAGE, "m2")
+
+        assertThat(OutboxCoalescer.decide(unpinM2, listOf(pinM1)))
+            .isEqualTo(CoalesceDecision.Enqueue(unpinM2))
+    }
+
+    @Test
     fun `a repeated friend request to the same receiver supersedes the pending one`() {
         val first = row("f1", OutboxKind.SEND_FRIEND_REQUEST, "u1")
         val second = row("f2", OutboxKind.SEND_FRIEND_REQUEST, "u1")

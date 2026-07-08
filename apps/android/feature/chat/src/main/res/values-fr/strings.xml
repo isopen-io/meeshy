@@ -16,6 +16,8 @@
     <string name="chat_action_show_original">Voir l’original</string>
     <string name="chat_action_show_translation">Voir la traduction</string>
     <string name="chat_action_edit">Modifier</string>
+    <string name="chat_action_pin">Épingler</string>
+    <string name="chat_action_unpin">Retirer</string>
     <string name="chat_action_delete_for_everyone">Supprimer pour tout le monde</string>
     <string name="chat_action_delete_for_me">Supprimer pour moi</string>
     <string name="chat_editing_label">Modification du message</string>
