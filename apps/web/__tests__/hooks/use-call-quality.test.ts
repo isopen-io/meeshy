@@ -70,6 +70,54 @@ function makeMockPeerConnection(statsReport = makeStatsReport({})) {
   return { getStats: jest.fn().mockResolvedValue(statsReport) };
 }
 
+// Returns a peer connection whose getStats() yields each report in `reports`
+// on successive calls (the last one is reused once the list is exhausted), so
+// a test can drive the hook through multiple monitoring ticks with evolving
+// cumulative counters — required to exercise the delta-based bitrate rate.
+function makeSequentialPeerConnection(reports: unknown[]) {
+  let call = 0;
+  return {
+    getStats: jest.fn().mockImplementation(() => {
+      const report = reports[Math.min(call, reports.length - 1)];
+      call += 1;
+      return Promise.resolve(report);
+    }),
+  };
+}
+
+// Builds an RTCStatsReport-like object with one inbound-rtp entry per stream,
+// each carrying a `timestamp` (DOMHighResTimeStamp, ms) so the rate math has a
+// real elapsed interval to divide by.
+function inboundStatsReport(
+  streams: Array<{
+    kind: 'audio' | 'video';
+    bytesReceived: number;
+    timestamp: number;
+    jitter?: number;
+    packetsLost?: number;
+    packetsReceived?: number;
+  }>,
+  opts: { rtt?: number } = {}
+) {
+  const { rtt = 0.05 } = opts;
+  return {
+    forEach: (cb: Function) => {
+      streams.forEach((s) =>
+        cb({
+          type: 'inbound-rtp',
+          kind: s.kind,
+          bytesReceived: s.bytesReceived,
+          timestamp: s.timestamp,
+          jitter: s.jitter ?? 0,
+          packetsLost: s.packetsLost ?? 0,
+          packetsReceived: s.packetsReceived ?? 100,
+        })
+      );
+      cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: rtt });
+    },
+  };
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('useCallQuality', () => {
@@ -218,7 +266,7 @@ describe('useCallQuality', () => {
       const { rerender } = renderHook(
         ({ pc }) =>
           useCallQuality({ peerConnection: pc as unknown as RTCPeerConnection | null }),
-        { initialProps: { pc: mockPC as unknown as RTCPeerConnection } }
+        { initialProps: { pc: mockPC as unknown as RTCPeerConnection | null } }
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -241,7 +289,7 @@ describe('useCallQuality', () => {
       const { result, rerender } = renderHook(
         ({ pc }) =>
           useCallQuality({ peerConnection: pc as unknown as RTCPeerConnection | null }),
-        { initialProps: { pc: mockPC as unknown as RTCPeerConnection } }
+        { initialProps: { pc: mockPC as unknown as RTCPeerConnection | null } }
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -391,24 +439,25 @@ describe('useCallQuality', () => {
       expect(result.current.qualityStats?.level).toBe('poor');
     });
 
-    it('computes video bitrate from video inbound-rtp report', async () => {
-      const mockPC = {
-        getStats: jest.fn().mockResolvedValue({
-          forEach: (cb: Function) => {
-            cb({ type: 'inbound-rtp', kind: 'video', packetsLost: 0, packetsReceived: 100, jitter: 0, bytesReceived: 10000 });
-            cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.05 });
-            cb({ type: 'outbound-rtp', bytesSent: 8000 });
-          },
-        }),
-      };
+    it('computes video bitrate from the delta between two video inbound-rtp samples', async () => {
+      // Bitrate is a rate: it needs a predecessor sample. The first sample has
+      // none (→ 0); the second yields (Δbytes·8)/Δms kbps.
+      const mockPC = makeSequentialPeerConnection([
+        inboundStatsReport([{ kind: 'video', bytesReceived: 100000, timestamp: 1000 }]),
+        inboundStatsReport([{ kind: 'video', bytesReceived: 110000, timestamp: 2000 }]),
+      ]);
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection, updateInterval: 500 })
       );
 
       await act(async () => { await Promise.resolve(); });
+      expect(result.current.qualityStats?.bitrate.video).toBe(0);
 
-      expect(result.current.qualityStats?.bitrate.video).toBeGreaterThan(0);
+      await act(async () => { jest.advanceTimersByTime(500); await Promise.resolve(); });
+
+      // Δ = 10000 bytes over 1000ms → 10000·8/1000 = 80 kbps.
+      expect(result.current.qualityStats?.bitrate.video).toBe(80);
       expect(result.current.qualityStats?.bitrate.audio).toBe(0);
     });
 
@@ -544,18 +593,65 @@ describe('useCallQuality', () => {
       expect(result.current.qualityStats?.bytesReceived).toBeGreaterThan(0);
     });
 
-    it('handles both audio and video inbound-rtp streams together', async () => {
-      // Covers both audio (line 102) and video (line 104) bitrate branches
-      const mockPC = {
-        getStats: jest.fn().mockResolvedValue({
-          forEach: (cb: Function) => {
-            cb({ type: 'inbound-rtp', kind: 'audio', packetsLost: 0, packetsReceived: 50, jitter: 0.001, bytesReceived: 3000 });
-            cb({ type: 'inbound-rtp', kind: 'video', packetsLost: 0, packetsReceived: 50, jitter: 0.002, bytesReceived: 8000 });
-            cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.04 });
-            cb({ type: 'outbound-rtp', bytesSent: 4000 });
-          },
-        }),
-      };
+    it('computes both audio and video bitrate from the delta between two samples', async () => {
+      const mockPC = makeSequentialPeerConnection([
+        inboundStatsReport([
+          { kind: 'audio', bytesReceived: 3000, timestamp: 1000, jitter: 0.001 },
+          { kind: 'video', bytesReceived: 8000, timestamp: 1000, jitter: 0.002 },
+        ]),
+        inboundStatsReport([
+          { kind: 'audio', bytesReceived: 7000, timestamp: 2000, jitter: 0.001 },
+          { kind: 'video', bytesReceived: 28000, timestamp: 2000, jitter: 0.002 },
+        ]),
+      ]);
+
+      const { result } = renderHook(() =>
+        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection, updateInterval: 500 })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { jest.advanceTimersByTime(500); await Promise.resolve(); });
+
+      // audio Δ = 4000 bytes / 1000ms → 32 kbps ; video Δ = 20000 / 1000ms → 160 kbps.
+      expect(result.current.qualityStats?.bitrate.audio).toBe(32);
+      expect(result.current.qualityStats?.bitrate.video).toBe(160);
+    });
+
+    it('reports bitrate as a per-interval rate that stays bounded over call duration', async () => {
+      // Steady link: +4000 bytes every 1000ms. The cumulative counter climbs
+      // (100000 → 104000 → 108000) but the reported rate must stay 32 kbps —
+      // guards against the regression where bitrate was the cumulative counter.
+      const mockPC = makeSequentialPeerConnection([
+        inboundStatsReport([{ kind: 'audio', bytesReceived: 100000, timestamp: 1000 }]),
+        inboundStatsReport([{ kind: 'audio', bytesReceived: 104000, timestamp: 2000 }]),
+        inboundStatsReport([{ kind: 'audio', bytesReceived: 108000, timestamp: 3000 }]),
+      ]);
+
+      const { result } = renderHook(() =>
+        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection, updateInterval: 500 })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+      expect(result.current.qualityStats?.bitrate.audio).toBe(0); // first sample: no predecessor
+
+      await act(async () => { jest.advanceTimersByTime(500); await Promise.resolve(); });
+      expect(result.current.qualityStats?.bitrate.audio).toBe(32);
+
+      await act(async () => { jest.advanceTimersByTime(500); await Promise.resolve(); });
+      expect(result.current.qualityStats?.bitrate.audio).toBe(32); // NOT 864 (cumulative)
+    });
+
+    it('reports the worst (max) jitter across inbound streams, not the last iterated', async () => {
+      // audio jitter 40ms iterated BEFORE video jitter 3ms. Last-write-wins
+      // would report 3ms (video, iterated last) and mask the jittery audio
+      // stream; the aggregate must be the worst case = 40ms.
+      const mockPC = makeMockPeerConnection({
+        forEach: (cb: Function) => {
+          cb({ type: 'inbound-rtp', kind: 'audio', packetsLost: 0, packetsReceived: 100, jitter: 0.04, bytesReceived: 1000, timestamp: 1000 });
+          cb({ type: 'inbound-rtp', kind: 'video', packetsLost: 0, packetsReceived: 100, jitter: 0.003, bytesReceived: 5000, timestamp: 1000 });
+          cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.05 });
+        },
+      } as any);
 
       const { result } = renderHook(() =>
         useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
@@ -563,8 +659,7 @@ describe('useCallQuality', () => {
 
       await act(async () => { await Promise.resolve(); });
 
-      expect(result.current.qualityStats?.bitrate.audio).toBeGreaterThan(0);
-      expect(result.current.qualityStats?.bitrate.video).toBeGreaterThan(0);
+      expect(result.current.qualityStats?.jitter).toBe(40);
     });
 
     it('handles inbound-rtp with missing bytesReceived and bytesSent fields', async () => {
