@@ -77,11 +77,14 @@ export const getStatsSchema = z.object({
 export function detectBrowser(userAgent: string): string {
   if (!userAgent) return 'Unknown';
 
+  // Order matters: Chromium-derived browsers (Opera, Edge) all carry the
+  // `Chrome` token, so their specific markers (`OPR`/`Opera`, `Edg`) MUST be
+  // tested before the generic Chrome branch — otherwise they fold into Chrome.
   if (userAgent.includes('Firefox')) return 'Firefox';
-  if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) return 'Chrome';
-  if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) return 'Safari';
+  if (userAgent.includes('OPR') || userAgent.includes('Opera')) return 'Opera';
   if (userAgent.includes('Edg')) return 'Edge';
-  if (userAgent.includes('Opera') || userAgent.includes('OPR')) return 'Opera';
+  if (userAgent.includes('Chrome')) return 'Chrome';
+  if (userAgent.includes('Safari')) return 'Safari';
 
   return 'Other';
 }
@@ -89,11 +92,15 @@ export function detectBrowser(userAgent: string): string {
 export function detectOS(userAgent: string): string {
   if (!userAgent) return 'Unknown';
 
+  // Order matters: every Android UA carries `Linux`, and every iPhone/iPad UA
+  // carries `Mac OS X` ("like Mac OS X"). The mobile platforms MUST be tested
+  // before the desktop tokens they contain — otherwise Android reads as Linux
+  // and iOS reads as macOS.
   if (userAgent.includes('Windows')) return 'Windows';
+  if (userAgent.includes('Android')) return 'Android';
+  if (userAgent.includes('iPhone') || userAgent.includes('iPad') || userAgent.includes('iOS')) return 'iOS';
   if (userAgent.includes('Mac OS')) return 'macOS';
   if (userAgent.includes('Linux')) return 'Linux';
-  if (userAgent.includes('Android')) return 'Android';
-  if (userAgent.includes('iOS') || userAgent.includes('iPhone') || userAgent.includes('iPad')) return 'iOS';
 
   return 'Other';
 }
@@ -101,11 +108,14 @@ export function detectOS(userAgent: string): string {
 export function detectDevice(userAgent: string): string {
   if (!userAgent) return 'Unknown';
 
-  if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
+  // Order matters: iPad Safari UAs carry the `Mobile` token (`Mobile/15E148`),
+  // so tablets MUST be tested before the generic mobile branch. Android tablets
+  // are distinguished from phones by the ABSENCE of `Mobile` (the standard
+  // Android convention: phones include `Mobile`, tablets omit it).
+  if (userAgent.includes('iPad') || userAgent.includes('Tablet')) return 'tablet';
+  if (userAgent.includes('Android') && !userAgent.includes('Mobile')) return 'tablet';
+  if (userAgent.includes('Mobile') || userAgent.includes('iPhone') || userAgent.includes('Android')) {
     return 'mobile';
-  }
-  if (userAgent.includes('Tablet') || userAgent.includes('iPad')) {
-    return 'tablet';
   }
 
   return 'desktop';
