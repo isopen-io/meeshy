@@ -426,7 +426,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`ReplyJumpResolver`, inerte si original paginé hors écran) + **swipe-to-reply**
       (`SwipeToReply` : incoming→droite / own→gauche, rubber-band + seuil de commit + haptique,
       révèle un glyphe reply, commit → `startReply`) ; forward pending
-- [ ] Reply-count pills + reply thread overlay
+- [~] Reply-count pills + reply thread overlay — **pills done** (slice `chat-reply-count-pills`,
+      2026-07-08): pure `:feature:chat` `ReplyThreads.of(messages) → threadFor(id)` SSOT groups the
+      loaded messages by their (trimmed, non-self, non-deleted) `replyToId` into
+      `ReplyThread(parentId, count, firstReplyId=earliest live reply)`; a parent whose every reply is
+      deleted/absent has no thread. `ChatScreen` renders an accent-tinted, bubble-side-aligned pill under
+      any message with a thread; tapping it (`ChatViewModel.onReplyCountTap`) scrolls to the earliest
+      reply (reuses `scrollToMessageId`; a no-reply message is inert). +16 tests. **Pending:** the full
+      thread overlay (a focused reply-thread sheet).
 - [~] Message bubbles: text done ; pièces jointes image (grille 1–4 + overlay « +N »,
       URL relative résolue contre l'origine gateway, `ApiMessage.attachments` persisté
       via le payload Room) + repli fichier générique (nom + taille) done ;
