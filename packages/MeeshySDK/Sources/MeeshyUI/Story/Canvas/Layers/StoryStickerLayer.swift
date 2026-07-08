@@ -37,7 +37,7 @@ public final class StoryStickerLayer: CALayer {
         bounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
 
         let designCenterX = geometry.designLength(forNormalized: CGFloat(sticker.x))
-        let designCenterY = CGFloat(sticker.y) * CanvasGeometry.designHeight
+        let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(sticker.y))
         position = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
         anchorPoint = sticker.anchor
         transform = CATransform3DMakeRotation(CGFloat(sticker.rotation) * .pi / 180, 0, 0, 1)

@@ -590,6 +590,10 @@ extension StoryComposerView {
             // Marge basse minimale même sheet repliée → la carte reste détachée du bas du
             // viewport (et de la poignée), sinon elle touchait quasi le bord en collapse.
             let bottomInset = max(presentedSheetHeight, 16) + max(proxy.safeAreaInsets.bottom, 0)
+            // « L'import de l'image de fond impose le cadre et forme du Canvas » :
+            // un fond paysage bascule le ratio en 16:9 (`currentCanvasRatio`), sinon
+            // le canvas reste vertical 9:16 par défaut.
+            let canvasRatio = viewModel.currentCanvasRatio
             let framing = StoryCanvasFraming.resolve(.init(
                 viewport: proxy.size,
                 headerInset: headerInset,
@@ -599,8 +603,9 @@ extension StoryComposerView {
                 // du viewport »), pour tous les outils (dessin inclus).
                 sideInset: 14,
                 state: canvasIsCarded ? .carded : .free,
-                cardedCornerRadius: 22))
-            let fit = CanvasGeometry.aspectFitSize(in: proxy.size)
+                cardedCornerRadius: 22,
+                canvasRatio: canvasRatio))
+            let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: canvasRatio)
             // Rayon compensé par `framing.scale` : la carte est rendue à sa taille
             // intrinsèque `fit` PUIS réduite par `.scaleEffect(framing.scale)`, donc
             // un rayon UIKit de `cornerRadius / scale` atterrit à ~22pt à l'écran.

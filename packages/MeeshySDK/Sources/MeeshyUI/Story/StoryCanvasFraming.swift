@@ -27,14 +27,20 @@ public nonisolated enum StoryCanvasFraming {
         public let state: Presentation
         public let cardedCornerRadius: CGFloat
         public let verticalAlignment: VerticalAlignment
+        /// Ratio (largeur / hauteur) du canvas. Défaut = portrait 9:16 (tous les
+        /// call sites historiques inchangés) ; un fond paysage passe le ratio 16:9
+        /// pour que la carte cadre exactement le canvas horizontal.
+        public let canvasRatio: CGFloat
         public init(viewport: CGSize, headerInset: CGFloat, bottomInset: CGFloat,
                     sideInset: CGFloat = 0,
                     state: Presentation, cardedCornerRadius: CGFloat,
-                    verticalAlignment: VerticalAlignment = .center) {
+                    verticalAlignment: VerticalAlignment = .center,
+                    canvasRatio: CGFloat = CanvasGeometry.portraitRatio) {
             self.viewport = viewport; self.headerInset = headerInset
             self.bottomInset = bottomInset; self.sideInset = sideInset; self.state = state
             self.cardedCornerRadius = cardedCornerRadius
             self.verticalAlignment = verticalAlignment
+            self.canvasRatio = canvasRatio
         }
     }
 
@@ -66,7 +72,7 @@ public nonisolated enum StoryCanvasFraming {
 
     public static func resolve(_ input: Input) -> Result {
         guard input.state == .carded else { return .identity }
-        let intrinsic = CanvasGeometry.aspectFitSize(in: input.viewport)
+        let intrinsic = CanvasGeometry.aspectFitSize(in: input.viewport, ratio: input.canvasRatio)
         guard intrinsic.width > 0, intrinsic.height > 0,
               input.viewport.width > 0, input.viewport.height > 0 else { return .identity }
 

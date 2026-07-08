@@ -177,7 +177,7 @@ public final class StoryTextLayer: CATextLayer {
         truncationMode = .none
 
         let designCenterX = geometry.designLength(forNormalized: CGFloat(text.x))
-        let designCenterY = CGFloat(text.y) * CanvasGeometry.designHeight
+        let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(text.y))
         position = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
         anchorPoint = text.anchor
         transform = CATransform3DMakeRotation(CGFloat(text.rotation) * .pi / 180, 0, 0, 1)
