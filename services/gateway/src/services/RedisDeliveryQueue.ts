@@ -29,7 +29,7 @@ return entries
 // ARGV[3] = TTL, ARGV[4] = normalized eventType
 const ENQUEUE_DEDUP_LUA = `
 local entries = redis.call('LRANGE', KEYS[1], 0, -1)
-for _, entry in ipairs(entries) do
+for i, entry in ipairs(entries) do
   local ok, decoded = pcall(cjson.decode, entry)
   if ok and decoded then
     local decodedDedupId = decoded.dedupKey or decoded.messageId

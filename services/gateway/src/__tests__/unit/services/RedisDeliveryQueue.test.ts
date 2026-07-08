@@ -976,7 +976,7 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     expect(drained.map(d => d.eventType ?? 'new')).toEqual(['new', 'deleted']);
   });
 
-  test('dedup (memory): a repeated "edited" event for the same messageId IS still deduped', async () => {
+  test('dedup (memory): a repeated "edited" event for the same messageId IS still collapsed to one entry', async () => {
     const queue = new RedisDeliveryQueue(makeCacheStore(null));
     const edited = makePayload({ messageId: 'msg-edit-twice', eventType: 'edited' });
 
@@ -1066,6 +1066,23 @@ describe('RedisDeliveryQueue (Redis dedup via eval)', () => {
     expect(redis.eval).toHaveBeenCalledTimes(2);
     // Memory queue remains empty since Redis was available both times
     expect(await queue.size('user-rd')).toBe(0);
+  });
+
+  test('supersede (Redis): eval returns 2 (in-place replace) — handled without a memory fallback push', async () => {
+    const redis = makeMockRedis({
+      eval: jest.fn()
+        .mockResolvedValueOnce(1)  // first edit: pushed
+        .mockResolvedValueOnce(2), // second edit: superseded in place
+      llen: jest.fn().mockResolvedValue(1),
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-sup', makePayload({ messageId: 'm-sup', eventType: 'edited', payload: { content: 'v1' } }));
+    await queue.enqueue('user-sup', makePayload({ messageId: 'm-sup', eventType: 'edited', payload: { content: 'v2' } }));
+
+    expect(redis.eval).toHaveBeenCalledTimes(2);
+    // Redis owned both enqueues — nothing leaks into the memory fallback.
+    expect(await queue.size('user-sup')).toBe(1); // llen returns 1 (single collapsed entry)
   });
 
   test('dedup (Redis): eval returns 1 on first push, correctly logs dedup on second', async () => {
