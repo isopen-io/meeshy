@@ -331,7 +331,8 @@ export class CallEventsHandler {
             data: { type: 'call_cancel', callId }
           },
           types: ['apns'],
-          platforms: ['ios']
+          platforms: ['ios'],
+          bypassDnd: true
         }).catch((error) => {
           logger.error('call_cancel push failed', { callId, userId: uid, error });
         })
@@ -1191,7 +1192,25 @@ export class CallEventsHandler {
     // the app was foreground. iOS emits this on scenePhase transitions while the
     // socket is still alive (`.inactive` fires before suspension). Stored on the
     // socket so the per-user fanout (which uses fetchSockets) can read it.
-    socket.on('presence:app-state', (data: { foreground?: boolean }) => {
+    // Audit gateway calling-stack 2026-07-08 — this was the last call-adjacent
+    // handler with no auth/rate-limit gate at all (every sibling lifecycle
+    // event does). Impact per-event is minimal (flips a socket-local flag, no
+    // DB write, no broadcast) but a flooding client should still be bounded
+    // like every other handler here, not left as the one exception.
+    socket.on('presence:app-state', async (data: { foreground?: boolean }) => {
+      const userId = getUserId(socket.id);
+      if (!userId) return;
+      rememberAuth(userId);
+
+      const rateLimitPassed = await checkSocketRateLimit(
+        socket,
+        userId,
+        SOCKET_RATE_LIMITS.PRESENCE_APP_STATE,
+        this.rateLimiter,
+        CALL_EVENTS.ERROR
+      );
+      if (!rateLimitPassed) return;
+
       socket.data.appForeground = data?.foreground === true;
     });
 
@@ -1545,6 +1564,7 @@ export class CallEventsHandler {
                 },
               },
               types: ['voip'],
+              bypassDnd: true,
             }).catch(err => {
               logger.error('Failed to send VoIP push', { userId: offlineUserId, error: err });
             });
@@ -2408,7 +2428,8 @@ export class CallEventsHandler {
                 data: { type: 'call_answered_elsewhere', callId: data.callId }
               },
               types: ['apns'],
-              platforms: ['ios']
+              platforms: ['ios'],
+              bypassDnd: true
             }).catch((error) => {
               logger.error('call_answered_elsewhere push failed (signal unaffected)', {
                 callId: data.callId, userId, error
@@ -3349,24 +3370,6 @@ export class CallEventsHandler {
           return;
         }
 
-        // ZOMBIE-SOCKET GUARD (2026-07-02) — a stale socket from a previous
-        // session expiring must NOT tear down calls the user is actively on
-        // through ANOTHER live socket (prod: two expired zombies killed call
-        // 6a464c61 mid-ring while the active socket still received messages).
-        // This handler listens on 'disconnect', so the closing socket has
-        // already left its rooms — any member left in the user room is a
-        // different, live connection: no leave, no grace, the user is here.
-        const remainingUserSockets =
-          io?.sockets?.adapter?.rooms?.get(ROOMS.user(userId))?.size ?? 0;
-        if (remainingUserSockets > 0) {
-          logger.info('📞 Socket disconnect ignored for calls — user still has live sockets', {
-            socketId: socket.id,
-            userId,
-            remainingUserSockets
-          });
-          return;
-        }
-
         logger.info('📞 Socket: disconnect - checking for active calls', {
           socketId: socket.id,
           userId
@@ -3417,6 +3420,43 @@ export class CallEventsHandler {
           // timeout stays the hard cap).
           const dcStatus = participation.callSession.status as string;
           const isAnswered = dcStatus === 'active' || dcStatus === 'reconnecting';
+          const callId = participation.callSessionId;
+
+          // ZOMBIE-SOCKET GUARD (2026-07-02, scoped per-call 2026-07-08) — a
+          // stale socket from a previous session expiring must NOT tear down
+          // a call the user is actively on through ANOTHER live socket (prod:
+          // two expired zombies killed call 6a464c61 mid-ring while the
+          // active socket still received messages). This handler listens on
+          // 'disconnect', so the closing socket has already left its rooms.
+          //
+          // Pre-answer calls have no `ROOMS.call` membership yet (joined only
+          // on answer/explicit join) — the only signal of "user is still
+          // here" is a live socket anywhere in their user room. Answered
+          // calls DO have call-room membership, and checking there instead
+          // (rather than the user's global presence) is what actually proves
+          // the user is still on THIS call: an unrelated idle second device
+          // (never joined to this call) must not mask a crashed in-call
+          // device and suppress grace for a call nobody is actually still on.
+          if (!isAnswered) {
+            const remainingUserSockets =
+              io?.sockets?.adapter?.rooms?.get(ROOMS.user(userId))?.size ?? 0;
+            if (remainingUserSockets > 0) {
+              logger.info('📞 Socket disconnect ignored for pre-answer call — user still has live sockets', {
+                socketId: socket.id, userId, callId, remainingUserSockets
+              });
+              continue;
+            }
+          } else {
+            const socketsInCallRoom = await io.in(ROOMS.call(callId)).fetchSockets();
+            const stillInCallRoom = socketsInCallRoom.some((s: { id: string }) => getUserId(s.id) === userId);
+            if (stillInCallRoom) {
+              logger.info('📞 Socket disconnect ignored for call — user still has a live socket in the call room', {
+                socketId: socket.id, userId, callId
+              });
+              continue;
+            }
+          }
+
           this.armDisconnectGrace(
             {
               io,
