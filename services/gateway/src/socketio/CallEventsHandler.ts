@@ -1798,35 +1798,6 @@ export class CallEventsHandler {
           callId: data.callId
         });
 
-        // Multi-device socketless — the socket event above cannot reach a
-        // secondary device woken by the VoIP push whose WebSocket never came
-        // up: it would ring until its local timeout although the call was
-        // answered elsewhere. Mirror of the call_cancel hardening: a silent
-        // background push to the joiner's devices; the answering device (and
-        // any device not ringing on this callId) drops it via the client-side
-        // FSM guard. Only on a real ANSWER (callee, initiated/ringing →
-        // connecting) — never for the initiator's own room join nor rejoins.
-        // Best-effort: a push failure must never fail the join.
-        if (this.pushService
-            && userId !== callSession.initiatorId
-            && (callSession.status as string) === 'connecting') {
-          this.pushService.sendToUser({
-            userId,
-            payload: {
-              title: '',
-              body: '',
-              silent: true,
-              data: { type: 'call_answered_elsewhere', callId: data.callId }
-            },
-            types: ['apns'],
-            platforms: ['ios']
-          }).catch((error) => {
-            logger.error('call_answered_elsewhere push failed (join unaffected)', {
-              callId: data.callId, userId, error
-            });
-          });
-        }
-
         logger.info('✅ Socket: User joined call', {
           callId: data.callId,
           userId,
@@ -2003,6 +1974,17 @@ export class CallEventsHandler {
         }
       } catch (error: any) {
         logger.error('❌ Socket: Error leaving call', error);
+
+        // Sibling-drift fix (Vague 27, mirrors call:end's catch) — if
+        // leaveCall() itself threw, the CallSession may be left stuck
+        // non-terminal (ACTIVE), blocking every future call:initiate in this
+        // conversation until CallCleanupService's GC tier reaps it (~120s).
+        // Force it to a terminal state and run the same fanout/summary/
+        // missed-call side effects the happy path would have run. `userId`
+        // was declared inside the try block above and is out of scope here —
+        // re-resolve it the same way call:end's catch does.
+        const recoveryUserId = getUserId(socket.id) ?? 'unknown';
+        await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, recoveryUserId);
 
         const errorMessage = error.message || 'Failed to leave call';
         const errorCode = errorMessage.split(':')[0];
@@ -2188,6 +2170,14 @@ export class CallEventsHandler {
               }
             } catch (leaveError) {
               logger.error('❌ Error force leaving call', { callId: call.id, error: leaveError });
+
+              // Sibling-drift fix (Vague 27, mirrors call:end/call:leave's
+              // catch) — if leaveCall() itself threw, this specific call may
+              // be left stuck non-terminal (ACTIVE), blocking every future
+              // call:initiate in this conversation until CallCleanupService's
+              // GC tier reaps it (~120s) — defeating the whole point of
+              // call:force-leave, whose job is exactly to unstick this.
+              await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, call.id, userId);
             }
           }
         }
@@ -2386,7 +2376,45 @@ export class CallEventsHandler {
           this.callService.clearRingingTimeout(data.callId);
           // §4.6 — negotiation complete, the buffered offer is no longer needed.
           this.clearBufferedOffer(data.callId);
+          // `callSession` was read (line ~2302) BEFORE this update — its
+          // `answeredAt` is the true pre-update value, so this correctly
+          // identifies the FIRST answer (never a later renegotiation answer,
+          // e.g. enabling video mid-call, which would already have it set).
+          const isFirstAnswer = !callSession.answeredAt;
           await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on answer)', { callId: data.callId, err }));
+
+          // Audit Vague 27 — relocated from call:join, where this was
+          // permanently dead: it gated on `callSession.status === 'connecting'`,
+          // a status the FSM (Item F) never actually writes (joinCallAttempt
+          // only ever transitions initiated/ringing → ringing). The real
+          // "callee answered" transition happens HERE, on the SDP answer.
+          // Multi-device socketless — the ALREADY_ANSWERED socket event above
+          // cannot reach a secondary device woken by the VoIP push whose
+          // WebSocket never came up: it would ring until its local timeout
+          // although the call was answered elsewhere. Mirror of the
+          // call_cancel hardening: a silent background push to the
+          // answerer's OTHER devices; the answering device (and any device
+          // not ringing on this callId) drops it via the client-side FSM
+          // guard. Never for the initiator's own answer, never for a later
+          // renegotiation answer. Best-effort: a push failure must never
+          // fail the signal relay.
+          if (this.pushService && userId !== callSession.initiatorId && isFirstAnswer) {
+            this.pushService.sendToUser({
+              userId,
+              payload: {
+                title: '',
+                body: '',
+                silent: true,
+                data: { type: 'call_answered_elsewhere', callId: data.callId }
+              },
+              types: ['apns'],
+              platforms: ['ios']
+            }).catch((error) => {
+              logger.error('call_answered_elsewhere push failed (signal unaffected)', {
+                callId: data.callId, userId, error
+              });
+            });
+          }
         }
 
         ack?.({ success: true });
