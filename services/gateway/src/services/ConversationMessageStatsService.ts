@@ -16,12 +16,15 @@ interface CacheEntry {
   expiresAt: number;
 }
 
+// Maps an attachment token (derived from a message's MIME types) to its
+// conversation-level counter. Location is NOT here: it is a `messageType`,
+// never an attachment token, so it is counted by `messageType === 'location'`
+// on both the incremental path AND recompute() — see isLocationMessageStat.
 const ATTACHMENT_TYPE_FIELDS: Record<string, string> = {
   image: 'imageCount',
   audio: 'audioCount',
   video: 'videoCount',
   file: 'fileCount',
-  location: 'locationCount',
 };
 
 function countWords(content: string): number {
@@ -41,6 +44,15 @@ function isTextMessageStat(
 ): boolean {
   const hasTextContent = !!(content && content.trim().length > 0);
   return attachmentTypes.length === 0 && hasTextContent && (messageType || 'text') === 'text';
+}
+
+// A message counts as "location" for stats iff its messageType is 'location'.
+// Location is a messageType dimension (like 'text'/'system'), NOT an attachment
+// token, so the incremental path MUST count it by messageType — exactly like
+// the authoritative recompute() (`msgType === 'location'`) — or locationCount
+// silently stays frozen at its seed value forever (no periodic recompute).
+function isLocationMessageStat(messageType?: string): boolean {
+  return messageType === 'location';
 }
 
 function countCharacters(content: string): number {
@@ -136,6 +148,7 @@ export class ConversationMessageStatsService {
     }
 
     const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
+    const isLocationMessage = isLocationMessageStat(messageType);
 
     const participantStats = (typeof existing.participantStats === 'string'
       ? JSON.parse(existing.participantStats)
@@ -189,6 +202,7 @@ export class ConversationMessageStatsService {
         totalWords: { increment: words },
         totalCharacters: { increment: chars },
         textMessages: isTextMessage ? { increment: 1 } : undefined,
+        locationCount: isLocationMessage ? { increment: 1 } : undefined,
         ...Object.fromEntries(
           Object.entries(attachmentIncrements).map(([field, count]) => [field, { increment: count }]),
         ),
@@ -266,6 +280,7 @@ export class ConversationMessageStatsService {
     const words = countWords(content);
     const chars = countCharacters(content);
     const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
+    const isLocationMessage = isLocationMessageStat(messageType);
 
     const decrements: Record<string, number> = {};
     for (const t of attachmentTypes) {
@@ -301,6 +316,10 @@ export class ConversationMessageStatsService {
 
     if (isTextMessage) {
       updateData.textMessages = { decrement: 1 };
+    }
+
+    if (isLocationMessage) {
+      updateData.locationCount = { decrement: 1 };
     }
 
     for (const [field, count] of Object.entries(decrements)) {
