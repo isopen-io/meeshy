@@ -1346,3 +1346,17 @@ Append-only log of gotchas and decisions that save time next run.
   `StateFlow<LocallyHiddenMessages>`, `.combine`d into the stream, and applied as a pure
   `filterNot { hidden.isHidden(id) }` before building bubbles — no repo/outbox/network touched. The
   pure set value returns `this` on a no-op `hide` so the SharedPrefs layer skips redundant writes.
+
+## Lesson (2026-07-08, `chat-pinned-banner`)
+- **Adding a `MessageSocketManager` stream ⇒ update the `ChatViewModelTest` mock.** The test builds the
+  socket with a **non-relaxed** `mockk<MessageSocketManager> { … }`, so every collected flow must be
+  stubbed with `every { flowName } returns …`. A new stream the ViewModel collects (e.g.
+  `messagePinned`/`messageUnpinned`) throws `MockKException` at construction until you add the stub — add a
+  `MutableSharedFlow` field + `every { this@mockk.messagePinned } returns …` alongside the existing ones.
+- **Deriving read-side state from the existing bubble stream avoids new plumbing.** The pinned banner is a
+  pure computed `ChatUiState.pinnedBanner = PinnedMessages.of(messages.map { it.toPinnable() })` over the
+  already-combined `messages` — no extra combine source, no repo change. Cross-client live updates come for
+  free by having the socket pinned/unpinned collectors call `messageRepository.refresh(conversationId)`
+  (same pattern as `messageDeleted`/`messageUpdated`).
+- **Stable newest-pick on ties:** `maxByOrNull` keeps the *last* max; for "newest pin, ties→earliest in
+  list order" write a small `maxByStable` that only replaces on a strict `>` — keeps the first max.

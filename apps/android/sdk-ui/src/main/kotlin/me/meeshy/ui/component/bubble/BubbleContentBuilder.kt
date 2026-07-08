@@ -102,6 +102,7 @@ public object BubbleContentBuilder {
             } else {
                 0
             },
+            pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
         )
     }
 

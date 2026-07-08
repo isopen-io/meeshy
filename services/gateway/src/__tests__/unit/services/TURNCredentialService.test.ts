@@ -38,6 +38,7 @@ import crypto from 'crypto';
 
 type MockFn = jest.Mock<any>;
 const warnMock = logger.warn as MockFn;
+const errorMock = logger.error as MockFn;
 
 // Imported (not hand-duplicated) so a future change to either service's
 // constant can't silently drift out of sync and reintroduce the "call drops
@@ -283,7 +284,7 @@ describe('TURNCredentialService — parseTURNServers', () => {
     expect(turnEntries).toHaveLength(1);
   });
 
-  it('warns and returns STUN-only when TURN_SERVERS is empty', () => {
+  it('warns (not errors) and returns STUN-only when TURN_SERVERS is empty in development', () => {
     const svc = buildService({
       TURN_SECRET: 'test-secret',
       TURN_SERVERS: '',
@@ -294,6 +295,37 @@ describe('TURNCredentialService — parseTURNServers', () => {
     expect(turnEntries).toHaveLength(0);
     const stunEntries = creds.filter(s => (s.urls as string).startsWith('stun:'));
     expect(stunEntries.length).toBeGreaterThan(0);
+    expect(warnMock).toHaveBeenCalledWith(expect.stringContaining('No TURN servers configured'));
+    expect(errorMock).not.toHaveBeenCalled();
+  });
+
+  // Audit finding — a missing TURN_SERVERS in production previously only
+  // logged at `warn`, so a deployment where every call fails behind a
+  // symmetric/carrier-grade NAT had no signal an operator would notice via
+  // the error-level alerting every environment already has. This does NOT
+  // throw (unlike the TURN_SECRET guards above) — some deployments
+  // intentionally run STUN-only for LAN-only testing — but production and
+  // staging must surface it loudly.
+  it('errors (not just warns) when TURN_SERVERS is empty in production', () => {
+    const svc = buildService({
+      TURN_SECRET: STRONG_SECRET,
+      TURN_SERVERS: '',
+      NODE_ENV: 'production',
+    });
+    const creds = svc.generateCredentials('user-1');
+    const turnEntries = creds.filter(s => (s.urls as string).startsWith('turn:'));
+    expect(turnEntries).toHaveLength(0);
+    expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('No TURN servers configured'));
+  });
+
+  it('errors (not just warns) when TURN_SERVERS is empty in staging', () => {
+    const svc = buildService({
+      TURN_SECRET: STRONG_SECRET,
+      TURN_SERVERS: '',
+      NODE_ENV: 'staging',
+    });
+    const creds = svc.generateCredentials('user-1');
+    expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('No TURN servers configured'));
   });
 });
 
@@ -385,6 +417,23 @@ describe('TURNCredentialService — generateCredentials', () => {
     const creds = svc.generateCredentials('user-1');
     const stunEntries = creds.filter(s => (s.urls as string).startsWith('stun:'));
     expect(stunEntries.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // Audit finding — the iOS client's STUN-only fallback list already mixes
+  // Google + Cloudflare "for resilience against Google STUN outages", but
+  // that redundancy only existed in the rarely-hit fallback path. The
+  // server-issued list used on every call was Google-only.
+  it('includes a non-Google STUN provider for redundancy against a single-vendor outage', () => {
+    const svc = buildService({
+      TURN_SECRET: 'test-secret',
+      TURN_SERVERS: 'turn.example.com:3478',
+      NODE_ENV: 'development',
+    });
+    const creds = svc.generateCredentials('user-1');
+    const stunUrls = creds
+      .filter(s => (s.urls as string).startsWith('stun:'))
+      .map(s => s.urls as string);
+    expect(stunUrls.some(url => !url.includes('l.google.com'))).toBe(true);
   });
 });
 

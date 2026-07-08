@@ -77,6 +77,20 @@ data class ChatUiState(
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
+
+    /** The pinned-message banner surfaced above the list, or null when nothing is pinned. */
+    val pinnedBanner: PinnedBanner? get() = PinnedMessages.of(messages.map { it.toPinnable() })
+}
+
+private fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessage {
+    override val id: String = messageId
+    override val pinnedAtIso: String? = this@toPinnable.pinnedAtIso
+    override val isDeleted: Boolean = this@toPinnable.isDeleted
+    override val isOutgoing: Boolean = this@toPinnable.isOutgoing
+    override val senderName: String? = this@toPinnable.senderName
+    override val text: String = this@toPinnable.text
+    override val hasImage: Boolean = images.isNotEmpty()
+    override val hasFile: Boolean = files.isNotEmpty()
 }
 
 @HiltViewModel
@@ -217,6 +231,20 @@ class ChatViewModel @Inject constructor(
             }
             launch {
                 messageSocketManager.messageUpdated.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        messageRepository.refresh(conversationId)
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.messagePinned.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        messageRepository.refresh(conversationId)
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.messageUnpinned.collect { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.refresh(conversationId)
                     }
@@ -520,6 +548,16 @@ class ChatViewModel @Inject constructor(
         val links = _state.value.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) }
         val thread = ReplyThreads.of(links).threadFor(messageId) ?: return
         _state.update { it.copy(scrollToMessageId = thread.firstReplyId) }
+    }
+
+    /**
+     * The pinned-message banner was tapped: scroll to the newest pinned message.
+     * When nothing is pinned the banner is absent, so this is inert.
+     * See [PinnedMessages].
+     */
+    fun onPinnedBannerTap() {
+        val target = _state.value.pinnedBanner?.messageId ?: return
+        _state.update { it.copy(scrollToMessageId = target) }
     }
 
     /** The pending reply-jump scroll has been performed by the screen. */

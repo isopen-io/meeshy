@@ -1561,13 +1561,16 @@ final class CallManager: ObservableObject {
         }
     }
 
-    /// Async SDP+media setup kicked off by `CXAnswerCallAction` AFTER
-    /// `action.fulfill()` has already been called synchronously (CallKit's
-    /// contract requires fulfill()/fail() before the delegate method
-    /// returns — see `provider(_:perform: CXAnswerCallAction)`). This is
-    /// fire-and-forget from CallKit's perspective: a `createAnswer` failure
-    /// here cannot un-fulfill the action, so it must tear the call down via
-    /// `endCallInternal` instead of failing it back to CallKit.
+    /// Async SDP+media setup kicked off by `CXAnswerCallAction`. As of the
+    /// [Fix 2026-07-02]/[Fix 2026-07-03] hold-and-settle model, the action is
+    /// NOT fulfilled synchronously here: `provider(_:perform: CXAnswerCallAction)`
+    /// holds it via `holdPendingAnswerAction` (so CallKit's callee elapsed-timer
+    /// doesn't start before the connection exists) and this method settles it
+    /// later — fulfilled in `transitionToConnected`, failed on pre-connect
+    /// teardown, or fulfilled by the 10s safety net — never inline here. A
+    /// `createAnswer` failure in this method tears the call down via
+    /// `endCallInternal`/`failCall`, which routes back to `settlePendingAnswerAction`
+    /// rather than calling `action.fail()` directly.
     func answerCallReady() async {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
@@ -2775,16 +2778,48 @@ final class CallManager: ObservableObject {
                         await previousToggle?.value
                         _ = await previousSurvival?.value
                         guard let self, !Task.isCancelled else { return }
-                        guard let needsRenegotiation = try? await self.webRTCService.upgradeToVideo() else { return }
-                        guard !Task.isCancelled else { return }
-                        self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
-                        if needsRenegotiation,
-                           let callId = self.currentCallId,
-                           let userId = self.remoteUserId,
-                           let offer = await self.webRTCService.createOffer(),
-                           self.currentCallId == callId {
-                            self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)
-                            Logger.calls.info("[CALL] unhold renegotiation offer sent (video=true)")
+                        do {
+                            let needsRenegotiation = try await self.webRTCService.upgradeToVideo()
+                            guard !Task.isCancelled else { return }
+                            self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                            if needsRenegotiation,
+                               let callId = self.currentCallId,
+                               let userId = self.remoteUserId,
+                               let offer = await self.webRTCService.createOffer(),
+                               self.currentCallId == callId {
+                                self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)
+                                Logger.calls.info("[CALL] unhold renegotiation offer sent (video=true)")
+                            }
+                        } catch WebRTCError.cameraPermissionDenied {
+                            // Audit finding — this previously swallowed the error via
+                            // `try?`, which left `isVideoEnabled == true` with no video
+                            // track, no peer correction, and no user feedback: a silent,
+                            // unrecoverable video outage for the rest of the call.
+                            // Mirror toggleVideo/actuateSurvivalVideoSend's handling.
+                            guard !Task.isCancelled else { return }
+                            Logger.calls.error("unhold video recovery failed: camera permission denied — disabling video")
+                            self.isVideoEnabled = false
+                            self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                            self.videoSurvivalController.reset()
+                            if let callId = self.currentCallId {
+                                MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                            }
+                            FeedbackToastManager.shared.showError(
+                                String(localized: "call.video.permission.denied",
+                                       defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                                       bundle: .main)
+                            ) {
+                                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                                UIApplication.shared.open(url)
+                            }
+                        } catch {
+                            guard !Task.isCancelled else { return }
+                            Logger.calls.error("unhold video recovery failed: \(error.localizedDescription)")
+                            self.isVideoEnabled = false
+                            self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                            if let callId = self.currentCallId {
+                                MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                            }
                         }
                     }
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
@@ -4056,33 +4091,53 @@ extension CallManager: ThermalStateMonitorDelegate {
                 Logger.calls.warning("Thermal critical — disabled all filters (video)")
                 if self.isVideoEnabled {
                     self.isVideoEnabled = false
-                    // §5.4 — use downgradeFromVideo (sets transceiver direction +
-                    // stops capture) rather than enableVideo(false) (track.enabled
-                    // only). Without the direction change the peer's SDP still
-                    // advertises sendRecv and the RTP session stays open, which
-                    // means the peer's decoder never tears down and the "camera off"
-                    // media-toggled is the only signal it gets — race-prone and
-                    // semantically wrong. Mirror the manual toggleVideo() path.
-                    let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
-                    self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
-                    self.updateAudioSessionModeForCurrentVideoState()
-                    self.videoSurvivalController.reset()
-                    // P0-3 — signal the peer (avatar placeholder, not a frozen frame).
-                    if let callId = self.currentCallId {
-                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                    // Audit finding — this used to call downgradeFromVideo()
+                    // directly here, unserialized against videoToggleTask/
+                    // holdVideoTask/survivalVideoTask. A thermal-critical event
+                    // firing mid-toggle (or mid-hold/unhold) ran a fourth,
+                    // concurrent camera/transceiver actuation — exactly what
+                    // every other site in this file chains onto the previous
+                    // task to prevent (upgradeToVideo/downgradeFromVideo never
+                    // check cancellation mid-flight and two concurrent calls
+                    // corrupt state). Route through the same chained-task
+                    // pattern as toggleVideo/handleHold/applySurvivalVideoSend.
+                    let previousToggle = self.videoToggleTask
+                    let previousHold = self.holdVideoTask
+                    let previousSurvival = self.survivalVideoTask
+                    self.videoToggleTask?.cancel()
+                    self.videoToggleTask = Task { @MainActor [weak self] in
+                        await previousToggle?.value
+                        await previousHold?.value
+                        _ = await previousSurvival?.value
+                        guard let self, !Task.isCancelled else { return }
+                        // §5.4 — use downgradeFromVideo (sets transceiver direction +
+                        // stops capture) rather than enableVideo(false) (track.enabled
+                        // only). Without the direction change the peer's SDP still
+                        // advertises sendRecv and the RTP session stays open, which
+                        // means the peer's decoder never tears down and the "camera off"
+                        // media-toggled is the only signal it gets — race-prone and
+                        // semantically wrong. Mirror the manual toggleVideo() path.
+                        let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
+                        self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                        self.updateAudioSessionModeForCurrentVideoState()
+                        self.videoSurvivalController.reset()
+                        // P0-3 — signal the peer (avatar placeholder, not a frozen frame).
+                        if let callId = self.currentCallId {
+                            MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                        }
+                        // Renegotiate so the peer's SDP transceiver direction matches
+                        // the video downgrade (media-toggled alone does not update the
+                        // remote offer's m-sections).
+                        if needsRenegotiation,
+                           let callId = self.currentCallId,
+                           let userId = self.remoteUserId,
+                           let offer = await self.webRTCService.createOffer(),
+                           self.currentCallId == callId {
+                            self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)
+                            Logger.calls.warning("Thermal critical — SDP renegotiation offer emitted (video downgrade)")
+                        }
+                        Logger.calls.warning("Thermal critical — disabled video")
                     }
-                    // Renegotiate so the peer's SDP transceiver direction matches
-                    // the video downgrade (media-toggled alone does not update the
-                    // remote offer's m-sections).
-                    if needsRenegotiation,
-                       let callId = self.currentCallId,
-                       let userId = self.remoteUserId,
-                       let offer = await self.webRTCService.createOffer(),
-                       self.currentCallId == callId {
-                        self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)
-                        Logger.calls.warning("Thermal critical — SDP renegotiation offer emitted (video downgrade)")
-                    }
-                    Logger.calls.warning("Thermal critical — disabled video")
                 }
             } else if state == .serious {
                 self.webRTCService.videoFilters.config.backgroundBlurEnabled = false
