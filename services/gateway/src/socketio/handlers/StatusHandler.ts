@@ -117,24 +117,43 @@ export class StatusHandler {
     otherSocketIds?: ReadonlySet<string>
   ): Promise<void> {
     const typers = this.activeTypers.get(socketId);
-    if (typers && typers.length > 0) {
-      for (const { conversationId, userId, username, displayName } of typers) {
-        if (otherSocketIds && otherSocketIds.size > 0) {
-          const anotherIsTyping = [...otherSocketIds].some(sid =>
-            (this.activeTypers.get(sid) ?? []).some(t => t.conversationId === conversationId)
-          );
-          if (anotherIsTyping) continue;
+    try {
+      if (typers && typers.length > 0) {
+        for (const { conversationId, userId, username, displayName } of typers) {
+          // Per-conversation isolation: a transient DB failure in the
+          // blocked-viewer lookup (or a throwing broadcast) for ONE conversation
+          // must not abort the loop — the socket's other typing conversations
+          // must still receive their typing:stop, and cleanup below must always
+          // run. Mirrors the try/catch in handleTypingStart / handleTypingStop.
+          try {
+            if (otherSocketIds && otherSocketIds.size > 0) {
+              const anotherIsTyping = [...otherSocketIds].some(sid =>
+                (this.activeTypers.get(sid) ?? []).some(t => t.conversationId === conversationId)
+              );
+              if (anotherIsTyping) continue;
+            }
+            const room = ROOMS.conversation(conversationId);
+            const typingEvent: TypingEvent = { userId, username, displayName, conversationId, isTyping: false };
+            const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, conversationId);
+            broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent, blockedSocketIds.length > 0 ? blockedSocketIds : undefined);
+          } catch (error) {
+            logger.error('typing:stop broadcast on disconnect failed', { error, socketId, conversationId });
+          }
         }
-        const room = ROOMS.conversation(conversationId);
-        const typingEvent: TypingEvent = { userId, username, displayName, conversationId, isTyping: false };
-        const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, conversationId);
-        broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent, blockedSocketIds.length > 0 ? blockedSocketIds : undefined);
       }
-      this.activeTypers.delete(socketId);
-    }
-    const userIdOrToken = this.socketToUser.get(socketId);
-    if (userIdOrToken) {
-      this.clearTypingThrottle(userIdOrToken);
+    } finally {
+      // Cleanup MUST run even if the loop threw: this handler is fired
+      // fire-and-forget (`void ...`) with no .catch at the call site, so an
+      // escaping rejection surfaces as a false "unhandled rejection" crash, and
+      // a skipped delete leaks the socket's activeTypers entry (memory) while
+      // peers keep a phantom "typing…" indicator for a user who has left.
+      if (typers && typers.length > 0) {
+        this.activeTypers.delete(socketId);
+      }
+      const userIdOrToken = this.socketToUser.get(socketId);
+      if (userIdOrToken) {
+        this.clearTypingThrottle(userIdOrToken);
+      }
     }
   }
 

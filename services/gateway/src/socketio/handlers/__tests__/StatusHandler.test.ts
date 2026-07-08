@@ -775,6 +775,78 @@ describe('StatusHandler', () => {
       expect(broadcastFn).not.toHaveBeenCalled();
     });
 
+    it('resolves without throwing and still clears typing state when the blocked-lookup DB query rejects', async () => {
+      // The disconnect handler is fired fire-and-forget (`void ...` with no
+      // .catch at the call site). A transient Mongo failure in the blocked-viewer
+      // lookup must NOT escape as an unhandled rejection, and typing state MUST
+      // still be cleaned up — otherwise the socket leaks an activeTypers entry
+      // and peers keep a phantom "typing…" indicator for a user who has left.
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const participantFindMany = jest.fn<any>()
+        .mockResolvedValueOnce([]) // handleTypingStart setup succeeds
+        .mockRejectedValue(new Error('transient Mongo error')); // disconnect lookup fails
+      const prisma = makePrisma({
+        user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) },
+        participant: { findMany: participantFindMany },
+      });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      expect(activeTypers.has(SOCKET_ID)).toBe(true);
+
+      const broadcastFn = jest.fn();
+      await expect(
+        handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn)
+      ).resolves.not.toThrow();
+
+      expect(activeTypers.has(SOCKET_ID)).toBe(false);
+      expect([...throttleMap.keys()].some(k => k.startsWith(`${USER_ID}:`))).toBe(false);
+    });
+
+    it('still broadcasts typing:stop for healthy conversations when one conversation lookup rejects', async () => {
+      // A per-conversation lookup failure must not abort the whole loop —
+      // remaining conversations the socket was typing in must still receive
+      // their typing:stop broadcast.
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const CONV_ID_2 = '507f1f77bcf86cd799439099';
+      const participantFindMany = jest.fn<any>()
+        .mockResolvedValueOnce([]) // typing:start CONV_ID
+        .mockResolvedValueOnce([]) // typing:start CONV_ID_2
+        .mockRejectedValueOnce(new Error('transient Mongo error')) // disconnect: first conv lookup fails
+        .mockResolvedValueOnce([]); // disconnect: second conv lookup succeeds
+      const prisma = makePrisma({
+        user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) },
+        participant: { findMany: participantFindMany },
+      });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      mockNormalizeConversationId
+        .mockResolvedValueOnce(CONV_ID)
+        .mockResolvedValueOnce(CONV_ID_2);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: CONV_ID_2 } });
+      ((handler as any).typingThrottleMap as Map<string, number>).clear();
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID_2 });
+
+      const broadcastFn = jest.fn();
+      await expect(
+        handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn)
+      ).resolves.not.toThrow();
+
+      // One conversation failed, the other must still be broadcast.
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID_2),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID_2 }),
+        undefined
+      );
+      expect(((handler as any).activeTypers as Map<string, unknown[]>).has(SOCKET_ID)).toBe(false);
+    });
+
     it('suppresses typing:stop when another socket for same user is typing in the same conversation', async () => {
       const SOCKET_1 = 'socket-device-1';
       const SOCKET_2 = 'socket-device-2';

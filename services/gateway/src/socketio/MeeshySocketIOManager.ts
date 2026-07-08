@@ -1010,7 +1010,13 @@ export class MeeshySocketIOManager {
               emitter.emit(event as keyof ServerToClientEvents, data as any);
             },
             otherSocketIds.size > 0 ? otherSocketIds : undefined
-          );
+          ).catch((error) => {
+            // Defense-in-depth: handleSocketDisconnecting already swallows its
+            // own failures, but keep the fire-and-forget call symmetric with
+            // every other `void`-launched handler here (all attach .catch) so a
+            // future refactor can never leak an unhandled rejection.
+            logger.error('handleSocketDisconnecting failed', { error, socketId: socket.id });
+          });
         }
       });
 
