@@ -71,7 +71,7 @@ psutil==7.2.2
 pandas>=2.0.0,<2.4.0
 aiohttp==3.14.1
 python-multipart==0.0.22
-aiofiles==24.1.0
+aiofiles==25.1.0
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # VOICE FEATURES - MANDATORY FOR MEESHY PLATFORM
