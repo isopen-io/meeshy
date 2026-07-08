@@ -169,7 +169,7 @@ extension UserProfileSheet {
             avatarURL: displayUser.avatarURL,
             storyState: ringState,
             moodEmoji: isBlockedByTarget ? nil : moodEmoji,
-            presenceState: isBlockedByTarget ? .offline : resolvedPresence,
+            presenceState: isBlockedByTarget ? nil : resolvedPresence,
             onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
             onMoodTap: isBlockedByTarget ? nil : onMoodTap
         )
@@ -192,12 +192,14 @@ extension UserProfileSheet {
         ).state
     }
 
-    /// Couleur du libellé de présence selon l'ancienneté : orange <= 5 min
-    /// (actif), gris au-delà. Miroir de `presenceColorClass` (web). Pas de vert.
+    /// Couleur du libellé de présence — dérive l'état via la règle canonique
+    /// (`UserPresence.state`) puis le mapping couleur central (PresenceStyle) :
+    /// vert actif (<= 5 min), orange away (5-30 min), gris texte au-delà.
+    /// Miroir de `presenceColorClass` (web).
     func presenceColor(for date: Date, now: Date = Date()) -> Color {
-        let minutes = now.timeIntervalSince(date) / 60
-        if minutes <= 5 { return MeeshyColors.warning }
-        return theme.textSecondary
+        let state = UserPresence(isOnline: false, lastActiveAt: date).state(now: now)
+        if state == .offline { return theme.textSecondary }
+        return state.dotColor
     }
 
     // MARK: - Pinned tab bar (section header — pins on scroll)
@@ -290,7 +292,7 @@ extension UserProfileSheet {
                 accentColor: isBlockedByTarget ? "888888" : resolvedAccent,
                 avatarURL: displayUser.avatarURL,
                 storyState: .none,
-                presenceState: isBlockedByTarget ? .offline : resolvedPresence
+                presenceState: isBlockedByTarget ? nil : resolvedPresence
             )
 
             VStack(alignment: .leading, spacing: 0) {

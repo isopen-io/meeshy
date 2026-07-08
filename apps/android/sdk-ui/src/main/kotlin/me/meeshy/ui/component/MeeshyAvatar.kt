@@ -30,13 +30,18 @@ import me.meeshy.ui.theme.NunitoFontFamily
 public enum class StoryRingState { None, Unread, Read }
 
 /**
- * Presence-dot colour for [presence], or `null` when no dot should show (offline).
- * Pure so it stays unit-testable off Compose. Mirrors iOS `MeeshyAvatar.dotColor`.
+ * CENTRAL presence-dot colour mapping for [presence], or `null` when the caller
+ * has no presence data at all. Pure so it stays unit-testable off Compose.
+ * Mirrors iOS `PresenceState.dotColor` (PresenceStyle.swift) and web
+ * `PRESENCE_DOT_CLASS`: green = online/recent, orange = away, gray = offline.
+ * Every surface (contacts, profile, new-conversation) MUST consume this —
+ * never redeclare the palette locally.
  */
-internal fun meeshyPresenceDotColor(presence: PresenceState): Color? = when (presence) {
-    PresenceState.ONLINE, PresenceState.RECENT -> MeeshyPalette.Warning // orange : actif <= 5min
-    PresenceState.AWAY -> MeeshyPalette.Neutral400                      // gris : absent 5-30min
-    PresenceState.OFFLINE -> null                                       // aucun dot au-dela de 30min
+public fun meeshyPresenceDotColor(presence: PresenceState?): Color? = when (presence) {
+    PresenceState.ONLINE, PresenceState.RECENT -> MeeshyPalette.Success // vert : connecté / actif <= 5min
+    PresenceState.AWAY -> MeeshyPalette.Warning                          // orange : absent 5-30min
+    PresenceState.OFFLINE -> MeeshyPalette.Neutral400                    // gris : hors ligne > 30min
+    null -> null                                                          // aucune donnée de présence
 }
 
 /**
@@ -58,7 +63,7 @@ public fun MeeshyAvatar(
     secondaryColor: Color? = null,
     contentColor: Color = MeeshyPalette.White,
     storyRing: StoryRingState = StoryRingState.None,
-    presence: PresenceState = PresenceState.OFFLINE,
+    presence: PresenceState? = null,
     moodEmoji: String? = null,
 ) {
     val density = LocalDensity.current

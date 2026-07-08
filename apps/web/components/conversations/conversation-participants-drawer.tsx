@@ -248,7 +248,7 @@ export function ConversationParticipantsDrawer({
         );
       });
 
-  // Separer actifs (orange : online + recent) / inactifs via getUserStatus (temps reel)
+  // Separer actifs (vert : online + recent) / inactifs via getUserStatus (temps reel)
   const onlineParticipants = filteredParticipants.filter(p => {
     const storeUser = p.userId ? getUserByIdFn(p.userId) : undefined;
     return isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));

@@ -122,7 +122,7 @@ struct ConversationPreviewView: View {
     var avatarURL: String? = nil
     var storyState: StoryRingState = .none
     var moodEmoji: String? = nil
-    var presenceState: PresenceState = .offline
+    var presenceState: PresenceState? = nil
     var isDirect: Bool = false
     var onCall: (() -> Void)? = nil
     var onSearch: (() -> Void)? = nil

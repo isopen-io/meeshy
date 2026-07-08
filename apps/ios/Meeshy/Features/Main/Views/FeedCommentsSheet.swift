@@ -26,10 +26,10 @@ struct ThreadedCommentSection: View {
     var onDeleteComment: ((FeedComment) -> Void)? = nil
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
-    var presenceState: PresenceState = .offline
+    var presenceState: PresenceState? = nil
     var replyMoodResolver: ((String) -> String?)? = nil
     var replyStoryResolver: ((String) -> StoryRingState)? = nil
-    var replyPresenceResolver: ((String) -> PresenceState)? = nil
+    var replyPresenceResolver: ((String) -> PresenceState?)? = nil
 
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
@@ -95,7 +95,7 @@ struct ThreadedCommentSection: View {
                         onDeleteComment: deleteHandler(for: reply),
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? .offline
+                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil
                     )
                     .padding(.leading, 36)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -131,7 +131,7 @@ struct ThreadedCommentSection: View {
                         onDeleteComment: deleteHandler(for: reply),
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? .offline
+                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil
                     )
                     .padding(.leading, 36)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -319,10 +319,10 @@ struct CommentsSheetView: View {
                                     },
                                     moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                                     storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
-                                    presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline,
+                                    presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
                                     replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
                                     replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-                                    replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
+                                    replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state }
                                 )
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
@@ -1358,7 +1358,7 @@ struct CommentRowView: View, Equatable {
     var onSeeReplies: (() -> Void)? = nil
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
-    var presenceState: PresenceState = .offline
+    var presenceState: PresenceState? = nil
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&

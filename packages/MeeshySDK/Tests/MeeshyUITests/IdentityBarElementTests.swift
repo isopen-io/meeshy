@@ -68,7 +68,7 @@ final class IdentityBarElementTests: XCTestCase {
         XCTAssertNil(config.url)
         XCTAssertEqual(config.accentColor, "#6366F1")
         XCTAssertNil(config.moodEmoji)
-        XCTAssertEqual(config.presenceState, .offline)
+        XCTAssertNil(config.presenceState)
         XCTAssertNil(config.onTap)
         XCTAssertNil(config.contextMenuItems)
     }

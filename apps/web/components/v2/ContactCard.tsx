@@ -3,7 +3,7 @@
 import React, { memo, useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { getUserStatus } from '@/lib/user-status';
+import { getUserStatus, PRESENCE_BADGE_CLASS } from '@/lib/user-status';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { Badge } from './Badge';
@@ -97,9 +97,13 @@ export const ContactCard = memo(function ContactCard({
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0">
-        {contact.isOnline && (
-          <Badge size="sm" className="bg-orange-400 text-white border-transparent hover:bg-orange-500">
-            {t('status.online')}
+        {presence !== 'offline' && (
+          <Badge size="sm" className={`${PRESENCE_BADGE_CLASS[presence]} text-white border-transparent`}>
+            {presence === 'online'
+              ? t('status.online')
+              : presence === 'recent'
+                ? t('status.recent', { defaultValue: 'Actif récemment' })
+                : t('status.away', { defaultValue: 'Absent' })}
           </Badge>
         )}
 
