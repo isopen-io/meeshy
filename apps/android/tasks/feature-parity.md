@@ -409,7 +409,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of
       `EmojiUsageTracker`, `EmojiUsageStore` SharedPrefs backing, strip re-ranks on send) +
       full categorised picker done (`EmojiCatalog` 6 cats + `EmojiFullPicker` sheet) +
-      add/remove optimistic done ; reaction detail breakdown (who-reacted sheet) pending
+      add/remove optimistic done ; **reaction detail breakdown (who-reacted sheet) done**
+      (slice `chat-reaction-who-reacted-sheet`, 2026-07-08): long-press a reaction chip opens a
+      bottom sheet listing who reacted, driven by the pure `:feature:chat` `ReactionBreakdown.of(
+      response, currentUserId)` SSOT — emoji tabs ordered by count desc (stable ties), a leading
+      "All" tab when ≥2 emojis (reactor lists concatenated in tab order), the current user floated
+      to the top of each list (once per emoji) and flagged "Vous", blank username→userId,
+      blank avatar→null, dup reactors collapsed, truncated-reactor groups keep an honest count.
+      `ReactionDetailsUiState` (loading/breakdown/selectedTab, inert out-of-range select). Wired:
+      cache-first sheet (appears loading, fills from `fetchDetails`; failed fetch → empty non-loading),
+      `MessageBubble` gains an `onReactionLongPress` combinedClickable. +24 tests. reaction-count is
+      shown per tab
 - [ ] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle + **tap-aperçu → scroll vers l'original**

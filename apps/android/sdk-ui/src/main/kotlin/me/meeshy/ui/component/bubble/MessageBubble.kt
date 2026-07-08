@@ -63,6 +63,7 @@ public fun MessageBubble(
     outgoingColor: Color = MeeshyPalette.Indigo500,
     onLongPress: (() -> Unit)? = null,
     onReactionClick: ((String) -> Unit)? = null,
+    onReactionLongPress: (() -> Unit)? = null,
     onImageClick: ((Int) -> Unit)? = null,
     onReplyPreviewClick: (() -> Unit)? = null,
     mentionDisplayNames: Map<String, String>? = null,
@@ -173,6 +174,7 @@ public fun MessageBubble(
                 ReactionStrip(
                     reactions = content.reactions,
                     onReactionClick = onReactionClick,
+                    onReactionLongPress = onReactionLongPress,
                     modifier = Modifier.padding(top = MeeshySpacing.xs),
                 )
             }
@@ -406,6 +408,7 @@ private fun ReplyPreview(
 private fun ReactionStrip(
     reactions: List<ReactionEntry>,
     onReactionClick: ((String) -> Unit)?,
+    onReactionLongPress: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     FlowRow(
@@ -414,13 +417,18 @@ private fun ReactionStrip(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         reactions.forEach { entry ->
-            ReactionChip(entry = entry, onClick = onReactionClick?.let { { it(entry.emoji) } })
+            ReactionChip(
+                entry = entry,
+                onClick = onReactionClick?.let { { it(entry.emoji) } },
+                onLongClick = onReactionLongPress,
+            )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?) {
+private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?, onLongClick: (() -> Unit)? = null) {
     val background =
         if (entry.includesMe) MeeshyPalette.Indigo500.copy(alpha = 0.22f)
         else MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.6f)
@@ -436,8 +444,14 @@ private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?) {
                 }
             }
             .let { base ->
-                if (onClick == null) base
-                else base.clickable(onClick = onClick).semantics { role = Role.Button }
+                if (onClick == null && onLongClick == null) {
+                    base
+                } else {
+                    base.combinedClickable(
+                        onClick = onClick ?: {},
+                        onLongClick = onLongClick,
+                    ).semantics { role = Role.Button }
+                }
             }
             .padding(horizontal = MeeshySpacing.xs, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
