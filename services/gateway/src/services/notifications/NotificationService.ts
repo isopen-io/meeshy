@@ -43,7 +43,10 @@ function formatDuration(ms: number): string {
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  // Bascule le tier sur la valeur ARRONDIE (comme formatCallDataSize) : sinon
+  // p.ex. 1 048 500 o (< 1 Mio) affiche "1024 Ko" au lieu de "1.0 Mo".
+  const ko = Math.round(bytes / 1024);
+  if (ko < 1024) return `${ko} Ko`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
