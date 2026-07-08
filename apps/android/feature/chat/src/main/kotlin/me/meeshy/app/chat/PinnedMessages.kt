@@ -51,61 +51,75 @@ data class PinnedBanner(
 )
 
 /**
- * Pure SSOT deriving the pinned-message banner from the loaded messages — parity
- * with iOS's pinned-messages strip. Rules:
+ * One row of the pinned-messages sheet — a single currently-pinned message. Uses
+ * the same projection the banner features ([PinnedBanner]), so the sheet and the
+ * banner never disagree about which messages are pinned or how their preview reads.
+ */
+data class PinnedMessageRow(
+    val messageId: String,
+    val senderName: String?,
+    val isOutgoing: Boolean,
+    val snippet: PinnedSnippet,
+)
+
+/**
+ * Pure SSOT for the full pinned-messages list (the sheet reached from the banner) —
+ * parity with iOS's pinned-messages list. Rules:
  *  - A message counts as pinned only when it is **not deleted** and its
  *    [PinnableMessage.pinnedAtIso] is non-blank (a pinned message later deleted
- *    disappears from the strip, matching the bubble tombstone).
- *  - The banner features the **newest** pinned message (latest [pinnedAtIso],
- *    parsed to epoch millis); ties and unparseable instants keep the earliest in
- *    list order (stable), so the strip never flickers between equal-instant pins.
- *  - [PinnedBanner.count] is the total pinned count, so the strip can advertise
- *    "N épinglés" even though it shows one at a time.
- *  - The snippet is the featured message's trimmed text, else an Image/File key
- *    (image beats file, matching the scroll-affordance preview), else Empty.
- *  - No pinned message ⇒ null (no strip).
+ *    drops out of the list, matching the bubble tombstone).
+ *  - Rows are ordered **newest pin first** (latest [pinnedAtIso], parsed to epoch
+ *    millis); ties and unparseable instants keep their incoming list order (the
+ *    sort is stable), so the list never flickers between equal-instant pins and an
+ *    unparseable pin sinks to the end rather than jumping to the top.
+ *  - Each row's snippet is the message's trimmed text, else an Image/File key
+ *    (image beats file, matching the scroll-affordance preview), else Empty; a
+ *    blank sender name resolves to null.
+ *  - Nothing pinned ⇒ an empty list.
+ */
+object PinnedMessagesList {
+
+    fun of(messages: List<PinnableMessage>): List<PinnedMessageRow> =
+        messages
+            .filter { !it.isDeleted && !it.pinnedAtIso.isNullOrBlank() }
+            .sortedByDescending { isoToEpochMillisOrNull(it.pinnedAtIso) ?: Long.MIN_VALUE }
+            .map { it.toRow() }
+}
+
+/**
+ * Pure SSOT deriving the pinned-message banner from the loaded messages — the strip
+ * shown above the list. It features the **newest** pinned message (the first row of
+ * [PinnedMessagesList], which is already newest-first) and advertises the total
+ * pinned [PinnedBanner.count] even though it shows one at a time. No pin ⇒ null.
  */
 object PinnedMessages {
 
     fun of(messages: List<PinnableMessage>): PinnedBanner? {
-        val pinned = messages.filter { !it.isDeleted && !it.pinnedAtIso.isNullOrBlank() }
-        if (pinned.isEmpty()) return null
-        val featured = pinned.maxByStable { isoToEpochMillisOrNull(it.pinnedAtIso) ?: Long.MIN_VALUE }
+        val rows = PinnedMessagesList.of(messages)
+        val featured = rows.firstOrNull() ?: return null
         return PinnedBanner(
-            messageId = featured.id,
-            count = pinned.size,
-            senderName = featured.senderName?.trim()?.ifBlank { null },
+            messageId = featured.messageId,
+            count = rows.size,
+            senderName = featured.senderName,
             isOutgoing = featured.isOutgoing,
-            snippet = featured.snippet(),
+            snippet = featured.snippet,
         )
     }
+}
 
-    private fun PinnableMessage.snippet(): PinnedSnippet {
-        val body = text.trim()
-        return when {
-            body.isNotEmpty() -> PinnedSnippet.Text(body)
-            hasImage -> PinnedSnippet.Image
-            hasFile -> PinnedSnippet.File
-            else -> PinnedSnippet.Empty
-        }
-    }
+private fun PinnableMessage.toRow(): PinnedMessageRow = PinnedMessageRow(
+    messageId = id,
+    senderName = senderName?.trim()?.ifBlank { null },
+    isOutgoing = isOutgoing,
+    snippet = snippet(),
+)
 
-    /**
-     * Like `maxByOrNull` but on ties keeps the **first** element in iteration
-     * order (`maxByOrNull` keeps the last), so an equal-instant tie resolves to
-     * the earliest pinned message deterministically.
-     */
-    private inline fun <T> List<T>.maxByStable(selector: (T) -> Long): T {
-        var best = this[0]
-        var bestKey = selector(best)
-        for (index in 1 until size) {
-            val candidate = this[index]
-            val key = selector(candidate)
-            if (key > bestKey) {
-                best = candidate
-                bestKey = key
-            }
-        }
-        return best
+private fun PinnableMessage.snippet(): PinnedSnippet {
+    val body = text.trim()
+    return when {
+        body.isNotEmpty() -> PinnedSnippet.Text(body)
+        hasImage -> PinnedSnippet.Image
+        hasFile -> PinnedSnippet.File
+        else -> PinnedSnippet.Empty
     }
 }

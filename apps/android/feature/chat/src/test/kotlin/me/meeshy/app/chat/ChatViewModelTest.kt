@@ -526,6 +526,70 @@ class ChatViewModelTest {
         assertThat(h.vm.state.value.scrollToMessageId).isNull()
     }
 
+    @Test
+    fun the_pinned_sheet_lists_every_pin_newest_first() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.pinnedMessages.map { it.messageId })
+            .containsExactly("m2", "m1").inOrder()
+    }
+
+    @Test
+    fun opening_the_pinned_sheet_with_pins_shows_it() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.openPinnedSheet()
+
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isTrue()
+    }
+
+    @Test
+    fun opening_the_pinned_sheet_with_nothing_pinned_is_inert() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.openPinnedSheet()
+
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isFalse()
+    }
+
+    @Test
+    fun tapping_a_pinned_row_scrolls_to_it_and_closes_the_sheet() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openPinnedSheet()
+
+        h.vm.onPinnedMessageTap("m1")
+
+        assertThat(h.vm.state.value.scrollToMessageId).isEqualTo("m1")
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isFalse()
+    }
+
+    @Test
+    fun tapping_an_unknown_pinned_row_is_inert() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openPinnedSheet()
+
+        h.vm.onPinnedMessageTap("ghost")
+
+        assertThat(h.vm.state.value.scrollToMessageId).isNull()
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isTrue()
+    }
+
+    @Test
+    fun closing_the_pinned_sheet_dismisses_it() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openPinnedSheet()
+
+        h.vm.closePinnedSheet()
+
+        assertThat(h.vm.state.value.isPinnedSheetOpen).isFalse()
+    }
+
     private fun deletedStream() = flowOf(
         CacheResult.Fresh(
             listOf(

@@ -76,9 +76,13 @@ data class ChatUiState(
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
     val reactionDetails: ReactionDetailsUiState? = null,
+    val isPinnedSheetOpen: Boolean = false,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
+
+    /** Every currently-pinned message, newest-pin first — drives the pinned-messages sheet. */
+    val pinnedMessages: List<PinnedMessageRow> get() = PinnedMessagesList.of(messages.map { it.toPinnable() })
 
     /** The pinned-message banner surfaced above the list, or null when nothing is pinned. */
     val pinnedBanner: PinnedBanner? get() = PinnedMessages.of(messages.map { it.toPinnable() })
@@ -560,6 +564,31 @@ class ChatViewModel @Inject constructor(
     fun onPinnedBannerTap() {
         val target = _state.value.pinnedBanner?.messageId ?: return
         _state.update { it.copy(scrollToMessageId = target) }
+    }
+
+    /**
+     * Opens the full pinned-messages sheet (the banner shows one at a time; the
+     * sheet lists every pin). Inert when nothing is pinned — no empty sheet.
+     * See [PinnedMessagesList].
+     */
+    fun openPinnedSheet() {
+        if (_state.value.pinnedMessages.isEmpty()) return
+        _state.update { it.copy(isPinnedSheetOpen = true) }
+    }
+
+    /** Dismisses the pinned-messages sheet. */
+    fun closePinnedSheet() {
+        _state.update { it.copy(isPinnedSheetOpen = false) }
+    }
+
+    /**
+     * A row in the pinned-messages sheet was tapped: scroll to that message and
+     * close the sheet. A messageId not among the currently-pinned messages is inert
+     * (never a crash on a since-unpinned/absent target).
+     */
+    fun onPinnedMessageTap(messageId: String) {
+        if (_state.value.pinnedMessages.none { it.messageId == messageId }) return
+        _state.update { it.copy(scrollToMessageId = messageId, isPinnedSheetOpen = false) }
     }
 
     /** The pending reply-jump scroll has been performed by the screen. */
