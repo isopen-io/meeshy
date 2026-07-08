@@ -391,6 +391,21 @@ describe('POST /posts/:id/view — STORY type broadcasts viewed', () => {
   });
 });
 
+describe('POST /posts/:id/view — refetches the post with the viewer for visibility', () => {
+  it('passes the viewer id to getPostById so non-PUBLIC stories resolve and broadcast', async () => {
+    // Régression : sans le viewer, getPostById applique le filtre PUBLIC-seul et
+    // retourne null pour une story FRIENDS → broadcastStoryViewed ne partait jamais
+    // alors que recordView (même filtre viewer) avait enregistré la vue.
+    mockGetPostById.mockClear();
+    mockGetPostById.mockResolvedValueOnce({ id: POST_ID, type: 'STORY', authorId: 'other-author', viewCount: 7 });
+    const app = await buildApp({ withSocialEvents: true, withNotifications: true });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/view`, payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(mockGetPostById).toHaveBeenCalledWith(POST_ID, USER_ID);
+    await app.close();
+  });
+});
+
 describe('POST /posts/:id/view — STORY type does not broadcast when author is viewer', () => {
   it('returns 200 and skips broadcast when story author views own story', async () => {
     mockGetPostById.mockResolvedValueOnce({ id: POST_ID, type: 'STORY', authorId: USER_ID, viewCount: 1 });
