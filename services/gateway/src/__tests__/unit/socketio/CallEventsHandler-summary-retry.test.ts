@@ -245,4 +245,37 @@ describe('CallEventsHandler — postCallSummary retry', () => {
     // call:end itself must still ack success (summary errors are absorbed)
     expect(ack).toHaveBeenCalledWith({ success: true });
   });
+
+  // -------------------------------------------------------------------------
+  // ack must not be gated behind postCallSummary's retry backoff
+  // -------------------------------------------------------------------------
+
+  it('acks call:end before postCallSummary retries resolve', async () => {
+    // Always fail — if the ack were gated on this settling, the handler
+    // promise below would still be pending after only the *first* attempt.
+    mockCreateCallSummaryMessage.mockRejectedValue(new Error('transient DB error'));
+
+    const messageBroadcaster = jest.fn<any>().mockResolvedValue(undefined);
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const { io } = makeIo();
+    const ack = jest.fn<any>();
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setMessageBroadcaster(messageBroadcaster);
+    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+
+    // No timer advancement before this resolves: the handler must settle on
+    // its own once postCallSummary is fired off, not awaited.
+    await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+    expect(ack).toHaveBeenCalledWith({ success: true });
+    // Only the first attempt has had a chance to run — the 1s/2s backoff
+    // retries are still pending on the fake timer queue.
+    expect(mockCreateCallSummaryMessage).toHaveBeenCalledTimes(1);
+
+    handler.destroy();
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(mockCreateCallSummaryMessage).toHaveBeenCalledTimes(3);
+  });
 });
