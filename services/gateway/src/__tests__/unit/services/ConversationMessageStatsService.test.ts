@@ -411,6 +411,30 @@ describe('ConversationMessageStatsService', () => {
       expect(updateCall.data.totalMessages).toEqual({ increment: 1 });
     });
 
+    it('increments locationCount for a location messageType (parity with recompute)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      // Location is a messageType, not an attachment token — callers never put
+      // 'location' in attachmentTypes. The incremental path MUST count it by
+      // messageType, exactly like recompute (`msgType === 'location'`), or
+      // locationCount stays frozen at its seed forever (no periodic recompute).
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, 'shared a place', [], 'en', 'location');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.locationCount).toEqual({ increment: 1 });
+    });
+
+    it('does not touch locationCount for a plain text message', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, 'hello', [], 'en', 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.locationCount).toBeUndefined();
+    });
+
     it('increments textMessages when messageType is explicitly text', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
@@ -751,6 +775,26 @@ describe('ConversationMessageStatsService', () => {
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
       expect(updateCall.data.textMessages).toBeUndefined();
       expect(updateCall.data.totalMessages).toEqual({ decrement: 1 });
+    });
+
+    it('decrements locationCount when a location message is deleted (symmetry with onNewMessage)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats({ locationCount: 3 }));
+
+      await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'shared a place', [], 'location');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.locationCount).toEqual({ decrement: 1 });
+    });
+
+    it('does not touch locationCount when a plain text message is deleted', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'hello', [], 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.locationCount).toBeUndefined();
     });
 
     it('does not decrement textMessages when message had attachments', async () => {
