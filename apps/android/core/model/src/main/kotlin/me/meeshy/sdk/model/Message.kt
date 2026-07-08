@@ -58,6 +58,8 @@ data class ApiMessage(
     val attachments: List<ApiMessageAttachment> = emptyList(),
     val pinnedAt: String? = null,
     val pinnedBy: String? = null,
+    val forwardedFromId: String? = null,
+    val forwardedFromConversationId: String? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,
@@ -79,4 +81,6 @@ data class SendMessageRequest(
     val replyToId: String? = null,
     val clientMessageId: String,
     val attachmentIds: List<String>? = null,
+    val forwardedFromId: String? = null,
+    val forwardedFromConversationId: String? = null,
 )

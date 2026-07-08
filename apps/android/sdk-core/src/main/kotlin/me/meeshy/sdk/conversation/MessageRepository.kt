@@ -95,6 +95,8 @@ class MessageRepository @Inject constructor(
         originalLanguage: String,
         sender: MeeshyUser,
         replyToId: String? = null,
+        forwardedFromId: String? = null,
+        forwardedFromConversationId: String? = null,
     ): String {
         val cmid = OutboxIds.cmid()
         val now = clock.nowMillis()
@@ -113,12 +115,16 @@ class MessageRepository @Inject constructor(
                 avatar = sender.avatar,
             ),
             clientMessageId = cmid,
+            forwardedFromId = forwardedFromId,
+            forwardedFromConversationId = forwardedFromConversationId,
         )
         val request = SendMessageRequest(
             content = content,
             originalLanguage = originalLanguage,
             replyToId = replyToId,
             clientMessageId = cmid,
+            forwardedFromId = forwardedFromId,
+            forwardedFromConversationId = forwardedFromConversationId,
         )
         database.withTransaction {
             messageDao.upsertAll(listOf(optimistic.toLocalEntity(now, LocalSendState.SENDING)))
@@ -185,6 +191,8 @@ class MessageRepository @Inject constructor(
                             ?: LanguageResolver.FALLBACK_LANGUAGE,
                         replyToId = message.replyToId,
                         clientMessageId = cmid,
+                        forwardedFromId = message.forwardedFromId,
+                        forwardedFromConversationId = message.forwardedFromConversationId,
                     ),
                 ),
                 cmid = cmid,

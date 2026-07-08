@@ -245,6 +245,66 @@ class MessageRepositoryTest {
         assertThat(outbox.deliverable("message:c1").map { it.cmid }).containsExactly(cmid)
     }
 
+    @Test
+    fun `sendOptimistic forwards carry the forwarded-from refs on the bubble and the queued request`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            conversationId = "c2",
+            content = "salut",
+            originalLanguage = "fr",
+            sender = sender,
+            forwardedFromId = "orig-msg",
+            forwardedFromConversationId = "c1",
+        )
+
+        val bubble = cachedMessage(cmid)
+        assertThat(bubble.forwardedFromId).isEqualTo("orig-msg")
+        assertThat(bubble.forwardedFromConversationId).isEqualTo("c1")
+
+        val row = outbox.deliverable("message:c2").single()
+        assertThat(row.cmid).isEqualTo(cmid)
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(row.payload)
+        assertThat(request.forwardedFromId).isEqualTo("orig-msg")
+        assertThat(request.forwardedFromConversationId).isEqualTo("c1")
+    }
+
+    @Test
+    fun `a non-forward send carries no forwarded-from refs`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.forwardedFromId).isNull()
+        assertThat(request.forwardedFromConversationId).isNull()
+    }
+
+    @Test
+    fun `retrySend preserves the forwarded-from refs when re-enqueuing from the cached payload`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic(
+            conversationId = "c2",
+            content = "salut",
+            originalLanguage = "fr",
+            sender = sender,
+            forwardedFromId = "orig-msg",
+            forwardedFromConversationId = "c1",
+        )
+        outbox.markSucceeded(cmid)
+        repo.markSendFailed(cmid)
+
+        repo.retrySend(cmid)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c2").single().payload,
+        )
+        assertThat(request.forwardedFromId).isEqualTo("orig-msg")
+        assertThat(request.forwardedFromConversationId).isEqualTo("c1")
+    }
+
     private suspend fun cachedMessage(id: String): ApiMessage =
         MeeshyApi.json.decodeFromString(db.messageDao().find(id)!!.payload)
 

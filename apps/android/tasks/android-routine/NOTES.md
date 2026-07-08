@@ -3,6 +3,25 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-08 (`chat-forward-message`): a "re-send elsewhere" feature is just the existing optimistic-send path
+  plus two nullable wire fields — don't build a second send.** Forward needed only: (1) `forwardedFromId`/
+  `forwardedFromConversationId` on `SendMessageRequest` **and** `ApiMessage` (the request so the gateway
+  resolves the original; the message so an outbox-exhaust `retrySend` can rebuild the request from the cached
+  bubble — put the refs on *both* or a retried forward silently loses them), (2) two default-null params on
+  `sendOptimistic` (existing callers untouched), (3) a pure `ForwardTargets` picker SSOT, (4) VM intents. The
+  `SEND_MESSAGE` worker sender re-encodes the payload verbatim, so **no worker/coalescer change** — grep the
+  sender to confirm before assuming you need one. The gateway `SendMessageBodySchema.refine` allows empty
+  `content` when `forwardedFromId` is present, so a media-only forward (content `""`) is valid; keep
+  `SendMessageRequest.content` non-null and pass the source content through. Only a **SYNCED** source is
+  forwardable — an optimistic bubble's id is a `cmid` the gateway doesn't know; gate `forwardTo` on
+  `sendState == SYNCED` (same spirit as pin's `requireSynced`).
+- **2026-07-08 (`chat-forward-message`): feed a VM-internal list from a repo stream by stubbing it BEFORE the VM
+  is constructed.** The forward target list comes from `conversationRepository.conversationsStream()`, collected
+  in `init`. A relaxed mock returns an empty Flow, so the collector captured nothing — stub
+  `every { conversations.conversationsStream(any(), any()) } returns flowOf(CacheResult.Fresh(list, ageMillis=0))`
+  **inside the harness, before** `ChatViewModel(...)` is built (the two default args → match with `any(), any()`).
+  Use the no-op `onSyncError` default so a conversations revalidation failure never leaks into the chat's
+  `errorMessage`.
 - **2026-07-08 (`chat-pinned-messages-sheet`): a "featured one" and "list all" of the same collection should be
   ONE filter/sort, not two.** The banner (`PinnedMessages.of → PinnedBanner?`) and the new sheet
   (`PinnedMessagesList.of → List<PinnedMessageRow>`) both need "the currently-pinned messages, newest first".

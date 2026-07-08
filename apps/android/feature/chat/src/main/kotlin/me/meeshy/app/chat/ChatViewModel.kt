@@ -24,6 +24,7 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
@@ -77,6 +78,7 @@ data class ChatUiState(
     val mentionDisplayNames: Map<String, String> = emptyMap(),
     val reactionDetails: ReactionDetailsUiState? = null,
     val isPinnedSheetOpen: Boolean = false,
+    val forward: ForwardUiState? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -87,6 +89,21 @@ data class ChatUiState(
     /** The pinned-message banner surfaced above the list, or null when nothing is pinned. */
     val pinnedBanner: PinnedBanner? get() = PinnedMessages.of(messages.map { it.toPinnable() })
 }
+
+/**
+ * State of the forward-picker sheet. `null` in [ChatUiState.forward] means the
+ * sheet is closed. [sendingConversationId] gates the picker to one in-flight
+ * forward at a time (parity with iOS, which disables every row while sending);
+ * [sentConversationIds] keeps a checkmark on rows already forwarded to so the
+ * user can forward one message to several conversations in one sitting.
+ */
+data class ForwardUiState(
+    val sourceMessageId: String,
+    val query: String = "",
+    val targets: List<ForwardTarget> = emptyList(),
+    val sendingConversationId: String? = null,
+    val sentConversationIds: Set<String> = emptySet(),
+)
 
 private fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessage {
     override val id: String = messageId
@@ -127,6 +144,7 @@ class ChatViewModel @Inject constructor(
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
+    private var allConversations: List<ApiConversation> = emptyList()
     private var mentionRoster: List<MentionCandidate> = emptyList()
     private var avatarByUserId: Map<String, String?> = emptyMap()
     private var isEmittingTyping = false
@@ -187,6 +205,13 @@ class ChatViewModel @Inject constructor(
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                     )
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            conversationRepository.conversationsStream().collect { result ->
+                allConversations = result.valueOrNull() ?: allConversations
+                recomputeForwardTargets()
             }
         }
 
@@ -592,6 +617,90 @@ class ChatViewModel @Inject constructor(
     }
 
     /** The pending reply-jump scroll has been performed by the screen. */
+    /**
+     * Open the forward-picker sheet for [messageId]. Dismisses the long-press
+     * action sheet and paints the eligible targets cache-first from whatever
+     * conversation list is already loaded (the collector fills it in live).
+     */
+    fun openForward(messageId: String) {
+        _state.update { it.copy(actionMessageId = null, forward = ForwardUiState(sourceMessageId = messageId)) }
+        recomputeForwardTargets()
+    }
+
+    fun onForwardQueryChange(query: String) {
+        _state.update { s -> s.forward?.let { s.copy(forward = it.copy(query = query)) } ?: s }
+        recomputeForwardTargets()
+    }
+
+    fun closeForward() {
+        _state.update { it.copy(forward = null) }
+    }
+
+    /**
+     * Optimistically forward the source message into [targetConversationId]: the
+     * original content is re-sent there carrying the `forwardedFrom` refs (the
+     * gateway resolves attachments from the original). Only a server-acked source
+     * can be forwarded — an unsent bubble has no id the gateway knows. One
+     * forward is in flight at a time; an already-forwarded target is inert.
+     */
+    fun forwardTo(targetConversationId: String) {
+        val forward = _state.value.forward ?: return
+        if (forward.sendingConversationId != null) return
+        if (targetConversationId in forward.sentConversationIds) return
+        val user = sessionRepository.currentUser.value ?: return
+        val source = latestMessages
+            .firstOrNull { it.message.id == forward.sourceMessageId && it.sendState == LocalSendState.SYNCED }
+            ?.message ?: return
+        _state.update { s ->
+            s.forward?.let { s.copy(forward = it.copy(sendingConversationId = targetConversationId)) } ?: s
+        }
+        viewModelScope.launch {
+            try {
+                messageRepository.sendOptimistic(
+                    conversationId = targetConversationId,
+                    content = source.content,
+                    originalLanguage = source.originalLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
+                    sender = user,
+                    forwardedFromId = source.id,
+                    forwardedFromConversationId = conversationId,
+                )
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+                _state.update { s ->
+                    s.forward?.let {
+                        s.copy(
+                            forward = it.copy(
+                                sendingConversationId = null,
+                                sentConversationIds = it.sentConversationIds + targetConversationId,
+                            ),
+                        )
+                    } ?: s
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { s ->
+                    s.copy(errorMessage = e.message, forward = s.forward?.copy(sendingConversationId = null))
+                }
+            }
+        }
+    }
+
+    private fun recomputeForwardTargets() {
+        _state.update { s ->
+            val forward = s.forward ?: return@update s
+            s.copy(
+                forward = forward.copy(
+                    targets = ForwardTargets.of(
+                        conversations = allConversations,
+                        sourceConversationId = conversationId,
+                        query = forward.query,
+                        currentUserId = sessionRepository.currentUser.value?.id,
+                    ),
+                ),
+            )
+        }
+    }
+
     fun onScrollHandled() {
         _state.update { it.copy(scrollToMessageId = null) }
     }

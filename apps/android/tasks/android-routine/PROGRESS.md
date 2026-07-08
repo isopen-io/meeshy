@@ -2,7 +2,7 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
 > On 2026-07-08 the **pinned-message banner** landed (slice `chat-pinned-banner`, Chat parity §C —
 > feature-parity.md "Pin/unpin message"). The gateway fully supports message pinning (REST pin/unpin +
@@ -737,7 +737,20 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-08): `chat-pinned-messages-sheet`** — the pinned-messages **list sheet**, the last
+**Just shipped (2026-07-08): `chat-forward-message`** — the last missing verb of §C "send, edit, delete,
+reply, **forward**". Pure `:feature:chat` `ForwardTargets.of` SSOT (port of iOS `filteredConversations`) +
+nullable `forwardedFromId`/`forwardedFromConversationId` on `SendMessageRequest`/`ApiMessage` (`:core:model`)
++ `MessageRepository.sendOptimistic` forward params (retry-safe) + `ChatViewModel.openForward`/`forwardTo`
+optimistic send into a picked conversation + a cache-first `ForwardPickerSheet`. +21 tests. See run log.
+**Recommended next (highest value, Chat §C):**
+- **forwarded-message indicator** — the read side of forward: show a "Transféré" / "Forwarded" badge on a
+  bubble whose `forwardedFromId` is set (feature-parity §C "Edited / pinned / **forwarded** indicators"). The
+  wire field is now on `ApiMessage`, so this is a thin `BubbleContent` flag + an exempt badge composable.
+- **reply thread overlay** — a focused reply-thread sheet listing a parent's replies (the `ReplyThreads`
+  grouping is already the SSOT; mirror the pinned-messages-sheet wiring).
+- **starred/bookmarked messages list** — a distinct §C feature from pins (needs a star/bookmark toggle).
+
+**Earlier (2026-07-08): `chat-pinned-messages-sheet`** — the pinned-messages **list sheet**, the last
 half of Chat §C "Pin/unpin message". Pure `:feature:chat` `PinnedMessagesList.of(messages) →
 List<PinnedMessageRow>` SSOT lists every pin newest-first, sharing the banner's exact pin predicate /
 snippet / sender projection — `PinnedMessages.of` now derives the banner from `list.first()` + `list.size`
@@ -1458,6 +1471,52 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-08 — slice `chat-forward-message` ✅ impl + reviewer PASS
+- **Rule #0 first:** no open Android PR (`list_pull_requests state=open` → `[]`). `main` had been
+  **force-updated** (`7f46adb2…→1f82a0d5`); branched clean off `origin/main` and verified a recent symbol
+  (`PinnedMessages.kt`) present before coding.
+- **Parity:** §C "…reply, forward" — the last missing verb (forward). iOS `ForwardPickerSheet` lets the user
+  pick a target conversation and re-sends the message carrying `forwardedFromId`/`forwardedFromConversationId`;
+  Android had nothing.
+- **Pure core (TDD, `:feature:chat`):** `ForwardTargets.of(conversations, sourceConversationId, query,
+  currentUserId) → List<ForwardTarget>` — port of iOS `filteredConversations`: the source conversation is
+  never a target; a blank/whitespace query keeps every other conversation; a non-blank query is trimmed then
+  matched case-insensitively against the **resolved `displayTitle`** (what the user sees — the other
+  participant for a DM); input order preserved; each target carries the deterministic `accentHex` and a
+  blank-avatar→null projection. +11 tests (`ForwardTargetsTest`: empty, source-only, all-except-source,
+  whitespace-blank, case-insensitive match, trim-before-match, no-match, order-preserved, DM-title-resolves+
+  searchable, blank-avatar→null/present-carried, accent+memberCount+type projection).
+- **Model (`:core:model`):** `SendMessageRequest` and `ApiMessage` gained nullable `forwardedFromId` /
+  `forwardedFromConversationId` (mirrors the gateway `SendMessageBodySchema`; no DB migration — `ApiMessage`
+  serializes into the JSON payload column, lenient decode tolerates older rows).
+- **Repository (`:sdk-core`):** `MessageRepository.sendOptimistic` gained the two forward params (default null)
+  — set on both the optimistic bubble and the queued `SendMessageRequest`; `retrySend` rebuilds them from the
+  cached `ApiMessage` so a forward survives an outbox exhaust. The existing `SEND_MESSAGE` worker sender
+  re-sends the payload verbatim → no worker change. +3 tests (`MessageRepositoryTest`: forward stamps bubble+
+  request, non-forward carries none, retry preserves refs).
+- **VM + state:** `ChatUiState.forward: ForwardUiState?` (null = closed) + `openForward` (dismisses the action
+  sheet, paints targets cache-first), `onForwardQueryChange`, `forwardTo` (one in-flight at a time; an
+  already-forwarded or unknown/unsent source is inert; only a `SYNCED` source is forwardable — an unsent
+  bubble has no gateway id; optimistic send into the target + wake the flush worker; failure surfaces
+  `errorMessage` and clears the sending flag), `closeForward`; a `conversationsStream()` collector feeds the
+  target list live (no-op `onSyncError`, so a conversations revalidation never disturbs the chat). +7 tests
+  (`ChatViewModelTest`: open-lists-except-source, query-filters, forward-sends+marks-sent+flush, already-sent
+  inert, unknown-source inert, unsent-source refused, failure surfaces+clears, close-dismisses).
+- **Wiring (exempt Compose glue):** `MessageActionsSheet` gains a "Forward" action (shown for an actionable
+  message) → `openForward`; a `ForwardPickerSheet` `ModalBottomSheet` (search field, accent-tinted avatar
+  rows, per-target Send→spinner→check state, empty state). EN/FR/ES/PT strings.
+- **Verify:** `:app:assembleDebug` green; `ForwardTargetsTest` 11/11, `MessageRepositoryTest` (0 failures),
+  `ChatViewModelTest` (all pass) — full `testDebugUnitTest` green except the **documented** DataStore-timeout
+  flakes (`InterfaceLanguageStoreTest`, `ThemeStoreTest`) which **pass in isolation** on a warm-cache re-run
+  (`--tests "*InterfaceLanguageStoreTest*" "*ThemeStoreTest*" --rerun-tasks` → BUILD SUCCESSFUL). +21 tests.
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API (`ForwardTargets.of`,
+  `sendOptimistic` forward params, `openForward`/`forwardTo`), no tautologies, boundary coverage on
+  source-exclusion/blank-vs-query/trim/no-match/order + unknown/unsent/already-sent/failure; SDK-purity
+  honoured — "who can I forward to / how does it match" is a pure `:feature` atom, the model carrier is
+  `:core:model`, the optimistic send + outbox is `:sdk-core`, the "when to forward" wiring is the VM, the
+  picker is exempt Compose glue; instant-app cache-first target list; UDF immutable state; accent-coherent
+  rows; natural long-press → sheet gesture; no dead end (every row forwards, checkmark confirms).
 
 ### 2026-07-08 — slice `chat-pinned-messages-sheet` ✅ impl + reviewer PASS
 - **Rule #0 first:** the one open Android PR, **#1722** (`conversations-draft-aware-ordering`), was

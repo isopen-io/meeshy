@@ -129,11 +129,14 @@ class ChatViewModelTest {
         nowMillis: Long = FIXED_NOW,
         hidden: LocallyHiddenMessages = LocallyHiddenMessages(),
         drafts: Map<String, ConversationDraft> = emptyMap(),
+        targetConversations: List<ApiConversation> = emptyList(),
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
         val conversations = mockk<ConversationRepository>(relaxed = true)
         every { conversations.conversationStream("c1") } returns MutableStateFlow(conversation)
+        every { conversations.conversationsStream(any(), any()) } returns
+            flowOf(CacheResult.Fresh(targetConversations, ageMillis = 0))
         val session = mockk<SessionRepository>(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(currentUser)
         val reactions = mockk<ReactionRepository>(relaxed = true)
@@ -745,6 +748,149 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.refresh("c1") }
+    }
+
+    private fun forwardCandidates() = listOf(
+        ApiConversation(id = "c1", title = "Source", type = "group"),
+        ApiConversation(id = "c2", title = "Alpha", type = "group"),
+        ApiConversation(id = "c3", title = "Beta", type = "group"),
+    )
+
+    @Test
+    fun openForward_lists_every_conversation_except_the_source() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        val forward = h.vm.state.value.forward
+        assertThat(forward).isNotNull()
+        assertThat(forward!!.sourceMessageId).isEqualTo("m1")
+        assertThat(forward.targets.map { it.conversationId }).containsExactly("c2", "c3").inOrder()
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun onForwardQueryChange_filters_the_targets() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        h.vm.onForwardQueryChange("beta")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.forward!!.targets.map { it.conversationId }).containsExactly("c3")
+    }
+
+    @Test
+    fun forwardTo_optimistically_sends_the_source_message_into_the_target_and_marks_it_sent() =
+        runTest(dispatcher) {
+            val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+            advanceUntilIdle()
+            h.vm.openForward("m1")
+            advanceUntilIdle()
+
+            h.vm.forwardTo("c2")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                h.repo.sendOptimistic(
+                    conversationId = "c2",
+                    content = "salut",
+                    originalLanguage = "fr",
+                    sender = me,
+                    forwardedFromId = "m1",
+                    forwardedFromConversationId = "c1",
+                )
+            }
+            verify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+            val forward = h.vm.state.value.forward!!
+            assertThat(forward.sentConversationIds).containsExactly("c2")
+            assertThat(forward.sendingConversationId).isNull()
+        }
+
+    @Test
+    fun forwardTo_is_inert_when_the_target_was_already_forwarded_to() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun forwardTo_is_inert_when_the_source_message_is_unknown() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+        h.vm.openForward("ghost")
+        advanceUntilIdle()
+
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun forwardTo_refuses_to_forward_an_unsent_bubble() = runTest(dispatcher) {
+        val unsent = flowOf(
+            CacheResult.Fresh(
+                listOf(
+                    LocalMessage(
+                        ApiMessage(id = "m1", conversationId = "c1", senderId = "me", content = "salut"),
+                        LocalSendState.SENDING,
+                    ),
+                ),
+                ageMillis = 0,
+            ),
+        )
+        val h = harness(unsent, currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun forwardTo_surfaces_an_error_and_clears_the_sending_flag_on_failure() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+        coEvery {
+            h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any())
+        } throws RuntimeException("boom")
+        advanceUntilIdle()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.errorMessage).isEqualTo("boom")
+        assertThat(h.vm.state.value.forward!!.sendingConversationId).isNull()
+        assertThat(h.vm.state.value.forward!!.sentConversationIds).isEmpty()
+    }
+
+    @Test
+    fun closeForward_dismisses_the_picker() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+        advanceUntilIdle()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        h.vm.closeForward()
+
+        assertThat(h.vm.state.value.forward).isNull()
     }
 
     private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
