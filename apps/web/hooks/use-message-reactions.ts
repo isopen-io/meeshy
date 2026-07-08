@@ -58,9 +58,14 @@ export function useMessageReactions({
   // Traductions
   const { t } = useI18n('reactions');
 
-  // Désactiver les réactions sur les messages optimistes (ID temporaire)
-  // pour éviter d'envoyer un ID invalide au gateway (Prisma ObjectID error)
-  const isOptimistic = messageId.startsWith('temp-');
+  // Désactiver les réactions sur les messages optimistes (ID client, pas encore
+  // persisté) pour éviter d'envoyer un ID invalide au gateway (Prisma ObjectID
+  // error). Un message optimiste porte un `cid_<uuid>` (generateClientMessageId)
+  // jusqu'à ce que l'ACK/broadcast serveur le remplace par un ObjectId Mongo
+  // (24 hex). On gate donc sur le format ObjectId — même convention que
+  // use-conversation-messages-rq / use-socket-cache-sync — plutôt que sur un
+  // préfixe `temp-` qu'aucun chemin de production ne produit.
+  const isOptimistic = !/^[a-f\d]{24}$/i.test(messageId);
   const effectiveEnabled = enabled && !isOptimistic;
 
   // État local
