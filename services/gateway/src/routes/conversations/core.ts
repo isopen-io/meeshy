@@ -1089,9 +1089,20 @@ export function registerCoreRoutes(
       // pour compat avec les anciens clients pendant ~3 mois.
       try {
         const socketIOHandler = fastify.socketIOHandler;
-        const io = socketIOHandler?.getManager()?.getIO();
+        const socketManager = socketIOHandler?.getManager();
+        const io = socketManager?.getIO();
         if (io) {
           const allParticipantIds = [userId, ...uniqueParticipantIds];
+          // Auto-join every already-connected participant's sockets to the
+          // conversation room BEFORE announcing it. Without this, connected
+          // participants are in `connectedUsers` (so never offline-queued)
+          // but not in ROOMS.conversation(id) — every message:new for the
+          // new conversation is silently missed until their next reconnect.
+          for (const participantId of allParticipantIds) {
+            socketManager.joinUserToConversationRoom(participantId, conversation.id).catch(
+              (err: unknown) => logger.error('Failed to auto-join participant to new conversation room', { participantId, error: err })
+            );
+          }
           const conversationNewPayload = {
             conversationId: conversation.id,
             conversationType: type,

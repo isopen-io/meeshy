@@ -1038,13 +1038,17 @@ export class MessageHandler {
       // message never leaks the sender's local optimistic id to another user.
       if (this.deliveryQueue) {
         for (const p of sharedParticipants) {
-          if (!p.userId || p.id === message.senderId || this.connectedUsers.has(p.userId)) continue;
-          this.deliveryQueue.enqueue(p.userId, {
+          // Queue key mirrors the presence key convention: userId for
+          // registered users, participant id for anonymous (connectedUsers
+          // and ROOMS.user use the same key on the drain side).
+          const queueKey = p.userId ?? p.id;
+          if (p.id === message.senderId || this.connectedUsers.has(queueKey)) continue;
+          this.deliveryQueue.enqueue(queueKey, {
             messageId: message.id,
             conversationId: normalizedId,
             payload: broadcastPayload,
             enqueuedAt: new Date().toISOString(),
-          }).catch((err) => handlerLogger.warn('Failed to enqueue message for offline user', { userId: p.userId, error: err }));
+          }).catch((err) => handlerLogger.warn('Failed to enqueue message for offline user', { userId: queueKey, error: err }));
         }
       }
 
@@ -1139,14 +1143,15 @@ export class MessageHandler {
         select: { id: true, userId: true }
       });
       for (const p of participants) {
-        if (!p.userId || p.id === senderParticipantId || this.connectedUsers.has(p.userId)) continue;
-        this.deliveryQueue.enqueue(p.userId, {
+        const queueKey = p.userId ?? p.id;
+        if (p.id === senderParticipantId || this.connectedUsers.has(queueKey)) continue;
+        this.deliveryQueue.enqueue(queueKey, {
           messageId,
           conversationId,
           payload,
           enqueuedAt: new Date().toISOString(),
           eventType,
-        }).catch((err) => handlerLogger.warn('Failed to enqueue offline event', { userId: p.userId, eventType, error: err }));
+        }).catch((err) => handlerLogger.warn('Failed to enqueue offline event', { userId: queueKey, eventType, error: err }));
       }
     } catch (err) {
       handlerLogger.warn('Failed to fetch participants for offline enqueue', { conversationId, eventType, error: err });

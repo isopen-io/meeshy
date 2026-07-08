@@ -50,7 +50,7 @@ import { getUserInitials } from '@/lib/avatar-utils';
 import { useUserStore } from '@/stores/user-store';
 import { useManualStatusRefresh } from '@/hooks/use-manual-status-refresh';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
+import { getUserStatus, isPresenceActive } from '@/lib/user-status';
 import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials, isParticipantModerator } from '@/utils/participant-helpers';
 
 interface ConversationParticipantsDrawerProps {
@@ -248,14 +248,14 @@ export function ConversationParticipantsDrawer({
         );
       });
 
-  // Separer en ligne / hors ligne via getUserStatus (temps reel)
+  // Separer actifs (orange : online + recent) / inactifs via getUserStatus (temps reel)
   const onlineParticipants = filteredParticipants.filter(p => {
     const storeUser = p.userId ? getUserByIdFn(p.userId) : undefined;
-    return getUserStatus(storeUser || p.user as ParticipantUser) === 'online';
+    return isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
   });
   const offlineParticipants = filteredParticipants.filter(p => {
     const storeUser = p.userId ? getUserByIdFn(p.userId) : undefined;
-    return getUserStatus(storeUser || p.user as ParticipantUser) !== 'online';
+    return !isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
   });
 
   // Pagination : limiter le rendu

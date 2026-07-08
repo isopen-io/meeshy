@@ -519,7 +519,7 @@ export function SearchPageContent() {
                                       variant={user.isOnline ? 'default' : 'secondary'}
                                       className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold flex-shrink-0 whitespace-nowrap ${
                                         user.isOnline
-                                          ? 'bg-green-500 hover:bg-green-600'
+                                          ? 'bg-orange-400 hover:bg-orange-500'
                                           : 'bg-gray-400 hover:bg-gray-500'
                                       }`}
                                     >

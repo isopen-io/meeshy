@@ -430,8 +430,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       list order), carries the total pinned `count` and a `PinnedSnippet` preview (trimmed text, else
       Image>File>Empty key). `ChatScreen` renders an accent-tinted, tappable `PinnedBannerStrip` above
       the list → `ChatViewModel.onPinnedBannerTap` scrolls to the newest pin (reuses `scrollToMessageId`).
-      +28 tests. **Pending:** the pin/unpin **action** (optimistic outbox toggle + long-press action) and
-      the full pinned-messages list sheet.
+      +28 tests. **Pin/unpin action done** (slice `chat-pin-toggle`, 2026-07-08): the pure `:core:model`
+      `MessagePinToggle.resolve(isDeleted, pinnedAtIso) → PinAction` SSOT (Pin | Unpin | Unavailable; pinned =
+      non-blank `pinnedAt`, same rule as the banner; not owner/window-gated — parity with the gateway which
+      only checks conversation access — only a deleted tombstone is Unavailable) drives a long-press
+      "Épingler"/"Retirer" sheet action → `ChatViewModel.togglePin` → `MessageRepository.setPinnedOptimistic`
+      (flips the cached `pinnedAt` instantly so the banner reacts at once, refuses an unsent bubble) + a durable
+      `PIN_MESSAGE`/`UNPIN_MESSAGE` outbox row on the shared `pin` lane (a pin+unpin of the same message
+      annihilates, a repeat supersedes — reuses the block/unblock `terminalToggle` coalescer), a
+      `MessageApi.pin`/`unpin` (PUT/DELETE) worker sender, and an `onExhausted` conversation refresh that
+      reconciles a dead flip with server truth. +31 tests. **Pending:** the full pinned-messages list sheet.
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle + **tap-aperçu → scroll vers l'original**
       (`ReplyJumpResolver`, inerte si original paginé hors écran) + **swipe-to-reply**

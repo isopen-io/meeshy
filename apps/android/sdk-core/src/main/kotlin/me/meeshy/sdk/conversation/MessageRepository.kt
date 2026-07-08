@@ -26,6 +26,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.PinPayload
 import me.meeshy.sdk.outbox.ReactionPayload
 import me.meeshy.sdk.util.isoToEpochMillis
 import java.time.Instant
@@ -260,6 +261,31 @@ class MessageRepository @Inject constructor(
                 lane = OutboxLanes.forMessage(updated.conversationId),
                 targetId = messageId,
                 payload = "{}",
+            ),
+        )
+        return true
+    }
+
+    /**
+     * Optimistic pin/unpin of a server-acked message: the cached `pinnedAt` flips
+     * instantly (set to now on pin, cleared on unpin — the pinned-banner reads it
+     * live) and a `PIN_MESSAGE`/`UNPIN_MESSAGE` mutation is queued on the shared
+     * pin lane (a quick pin+unpin of the same message annihilates in the
+     * coalescer). Only server-acked messages can be pinned — the gateway does not
+     * know an optimistic `cmid` yet — so an unsent bubble is refused (returns
+     * false). `pinnedBy` is left untouched optimistically; the authoritative
+     * `pinnedBy` arrives with the `message:pinned` socket refresh.
+     */
+    suspend fun setPinnedOptimistic(messageId: String, pin: Boolean): Boolean {
+        val updated = updateCachedMessage(messageId, requireSynced = true) { message ->
+            message.copy(pinnedAt = if (pin) Instant.ofEpochMilli(clock.nowMillis()).toString() else null)
+        } ?: return false
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = if (pin) OutboxKind.PIN_MESSAGE else OutboxKind.UNPIN_MESSAGE,
+                lane = OutboxLanes.PIN,
+                targetId = messageId,
+                payload = MeeshyApi.json.encodeToString(PinPayload(updated.conversationId)),
             ),
         )
         return true

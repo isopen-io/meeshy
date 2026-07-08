@@ -526,6 +526,86 @@ class ChatViewModelTest {
         assertThat(h.vm.state.value.scrollToMessageId).isNull()
     }
 
+    private fun deletedStream() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(
+                    ApiMessage(
+                        id = "m3",
+                        conversationId = "c1",
+                        senderId = "me",
+                        content = "",
+                        deletedAt = "2026-07-08T09:00:00Z",
+                    ),
+                ),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
+    @Test
+    fun togglePin_pins_a_not_yet_pinned_message_optimistically() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.setPinnedOptimistic(any(), any()) } returns true
+        advanceUntilIdle()
+
+        h.vm.onMessageLongPress("m2")
+        h.vm.togglePin("m2")
+        advanceUntilIdle()
+
+        coVerify { h.repo.setPinnedOptimistic("m2", pin = true) }
+        coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun togglePin_unpins_an_already_pinned_message() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        coEvery { h.repo.setPinnedOptimistic(any(), any()) } returns true
+        advanceUntilIdle()
+
+        h.vm.togglePin("m2")
+        advanceUntilIdle()
+
+        coVerify { h.repo.setPinnedOptimistic("m2", pin = false) }
+    }
+
+    @Test
+    fun togglePin_is_inert_on_a_deleted_message() = runTest(dispatcher) {
+        val h = harness(deletedStream(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onMessageLongPress("m3")
+        h.vm.togglePin("m3")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.setPinnedOptimistic(any(), any()) }
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun togglePin_is_inert_on_an_unknown_message() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.togglePin("nope")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.setPinnedOptimistic(any(), any()) }
+    }
+
+    @Test
+    fun togglePin_surfaces_a_repository_failure_as_an_error() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.setPinnedOptimistic(any(), any()) } throws RuntimeException("boom")
+        advanceUntilIdle()
+
+        h.vm.togglePin("m2")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.errorMessage).isEqualTo("boom")
+    }
+
     @Test
     fun a_pinned_socket_event_refreshes_the_open_conversation() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)

@@ -44,15 +44,19 @@ describe('formatPresenceLabel', () => {
 });
 
 describe('presenceColorClass', () => {
-  it('is green within 5 minutes', () => {
-    expect(presenceColorClass(new Date(NOW - 2 * 60_000), true, NOW)).toContain('green');
+  it('is orange (active) within 5 minutes', () => {
+    expect(presenceColorClass(new Date(NOW - 2 * 60_000), true, NOW)).toContain('orange');
   });
 
-  it('is orange between 5 and 30 minutes', () => {
-    expect(presenceColorClass(new Date(NOW - 10 * 60_000), false, NOW)).toContain('orange');
+  it('is orange (active) at exactly 5 minutes', () => {
+    expect(presenceColorClass(new Date(NOW - 5 * 60_000), false, NOW)).toContain('orange');
   });
 
-  it('is grey beyond 30 minutes', () => {
+  it('is grey (away) between 5 and 30 minutes', () => {
+    expect(presenceColorClass(new Date(NOW - 10 * 60_000), false, NOW)).toContain('gray');
+  });
+
+  it('is grey (away) beyond 30 minutes', () => {
     expect(presenceColorClass(new Date(NOW - 2 * 3_600_000), false, NOW)).toContain('gray');
   });
 });

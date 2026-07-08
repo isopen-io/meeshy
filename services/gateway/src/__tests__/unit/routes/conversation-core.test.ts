@@ -210,7 +210,8 @@ const createMockFastify = () => {
   const mockEmit = jest.fn();
   const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
-  const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO });
+  const mockJoinRoom = jest.fn().mockResolvedValue(undefined);
+  const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO, joinUserToConversationRoom: mockJoinRoom });
 
   const fastify: any = {
     get: jest.fn((path: string, opts: any, handler: Function) => {
@@ -243,6 +244,7 @@ const createMockFastify = () => {
     _routes: routes,
     _mockTo: mockTo,
     _mockEmit: mockEmit,
+    _mockJoinRoom: mockJoinRoom,
   };
   return fastify;
 };
@@ -1285,6 +1287,46 @@ describe('registerCoreRoutes', () => {
       );
     });
 
+    it('auto-joins every participant (creator included) to the new conversation socket room', async () => {
+      mockValidateSchema.mockReturnValue({ type: 'group', title: 'Room join', participantIds: [OTHER_USER_ID] });
+      prisma.conversation.create.mockResolvedValue({
+        id: CONV_ID,
+        type: 'group',
+        title: 'Room join',
+        createdAt: new Date(),
+        participants: [],
+      });
+      prisma.user.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ body: {} });
+      const reply = makeReply();
+
+      await getCreateHandler(fastify)(req, reply);
+
+      expect(fastify._mockJoinRoom).toHaveBeenCalledWith(USER_ID, CONV_ID);
+      expect(fastify._mockJoinRoom).toHaveBeenCalledWith(OTHER_USER_ID, CONV_ID);
+    });
+
+    it('room auto-join failure is non-blocking', async () => {
+      mockValidateSchema.mockReturnValue({ type: 'group', title: 'Join fail', participantIds: [OTHER_USER_ID] });
+      fastify._mockJoinRoom.mockRejectedValue(new Error('join fail'));
+      prisma.conversation.create.mockResolvedValue({
+        id: CONV_ID,
+        type: 'group',
+        title: 'Join fail',
+        createdAt: new Date(),
+        participants: [],
+      });
+      prisma.user.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ body: {} });
+      const reply = makeReply();
+
+      await getCreateHandler(fastify)(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
     it('broadcast error is non-blocking', async () => {
       mockValidateSchema.mockReturnValue({ type: 'direct', participantIds: [OTHER_USER_ID] });
       fastify.socketIOHandler.getManager.mockReturnValue({
@@ -1293,6 +1335,7 @@ describe('registerCoreRoutes', () => {
             emit: jest.fn().mockImplementation(() => { throw new Error('socket fail'); }),
           }),
         }),
+        joinUserToConversationRoom: jest.fn().mockResolvedValue(undefined),
       });
       prisma.conversation.create.mockResolvedValue({
         id: CONV_ID,

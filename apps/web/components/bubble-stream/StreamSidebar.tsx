@@ -118,10 +118,10 @@ export const StreamSidebar = memo(function StreamSidebar({
 
 StreamSidebar.displayName = 'StreamSidebar';
 
-const statusDotClasses: Record<UserStatus, string> = {
-  online: 'bg-green-500',
-  away: 'bg-orange-400',
-  offline: 'bg-gray-400',
+const statusDotClasses: Record<Exclude<UserStatus, 'offline'>, string> = {
+  online: 'bg-orange-400 animate-pulse', // actif <= 60s
+  recent: 'bg-orange-400', // actif <= 5min
+  away: 'bg-gray-400', // absent 5-30min
 };
 
 /**
@@ -145,7 +145,9 @@ const UserItem = memo(function UserItem({ user }: { user: User }) {
           @{user.username}
         </p>
       </div>
-      <div className={`w-2 h-2 ${statusDotClasses[status]} rounded-full`} />
+      {status !== 'offline' && (
+        <div className={`w-2 h-2 ${statusDotClasses[status]} rounded-full`} />
+      )}
     </div>
   );
 });

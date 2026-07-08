@@ -622,6 +622,15 @@ public struct AudioPlayerView: View {
     @State private var isTranscribing = false
     /// Toggled in `onAppear` of the skeleton view to drive the pulse.
     @State private var transcriptionPulsePhase = false
+    /// `true` pendant le drag de scrub sur la waveform. Publié via
+    /// `MediaScrubbingPreferenceKey` pour que l'hôte (conteneur de swipe de
+    /// bulle côté app) désengage ses gestes horizontaux le temps du scrub.
+    /// `@GestureState` (pas `@State`) : SwiftUI le remet à `false`
+    /// automatiquement si le drag est interrompu (appel entrant, arbitrage
+    /// perdu face au parent) même quand `.onEnded` ne se déclenche jamais —
+    /// un `@State` manuel resterait bloqué à `true` et désengagerait le swipe
+    /// reply/forward de la bulle indéfiniment.
+    @GestureState private var isUserScrubbing = false
 
     private var isDark: Bool { theme.mode.isDark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
@@ -1445,6 +1454,9 @@ public struct AudioPlayerView: View {
                     // zero-distance case: it seeks to the tapped point on `.onEnded`.
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
+                            .updating($isUserScrubbing) { _, state, _ in
+                                state = true
+                            }
                             .onChanged { value in
                                 player.seek(to: Self.scrubFraction(
                                     locationX: value.location.x, width: geo.size.width))
@@ -1458,6 +1470,10 @@ public struct AudioPlayerView: View {
             }
             .allowsHitTesting(availability == .ready)
         )
+        // Signale le scrub en cours à l'hôte (voir MediaScrubbingPreferenceKey) :
+        // le conteneur de swipe de la bulle désengage reply/forward tant que le
+        // doigt manipule la waveform.
+        .preference(key: MediaScrubbingPreferenceKey.self, value: isUserScrubbing)
     }
 
     // MARK: - Time Row

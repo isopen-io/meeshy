@@ -19,6 +19,14 @@ on:
       - 'services/*/package.json'
       - 'packages/*/package.json'
 
+# Sérialise les releases par branche : deux pushes rapprochés déclenchaient
+# des runs concurrents qui se volaient le push de version (non fast-forward).
+# Pas de cancel-in-progress : une release entamée va au bout, la suivante
+# trouve les changesets déjà consommés et skip proprement.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
   workflow_dispatch:
     inputs:
       force_release:
@@ -170,7 +178,11 @@ jobs:
       - name: Get new version
         id: get-version
         run: |
-          VERSION=$(jq -r '.version' package.json)
+          # Le package.json racine n'est PAS versionné par changesets (figé à
+          # 1.0.0 → « tag already exists » à chaque release). La version de
+          # release = max des trois services livrés ; updateInternalDependencies:
+          # patch garantit qu'un bump de packages/shared propage un bump ici.
+          VERSION=$(jq -r '.version' apps/web/package.json services/gateway/package.json services/translator/package.json | sort -V | tail -n 1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "📌 New version: $VERSION"
@@ -182,6 +194,15 @@ jobs:
         run: |
           git add -A
           git commit -m "chore(release): version packages [skip ci]" || echo "No changes to commit"
+          # Le push peut être rejeté (non fast-forward) si main a avancé entre le
+          # checkout du runner et ce push : rebase puis retry au lieu d'échouer.
+          for attempt in 1 2 3; do
+            if git push origin "$BRANCH_NAME"; then
+              exit 0
+            fi
+            echo "⚠️  Push rejeté (tentative $attempt) — rebase sur origin/$BRANCH_NAME..."
+            git pull --rebase origin "$BRANCH_NAME"
+          done
           git push origin "$BRANCH_NAME"
 
       - name: Create Git tag
@@ -189,6 +210,17 @@ jobs:
         env:
           TAG_NAME: ${{ steps.get-version.outputs.tag }}
         run: |
+          # Idempotent : un re-run/race peut retrouver un tag déjà posé. S'il
+          # pointe sur HEAD c'est la même release (skip) ; sinon c'est un vrai
+          # conflit de version → échec explicite (le build checkout ce tag).
+          if git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
+            if [ "$(git rev-parse "$TAG_NAME^{commit}")" = "$(git rev-parse HEAD)" ]; then
+              echo "ℹ️  Tag $TAG_NAME déjà posé sur HEAD — skip"
+              exit 0
+            fi
+            echo "::error::Tag $TAG_NAME existe déjà sur un autre commit"
+            exit 1
+          fi
           git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           git push origin "$TAG_NAME"
 

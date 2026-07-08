@@ -38,6 +38,14 @@ class OutboxLaneMapTest {
     }
 
     @Test
+    fun `pin and unpin share the pin lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.PIN_MESSAGE))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.PIN))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UNPIN_MESSAGE))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.PIN))
+    }
+
+    @Test
     fun `each remaining kind maps to its own dedicated shared lane`() {
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.READ_RECEIPT))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT))

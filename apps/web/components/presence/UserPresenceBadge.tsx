@@ -5,10 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { useLiveUserStatus } from '@/hooks/use-live-user-status';
 import type { PresenceSource, UserStatus } from '@/lib/user-status';
 
-const badgeColors: Record<UserStatus, string> = {
-  online: 'bg-green-500 hover:bg-green-600',
-  away: 'bg-orange-400 hover:bg-orange-500',
-  offline: 'bg-gray-400 hover:bg-gray-500',
+const badgeColors: Record<Exclude<UserStatus, 'offline'>, string> = {
+  online: 'bg-orange-400 hover:bg-orange-500', // actif <= 60s
+  recent: 'bg-orange-400 hover:bg-orange-500', // actif <= 5min
+  away: 'bg-gray-400 hover:bg-gray-500', // absent 5-30min
 };
 
 interface UserPresenceBadgeProps {
@@ -31,15 +31,18 @@ export const UserPresenceBadge = memo(function UserPresenceBadge({
 }: UserPresenceBadgeProps) {
   const status = useLiveUserStatus(userId, fallbackUser);
 
-  const labels: Record<UserStatus, string> = {
+  // Au-dela de 30min (offline) : plus aucune info de presence.
+  if (status === 'offline') return null;
+
+  const labels: Record<Exclude<UserStatus, 'offline'>, string> = {
     online: t('status.online'),
+    recent: t('status.recent', { defaultValue: 'Actif récemment' }),
     away: t('status.away', { defaultValue: 'Absent' }),
-    offline: t('status.offline'),
   };
 
   return (
     <Badge
-      variant={status === 'offline' ? 'secondary' : 'default'}
+      variant="default"
       className={`${badgeColors[status]} ${className ?? ''}`}
     >
       {labels[status]}

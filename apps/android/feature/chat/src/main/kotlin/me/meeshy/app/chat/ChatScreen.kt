@@ -107,6 +107,8 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
+import me.meeshy.sdk.model.MessagePinToggle
+import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.MeeshyAvatar
@@ -450,6 +452,10 @@ fun ChatScreen(
                 createdAtMillis = createdAtMillis,
                 nowMillis = nowMillis,
             ),
+            pinAction = MessagePinToggle.resolve(
+                isDeleted = actionTarget.isDeleted,
+                pinnedAtIso = actionTarget.pinnedAtIso,
+            ),
             ownReactions = state.ownReactions[actionTarget.messageId] ?: emptySet(),
             quickReactions = state.quickReactions,
             accentColor = accentColor,
@@ -459,6 +465,7 @@ fun ChatScreen(
             onDeleteForEveryone = { viewModel.deleteForEveryone(actionTarget.messageId) },
             onDeleteForMe = { viewModel.deleteForMe(actionTarget.messageId) },
             onReply = { viewModel.startReply(actionTarget.messageId) },
+            onPin = { viewModel.togglePin(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
         )
@@ -1129,6 +1136,7 @@ private fun MessageActionsSheet(
     bubble: BubbleContent,
     canEdit: Boolean,
     canDeleteForEveryone: Boolean,
+    pinAction: PinAction,
     ownReactions: Set<String>,
     quickReactions: List<String>,
     accentColor: Color,
@@ -1138,6 +1146,7 @@ private fun MessageActionsSheet(
     onDeleteForEveryone: () -> Unit,
     onDeleteForMe: () -> Unit,
     onReply: () -> Unit,
+    onPin: () -> Unit,
     onToggleOriginal: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1190,6 +1199,16 @@ private fun MessageActionsSheet(
                         clipboard.setText(AnnotatedString(bubble.text))
                         onDismiss()
                     },
+                )
+            }
+            if (pinAction != PinAction.Unavailable) {
+                SheetAction(
+                    icon = Icons.Filled.PushPin,
+                    label = stringResource(
+                        if (pinAction == PinAction.Unpin) R.string.chat_action_unpin
+                        else R.string.chat_action_pin,
+                    ),
+                    onClick = onPin,
                 )
             }
             if (bubble.isOutgoing && isActionable && canEdit) {

@@ -589,6 +589,17 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             }
           });
 
+          // Auto-join both users' currently-connected sockets to the new DM
+          // room so they receive message:new immediately without a reconnect.
+          const socketManager = fastify.socketIOHandler?.getManager();
+          if (socketManager) {
+            for (const memberUserId of [friendRequest.senderId, friendRequest.receiverId]) {
+              socketManager.joinUserToConversationRoom(memberUserId, conversation.id).catch(
+                (err: unknown) => logError(fastify.log, 'Failed to auto-join friend to new DM room:', err)
+              );
+            }
+          }
+
           // Ajouter la conversation a la reponse
           (updatedRequest as any).conversation = conversation;
           acceptedConversationId = conversation.id;

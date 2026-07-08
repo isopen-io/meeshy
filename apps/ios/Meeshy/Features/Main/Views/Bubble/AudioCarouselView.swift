@@ -127,6 +127,14 @@ struct AudioCarouselView: View {
         .onAppear {
             if currentPageID == nil { currentPageID = items.first?.id }
         }
+        // Contrairement au carrousel visuel (état grille ↔ carrousel), le pager
+        // multi-audio est TOUJOURS actif : le glissement horizontal lui
+        // appartient en permanence. On désengage donc le swipe reply/forward du
+        // BubbleSwipeContainer pour toute la vie de la bulle — sinon un swipe
+        // de piste franc (~60-100pt) franchit même le seuil `.resistant` (48pt)
+        // et déclenche Répondre/Transférer en plein changement de piste.
+        // Répondre/Transférer restent accessibles via le menu long-press.
+        .preference(key: BubbleInlinePagingPreferenceKey.self, value: items.count > 1)
         // Swipe to a track plays it from 0 (validated UX). Tapping play inside a
         // page routes through the same `onPlayAudio` callback below.
         //

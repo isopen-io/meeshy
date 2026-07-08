@@ -395,18 +395,32 @@ export class MeeshySocketIOManager {
     this.messageHandler.setDeliveryQueue(queue);
   }
 
-  private async _drainPendingMessages(socket: Socket, userId: string): Promise<void> {
+  private async _drainPendingMessages(userId: string, isAnonymous: boolean): Promise<void> {
     if (!this.deliveryQueue) return;
     try {
       const pending = await this.deliveryQueue.drain(userId);
       if (pending.length === 0) return;
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
+      // Emit to the user room so EVERY currently-connected device of this user
+      // receives the replay (the drain is destructive — a single-socket emit
+      // would lose the messages for the user's other devices). Safe because
+      // AuthHandler joins ROOMS.user(...) BEFORE registering the socket and
+      // before the presence-snapshot/drain call, for both JWT and anonymous
+      // paths (anonymous personal rooms use the participant id).
+      // Replayed payloads are stored as opaque JSON in the queue — they were
+      // shaped at enqueue time, so re-checking them against ServerToClientEvents
+      // here is impossible (loose emit, same as the previous raw-Socket path).
+      const userRoom = this.io.to(ROOMS.user(userId)) as unknown as { emit: (event: string, payload: unknown) => void };
       for (const entry of pending) {
-        socket.emit(_drainedEventName(entry.eventType), entry.payload);
+        userRoom.emit(_drainedEventName(entry.eventType), entry.payload);
       }
       const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
-      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
+      userRoom.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
+
+      // Delivery receipts require a registered userId (participant lookup is
+      // keyed on Participant.userId, null for anonymous) — skip for anonymous.
+      if (isAnonymous) return;
 
       // Emit delivery receipts to senders so their checkmarks advance from
       // "sent" (single tick) to "delivered" (double tick) as soon as the
@@ -652,10 +666,12 @@ export class MeeshySocketIOManager {
       // Drain offline delivery queue regardless of snapshot cache hit/miss.
       // Previously this only ran on the non-cached path — on quick reconnects
       // (within the 30s TTL) queued messages were silently dropped.
+      // Anonymous users drain too: their queue is keyed by participant id
+      // (same key as connectedUsers / ROOMS.user for anonymous identities).
+      this._drainPendingMessages(userId, isAnonymous).catch(err => {
+        logger.warn('Failed to drain pending messages on connect', { userId, error: err });
+      });
       if (!isAnonymous) {
-        this._drainPendingMessages(socket, userId).catch(err => {
-          logger.warn('Failed to drain pending messages on connect', { userId, error: err });
-        });
         this._emitUnreadCountsSnapshot(socket, userId).catch(err => {
           logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, error: err });
         });

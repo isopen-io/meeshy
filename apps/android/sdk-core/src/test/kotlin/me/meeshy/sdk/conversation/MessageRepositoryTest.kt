@@ -55,6 +55,10 @@ private class FakeMessageApi(
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
+    override suspend fun pin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = true)
+    override suspend fun unpin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = true)
 }
 
 private fun apiMessage(
@@ -342,6 +346,56 @@ class MessageRepositoryTest {
         assertThat(cachedMessage(cmid).content).isEqualTo("salut")
         assertThat(outbox.deliverable("message:c1").single().kindEnum)
             .isEqualTo(OutboxKind.SEND_MESSAGE)
+    }
+
+    @Test
+    fun `setPinnedOptimistic pin stamps pinnedAt and queues PIN_MESSAGE`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            clock = MutableClock(1_700_000_000_000),
+        )
+        repo.refresh("c1")
+
+        val applied = repo.setPinnedOptimistic("m1", pin = true)
+
+        assertThat(applied).isTrue()
+        assertThat(cachedMessage("m1").pinnedAt).isNotNull()
+        val row = outbox.deliverable(OutboxLanes.PIN).single()
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.PIN_MESSAGE)
+        assertThat(row.targetId).isEqualTo("m1")
+        assertThat(row.payload).contains("c1")
+    }
+
+    @Test
+    fun `setPinnedOptimistic unpin clears pinnedAt and queues UNPIN_MESSAGE`() = runTest {
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(apiMessage("m1").copy(pinnedAt = "2026-07-08T10:00:00Z")),
+                ),
+            ),
+        )
+        repo.refresh("c1")
+
+        val applied = repo.setPinnedOptimistic("m1", pin = false)
+
+        assertThat(applied).isTrue()
+        assertThat(cachedMessage("m1").pinnedAt).isNull()
+        assertThat(outbox.deliverable(OutboxLanes.PIN).single().kindEnum)
+            .isEqualTo(OutboxKind.UNPIN_MESSAGE)
+    }
+
+    @Test
+    fun `setPinnedOptimistic refuses a bubble the server does not know yet`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val applied = repo.setPinnedOptimistic(cmid, pin = true)
+
+        assertThat(applied).isFalse()
+        assertThat(cachedMessage(cmid).pinnedAt).isNull()
+        assertThat(outbox.deliverable(OutboxLanes.PIN)).isEmpty()
     }
 
     @Test

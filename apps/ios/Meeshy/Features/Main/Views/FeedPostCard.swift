@@ -299,9 +299,15 @@ struct FeedPostCard: View {
                             Text(String(localized: "feed.post.see_more", defaultValue: "voir plus", bundle: .main))
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textMuted)
-                                // Cible de touche 44pt (HIG) sans gonfler le texte visuellement.
-                                .frame(minHeight: 44)
-                                .contentShape(Rectangle())
+                                // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
+                                // creusait ~14pt de vide au-dessus et en dessous du libellé
+                                // avant la rangée d'actions (même correctif que le « Voir
+                                // plus » des bulles, 2026-07-08). Cible tactile 44pt HIG via
+                                // un contentShape étendu UNIQUEMENT vers le bas
+                                // (`DownwardExtendedTapShape`, +20pt) — vers le texte du post
+                                // au-dessus, jamais.
+                                .frame(minHeight: 24)
+                                .contentShape(DownwardExtendedTapShape(extraBottom: 20))
                                 .textSelection(.disabled)
                                 .highPriorityGesture(
                                     TapGesture()

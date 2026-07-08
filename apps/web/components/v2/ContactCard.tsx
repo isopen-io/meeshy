@@ -98,7 +98,7 @@ export const ContactCard = memo(function ContactCard({
 
       <div className="flex items-center gap-2 flex-shrink-0">
         {contact.isOnline && (
-          <Badge variant="success" size="sm">
+          <Badge size="sm" className="bg-orange-400 text-white border-transparent hover:bg-orange-500">
             {t('status.online')}
           </Badge>
         )}

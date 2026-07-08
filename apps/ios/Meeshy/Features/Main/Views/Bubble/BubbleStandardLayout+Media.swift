@@ -403,6 +403,10 @@ fileprivate struct BubbleGridCell: View {
                     frame: .bubble,
                     availability: availability,
                     performance: .inline,
+                    // Grille multi-média : cellules ~150pt de large — le bouton
+                    // play 64pt écrasait la vignette. 44pt (minimum HIG) en
+                    // multi, 64pt conservé pour la vidéo solo pleine largeur.
+                    playButtonDiameter: solo ? 64 : 44,
                     onDownload: onDownload,
                     onExpand: { fullscreenAttachment = attachment }
                 )

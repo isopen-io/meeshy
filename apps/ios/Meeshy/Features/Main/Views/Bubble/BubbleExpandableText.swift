@@ -79,11 +79,16 @@ struct BubbleExpandableText: View, Equatable {
                 Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(textColor.opacity(0.6))
-                    // Hit-area élargie à 44pt (HIG) sans gonfler visuellement le texte.
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
-                    .padding(.top, 2)
+                    // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
+                    // creusait ~16pt de vide au-dessus ET en dessous du libellé
+                    // avant la date (feedback produit 2026-07-08). La cible
+                    // tactile atteint les 44pt HIG via un contentShape étendu
+                    // UNIQUEMENT vers le bas (`DownwardExtendedTapShape`, +20pt)
+                    // — jamais vers le haut, pour ne pas mordre sur le texte
+                    // tronqué / les liens juste au-dessus.
+                    .frame(maxWidth: .infinity, minHeight: 24, alignment: .trailing)
                     .padding(.trailing, 48)
-                    .contentShape(Rectangle())
+                    .contentShape(DownwardExtendedTapShape(extraBottom: 20))
                     .textSelection(.disabled)
                     .highPriorityGesture(
                         TapGesture()

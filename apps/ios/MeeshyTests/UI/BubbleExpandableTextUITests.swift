@@ -28,9 +28,12 @@ final class BubbleExpandableTextUITests: XCTestCase {
         let voirPlusButton = app.otherElements["bubble.expand.more"].firstMatch
         XCTAssertTrue(voirPlusButton.exists, "The 'Voir plus' button should be visible for long messages")
 
-        // Verify hit-area is sufficient (44pt)
+        // Layout height is compact (24pt) so the label sits close to the
+        // timestamp row; the effective touch target stays ~40pt via the
+        // extended contentShape (-8pt inset), which XCUITest cannot measure.
         let frame = voirPlusButton.frame
-        XCTAssertGreaterThanOrEqual(frame.height, 44, "The touch target height should be at least 44pt")
+        XCTAssertGreaterThanOrEqual(frame.height, 24, "The button's layout height should be at least 24pt")
+        XCTAssertLessThan(frame.height, 44, "The compact layout must not regress to the old 44pt strip that padded the timestamp row")
 
         // Tap "Voir plus"
         voirPlusButton.tap()

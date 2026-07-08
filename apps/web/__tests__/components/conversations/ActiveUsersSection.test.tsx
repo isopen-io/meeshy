@@ -54,7 +54,8 @@ describe('ActiveUsersSection presence', () => {
       />
     );
 
-    expect(screen.getByTitle('Hors ligne')).toBeInTheDocument();
+    expect(screen.queryByTitle('En ligne')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Absent')).not.toBeInTheDocument();
   });
 
   it('updates the dot when a Socket.IO presence event lands in the store', () => {
@@ -71,7 +72,8 @@ describe('ActiveUsersSection presence', () => {
       useUserStore.getState().updateUserStatus('user-1', { isOnline: false, lastActiveAt: thirtyFiveMinutesAgo });
     });
 
-    expect(screen.getByTitle('Hors ligne')).toBeInTheDocument();
+    expect(screen.queryByTitle('En ligne')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Absent')).not.toBeInTheDocument();
   });
 
   it('recomputes status decay on the store tick', () => {
@@ -98,7 +100,7 @@ describe('ActiveUsersSection presence', () => {
       state.triggerStatusTick();
     });
 
-    expect(screen.getByTitle('Inactif')).toBeInTheDocument();
+    expect(screen.getByTitle('Absent')).toBeInTheDocument();
   });
 
   it('falls back to the payload presence when the store does not know the user', () => {

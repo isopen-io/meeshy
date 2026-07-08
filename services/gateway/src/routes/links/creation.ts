@@ -208,6 +208,17 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         });
         conversationId = conversation.id;
 
+        // Auto-join every connected member's sockets to the new conversation
+        // room so they receive message:new immediately without a reconnect.
+        const socketManager = fastify.socketIOHandler?.getManager();
+        if (socketManager) {
+          for (const participant of participantsToCreate) {
+            socketManager.joinUserToConversationRoom(participant.userId, conversation.id).catch(
+              (err: unknown) => logError(fastify.log, 'Failed to auto-join member to new conversation room:', err)
+            );
+          }
+        }
+
       } else {
         // Créer une nouvelle conversation de type public (legacy)
         const conversationIdentifier = generateConversationIdentifier(body.name || 'Shared Conversation');
@@ -237,6 +248,14 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           }
         });
         conversationId = conversation.id;
+
+        // Same auto-join for the legacy path (creator is the sole member).
+        const socketManager = fastify.socketIOHandler?.getManager();
+        if (socketManager) {
+          socketManager.joinUserToConversationRoom(userId, conversation.id).catch(
+            (err: unknown) => logError(fastify.log, 'Failed to auto-join creator to new conversation room:', err)
+          );
+        }
       }
 
       // Générer le linkId initial

@@ -13,6 +13,7 @@ import {
   requiresUserAction,
   getActorDisplayName,
   formatNotificationTimeAgo,
+  groupNotificationsByDate,
 } from '@/utils/notification-helpers';
 import { NotificationTypeEnum } from '@/types/notification';
 import type { Notification } from '@/types/notification';
@@ -668,6 +669,86 @@ describe('notification-helpers - Structure Groupée V2', () => {
       const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
       const n = mk({ subtitle: 'Story', context: { postExpiresAt: future } });
       expect(buildNotificationContextLine(n, t)).toBe('Story');
+    });
+  });
+
+  describe('groupNotificationsByDate', () => {
+    const labels = {
+      today: 'today',
+      yesterday: 'yesterday',
+      thisWeek: 'thisWeek',
+      thisMonth: 'thisMonth',
+      older: 'older',
+    };
+
+    // Facteur déterministe : createdAt injectable, reste minimal.
+    const at = (createdAt: Date): Notification => ({
+      id: `n_${createdAt.getTime()}`,
+      userId: 'u',
+      type: NotificationTypeEnum.NEW_MESSAGE,
+      priority: 'normal',
+      content: '',
+      actor: { id: 'a', username: 'a', displayName: 'A', avatar: null },
+      context: {},
+      metadata: {},
+      state: { isRead: false, readAt: null, createdAt },
+      delivery: { emailSent: false, pushSent: false },
+    });
+
+    const bucketOf = (
+      created: Date,
+      now: Date
+    ): string | undefined =>
+      groupNotificationsByDate([at(created)], labels, now).find(
+        (g) => g.notifications.length > 0
+      )?.label;
+
+    it('range une notification vieille de 3 jours dans « this week » — même un dimanche (bug d’effondrement du bucket)', () => {
+      const sunday = new Date(2026, 6, 5, 12, 0, 0); // dimanche 2026-07-05
+      const threeDaysAgo = new Date(2026, 6, 2, 9, 0, 0); // jeudi 2026-07-02
+      expect(bucketOf(threeDaysAgo, sunday)).toBe('thisWeek');
+    });
+
+    it('n’émet jamais de bucket « today » redondant pour la fenêtre semaine un dimanche', () => {
+      const sunday = new Date(2026, 6, 5, 12, 0, 0);
+      const groups = groupNotificationsByDate(
+        [at(new Date(2026, 6, 5, 8, 0, 0)), at(new Date(2026, 6, 3, 8, 0, 0))],
+        labels,
+        sunday
+      );
+      const today = groups.find((g) => g.label === 'today');
+      const thisWeek = groups.find((g) => g.label === 'thisWeek');
+      expect(today?.notifications).toHaveLength(1); // le dimanche même
+      expect(thisWeek?.notifications).toHaveLength(1); // vendredi J-2
+    });
+
+    it('reste cohérent en milieu de semaine : J-5 tombe dans « this week », pas « this month »', () => {
+      const wednesday = new Date(2026, 6, 8, 12, 0, 0); // mercredi 2026-07-08
+      const fiveDaysAgo = new Date(2026, 6, 3, 9, 0, 0); // vendredi 2026-07-03
+      expect(bucketOf(fiveDaysAgo, wednesday)).toBe('thisWeek');
+    });
+
+    it('classe today / yesterday / this week / this month / older aux bonnes bornes', () => {
+      const now = new Date(2026, 6, 20, 12, 0, 0); // lundi 2026-07-20
+      expect(bucketOf(new Date(2026, 6, 20, 1, 0, 0), now)).toBe('today');
+      expect(bucketOf(new Date(2026, 6, 19, 23, 0, 0), now)).toBe('yesterday');
+      expect(bucketOf(new Date(2026, 6, 15, 9, 0, 0), now)).toBe('thisWeek'); // J-5
+      expect(bucketOf(new Date(2026, 6, 2, 9, 0, 0), now)).toBe('thisMonth'); // J-18, même mois
+      expect(bucketOf(new Date(2026, 5, 25, 9, 0, 0), now)).toBe('older'); // mois précédent
+    });
+
+    it('préserve l’ordre canonique des buckets et supprime les groupes vides', () => {
+      const now = new Date(2026, 6, 20, 12, 0, 0);
+      const groups = groupNotificationsByDate(
+        [
+          at(new Date(2026, 5, 25, 9, 0, 0)), // older
+          at(new Date(2026, 6, 20, 1, 0, 0)), // today
+          at(new Date(2026, 6, 15, 9, 0, 0)), // thisWeek
+        ],
+        labels,
+        now
+      );
+      expect(groups.map((g) => g.label)).toEqual(['today', 'thisWeek', 'older']);
     });
   });
 });
