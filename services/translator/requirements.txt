@@ -8,10 +8,25 @@ pydantic-settings==2.14.2
 pydantic==2.13.4
 
 # Communication gRPC et ZeroMQ
-grpcio==1.69.0
-grpcio-tools==1.69.0
-grpcio-reflection==1.82.0
-protobuf==5.29.3
+# PIN EXACT lockstep (verified against PyPI metadata + `uv pip install --dry-run`).
+# Dependabot proposed grpcio-reflection==1.82.0, but the entire 1.82.0 grpcio-family
+# release (grpcio/grpcio-tools/grpcio-reflection) is YANKED on PyPI — "Bad protobuf
+# dependency version specified; only 7.x should be supported"
+# (https://github.com/grpc/grpc/issues/42906). The next non-yanked release
+# (1.78.0+) tightens grpcio-tools' setuptools requirement to >=77.0.1, which
+# conflicts with espnet==202412 below (requires setuptools<74.0.0) — confirmed via
+# `uv pip install -r requirements.txt --dry-run` ("espnet==202412 and
+# grpcio-tools==1.81.1 are incompatible"). Pinning the whole family to 1.76.0
+# instead: not yanked, no setuptools conflict, and matches the version already
+# resolved in uv.lock (used by the passing CI test suite). protobuf bumped to
+# 6.33.6 because grpcio-tools/grpcio-reflection 1.76.0 both require
+# protobuf>=6.31.1,<7.0.0 — the previous protobuf==5.29.3 pin is unsatisfiable
+# with any of these grpcio-reflection releases (1.76.0, 1.81.1 or 1.82.0 alike
+# require protobuf>=6.3x).
+grpcio==1.76.0
+grpcio-tools==1.76.0
+grpcio-reflection==1.76.0
+protobuf==6.33.6
 pyzmq==26.2.0
 
 # Machine Learning et NLP
