@@ -45,9 +45,6 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// Résistance du swipe latéral selon le type de contenu. `.resistant`
     /// (audio/vidéo) relève le seuil pour ne pas gêner le scrubber de lecture.
     var resistance: SwipeResistance = .normal
-    /// `true` pendant que l'utilisateur manipule le curseur de lecture d'un
-    /// média : le swipe s'efface pour laisser le scrubbing prioritaire.
-    var isScrubbing: Bool = false
     let onSwipeReply: () -> Void
     let onSwipeForward: () -> Void
     /// Long press triggers the message's contextual options (reply, forward,
@@ -63,6 +60,11 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// reply/forward est alors totalement désengagé (même règle que le
     /// scrubbing média).
     @State private var isInlinePagingActive: Bool = false
+    /// Miroir de `MediaScrubbingPreferenceKey` (SDK) remonté par les widgets
+    /// média : vrai pendant qu'un doigt manipule la waveform audio ou la seek
+    /// bar vidéo. Remplace l'ancien paramètre `isScrubbing` qui n'était câblé
+    /// par aucun call site — la protection scrubbing → swipe était inopérante.
+    @State private var isMediaScrubbing: Bool = false
 
     private var replyDirection: CGFloat { isMine ? -1 : 1 }
 
@@ -105,6 +107,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                 .opacity(isHiddenForOverlay ? 0 : 1)
                 .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
                 .onPreferenceChange(BubbleInlinePagingPreferenceKey.self) { isInlinePagingActive = $0 }
+                .onPreferenceChange(MediaScrubbingPreferenceKey.self) { isMediaScrubbing = $0 }
                 .simultaneousGesture(dragGesture)
                 // Long press surfaces via `simultaneousGesture` so it
                 // cooperates with the inner reaction "+" tap. The parent
@@ -193,7 +196,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                 guard BubbleSwipeResistance.shouldEngage(
                     translationWidth: h,
                     translationHeight: value.translation.height,
-                    isScrubbing: isScrubbing || isInlinePagingActive,
+                    isScrubbing: isMediaScrubbing || isInlinePagingActive,
                     resistance: resistance
                 ) else { return }
                 let zone: CGFloat = 72

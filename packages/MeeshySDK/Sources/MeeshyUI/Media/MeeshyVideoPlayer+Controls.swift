@@ -42,6 +42,10 @@ internal struct _InlineOverlayControls: View {
         }
         .buttonStyle(BouncyControlButtonStyle())
         .allowsHitTesting(true)
+        // Signale le scrub en cours à l'hôte (voir MediaScrubbingPreferenceKey) :
+        // le conteneur de swipe de la bulle désengage reply/forward tant que le
+        // doigt manipule la seek bar.
+        .preference(key: MediaScrubbingPreferenceKey.self, value: isSeeking)
     }
 
     // MARK: - Scrim

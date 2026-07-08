@@ -622,6 +622,10 @@ public struct AudioPlayerView: View {
     @State private var isTranscribing = false
     /// Toggled in `onAppear` of the skeleton view to drive the pulse.
     @State private var transcriptionPulsePhase = false
+    /// `true` pendant le drag de scrub sur la waveform. Publié via
+    /// `MediaScrubbingPreferenceKey` pour que l'hôte (conteneur de swipe de
+    /// bulle côté app) désengage ses gestes horizontaux le temps du scrub.
+    @State private var isUserScrubbing = false
 
     private var isDark: Bool { theme.mode.isDark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
@@ -1446,18 +1450,24 @@ public struct AudioPlayerView: View {
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
+                                if !isUserScrubbing { isUserScrubbing = true }
                                 player.seek(to: Self.scrubFraction(
                                     locationX: value.location.x, width: geo.size.width))
                             }
                             .onEnded { value in
                                 player.seek(to: Self.scrubFraction(
                                     locationX: value.location.x, width: geo.size.width))
+                                isUserScrubbing = false
                                 HapticFeedback.light()
                             }
                     )
             }
             .allowsHitTesting(availability == .ready)
         )
+        // Signale le scrub en cours à l'hôte (voir MediaScrubbingPreferenceKey) :
+        // le conteneur de swipe de la bulle désengage reply/forward tant que le
+        // doigt manipule la waveform.
+        .preference(key: MediaScrubbingPreferenceKey.self, value: isUserScrubbing)
     }
 
     // MARK: - Time Row
