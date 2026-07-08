@@ -108,6 +108,42 @@ public final class UserPreferencesManager: ObservableObject {
         scheduleSyncToBackend(.application)
     }
 
+    // MARK: - Convenience: Voice Consent (espace de préférences)
+
+    /// Consentement de définition du profil vocal accordé — lu depuis
+    /// l'espace de préférences (`application.voiceProfileConsentAt`), la même
+    /// source que le gateway (`ConsentValidationService`, priorité
+    /// `UserPreferences.application` > `User`).
+    public var voiceConsentGranted: Bool { application.voiceProfileConsentAt != nil }
+
+    /// Traduction vocale utilisant le profil (clonage) consentie.
+    public var voiceCloningConsentGranted: Bool { application.voiceCloningConsentAt != nil }
+
+    /// Accorde en un geste, via la MÊME API préférences que le reste
+    /// (PATCH `/me/preferences/application` + `/me/preferences/audio`,
+    /// synchronisés par l'outbox) :
+    /// 1. la chaîne de consentements vocaux (traitement des données →
+    ///    données vocales → profil vocal → clonage) ;
+    /// 2. les features audio correspondantes (transcription, traduction
+    ///    audio, génération TTS, profil vocal).
+    /// Idempotent : un timestamp déjà posé n'est jamais réécrit.
+    public func grantVoiceAutoTranslationConsent(now: Date = Date()) {
+        let iso = ISO8601DateFormatter().string(from: now)
+        updateApplication { app in
+            if app.dataProcessingConsentAt == nil { app.dataProcessingConsentAt = iso }
+            if app.voiceDataConsentAt == nil { app.voiceDataConsentAt = iso }
+            if app.voiceProfileConsentAt == nil { app.voiceProfileConsentAt = iso }
+            if app.voiceCloningConsentAt == nil { app.voiceCloningConsentAt = iso }
+            if app.voiceCloningEnabledAt == nil { app.voiceCloningEnabledAt = iso }
+        }
+        updateAudio { audio in
+            audio.transcriptionEnabled = true
+            audio.audioTranslationEnabled = true
+            audio.ttsEnabled = true
+            audio.voiceProfileEnabled = true
+        }
+    }
+
     // MARK: - Convenience: Data-Saving Queries
 
     public var shouldAutoDownloadMedia: Bool { document.autoDownloadEnabled }

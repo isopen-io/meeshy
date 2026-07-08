@@ -315,9 +315,13 @@ class VoiceProfileWizardViewModel: ObservableObject {
         }
         Task {
             do {
-                let formatter = ISO8601DateFormatter()
-                let dateStr = formatter.string(from: birthDate)
-                _ = try await voiceService.grantConsent(ageVerification: true, birthDate: dateStr)
+                // Le gateway valide `birthDate` en `format: 'date'` strict
+                // (YYYY-MM-DD) — un ISO8601 complet (avec heure) serait rejeté.
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+                let c = calendar.dateComponents([.year, .month, .day], from: birthDate)
+                let dateStr = String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+                _ = try await voiceService.grantConsent(voiceCloningConsent: false, birthDate: dateStr)
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     currentStep = .recording
                 }

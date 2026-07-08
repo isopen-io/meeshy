@@ -696,6 +696,19 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
     public var tutorialsCompleted: [String]
     public var betaFeaturesEnabled: Bool
     public var telemetryEnabled: Bool
+
+    /// Consentements données/voix — miroir des champs User, lus par le
+    /// gateway (`ConsentValidationService`) avec priorité
+    /// `UserPreferences.application` > `User`. Portés en `String?` ISO-8601
+    /// (et non `Date?`) : le PATCH `/me/preferences/application` est validé
+    /// par `z.iso.datetime({ offset: true })` côté gateway et l'encoder JSON
+    /// partagé du manager n'a pas de stratégie de date ISO.
+    public var dataProcessingConsentAt: String?
+    public var voiceDataConsentAt: String?
+    public var voiceProfileConsentAt: String?
+    public var voiceCloningConsentAt: String?
+    public var voiceCloningEnabledAt: String?
+
     public var extras: [String: CodableValue]
 
     public static let defaults = ApplicationPreferences(
@@ -714,6 +727,9 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         animationsEnabled: Bool = true, reducedMotion: Bool = false,
         highContrastMode: Bool = false, screenReaderOptimized: Bool = false, keyboardShortcutsEnabled: Bool = true,
         tutorialsCompleted: [String] = [], betaFeaturesEnabled: Bool = false, telemetryEnabled: Bool = true,
+        dataProcessingConsentAt: String? = nil, voiceDataConsentAt: String? = nil,
+        voiceProfileConsentAt: String? = nil, voiceCloningConsentAt: String? = nil,
+        voiceCloningEnabledAt: String? = nil,
         extras: [String: CodableValue] = [:]
     ) {
         self.theme = theme; self.accentColor = accentColor; self.interfaceLanguage = interfaceLanguage
@@ -723,6 +739,9 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         self.highContrastMode = highContrastMode; self.screenReaderOptimized = screenReaderOptimized
         self.keyboardShortcutsEnabled = keyboardShortcutsEnabled; self.tutorialsCompleted = tutorialsCompleted
         self.betaFeaturesEnabled = betaFeaturesEnabled; self.telemetryEnabled = telemetryEnabled
+        self.dataProcessingConsentAt = dataProcessingConsentAt; self.voiceDataConsentAt = voiceDataConsentAt
+        self.voiceProfileConsentAt = voiceProfileConsentAt; self.voiceCloningConsentAt = voiceCloningConsentAt
+        self.voiceCloningEnabledAt = voiceCloningEnabledAt
         self.extras = extras
     }
 
@@ -730,7 +749,10 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         case theme, accentColor, interfaceLanguage, fontSize, fontFamily, lineHeight
         case compactMode, sidebarPosition, showAvatars, animationsEnabled, reducedMotion
         case highContrastMode, screenReaderOptimized, keyboardShortcutsEnabled
-        case tutorialsCompleted, betaFeaturesEnabled, telemetryEnabled, extras
+        case tutorialsCompleted, betaFeaturesEnabled, telemetryEnabled
+        case dataProcessingConsentAt, voiceDataConsentAt, voiceProfileConsentAt
+        case voiceCloningConsentAt, voiceCloningEnabledAt
+        case extras
     }
 
     public init(from decoder: Decoder) throws {
@@ -752,6 +774,11 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         tutorialsCompleted = try c.decodeIfPresent([String].self, forKey: .tutorialsCompleted) ?? Self.defaults.tutorialsCompleted
         betaFeaturesEnabled = try c.decodeIfPresent(Bool.self, forKey: .betaFeaturesEnabled) ?? Self.defaults.betaFeaturesEnabled
         telemetryEnabled = try c.decodeIfPresent(Bool.self, forKey: .telemetryEnabled) ?? Self.defaults.telemetryEnabled
+        dataProcessingConsentAt = try c.decodeIfPresent(String.self, forKey: .dataProcessingConsentAt)
+        voiceDataConsentAt = try c.decodeIfPresent(String.self, forKey: .voiceDataConsentAt)
+        voiceProfileConsentAt = try c.decodeIfPresent(String.self, forKey: .voiceProfileConsentAt)
+        voiceCloningConsentAt = try c.decodeIfPresent(String.self, forKey: .voiceCloningConsentAt)
+        voiceCloningEnabledAt = try c.decodeIfPresent(String.self, forKey: .voiceCloningEnabledAt)
         extras = try c.decodeIfPresent([String: CodableValue].self, forKey: .extras) ?? [:]
     }
 }

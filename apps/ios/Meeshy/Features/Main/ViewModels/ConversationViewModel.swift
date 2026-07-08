@@ -349,12 +349,34 @@ class ConversationViewModel: ObservableObject {
     }
 
     private func loadVoiceConsentStatus() {
+        // Source primaire : l'espace de préférences — la même API que celle
+        // par laquelle le popup accorde le consentement (PATCH
+        // /me/preferences/application). Repli legacy : un consentement
+        // accordé via le wizard voice-profile n'écrit que les champs User —
+        // le statut REST voice-profile couvre ce cas tant que les
+        // préférences sont muettes.
+        if UserPreferencesManager.shared.voiceConsentGranted {
+            voiceConsentMissing = false
+            return
+        }
         Task { [weak self] in
             let missing = await Self.resolveVoiceConsentMissing {
                 try await VoiceProfileService.shared.getConsentStatus().hasConsent
             }
             await MainActor.run { self?.voiceConsentMissing = missing }
         }
+    }
+
+    /// Validation du popup de traduction automatique à l'envoi d'un audio
+    /// sans consentement : accorde via l'espace de préférences — la MÊME API
+    /// que la lecture — le consentement de définition du profil vocal ET la
+    /// traduction utilisant ce profil, plus les features audio associées
+    /// (transcription, traduction audio, TTS, profil vocal). L'écriture est
+    /// locale-first et synchronisée au backend par l'outbox des préférences
+    /// (PATCH /me/preferences/application + /audio) — jamais bloquant.
+    func grantVoiceAutoTranslationConsent() {
+        UserPreferencesManager.shared.grantVoiceAutoTranslationConsent()
+        voiceConsentMissing = false
     }
 
     // MARK: - Audio Continuous Playback (Phase 4)
@@ -2427,6 +2449,13 @@ class ConversationViewModel: ObservableObject {
         // Déclarés hors du `do` : le bloc `catch` (repli socket) les relit.
         var finalContent: String? = text.isEmpty ? nil : text
         var isEncrypted = false
+        // Spec 2026-07-08 (message-send-failure-retry-flow) — chaque tentative
+        // de transport est journalisée dans `send_attempts` pour la carte
+        // « Historique d'envoi » de la vue détails. Non-nil uniquement quand le
+        // POST REST a réellement démarré, pour que le catch (atteignable aussi
+        // par un échec de chiffrement pré-transport) n'enregistre pas de
+        // fausse tentative REST.
+        var restAttemptStartedAt: Date? = nil
         do {
             var encryptionMode: String? = nil
 
@@ -2488,6 +2517,7 @@ class ConversationViewModel: ObservableObject {
                 && !pendingEffects.hasAnyEffect
             if socketFirstEligible {
                 Logger.messages.info("SendFlow socket-first START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — message:send before REST")
+                let socketFirstStartedAt = Date()
                 if let socketAck = await messageSocket.sendViaSocketFallback(
                     conversationId: conversationId,
                     content: finalContent,
@@ -2498,6 +2528,7 @@ class ConversationViewModel: ObservableObject {
                     isEncrypted: false,
                     clientMessageId: tempId
                 ) {
+                    await recordSendAttempt(tempId, transport: .socketFirst, startedAt: socketFirstStartedAt, outcome: .success)
                     await finalizeSuccessfulSend(
                         tempId: tempId,
                         serverId: socketAck.messageId,
@@ -2508,6 +2539,7 @@ class ConversationViewModel: ObservableObject {
                     )
                     return true
                 }
+                await recordSendAttempt(tempId, transport: .socketFirst, startedAt: socketFirstStartedAt, outcome: .failure, errorMessage: "no ACK")
                 Logger.messages.info("SendFlow socket-first MISS tempId=\(tempId, privacy: .public) — no ACK, falling through to REST")
             }
 
@@ -2523,6 +2555,7 @@ class ConversationViewModel: ObservableObject {
             // a full minute before the socket fallback + durable outbox can take
             // over. On timeout the throw routes into the catch below (socket
             // re-emit with the SAME clientMessageId → gateway dedups).
+            restAttemptStartedAt = Date()
             let responseData = try await withSendTimeout(seconds: Self.sendRESTTimeoutSeconds) {
                 try await self.messageService.send(
                     conversationId: self.conversationId, request: body
@@ -2530,6 +2563,7 @@ class ConversationViewModel: ObservableObject {
             }
             let serverId = responseData.id
             let serverCreatedAt = responseData.createdAt
+            await recordSendAttempt(tempId, transport: .rest, startedAt: restAttemptStartedAt ?? sendStartedAt, outcome: .success)
             Logger.messages.debug("SendFlow POST OK tempId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public)")
 
             await finalizeSuccessfulSend(
@@ -2542,6 +2576,9 @@ class ConversationViewModel: ObservableObject {
             )
             return true
         } catch {
+            if let restStartedAt = restAttemptStartedAt {
+                await recordSendAttempt(tempId, transport: .rest, startedAt: restStartedAt, outcome: .failure, errorMessage: error.localizedDescription)
+            }
             // Permanent rejection: the other party blocked us (or we blocked
             // them from another device). Retrying never succeeds, so skip the
             // ~10s socket fallback + outbox retry — mark the row failed and tell
@@ -2570,6 +2607,7 @@ class ConversationViewModel: ObservableObject {
                 || pendingEffects.hasAnyEffect
             if !hasSpecialProps {
                 Logger.messages.warning("SendFlow socket-fallback START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — REST failed, awaiting socket ack up to ~10s (isSending held)")
+                let socketFallbackStartedAt = Date()
                 let socketAck = await messageSocket.sendViaSocketFallback(
                     conversationId: conversationId,
                     content: finalContent,
@@ -2579,6 +2617,13 @@ class ConversationViewModel: ObservableObject {
                     originalLanguage: originalLanguage ?? "fr",
                     isEncrypted: isEncrypted,
                     clientMessageId: tempId
+                )
+                await recordSendAttempt(
+                    tempId,
+                    transport: .socketFallback,
+                    startedAt: socketFallbackStartedAt,
+                    outcome: socketAck != nil ? .success : .failure,
+                    errorMessage: socketAck == nil ? "no ACK" : nil
                 )
                 if let socketAck {
                     pendingServerIds[tempId] = socketAck.messageId
@@ -2637,6 +2682,27 @@ class ConversationViewModel: ObservableObject {
 
             return false
         }
+    }
+
+    // MARK: - Send Attempt Journal
+
+    /// Journalise une tentative de transport dans `send_attempts` (spec
+    /// 2026-07-08 message-send-failure-retry-flow). Best-effort : un échec
+    /// d'écriture ne doit jamais interrompre le flux d'envoi.
+    private func recordSendAttempt(
+        _ tempId: String,
+        transport: SendAttemptRecord.Transport,
+        startedAt: Date,
+        outcome: SendAttemptRecord.Outcome,
+        errorMessage: String? = nil
+    ) async {
+        try? await messagePersistence.recordSendAttempt(
+            localId: tempId,
+            transport: transport,
+            startedAt: startedAt,
+            outcome: outcome,
+            errorMessage: errorMessage
+        )
     }
 
     // MARK: - Retry Failed Message

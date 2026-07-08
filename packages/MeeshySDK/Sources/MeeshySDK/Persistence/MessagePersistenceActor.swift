@@ -271,6 +271,46 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// Journalise une tentative d'envoi (spec 2026-07-08
+    /// message-send-failure-retry-flow). `attemptNumber` est monotone par
+    /// message ; l'historique survit au `serverAck` pour la vue détails.
+    public func recordSendAttempt(
+        localId: String,
+        transport: SendAttemptRecord.Transport,
+        startedAt: Date,
+        outcome: SendAttemptRecord.Outcome,
+        errorMessage: String? = nil
+    ) throws {
+        try dbWriter.write { db in
+            _ = try SendAttemptRecord.log(
+                db,
+                localId: localId,
+                transport: transport,
+                startedAt: startedAt,
+                outcome: outcome,
+                errorMessage: errorMessage
+            )
+        }
+    }
+
+    /// Historique des tentatives d'envoi d'un message, ordonné par tentative.
+    /// `messageId` accepte indifféremment le `localId` (`cid_…`) ou le
+    /// `serverId` (la vue détails ne connaît que `message.id`, qui bascule sur
+    /// l'id serveur après réconciliation).
+    public func sendAttempts(messageId: String) throws -> [SendAttemptRecord] {
+        try dbWriter.read { db in
+            let localId = try String.fetchOne(
+                db,
+                sql: "SELECT localId FROM messages WHERE localId = ? OR serverId = ? LIMIT 1",
+                arguments: [messageId, messageId]
+            ) ?? messageId
+            return try SendAttemptRecord
+                .filter(Column("localId") == localId)
+                .order(Column("attemptNumber").asc)
+                .fetchAll(db)
+        }
+    }
+
     public func applyEvent(localId: String, event: MessageEvent) throws -> MessageState? {
         // We need the record's conversationId outside the write block so we
         // can post a *targeted* refresh notification. MessageStore observers

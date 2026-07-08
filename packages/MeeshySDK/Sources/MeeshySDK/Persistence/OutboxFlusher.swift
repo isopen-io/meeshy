@@ -264,15 +264,43 @@ public actor OutboxFlusher {
         return false
     }
 
+    /// Journal des tentatives (spec 2026-07-08 message-send-failure-retry-flow) :
+    /// chaque dispatch d'un record `.sendMessage` — succès comme échec — ajoute
+    /// une ligne `send_attempts` keyed sur le `clientMessageId`, pour la carte
+    /// « Historique d'envoi » de la vue détails. Best-effort : ne bloque jamais
+    /// le flush.
+    private func logSendAttempt(
+        for record: OutboxRecord,
+        startedAt: Date,
+        outcome: SendAttemptRecord.Outcome,
+        error: Error?
+    ) async {
+        guard record.kind == .sendMessage else { return }
+        let cmid = record.clientMessageId
+        let errorMessage = error.map { String(describing: $0) }
+        try? await pool.write { db in
+            _ = try SendAttemptRecord.log(
+                db,
+                localId: cmid,
+                transport: .outbox,
+                startedAt: startedAt,
+                outcome: outcome,
+                errorMessage: errorMessage
+            )
+        }
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
         guard await claimPending(record) else { return }
         var current = record
         current.status = .inflight
         current.updatedAt = Date()
+        let attemptStartedAt = Date()
 
         do {
             try await dispatcher.dispatch(current)
+            await logSendAttempt(for: current, startedAt: attemptStartedAt, outcome: .success, error: nil)
             let idToDelete = current.id
             do {
                 try await pool.write { db in
@@ -289,6 +317,7 @@ public actor OutboxFlusher {
             cleanupLocalFiles(for: current)
             onOutcome?(.applied(cmid: current.clientMessageId))
         } catch {
+            await logSendAttempt(for: current, startedAt: attemptStartedAt, outcome: .failure, error: error)
             // 401 / session-expiry is TRANSITORY — the app's auth flow refreshes the
             // token (AuthManager.checkExistingSession on resume/reconnect). Treating it
             // like a normal failure burns the retry budget and PERMANENTLY exhausts
