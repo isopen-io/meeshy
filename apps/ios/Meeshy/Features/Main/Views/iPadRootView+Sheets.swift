@@ -161,6 +161,10 @@ extension iPadRootView {
                         onReject: { callManager.rejectPendingCall() },
                         onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
                     )
+                    // Audit Vague 27 — mirrors RootView's fix: force a
+                    // remount (fresh onAppear/auto-dismiss timer) whenever
+                    // the pending call is superseded, see RootView.swift.
+                    .id(callManager.pendingIncomingCall?.callId)
                     .padding(.top, 8)
                 }
             }

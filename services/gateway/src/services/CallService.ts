@@ -346,7 +346,6 @@ export class CallService {
     if (!session) return null;
 
     const now = new Date();
-    const duration = Math.max(0, Math.floor((now.getTime() - session.startedAt.getTime()) / 1000));
 
     // Audit Vague 25 — mirror endCall()'s wasPreAnswered handling (see its
     // doc comment): a call force-ended before it was ever answered (e.g. the
@@ -363,6 +362,14 @@ export class CallService {
     const targetEndReason = wasPreAnswered && endReason === CallEndReason.completed
       ? CallEndReason.missed
       : endReason;
+    // Audit Vague 27 — anchor duration on answeredAt (talk time), exactly
+    // like endCall()'s `call.answeredAt ? … : 0`. This was the one terminal
+    // writer still anchoring on startedAt unconditionally (ring+talk time),
+    // producing a duration inconsistent with the same real-world call ending
+    // via a different path (e.g. the explicit "End Call" button).
+    const duration = wasPreAnswered
+      ? 0
+      : Math.max(0, Math.floor((now.getTime() - session.answeredAt!.getTime()) / 1000));
 
     const ended = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.callSession.updateMany({
@@ -1242,6 +1249,15 @@ export class CallService {
       const idemNow = new Date();
       // Same `answeredAt` criterion as the main path below (2026-07-03).
       const idemPreAnswered = !existing.answeredAt;
+      // Audit Vague 27 — anchor duration on answeredAt (talk time), mirroring
+      // endCall()'s `call.answeredAt ? … : 0`. This idempotent branch was
+      // still anchoring on startedAt unconditionally (ring+talk time),
+      // producing a duration inconsistent with the same real-world call
+      // ending via a different path (e.g. the main leaveCall branch, or the
+      // explicit "End Call" button).
+      const idemDuration = idemPreAnswered
+        ? 0
+        : Math.max(0, Math.floor((idemNow.getTime() - existing.answeredAt!.getTime()) / 1000));
       // Version-guarded (see endCall()'s doc comment): a racing terminal
       // writer (call:end, force-end) could resolve this same call between
       // the `existing` read above and this write; scope to `existing.version`
@@ -1259,7 +1275,7 @@ export class CallService {
             status: idemPreAnswered ? CallStatus.missed : CallStatus.ended,
             endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
             endedAt: idemNow,
-            duration: Math.max(0, Math.floor((idemNow.getTime() - existing.startedAt.getTime()) / 1000)),
+            duration: idemDuration,
             version: { increment: 1 }
           }
         });
@@ -1393,9 +1409,14 @@ export class CallService {
           data: { leftAt }
         });
 
-        const duration = Math.floor(
-          (leftAt.getTime() - call.startedAt.getTime()) / 1000
-        );
+        // Audit Vague 27 — anchor duration on answeredAt (talk time),
+        // mirroring endCall()'s `call.answeredAt ? … : 0`. This was still
+        // anchoring on startedAt unconditionally (ring+talk time), producing
+        // a duration inconsistent with the same real-world call ending via
+        // a different path (e.g. the explicit "End Call" button).
+        const duration = wasPreAnswered
+          ? 0
+          : Math.max(0, Math.floor((leftAt.getTime() - call.answeredAt!.getTime()) / 1000));
 
         const lock = await tx.callSession.updateMany({
           where: { id: callId, version: call.version },

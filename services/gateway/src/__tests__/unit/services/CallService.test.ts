@@ -3358,6 +3358,51 @@ describe('CallService - leaveCall idempotent paths', () => {
     expect(result).toBeDefined();
   });
 
+  it('computes duration from answeredAt (talk time), not startedAt (ring+talk time), on the idempotent direct-leave force-end path (Vague 27)', async () => {
+    const directSession = createMockCallSession({
+      status: CallStatus.active,
+      endedAt: null,
+      startedAt: new Date(Date.now() - 90_000), // rang for ~60s before being answered
+      answeredAt: new Date(Date.now() - 30_000), // answered 30s ago — the talk-time anchor
+      participants: [createMockParticipant({ leftAt: null })],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'direct' })
+    });
+    const endedSession = {
+      ...directSession,
+      status: CallStatus.ended,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ leftAt: new Date(), user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'direct' })
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(directSession)
+      .mockResolvedValueOnce(endedSession); // getCallSession after tx
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+
+    let capturedDuration: number | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        callSession: {
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
+            capturedDuration = data.duration;
+            return { count: 1 };
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.leaveCall({ callId: 'call-123', userId: 'user-123', participantId: 'p-123' });
+
+    expect(capturedDuration).toBeGreaterThanOrEqual(29);
+    expect(capturedDuration).toBeLessThanOrEqual(31);
+  });
+
   it('force-ends when last participant in group (idempotent, no remaining active)', async () => {
     const groupSession = createMockCallSession({
       status: CallStatus.active,
@@ -3954,6 +3999,52 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
     expect(capturedReason).toBe(CallEndReason.completed);
   });
 
+  it('computes duration from answeredAt (talk time), not startedAt (ring+talk time), when an active call ends via leave (Vague 27)', async () => {
+    const participant = createMockParticipant({ userId: 'user-123', participantId: 'participant-123' });
+    const activeCall = createMockCallSession({
+      status: CallStatus.active,
+      startedAt: new Date(Date.now() - 90_000), // rang for ~60s before being answered
+      answeredAt: new Date(Date.now() - 30_000), // answered 30s ago — the talk-time anchor
+      participants: [participant]
+    });
+    const endedCall = {
+      ...activeCall,
+      status: CallStatus.ended,
+      endedAt: new Date(),
+      participants: [{ ...participant, leftAt: new Date(), user: createMockUser() }],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(activeCall)
+      .mockResolvedValueOnce(endedCall);
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+
+    let capturedDuration: number | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+        },
+        callSession: {
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
+            capturedDuration = data.duration;
+            return { count: 1 };
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.leaveCall({ callId: 'call-123', userId: 'user-123', participantId: 'participant-123' });
+
+    expect(capturedDuration).toBeGreaterThanOrEqual(29);
+    expect(capturedDuration).toBeLessThanOrEqual(31);
+  });
+
   it('ends call with status=missed and endReason=missed when ringing call (wasPreAnswered=true)', async () => {
     const participant = createMockParticipant({ userId: 'user-123', participantId: 'participant-123' });
     const ringingCall = createMockCallSession({
@@ -3977,6 +4068,7 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
 
     let capturedStatus: string | undefined;
     let capturedReason: string | undefined;
+    let capturedDuration: number | undefined;
     mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
       const tx = {
         callParticipant: {
@@ -3987,6 +4079,7 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
           updateMany: jest.fn().mockImplementation(({ data }: any) => {
             capturedStatus = data.status;
             capturedReason = data.endReason;
+            capturedDuration = data.duration;
             return { count: 1 };
           })
         }
@@ -3998,6 +4091,9 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
 
     expect(capturedStatus).toBe(CallStatus.missed);
     expect(capturedReason).toBe(CallEndReason.missed);
+    // Audit Vague 27 — a never-answered call must report duration=0
+    // (mirrors endCall()'s `call.answeredAt ? … : 0`), not ring time.
+    expect(capturedDuration).toBe(0);
   });
 });
 
@@ -4706,7 +4802,13 @@ describe('CallService - createCallSummaryMessage', () => {
       const result = await callService.forceEndOrphanedCallSession('call-123', CallEndReason.connectionLost);
 
       expect(result?.conversationId).toBe('conv-123');
-      expect(result?.duration).toBeGreaterThanOrEqual(42);
+      // Audit Vague 27 — duration must be talk-time (endedAt - answeredAt,
+      // ~30s here), mirroring endCall()'s anchor, NOT ring+talk time
+      // (endedAt - startedAt, ~42s) — the two are deliberately set apart in
+      // this fixture so a startedAt-anchored regression fails loudly instead
+      // of passing by coincidence.
+      expect(result?.duration).toBeGreaterThanOrEqual(29);
+      expect(result?.duration).toBeLessThanOrEqual(31);
       expect(result?.status).toBe(CallStatus.ended);
       expect(result?.endReason).toBe(CallEndReason.connectionLost);
       expect(callSessionUpdateMany).toHaveBeenCalledWith({
@@ -4750,6 +4852,9 @@ describe('CallService - createCallSummaryMessage', () => {
 
       expect(result?.status).toBe(CallStatus.missed);
       expect(result?.endReason).toBe(CallEndReason.connectionLost);
+      // Audit Vague 27 — a never-answered call must report duration=0
+      // (mirrors endCall()'s `call.answeredAt ? … : 0`), not ring time.
+      expect(result?.duration).toBe(0);
       expect(callSessionUpdateMany).toHaveBeenCalledWith({
         where: { id: 'call-123', status: { in: expect.any(Array) } },
         data: expect.objectContaining({

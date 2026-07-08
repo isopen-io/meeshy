@@ -1923,6 +1923,102 @@ lancés en parallèle ; iOS non ré-audité cette session (pas de toolchain Swif
   travers tous les événements call.
 
 ## Vague 26 — `call:end` recovery path bypassait le fanout d'appel + web n'émettait jamais `call:heartbeat` (2026-07-07)
+(voir section suivante pour le détail — laissée en place, non dupliquée)
+
+## Vague 27 — 3 bugs gateway (recovery + duration + push mort) + boucle self-triggering web + banner iOS non re-armée (2026-07-08)
+
+Point d'entrée : routine calling-feature, reprise après compaction de session. `git fetch origin main`
+confirme HEAD (`37d9522`) déjà à jour avec `origin/main` — aucune divergence, pas de merge à résoudre.
+Trois agents d'exploration dédiés (gateway, web, iOS — lecture seule, mandatés à falsifier tout candidat
+contre ce fichier + `lessons.md` avant de rapporter) lancés en parallèle.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `call:leave`/`call:force-leave` n'avaient aucun filet de
+  récupération orpheline quand l'écriture terminale lève — contrairement à leur sibling `call:end`.**
+  `call:end`'s catch appelle `forceEndOrphanedCallAfterOptimisticBroadcast` depuis la Vague 26 (voir
+  ci-dessous) ; `call:leave` (catch top-level) et `call:force-leave` (catch par-appel dans la boucle)
+  se contentaient de logger + émettre une erreur client. `CallService.leaveCall()` peut réellement lever
+  (`CALL_NOT_FOUND`, une erreur DB non-transitoire dans sa transaction) — la session restait alors
+  bloquée non-terminale (ACTIVE), bloquant tout `call:initiate` futur dans la conversation jusqu'au GC
+  (~120s). Pour `call:force-leave` en particulier, c'est ironique : sa RAISON D'ÊTRE est de débloquer
+  exactement ce genre d'appel zombie. **Fix** : les deux catch appellent désormais
+  `forceEndOrphanedCallAfterOptimisticBroadcast(io, callId, userId)` (userId ré-résolu via
+  `getUserId(socket.id)` dans le catch de `call:leave`, où il est hors scope du try — même pattern que
+  `call:end`). **Tests TDD** : 2 nouveaux cas (un par handler), RED confirmé par lecture (0 appel avant
+  fix) puis GREEN. Suite gateway filtrée `[Cc]all` : 31/31 suites, 880/880 tests verts.
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `duration` incohérent entre 3 writers terminaux
+  (ring+talk time) et `endCall()` (talk time seul).** `endCall()` calcule
+  `duration = call.answeredAt ? (endedAt-answeredAt) : 0`. Trois siblings — `forceEndOrphanedCallSession`,
+  et les 2 branches de `leaveCall` (idempotente + principale) — calculaient tous
+  `duration = now - startedAt` INCONDITIONNELLEMENT, incluant le temps de sonnerie et ignorant
+  `wasPreAnswered` (déjà utilisé par ces mêmes méthodes pour le statut/endReason depuis les Vagues 19/25,
+  juste jamais étendu à `duration`). Un même appel réel (55s de sonnerie + 5s parlé) affiche donc
+  `duration=60` s'il se termine via `leaveCall`/force-end, mais `duration≈5` via le bouton "Terminer" —
+  et ce champ alimente directement la bulle résumé chat + l'historique (`createCallSummaryMessage`). Le
+  test existant de `forceEndOrphanedCallSession` encodait littéralement le bug
+  (`expect(result?.duration).toBeGreaterThanOrEqual(42)` avec startedAt=42s/answeredAt=30s dans la
+  fixture) — recadré sur l'invariant corrigé (talk-time ~30s) plutôt que contourné, cf. Leçon 58.
+  **Fix** : les 3 sites anchorent désormais sur `answeredAt` (0 si jamais répondu), miroir exact de
+  `endCall()`. **Tests TDD** : 3 tests adaptés + 2 nouveaux (fixtures avec `startedAt`/`answeredAt`
+  délibérément écartés de 60s pour qu'un anchor startedAt-régressé échoue bruyamment plutôt que par
+  coïncidence). RED confirmé (2 échecs avant fix sur les tests adaptés), GREEN restauré. Suite
+  `CallService.test.ts` : 183/183 verts.
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ] Push silencieux "call_answered_elsewhere" mort depuis
+  l'introduction du FSM Item F.** Ce push (notifie les AUTRES devices de l'answerer pour qu'ils arrêtent
+  de sonner — utile pour un device réveillé par VoIP push dont le WebSocket n'est jamais monté) était
+  gaté dans `call:join` sur `callSession.status === 'connecting'`. Or `CallStatus.connecting` n'est plus
+  JAMAIS écrit en production depuis l'Item F (`joinCallAttempt` ne transitionne que
+  `initiated/ringing → ringing`) — confirmé par grep exhaustif de tout `status: CallStatus.connecting`
+  dans `services/gateway/src`. Condition en permanence fausse : mort depuis l'introduction du FSM Item F
+  (Vague 7/8), jamais détecté par 26 vagues d'audit car aucune n'avait vérifié qu'une condition de statut
+  correspondait à un statut RÉELLEMENT écrit quelque part. **Fix** : relocalisé vers le vrai site de
+  transition (`call:signal`, type `answer`, juste avant `updateCallStatus(active)`) — gaté sur
+  `isFirstAnswer = !callSession.answeredAt` (lu AVANT la mise à jour, donc jamais re-déclenché par une
+  renégociation ultérieure, ex. activer la vidéo en cours d'appel) et `userId !== callSession.initiatorId`
+  (jamais pour la propre réponse de l'initiateur). Les tests de l'ancien site (fixture `status: 'connecting'`,
+  qui n'arrive jamais en vrai) ont été supprimés et reconstruits sous `call:signal` avec la fixture
+  correcte (`answeredAt: null` = première réponse / `answeredAt: <date>` = renégociation). 4 tests
+  (premier answer → push ; renégociation → pas de push ; initiateur → pas de push ; échec push
+  n'interrompt pas l'ack). RED confirmé sur le cas nominal (0 appel avant fix), GREEN restauré.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ] `use-call-quality.ts` : boucle self-triggering sur transition de
+  niveau de qualité, indépendante de `updateInterval`.** `updateStats` dépendait de `qualityStats?.level`
+  (uniquement pour un log de debug comparant l'ancien/nouveau niveau). Chaque VRAIE transition de niveau
+  (excellent↔bon↔correct↔mauvais) changeait donc l'identité de `updateStats`, ce qui redéclenchait
+  l'effet de monitoring (qui dépend de `updateStats` et appelle inconditionnellement un "Initial update"
+  à chaque exécution) — un appel `getStats()` hors-bande, sans rapport avec `updateInterval`. Sur une
+  connexion réellement instable (exactement le cas que ce moniteur existe pour détecter), cet appel
+  supplémentaire peut lui-même produire un niveau différent et boucler indéfiniment (reproduit dans un
+  test : timeout par dépassement de boucle infinie). Sibling du bug déjà corrigé Vague 23 dans le même
+  fichier (l'effet d'émission `CALL_QUALITY_REPORT` à 10s), mais un mécanisme distinct (l'effet de
+  MONITORING ici, pas celui d'émission). **Fix** : miroir du pattern `qualityStatsRef` déjà utilisé 20
+  lignes plus bas dans le même fichier — un nouveau `previousLevelRef` remplace la dépendance directe,
+  `updateStats` ne dépend plus que de `[peerConnection, calculateQualityLevel]`. **Test TDD** : nouveau
+  cas (niveau alterné à chaque `getStats()`, `updateInterval` volontairement énorme pour isoler tout
+  appel hors-timer) — RED confirmé par timeout (boucle infinie réelle, pas juste une assertion), GREEN
+  restauré. Suite `use-call-quality.test.ts` : 41/41 verts. Suite web filtrée
+  `.*(call|webrtc|quality).*\.test\.` : 23 suites/440 tests verts (+1). `tsc --noEmit` web : 1532 erreurs
+  avant/après identique (confirmé par diff des lignes touchées), aucune nouvelle.
+- **[BUG RÉEL, iOS, CONFIRMÉ (lecture seule, pas de toolchain Swift ici — fix mécanique appliqué par
+  inspection) — timer d'auto-dismiss de `CallWaitingBannerView` non ré-armé quand un 3e appelant
+  supplante un 2e en attente.]** Le fix du jour même (commit `97c94dc`, "third caller silently dropped")
+  fait que `rejectSupersededPendingCall` termine proprement le 2e appelant côté serveur et écrase
+  `pendingIncomingCall` avec le 3e — mais `showCallWaitingBanner` reste `true` tout du long, donc SwiftUI
+  RÉUTILISE la même identité de vue : `onAppear`/`scheduleAutoDismiss()` ne se redéclenche pas, et le
+  `Task` de 15s armé pour le 2e appelant continue son compte à rebours inchangé. **Scénario concret** : A
+  en appel actif ; B appelle (banner, timer à 15s) ; à T+10s, C appelle pendant que B attend encore —
+  B est proprement raccroché serveur, mais le Task original (toujours armé pour B) tire à T+15s (5s
+  seulement dans le ring réel de C) et auto-rejette C au lieu de B. Aucune trace dans `lessons.md`/backlog
+  (classe de bug introduite par le fix du jour même, jamais auditée avant). **Fix appliqué** (mécanique,
+  un seul modifier SwiftUI par site, 2 sites identiques) : `.id(callManager.pendingIncomingCall?.callId)`
+  ajouté aux deux mounts (`RootView.swift`, `iPadRootView+Sheets.swift`) — force un remount (donc un
+  ré-armement du timer) à chaque supersession. **Non vérifié par compilation** (environnement Linux sans
+  Xcode) — la CI `ios-tests` (macOS) reste le garde-fou définitif ; changement volontairement borné à un
+  seul modifier de vue par site pour rester dans l'enveloppe "mécanique, vérifiable par lecture" des
+  sessions sans toolchain (cf. `lessons.md`, règle post-2026-07-02).
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call.
+
+## Vague 26 — `call:end` recovery path bypassait le fanout d'appel + web n'émettait jamais `call:heartbeat` (2026-07-07)
 
 Point d'entrée : routine calling-feature. `git log` confirme HEAD (`ec73d65`) inchangé côté calling depuis
 la Vague 25. Trois agents d'exploration dédiés (gateway, web, iOS — lecture seule, mandatés à falsifier
