@@ -96,7 +96,7 @@
     "web-vitals": "^5.2.0",
     "workbox-window": "^7.4.0",
     "zod": "^4.4.3",
-    "zustand": "^5.0.12"
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
