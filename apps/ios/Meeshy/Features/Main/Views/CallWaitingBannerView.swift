@@ -69,6 +69,7 @@ struct CallWaitingBannerView: View {
                             .background(MeeshyColors.error, in: Capsule())
                     }
                     .accessibilityLabel(String(localized: "call.waiting.reject.a11y", defaultValue: "Refuser l'appel de \(callerName)", bundle: .main))
+                    .accessibilityHint(String(localized: "call.waiting.reject.hint", defaultValue: "Refuse le nouvel appel entrant, la conversation en cours n'est pas interrompue", bundle: .main))
 
                     Button(action: {
                         dismiss()
@@ -83,6 +84,7 @@ struct CallWaitingBannerView: View {
                             .background(MeeshyColors.success, in: Capsule())
                     }
                     .accessibilityLabel(String(localized: "call.waiting.answer.a11y", defaultValue: "Raccrocher et repondre a \(callerName)", bundle: .main))
+                    .accessibilityHint(String(localized: "call.waiting.answer.hint", defaultValue: "Termine l'appel en cours et répond au nouvel appel entrant", bundle: .main))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
