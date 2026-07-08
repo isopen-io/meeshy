@@ -23,6 +23,23 @@ describe('extractMentions (types/mention)', () => {
   it('retourne [] pour un contenu vide', () => {
     expect(extractMentions('')).toEqual([]);
   });
+
+  it("ignore un @ collé après un mot (adresse e-mail) — parité SSOT parseMentions", () => {
+    // `@` précédé d'un caractère de nom = fragment d'adresse e-mail, PAS une mention.
+    // Même frontière gauche que parseMentions/hasMentions (mention-parser.ts).
+    expect(extractMentions('write to bob@alice.com')).toEqual([]);
+    expect(extractMentions('contact@marie.com')).toEqual([]);
+    expect(extractMentions('reply to jean.dupont@example.org please')).toEqual([]);
+  });
+
+  it("ignore un @ collé après une lettre accentuée/non-latine", () => {
+    expect(extractMentions('André@atabeth.com')).toEqual([]);
+    expect(extractMentions('écris à Владимир@mail.ru')).toEqual([]);
+  });
+
+  it("extrait une vraie mention mais pas le fragment d'e-mail voisin", () => {
+    expect(extractMentions('cc @alice et bob@alice.com')).toEqual(['alice']);
+  });
 });
 
 describe('mentionsToLinks', () => {
@@ -56,6 +73,17 @@ describe('mentionsToLinks', () => {
   it('normalise aussi une liste validée en casse mixte', () => {
     expect(mentionsToLinks('hi @alice', '/u/{username}', ['Alice']))
       .toBe('hi [@alice](/u/alice)');
+  });
+
+  it("ne linkifie pas un @ collé dans une adresse e-mail", () => {
+    // `bob@alice.com` : le `@` fait partie de l'e-mail — ne doit PAS devenir /u/alice.
+    expect(mentionsToLinks('mail bob@alice.com', '/u/{username}', ['alice']))
+      .toBe('mail bob@alice.com');
+  });
+
+  it("linkifie une vraie mention mais laisse intact le fragment d'e-mail voisin", () => {
+    expect(mentionsToLinks('cc @alice et bob@alice.com', '/u/{username}', ['alice']))
+      .toBe('cc [@alice](/u/alice) et bob@alice.com');
   });
 });
 

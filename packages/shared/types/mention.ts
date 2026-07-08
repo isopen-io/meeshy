@@ -3,7 +3,7 @@
  * @module shared/types/mention
  */
 
-import { hasMentions as hasMentionsCore, MENTION_HANDLE_CHARS } from '../utils/mention-parser.js';
+import { hasMentions as hasMentionsCore, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT } from '../utils/mention-parser.js';
 
 /**
  * Utilisateur mentionné résolu par le serveur.
@@ -222,9 +222,11 @@ export function extractMentions(
 
   // Regex: @ suivi de lettres, chiffres, underscore, tiret (et optionnellement espaces).
   // Le tiret fait partie du charset username (/^[a-zA-Z0-9_-]+$/) — cf. MENTION_HANDLE_CHARS.
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `parseMentions`) : un `@` collé après un mot
+  // appartient à une adresse e-mail (`bob@alice.com`) et n'est PAS une mention. Flag `u` requis.
   const pattern = allowSpaces
-    ? new RegExp(`@([${MENTION_HANDLE_CHARS} ]{1,${maxUsernameLength}})`, 'g')
-    : new RegExp(`@([${MENTION_HANDLE_CHARS}]{1,${maxUsernameLength}})`, 'g');
+    ? new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS} ]{1,${maxUsernameLength}})`, 'gu')
+    : new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]{1,${maxUsernameLength}})`, 'gu');
 
   const mentions = new Set<string>();
   const matches = content.matchAll(pattern);
@@ -278,7 +280,9 @@ export function mentionsToLinks(
   // insensible à la casse, sinon `@Alice` ne devient jamais un lien.
   const validLower = new Set(validUsernames.map((u) => u.toLowerCase()));
 
-  return content.replace(new RegExp(`@([${MENTION_HANDLE_CHARS}]+)`, 'g'), (_match, username) => {
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT) : ne pas linkifier le `@` interne d'une adresse
+  // e-mail (`bob@alice.com` ne doit pas devenir `bob[@alice](/u/alice).com`). Flag `u` requis.
+  return content.replace(new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]+)`, 'gu'), (_match, username) => {
     const canonical = username.toLowerCase();
     // Vérifier si le username est dans la liste validée
     if (!validLower.has(canonical)) {
@@ -367,7 +371,7 @@ export const MENTION_CONSTANTS = {
   AUTOCOMPLETE_DEBOUNCE_MS: 300,
   NOTIFICATION_WORD_LIMIT: 20,
   MENTION_TRIGGER: '@',
-  MENTION_REGEX: new RegExp(`@([${MENTION_HANDLE_CHARS}]+)`, 'g'),
+  MENTION_REGEX: new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]+)`, 'gu'),
   MENTION_DISPLAY_REGEX: /@([\w][\w\s'-]{0,49})(?=[!?,;:.@\n]|\s{2,}|$)/g
 } as const;
 

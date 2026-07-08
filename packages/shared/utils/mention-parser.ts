@@ -15,7 +15,12 @@ export const MENTION_HANDLE_CHARS = '\\w-';
 // Le tiret en fait partie : usernames ET displayNames l'autorisent (`Ann-Marie`), donc `@marie`
 // ne doit PAS matcher dans `@marie-claire` (frontière droite), et `@marie-claire` est un seul token.
 const NAME_CHAR = '[\\p{L}\\p{N}_-]';
-const NAME_BOUNDARY_LEFT = `(?<!${NAME_CHAR})`;
+// Frontière gauche Unicode — source de vérité unique pour TOUS les chemins de mention
+// (`parseMentions`, `hasMentions`, et les helpers de `types/mention.ts` : `extractMentions`,
+// `mentionsToLinks`, `MENTION_REGEX`). Un `@` précédé d'un caractère de nom appartient à une
+// adresse e-mail (`contact@marie.com`) et n'est PAS une mention. Exportée pour éviter tout drift.
+// Requiert le flag `u` sur la regex qui l'utilise (classes `\p{...}`).
+export const NAME_BOUNDARY_LEFT = `(?<!${NAME_CHAR})`;
 const NAME_BOUNDARY_RIGHT = `(?!${NAME_CHAR})`;
 
 /**
