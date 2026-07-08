@@ -69,27 +69,25 @@ export function useCallQuality({
     try {
       const stats = await peerConnection.getStats();
 
-      let packetLoss = 0;
       let rtt = 0;
       let audioBitrate = 0;
       let videoBitrate = 0;
       let jitter = 0;
-      // Cumulative byte counters (summed across all RTP streams) — reported so
-      // the gateway can persist real "data spent" on the call-summary message.
+      // Cumulative counters summed across ALL inbound RTP streams (audio +
+      // video). Packet loss is aggregated the same way as the byte counters so
+      // a lossy stream can never be masked by a healthy one iterated after it —
+      // reassigning per-report kept only the last stream's loss.
+      let totalPacketsLost = 0;
+      let totalPacketsReceived = 0;
       let bytesSent = 0;
       let bytesReceived = 0;
 
       // Parse WebRTC stats
       stats.forEach((report) => {
         if (report.type === 'inbound-rtp') {
-          // Calculate packet loss
-          const packetsLost = report.packetsLost || 0;
-          const packetsReceived = report.packetsReceived || 0;
-          const totalPackets = packetsLost + packetsReceived;
-
-          if (totalPackets > 0) {
-            packetLoss = (packetsLost / totalPackets) * 100;
-          }
+          // Accumulate packet loss across every inbound stream
+          totalPacketsLost += report.packetsLost || 0;
+          totalPacketsReceived += report.packetsReceived || 0;
 
           // Get jitter
           if (report.jitter !== undefined) {
@@ -124,6 +122,11 @@ export function useCallQuality({
           }
         }
       });
+
+      // Overall inbound packet-loss percentage across all streams
+      const totalPackets = totalPacketsLost + totalPacketsReceived;
+      const packetLoss =
+        totalPackets > 0 ? (totalPacketsLost / totalPackets) * 100 : 0;
 
       // Calculate quality level
       const level = calculateQualityLevel(packetLoss, rtt);
