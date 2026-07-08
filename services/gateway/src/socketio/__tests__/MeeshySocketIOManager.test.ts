@@ -239,6 +239,7 @@ jest.mock('../handlers/ReactionHandler', () => ({
       handleReactionAdd: jest.fn().mockResolvedValue(undefined),
       handleReactionRemove: jest.fn().mockResolvedValue(undefined),
       handleReactionSync: jest.fn().mockResolvedValue(undefined),
+      setDeliveryQueue: jest.fn(),
     };
     return mockReactionHandlerInstance;
   }),
@@ -792,6 +793,12 @@ describe('MeeshySocketIOManager', () => {
       const fakeQueue = { drain: jest.fn(), enqueue: jest.fn() };
       manager.setDeliveryQueue(fakeQueue as any);
       expect(mockMessageHandlerInstance.setDeliveryQueue).toHaveBeenCalledWith(fakeQueue);
+    });
+
+    it('setDeliveryQueue forwards the same queue to ReactionHandler (offline reaction replay path)', () => {
+      const fakeQueue = { drain: jest.fn(), enqueue: jest.fn() };
+      manager.setDeliveryQueue(fakeQueue as any);
+      expect(mockReactionHandlerInstance.setDeliveryQueue).toHaveBeenCalledWith(fakeQueue);
     });
 
     it('setAgentClient stores the client on the manager', () => {
@@ -1934,6 +1941,19 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-new' });
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_EDITED, { id: 'msg-edit' });
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_DELETED, { messageId: 'msg-del' });
+    });
+
+    it('routes reaction entries: reaction-added → REACTION_ADDED, reaction-removed → REACTION_REMOVED', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { messageId: 'msg-r', emoji: '👍' }, eventType: 'reaction-added' },
+          { payload: { messageId: 'msg-r', emoji: '👍' }, eventType: 'reaction-removed' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-reactions', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.REACTION_ADDED, { messageId: 'msg-r', emoji: '👍' });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.REACTION_REMOVED, { messageId: 'msg-r', emoji: '👍' });
     });
 
     it('drains an anonymous identity (participant-id key) without emitting delivery receipts', async () => {

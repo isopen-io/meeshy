@@ -58,6 +58,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
@@ -466,6 +467,7 @@ fun ChatScreen(
             onDeleteForEveryone = { viewModel.deleteForEveryone(actionTarget.messageId) },
             onDeleteForMe = { viewModel.deleteForMe(actionTarget.messageId) },
             onReply = { viewModel.startReply(actionTarget.messageId) },
+            onForward = { viewModel.openForward(actionTarget.messageId) },
             onPin = { viewModel.togglePin(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
@@ -510,6 +512,22 @@ fun ChatScreen(
                 pins = state.pinnedMessages,
                 accentColor = accentColor,
                 onTap = viewModel::onPinnedMessageTap,
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
+    }
+
+    val forward = state.forward
+    if (forward != null) {
+        ModalBottomSheet(
+            onDismissRequest = viewModel::closeForward,
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
+            ForwardPickerSheet(
+                forward = forward,
+                accentColor = accentColor,
+                onQueryChange = viewModel::onForwardQueryChange,
+                onForwardTo = viewModel::forwardTo,
                 modifier = Modifier.navigationBarsPadding(),
             )
         }
@@ -1141,6 +1159,118 @@ private fun PinnedMessagesSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ForwardPickerSheet(
+    forward: ForwardUiState,
+    accentColor: Color,
+    onQueryChange: (String) -> Unit,
+    onForwardTo: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = MeeshySpacing.lg),
+    ) {
+        Text(
+            text = stringResource(R.string.chat_forward_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MeeshyTheme.tokens.textPrimary,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        )
+        OutlinedTextField(
+            value = forward.query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            placeholder = { Text(stringResource(R.string.chat_forward_search_hint)) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = accentColor,
+                cursorColor = accentColor,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        )
+        if (forward.targets.isEmpty()) {
+            Text(
+                text = stringResource(R.string.chat_forward_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.lg),
+            )
+            return@Column
+        }
+        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+            itemsIndexed(forward.targets, key = { _, t -> t.conversationId }) { index, target ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
+                        color = MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.5f),
+                    )
+                }
+                val sent = target.conversationId in forward.sentConversationIds
+                val sending = target.conversationId == forward.sendingConversationId
+                val enabled = !sent && forward.sendingConversationId == null
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = enabled) { onForwardTo(target.conversationId) }
+                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+                ) {
+                    MeeshyAvatar(
+                        name = target.title,
+                        size = 40.dp,
+                        containerColor = hexColor(target.accentHex).takeIf { it != Color.Unspecified } ?: accentColor,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = target.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MeeshyTheme.tokens.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = if (target.memberCount > 0) {
+                                stringResource(R.string.chat_forward_members, target.memberCount)
+                            } else {
+                                target.type
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MeeshyTheme.tokens.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    when {
+                        sent -> Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = stringResource(R.string.chat_forward_sent),
+                            tint = MeeshyPalette.Success,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        sending -> CircularProgressIndicator(
+                            color = accentColor,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        else -> Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = stringResource(R.string.chat_forward_send_a11y, target.title),
+                            tint = accentColor,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun pinnedSnippetLabel(snippet: PinnedSnippet, sender: String?): String {
     val body = when (snippet) {
@@ -1240,6 +1370,7 @@ private fun MessageActionsSheet(
     onDeleteForEveryone: () -> Unit,
     onDeleteForMe: () -> Unit,
     onReply: () -> Unit,
+    onForward: () -> Unit,
     onPin: () -> Unit,
     onToggleOriginal: () -> Unit,
     onDismiss: () -> Unit,
@@ -1273,6 +1404,11 @@ private fun MessageActionsSheet(
                     icon = Icons.AutoMirrored.Filled.Reply,
                     label = stringResource(R.string.chat_action_reply),
                     onClick = onReply,
+                )
+                SheetAction(
+                    icon = Icons.AutoMirrored.Filled.Send,
+                    label = stringResource(R.string.chat_action_forward),
+                    onClick = onForward,
                 )
             }
             if (bubble.isTranslated) {

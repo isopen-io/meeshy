@@ -808,7 +808,13 @@ export class CallEventsHandler {
         reason: forceEnded.endReason
       };
       await this.broadcastCallEnded(io, callId, forceEnded.conversationId, forceEndedEvent);
-      await this.postCallSummary(callId);
+      // Fire-and-forget — same ack-latency reasoning as call:end's happy
+      // path: this helper runs on call:end's error branches too, still ahead
+      // of that handler's own `ack?.({ success: false })`.
+      /* istanbul ignore next -- postCallSummary has its own internal catch and never rejects */
+      this.postCallSummary(callId).catch((err) => {
+        logger.error('❌ postCallSummary failed after force-end orphaned call', { callId, err });
+      });
 
       if (forceEnded.status === CallStatus.missed) {
         // Mirror the sibling call:end/call:leave paths (see their doc
@@ -2745,7 +2751,16 @@ export class CallEventsHandler {
 
         // P3 — post the call-summary system message ("Appel … · MM:SS",
         // "Appel refusé", …). Primary hangup/reject path; idempotent.
-        await this.postCallSummary(callSession.id);
+        // Fire-and-forget (mirrors handleMissedCall below): postCallSummary
+        // retries up to 3× with 1s/2s backoff on a transient DB failure —
+        // awaiting it here delayed this ack past the client's 3s
+        // emitCallEndWithAck timeout, which read as a failed hangup and
+        // triggered a redundant fire-and-forget call:end + reconnect
+        // reconciliation for a call that had, in fact, already ended cleanly.
+        /* istanbul ignore next -- postCallSummary has its own internal catch and never rejects */
+        this.postCallSummary(callSession.id).catch((err) => {
+          logger.error('❌ postCallSummary failed after call:end', { callId: data.callId, err });
+        });
 
         // Audit C3/C4 (2026-07-02 prod audit) — endCall() now mirrors leaveCall()
         // and resolves a pre-answer end to `missed`. Mirror the call:leave handler:
