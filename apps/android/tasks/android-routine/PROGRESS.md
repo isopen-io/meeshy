@@ -4,6 +4,19 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-08 the **pinned-message banner** landed (slice `chat-pinned-banner`, Chat parity §C —
+> feature-parity.md "Pin/unpin message"). The gateway fully supports message pinning (REST pin/unpin +
+> `GET /pinned-messages` + socket `message:pinned`/`message:unpinned`, wire `pinnedAt`/`pinnedBy`) but
+> Android ignored all of it. Now `ApiMessage` carries `pinnedAt`/`pinnedBy`, `BubbleContent.pinnedAtIso`
+> maps it (null on a deleted message or blank instant), `MessageSocketManager` gains
+> `messagePinned`/`messageUnpinned` streams that `refresh` the open conversation (so any client's pin
+> appears live), and the pure `:feature:chat` `PinnedMessages.of(messages) → PinnedBanner?` SSOT features
+> the **newest** live pin (parsed instant; equal-instant & unparseable ties keep the earliest in list
+> order via a stable max), with the total `count` and a `PinnedSnippet` (trimmed text › Image › File ›
+> Empty). `ChatUiState.pinnedBanner` derives it; `onPinnedBannerTap` scrolls to the newest pin.
+> `ChatScreen` renders a tappable accent `PinnedBannerStrip` above the list. +28 tests. Reviewer PASS. The
+> pin/unpin **action** (optimistic outbox toggle) is the next slice.
+
 > On 2026-07-08 the **who-reacted breakdown sheet** landed (slice `chat-reaction-who-reacted-sheet`, Chat parity §C —
 > feature-parity.md "reaction detail breakdown (who-reacted sheet)"). Reactions were add/remove-only; long-pressing a
 > reaction chip did nothing. iOS opens a sheet listing who reacted, grouped by emoji. New pure `:feature:chat`
@@ -692,7 +705,20 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**✅ MERGED (2026-07-08): `chat-reaction-who-reacted-sheet` — PR [#1663](https://github.com/isopen-io/meeshy/pull/1663) merged to `main`** (verified this run: `merged: true`, merged_at 2026-07-08T10:54:40Z). Step 0 clear — no open PRs.
+**Just shipped (2026-07-08): `chat-pinned-banner`** — the read side of message pinning. The wire now
+carries `pinnedAt`/`pinnedBy`; the socket `message:pinned`/`message:unpinned` events refresh the open
+conversation; the pure `:feature:chat` `PinnedMessages.of(messages) → PinnedBanner?` SSOT features the
+newest live pin (stable tie-break, total count, text›image›file›empty snippet); `ChatScreen` renders a
+tappable accent `PinnedBannerStrip` above the list → `onPinnedBannerTap` jumps to the newest pin. +28
+tests. See run log. **Recommended next (highest value, Chat §C):**
+- **`chat-pin-toggle`** — the pin/unpin **action**: long-press "Épingler"/"Retirer", a durable outbox
+  `PIN_MESSAGE`/`UNPIN_MESSAGE` kind (coalescer latest-wins + worker sender via `MessageApi.pin/unpin`,
+  optimistic `pinnedAt` flip + rollback), completing the pin feature end-to-end on Android alone.
+- **pinned-messages list sheet** — a `GET /pinned-messages`-backed sheet listing every pin (the banner
+  shows one at a time); tapping a row jumps to it.
+- **`chat-forward-message`** / §C forward (the remaining half of send/edit/delete/reply/forward).
+
+**✅ MERGED (2026-07-08): `chat-reaction-who-reacted-sheet` — PR [#1663](https://github.com/isopen-io/meeshy/pull/1663) merged to `main`** (verified: `merged: true`, merged_at 2026-07-08T10:54:40Z).
 
 **Just shipped (2026-07-08): `chat-reply-count-pills`** — an accent-tinted reply-count pill under any
 message that has quoted replies, driven by the pure `:feature:chat` `ReplyThreads.of(messages)` SSOT
@@ -1383,6 +1409,45 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-08 — slice `chat-pinned-banner` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/chat-pinned-banner` (off latest `origin/main`).
+- **Step 0:** no open Android PR (only Dependabot PRs open); prior slice `chat-reply-count-pills`
+  already merged. Branched fresh off `origin/main`.
+- **Slice:** the **pinned-message banner** (Chat parity §C "Pin/unpin message …") — the read side of
+  message pinning. The gateway fully supports it (`POST`/`DELETE /conversations/:id/messages/:messageId/pin`,
+  `GET /pinned-messages`, socket `message:pinned`/`message:unpinned`, wire carries `pinnedAt`/`pinnedBy`),
+  but Android ignored all of it. Now:
+  - `:core:model` — `ApiMessage.pinnedAt`/`pinnedBy`; `MessagePinnedEvent`/`MessageUnpinnedEvent`.
+  - `:sdk-core` — `MessageSocketManager` `messagePinned`/`messageUnpinned` streams (`listen("message:pinned"/…)`).
+  - `:sdk-ui` — `BubbleContent.pinnedAtIso` (builder maps `message.pinnedAt`, trimmed; **null on a deleted
+    message or a blank instant**).
+  - `:feature:chat` — pure `PinnedMessages.of(messages) → PinnedBanner?` SSOT: filters live (non-deleted,
+    non-blank `pinnedAtIso`) pins, features the **newest** by parsed instant (equal-instant & unparseable
+    ties keep the earliest in list order via a stable max), carries the total `count` and a `PinnedSnippet`
+    (trimmed text › Image › File › Empty). `ChatUiState.pinnedBanner` derives it from `messages` (adapter
+    `BubbleContent.toPinnable()`); `onPinnedBannerTap` scrolls to the newest pin (`scrollToMessageId`
+    reuse); socket pinned/unpinned collectors `refresh(conversationId)` so any client's pin appears live.
+  - `ChatScreen` — accent-tinted tappable `PinnedBannerStrip` above the list (PushPin glyph + count/title +
+    sender:snippet). EN/FR/ES/PT strings.
+- **Tests (+28):** `PinnedMessagesTest` 17 (empty/no-pin/blank-instant → null; single→banner; deleted
+  excluded + dropped from count; newest featured + total count; equal-instant tie → earliest; unparseable
+  never outranks + still counts; all-unparseable → first; image/file/image-beats-file/text-wins/empty
+  snippet; text trimmed; blank-sender→null + outgoing carried). `ChatViewModelTest` +8 (banner surfaces /
+  absent, tap→newest + clear, tap-inert-when-none, pinned & unpinned socket → refresh, both elsewhere →
+  ignored). `BubbleContentBuilderTest` +3 (pinned instant carried, blank dropped, deleted never pinned).
+- **Verification:** `:feature:chat:testDebugUnitTest` + `:sdk-ui:testDebugUnitTest` green; `:app:assembleDebug`
+  green; full `testDebugUnitTest` (all modules) green (system Gradle 8.14.3, `/opt/gradle`; wrapper download
+  403-blocked in this container).
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API `PinnedMessages.of`, no
+  tautologies, boundary coverage on the tie/unparseable/deleted/blank/media-kind branches + both socket
+  conversation arms; SDK-purity honoured (the "which pin anchors the banner / what does the preview say"
+  product decision is a pure atom in `:feature:chat`; the model carrier is `:core:model`, the socket bytes
+  `:sdk-core`, the strip exempt Compose glue); SSOT (parses via `isoToEpochMillisOrNull`); accent-coherent;
+  natural tap-to-jump gesture; no dead end — live cross-client pins render and jump.
+- **Next:** `chat-pin-toggle` — the optimistic pin/unpin **action** (long-press "Épingler"/"Retirer",
+  durable outbox `PIN_MESSAGE`/`UNPIN_MESSAGE` kind + coalescer + worker sender + `MessageApi.pin/unpin`),
+  then a pinned-messages list sheet.
 
 ### 2026-07-08 — slice `chat-reply-count-pills` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/chat-reply-count-pills`
