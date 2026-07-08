@@ -169,14 +169,24 @@ extension UserProfileSheet {
             avatarURL: displayUser.avatarURL,
             storyState: ringState,
             moodEmoji: isBlockedByTarget ? nil : moodEmoji,
-            presenceState: isBlockedByTarget ? .offline : presenceFromUser,
+            presenceState: isBlockedByTarget ? .offline : resolvedPresence,
             onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
             onMoodTap: isBlockedByTarget ? nil : onMoodTap
         )
     }
 
-    var presenceFromUser: PresenceState {
-        displayUser.isOnline == true ? .online : .offline
+    /// Présence affichée sur l'avatar (grand header + barre compacte).
+    /// Priorité au `presenceProvider` injecté par l'app — même source temps
+    /// réel que la liste de conversations — puis fallback sur le snapshot
+    /// REST `isOnline` du profil chargé quand l'utilisateur n'est pas suivi
+    /// (provider absent ou retour `nil`).
+    var resolvedPresence: PresenceState {
+        if let presenceProvider,
+           let userId = resolvedUserId, !userId.isEmpty,
+           let live = presenceProvider(userId) {
+            return live
+        }
+        return displayUser.isOnline == true ? .online : .offline
     }
 
     /// Couleur du libellé de présence selon l'ancienneté : vert < 5 min,
@@ -278,7 +288,7 @@ extension UserProfileSheet {
                 accentColor: isBlockedByTarget ? "888888" : resolvedAccent,
                 avatarURL: displayUser.avatarURL,
                 storyState: .none,
-                presenceState: isBlockedByTarget ? .offline : presenceFromUser
+                presenceState: isBlockedByTarget ? .offline : resolvedPresence
             )
 
             VStack(alignment: .leading, spacing: 0) {

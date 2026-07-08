@@ -127,6 +127,15 @@ final class PresenceManager: ObservableObject {
         presenceMap[userId]?.state ?? .offline
     }
 
+    /// Présence temps réel si l'utilisateur est suivi par le manager, `nil`
+    /// sinon. Injecté comme `presenceProvider` de `UserProfileSheet` : le
+    /// profil affiche la MÊME pastille que la liste de conversations quand la
+    /// donnée live existe, et retombe sur son snapshot REST `isOnline` pour
+    /// les profils hors du périmètre suivi (contacts jamais croisés).
+    func knownPresenceState(for userId: String) -> PresenceState? {
+        presenceMap[userId]?.state
+    }
+
     /// Apply a bulk presence snapshot. Used by:
     /// - the `presence:snapshot` socket event right after auth
     /// - the REST `/users/presence` refresh on foreground/reconnect

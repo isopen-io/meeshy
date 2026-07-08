@@ -736,6 +736,7 @@ struct StoryHeaderView: View {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in AnyView(ProfileUserPostsList(
                     userId: uid,
                     onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },

@@ -79,14 +79,16 @@ struct ConversationRowItem: View {
                 preferredContentLanguages: preferredContentLanguages
             )
             .equatable()
-            .contentShape(Rectangle())
-            .onTapGesture {
-                HapticFeedback.light()
-                onTap()
-            }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
+            // Les gestes tactiles (tap + long-press) vivent dans l'overlay de
+            // RowPressBounceModifier, HORS de l'élément combiné : cette action
+            // par défaut garantit que le double-tap VoiceOver ouvre toujours
+            // la conversation.
+            .accessibilityAction {
+                onTap()
+            }
             // Le menu custom n'est plus un `.contextMenu` natif (auto-exposé
             // à VoiceOver) : cette action de rotor reste le seul accès non-visuel
             // à épingler/sourdine/archiver/verrouiller depuis la ligne.
@@ -112,12 +114,26 @@ struct ConversationRowItem: View {
             // la propriété exclusive du ScrollView. Le geste « replier
             // l'aperçu » vit dans l'overlay du menu (+Overlays), hors de tout
             // contexte scrollable.
-            .modifier(RowPressBounceModifier(onTrigger: onLongPress))
+            .modifier(RowPressBounceModifier(onTap: onTap, onTrigger: onLongPress))
             .task {
                 await onLoadPreview()
             }
         }
     }
+}
+
+// MARK: - Row interaction metrics
+
+/// Largeur de la bande avant de la ligne réservée aux interactions de
+/// l'avatar : padding horizontal de la ligne (`MeeshySpacing.md`) + emprise
+/// de l'avatar avec son anneau story (`AvatarContext.conversationList
+/// .ringSize`). Les gestes tap/long-press de la LIGNE n'écoutent pas cette
+/// bande — l'avatar y possède ses propres gestes (tap story/profil, badge
+/// mood, menu contextuel) et un appui maintenu dessus ne doit PAS ouvrir le
+/// menu de la ligne (feedback user 2026-07-08).
+enum ConversationRowMetrics {
+    static let avatarInteractionExclusionWidth: CGFloat =
+        MeeshySpacing.md + AvatarContext.conversationList.ringSize
 }
 
 // MARK: - Press feedback (réduction pendant l'appui + rebond au trigger)
@@ -130,6 +146,18 @@ struct ConversationRowItem: View {
 /// ANNULE : `onPressingChanged(false)` arrive à l'échec du geste et la
 /// ligne remonte élastiquement, sans ouvrir le menu.
 ///
+/// Les gestes (tap + détecteur d'appui + déclencheur du menu) sont attachés
+/// à un OVERLAY transparent qui couvre la ligne SAUF la bande avatar
+/// (`ConversationRowMetrics.avatarInteractionExclusionWidth`, miroir
+/// automatique en RTL via le HStack). La bande laissée claire n'est pas
+/// hit-testable : les touches y traversent vers l'avatar en dessous (tap
+/// story/profil, badge mood, menu contextuel MeeshyAvatar) sans jamais
+/// déclencher le long-press de la ligne. Un `.contentShape` restrictif sur
+/// la ligne entière n'aurait pas fait l'affaire : il élague le hit-testing
+/// du sous-arbre et aurait tué les gestes propres de l'avatar ; et le swipe
+/// de `SwipeableRow` (simultaneousGesture ancêtre) doit continuer de
+/// fonctionner partout, bande avatar comprise.
+///
 /// `onPressingChanged` (et PAS `LongPressGesture.updating`) : le callback
 /// `updating`/@GestureState ne fire qu'à la RECONNAISSANCE du long-press,
 /// pas au touch-down (vérifié frame par frame sur simulateur 2026-07-03 —
@@ -141,6 +169,7 @@ struct ConversationRowItem: View {
 /// `.equatable()` — son state s'invalide indépendamment, comme le drag
 /// interne de `SwipeableRow`.
 private struct RowPressBounceModifier: ViewModifier {
+    let onTap: () -> Void
     let onTrigger: (CGRect) -> Void
 
     @State private var isPressing = false
@@ -182,30 +211,48 @@ private struct RowPressBounceModifier: ViewModifier {
                         : .spring(response: 0.35, dampingFraction: 0.85)),
                 value: isPressing
             )
-            // Détecteur d'état d'appui PUR : minimumDuration inatteignable,
-            // seul `onPressingChanged` sert (true au touch-down, false au
-            // relâchement/échec). Sa variante `perform:` composée avec le
-            // `.onTapGesture` de la ligne ne fire qu'au RELÂCHEMENT (vérifié
-            // frame par frame 2026-07-03) — d'où le déclencheur séparé.
-            .onLongPressGesture(
-                minimumDuration: 3600,
-                maximumDistance: 10,
-                perform: {},
-                onPressingChanged: { pressing in
-                    if pressing { triggered = false }
-                    isPressing = pressing
+            // Surface d'interaction de la ligne : tout SAUF la bande avatar.
+            // Le Spacer avant n'est pas hit-testable → les touches sur
+            // l'avatar traversent vers ses propres gestes ; la zone claire
+            // trailing porte le tap d'ouverture + les deux long-press.
+            .overlay {
+                HStack(spacing: 0) {
+                    Spacer()
+                        .frame(width: ConversationRowMetrics.avatarInteractionExclusionWidth)
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            HapticFeedback.light()
+                            onTap()
+                        }
+                        // Détecteur d'état d'appui PUR : minimumDuration
+                        // inatteignable, seul `onPressingChanged` sert (true au
+                        // touch-down, false au relâchement/échec). Sa variante
+                        // `perform:` composée avec le `.onTapGesture` de la
+                        // ligne ne fire qu'au RELÂCHEMENT (vérifié frame par
+                        // frame 2026-07-03) — d'où le déclencheur séparé.
+                        .onLongPressGesture(
+                            minimumDuration: 3600,
+                            maximumDistance: 10,
+                            perform: {},
+                            onPressingChanged: { pressing in
+                                if pressing { triggered = false }
+                                isPressing = pressing
+                            }
+                        )
+                        // Déclencheur du menu : la variante simultanée fire à
+                        // minimumDuration PENDANT l'appui (0.4 s), pas au
+                        // relâchement.
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.4)
+                                .onEnded { _ in
+                                    triggered = true
+                                    HapticFeedback.medium()
+                                    onTrigger(frameBox.rect)
+                                }
+                        )
                 }
-            )
-            // Déclencheur du menu : la variante simultanée fire à
-            // minimumDuration PENDANT l'appui (0.4 s), pas au relâchement.
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.4)
-                    .onEnded { _ in
-                        triggered = true
-                        HapticFeedback.medium()
-                        onTrigger(frameBox.rect)
-                    }
-            )
+            }
     }
 }
 
