@@ -60,10 +60,15 @@ export function getUserPresenceStatus(
   if (!source) return 'offline';
 
   const { isOnline, lastActiveAt } = source;
-  const elapsed =
+  const parsedElapsed =
     lastActiveAt === null || lastActiveAt === undefined
       ? null
       : now - new Date(lastActiveAt).getTime();
+  // Un timestamp illisible (NaN) est traité comme absent, pas comme une
+  // distance infinie — sinon `elapsed <= X` vaut toujours false pour NaN et la
+  // fonction retombe sur 'offline' même si isOnline=true, contrairement à
+  // Android (isoToEpochMillisOrNull retourne null sur parse-échec).
+  const elapsed = parsedElapsed === null || Number.isNaN(parsedElapsed) ? null : parsedElapsed;
 
   if (isOnline === true && (elapsed === null || elapsed <= PRESENCE_AWAY_WINDOW_MS)) {
     return 'online';

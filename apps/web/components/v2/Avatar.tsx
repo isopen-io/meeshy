@@ -18,15 +18,19 @@ export interface AvatarProps {
 }
 
 /**
- * Mapping présence -> dot du design system v2 (tokens --gp-*). Règle produit
- * identique iOS/Android/web classique : vert = online/recent, orange = away,
- * gris = offline. Consommé aussi par ConversationItem — ne pas redéclarer.
+ * Mapping présence -> dot du design system v2. Couleurs FIXES (pas les tokens
+ * thème --gp-success/--gp-warning, qui varient light/dark pour d'autres
+ * usages comme Badge) : la présence doit rendre le même hex exact que le web
+ * classique (PRESENCE_DOT_CLASS), iOS (MeeshyColors.success/.warning) et
+ * Android (MeeshyPalette.Success/Warning), quel que soit le thème actif.
+ * Vert = online/recent, orange = away, gris = offline.
+ * Consommé aussi par ConversationItem — ne pas redéclarer.
  */
 export const presenceDotClassV2: Record<AvatarPresence, string> = {
-  online: 'bg-[var(--gp-success)] animate-pulse', // actif <= 60s : vert + pulse
-  recent: 'bg-[var(--gp-success)]', // actif <= 5min : vert
-  away: 'bg-[var(--gp-warning)]', // absent 5-30min : orange
-  offline: 'bg-[#9CA3AF]', // hors ligne > 30min : gris
+  online: 'bg-emerald-400 animate-pulse', // actif <= 60s : vert + pulse (#34D399)
+  recent: 'bg-emerald-400', // actif <= 5min : vert (#34D399)
+  away: 'bg-amber-400', // absent 5-30min : orange (#FBBF24)
+  offline: 'bg-gray-400', // hors ligne > 30min : gris (#9CA3AF)
 };
 
 const sizeMap = {
