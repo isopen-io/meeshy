@@ -111,7 +111,7 @@
     "@signalapp/libsignal-client": "^0.58.3"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
     "prisma": "^6.19.3",
     "typescript": "^6.0.3",
