@@ -103,6 +103,7 @@ public object BubbleContentBuilder {
                 0
             },
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
+            isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
         )
     }
 

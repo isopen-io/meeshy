@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
@@ -99,6 +100,27 @@ public fun MessageBubble(
                 }
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         ) {
+            if (content.isForwarded) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = null,
+                        tint = onColor.copy(alpha = 0.6f),
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.bubble_forwarded),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontStyle = FontStyle.Italic,
+                        color = onColor.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(start = 3.dp),
+                    )
+                }
+            }
+
             if (content.showSenderName && content.senderName != null) {
                 Text(
                     text = content.senderName,

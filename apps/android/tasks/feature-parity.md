@@ -500,7 +500,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       markers ahead of the counters ; `BubbleContentBuilder` consumes it with a reactive `recipientCount`
       (distinct other members) threaded from `ChatViewModel`. **Pending:** the finer 8-state
       send-lifecycle glyphs (clock/slow/invisible), offline hourglass, tap-checks → read-status sheet
-- [ ] Edited / pinned / forwarded indicators; edit-history viewer
+- [~] Edited / pinned / forwarded indicators; edit-history viewer
+      **Edited ✅** (`bubble_edited` badge), **pinned ✅** (`chat-pinned-banner`), **forwarded ✅**
+      (slice `chat-forwarded-indicator`, 2026-07-08, +5 tests): `BubbleContent.isForwarded` derived in
+      `BubbleContentBuilder` (`!isDeleted && !forwardedFromId.isNullOrBlank()` — a deleted tombstone
+      shows no metadata, mirroring the `pinnedAtIso` suppress rule; a blank/whitespace id or a
+      conversation-id-only forward is not flagged). `MessageBubble` renders a subtle top-of-bubble
+      italic "Transféré/Forwarded" chip with the same accent-coherent forward glyph as the forward
+      action (`Icons.AutoMirrored.Filled.Send`). **Pending:** edit-history viewer (needs the gateway
+      edit-history endpoint surfaced on Android).
 - [ ] Ephemeral (self-destruct) messages with duration picker + countdown badges
 - [ ] Blurred ("tap to reveal") + view-once messages with fog effect
 - [ ] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)

@@ -4,6 +4,28 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-08 the **forwarded-message indicator** landed (slice `chat-forwarded-indicator`, Chat parity §C —
+> feature-parity.md "Edited / pinned / **forwarded** indicators"). Forward shipped the send side (#1730,
+> `forwardedFromId`/`forwardedFromConversationId` on `ApiMessage`/`SendMessageRequest`) but the read side
+> ignored the wire refs — a forwarded message looked native. Now `BubbleContent.isForwarded` is derived in
+> `BubbleContentBuilder.build` as `!isDeleted && !message.forwardedFromId.isNullOrBlank()`: the trigger is a
+> **non-blank `forwardedFromId`** (a whitespace-only id or a forward carrying only a `forwardedFromConversationId`
+> is **not** flagged), and a **deleted tombstone is never forwarded** (mirrors the existing `pinnedAtIso`
+> deleted-suppress rule so metadata never leaks onto a deleted bubble). `MessageBubble` renders a subtle
+> top-of-bubble italic chip (`Icons.AutoMirrored.Filled.Send` glyph + "Transféré"/"Forwarded", `onColor`
+> alpha 0.6 so it stays accent-coherent on both incoming and outgoing bubbles), placed above the sender name
+> / reply preview at iOS parity. New string `bubble_forwarded` in en/fr/es/pt (sdk-ui). +5 tests
+> (`BubbleContentBuilderTest`: forwarded-flagged, no-origin→false, blank-id→false, conversation-id-only→false,
+> deleted→false) — 37 bubble-builder tests total, 0 failures. `:sdk-ui:testDebugUnitTest` + full
+> `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (system Gradle 8.14.3;
+> `/opt/gradle/bin/gradle` — the wrapper download is 403-blocked in this container). Reviewer: PASS (diff
+> apps/android only; behaviour-through-public-API `BubbleContentBuilder.build`, no tautologies, boundary
+> coverage on blank/whitespace id + conversation-id-only + deleted-suppress; SDK-purity honoured — the
+> "is this forwarded" derivation is a stateless building block in `:sdk-ui` `BubbleContentBuilder` (same
+> layer as `isEdited`/`pinnedAtIso`), the chip is exempt Compose glue; SSOT — the deleted-suppress rule
+> mirrors `pinnedAtIso`; accent-coherent chip, read-only indicator so no dead end). **Next:** reply-thread
+> overlay (the `ReplyThreads` grouping is already the SSOT) or a starred/bookmarked messages list.
+
 > On 2026-07-08 the **pinned-message banner** landed (slice `chat-pinned-banner`, Chat parity §C —
 > feature-parity.md "Pin/unpin message"). The gateway fully supports message pinning (REST pin/unpin +
 > `GET /pinned-messages` + socket `message:pinned`/`message:unpinned`, wire `pinnedAt`/`pinnedBy`) but
