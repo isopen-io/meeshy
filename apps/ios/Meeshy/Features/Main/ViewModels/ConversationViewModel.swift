@@ -349,6 +349,16 @@ class ConversationViewModel: ObservableObject {
     }
 
     private func loadVoiceConsentStatus() {
+        // Source primaire : l'espace de préférences — la même API que celle
+        // par laquelle le popup accorde le consentement (PATCH
+        // /me/preferences/application). Repli legacy : un consentement
+        // accordé via le wizard voice-profile n'écrit que les champs User —
+        // le statut REST voice-profile couvre ce cas tant que les
+        // préférences sont muettes.
+        if UserPreferencesManager.shared.voiceConsentGranted {
+            voiceConsentMissing = false
+            return
+        }
         Task { [weak self] in
             let missing = await Self.resolveVoiceConsentMissing {
                 try await VoiceProfileService.shared.getConsentStatus().hasConsent
@@ -358,34 +368,15 @@ class ConversationViewModel: ObservableObject {
     }
 
     /// Validation du popup de traduction automatique à l'envoi d'un audio
-    /// sans consentement : accorde en un geste le consentement de définition
-    /// du profil vocal (`voiceRecordingConsent`) ET la traduction utilisant
-    /// ce profil (`voiceCloningConsent`), puis active les features audio
-    /// correspondantes côté préférences (transcription, traduction audio,
-    /// génération TTS, profil vocal) — synchronisées au backend via l'outbox
-    /// des préférences. Retourne `false` (avec toast) si l'octroi échoue.
-    func grantVoiceAutoTranslationConsent() async -> Bool {
-        do {
-            _ = try await VoiceProfileService.shared.grantConsent(
-                voiceCloningConsent: true, birthDate: nil
-            )
-            UserPreferencesManager.shared.updateAudio { audio in
-                audio.transcriptionEnabled = true
-                audio.audioTranslationEnabled = true
-                audio.ttsEnabled = true
-                audio.voiceProfileEnabled = true
-            }
-            voiceConsentMissing = false
-            return true
-        } catch {
-            Logger.messages.error("grantVoiceAutoTranslationConsent failed: \(error.localizedDescription, privacy: .public)")
-            FeedbackToastManager.shared.showError(
-                String(localized: "conversation.voiceConsent.grantFailed",
-                       defaultValue: "Impossible d'activer la traduction automatique. Réessayez depuis les Réglages.",
-                       bundle: .main)
-            )
-            return false
-        }
+    /// sans consentement : accorde via l'espace de préférences — la MÊME API
+    /// que la lecture — le consentement de définition du profil vocal ET la
+    /// traduction utilisant ce profil, plus les features audio associées
+    /// (transcription, traduction audio, TTS, profil vocal). L'écriture est
+    /// locale-first et synchronisée au backend par l'outbox des préférences
+    /// (PATCH /me/preferences/application + /audio) — jamais bloquant.
+    func grantVoiceAutoTranslationConsent() {
+        UserPreferencesManager.shared.grantVoiceAutoTranslationConsent()
+        voiceConsentMissing = false
     }
 
     // MARK: - Audio Continuous Playback (Phase 4)

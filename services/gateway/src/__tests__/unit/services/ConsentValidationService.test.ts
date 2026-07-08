@@ -135,4 +135,112 @@ describe('ConsentValidationService.getConsentStatus', () => {
 
     await expect(service.getConsentStatus('missing')).rejects.toThrow('User not found');
   });
+
+  it('grants the full chain from application-preferences consent timestamps alone', async () => {
+    // Popup iOS 2026-07-08 : le consentement transite par la MÊME API
+    // préférences (PATCH /me/preferences/application) — aucun champ User.
+    const iso = NOW.toISOString();
+    const service = new ConsentValidationService(
+      makePrisma({
+        user: {},
+        audio: { transcriptionEnabled: true, audioTranslationEnabled: true, ttsEnabled: true },
+        application: {
+          dataProcessingConsentAt: iso,
+          voiceDataConsentAt: iso,
+          voiceProfileConsentAt: iso,
+          voiceCloningConsentAt: iso,
+          voiceCloningEnabledAt: iso,
+        },
+      })
+    );
+
+    const status = await service.getConsentStatus('u1');
+
+    expect(status.hasVoiceProfileConsent).toBe(true);
+    expect(status.hasVoiceCloningConsent).toBe(true);
+    expect(status.canTranscribeAudio).toBe(true);
+    expect(status.canTranslateAudio).toBe(true);
+    expect(status.canGenerateTranslatedAudio).toBe(true);
+    expect(status.canUseVoiceCloning).toBe(true);
+  });
+});
+
+describe('ConsentValidationService.validateAudioPreferences', () => {
+  beforeEach(() => {
+    (process.env as any).NODE_ENV = 'test';
+  });
+
+  it('accepts the popup PATCH enabling the whole chain in one request (consents stored)', async () => {
+    // Popup iOS : transcription + traduction audio + TTS activés ENSEMBLE,
+    // alors que l'état stocké a audioTranslationEnabled/ttsEnabled à false —
+    // la chaîne doit être évaluée sur stocké ∪ entrant, pas stocké seul.
+    const service = new ConsentValidationService(
+      makePrisma({ user: fullVoiceConsent, audio: {} })
+    );
+
+    const violations = await service.validateAudioPreferences('u1', {
+      transcriptionEnabled: true,
+      audioTranslationEnabled: true,
+      ttsEnabled: true,
+    });
+
+    expect(violations).toEqual([]);
+  });
+
+  it('still rejects the chain without voice data consent', async () => {
+    const service = new ConsentValidationService(makePrisma({ user: {} }));
+
+    const violations = await service.validateAudioPreferences('u1', {
+      transcriptionEnabled: true,
+      audioTranslationEnabled: true,
+      ttsEnabled: true,
+    });
+
+    expect(violations.map(v => v.field)).toEqual([
+      'transcriptionEnabled',
+      'audioTranslationEnabled',
+      'ttsEnabled',
+    ]);
+  });
+
+  it('rejects TTS enabled alone when audio translation stays disabled', async () => {
+    const service = new ConsentValidationService(
+      makePrisma({ user: fullVoiceConsent, audio: { audioTranslationEnabled: false } })
+    );
+
+    const violations = await service.validateAudioPreferences('u1', { ttsEnabled: true });
+
+    expect(violations.map(v => v.field)).toEqual(['ttsEnabled']);
+  });
+});
+
+describe('ConsentValidationService.validateApplicationPreferences', () => {
+  beforeEach(() => {
+    (process.env as any).NODE_ENV = 'test';
+  });
+
+  it('accepts telemetryEnabled when the same request grants dataProcessingConsentAt', async () => {
+    // Le PATCH du popup envoie la struct application COMPLÈTE (telemetry par
+    // défaut à true) en même temps que l'octroi — la validation ne doit pas
+    // rejeter la requête qui accorde le consentement qu'elle exige.
+    const service = new ConsentValidationService(makePrisma({ user: {} }));
+
+    const violations = await service.validateApplicationPreferences('u1', {
+      telemetryEnabled: true,
+      dataProcessingConsentAt: NOW.toISOString(),
+    });
+
+    expect(violations).toEqual([]);
+  });
+
+  it('still flags telemetryEnabled without any data-processing consent', async () => {
+    const service = new ConsentValidationService(makePrisma({ user: {} }));
+
+    const violations = await service.validateApplicationPreferences('u1', {
+      telemetryEnabled: true,
+    });
+
+    expect(violations).toHaveLength(1);
+    expect(violations[0].field).toBe('telemetryEnabled');
+  });
 });

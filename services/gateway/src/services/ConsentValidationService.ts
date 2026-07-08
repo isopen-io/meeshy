@@ -162,8 +162,21 @@ export class ConsentValidationService {
     const status = await this.getConsentStatus(userId);
     const violations: ConsentViolation[] = [];
 
+    // Chaîne évaluée sur l'état STORED ∪ INCOMING : une même requête active
+    // légitimement plusieurs maillons d'un coup (popup iOS 2026-07-08 —
+    // transcription + traduction audio + TTS dans un seul PATCH). Évaluer
+    // chaque maillon uniquement sur l'état stocké rejetterait la requête qui
+    // contient elle-même le maillon précédent. Les CONSENTEMENTS, eux,
+    // restent exigés tels que stockés (catégorie application / User).
+    const effCanTranscribe = status.hasVoiceDataConsent &&
+      (preferences.transcriptionEnabled === true || status.canTranscribeAudio);
+    const effCanTranslateAudio = effCanTranscribe && status.canTranslateText &&
+      (preferences.audioTranslationEnabled === true || status.canTranslateAudio);
+    const effCanGenerateTranslatedAudio = effCanTranslateAudio &&
+      (preferences.ttsEnabled === true || status.canGenerateTranslatedAudio);
+
     // Transcription requiert voiceDataConsent
-    if (preferences.transcriptionEnabled === true && !status.canTranscribeAudio) {
+    if (preferences.transcriptionEnabled === true && !effCanTranscribe) {
       violations.push({
         field: 'transcriptionEnabled',
         message: 'Audio transcription requires voice data consent and feature activation',
@@ -172,7 +185,7 @@ export class ConsentValidationService {
     }
 
     // Traduction audio requiert transcription + traduction texte
-    if (preferences.audioTranslationEnabled === true && !status.canTranslateAudio) {
+    if (preferences.audioTranslationEnabled === true && !effCanTranslateAudio) {
       violations.push({
         field: 'audioTranslationEnabled',
         message: 'Audio translation requires text translation and audio transcription to be enabled',
@@ -185,7 +198,7 @@ export class ConsentValidationService {
     }
 
     // TTS (génération audio traduit) requiert traduction audio
-    if (preferences.ttsEnabled === true && !status.canGenerateTranslatedAudio) {
+    if (preferences.ttsEnabled === true && !effCanGenerateTranslatedAudio) {
       violations.push({
         field: 'ttsEnabled',
         message: 'TTS requires audio translation and translated audio generation to be enabled',
@@ -343,8 +356,15 @@ export class ConsentValidationService {
     const status = await this.getConsentStatus(userId);
     const violations: ConsentViolation[] = [];
 
+    // Octroi same-request : le corps peut LUI-MÊME accorder le consentement
+    // (popup iOS — PATCH application avec dataProcessingConsentAt + telemetry
+    // dans le même envoi). getConsentStatus lit l'état AVANT écriture ;
+    // sans cette reconnaissance, la requête qui accorde serait rejetée.
+    const grantsDataProcessing =
+      status.hasDataProcessingConsent || !!preferences.dataProcessingConsentAt;
+
     // Télémétrie requiert dataProcessingConsent
-    if (preferences.telemetryEnabled === true && !status.hasDataProcessingConsent) {
+    if (preferences.telemetryEnabled === true && !grantsDataProcessing) {
       violations.push({
         field: 'telemetryEnabled',
         message: 'Telemetry requires data processing consent',

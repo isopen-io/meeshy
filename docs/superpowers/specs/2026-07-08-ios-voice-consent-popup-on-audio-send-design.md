@@ -24,19 +24,40 @@ Tap envoyer (composer contient de l'audio)
   → shouldPromptVoiceConsent(hasAudio, consentMissing, alreadyPrompted) ?
       non → envoi normal
       oui → popup (UNE fois par session de conversation), composer INTACT
-             ├─ « Activer »  → grantVoiceAutoTranslationConsent()
-             │                 (POST /voice-profile/consent + prefs audio)
+             ├─ « Activer »  → UserPreferencesManager.grantVoiceAutoTranslationConsent()
+             │                 (espace de préférences — PATCH
+             │                 /me/preferences/application + /audio via l'outbox)
              │                 → relance sendMessageWithAttachments()
              └─ « Plus tard » → relance l'envoi tel quel (audio non transcrit,
                                 comportement actuel ; la note inline
                                 AudioConsentNotice reste le rappel discret)
 ```
 
+### Source de vérité : l'espace de préférences (même API en lecture et écriture)
+
+- **Lecture** : `UserPreferencesManager.voiceConsentGranted`
+  (`application.voiceProfileConsentAt != nil`) — repli legacy sur
+  `VoiceProfileService.getConsentStatus()` uniquement quand les préférences
+  sont muettes (consentement historique accordé via le wizard, champs User).
+- **Écriture** : `UserPreferencesManager.grantVoiceAutoTranslationConsent()`
+  pose de manière idempotente la chaîne de consentements dans
+  `application` (`dataProcessingConsentAt` → `voiceDataConsentAt` →
+  `voiceProfileConsentAt` → `voiceCloningConsentAt`/`voiceCloningEnabledAt`)
+  ET les features `audio` (transcription, traduction audio, TTS, profil
+  vocal) — local-first, synchronisé par l'outbox des préférences sur la
+  MÊME API que toute autre préférence.
+- Le gateway (`ConsentValidationService`) lit déjà ces champs avec priorité
+  `UserPreferences.application` > `User` ; le `ApplicationPreferenceSchema`
+  (shared) porte désormais ces cinq timestamps (Zod strippait silencieusement
+  les clés inconnues), et `validateApplicationPreferences` reconnaît l'octroi
+  same-request (le PATCH qui accorde `dataProcessingConsentAt` ne peut pas
+  être rejeté pour `telemetryEnabled: true` présent dans le même corps).
 - Décision pure testable : `ConversationView.shouldPromptVoiceConsent`
-  (`VoiceConsentPromptGatingTests`).
-- Octroi : `ConversationViewModel.grantVoiceAutoTranslationConsent()` —
-  bascule aussi `voiceConsentMissing = false` (éteint les nudges inline).
-- Échec d'octroi : toast d'erreur, l'envoi part quand même (jamais bloquant).
+  (`VoiceConsentPromptGatingTests`) ; octroi testé dans
+  `UserPreferencesManagerTests`.
+- Jamais bloquant : l'écriture est locale immédiate, l'envoi repart dans
+  tous les cas. Le wizard voix conserve son endpoint dédié
+  `POST /voice-profile/consent` (réparé, voir ci-dessous).
 
 ## Réparations de contrat associées (préexistantes, root cause)
 

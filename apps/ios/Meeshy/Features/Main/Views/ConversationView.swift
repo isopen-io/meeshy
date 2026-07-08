@@ -601,10 +601,8 @@ struct ConversationView: View {
             ) {
                 Button(String(localized: "conversation.voiceConsent.accept",
                               defaultValue: "Activer", bundle: .main)) {
-                    Task {
-                        _ = await viewModel.grantVoiceAutoTranslationConsent()
-                        sendMessageWithAttachments()
-                    }
+                    viewModel.grantVoiceAutoTranslationConsent()
+                    sendMessageWithAttachments()
                 }
                 Button(String(localized: "conversation.voiceConsent.later",
                               defaultValue: "Plus tard", bundle: .main), role: .cancel) {

@@ -159,4 +159,36 @@ final class UserPreferencesManagerTests: XCTestCase {
         manager.updateApplication { $0.reducedMotion = true }
         XCTAssertTrue(manager.application.reducedMotion)
     }
+
+    // MARK: - Voice Consent (espace de préférences)
+
+    func test_voiceConsentGranted_defaultsToFalse() {
+        XCTAssertFalse(manager.voiceConsentGranted)
+        XCTAssertFalse(manager.voiceCloningConsentGranted)
+    }
+
+    func test_grantVoiceAutoTranslationConsent_setsConsentChainAndAudioFeatures() {
+        manager.grantVoiceAutoTranslationConsent()
+
+        XCTAssertTrue(manager.voiceConsentGranted)
+        XCTAssertTrue(manager.voiceCloningConsentGranted)
+        XCTAssertNotNil(manager.application.dataProcessingConsentAt)
+        XCTAssertNotNil(manager.application.voiceDataConsentAt)
+        XCTAssertNotNil(manager.application.voiceProfileConsentAt)
+        XCTAssertNotNil(manager.application.voiceCloningEnabledAt)
+        XCTAssertTrue(manager.audio.transcriptionEnabled)
+        XCTAssertTrue(manager.audio.audioTranslationEnabled)
+        XCTAssertTrue(manager.audio.ttsEnabled)
+        XCTAssertTrue(manager.audio.voiceProfileEnabled)
+    }
+
+    func test_grantVoiceAutoTranslationConsent_isIdempotent_neverRewritesTimestamps() {
+        let first = Date(timeIntervalSince1970: 1_700_000_000)
+        manager.grantVoiceAutoTranslationConsent(now: first)
+        let stamped = manager.application.voiceProfileConsentAt
+
+        manager.grantVoiceAutoTranslationConsent(now: first.addingTimeInterval(3600))
+
+        XCTAssertEqual(manager.application.voiceProfileConsentAt, stamped)
+    }
 }

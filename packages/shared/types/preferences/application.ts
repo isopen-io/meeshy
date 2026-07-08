@@ -35,7 +35,18 @@ export const ApplicationPreferenceSchema = z.object({
   // Expérience
   tutorialsCompleted: z.array(z.string()).default([]),
   betaFeaturesEnabled: z.boolean().default(false),
-  telemetryEnabled: z.boolean().default(true)
+  telemetryEnabled: z.boolean().default(true),
+
+  // Consentements données/voix — miroir des champs User, lus par
+  // ConsentValidationService avec priorité UserPreferences.application > User.
+  // Écrits par les clients via la MÊME API préférences que le reste
+  // (PATCH /me/preferences/application — popup iOS 2026-07-08). Sans ces
+  // clés, Zod (mode strip) les supprimait silencieusement du corps.
+  dataProcessingConsentAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  voiceDataConsentAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  voiceProfileConsentAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  voiceCloningConsentAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  voiceCloningEnabledAt: z.iso.datetime({ offset: true }).nullable().optional()
 });
 
 export type ApplicationPreference = z.infer<typeof ApplicationPreferenceSchema>;
