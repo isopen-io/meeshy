@@ -158,8 +158,6 @@ fun ConversationListScreen(
                         onRefresh = viewModel::refresh,
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        val pinned = state.conversations.filter { it.resolvedPreferences?.isPinned == true }
-                        val others = state.conversations.filterNot { it.resolvedPreferences?.isPinned == true }
                         val row: @Composable (ApiConversation) -> Unit = { conversation ->
                             ConversationRow(
                                 conversation = conversation,
@@ -174,40 +172,29 @@ fun ConversationListScreen(
                             )
                         }
                         // Sections (parity iOS): Épingles first, then Mes conversations.
-                        // Section bodies compose eagerly (few items on a real account);
-                        // revisit for lazy paging if a user has hundreds of threads.
+                        // The pinned/others split is the pure ConversationSections SSOT,
+                        // which also omits an empty section (no phantom "Mes conversations"
+                        // header when every row is pinned). Section bodies compose eagerly
+                        // (few items on a real account); revisit for lazy paging if a user
+                        // has hundreds of threads.
+                        val sections = ConversationSections.of(state.conversations)
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            if (pinned.isNotEmpty()) {
-                                item(key = "section-pinned") {
+                            sections.forEach { section ->
+                                item(key = "section-${section.kind}") {
                                     CollapsibleSection(
-                                        title = stringResource(R.string.conversations_section_pinned),
-                                        count = pinned.size,
-                                        iconContainerColor = MeeshyPalette.Error,
+                                        title = stringResource(section.kind.titleRes()),
+                                        count = section.items.size,
+                                        iconContainerColor = section.kind.containerColor(),
                                         icon = {
                                             Icon(
-                                                Icons.Filled.PushPin,
+                                                section.kind.icon(),
                                                 contentDescription = null,
                                                 tint = MeeshyPalette.White,
                                                 modifier = Modifier.size(16.dp),
                                             )
                                         },
-                                    ) { pinned.forEach { row(it) } }
+                                    ) { section.items.forEach { row(it) } }
                                 }
-                            }
-                            item(key = "section-all") {
-                                CollapsibleSection(
-                                    title = stringResource(R.string.conversations_section_all),
-                                    count = others.size,
-                                    iconContainerColor = MeeshyPalette.Indigo500,
-                                    icon = {
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.Chat,
-                                            contentDescription = null,
-                                            tint = MeeshyPalette.White,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                    },
-                                ) { others.forEach { row(it) } }
                             }
                         }
                     }
@@ -703,6 +690,21 @@ private fun EmptyStateGlyph.icon() = when (this) {
     EmptyStateGlyph.Error -> Icons.Filled.CloudOff
     EmptyStateGlyph.NoResults -> Icons.Filled.SearchOff
     EmptyStateGlyph.NoConversations -> Icons.AutoMirrored.Filled.Chat
+}
+
+private fun ConversationSectionKind.titleRes(): Int = when (this) {
+    ConversationSectionKind.PINNED -> R.string.conversations_section_pinned
+    ConversationSectionKind.ALL -> R.string.conversations_section_all
+}
+
+private fun ConversationSectionKind.icon() = when (this) {
+    ConversationSectionKind.PINNED -> Icons.Filled.PushPin
+    ConversationSectionKind.ALL -> Icons.AutoMirrored.Filled.Chat
+}
+
+private fun ConversationSectionKind.containerColor(): Color = when (this) {
+    ConversationSectionKind.PINNED -> MeeshyPalette.Error
+    ConversationSectionKind.ALL -> MeeshyPalette.Indigo500
 }
 
 private fun EmptyStateCopy.resId(): Int = when (this) {

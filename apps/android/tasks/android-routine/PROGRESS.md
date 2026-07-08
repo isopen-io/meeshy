@@ -662,7 +662,19 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-08): `conversations-draft-discard`** — a contextual "Discard draft" action
+**Just shipped (2026-07-08): `conversations-section-model`** — the conversation-list pinned/others
+section split, previously scattered `filter { isPinned }` / `filterNot` glue inside
+`ConversationListScreen`, is now the pure `:feature:conversations` `ConversationSections.of()` SSOT
+(`ConversationSection(kind: PINNED|ALL, items)` — Pinned first, then All, each preserving the incoming
+draft/filter order). An **empty section is omitted**, fixing a real wart: an all-pinned account no longer
+renders a phantom empty "Mes conversations" header. The screen renders `ConversationSections.of(state.
+conversations)` via the existing `CollapsibleSection` (its collapse state stays its own saved UI state);
+kind→title/icon/color are three tiny exempt mapping helpers. +9 tests. See run log. **Recommended next:**
+`conversations-communities-carousel` / §B "Communities carousel + category filter chips" (larger), the
+**collapsible user categories** follow-on to this slice (needs category-name metadata), or move into
+Profile/Settings §K/§L follow-ups.
+
+**Earlier — `conversations-draft-discard` (2026-07-08)** — a contextual "Discard draft" action
 (long-press menu, offered only on a draft-bearing row) backed by a pure `DraftDiscard.isDiscardable`/
 `afterDiscard` SSOT + optimistic `ConversationListViewModel.discardDraft` (instant state removal,
 `draftStore.clear`, rollback on failure). The row loses its "Brouillon : …" preview and sinks out of the
@@ -1325,6 +1337,42 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-08 — slice `conversations-section-model` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/conversations-section-model`
+- **Parity:** §B "Sectioned list … pinned section". The conversation list already split into a
+  Pinned section + an "All" section, but the split lived as scattered `filter { isPinned }` /
+  `filterNot` glue directly inside the `ConversationListScreen` Composable — untestable, and it
+  rendered a **phantom empty "Mes conversations" header** whenever every conversation was pinned
+  (the `section-all` `item` had no `isNotEmpty` gate, unlike the pinned one).
+- **Added (production):**
+  - `ConversationSections.kt` (`:feature:conversations`, pure SSOT) — `ConversationSectionKind`
+    (`PINNED` | `ALL`), `ConversationSection(kind, items)`, and `ConversationSections.of(
+    conversations) → List<ConversationSection>`: partitions on `resolvedPreferences?.isPinned`,
+    Pinned section first then All, each preserving the incoming (draft-floated / filtered) order,
+    and **omits any empty section** (no phantom All header on an all-pinned account; no phantom
+    Pinned header on a pin-free one).
+  - `ConversationListScreen` — the inline `pinned`/`others` split is gone; the `LazyColumn` now
+    iterates `ConversationSections.of(state.conversations)` and renders each via the existing
+    `CollapsibleSection`. Three tiny private mapping helpers (`ConversationSectionKind.titleRes()`
+    / `.icon()` / `.containerColor()`) keep the header visuals (Épingles → red PushPin, Mes
+    conversations → indigo Chat) exactly as before. No string/resource changes.
+- **Tests:** +9 `ConversationSectionsTest` — empty→no sections; no-pinned→single ALL in order;
+  all-pinned→single PINNED, no phantom ALL (the wart fix); mixed→PINNED then ALL; interleaved
+  input preserves each group's relative order; single pinned; single non-pinned; pin resolved from
+  `userPreferences[0]`; no-preferences row treated as not pinned.
+- **Edge cases covered:** empty / single each side / all-pinned / pin-free / interleaving order;
+  both preference sources (`preferences` optimistic override + `userPreferences`); absent prefs.
+- **Verify:** `:feature:conversations:testDebugUnitTest` (`ConversationSectionsTest`) green, then full
+  `assembleDebug` + `testDebugUnitTest` across all modules → **BUILD SUCCESSFUL** (system Gradle
+  8.14.3; wrapper download 403-blocked in this container — used `/opt/gradle` directly).
+- **Reviewer:** PASS — diff `apps/android` only (only `:feature:conversations`); behaviour through
+  the public `ConversationSections.of` API, no tautologies, near-total branch coverage on both
+  partition arms + both empty-omission branches + order preservation; SDK-purity honoured (the
+  "how the list sections" product decision is a pure atom in `:feature:conversations`; the render is
+  exempt Compose glue); single source of truth (the split no longer duplicated in the Composable);
+  UDF preserved; accent-coherent headers unchanged; no dead code (the reducer + three helpers are
+  all consumed by the screen; the wart-fix is user-visible).
 
 ### 2026-07-08 — slice `conversations-draft-discard` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/conversations-draft-discard`

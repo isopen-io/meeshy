@@ -291,7 +291,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Cache-first instant load done ; pull-to-refresh done (`PullToRefreshBox`,
       spinner gated sur le geste utilisateur — les revalidations SWR de fond
       restent silencieuses) ; cursor-based infinite scroll / branding pending
-- [ ] Sectioned list with collapsible user categories + pinned section + drag-to-category
+- [~] Sectioned list with collapsible user categories + pinned section + drag-to-category —
+      **pinned section done** (slice `conversations-section-model`, 2026-07-08): the pinned/others
+      split, previously scattered `filter`/`filterNot` glue inside `ConversationListScreen`, is now
+      the pure `:feature:conversations` `ConversationSections.of(conversations)` SSOT
+      (Pinned first → All), each `ConversationSection` preserving the incoming (draft/filter) order.
+      An **empty section is omitted**, so an all-pinned account no longer shows a phantom empty
+      "Mes conversations" header. Rendered via the existing `CollapsibleSection` (collapse state is
+      its own saved UI state). +9 tests. **Reste**: collapsible *user categories* (needs category
+      metadata) + drag-to-category.
 - [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
       — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
       (port fidèle de `filterConversations` : soft-delete masqué partout, archivés
