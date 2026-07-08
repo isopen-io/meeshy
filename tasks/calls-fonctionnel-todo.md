@@ -2075,3 +2075,109 @@ environnement de toute façon).
 - **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
   CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
   travers tous les événements call.
+
+## Vague 28 — `negotiate()` guard `makingOffer` speculative item finally verified real (web) + cross-platform verification near-miss on `call:force-leave` (2026-07-08)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, PHASE 1-12 mandate). `git log`
+confirme HEAD (`1b28c39`) déjà à jour avec `origin/main`, 2 commits après `b62f4ba` (Vague 27's aggregate),
+tous deux hors scope calling (Android empty-state, mentions). Trois agents d'exploration dédiés (iOS
+CallManager/WebRTC core, iOS call UI screens, gateway signaling/backend) lancés en parallèle, lecture
+seule, mandatés à croiser tout candidat contre ce fichier + `lessons.md`.
+
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ, TDD] Le `negotiate()` guard `makingOffer` spéculatif (noté "non
+  vérifié comme atteignable en pratique" depuis la Vague 19, jamais retraité en 8 vagues) est réel et a
+  été corrigé.** `WebRTCService.negotiate({iceRestart:true})` (`apps/web/services/webrtc-service.ts:759`)
+  droppait silencieusement un ICE restart si le guard de ré-entrance `makingOffer` était déjà posé par une
+  renégociation SANS RAPPORT en vol (ex. le `onnegotiationneeded` d'un A/V switch). Scénario concret :
+  `oniceconnectionstatechange` passe à `'failed'` pendant qu'une offre d'A/V switch attend son
+  `createOffer()`/`setLocalDescription()` (potentiellement lent) → `restartIce()` →
+  `negotiate({iceRestart:true})` retourne immédiatement sans jamais relancer la collecte ICE — aucun
+  filet, aucun retry, la connexion reste `failed` pour toujours (l'A/V switch qui complète ensuite ne
+  régénère pas de nouvel ufrag/pwd puisqu'il n'est pas lui-même un ICE restart). Cette classe de bug
+  ("un appel établi ne doit jamais mourir d'une condition transitoire/racy") est exactement celle que la
+  routine a corrigée à répétition côté gateway (`TARGET_NOT_FOUND`, `RATE_LIMIT_EXCEEDED`) — jamais
+  vérifiée côté web jusqu'ici faute de scénario de repro écrit. **Fix** : nouveau flag
+  `pendingIceRestart` — un ICE restart dropé par le guard est mémorisé au lieu d'être perdu ; le bloc
+  `finally` de `negotiate()` le rejoue automatiquement (`void this.negotiate({iceRestart:true})`,
+  fire-and-forget avec `.catch` miroir du pattern `restartIce().catch()` déjà utilisé ailleurs dans le
+  fichier) une fois l'offre en vol réglée — sans boucle infinie (le flag n'est consommé qu'une fois, la
+  relecture elle-même ne peut pas se re-marquer sauf nouvelle collision réelle). Reset ajouté aux 2 points
+  de remise à zéro existants de l'état perfect-negotiation (`createPeerConnection` reuse-sans-close et
+  `close()`), miroir exact des 4 autres flags (`makingOffer`/`isSettingRemoteAnswerPending`/`ignoreOffer`/
+  `autoNegotiate`). **Test TDD** (`webrtc-service.coverage.test.ts`, describe `negotiate`) : offre A/V
+  switch mise en pause (`createOffer` hangé), ICE restart concurrent → dropé (0 second `createOffer`
+  avant résolution) → résolution de la 1ʳᵉ offre → le restart est rejoué automatiquement
+  (`createOffer` appelé 2×, 2e appel avec `{iceRestart:true}`). RED confirmé (0 échec de la suite avant
+  le fix ne suffisait pas à prouver le bug — nouveau test écrit AVANT le fix source, `toHaveBeenCalledTimes(2)`
+  échouait avec `1` reçu), GREEN restauré. Suite `webrtc-service.coverage.test.ts` +
+  `webrtc-service.test.ts` : 170/170. Suite web filtrée `.*(call|webrtc|quality).*\.test\.` : 23
+  suites/442 tests verts (+1 vs Vague 27). `tsc --noEmit` web : 1201 erreurs identiques avant/après sur
+  `webrtc-service.ts` (0 nouvelle erreur sur ce fichier, confirmé par grep ciblé).
+- **[FAUX POSITIF confirmé, gateway] `call:toggle-video` "skips the audio-only privacy gate"
+  n'est PAS un bug — c'est la feature FIX 7 (Vague "2026-07-02 (suite)") qui fonctionne comme prévu.**
+  Un agent d'exploration gateway a rapporté en HIGH que `updateParticipantMedia`/le handler
+  `call:toggle-video` n'appliquent aucun gate "call.metadata.type === 'video'" avant d'écrire
+  `isVideoEnabled: true`, contrairement au gate join-time (`joinCallAttempt`, audit 2026-07-07). Vérifié
+  FAUX par lecture complète + confrontation à ce fichier : le join-time gate protège contre un
+  `videoEnabled: true` **implicite/non consenti** envoyé automatiquement par un client au moment de
+  répondre à un appel audio (état client périmé, la victime n'a fait qu'appuyer sur "répondre" à un appel
+  qu'elle croit audio). `call:toggle-video {enabled:true}` mid-call est au contraire une action
+  **utilisateur explicite** (bouton caméra local, `CallManager.toggleVideo` iOS / `CallControls` web) —
+  et la Vague "FIX 7" (2026-07-02) documente EXPLICITEMENT ce chemin comme une feature livrée et testée
+  ("l'user a activé sa caméra pendant l'appel audio → renégociation entrante OK... l'affichage du flux
+  distant fonctionne partout"). Appliquer le gate suggéré aurait cassé cette feature shippée. **Règle
+  réutilisable** : un event `X:Y {enabled:true}` déclenché par un bouton UI explicite et un champ du même
+  nom écrit implicitement à une transition d'état (join/answer) NE partagent PAS le même modèle de
+  consentement, même s'ils appellent la même méthode service — vérifier QUI déclenche l'event
+  (action utilisateur explicite vs valeur par défaut héritée d'un client) avant de proposer un gate
+  symétrique. Non corrigé (à raison) ; noté ici pour ne pas re-flaguer.
+- **[NEAR-MISS méthodologique, gateway+iOS, aucun changement net] `SERVER_EVENTS.CALL_FORCE_LEAVE`
+  ('call:force-leave' server→client) a failli être supprimé comme "mort" — vérification cross-repo a
+  révélé un récepteur iOS réel et testé.** Un agent gateway a rapporté ce type/const comme
+  "aspirationnel, jamais émis" (grep gateway + web : zéro émetteur, commentaire source disant
+  "no emitter yet"). Suppression appliquée puis **annulée** après avoir grep `apps/ios` (pas fait par
+  l'agent, scope gateway/web uniquement) : `MessageSocketManager.swift:3052` écoute bien
+  `socket.on("call:force-leave")` server→client, publie via `callForcedLeave` (Combine), et
+  `CallManager.swift:3689` s'y abonne — le tout couvert par une suite de tests dédiée
+  (`CallManagerTests.swift:3230-3276`, vérifie teardown `.remote` + report CallKit). Investigation
+  complémentaire (safe, lecture seule) : `CallCleanupService.forceEndCall` (le seul chemin qui aurait dû
+  émettre ce SERVER_EVENTS-là) broadcast en réalité `call:ended` à la même audience large
+  (call+conversation+user rooms, cf. Vague 15/26) — donc le récepteur iOS `callForcedLeave`, bien que
+  réel et testé, est aujourd'hui **inatteignable en pratique** (le serveur ne l'émet jamais, `call:ended`
+  couvre déjà le même besoin UX). Ni clairement mort (receiver réel, testé, documenté) ni clairement
+  manquant (`call:ended` fait déjà le travail) — **aucun changement appliqué**, ambiguïté non tranchée
+  volontairement plutôt que de deviner. **Leçon méthodologique pour la prochaine session** : avant de
+  supprimer une déclaration TS "SERVER_EVENTS.X, jamais émis" repérée par un audit gateway/web-only,
+  grep AUSSI `apps/ios` et `packages/MeeshySDK` pour un récepteur `socket.on("...")`/Combine correspondant
+  — "aucun émetteur" côté serveur ne prouve pas que la déclaration est morte si un client a déjà construit
+  et testé le côté réception en attendant l'implémentation serveur. Décision produit à trancher dans une
+  session future : émettre réellement `call:force-leave` en plus de `call:ended` (défense en profondeur,
+  risque de double-traitement à gérer) OU supprimer le récepteur iOS mort (nécessite Xcode pour vérifier
+  qu'aucun autre test/appelant n'en dépend).
+- **[iOS, lecture seule, aucun changement — nécessite Xcode]** Deux agents dédiés (CallManager/WebRTC core,
+  UI/accessibilité) ont audité l'intégralité de la pile iOS. Aucun changement appliqué (toujours pas de
+  toolchain Swift/Xcode dans cet environnement) ; findings consignés pour une session avec accès macOS :
+  - `CallManager.switchCamera()`/`selectCamera(id:)` posent `isUsingFrontCamera` de façon optimiste AVANT
+    que `WebRTCService.switchCamera()` (fire-and-forget) confirme — un échec (format caméra indisponible,
+    thermal throttling) laisse le flag à la mauvaise valeur pour le reste de l'appel (preview mirroré à
+    tort, cf. contrat §7.7 "bug k"). Même pattern sur `toggleSpeaker()`/`applyRouteOverride` (sévérité
+    moindre, `handleAudioRouteChange` peut se re-corriger sur un futur route-change).
+  - `CallManagerTests.swift`/`CallManagerAudioSessionTests.swift` (~800 assertions cumulées) sont des
+    tests "source-reflection" (regex/substring sur le texte source du fichier, zéro instanciation réelle
+    de `CallManager`/`CXProvider`) — déjà documenté par une note d'audit du 2026-07-06, toujours vrai,
+    toujours hors de portée sans compilateur (nécessite d'abstraire `CXProvider`/`CXCallController`
+    derrière un protocole injectable).
+  - UI/accessibilité (8 findings, triés par sévérité) : `IncomingCallView`/`CallWaitingBannerView` sans
+    fallback landscape/Dynamic-Type (risque de clipper les boutons Accepter/Refuser — safety-critical) ;
+    `CallsTab`'s `CallRowDialButton` (40×40, sous les 44pt HIG) et filter chips (~28-30pt) sous le tap
+    target minimum ; `BubbleCallNoticeView` hardcode `indigo500` au lieu de recevoir `accentColor` en
+    paramètre (violation de la règle documentée SDK/app) ; `CallDetailSheet`/`CallSummaryDetailSheet`
+    sans plafond de largeur iPad/Mac (contrairement à `FloatingCallPillView`'s 560pt déjà établi) ;
+    `CallsTab`'s `.accessibilityElement(children: .combine)` rend le menu "Rappeler" inatteignable en
+    VoiceOver. Aucun n'est un crash/perte de données — reportés pour une session avec Xcode plutôt que
+    risqués en aveugle (cf. lessons.md : édits Swift mécaniques uniquement, vérifiables par lecture, dans
+    cet environnement).
+- **Reste ouvert (inchangé sauf `negotiate()` retiré, ajout `call:force-leave`)** : items J (validation
+  device réel), C6 (court-circuit dédup cosmétique), CALL-DIAG retagging, threading complet du `ttl` TURN
+  à travers tous les événements call, `call:force-leave` server-emit ambiguïté (voir ci-dessus), 5 findings
+  iOS structurels listés ci-dessus (nécessitent Xcode).
