@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
 
-export type AvatarPresence = 'online' | 'away' | 'offline';
+export type AvatarPresence = 'online' | 'recent' | 'away' | 'offline';
 
 export interface AvatarProps {
   src?: string | null;
@@ -18,8 +18,9 @@ export interface AvatarProps {
 }
 
 const presenceDotColors: Record<Exclude<AvatarPresence, 'offline'>, string> = {
-  online: 'bg-[var(--gp-jade-green)]',
-  away: 'bg-[var(--gp-warning)]',
+  online: 'bg-[var(--gp-warning)] animate-pulse', // actif <= 60s : orange + pulse
+  recent: 'bg-[var(--gp-warning)]', // actif <= 5min : orange
+  away: 'bg-gray-400', // absent 5-30min : gris
 };
 
 const sizeMap = {

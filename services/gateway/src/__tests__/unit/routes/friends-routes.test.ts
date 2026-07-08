@@ -173,13 +173,14 @@ type BuildOpts = {
   notifService?: ReturnType<typeof makeNotifService> | null;
   socialEvents?: ReturnType<typeof makeSocialEvents> | null;
   authUserId?: string;
+  socketIOHandler?: { getManager: jest.Mock } | null;
 };
 
 async function buildApp(
   prismaOptsOrFullOpts: PrismaOpts | BuildOpts = {},
 ): Promise<FastifyInstance> {
   // Accept either legacy PrismaOpts or new BuildOpts object
-  const isFullOpts = 'prismaOpts' in prismaOptsOrFullOpts || 'notifService' in prismaOptsOrFullOpts || 'socialEvents' in prismaOptsOrFullOpts || 'authUserId' in prismaOptsOrFullOpts;
+  const isFullOpts = 'prismaOpts' in prismaOptsOrFullOpts || 'notifService' in prismaOptsOrFullOpts || 'socialEvents' in prismaOptsOrFullOpts || 'authUserId' in prismaOptsOrFullOpts || 'socketIOHandler' in prismaOptsOrFullOpts;
   const fullOpts: BuildOpts = isFullOpts ? (prismaOptsOrFullOpts as BuildOpts) : { prismaOpts: prismaOptsOrFullOpts as PrismaOpts };
 
   const prismaOpts = fullOpts.prismaOpts ?? {};
@@ -192,6 +193,7 @@ async function buildApp(
   app.decorate('prisma', makePrisma(prismaOpts) as unknown);
   app.decorate('notificationService', notifService);
   app.decorate('socialEvents', socialEventsDecor);
+  if (fullOpts.socketIOHandler) app.decorate('socketIOHandler', fullOpts.socketIOHandler);
   app.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
     const token = req.headers['authorization'];
     if (!token) {
@@ -440,6 +442,24 @@ describe('PATCH /friend-requests/:id', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
+    await appWithFR.close();
+  });
+
+  it('auto-joins both users\' connected sockets to the new DM conversation room on accept', async () => {
+    const joinUserToConversationRoom = jest.fn().mockResolvedValue(undefined);
+    const appWithFR = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      socketIOHandler: { getManager: jest.fn().mockReturnValue({ joinUserToConversationRoom }) },
+    });
+    const res = await appWithFR.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(joinUserToConversationRoom).toHaveBeenCalledWith(DB_FRIEND_REQUEST.senderId, DB_CONVERSATION.id);
+    expect(joinUserToConversationRoom).toHaveBeenCalledWith(DB_FRIEND_REQUEST.receiverId, DB_CONVERSATION.id);
     await appWithFR.close();
   });
 

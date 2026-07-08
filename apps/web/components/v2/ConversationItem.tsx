@@ -275,7 +275,7 @@ export const ConversationItem = memo(function ConversationItem({
             <div
               className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300"
               style={{
-                background: presence === 'away' ? 'var(--gp-warning)' : 'var(--gp-jade-green)',
+                background: presence === 'away' ? '#9ca3af' : 'var(--gp-warning)',
                 borderColor: 'var(--gp-surface)',
               }}
             />

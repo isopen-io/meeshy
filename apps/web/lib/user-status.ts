@@ -1,57 +1,63 @@
 /**
- * Calcul du statut de presence — combine isOnline (socket event) + lastActiveAt (temps).
+ * Calcul du statut de presence — decroissance temporelle sur lastActiveAt.
  *
- * Priorite:
- * 1. Si isOnline === false (deconnexion explicite via socket) → offline immediat
- * 2. Si isOnline === true ET lastActiveAt < 5min → online
- * 3. Sinon, calcul temporel classique sur lastActiveAt
+ * Regle produit (source unique, identique web / iOS / Android) :
+ *   delta = now - lastActiveAt
+ *   delta <= 60s   -> 'online'  (orange, pulse)  — actif a l'instant
+ *   delta <= 5min  -> 'recent'  (orange)         — actif recemment
+ *   delta <= 30min -> 'away'    (gris)           — absent
+ *   delta > 30min  -> 'offline' (aucun indicateur)
+ *
+ * Le gateway gele lastActiveAt a la deconnexion (jamais touche au disconnect),
+ * donc la decroissance orange -> gris -> rien demarre au dernier instant
+ * d'activite reelle. isOnline ne sert que de fallback quand lastActiveAt manque.
  */
 
 import type { SocketIOUser as User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 
-export type UserStatus = 'online' | 'away' | 'offline';
+export type UserStatus = 'online' | 'recent' | 'away' | 'offline';
 
 export type PresenceSource = {
   isOnline?: boolean;
   lastActiveAt?: Date | string | number | null;
 };
 
-function getMinutesAgo(lastActiveAt: Date | string | number): number {
-  return (Date.now() - new Date(lastActiveAt).getTime()) / (1000 * 60);
+export const PRESENCE_ONLINE_WINDOW_MS = 60 * 1000; // 1 min
+export const PRESENCE_RECENT_WINDOW_MS = 5 * 60 * 1000; // 5 min
+export const PRESENCE_AWAY_WINDOW_MS = 30 * 60 * 1000; // 30 min
+
+function getElapsedMs(lastActiveAt: Date | string | number): number {
+  return Date.now() - new Date(lastActiveAt).getTime();
 }
 
-/**
- * < 5 min   → VERT  (online)
- * 5-30 min  → ORANGE (away)
- * > 30 min  → GRIS  (offline)
- *
- * isOnline = false → GRIS immediat (deconnexion socket)
- * isOnline = true + lastActiveAt recent → VERT
- */
 export function getUserStatus(user: User | Participant | PresenceSource | null | undefined): UserStatus {
   if (!user) return 'offline';
 
   const { isOnline, lastActiveAt } = user as PresenceSource;
 
-  if (isOnline === false) {
-    if (!lastActiveAt) return 'offline';
-    const minutesAgo = getMinutesAgo(lastActiveAt);
-    if (minutesAgo < 30) return 'away';
-    return 'offline';
+  if (lastActiveAt === null || lastActiveAt === undefined) {
+    return isOnline === true ? 'online' : 'offline';
   }
 
-  if (isOnline === true) {
-    if (!lastActiveAt) return 'online';
-    const minutesAgo = getMinutesAgo(lastActiveAt);
-    if (minutesAgo < 5) return 'online';
-    if (minutesAgo < 30) return 'away';
-    return 'away';
-  }
-
-  if (!lastActiveAt) return 'offline';
-  const minutesAgo = getMinutesAgo(lastActiveAt);
-  if (minutesAgo < 5) return 'online';
-  if (minutesAgo < 30) return 'away';
+  const elapsed = getElapsedMs(lastActiveAt);
+  if (elapsed <= PRESENCE_ONLINE_WINDOW_MS) return 'online';
+  if (elapsed <= PRESENCE_RECENT_WINDOW_MS) return 'recent';
+  if (elapsed <= PRESENCE_AWAY_WINDOW_MS) return 'away';
   return 'offline';
+}
+
+/** Un indicateur (dot/badge) est rendu pour tout sauf 'offline'. */
+export function isPresenceVisible(status: UserStatus): boolean {
+  return status !== 'offline';
+}
+
+/** Etats "actifs" affiches en orange : online + recent. away = gris. */
+export function isPresenceActive(status: UserStatus): boolean {
+  return status === 'online' || status === 'recent';
+}
+
+/** Seul 'online' (<= 60s) pulse ("en ligne maintenant"). */
+export function isPresencePulsing(status: UserStatus): boolean {
+  return status === 'online';
 }

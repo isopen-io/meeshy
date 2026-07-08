@@ -1895,20 +1895,18 @@ describe('MeeshySocketIOManager', () => {
 
   describe('_drainPendingMessages', () => {
     it('returns early when no deliveryQueue is set', async () => {
-      const socket = makeSocket('sock-drain1');
-      await (manager as any)._drainPendingMessages(socket, 'user-1');
-      expect(socket.emit).not.toHaveBeenCalled();
+      await (manager as any)._drainPendingMessages('user-1', false);
+      expect(ioState.to).not.toHaveBeenCalled();
     });
 
     it('returns early when no pending messages', async () => {
       const fakeQueue = { drain: jest.fn().mockResolvedValue([]) };
       manager.setDeliveryQueue(fakeQueue as any);
-      const socket = makeSocket('sock-drain2');
-      await (manager as any)._drainPendingMessages(socket, 'user-1');
-      expect(socket.emit).not.toHaveBeenCalled();
+      await (manager as any)._drainPendingMessages('user-1', false);
+      expect(ioState.to).not.toHaveBeenCalled();
     });
 
-    it('emits MESSAGE_NEW for each pending message and PENDING_MESSAGES_DELIVERED', async () => {
+    it('emits MESSAGE_NEW to the user room (all devices) for each pending message and PENDING_MESSAGES_DELIVERED', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
           { payload: { id: 'msg-p1', conversationId: 'conv-1' } },
@@ -1916,11 +1914,11 @@ describe('MeeshySocketIOManager', () => {
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
-      const socket = makeSocket('sock-drain3');
-      await (manager as any)._drainPendingMessages(socket, 'user-drain');
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p1', conversationId: 'conv-1' });
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: 'conv-1' });
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
+      await (manager as any)._drainPendingMessages('user-drain', false);
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-drain'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p1', conversationId: 'conv-1' });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: 'conv-1' });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
     });
 
     it('routes entries by eventType: edited → MESSAGE_EDITED, deleted → MESSAGE_DELETED, default → MESSAGE_NEW', async () => {
@@ -1932,11 +1930,37 @@ describe('MeeshySocketIOManager', () => {
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
-      const socket = makeSocket('sock-drain-types');
-      await (manager as any)._drainPendingMessages(socket, 'user-drain-types');
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-new' });
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_EDITED, { id: 'msg-edit' });
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_DELETED, { messageId: 'msg-del' });
+      await (manager as any)._drainPendingMessages('user-drain-types', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-new' });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_EDITED, { id: 'msg-edit' });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_DELETED, { messageId: 'msg-del' });
+    });
+
+    it('drains an anonymous identity (participant-id key) without emitting delivery receipts', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-anon' }, conversationId: 'conv-1', messageId: 'msg-anon' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest.spyOn(manager as any, '_emitDeliveryForDrainedMessages');
+      await (manager as any)._drainPendingMessages('anon-part-1', true);
+      expect(fakeQueue.drain).toHaveBeenCalledWith('anon-part-1');
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('anon-part-1'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-anon' });
+      expect(receiptsSpy).not.toHaveBeenCalled();
+    });
+
+    it('still emits delivery receipts for a registered identity', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-reg' }, conversationId: 'conv-1', messageId: 'msg-reg' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest.spyOn(manager as any, '_emitDeliveryForDrainedMessages').mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-reg', false);
+      expect(receiptsSpy).toHaveBeenCalledWith('user-reg', expect.any(Array));
     });
   });
 
@@ -1999,6 +2023,19 @@ describe('MeeshySocketIOManager', () => {
       expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({ id: 'anon-id' }),
       }));
+    });
+
+    it('drains the pending queue for anonymous users too (participant-id key), without unread snapshot', async () => {
+      const socket = makeSocket('sock-anon-drain');
+      prisma.participant.findMany.mockResolvedValueOnce([{ conversationId: 'conv-anon' }]);
+      prisma.participant.findMany.mockResolvedValueOnce([]);
+      const drainSpy = jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      const unreadSpy = jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'anon-drain-id', true);
+
+      expect(drainSpy).toHaveBeenCalledWith('anon-drain-id', true);
+      expect(unreadSpy).not.toHaveBeenCalled();
     });
 
     it('hides isOnline/lastActiveAt for a contact blocked either way with the viewer (privacy parity with GET /users/presence)', async () => {
@@ -3426,9 +3463,8 @@ describe('MeeshySocketIOManager', () => {
       };
       manager.setDeliveryQueue(fakeQueue as any);
 
-      const socket = makeSocket('sock-drain-err');
       await expect(
-        (manager as any)._drainPendingMessages(socket, 'user-drain-err')
+        (manager as any)._drainPendingMessages('user-drain-err', false)
       ).resolves.not.toThrow();
     });
   });
@@ -3967,8 +4003,7 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('_drainPendingMessages - pending messages emitted', () => {
-    it('emits each pending message payload and delivery confirmation', async () => {
-      const socket = makeSocket('sock-drain-pending');
+    it('emits each pending message payload and delivery confirmation to the user room', async () => {
       const mockQueue = {
         drain: jest.fn().mockResolvedValue([
           { payload: { id: 'msg-p1', conversationId: '507f1f77bcf86cd799439200' } },
@@ -3977,19 +4012,19 @@ describe('MeeshySocketIOManager', () => {
       };
       (manager as any).deliveryQueue = mockQueue;
 
-      await (manager as any)._drainPendingMessages(socket, 'user-drain-pending');
+      await (manager as any)._drainPendingMessages('user-drain-pending', false);
 
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({ id: 'msg-p1' }));
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-drain-pending'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({ id: 'msg-p1' }));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
     });
 
     it('catches drain() errors without throwing (line 365)', async () => {
-      const socket = makeSocket('sock-drain-err-3');
       const mockQueue = { drain: jest.fn().mockRejectedValue(new Error('Redis down')) };
       (manager as any).deliveryQueue = mockQueue;
 
       await expect(
-        (manager as any)._drainPendingMessages(socket, 'user-drain-err-3')
+        (manager as any)._drainPendingMessages('user-drain-err-3', false)
       ).resolves.not.toThrow();
     });
   });

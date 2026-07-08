@@ -57,7 +57,9 @@ describe('ParticipantPresenceIndicator', () => {
       useUserStore.getState().updateUserStatus('user-1', { isOnline: false, lastActiveAt: thirtyFiveMinutesAgo });
     });
 
-    expect(screen.getByTitle('Hors ligne')).toBeInTheDocument();
+    // Au-dela de 30min : plus aucun indicateur de presence.
+    expect(screen.queryByTitle('En ligne')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Absent')).not.toBeInTheDocument();
   });
 
   it('falls back to the provided user when the store does not know the user yet', () => {
@@ -71,10 +73,11 @@ describe('ParticipantPresenceIndicator', () => {
     expect(screen.getByTitle('En ligne')).toBeInTheDocument();
   });
 
-  it('renders offline when neither the store nor the fallback resolve a user', () => {
-    render(<ParticipantPresenceIndicator userId="unknown-user" />);
+  it('renders nothing (offline) when neither the store nor the fallback resolve a user', () => {
+    const { container } = render(<ParticipantPresenceIndicator userId="unknown-user" />);
 
-    expect(screen.getByTitle('Hors ligne')).toBeInTheDocument();
+    // offline => aucun indicateur affiche.
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('recomputes relative status decay on the store tick (online → away without any user mutation)', () => {
@@ -95,6 +98,6 @@ describe('ParticipantPresenceIndicator', () => {
       useUserStore.getState().updateUserStatus('user-1', { lastActiveAt: sixMinutesAgo });
     });
 
-    expect(screen.getByTitle('Inactif')).toBeInTheDocument();
+    expect(screen.getByTitle('Absent')).toBeInTheDocument();
   });
 });

@@ -104,12 +104,14 @@ async function buildApp(opts: {
   prisma?: ReturnType<typeof makePrisma>;
   notificationService?: ReturnType<typeof makeNotificationService> | null;
   emailService?: ReturnType<typeof makeEmailService> | null;
+  socketIOHandler?: { getManager: jest.Mock<any> } | null;
 } = {}): Promise<{ app: FastifyInstance; prisma: ReturnType<typeof makePrisma>; notificationService: any; emailService: any }> {
   const {
     auth = 'authenticated',
     prisma = makePrisma(),
     notificationService = null,
     emailService = null,
+    socketIOHandler = null,
   } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -121,6 +123,7 @@ async function buildApp(opts: {
   });
   if (notificationService) app.decorate('notificationService', notificationService);
   if (emailService) app.decorate('emailService', emailService);
+  if (socketIOHandler) app.decorate('socketIOHandler', socketIOHandler);
 
   await sendFriendRequest(app);
   await respondToFriendRequest(app);
@@ -205,6 +208,26 @@ describe('PATCH /users/friend-requests/:id — accept creates new conversation',
     });
     expect(res.statusCode).toBe(200);
     expect(prisma.conversation.create).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('auto-joins both users\' connected sockets to the new DM conversation room', async () => {
+    const joinUserToConversationRoom = jest.fn<any>().mockResolvedValue(undefined);
+    const prisma = makePrisma();
+    prisma.friendRequest.findFirst = jest.fn<any>().mockResolvedValue({
+      id: REQUEST_ID, senderId: OTHER_USER_ID, receiverId: CURRENT_USER_ID, status: 'pending',
+    });
+    prisma.conversation.findFirst = jest.fn<any>().mockResolvedValue(null);
+    const { app } = await buildApp({
+      prisma,
+      socketIOHandler: { getManager: jest.fn<any>().mockReturnValue({ joinUserToConversationRoom }) },
+    });
+    const res = await app.inject({
+      method: 'PATCH', url: `/users/friend-requests/${REQUEST_ID}`, payload: { action: 'accept' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(joinUserToConversationRoom).toHaveBeenCalledWith(OTHER_USER_ID, 'conv-new');
+    expect(joinUserToConversationRoom).toHaveBeenCalledWith(CURRENT_USER_ID, 'conv-new');
     await app.close();
   });
 });

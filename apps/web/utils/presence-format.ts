@@ -38,13 +38,13 @@ export function formatPresenceLabel(o: FormatPresenceLabelOptions): string {
 }
 
 const PRESENCE_COLORS = {
-  fresh: 'text-green-600 dark:text-green-400',
-  recent: 'text-orange-500 dark:text-orange-400',
-  stale: 'text-gray-500 dark:text-gray-400',
+  active: 'text-orange-500 dark:text-orange-400', // actif <= 5 min : orange
+  away: 'text-gray-500 dark:text-gray-400', // absent > 5 min : gris
 } as const;
 
 /**
- * Couleur du libellé selon l'ancienneté : vert < 5 min, orange < 30 min, gris sinon.
+ * Couleur du libellé selon l'ancienneté (regle Prisme presence) :
+ * orange <= 5 min (actif), gris au-dela. Aucune couleur "en ligne" verte.
  */
 export function presenceColorClass(
   lastActiveAt: Date | string | number,
@@ -52,7 +52,6 @@ export function presenceColorClass(
   now?: number,
 ): string {
   const minutesAgo = ((now ?? Date.now()) - new Date(lastActiveAt).getTime()) / 60_000;
-  if (minutesAgo < 5) return PRESENCE_COLORS.fresh;
-  if (minutesAgo < 30) return PRESENCE_COLORS.recent;
-  return PRESENCE_COLORS.stale;
+  if (minutesAgo <= 5) return PRESENCE_COLORS.active;
+  return PRESENCE_COLORS.away;
 }

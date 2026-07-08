@@ -458,6 +458,36 @@ describe('MessageHandler — handleMessageEdit', () => {
       payload: expect.objectContaining({ id: VALID_MSG_ID, content: 'Edited content' }),
     }));
   });
+
+  it('enqueues the edit for an offline anonymous participant keyed by participant id', async () => {
+    const enqueue = jest.fn().mockResolvedValue(undefined);
+    const anonPartId = 'anonpart-offline-edit-001122';
+    deps = makeDeps({ deliveryQueue: { enqueue } as any });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID },
+      { id: anonPartId, userId: null },
+    ]);
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith(anonPartId, expect.objectContaining({
+      messageId: VALID_MSG_ID,
+      conversationId: VALID_CONV_ID,
+      eventType: 'edited',
+    }));
+  });
 });
 
 // ── handleMessageDelete ────────────────────────────────────────────────────

@@ -614,6 +614,16 @@ export function registerSharingRoutes(
       });
       logger.info('Membre créé avec succès');
 
+      // Auto-join the joining user's currently-connected sockets to the
+      // conversation room so they receive message:new events immediately
+      // without a reconnect (mirrors POST /conversations/:id/participants).
+      const joinSocketManager = fastify.socketIOHandler?.getManager();
+      if (joinSocketManager) {
+        joinSocketManager.joinUserToConversationRoom(userToken.userId, shareLink.conversationId).catch(
+          (err: unknown) => logger.error('Failed to auto-join link joiner to conversation room', err as Error)
+        );
+      }
+
       // Envoyer des notifications
       const notificationService = fastify.notificationService;
       if (notificationService) {
@@ -830,6 +840,16 @@ export function registerSharingRoutes(
           }
         }
       });
+
+      // Auto-join the invited user's currently-connected sockets to the
+      // conversation room so they receive message:new events immediately
+      // without a reconnect (mirrors POST /conversations/:id/participants).
+      const inviteSocketManager = fastify.socketIOHandler?.getManager();
+      if (inviteSocketManager) {
+        inviteSocketManager.joinUserToConversationRoom(userId, conversationId).catch(
+          (err: unknown) => logger.error('Failed to auto-join invited user to conversation room', err as Error)
+        );
+      }
 
       // Envoyer une notification à l'utilisateur invité
       const notificationService = fastify.notificationService;

@@ -2094,6 +2094,57 @@ describe('MessageHandler', () => {
 
       await expect(handler.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
     });
+
+    it('enqueues for an offline anonymous participant keyed by participant id', async () => {
+      const anonPartId = 'anonpart0011223344556677';
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const d = makeDeps({ deliveryQueue: { enqueue } as any });
+      d.socketToUser.set('socket-1', USER_ID);
+      d.connectedUsers.set(USER_ID, makeSocketUser());
+      const h = new MessageHandler(d);
+
+      (d.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: anonPartId, userId: null, joinedAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+      (d.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await h.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket);
+
+      expect(enqueue).toHaveBeenCalledTimes(1);
+      expect(enqueue).toHaveBeenCalledWith(anonPartId, expect.objectContaining({
+        messageId: 'msg-dq',
+        conversationId: VALID_CONV_ID,
+        payload: expect.objectContaining({ id: 'msg-dq' }),
+        enqueuedAt: expect.any(String),
+      }));
+    });
+
+    it('does not enqueue for a connected anonymous participant (connectedUsers keyed by participant id)', async () => {
+      const anonPartId = 'anonpart8899aabbccddeeff';
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const d = makeDeps({ deliveryQueue: { enqueue } as any });
+      d.socketToUser.set('socket-1', USER_ID);
+      d.connectedUsers.set(USER_ID, makeSocketUser());
+      d.connectedUsers.set(anonPartId, makeSocketUser({
+        id: anonPartId, userId: undefined, participantId: anonPartId, isAnonymous: true,
+      }));
+      const h = new MessageHandler(d);
+
+      (d.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: anonPartId, userId: null, joinedAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+      (d.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await h.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket);
+
+      expect(enqueue).not.toHaveBeenCalled();
+    });
   });
 
   // ── Branch-gap-filling: _notifyAgent replyToId null (?? undefined) ─────────
