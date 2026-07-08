@@ -67,13 +67,12 @@ import {
   // Communication
   PhoneMissed,
 
-  // Social Media
-  Youtube,
-  Twitter,
-  Linkedin,
-  Instagram,
-
 } from 'lucide-react';
+
+// lucide-react 1.x dropped brand/social icons entirely — Youtube/Twitter/
+// Linkedin/Instagram are re-exported from the shared inline-SVG fallback
+// instead of the (now nonexistent) lucide-react named exports.
+import { YoutubeIcon as Youtube, XIcon as Twitter, LinkedinIcon as Linkedin, InstagramIcon as Instagram } from '@/components/icons/brand-icons';
 
 // Re-export pour utilisation dans l'application
 export {

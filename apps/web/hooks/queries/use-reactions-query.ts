@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tansta
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { isValidObjectId } from '@/utils/object-id';
 import type {
   ReactionAggregation,
   ReactionSync,
@@ -132,6 +133,14 @@ export function useReactionsQuery({
   const queryClient = useQueryClient();
   const MAX_REACTIONS_PER_USER = 3;
 
+  // An optimistic (not-yet-persisted) message carries a client id (`cid_<uuid>`,
+  // see optimistic-message.ts) until the server ACK/broadcast replaces it with a
+  // Mongo ObjectId. The gateway rejects any non-ObjectId messageId ("Prisma
+  // ObjectID error"), so the query/mutations below must stay disabled until
+  // messageId is a real, persisted ObjectId — reachable in practice via the
+  // always-interactive quick-reaction button on a still-"sending" bubble.
+  const isPersisted = isValidObjectId(messageId);
+
   // Convertir reactionSummary + currentUserReactions en données initiales pour React Query
   // Permet un affichage instantané sans attendre Socket.IO
   const initialData = useMemo((): ReactionState | undefined => {
@@ -171,7 +180,7 @@ export function useReactionsQuery({
   } = useQuery({
     queryKey: reactionKeys.message(messageId),
     queryFn: () => fetchReactions(messageId),
-    enabled: enabled && !!messageId,
+    enabled: enabled && !!messageId && isPersisted,
     staleTime: Infinity, // Socket.IO gère les mises à jour
     retry: 1,
     initialData, // Utiliser reactionSummary pour affichage instantané
@@ -325,7 +334,7 @@ export function useReactionsQuery({
 
   // Actions
   const addReaction = useCallback(async (emoji: string): Promise<boolean> => {
-    if (!enabled || !messageId) return false;
+    if (!enabled || !messageId || !isPersisted) return false;
 
     // Vérifier si déjà réagi
     if (userReactions.includes(emoji)) return true;
@@ -342,10 +351,10 @@ export function useReactionsQuery({
     } catch {
       return false;
     }
-  }, [enabled, messageId, userReactions, addMutation, t]);
+  }, [enabled, messageId, isPersisted, userReactions, addMutation, t]);
 
   const removeReaction = useCallback(async (emoji: string): Promise<boolean> => {
-    if (!enabled || !messageId) return false;
+    if (!enabled || !messageId || !isPersisted) return false;
 
     try {
       await removeMutation.mutateAsync(emoji);
@@ -353,7 +362,7 @@ export function useReactionsQuery({
     } catch {
       return false;
     }
-  }, [enabled, messageId, removeMutation]);
+  }, [enabled, messageId, isPersisted, removeMutation]);
 
   const toggleReaction = useCallback(async (emoji: string): Promise<boolean> => {
     if (userReactions.includes(emoji)) {
