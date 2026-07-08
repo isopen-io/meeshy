@@ -311,6 +311,7 @@ fun ChatScreen(
                             banner = banner,
                             accentColor = accentColor,
                             onClick = viewModel::onPinnedBannerTap,
+                            onOpenList = viewModel::openPinnedSheet,
                         )
                     }
                     Box(modifier = Modifier.weight(1f)) {
@@ -495,6 +496,20 @@ fun ChatScreen(
                 details = reactionDetails,
                 accentColor = accentColor,
                 onSelectTab = viewModel::selectReactionTab,
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
+    }
+
+    if (state.isPinnedSheetOpen) {
+        ModalBottomSheet(
+            onDismissRequest = viewModel::closePinnedSheet,
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
+            PinnedMessagesSheet(
+                pins = state.pinnedMessages,
+                accentColor = accentColor,
+                onTap = viewModel::onPinnedMessageTap,
                 modifier = Modifier.navigationBarsPadding(),
             )
         }
@@ -1000,6 +1015,7 @@ private fun PinnedBannerStrip(
     banner: PinnedBanner,
     accentColor: Color,
     onClick: () -> Unit,
+    onOpenList: () -> Unit,
 ) {
     val sender = banner.senderName
         ?: if (banner.isOutgoing) stringResource(R.string.chat_pinned_you) else null
@@ -1010,8 +1026,10 @@ private fun PinnedBannerStrip(
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = MeeshySpacing.md,
-                vertical = MeeshySpacing.sm,
+                start = MeeshySpacing.md,
+                end = MeeshySpacing.sm,
+                top = MeeshySpacing.sm,
+                bottom = MeeshySpacing.sm,
             ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
@@ -1042,6 +1060,82 @@ private fun PinnedBannerStrip(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            if (banner.count > 1) {
+                IconButton(onClick = onOpenList) {
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = stringResource(R.string.chat_pinned_sheet_title),
+                        tint = accentColor,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PinnedMessagesSheet(
+    pins: List<PinnedMessageRow>,
+    accentColor: Color,
+    onTap: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = MeeshySpacing.lg),
+    ) {
+        Text(
+            text = stringResource(R.string.chat_pinned_sheet_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MeeshyTheme.tokens.textPrimary,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        )
+        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+            itemsIndexed(pins, key = { _, row -> row.messageId }) { index, row ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
+                        color = MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.5f),
+                    )
+                }
+                val sender = row.senderName
+                    ?: if (row.isOutgoing) stringResource(R.string.chat_pinned_you) else null
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onTap(row.messageId) }
+                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PushPin,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        if (sender != null) {
+                            Text(
+                                text = sender,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = accentColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            text = pinnedSnippetLabel(row.snippet, sender = null),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MeeshyTheme.tokens.textPrimary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
         }
     }

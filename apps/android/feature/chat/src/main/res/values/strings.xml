@@ -32,6 +32,7 @@
     <string name="chat_unread_attachment">Attachment</string>
     <string name="chat_unread_new_message">New message</string>
     <string name="chat_pinned_title">Pinned message</string>
+    <string name="chat_pinned_sheet_title">Pinned messages</string>
     <string name="chat_pinned_count">%1$d pinned messages</string>
     <string name="chat_pinned_message">Pinned message</string>
     <string name="chat_pinned_you">You</string>
