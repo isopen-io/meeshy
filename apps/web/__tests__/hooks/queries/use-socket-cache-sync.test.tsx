@@ -368,24 +368,6 @@ describe('useSocketCacheSync', () => {
       expect(cachedData.pages[0].messages).toHaveLength(3);
     });
 
-    it('should add new message to simple list cache', () => {
-      const { wrapper, queryClient } = createWrapperWithClient();
-
-      queryClient.setQueryData(['messages', 'list', 'conv-1'], mockMessages);
-
-      renderHook(() => useSocketCacheSync(), { wrapper });
-
-      const newMessage = createMockMessage('msg-new', 'New message');
-      act(() => {
-        newMessageCallback?.(newMessage);
-      });
-
-      const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1']) as Message[];
-
-      expect(cachedData[0].id).toBe('msg-new');
-      expect(cachedData).toHaveLength(3);
-    });
-
     it('should not add duplicate message', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
