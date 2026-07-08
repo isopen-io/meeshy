@@ -214,15 +214,15 @@ extension BubbleStandardLayout {
                             isDark: isDark
                         )
                         .equatable()
-                        .padding(8)
+                        .padding(MeeshySpacing.sm)
                         .transition(.opacity)
                     }
                 }
         }
         .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .stroke(strokeColor, lineWidth: 0.5)
         )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -373,9 +373,9 @@ fileprivate struct BubbleGridCell: View {
                     },
                     onDismiss: { withAnimation { showReactionPicker = false } }
                 )
-                .padding(8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal, 6)
+                .padding(MeeshySpacing.sm)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                .padding(.horizontal, MeeshySpacing.xs + 2)
             }
             .transition(.opacity)
         }
@@ -458,7 +458,7 @@ fileprivate struct BubbleGridCell: View {
                     Spacer()
                     Text("\(attachment.viewOnceCount)")
                         // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
                         .background(
@@ -738,7 +738,7 @@ struct BubbleCarouselView: View {
             if !hasPlayingInlineVideo {
                 BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
                     .equatable()
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
         }
         .onAppear {
@@ -787,7 +787,7 @@ struct BubbleCarouselView: View {
             } label: {
                 Image(systemName: "xmark")
                     // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))

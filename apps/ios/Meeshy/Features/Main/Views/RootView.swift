@@ -1444,7 +1444,8 @@ struct RootView: View {
         // mask FIRST (the poster / frame 0 shows), THEN start playback from frame 0
         // over the poster that stays underneath (`ReelVideoView` keeps `ReelPoster`
         // behind the surface) → seamless, no flash and no black gap.
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+        Task {
+            try? await Task.sleep(for: .seconds(duration))
             guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
             reelsRevealMasked = false
             reelsRevealCompleted = true
@@ -1472,7 +1473,8 @@ struct RootView: View {
         withAnimation(.easeIn(duration: duration)) {
             reelsRevealProgress = 0
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+        Task {
+            try? await Task.sleep(for: .seconds(duration))
             reelsPresenter.dismiss()
             reelsRevealClosing = false
         }

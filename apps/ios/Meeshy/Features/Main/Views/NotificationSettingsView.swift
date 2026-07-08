@@ -242,7 +242,7 @@ struct NotificationSettingsView: View {
                     Text(dayLabel(day))
                         // Fixed size: single-letter label constrained inside a fixed
                         // 28×28 capsule — a scalable font would overflow the pill (doctrine 86i/93i).
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
                         .frame(width: 28, height: 28)
                         .background(
@@ -326,10 +326,10 @@ struct NotificationSettingsView: View {
                 content()
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: color))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: color), lineWidth: 1)
                     )
             )
@@ -346,7 +346,7 @@ struct NotificationSettingsView: View {
             Image(systemName: icon)
                 // Fixed size: decorative glyph constrained inside a fixed 28×28 badge —
                 // a scalable font would overflow the tinted square (doctrine 74i/86i).
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(Color(hex: color))
                 .frame(width: 28, height: 28)
                 .background(

@@ -70,10 +70,9 @@ struct ProfileView: View {
                         .padding(.bottom, 24)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                        withAnimation { self.errorMessage = nil }
-                    }
+                .task {
+                    try? await Task.sleep(for: .seconds(3))
+                    withAnimation { self.errorMessage = nil }
                 }
             }
         }
