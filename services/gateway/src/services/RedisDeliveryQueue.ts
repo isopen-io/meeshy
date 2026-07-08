@@ -39,6 +39,25 @@ redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
 return 1
 `.trim();
 
+// Atomically remove specific expired entries by exact value in a single
+// round-trip. Only the entries the caller identified as stale (passed as ARGV)
+// are removed; a message enqueued concurrently — AFTER the caller's LRANGE
+// snapshot — is a DIFFERENT value and is never touched. The previous
+// DEL + RPUSH(fresh) rebuild wiped the whole key then restored only the stale
+// snapshot, silently dropping any message enqueued between the read and the
+// rewrite (the very read-modify-write race the DRAIN_LUA comment warns about).
+// (messageId, eventType) dedup at enqueue guarantees each raw value is unique,
+// so LREM with count 0 removes exactly the intended entry. Returns the count
+// actually removed.
+// KEYS[1] = queue key, ARGV[1..N] = raw serialized entries to remove
+const PRUNE_STALE_LUA = `
+local removed = 0
+for i = 1, #ARGV do
+  removed = removed + redis.call('LREM', KEYS[1], 0, ARGV[i])
+end
+return removed
+`.trim();
+
 function queueKey(userId: string): string {
   return `${DELIVERY_QUEUE_PREFIX}${userId}`;
 }
@@ -205,26 +224,19 @@ export class RedisDeliveryQueue {
 
           for (const key of keys) {
             const entries = await redis.lrange(key, 0, -1);
-            const fresh = entries.filter(raw => {
+            const stale = entries.filter(raw => {
               try {
                 const parsed = JSON.parse(raw) as QueuedMessagePayload;
-                return new Date(parsed.enqueuedAt).getTime() > cutoff;
+                return new Date(parsed.enqueuedAt).getTime() <= cutoff;
               } catch {
                 logger.error('RedisDeliveryQueue: malformed entry in cleanup, dropping', { key, raw: raw.substring(0, 120) });
-                return false;
+                return true;
               }
             });
 
-            const removed = entries.length - fresh.length;
-            if (removed > 0) {
-              totalRemoved += removed;
-              const pipeline = redis.pipeline();
-              pipeline.del(key);
-              if (fresh.length > 0) {
-                pipeline.rpush(key, ...fresh);
-                pipeline.expire(key, DELIVERY_QUEUE_TTL_SECONDS);
-              }
-              await pipeline.exec();
+            if (stale.length > 0) {
+              const removed = await redis.eval(PRUNE_STALE_LUA, 1, key, ...stale);
+              totalRemoved += typeof removed === 'number' ? removed : stale.length;
             }
           }
         } while (cursor !== '0');
