@@ -41,6 +41,10 @@ export function OnlineIndicator({
   // Déterminer le statut effectif — sans prop status, dériver via la règle canonique
   const effectiveStatus = status ?? getUserStatus({ isOnline, lastActiveAt });
 
+  // Au-dela de 30min (offline) : aucun indicateur (dot masqué). Le gris reste
+  // défini dans PRESENCE_DOT_CLASS pour les usages labellisés, pas ici.
+  if (effectiveStatus === 'offline') return null;
+
   // Générer le tooltip
   let finalTooltip = tooltip || defaultTooltips[effectiveStatus];
 

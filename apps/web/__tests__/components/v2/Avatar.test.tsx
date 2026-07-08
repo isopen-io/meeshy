@@ -44,12 +44,10 @@ describe('Avatar v2 presence dot', () => {
     expect(dot?.className).not.toContain('bg-emerald-400');
   });
 
-  it('renders a gray dot for presence="offline"', () => {
+  it('renders NO dot for presence="offline" (offline = no dot)', () => {
     const { container } = render(<Avatar name="John" presence="offline" />);
 
-    const dot = getDot(container);
-    expect(dot).not.toBeNull();
-    expect(dot?.className).toContain('bg-gray-400');
+    expect(getDot(container)).toBeNull();
   });
 
   it('exports the central v2 presence map (consumed by ConversationItem)', () => {
@@ -69,10 +67,10 @@ describe('Avatar v2 presence dot', () => {
       expect(dot?.className).toContain('animate-pulse');
     });
 
-    it('renders the gray offline dot when isOnline is false and presence is omitted', () => {
+    it('renders no dot when isOnline is false and presence is omitted (offline = no dot)', () => {
       const { container } = render(<Avatar name="John" isOnline={false} />);
 
-      expect(getDot(container)?.className).toContain('bg-gray-400');
+      expect(getDot(container)).toBeNull();
     });
 
     it('renders NO dot when neither presence nor isOnline is provided (no data)', () => {
@@ -81,10 +79,10 @@ describe('Avatar v2 presence dot', () => {
       expect(getDot(container)).toBeNull();
     });
 
-    it('lets presence take precedence over isOnline', () => {
+    it('lets presence take precedence over isOnline (offline wins → no dot)', () => {
       const { container } = render(<Avatar name="John" isOnline={true} presence="offline" />);
 
-      expect(getDot(container)?.className).toContain('bg-gray-400');
+      expect(getDot(container)).toBeNull();
     });
   });
 });

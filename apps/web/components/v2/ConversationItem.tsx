@@ -271,8 +271,9 @@ export const ConversationItem = memo(function ConversationItem({
             <LanguageOrb code={conversation.languageCode} size="md" pulse={false} />
           )}
 
-          {/* Indicateur en ligne (conversations directes uniquement) */}
-          {!conversation.isGroup && (
+          {/* Indicateur en ligne (conversations directes uniquement).
+              Offline (>30min) : aucun dot — vert online/recent, orange away. */}
+          {!conversation.isGroup && presence !== 'offline' && (
             <div
               className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300 ${presenceDotClassV2[presence]}`}
               style={{ borderColor: 'var(--gp-surface)' }}

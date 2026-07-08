@@ -220,9 +220,9 @@ public struct MeeshyAvatar: View {
     public var thumbHash: String? = nil
     public var storyState: StoryRingState = .none
     public var moodEmoji: String? = nil
-    /// `nil` = aucune donnée de présence (pas de dot). `.offline` = présence
-    /// connue hors ligne (dot gris). Distinction volontaire : un avatar de
-    /// commentaire sans info présence ne doit pas afficher « hors ligne ».
+    /// Présence de l'avatar. `nil` = aucune donnée (pas de dot). `.offline`
+    /// (hors ligne > 30min) ne rend PAS de dot non plus — seuls online/recent
+    /// (vert) et away (orange) affichent une pastille.
     public var presenceState: PresenceState? = nil
     public var onTap: (() -> Void)? = nil
     public var onViewProfile: (() -> Void)? = nil
@@ -283,6 +283,9 @@ public struct MeeshyAvatar: View {
 
     private var effectivePresence: PresenceState? {
         guard kind == .user, context.showsOnlineDot else { return nil }
+        // Offline (>30min) : aucun dot. Le gris reste défini dans
+        // PresenceState.dotColor pour les affichages labellisés, pas ici.
+        guard presenceState != .offline else { return nil }
         return presenceState
     }
 

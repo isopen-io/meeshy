@@ -372,11 +372,11 @@ accent = hueShift(primary, −30°)
 
 ### User Presence (source de vérité + palette)
 États dérivés de `isOnline` (backend, autoritatif — actif < 1 min) + `lastActiveAt` (décroissance 60s/5min/30min) :
-`online`/`recent` → **vert** `#34D399` (pulse sur online) · `away` → **orange** `#FBBF24` · `offline` → **gris** `#9CA3AF` · aucune donnée → aucun dot.
+`online`/`recent` → **vert** `#34D399` (pulse sur online) · `away` → **orange** `#FBBF24` · `offline` (>30min) → **aucun point** · aucune donnée → aucun point.
+- **Offline = pas de pastille sur les avatars** (comme WhatsApp). Le gris `#9CA3AF` reste défini dans les maps centrales (`PRESENCE_DOT_CLASS.offline`, `PresenceState.offline.dotColor`) pour les affichages LABELLISÉS explicites (en-têtes de section « Hors ligne », badge story-intro, texte « vu il y a X »), mais les dots d'avatar ne le rendent jamais.
 - Source de vérité TS : `packages/shared/utils/user-presence.ts` (`getUserPresenceStatus`) ; miroirs : iOS `UserPresence.state(now:)` (PresenceModels.swift), Android `Presence.kt` — toute évolution touche les 3 sites
-- Mapping couleur CENTRAL (ne jamais redéclarer localement) : web `PRESENCE_DOT_CLASS`/`PRESENCE_BADGE_CLASS` (`apps/web/lib/user-status.ts`), iOS `PresenceState.dotColor` (`MeeshyUI/Theme/PresenceStyle.swift`), Android `meeshyPresenceDotColor` (`MeeshyAvatar.kt`)
+- Mapping couleur CENTRAL (ne jamais redéclarer localement) : web `PRESENCE_DOT_CLASS`/`PRESENCE_BADGE_CLASS` (`apps/web/lib/user-status.ts`), iOS `PresenceState.dotColor` (`MeeshyUI/Theme/PresenceStyle.swift`), Android `meeshyPresenceDotColor` (`MeeshyAvatar.kt`, renvoie `null` pour offline = pas de dot)
 - **typing:start reçu = preuve d'activité** : les clients forcent localement online (iOS `PresenceManager.noteActivity`, web `TypingService` → user-store) — une personne qui écrit est TOUJOURS verte
-- `nil`/absence de donnée ≠ `offline` : offline connu = dot gris, pas de donnée = pas de dot
 
 ### API Response Format (all services)
 ```typescript

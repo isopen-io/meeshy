@@ -25,11 +25,13 @@ export const UserPresenceBadge = memo(function UserPresenceBadge({
 }: UserPresenceBadgeProps) {
   const status = useLiveUserStatus(userId, fallbackUser);
 
-  const labels: Record<UserStatus, string> = {
+  // Au-dela de 30min (offline) : plus aucun badge de presence.
+  if (status === 'offline') return null;
+
+  const labels: Record<Exclude<UserStatus, 'offline'>, string> = {
     online: t('status.online'),
     recent: t('status.recent', { defaultValue: 'Actif récemment' }),
     away: t('status.away', { defaultValue: 'Absent' }),
-    offline: t('status.offline', { defaultValue: 'Hors ligne' }),
   };
 
   return (

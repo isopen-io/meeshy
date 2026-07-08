@@ -64,8 +64,8 @@ describe('UserPresenceBadge', () => {
       useUserStore.getState().updateUserStatus('user-1', { isOnline: false, lastActiveAt: thirtyFiveMinutesAgo });
     });
 
-    // Au-dela de 30min (offline) : badge gris « Hors ligne ».
-    expect(screen.getByText('Hors ligne')).toBeInTheDocument();
+    // Au-dela de 30min (offline) : le badge disparait entierement.
+    expect(screen.queryByText('Hors ligne')).not.toBeInTheDocument();
     expect(screen.queryByText('En ligne')).not.toBeInTheDocument();
   });
 

@@ -7,7 +7,7 @@ import org.junit.Test
 
 /**
  * Central presence dot rule (parity web/iOS): online+recent -> green (Success),
- * away -> orange (Warning), offline -> gray (Neutral400), no data (null) -> no dot.
+ * away -> orange (Warning), offline / no data -> no dot (null).
  */
 class MeeshyAvatarTest {
 
@@ -27,8 +27,8 @@ class MeeshyAvatarTest {
     }
 
     @Test
-    fun `offline presence is the neutral gray`() {
-        assertThat(meeshyPresenceDotColor(PresenceState.OFFLINE)).isEqualTo(MeeshyPalette.Neutral400)
+    fun `offline presence shows no dot`() {
+        assertThat(meeshyPresenceDotColor(PresenceState.OFFLINE)).isNull()
     }
 
     @Test
