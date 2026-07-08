@@ -2,6 +2,18 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// Émis (à `true`) par une bulle dont le carrousel média inline est ouvert :
+/// le pager horizontal possède alors le glissement gauche/droite, donc le
+/// swipe Répondre/Transférer du `BubbleSwipeContainer` parent doit s'effacer
+/// jusqu'au retour à la grille (fermeture du carrousel → la branche disparaît
+/// de la hiérarchie et la préférence retombe à `defaultValue`).
+struct BubbleInlinePagingPreferenceKey: PreferenceKey {
+    static let defaultValue: Bool = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
 /// Wraps a bubble with a horizontal swipe gesture that fires either a reply
 /// or forward action. Restored from the pre-bubble-decompose `+MessageRow`
 /// SwiftUI list layout — the new UICollectionView host (MessageListViewController)
@@ -46,6 +58,11 @@ struct BubbleSwipeContainer<Content: View>: View {
 
     @State private var offset: CGFloat = 0
     @State private var didCrossThreshold: Bool = false
+    /// Miroir de `BubbleInlinePagingPreferenceKey` remonté par la bulle :
+    /// vrai tant que le carrousel média inline est ouvert — le drag
+    /// reply/forward est alors totalement désengagé (même règle que le
+    /// scrubbing média).
+    @State private var isInlinePagingActive: Bool = false
 
     private var replyDirection: CGFloat { isMine ? -1 : 1 }
 
@@ -87,6 +104,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                 )
                 .opacity(isHiddenForOverlay ? 0 : 1)
                 .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
+                .onPreferenceChange(BubbleInlinePagingPreferenceKey.self) { isInlinePagingActive = $0 }
                 .simultaneousGesture(dragGesture)
                 // Long press surfaces via `simultaneousGesture` so it
                 // cooperates with the inner reaction "+" tap. The parent
@@ -169,10 +187,13 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // seuil selon la résistance, et abandon total pendant un
                 // scrubbing média. En `.normal` : 3:1 / 22pt (comportement
                 // historique). En `.resistant` : 4:1 / 48pt + priorité scrubber.
+                // Carrousel inline ouvert → le pager possède le glissement
+                // horizontal : reply/forward désengagés au même titre qu'un
+                // scrubbing média, jusqu'au retour à la grille.
                 guard BubbleSwipeResistance.shouldEngage(
                     translationWidth: h,
                     translationHeight: value.translation.height,
-                    isScrubbing: isScrubbing,
+                    isScrubbing: isScrubbing || isInlinePagingActive,
                     resistance: resistance
                 ) else { return }
                 let zone: CGFloat = 72

@@ -240,6 +240,10 @@ internal struct _InlineRenderer: View {
         thumbnailAspectRatio = size.width / size.height
     }
 
+    /// Facteur d'échelle des glyphes/anneau du bouton play, dérivé du diamètre
+    /// opaque `playButtonDiameter` (référence historique : 64pt).
+    private var playButtonScale: CGFloat { player.playButtonDiameter / 64 }
+
     private var playButton: some View {
         Button(action: handlePlayTap) {
             ZStack {
@@ -248,7 +252,7 @@ internal struct _InlineRenderer: View {
                 playButtonContent
                 downloadProgressRing
             }
-            .frame(width: 64, height: 64)
+            .frame(width: player.playButtonDiameter, height: player.playButtonDiameter)
             .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.8))
             .shadow(color: Color(hex: player.accentColor).opacity(0.45), radius: 12, y: 4)
         }
@@ -261,31 +265,31 @@ internal struct _InlineRenderer: View {
         switch player.availability {
         case .ready:
             Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: 22 * playButtonScale, weight: .bold))
                 .foregroundColor(.white)
-                .offset(x: 2)
+                .offset(x: 2 * playButtonScale)
         case .needsDownload:
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 22 * playButtonScale, weight: .bold))
                     .foregroundColor(.white)
                 if player.attachment.fileSize > 0 {
                     Text(formatSize(Int64(player.attachment.fileSize)))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 9 * playButtonScale, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.9))
                 }
             }
         case .downloading(let progress):
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 16 * playButtonScale, weight: .bold))
                     .foregroundColor(.white.opacity(0.6))
                 if progress > 0 {
                     Text("\(Int(progress * 100))%")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10 * playButtonScale, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                 } else {
-                    ProgressView().tint(.white).scaleEffect(0.6)
+                    ProgressView().tint(.white).scaleEffect(0.6 * playButtonScale)
                 }
             }
         }
@@ -296,9 +300,9 @@ internal struct _InlineRenderer: View {
         if case .downloading(let progress) = player.availability {
             Circle()
                 .trim(from: 0, to: progress > 0 ? progress : 0.05)
-                .stroke(Color.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 3 * playButtonScale, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .frame(width: 60, height: 60)
+                .frame(width: player.playButtonDiameter - 4, height: player.playButtonDiameter - 4)
                 .animation(.linear(duration: 0.2), value: progress)
         }
     }
