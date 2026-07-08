@@ -127,7 +127,7 @@ struct ThemedAvatarButton: View {
     let isExpanded: Bool
     var storyState: StoryRingState = .none
     var avatarURL: String? = nil
-    var presenceState: PresenceState = .offline
+    var presenceState: PresenceState? = nil
     var moodEmoji: String? = nil
     let action: () -> Void
     @State private var isPressed = false

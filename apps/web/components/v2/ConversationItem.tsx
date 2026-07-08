@@ -2,6 +2,7 @@
 
 import React, { memo } from 'react';
 import { getUserStatus } from '@/lib/user-status';
+import { presenceDotClassV2 } from './Avatar';
 import { Badge } from './Badge';
 import { LanguageOrb } from './LanguageOrb';
 import { TypingIndicator } from './TypingIndicator';
@@ -271,13 +272,10 @@ export const ConversationItem = memo(function ConversationItem({
           )}
 
           {/* Indicateur en ligne (conversations directes uniquement) */}
-          {!conversation.isGroup && presence !== 'offline' && (
+          {!conversation.isGroup && (
             <div
-              className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300"
-              style={{
-                background: presence === 'away' ? '#9ca3af' : 'var(--gp-warning)',
-                borderColor: 'var(--gp-surface)',
-              }}
+              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300 ${presenceDotClassV2[presence]}`}
+              style={{ borderColor: 'var(--gp-surface)' }}
             />
           )}
 

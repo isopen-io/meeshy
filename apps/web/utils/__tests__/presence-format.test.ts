@@ -44,19 +44,23 @@ describe('formatPresenceLabel', () => {
 });
 
 describe('presenceColorClass', () => {
-  it('is orange (active) within 5 minutes', () => {
-    expect(presenceColorClass(new Date(NOW - 2 * 60_000), true, NOW)).toContain('orange');
+  it('is green (active) within 5 minutes', () => {
+    expect(presenceColorClass(new Date(NOW - 2 * 60_000), true, NOW)).toContain('emerald');
   });
 
-  it('is orange (active) at exactly 5 minutes', () => {
-    expect(presenceColorClass(new Date(NOW - 5 * 60_000), false, NOW)).toContain('orange');
+  it('is green (active) at exactly 5 minutes', () => {
+    expect(presenceColorClass(new Date(NOW - 5 * 60_000), false, NOW)).toContain('emerald');
   });
 
-  it('is grey (away) between 5 and 30 minutes', () => {
-    expect(presenceColorClass(new Date(NOW - 10 * 60_000), false, NOW)).toContain('gray');
+  it('is green when the backend flags the user online, regardless of decay', () => {
+    expect(presenceColorClass(new Date(NOW - 10 * 60_000), true, NOW)).toContain('emerald');
   });
 
-  it('is grey (away) beyond 30 minutes', () => {
+  it('is orange (away) between 5 and 30 minutes', () => {
+    expect(presenceColorClass(new Date(NOW - 10 * 60_000), false, NOW)).toContain('amber');
+  });
+
+  it('is grey (offline) beyond 30 minutes', () => {
     expect(presenceColorClass(new Date(NOW - 2 * 3_600_000), false, NOW)).toContain('gray');
   });
 });

@@ -45,7 +45,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
+import me.meeshy.sdk.model.PresenceState
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -193,7 +195,9 @@ private fun UserRow(
     ) {
         Box {
             MeeshyAvatar(name = user.displayName, size = 44.dp)
-            if (user.isOnline) {
+            meeshyPresenceDotColor(
+                if (user.isOnline) PresenceState.ONLINE else PresenceState.OFFLINE,
+            )?.let { dot ->
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -202,7 +206,7 @@ private fun UserRow(
                         .background(MeeshyPalette.White)
                         .padding(2.dp)
                         .clip(CircleShape)
-                        .background(MeeshyPalette.Warning), // orange : présent (règle présence)
+                        .background(dot),
                 )
             }
         }

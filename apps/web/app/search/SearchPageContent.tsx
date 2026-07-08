@@ -37,6 +37,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { User } from '@/types';
 import { authManager } from '@/services/auth-manager.service';
 import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
+import { PRESENCE_BADGE_CLASS } from '@/lib/user-status';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
@@ -518,9 +519,7 @@ export function SearchPageContent() {
                                     <Badge
                                       variant={user.isOnline ? 'default' : 'secondary'}
                                       className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold flex-shrink-0 whitespace-nowrap ${
-                                        user.isOnline
-                                          ? 'bg-orange-400 hover:bg-orange-500'
-                                          : 'bg-gray-400 hover:bg-gray-500'
+                                        PRESENCE_BADGE_CLASS[user.isOnline ? 'online' : 'offline']
                                       }`}
                                     >
                                       {user.isOnline ? t('user.online') : t('user.offline')}

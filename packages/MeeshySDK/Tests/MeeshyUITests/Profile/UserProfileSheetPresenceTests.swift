@@ -87,16 +87,25 @@ final class UserProfileSheetPresenceTests: XCTestCase {
         XCTAssertEqual(sut.resolvedPresence, .away)
     }
 
-    func test_resolvedPresence_noProvider_recentlyActive_returnsRecent() {
+    func test_resolvedPresence_noProvider_connectedWithStaleTimestamp_returnsOnline() {
+        // isOnline backend est autoritatif : connecté = vert, même si le
+        // dernier lastActiveAt date de quelques minutes.
         let sut = UserProfileSheet(
             user: makeUser(isOnline: true, lastActiveAt: Date().addingTimeInterval(-180))
+        )
+        XCTAssertEqual(sut.resolvedPresence, .online)
+    }
+
+    func test_resolvedPresence_noProvider_disconnectedButRecentlyActive_returnsRecent() {
+        let sut = UserProfileSheet(
+            user: makeUser(isOnline: false, lastActiveAt: Date().addingTimeInterval(-180))
         )
         XCTAssertEqual(sut.resolvedPresence, .recent)
     }
 
     func test_resolvedPresence_noProvider_onlineButIdleOver30min_returnsOffline() {
-        // La regle temporelle prime : un flag isOnline obsolete ne maintient pas
-        // le dot au-dela de 30min d'inactivite.
+        // Garde anti-stale : un flag isOnline avec lastActiveAt > 30min est une
+        // donnee incoherente -> la decroissance temporelle prime (offline).
         let sut = UserProfileSheet(
             user: makeUser(isOnline: true, lastActiveAt: Date().addingTimeInterval(-2700))
         )

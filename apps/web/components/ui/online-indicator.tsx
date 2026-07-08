@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
-import { getUserStatus, type UserStatus } from '@/lib/user-status';
+import { getUserStatus, PRESENCE_DOT_CLASS, type UserStatus } from '@/lib/user-status';
 
 interface OnlineIndicatorProps {
   isOnline: boolean;
@@ -30,13 +30,6 @@ export function OnlineIndicator({
     lg: 'h-4 w-4',
   };
 
-  // Couleurs selon le statut (orange <= 5min, gris 5-30min, rien au-dela)
-  const statusColors: Record<Exclude<UserStatus, 'offline'>, string> = {
-    online: 'bg-orange-400 animate-pulse', // actif <= 60s : orange + pulse
-    recent: 'bg-orange-400',               // actif <= 5min : orange
-    away: 'bg-gray-400',                    // absent 5-30min : gris
-  };
-
   // Messages par défaut
   const defaultTooltips: Record<UserStatus, string> = {
     online: 'En ligne',
@@ -47,9 +40,6 @@ export function OnlineIndicator({
 
   // Déterminer le statut effectif — sans prop status, dériver via la règle canonique
   const effectiveStatus = status ?? getUserStatus({ isOnline, lastActiveAt });
-
-  // Au-dela de 30min (offline) : aucune info de presence affichee.
-  if (effectiveStatus === 'offline') return null;
 
   // Générer le tooltip
   let finalTooltip = tooltip || defaultTooltips[effectiveStatus];
@@ -78,7 +68,7 @@ export function OnlineIndicator({
       className={cn(
         'rounded-full border-2 border-white transition-colors duration-500',
         sizeClasses[size],
-        statusColors[effectiveStatus],
+        PRESENCE_DOT_CLASS[effectiveStatus],
         className
       )}
       title={finalTooltip}

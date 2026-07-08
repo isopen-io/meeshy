@@ -437,10 +437,10 @@ struct PostDetailView: View {
                 },
                 moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                 storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
-                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline,
+                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
                 replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
                 replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
+                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state }
             )
             .padding(.horizontal, 16)
             .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)

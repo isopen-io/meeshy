@@ -63,9 +63,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.LanguageData
-import me.meeshy.sdk.model.PresenceState
 import androidx.compose.material3.TopAppBarDefaults
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -162,7 +162,7 @@ fun ProfileScreen(
                     )
                 }
                 if (!state.isEditing) {
-                    presenceDotColor(header?.presence)?.let { dot ->
+                    meeshyPresenceDotColor(header?.presence)?.let { dot ->
                         Surface(
                             color = dot,
                             shape = CircleShape,
@@ -501,17 +501,6 @@ private fun statMetricLabel(metric: StatMetric): Int = when (metric) {
     StatMetric.FRIEND_REQUESTS -> R.string.profile_stat_friend_requests
     StatMetric.LANGUAGES -> R.string.profile_stat_languages
     StatMetric.MEMBER_DAYS -> R.string.profile_stat_member_days
-}
-
-/** Presence dot colours : orange (actif <= 5min), gris (absent 5-30min). */
-private val OnlineIndicator = Color(0xFFFBBF24)
-private val AwayIndicator = Color(0xFF9CA3AF)
-
-/** The dot colour for a resolved presence, or null when no dot should show (offline/unknown). */
-private fun presenceDotColor(state: PresenceState?): Color? = when (state) {
-    PresenceState.ONLINE, PresenceState.RECENT -> OnlineIndicator
-    PresenceState.AWAY -> AwayIndicator
-    PresenceState.OFFLINE, null -> null
 }
 
 /** Localized medium-date label for the "member since" line. */

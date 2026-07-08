@@ -1577,9 +1577,7 @@ private struct StoryGroupIntroOverlay: View {
         let state = presence?.state ?? .offline
         HStack(spacing: 6) {
             Circle()
-                .fill(state == .online ? MeeshyColors.success
-                      : state == .away ? MeeshyColors.warning
-                      : Color.white.opacity(0.35))
+                .fill(state.dotColor)
                 .frame(width: 9, height: 9)
             Text(presenceLabel(state))
                 .font(.caption.weight(.medium))

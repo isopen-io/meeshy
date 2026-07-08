@@ -352,7 +352,7 @@ extension ConversationListView {
                         moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
                         presenceState: conversation.type == .direct
                             ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
-                            : .offline,
+                            : nil,
                         isDirect: conversation.type == .direct,
                         onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
                             dismissContextMenu()
