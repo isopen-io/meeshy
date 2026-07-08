@@ -74,6 +74,20 @@ final class CallsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.loadState, .loaded)
     }
 
+    /// Regression test: the error message must come from the localization
+    /// catalog, not a hardcoded French literal — the app is multi-language
+    /// (Prisme Linguistique) and a French-only error string breaks the UI for
+    /// every other locale.
+    func test_loadCalls_serviceFails_setsLocalizedErrorState() async {
+        let (sut, service) = makeSUT(networkMonitor: TestNetworkMonitor(isOnline: true))
+        service.historyResult = .failure(URLError(.badServerResponse))
+
+        await sut.loadCalls()
+
+        let expected = String(localized: "calls.history.error", defaultValue: "Erreur lors du chargement", bundle: .main)
+        XCTAssertEqual(sut.loadState, .error(expected))
+    }
+
     func test_loadCalls_passesActiveFilterToService() async {
         let (sut, service) = makeSUT()
         sut.filter = .missed

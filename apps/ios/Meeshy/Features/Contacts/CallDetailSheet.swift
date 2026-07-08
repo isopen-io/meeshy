@@ -36,7 +36,7 @@ struct CallDetailSheet: View {
     // MARK: - Header
 
     private var header: some View {
-        let name = record.displayName
+        let name = record.displayName(fallback: String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
         let color = DynamicColorGenerator.colorForName(name)
         return VStack(spacing: 10) {
             MeeshyAvatar(
@@ -86,7 +86,7 @@ struct CallDetailSheet: View {
             guard let peer = record.peer else { return }
             CallStarter.start(
                 userId: peer.userId,
-                displayName: record.displayName,
+                displayName: record.displayName(fallback: String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main)),
                 isVideo: isVideo,
                 conversationId: record.conversationId
             )

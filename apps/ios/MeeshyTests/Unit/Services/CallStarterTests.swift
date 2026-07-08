@@ -52,6 +52,21 @@ final class CallStarterTests: XCTestCase {
         )
     }
 
+    func test_start_catchBlock_logsBeforeCallingOnUnavailable() throws {
+        let source = try callStarterSource()
+        guard let catchRange = source.range(of: "} catch {"),
+              let onUnavailableRange = source.range(of: "onUnavailable()", range: catchRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not locate the catch block in CallStarter.start"); return
+        }
+        let catchBody = String(source[catchRange.upperBound..<onUnavailableRange.upperBound])
+        XCTAssertTrue(
+            catchBody.contains("Logger.calls.error("),
+            "A findDirectWith failure must be logged — previously the catch block silently " +
+            "swallowed the underlying error (network failure, decoding failure, etc.), leaving " +
+            "no diagnostic trail for why a call could not be started."
+        )
+    }
+
     func test_start_delegatesBusyFeedbackToCallManager_doesNotDuplicateIt() throws {
         let source = try callStarterSource()
         // The busy-call toast must live in exactly one place (CallManager.startCall)
