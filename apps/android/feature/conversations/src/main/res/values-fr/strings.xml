@@ -43,6 +43,7 @@
     <string name="conversations_action_archive">Archiver</string>
     <string name="conversations_action_unarchive">Désarchiver</string>
     <string name="conversations_action_mark_read">Marquer comme lu</string>
+    <string name="conversations_action_discard_draft">Supprimer le brouillon</string>
     <string name="conversations_action_more">Plus d\'actions</string>
     <string name="conversations_badge_pinned">Épinglée</string>
     <string name="conversations_badge_muted">Muette</string>

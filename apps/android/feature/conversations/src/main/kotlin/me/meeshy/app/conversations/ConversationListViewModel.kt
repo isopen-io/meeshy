@@ -53,7 +53,7 @@ class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
-    draftStore: ConversationDraftStore,
+    private val draftStore: ConversationDraftStore,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -154,6 +154,29 @@ class ConversationListViewModel @Inject constructor(
     /** Marks a conversation read from the list (swipe action). */
     fun markRead(id: String) {
         runPrefMutation { repository.markReadOptimistic(id) }
+    }
+
+    /**
+     * Discards a conversation's unsent draft (context-menu action, offered only on
+     * a draft-bearing row). Optimistically drops the draft from state so the row
+     * loses its "Brouillon : …" preview and sinks out of the floated group
+     * immediately, then clears the durable store (the reactive `observeAll` stream
+     * re-emits the same cleared map). A no-op when the row holds nothing meaningful;
+     * a failed clear rolls the optimistic removal back.
+     */
+    fun discardDraft(id: String) {
+        val snapshot = _state.value.drafts
+        if (!DraftDiscard.isDiscardable(id, snapshot)) return
+        _state.update { it.copy(drafts = DraftDiscard.afterDiscard(id, it.drafts)).withVisible(rawConversations) }
+        viewModelScope.launch {
+            try {
+                draftStore.clear(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(drafts = snapshot, errorMessage = e.message).withVisible(rawConversations) }
+            }
+        }
     }
 
     private fun prefsOf(id: String) =
