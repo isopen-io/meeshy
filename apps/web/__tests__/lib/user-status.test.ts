@@ -24,6 +24,16 @@ import {
 const secondsAgo = (s: number) => new Date(Date.now() - s * 1000).toISOString();
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60 * 1000).toISOString();
 
+// Horloge figée : les tests de bornes inclusives ("away à exactement 30min")
+// fabriquent une date puis appellent getUserStatus — sans fake timers les
+// millisecondes écoulées entre les deux font basculer la borne (flaky).
+beforeAll(() => {
+  jest.useFakeTimers({ now: new Date('2026-07-08T12:00:00Z') });
+});
+afterAll(() => {
+  jest.useRealTimers();
+});
+
 describe('User Status Module', () => {
   describe('window constants', () => {
     it('exposes the canonical windows (60s / 5min / 30min)', () => {

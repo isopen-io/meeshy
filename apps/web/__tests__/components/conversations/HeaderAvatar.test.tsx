@@ -75,7 +75,8 @@ describe('HeaderAvatar presence', () => {
       useUserStore.getState().updateUserStatus('user-1', { isOnline: false, lastActiveAt: thirtyFiveMinutesAgo });
     });
 
-    expect(screen.getByTitle('Hors ligne')).toBeInTheDocument();
+    expect(screen.queryByTitle('En ligne')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Absent')).not.toBeInTheDocument();
   });
 
   it('recomputes status decay on the store tick without any user mutation', () => {
@@ -96,7 +97,7 @@ describe('HeaderAvatar presence', () => {
       state.triggerStatusTick();
     });
 
-    expect(screen.getByTitle('Inactif')).toBeInTheDocument();
+    expect(screen.getByTitle('Absent')).toBeInTheDocument();
   });
 
   it('falls back to the conversation payload presence when the store is empty', () => {
