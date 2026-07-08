@@ -459,6 +459,7 @@ struct FeedPostCard: View {
                 user: user,
                 moodEmoji: mood?.emoji,
                 onMoodTap: mood?.tapHandler,
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 // L'état réel n'est connu que pour l'auteur du post (la card
                 // est une leaf sans accès au StoryViewModel) ; les autres
                 // profils gardent l'anneau décoratif legacy (nil).

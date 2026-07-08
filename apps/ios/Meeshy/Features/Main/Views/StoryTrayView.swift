@@ -65,6 +65,7 @@ struct StoryTrayView: View {
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in AnyView(ProfileUserPostsList(
                     userId: uid,
                     onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
@@ -620,6 +621,7 @@ struct PinnedStoryTrailBand: View {
                         user: user,
                         moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                        presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                         postsContent: { uid in AnyView(ProfileUserPostsList(
                     userId: uid,
                     onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },

@@ -729,6 +729,7 @@ struct RootView: View {
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in
                     AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                         router.deepLinkProfileUser = nil

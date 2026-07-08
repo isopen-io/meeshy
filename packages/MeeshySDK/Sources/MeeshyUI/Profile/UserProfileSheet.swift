@@ -18,6 +18,14 @@ public struct UserProfileSheet: View {
     public var onSendMessage: (() -> Void)?
     public var moodEmoji: String? = nil
     public var onMoodTap: ((CGPoint) -> Void)? = nil
+    /// Source temps réel de présence injectée par l'app (paramètre opaque —
+    /// le SDK n'encode aucune règle produit). Appelée avec le userId résolu ;
+    /// retourner `nil` (utilisateur non suivi) fait retomber l'avatar sur le
+    /// snapshot REST `isOnline` du profil chargé. `nil` (défaut) conserve le
+    /// comportement legacy (snapshot uniquement). Doit pointer vers la MÊME
+    /// source que la liste de conversations (PresenceManager côté app) pour
+    /// que la pastille du profil reste synchronisée avec celle de la liste.
+    public var presenceProvider: ((String) -> PresenceState?)? = nil
     /// État réel de l'anneau story de l'utilisateur, fourni par l'app
     /// (paramètre opaque — le SDK n'encode aucune règle produit). `nil`
     /// conserve l'anneau décoratif historique du sheet.
@@ -73,6 +81,7 @@ public struct UserProfileSheet: View {
         onSendMessage: (() -> Void)? = nil,
         moodEmoji: String? = nil,
         onMoodTap: ((CGPoint) -> Void)? = nil,
+        presenceProvider: ((String) -> PresenceState?)? = nil,
         storyRingState: StoryRingState? = nil,
         onViewStory: (() -> Void)? = nil,
         postsContent: ((String) -> AnyView)? = nil
@@ -83,6 +92,7 @@ public struct UserProfileSheet: View {
         self.onSendMessage = onSendMessage
         self.moodEmoji = moodEmoji
         self.onMoodTap = onMoodTap
+        self.presenceProvider = presenceProvider
         self.storyRingState = storyRingState
         self.onViewStory = onViewStory
         self.postsContent = postsContent
