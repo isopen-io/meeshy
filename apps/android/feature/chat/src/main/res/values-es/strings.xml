@@ -33,6 +33,10 @@
     <string name="chat_unread_photo">Foto</string>
     <string name="chat_unread_attachment">Adjunto</string>
     <string name="chat_unread_new_message">Nuevo mensaje</string>
+    <string name="chat_pinned_title">Mensaje fijado</string>
+    <string name="chat_pinned_count">%1$d mensajes fijados</string>
+    <string name="chat_pinned_message">Mensaje fijado</string>
+    <string name="chat_pinned_you">Tú</string>
     <string name="chat_search">Buscar mensajes</string>
     <string name="chat_search_hint">Buscar en esta conversación</string>
     <string name="chat_search_close">Cerrar la búsqueda</string>
@@ -45,4 +49,8 @@
     <string name="chat_reactions_all">Todas</string>
     <string name="chat_reactions_you">Tú</string>
     <string name="chat_reactions_empty">Nadie todavía</string>
+    <plurals name="chat_reply_count">
+        <item quantity="one">%1$d respuesta</item>
+        <item quantity="other">%1$d respuestas</item>
+    </plurals>
 </resources>

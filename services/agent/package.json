@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/agent",
-  "version": "1.0.3",
+  "version": "1.0.8",
   "description": "Autonomous conversation agent service for Meeshy",
   "private": true,
   "main": "dist/src/server.js",
@@ -22,7 +22,7 @@
     "@meeshy/shared": "workspace:*",
     "@prisma/client": "^6.19.3",
     "dotenv": "^17.4.2",
-    "fastify": "^5.8.5",
+    "fastify": "^5.10.0",
     "ioredis": "^5.10.1",
     "jsonrepair": "^3.14.0",
     "mustache": "^4.2.0",

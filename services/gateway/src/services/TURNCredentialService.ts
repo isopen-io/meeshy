@@ -79,7 +79,7 @@ export class TURNCredentialService {
     // Parse TURN servers from environment
     // Format: TURN_SERVERS=turn1.example.com:3478,turn2.example.com:3478
     const turnServersEnv = process.env.TURN_SERVERS || '';
-    this.turnServers = this.parseTURNServers(turnServersEnv);
+    this.turnServers = this.parseTURNServers(turnServersEnv, isProductionOrStaging);
 
     // Credential TTL in seconds.
     //
@@ -99,11 +99,17 @@ export class TURNCredentialService {
     // exposure. Operators can still tighten/loosen via env (must stay ≥ 2h).
     this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '86400', 10);
 
-    // STUN servers (public Google STUN servers)
+    // STUN servers. Cloudflare is a second provider alongside Google so a
+    // Google STUN outage doesn't strand every call on TURN alone — mirrors
+    // the redundancy already documented on the iOS client's STUN-only
+    // fallback (`IceServer.defaultServers` in WebRTCTypes.swift), which was
+    // previously only reachable when TURN credential fetch failed entirely,
+    // never on the normal server-issued path used by every call.
     this.stunServers = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' }
     ];
 
     logger.info('🔐 TURNCredentialService initialized', {
@@ -117,9 +123,20 @@ export class TURNCredentialService {
    * Parse TURN servers from environment string
    * Format: "host1:port1,host2:port2" or "host1,host2" (default port: 3478)
    */
-  private parseTURNServers(serversEnv: string): TURNServerConfig[] {
+  private parseTURNServers(serversEnv: string, isProductionOrStaging: boolean): TURNServerConfig[] {
     if (!serversEnv.trim()) {
-      logger.warn('⚠️ No TURN servers configured. Video calls may fail behind restrictive NATs/firewalls.');
+      // Audit finding — a missing TURN_SERVERS in prod/staging previously only
+      // logged at `warn`, so a call failing 100% of the time behind a
+      // symmetric/carrier-grade NAT (common on cellular) had no signal an
+      // operator would notice. `error` surfaces in the log-based alerting
+      // every environment already has, without hard-failing startup (some
+      // deployments intentionally run STUN-only for LAN-only testing).
+      const message = '⚠️ No TURN servers configured. Calls WILL fail 100% of the time behind restrictive/symmetric NATs (common on cellular) — STUN-only cannot relay media.';
+      if (isProductionOrStaging) {
+        logger.error(message);
+      } else {
+        logger.warn(message);
+      }
       return [];
     }
 

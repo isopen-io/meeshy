@@ -784,4 +784,53 @@ describe('MessageHandler — handleMessageDelete', () => {
       payload: expect.objectContaining({ messageId: VALID_MSG_ID, conversationId: VALID_CONV_ID }),
     }));
   });
+
+  it('enqueues the delete for the OFFLINE original author when an admin deletes their message', async () => {
+    const enqueue = jest.fn().mockResolvedValue(undefined);
+    const offlineAuthorUserId = 'user-offline-author-001122334455';
+    deps = makeDeps({ deliveryQueue: { enqueue } as any });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);          // admin (the deleter) is online
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+
+    // Admin USER_ID deletes a message AUTHORED by an offline user. The author's
+    // participant id (message.senderId = PARTICIPANT_ID) is NOT the deleter — the
+    // skip arg must exclude the deleter, never the author, or the offline author
+    // never learns their moderated message was removed.
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValueOnce({
+      id: VALID_MSG_ID,
+      conversationId: VALID_CONV_ID,
+      senderId: PARTICIPANT_ID,
+      sender: { id: PARTICIPANT_ID, userId: offlineAuthorUserId },
+      conversation: {
+        createdAt: new Date('2024-01-01'),
+        lastMessageAt: new Date('2024-05-01'),
+        participants: [{ id: 'deleter-participant', role: 'admin' }],
+      },
+      attachments: [],
+    });
+    (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({ id: VALID_MSG_ID });
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValueOnce({ createdAt: new Date('2024-06-01') });
+    (deps.prisma.conversation.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: 'deleter-participant', userId: USER_ID },        // the deleter (online → skipped anyway)
+      { id: PARTICIPANT_ID, userId: offlineAuthorUserId },   // the author == message.senderId, OFFLINE
+    ]);
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // Before the fix the author was skipped (p.id === message.senderId) and the
+    // enqueue never happened; only the deleter should be excluded.
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith(offlineAuthorUserId, expect.objectContaining({
+      eventType: 'deleted',
+      messageId: VALID_MSG_ID,
+      conversationId: VALID_CONV_ID,
+    }));
+  });
 });

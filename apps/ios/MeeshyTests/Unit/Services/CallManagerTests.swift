@@ -1386,6 +1386,40 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
             "shows the avatar placeholder immediately (before the renegotiation round-trip)."
         )
     }
+
+    /// Audit finding — the thermal-critical downgrade previously called
+    /// `webRTCService.downgradeFromVideo()` directly, unserialized against
+    /// `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`. A thermal event
+    /// firing mid-toggle (or mid-hold/unhold) could run a fourth, concurrent
+    /// camera/transceiver actuation — exactly what `toggleVideo`/`handleHold`/
+    /// `applySurvivalVideoSend` chain onto the previous task to prevent.
+    func test_thermalCritical_serializesWithOtherVideoActuationTasks() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("let previousToggle = self.videoToggleTask") &&
+            body.contains("let previousHold = self.holdVideoTask") &&
+            body.contains("let previousSurvival = self.survivalVideoTask"),
+            "The thermal-critical downgrade must capture all three in-flight video-transition tasks " +
+            "before actuating, mirroring toggleVideo/handleHold/applySurvivalVideoSend."
+        )
+        XCTAssertTrue(
+            body.contains("await previousToggle?.value") &&
+            body.contains("await previousHold?.value") &&
+            body.contains("await previousSurvival?.value"),
+            "The thermal-critical downgrade must await all three prior tasks before calling " +
+            "downgradeFromVideo() — upgradeToVideo/downgradeFromVideo never check cancellation " +
+            "mid-flight, so two concurrent actuations would corrupt state."
+        )
+        guard let assignRange = body.range(of: "self.videoToggleTask = Task"),
+              let awaitRange = body.range(of: "await previousToggle?.value", range: assignRange.upperBound..<body.endIndex),
+              let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
+            XCTFail("Expected videoToggleTask = Task, await previousToggle?.value, then downgradeFromVideo() in that order"); return
+        }
+        XCTAssertLessThan(
+            awaitRange.lowerBound, downgradeRange.lowerBound,
+            "The thermal-critical branch must await the previous tasks' completion BEFORE calling downgradeFromVideo()"
+        )
+    }
 }
 
 // MARK: - Post-call diagnostics persistence
@@ -1960,6 +1994,60 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         XCTAssertTrue(
             body.contains("holdVideoTask?.cancel()"),
             "endCallInternal must cancel holdVideoTask to avoid dangling video ops after call teardown"
+        )
+    }
+
+    // MARK: - Unhold video-recovery error handling (audit finding)
+
+    /// Regression guard: the unhold branch previously discarded
+    /// `upgradeToVideo()`'s error via `try? … else { return }`, which — since
+    /// `isVideoSuspendedByHold` is flipped to `false` before the task starts —
+    /// left `isVideoEnabled == true` with no video track, no peer correction,
+    /// and no user feedback on a camera-permission failure (e.g. permission
+    /// revoked while the call was on hold). Must mirror the do/catch handling
+    /// used by `toggleVideo()` and `actuateSurvivalVideoSend`.
+    private func unholdBranchBody(_ source: String) throws -> String {
+        guard let elseRange = source.range(of: "} else {\n            if isVideoSuspendedByHold {") else {
+            XCTFail("unhold branch (`} else { if isVideoSuspendedByHold {`) not found in handleHold"); return ""
+        }
+        let end = source.range(of: "\n    }\n\n    // MARK: - DTMF Forwarding", range: elseRange.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[elseRange.lowerBound..<end])
+    }
+
+    func test_handleHold_unhold_doesNotSwallowUpgradeToVideoErrorViaTryQuestionMark() throws {
+        let body = try unholdBranchBody(try callManagerSource())
+        XCTAssertFalse(
+            body.contains("try? await self.webRTCService.upgradeToVideo()"),
+            "The unhold branch must not use `try?` to discard upgradeToVideo()'s error — " +
+            "a camera-permission failure must not silently leave isVideoEnabled stuck at true."
+        )
+        XCTAssertTrue(
+            body.contains("try await self.webRTCService.upgradeToVideo()"),
+            "The unhold branch must call upgradeToVideo() inside a do/catch so errors are handled explicitly."
+        )
+    }
+
+    func test_handleHold_unhold_catchesCameraPermissionDenied_andDisablesVideo() throws {
+        let body = try unholdBranchBody(try callManagerSource())
+        guard let catchRange = body.range(of: "catch WebRTCError.cameraPermissionDenied {") else {
+            XCTFail("unhold branch must catch WebRTCError.cameraPermissionDenied"); return
+        }
+        let catchBody = String(body[catchRange.lowerBound...])
+        XCTAssertTrue(
+            catchBody.contains("self.isVideoEnabled = false"),
+            "On camera-permission denial during unhold recovery, isVideoEnabled must be corrected to false " +
+            "— otherwise the app believes video is active with no track and no way to recover."
+        )
+        XCTAssertTrue(
+            catchBody.contains("MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)"),
+            "On camera-permission denial during unhold recovery, the peer must be told video is off — " +
+            "it was already optimistically told `enabled: true` when the unhold branch started."
+        )
+        XCTAssertTrue(
+            catchBody.contains("FeedbackToastManager.shared.showError("),
+            "On camera-permission denial during unhold recovery, the user must see a tappable error " +
+            "so they can grant access via Settings — silence was the original bug."
         )
     }
 }

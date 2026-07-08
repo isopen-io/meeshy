@@ -25,6 +25,7 @@ private fun message(
     deliveredCount: Int = 0,
     readCount: Int = 0,
     readByAllAt: String? = null,
+    pinnedAt: String? = null,
 ) = ApiMessage(
     id = id,
     conversationId = "c1",
@@ -38,6 +39,7 @@ private fun message(
     deliveredCount = deliveredCount,
     readCount = readCount,
     readByAllAt = readByAllAt,
+    pinnedAt = pinnedAt,
 )
 
 class BubbleContentBuilderTest {
@@ -483,6 +485,39 @@ class BubbleContentBuilderTest {
 
         assertThat(content.reactions.single { it.emoji == "❤️" }.includesMe).isTrue()
         assertThat(content.reactions.single { it.emoji == "🔥" }.includesMe).isFalse()
+    }
+
+    @Test
+    fun `a pinned message carries its pinned instant`() {
+        val content = BubbleContentBuilder.build(
+            message(pinnedAt = "2026-07-08T10:00:00Z"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.pinnedAtIso).isEqualTo("2026-07-08T10:00:00Z")
+    }
+
+    @Test
+    fun `a blank pinned instant is dropped`() {
+        val content = BubbleContentBuilder.build(
+            message(pinnedAt = "   "),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.pinnedAtIso).isNull()
+    }
+
+    @Test
+    fun `a deleted message is never pinned`() {
+        val content = BubbleContentBuilder.build(
+            message(deletedAt = "2026-07-08T09:00:00Z", pinnedAt = "2026-07-08T10:00:00Z"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.pinnedAtIso).isNull()
     }
 
 }

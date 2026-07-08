@@ -116,12 +116,13 @@ public extension APICallRecord {
     var isMissed: Bool { directionKind == .missed }
 
     /// Best display name: peer display name → peer username → conversation
-    /// title (group) → fallback.
-    var displayName: String {
+    /// title (group) → `fallback`, supplied by the caller so the SDK never
+    /// hardcodes UI copy (SDK Purity — localized strings are app-side).
+    func displayName(fallback: String) -> String {
         if let name = peer?.displayName, !name.isEmpty { return name }
         if let username = peer?.username, !username.isEmpty { return username }
         if let title = conversationTitle, !title.isEmpty { return title }
-        return "Inconnu"
+        return fallback
     }
 
     var avatarURL: String? { peer?.avatar ?? conversationAvatar }

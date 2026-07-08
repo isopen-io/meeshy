@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Badge
@@ -84,6 +85,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -133,6 +135,10 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val listItems = remember(state.messages) {
         buildChatListItems(state.messages, ZoneId.systemDefault())
+    }
+
+    val replyThreads = remember(state.messages) {
+        ReplyThreads.of(state.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) })
     }
 
     // Auto-scroll on a new message only when the user is already at the
@@ -298,6 +304,13 @@ fun ChatScreen(
                     ChatNotice(stringResource(R.string.chat_no_messages), onRetry = null)
 
                 else -> Column(modifier = Modifier.fillMaxSize()) {
+                    state.pinnedBanner?.let { banner ->
+                        PinnedBannerStrip(
+                            banner = banner,
+                            accentColor = accentColor,
+                            onClick = viewModel::onPinnedBannerTap,
+                        )
+                    }
                     Box(modifier = Modifier.weight(1f)) {
                     LazyColumn(
                         state = listState,
@@ -350,6 +363,14 @@ fun ChatScreen(
                                             onReplyPreviewClick = {
                                                 viewModel.onReplyPreviewTap(bubble.messageId)
                                             },
+                                        )
+                                    }
+                                    replyThreads.threadFor(bubble.messageId)?.let { thread ->
+                                        ReplyCountPill(
+                                            count = thread.count,
+                                            isOutgoing = bubble.isOutgoing,
+                                            accentColor = accentColor,
+                                            onClick = { viewModel.onReplyCountTap(bubble.messageId) },
                                         )
                                     }
                                     if (bubble.deliveryStatus == DeliveryStatus.Failed) {
@@ -696,6 +717,51 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
 }
 
 /**
+ * The reply-count pill under a message that has quoted replies (parity with iOS's
+ * reply-count affordance). Accent-tinted, aligned to the message's own side, and
+ * tappable — tapping jumps to the earliest reply in the thread (no dead end). The
+ * "which messages have a thread / how many / which reply anchors it" decision is the
+ * pure [ReplyThreads] SSOT; this is only the render.
+ */
+@Composable
+private fun ReplyCountPill(
+    count: Int,
+    isOutgoing: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        contentAlignment = if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            modifier = Modifier
+                .clip(RoundedCornerShape(MeeshyRadius.pill))
+                .clickable(onClick = onClick)
+                .background(accentColor.copy(alpha = 0.12f))
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = pluralStringResource(R.plurals.chat_reply_count, count, count),
+                style = MaterialTheme.typography.labelMedium,
+                color = accentColor,
+            )
+        }
+    }
+}
+
+/**
  * The scroll-to-bottom affordance: a badged FAB that surfaces when the reader has
  * scrolled away, with a live count and a compact preview of the newest unread message
  * (iOS `ConversationScrollControlsView`). Tapping either the pill or the button jumps
@@ -919,6 +985,70 @@ private fun TypingAvatarCluster(stack: TypingAvatarStack, accentColor: Color) {
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PinnedBannerStrip(
+    banner: PinnedBanner,
+    accentColor: Color,
+    onClick: () -> Unit,
+) {
+    val sender = banner.senderName
+        ?: if (banner.isOutgoing) stringResource(R.string.chat_pinned_you) else null
+    Surface(
+        onClick = onClick,
+        color = MeeshyTheme.tokens.backgroundSecondary,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = MeeshySpacing.md,
+                vertical = MeeshySpacing.sm,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.PushPin,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(18.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (banner.count > 1) {
+                        stringResource(R.string.chat_pinned_count, banner.count)
+                    } else {
+                        stringResource(R.string.chat_pinned_title)
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = accentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = pinnedSnippetLabel(banner.snippet, sender),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun pinnedSnippetLabel(snippet: PinnedSnippet, sender: String?): String {
+    val body = when (snippet) {
+        is PinnedSnippet.Text -> snippet.value
+        PinnedSnippet.Image -> stringResource(R.string.chat_unread_photo)
+        PinnedSnippet.File -> stringResource(R.string.chat_unread_attachment)
+        PinnedSnippet.Empty -> stringResource(R.string.chat_pinned_message)
+    }
+    return if (sender != null) "$sender: $body" else body
 }
 
 private fun unreadPreviewIcon(kind: UnreadPreviewKind): ImageVector? = when (kind) {

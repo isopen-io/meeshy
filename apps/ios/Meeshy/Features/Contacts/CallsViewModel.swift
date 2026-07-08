@@ -63,7 +63,7 @@ final class CallsViewModel: ObservableObject {
                 case .offline:
                     self.loadState = .offline
                 case .error:
-                    self.loadState = .error("Erreur lors du chargement")
+                    self.loadState = .error(String(localized: "calls.history.error", defaultValue: "Erreur lors du chargement", bundle: .main))
                 case .idle:
                     self.loadState = .idle
                 }

@@ -74,6 +74,10 @@ final class WebRTCService {
     private var qualityMonitorTask: Task<Void, Never>?
     private var lastStats: CallStats?
     private var qualityLevelDebounceDate: Date?
+    // Requires two consecutive high-jitter ticks before capping audio bitrate
+    // (see JitterBitrateCapTracker) — a lone jitter blip must not yank the
+    // encoder down and back up on the very next tick.
+    private var jitterBitrateCapTracker = JitterBitrateCapTracker()
     // BWE warm-up anchor — the GCC estimate is ignored while it ramps from
     // its kick-off value (see CallReliabilityPolicy.effectiveQualityLevel).
     private var qualityMonitorStartDate: Date?
@@ -333,6 +337,7 @@ final class WebRTCService {
         qualityMonitorTask = nil
         lastStats = nil
         qualityMonitorStartDate = nil
+        jitterBitrateCapTracker.reset()
     }
 
     private func adjustBitrate(basedOn stats: CallStats, previous: CallStats?) {
@@ -374,9 +379,15 @@ final class WebRTCService {
         } else {
             newBitrate = QualityThresholds.minBitrate
         }
-        // Jitter > 30ms degrades Opus PLC; cap to minBitrate even on a low-RTT path.
-        let effectiveBitrate = stats.jitterMs > QualityThresholds.highJitterThresholdMs
-            ? QualityThresholds.minBitrate : newBitrate
+        // Jitter > 30ms degrades Opus PLC; cap to minBitrate even on a low-RTT
+        // path — but only once the jitter tracker confirms two consecutive
+        // ticks, so a single transient spike doesn't yank bitrate down and
+        // back up on the next tick (audible warble on a link that's fine).
+        let jitterCapped = jitterBitrateCapTracker.record(
+            jitterMs: stats.jitterMs,
+            thresholdMs: QualityThresholds.highJitterThresholdMs
+        )
+        let effectiveBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate
 
         if effectiveBitrate != currentBitrate {
             currentBitrate = effectiveBitrate
@@ -387,7 +398,7 @@ final class WebRTCService {
             let bweMbps = stats.availableOutgoingBitrateBps > 0
                 ? String(format: " bwe=%.1fMbps", Double(stats.availableOutgoingBitrateBps) / 1_000_000)
                 : ""
-            let jitterTag = stats.jitterMs > QualityThresholds.highJitterThresholdMs
+            let jitterTag = jitterCapped
                 ? String(format: " jitter=%.0fms[capped]", stats.jitterMs)
                 : ""
             Logger.webrtc.info("Audio bitrate adjusted to \(effectiveBitrate / 1000)kbps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps)\(jitterTag))")

@@ -38,6 +38,8 @@ import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessagePinnedEvent
+import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.ReactionGroup
 import me.meeshy.sdk.model.ReactionSyncResponse
 import me.meeshy.sdk.model.ReactionUserDetail
@@ -81,12 +83,16 @@ class ChatViewModelTest {
     private val readStatusUpdated = MutableSharedFlow<ReadStatusUpdatedEvent>()
     private val typingStarted = MutableSharedFlow<TypingEvent>()
     private val typingStopped = MutableSharedFlow<TypingEvent>()
+    private val messagePinned = MutableSharedFlow<MessagePinnedEvent>()
+    private val messageUnpinned = MutableSharedFlow<MessageUnpinnedEvent>()
 
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { this@mockk.messageReceived } returns this@ChatViewModelTest.messageReceived
             every { messageUpdated } returns MutableSharedFlow()
             every { messageDeleted } returns MutableSharedFlow()
+            every { this@mockk.messagePinned } returns this@ChatViewModelTest.messagePinned
+            every { this@mockk.messageUnpinned } returns this@ChatViewModelTest.messageUnpinned
             every { this@mockk.typingStarted } returns this@ChatViewModelTest.typingStarted
             every { this@mockk.typingStopped } returns this@ChatViewModelTest.typingStopped
             every { this@mockk.reactionAdded } returns this@ChatViewModelTest.reactionAdded
@@ -449,6 +455,119 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.messages.single().deliveryStatus).isEqualTo(DeliveryStatus.Read)
+    }
+
+    private fun pinnedStream() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(
+                    ApiMessage(
+                        id = "m1",
+                        conversationId = "c1",
+                        senderId = "other",
+                        content = "first pin",
+                        pinnedAt = "2026-07-08T10:00:00Z",
+                    ),
+                ),
+                synced(
+                    ApiMessage(
+                        id = "m2",
+                        conversationId = "c1",
+                        senderId = "other",
+                        content = "newest pin",
+                        pinnedAt = "2026-07-08T11:00:00Z",
+                    ),
+                ),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
+    @Test
+    fun a_pinned_message_in_the_stream_surfaces_the_banner() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+
+        val banner = h.vm.state.value.pinnedBanner
+        assertThat(banner).isNotNull()
+        assertThat(banner!!.messageId).isEqualTo("m2")
+        assertThat(banner.count).isEqualTo(2)
+        assertThat(banner.snippet).isEqualTo(PinnedSnippet.Text("newest pin"))
+    }
+
+    @Test
+    fun no_pinned_message_leaves_the_banner_absent() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.pinnedBanner).isNull()
+    }
+
+    @Test
+    fun tapping_the_pinned_banner_scrolls_to_the_newest_pin() = runTest(dispatcher) {
+        val h = harness(pinnedStream(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onPinnedBannerTap()
+
+        assertThat(h.vm.state.value.scrollToMessageId).isEqualTo("m2")
+
+        h.vm.onScrollHandled()
+        assertThat(h.vm.state.value.scrollToMessageId).isNull()
+    }
+
+    @Test
+    fun tapping_the_banner_with_nothing_pinned_is_inert() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onPinnedBannerTap()
+
+        assertThat(h.vm.state.value.scrollToMessageId).isNull()
+    }
+
+    @Test
+    fun a_pinned_socket_event_refreshes_the_open_conversation() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        messagePinned.emit(MessagePinnedEvent(messageId = "m2", conversationId = "c1"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.refresh("c1") }
+    }
+
+    @Test
+    fun a_pinned_socket_event_elsewhere_is_ignored() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        messagePinned.emit(MessagePinnedEvent(messageId = "m2", conversationId = "other"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.refresh("c1") }
+    }
+
+    @Test
+    fun an_unpinned_socket_event_refreshes_the_open_conversation() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        messageUnpinned.emit(MessageUnpinnedEvent(messageId = "m2", conversationId = "c1"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.refresh("c1") }
+    }
+
+    @Test
+    fun an_unpinned_socket_event_elsewhere_is_ignored() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        messageUnpinned.emit(MessageUnpinnedEvent(messageId = "m2", conversationId = "other"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.refresh("c1") }
     }
 
     private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
@@ -1481,6 +1600,65 @@ class ChatViewModelTest {
 
         assertThat(vm.state.value.scrollToMessageId).isNull()
     }
+
+    @Test
+    fun tapping_the_reply_count_pill_scrolls_to_the_first_reply_in_the_thread() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.onReplyCountTap("orig")
+
+        assertThat(vm.state.value.scrollToMessageId).isEqualTo("answer")
+    }
+
+    @Test
+    fun tapping_the_reply_count_on_a_message_with_no_replies_is_inert() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.onReplyCountTap("plain")
+
+        assertThat(vm.state.value.scrollToMessageId).isNull()
+    }
+
+    @Test
+    fun tapping_the_reply_count_on_a_parent_with_several_replies_anchors_on_the_earliest() =
+        runTest(dispatcher) {
+            val (vm, _, _) = viewModel(
+                flowOf(
+                    CacheResult.Fresh(
+                        listOf(
+                            synced(ApiMessage(id = "orig", conversationId = "c1", senderId = "other", content = "root")),
+                            synced(
+                                ApiMessage(
+                                    id = "first",
+                                    conversationId = "c1",
+                                    senderId = "other",
+                                    content = "first reply",
+                                    replyTo = ApiMessageReplyPreview(id = "orig", content = "root"),
+                                ),
+                            ),
+                            synced(
+                                ApiMessage(
+                                    id = "second",
+                                    conversationId = "c1",
+                                    senderId = "other",
+                                    content = "second reply",
+                                    replyTo = ApiMessageReplyPreview(id = "orig", content = "root"),
+                                ),
+                            ),
+                        ),
+                        ageMillis = 0,
+                    ),
+                ),
+                currentUser = me,
+            )
+            advanceUntilIdle()
+
+            vm.onReplyCountTap("orig")
+
+            assertThat(vm.state.value.scrollToMessageId).isEqualTo("first")
+        }
 
     @Test
     fun opening_reaction_details_shows_the_sheet_immediately_while_the_fetch_is_in_flight() =

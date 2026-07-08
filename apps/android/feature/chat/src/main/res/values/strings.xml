@@ -29,6 +29,10 @@
     <string name="chat_unread_photo">Photo</string>
     <string name="chat_unread_attachment">Attachment</string>
     <string name="chat_unread_new_message">New message</string>
+    <string name="chat_pinned_title">Pinned message</string>
+    <string name="chat_pinned_count">%1$d pinned messages</string>
+    <string name="chat_pinned_message">Pinned message</string>
+    <string name="chat_pinned_you">You</string>
     <string name="chat_typing_one">%1$s is typing…</string>
     <string name="chat_typing_two">%1$s and %2$s are typing…</string>
     <string name="chat_typing_many">%1$d people are typing…</string>
@@ -45,4 +49,8 @@
     <string name="chat_reactions_all">All</string>
     <string name="chat_reactions_you">You</string>
     <string name="chat_reactions_empty">No one yet</string>
+    <plurals name="chat_reply_count">
+        <item quantity="one">%1$d reply</item>
+        <item quantity="other">%1$d replies</item>
+    </plurals>
 </resources>
