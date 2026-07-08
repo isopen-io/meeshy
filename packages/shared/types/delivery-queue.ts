@@ -15,6 +15,13 @@ export type QueuedMessagePayload = {
    * so an offline peer's reaction state converges on reconnect (same as
    * edits/deletes) — they never carry a delivery receipt. */
   readonly eventType?: 'new' | 'edited' | 'deleted' | 'reaction-added' | 'reaction-removed';
+  /** Overrides the identity used for enqueue-time dedup (default: messageId).
+   * messageId+eventType alone is correct for edits/deletes (at most one
+   * relevant transition matters per message), but reactions need a finer key:
+   * two different reactors adding a reaction to the same message both queue
+   * a 'reaction-added' entry, and messageId+eventType would collapse them
+   * into one — silently dropping every reactor after the first. */
+  readonly dedupKey?: string;
 };
 
 export const DELIVERY_QUEUE_PREFIX = 'delivery:queue:' as const;

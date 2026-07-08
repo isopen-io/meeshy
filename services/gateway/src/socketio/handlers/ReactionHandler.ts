@@ -174,13 +174,13 @@ export class ReactionHandler {
           )
             .then(removeEvent => {
               this._broadcastReactionEventWithConversationId(message.conversationId, removeEvent, SERVER_EVENTS.REACTION_REMOVED);
-              void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, removeEvent as unknown as Record<string, unknown>);
+              void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, removedEmoji, removeEvent as unknown as Record<string, unknown>);
             })
             .catch(err => logger.error('reaction:add replaced-emoji broadcast failed', { error: err, conversationId: message.conversationId }));
         }
         this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
           .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
-        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, updateEvent as unknown as Record<string, unknown>);
+        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
       }
       // _createReactionNotification handles errors internally; void to be explicit.
       void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
@@ -283,7 +283,7 @@ export class ReactionHandler {
       if (message) {
         this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
           .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
-        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, updateEvent as unknown as Record<string, unknown>);
+        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
       }
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
@@ -418,12 +418,19 @@ export class ReactionHandler {
    * The actor is excluded by participant id (Leçon 78: exclude on the CALLER's
    * identity, never on message content) and every online peer is skipped since
    * they already received the live broadcast.
+   *
+   * `dedupKey` scopes the delivery-queue dedup to (messageId, reactor, emoji)
+   * instead of the default messageId — RedisDeliveryQueue's default dedup is
+   * (messageId, eventType), which would otherwise collapse two different
+   * reactors' 'reaction-added' events on the same message into one, silently
+   * dropping every reactor after the first for an offline peer.
    */
   private async _enqueueOfflineReactionEvent(
     conversationId: string,
     actorParticipantId: string | null | undefined,
     eventType: 'reaction-added' | 'reaction-removed',
     messageId: string,
+    emoji: string,
     payload: Record<string, unknown>
   ): Promise<void> {
     if (!this.deliveryQueue) return;
@@ -432,6 +439,7 @@ export class ReactionHandler {
         where: { conversationId, isActive: true },
         select: { id: true, userId: true }
       });
+      const dedupKey = `${messageId}:${actorParticipantId ?? 'unknown'}:${emoji}`;
       for (const p of participants) {
         const queueKey = p.userId ?? p.id;
         if (p.id === actorParticipantId || this.connectedUsers.has(queueKey)) continue;
@@ -441,6 +449,7 @@ export class ReactionHandler {
           payload,
           enqueuedAt: new Date().toISOString(),
           eventType,
+          dedupKey,
         }).catch((err) => logger.warn('Failed to enqueue offline reaction event', { userId: queueKey, eventType, error: err }));
       }
     } catch (err) {

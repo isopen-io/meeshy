@@ -763,6 +763,29 @@ describe('ReactionHandler', () => {
       );
     });
 
+    it('scopes the delivery-queue dedup key to the reactor and emoji, not just the message', async () => {
+      // RedisDeliveryQueue's default dedup is (messageId, eventType) — without a
+      // per-reactor dedupKey, two different participants adding a reaction to
+      // the same message would collapse into a single queued entry for an
+      // offline peer, silently dropping every reactor after the first.
+      const deliveryQueue = makeDeliveryQueue();
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      expect(deliveryQueue.enqueue).toHaveBeenCalledWith(
+        OFFLINE_USER,
+        expect.objectContaining({
+          dedupKey: `${MESSAGE_ID}:${PARTICIPANT_ID}:👍`,
+        })
+      );
+    });
+
     it('does not enqueue for the reacting actor even if they were offline', async () => {
       const deliveryQueue = makeDeliveryQueue();
       // Actor's user id is NOT in connectedUsers → the only guard keeping them
