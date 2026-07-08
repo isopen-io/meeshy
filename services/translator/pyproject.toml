@@ -73,7 +73,7 @@ dependencies = [
 
     # Utilitaires système
     "psutil>=6.0.0",
-    "pandas>=2.0.0,<2.1.0",
+    "pandas>=2.0.0,<2.4.0",
     "aiohttp>=3.9.0",
     "python-multipart>=0.0.9",
     "aiofiles>=24.0.0",
