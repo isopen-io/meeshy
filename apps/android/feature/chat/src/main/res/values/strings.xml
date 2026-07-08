@@ -11,6 +11,13 @@
     <string name="chat_send_failed_retry">Not sent — tap to retry</string>
     <string name="chat_action_copy">Copy</string>
     <string name="chat_action_reply">Reply</string>
+    <string name="chat_action_forward">Forward</string>
+    <string name="chat_forward_title">Forward to…</string>
+    <string name="chat_forward_search_hint">Search a conversation</string>
+    <string name="chat_forward_empty">No conversation</string>
+    <string name="chat_forward_members">%d members</string>
+    <string name="chat_forward_sent">Forwarded</string>
+    <string name="chat_forward_send_a11y">Forward to %1$s</string>
     <string name="chat_replying_to">Replying to %1$s</string>
     <string name="chat_cancel_reply">Cancel reply</string>
     <string name="chat_action_show_original">See original</string>

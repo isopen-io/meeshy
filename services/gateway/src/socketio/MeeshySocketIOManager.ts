@@ -72,6 +72,8 @@ const logger = enhancedLogger.child({ module: 'SocketIOManager' });
 function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string {
   if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
   if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
+  if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
+  if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
   return SERVER_EVENTS.MESSAGE_NEW;
 }
 
@@ -393,6 +395,9 @@ export class MeeshySocketIOManager {
     // The WS `message:send` path (MessageHandler) enqueues offline recipients
     // itself, in parallel with this REST-path queue — same shared instance.
     this.messageHandler.setDeliveryQueue(queue);
+    // ReactionHandler enqueues reaction add/remove for offline peers on the
+    // same instance, so their reaction state converges on reconnect.
+    this.reactionHandler.setDeliveryQueue(queue);
   }
 
   private async _drainPendingMessages(userId: string, isAnonymous: boolean): Promise<void> {

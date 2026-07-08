@@ -380,7 +380,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
 ## C. Chat / Messaging
-- [~] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
+- [x] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
       **Edit 2-hour window now enforced** via pure `:core:model` `MessageEditability.canEdit(isOwn,
       createdAtMillis, nowMillis, windowMillis=2h)` SSOT (port of iOS's `Date().timeIntervalSince(createdAt)
       < 2h` gate): an own message is editable only while <2h elapsed; a future-dated createdAt (clock skew)
@@ -397,7 +397,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ChatViewModel.deleteForEveryone` keeps the server round-trip; `deleteForMe` hides locally (no network),
       the hidden set threads into the message-stream combine so the bubble disappears at once; `ChatScreen`
       offers "Delete for everyone" (own + within window) and "Delete for me" (any delivered message).
-      **Pending:** forward.
+      **Forward now shipped** (slice `chat-forward-message`, 2026-07-08, +21 tests): pure `:feature:chat`
+      `ForwardTargets.of(conversations, sourceConversationId, query, currentUserId) → List<ForwardTarget>`
+      SSOT (port of iOS `ForwardPickerSheet.filteredConversations`: source excluded, blank query keeps all,
+      non-blank query trimmed + matched case-insensitively against the resolved `displayTitle`, order
+      preserved, deterministic `accentHex` + blank-avatar→null projection). `SendMessageRequest`/`ApiMessage`
+      gained nullable `forwardedFromId`/`forwardedFromConversationId` (`:core:model`, no DB migration —
+      JSON payload); `MessageRepository.sendOptimistic` threads them (retry rebuilds from the cached refs so a
+      forward survives an exhaust). `ChatViewModel.openForward`/`onForwardQueryChange`/`forwardTo`/`closeForward`
+      drive a cache-first `ForwardPickerSheet` (long-press → "Forward" action): one in-flight forward at a
+      time, per-target sent checkmark, only a server-acked source is forwardable (an unsent bubble is refused).
+      EN/FR/ES/PT strings.
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
 - [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
       `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine

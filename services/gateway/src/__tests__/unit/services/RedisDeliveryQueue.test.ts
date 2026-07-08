@@ -976,12 +976,47 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     expect(drained.map(d => d.eventType ?? 'new')).toEqual(['new', 'deleted']);
   });
 
-  test('dedup (memory): a repeated "edited" event for the same messageId IS still deduped', async () => {
+  test('dedup (memory): a repeated "edited" event for the same messageId IS still collapsed to one entry', async () => {
     const queue = new RedisDeliveryQueue(makeCacheStore(null));
     const edited = makePayload({ messageId: 'msg-edit-twice', eventType: 'edited' });
 
     await queue.enqueue('user-offline', edited);
     await queue.enqueue('user-offline', edited);
+
+    expect(await queue.size('user-offline')).toBe(1);
+  });
+
+  test('dedup (memory): two different reactors on the same message both queue, when dedupKey differs', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const reactorA = makePayload({
+      messageId: 'msg-reacted',
+      eventType: 'reaction-added',
+      dedupKey: 'msg-reacted:participant-a:👍',
+    });
+    const reactorB = makePayload({
+      messageId: 'msg-reacted',
+      eventType: 'reaction-added',
+      dedupKey: 'msg-reacted:participant-b:🔥',
+    });
+
+    await queue.enqueue('user-offline', reactorA);
+    await queue.enqueue('user-offline', reactorB);
+
+    // Same messageId+eventType would have collapsed to 1 under the old
+    // messageId-only dedup — the exact bug this dedupKey exists to prevent.
+    expect(await queue.size('user-offline')).toBe(2);
+  });
+
+  test('dedup (memory): a repeated entry with the same dedupKey IS still deduped', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const reaction = makePayload({
+      messageId: 'msg-reacted',
+      eventType: 'reaction-added',
+      dedupKey: 'msg-reacted:participant-a:👍',
+    });
+
+    await queue.enqueue('user-offline', reaction);
+    await queue.enqueue('user-offline', reaction);
 
     expect(await queue.size('user-offline')).toBe(1);
   });
@@ -1000,6 +1035,22 @@ describe('RedisDeliveryQueue (Redis dedup via eval, eventType-aware)', () => {
     expect(redis.eval).toHaveBeenNthCalledWith(2, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'edited');
     expect(redis.eval).toHaveBeenNthCalledWith(3, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'deleted');
   });
+
+  test('enqueue passes dedupKey (not messageId) as ARGV[2] when the entry sets one', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-evt', makePayload({
+      messageId: 'msg-reacted',
+      eventType: 'reaction-added',
+      dedupKey: 'msg-reacted:participant-a:👍',
+    }));
+
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String), 1, expect.any(String),
+      expect.any(String), 'msg-reacted:participant-a:👍', expect.any(String), 'reaction-added'
+    );
+  });
 });
 
 describe('RedisDeliveryQueue (Redis dedup via eval)', () => {
@@ -1015,6 +1066,23 @@ describe('RedisDeliveryQueue (Redis dedup via eval)', () => {
     expect(redis.eval).toHaveBeenCalledTimes(2);
     // Memory queue remains empty since Redis was available both times
     expect(await queue.size('user-rd')).toBe(0);
+  });
+
+  test('supersede (Redis): eval returns 2 (in-place replace) — handled without a memory fallback push', async () => {
+    const redis = makeMockRedis({
+      eval: jest.fn()
+        .mockResolvedValueOnce(1)  // first edit: pushed
+        .mockResolvedValueOnce(2), // second edit: superseded in place
+      llen: jest.fn().mockResolvedValue(1),
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-sup', makePayload({ messageId: 'm-sup', eventType: 'edited', payload: { content: 'v1' } }));
+    await queue.enqueue('user-sup', makePayload({ messageId: 'm-sup', eventType: 'edited', payload: { content: 'v2' } }));
+
+    expect(redis.eval).toHaveBeenCalledTimes(2);
+    // Redis owned both enqueues — nothing leaks into the memory fallback.
+    expect(await queue.size('user-sup')).toBe(1); // llen returns 1 (single collapsed entry)
   });
 
   test('dedup (Redis): eval returns 1 on first push, correctly logs dedup on second', async () => {
