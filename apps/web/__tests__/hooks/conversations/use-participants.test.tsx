@@ -220,6 +220,28 @@ describe('useParticipants', () => {
       expect(participant.role).toBeDefined();
     });
 
+    it('does not fabricate now() for a co-participant with an absent lastActiveAt', async () => {
+      // Gateway returns lastActiveAt: null for an offline co-participant whose
+      // "last seen" is hidden by privacy prefs. Fabricating now() here makes
+      // getUserStatus decay to 'online' for someone who is actually offline.
+      mockGetAllParticipants.mockResolvedValue({
+        authenticatedParticipants: [{ ...mockAuthenticatedUser, isOnline: false, lastActiveAt: null }],
+        anonymousParticipants: [],
+      });
+
+      const { result } = renderHook(() =>
+        useParticipants({ conversationId: mockConversationId })
+      );
+
+      await act(async () => {
+        await result.current.loadParticipants(mockConversationId);
+      });
+
+      const participant = result.current.participants[0];
+      expect(participant.lastActiveAt).toBeUndefined();
+      expect((participant.user as any)?.lastActiveAt).toBeUndefined();
+    });
+
     it('should call service with correct conversation ID', async () => {
       mockGetAllParticipants.mockResolvedValue({
         authenticatedParticipants: [],
