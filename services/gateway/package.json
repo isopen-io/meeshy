@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/gateway",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "Fastify Gateway service for Meeshy real-time messaging",
   "private": true,
   "main": "dist/src/server.js",
