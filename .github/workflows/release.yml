@@ -182,6 +182,15 @@ jobs:
         run: |
           git add -A
           git commit -m "chore(release): version packages [skip ci]" || echo "No changes to commit"
+          # Le push peut être rejeté (non fast-forward) si main a avancé entre le
+          # checkout du runner et ce push : rebase puis retry au lieu d'échouer.
+          for attempt in 1 2 3; do
+            if git push origin "$BRANCH_NAME"; then
+              exit 0
+            fi
+            echo "⚠️  Push rejeté (tentative $attempt) — rebase sur origin/$BRANCH_NAME..."
+            git pull --rebase origin "$BRANCH_NAME"
+          done
           git push origin "$BRANCH_NAME"
 
       - name: Create Git tag
