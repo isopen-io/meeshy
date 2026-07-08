@@ -16,6 +16,7 @@ import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -26,6 +27,7 @@ export interface ReactionHandlerDependencies {
   reactionService: ReactionService;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
+  deliveryQueue?: RedisDeliveryQueue | null;
 }
 
 export class ReactionHandler {
@@ -35,6 +37,7 @@ export class ReactionHandler {
   private reactionService: ReactionService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private deliveryQueue: RedisDeliveryQueue | null;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ReactionHandlerDependencies) {
@@ -44,6 +47,16 @@ export class ReactionHandler {
     this.reactionService = deps.reactionService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.deliveryQueue = deps.deliveryQueue ?? null;
+  }
+
+  /**
+   * Injected after construction by `MeeshySocketIOManager.setDeliveryQueue`
+   * (same instance shared with MessageHandler and the REST broadcast path),
+   * since the queue is built once `server.ts` has the Redis-backed CacheStore.
+   */
+  setDeliveryQueue(queue: RedisDeliveryQueue): void {
+    this.deliveryQueue = queue;
   }
 
   /**
@@ -159,11 +172,15 @@ export class ReactionHandler {
             participantId,
             message.conversationId
           )
-            .then(removeEvent => this._broadcastReactionEventWithConversationId(message.conversationId, removeEvent, SERVER_EVENTS.REACTION_REMOVED))
+            .then(removeEvent => {
+              this._broadcastReactionEventWithConversationId(message.conversationId, removeEvent, SERVER_EVENTS.REACTION_REMOVED);
+              void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, removeEvent as unknown as Record<string, unknown>);
+            })
             .catch(err => logger.error('reaction:add replaced-emoji broadcast failed', { error: err, conversationId: message.conversationId }));
         }
         this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
           .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
+        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, updateEvent as unknown as Record<string, unknown>);
       }
       // _createReactionNotification handles errors internally; void to be explicit.
       void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
@@ -266,6 +283,7 @@ export class ReactionHandler {
       if (message) {
         this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
           .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
+        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, updateEvent as unknown as Record<string, unknown>);
       }
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
@@ -386,6 +404,48 @@ export class ReactionHandler {
       (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
     );
     this.io.to(ROOMS.conversation(normalizedConversationId)).emit(eventType, updateEvent);
+  }
+
+  /**
+   * Offline delivery queue for reaction add/remove — mirrors
+   * `MessageHandler._enqueueOfflineEventForParticipants` for edits/deletes.
+   * Without this a reaction toggled while a participant is offline is only
+   * broadcast to the live conversation room, so the offline peer's cached
+   * reaction counts stay stale until an unrelated full refetch. On reconnect
+   * `MeeshySocketIOManager._drainedEventName` replays the queued entry as
+   * REACTION_ADDED / REACTION_REMOVED with the same payload as the live emit.
+   *
+   * The actor is excluded by participant id (Leçon 78: exclude on the CALLER's
+   * identity, never on message content) and every online peer is skipped since
+   * they already received the live broadcast.
+   */
+  private async _enqueueOfflineReactionEvent(
+    conversationId: string,
+    actorParticipantId: string | null | undefined,
+    eventType: 'reaction-added' | 'reaction-removed',
+    messageId: string,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.deliveryQueue) return;
+    try {
+      const participants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true },
+        select: { id: true, userId: true }
+      });
+      for (const p of participants) {
+        const queueKey = p.userId ?? p.id;
+        if (p.id === actorParticipantId || this.connectedUsers.has(queueKey)) continue;
+        this.deliveryQueue.enqueue(queueKey, {
+          messageId,
+          conversationId,
+          payload,
+          enqueuedAt: new Date().toISOString(),
+          eventType,
+        }).catch((err) => logger.warn('Failed to enqueue offline reaction event', { userId: queueKey, eventType, error: err }));
+      }
+    } catch (err) {
+      logger.warn('Failed to fetch participants for offline reaction enqueue', { conversationId, eventType, error: err });
+    }
   }
 
   /**

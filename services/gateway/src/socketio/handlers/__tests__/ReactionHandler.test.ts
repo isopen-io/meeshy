@@ -76,6 +76,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    conversation: {
+      findUnique: jest.fn<any>().mockResolvedValue({ id: CONV_ID, identifier: CONV_ID }),
     },
     ...overrides,
   } as unknown as PrismaClient;
@@ -119,6 +123,7 @@ function buildHandler(overrides: Record<string, any> = {}) {
   const connectedUsers = overrides.connectedUsers ?? makeConnectedUsers();
   const socketToUser = overrides.socketToUser ?? makeSocketToUser();
 
+  const deliveryQueue = overrides.deliveryQueue;
   const handler = new ReactionHandler({
     io: io as any,
     prisma,
@@ -126,8 +131,9 @@ function buildHandler(overrides: Record<string, any> = {}) {
     reactionService,
     connectedUsers,
     socketToUser,
+    deliveryQueue,
   });
-  return { handler, prisma, reactionService, io, connectedUsers, socketToUser };
+  return { handler, prisma, reactionService, io, connectedUsers, socketToUser, deliveryQueue };
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -686,6 +692,175 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(
         expect.objectContaining({ success: false, error: 'Could not resolve participant' })
       );
+    });
+  });
+
+  // ── Offline reaction delivery queue ──────────────────────────────────────
+  //
+  // Symmetry with MessageHandler edit/delete enqueue (Leçon 77/78): a reaction
+  // added or removed while a participant is offline is broadcast only to the
+  // live conversation room, so the offline peer never learns of it until an
+  // unrelated full refetch. Reactions must be enqueued for offline peers and
+  // replayed on reconnect via `_drainedEventName` → REACTION_ADDED/REMOVED.
+
+  describe('offline reaction delivery queue', () => {
+    const OFFLINE_USER = 'user-offline';
+    const OFFLINE_PARTICIPANT = '607f191e810c19729de860f1';
+    const ONLINE_PEER_USER = 'user-online-peer';
+    const ONLINE_PEER_PARTICIPANT = '607f191e810c19729de860f2';
+
+    function makeDeliveryQueue() {
+      return { enqueue: jest.fn<any>().mockResolvedValue(undefined) } as any;
+    }
+
+    function makeConnectedUsersWith(peerOnline: boolean) {
+      const users = new Map<string, any>();
+      users.set(USER_ID, { id: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'en' });
+      if (peerOnline) {
+        users.set(ONLINE_PEER_USER, { id: ONLINE_PEER_USER, socketId: 'socket-peer', isAnonymous: false, language: 'en' });
+      }
+      return users;
+    }
+
+    function makePrismaWithParticipants() {
+      return {
+        message: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }) },
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            { id: PARTICIPANT_ID, userId: USER_ID },
+            { id: OFFLINE_PARTICIPANT, userId: OFFLINE_USER },
+            { id: ONLINE_PEER_PARTICIPANT, userId: ONLINE_PEER_USER },
+          ]),
+        },
+        conversation: { findUnique: jest.fn<any>().mockResolvedValue({ id: CONV_ID, identifier: CONV_ID }) },
+      } as unknown as PrismaClient;
+    }
+
+    const flush = () => new Promise(resolve => setImmediate(resolve));
+
+    it('enqueues a reaction-added event for offline participants only', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      // Exactly one enqueue: the offline peer. Actor (online + self) and the
+      // online peer are both skipped.
+      expect(deliveryQueue.enqueue).toHaveBeenCalledTimes(1);
+      expect(deliveryQueue.enqueue).toHaveBeenCalledWith(
+        OFFLINE_USER,
+        expect.objectContaining({
+          messageId: MESSAGE_ID,
+          conversationId: CONV_ID,
+          eventType: 'reaction-added',
+        })
+      );
+    });
+
+    it('does not enqueue for the reacting actor even if they were offline', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      // Actor's user id is NOT in connectedUsers → the only guard keeping them
+      // out of the queue is the explicit actor-participant exclusion.
+      const usersWithoutActor = new Map<string, any>();
+      usersWithoutActor.set(USER_ID, { id: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'en' });
+      const { handler } = buildHandler({
+        prisma: {
+          message: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }) },
+          participant: {
+            findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+            findMany: jest.fn<any>().mockResolvedValue([{ id: PARTICIPANT_ID, userId: USER_ID }]),
+          },
+          conversation: { findUnique: jest.fn<any>().mockResolvedValue({ id: CONV_ID, identifier: CONV_ID }) },
+        },
+        connectedUsers: usersWithoutActor,
+        deliveryQueue,
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      expect(deliveryQueue.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('enqueues a reaction-removed event for offline participants on un-react', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+      });
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      expect(deliveryQueue.enqueue).toHaveBeenCalledTimes(1);
+      expect(deliveryQueue.enqueue).toHaveBeenCalledWith(
+        OFFLINE_USER,
+        expect.objectContaining({ eventType: 'reaction-removed', messageId: MESSAGE_ID })
+      );
+    });
+
+    it('also enqueues a reaction-removed for a replaced emoji during a single-reaction swap', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      const createUpdateEvent = jest.fn<any>()
+        .mockImplementation((_m: string, emoji: string, action: string) =>
+          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r2', emoji: '🔥' }, replacedEmojis: ['👍'] }),
+          createUpdateEvent,
+        },
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, jest.fn());
+      await flush();
+
+      const events = deliveryQueue.enqueue.mock.calls.map((c: any[]) => c[1].eventType);
+      expect(events).toEqual(expect.arrayContaining(['reaction-added', 'reaction-removed']));
+      // Both enqueues target the offline peer only.
+      for (const call of deliveryQueue.enqueue.mock.calls) {
+        expect(call[0]).toBe(OFFLINE_USER);
+      }
+    });
+
+    it('is a no-op when no delivery queue is wired (does not throw)', async () => {
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        // deliveryQueue omitted
+      });
+
+      await expect(
+        handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn())
+      ).resolves.toBeUndefined();
+      await flush();
+    });
+
+    it('does not enqueue on an idempotent no-op re-react', async () => {
+      const deliveryQueue = makeDeliveryQueue();
+      const { handler } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r1', emoji: '👍' }, replacedEmojis: [], unchanged: true }),
+          createUpdateEvent: jest.fn<any>(),
+        },
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+      await flush();
+
+      expect(deliveryQueue.enqueue).not.toHaveBeenCalled();
     });
   });
 });
