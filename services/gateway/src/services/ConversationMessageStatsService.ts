@@ -34,16 +34,17 @@ function countWords(content: string): number {
 
 // A message counts as "text" for stats iff it has no attachments AND its
 // messageType is 'text'. This mirrors the authoritative recompute()
-// (`msgType === 'text' && attachments.length === 0`); the incremental path
-// MUST use the same rule or a non-text message (e.g. 'location', 'system')
-// with a caption inflates contentTypes.text until the next recompute.
+// (`msgType === 'text' && attachments.length === 0`) EXACTLY; the incremental
+// path MUST use the same rule or the two diverge. Content emptiness is
+// deliberately NOT checked: recompute counts a blank-content text message
+// (e.g. a whitespace-only `' '`, which the gateway's `min(1)` schema allows),
+// so adding a `content.trim()` gate here would undercount contentTypes.text
+// incrementally and let it jump up on the next periodic recompute.
 function isTextMessageStat(
   attachmentTypes: string[],
-  content: string,
   messageType?: string,
 ): boolean {
-  const hasTextContent = !!(content && content.trim().length > 0);
-  return attachmentTypes.length === 0 && hasTextContent && (messageType || 'text') === 'text';
+  return attachmentTypes.length === 0 && (messageType || 'text') === 'text';
 }
 
 // A message counts as "location" for stats iff its messageType is 'location'.
@@ -147,7 +148,7 @@ export class ConversationMessageStatsService {
       }
     }
 
-    const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
+    const isTextMessage = isTextMessageStat(attachmentTypes, messageType);
     const isLocationMessage = isLocationMessageStat(messageType);
 
     const participantStats = (typeof existing.participantStats === 'string'
@@ -279,7 +280,7 @@ export class ConversationMessageStatsService {
 
     const words = countWords(content);
     const chars = countCharacters(content);
-    const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
+    const isTextMessage = isTextMessageStat(attachmentTypes, messageType);
     const isLocationMessage = isLocationMessageStat(messageType);
 
     const decrements: Record<string, number> = {};

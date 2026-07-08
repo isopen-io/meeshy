@@ -400,6 +400,30 @@ describe('ConversationMessageStatsService', () => {
       expect(updateCall.data.textMessages).toEqual({ increment: 1 });
     });
 
+    it('increments textMessages for a whitespace-only text message (matches recompute — content emptiness is not a gate)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      // A ' ' body passes the gateway's `min(1)` content schema and is stored
+      // as messageType 'text' with no attachments. recompute() counts it
+      // (`msgType === 'text' && attachments.length === 0`), so the incremental
+      // path MUST too, or contentTypes.text drifts down until the next recompute.
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, ' ', [], 'en', 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.textMessages).toEqual({ increment: 1 });
+    });
+
+    it('increments textMessages for an empty-content text message (parity with recompute)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onNewMessage(prisma as any, CONV_ID, USER_A, '', [], 'en', 'text');
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.textMessages).toEqual({ increment: 1 });
+    });
+
     it('does not increment textMessages for a non-text messageType with a caption (matches recompute)', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
@@ -761,6 +785,16 @@ describe('ConversationMessageStatsService', () => {
       prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
 
       await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'hello', []);
+
+      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
+      expect(updateCall.data.textMessages).toEqual({ decrement: 1 });
+    });
+
+    it('decrements textMessages when a whitespace-only text message is deleted (symmetry with onNewMessage + recompute)', async () => {
+      const prisma = makePrisma();
+      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
+
+      await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, ' ', [], 'text');
 
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
       expect(updateCall.data.textMessages).toEqual({ decrement: 1 });
