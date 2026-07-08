@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.model.UnreadUpdateEvent
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.MessageDeletedEvent
+import me.meeshy.sdk.model.MessagePinnedEvent
+import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.AttachmentUpdatedEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
@@ -41,6 +43,8 @@ class MessageSocketManager @Inject constructor(
     private val _messageReceived = buf<ApiMessage>()
     private val _messageUpdated = buf<ApiMessage>()
     private val _messageDeleted = buf<MessageDeletedEvent>()
+    private val _messagePinned = buf<MessagePinnedEvent>()
+    private val _messageUnpinned = buf<MessageUnpinnedEvent>()
     private val _typingStarted = buf<TypingEvent>()
     private val _typingStopped = buf<TypingEvent>()
     private val _reactionAdded = buf<ReactionUpdateEvent>()
@@ -63,6 +67,8 @@ class MessageSocketManager @Inject constructor(
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.asSharedFlow()
     val messageUpdated: SharedFlow<ApiMessage> = _messageUpdated.asSharedFlow()
     val messageDeleted: SharedFlow<MessageDeletedEvent> = _messageDeleted.asSharedFlow()
+    val messagePinned: SharedFlow<MessagePinnedEvent> = _messagePinned.asSharedFlow()
+    val messageUnpinned: SharedFlow<MessageUnpinnedEvent> = _messageUnpinned.asSharedFlow()
     val typingStarted: SharedFlow<TypingEvent> = _typingStarted.asSharedFlow()
     val typingStopped: SharedFlow<TypingEvent> = _typingStopped.asSharedFlow()
     val reactionAdded: SharedFlow<ReactionUpdateEvent> = _reactionAdded.asSharedFlow()
@@ -86,6 +92,8 @@ class MessageSocketManager @Inject constructor(
         listen("message:new", _messageReceived)
         listen("message:updated", _messageUpdated)
         listen("message:deleted", _messageDeleted)
+        listen("message:pinned", _messagePinned)
+        listen("message:unpinned", _messageUnpinned)
         listen("typing:start", _typingStarted)
         listen("typing:stop", _typingStopped)
         listen("reaction:added", _reactionAdded)
