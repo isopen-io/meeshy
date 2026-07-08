@@ -32,10 +32,10 @@ datasets==5.0.0
 huggingface_hub==1.21.0
 safetensors==0.8.0
 peft==0.19.1
-# PIN EXACT — chatterbox-tts 0.1.6 requiert transformers==5.12.1 (cf. uv.lock + pyproject.toml).
+# PIN EXACT — chatterbox-tts 0.1.6 requiert transformers==5.13.0 (cf. uv.lock + pyproject.toml).
 # NE PAS élargir : transformers>=4.55 référence torch.float8_e8m0fnu (dtype MXFP4) absent de
 # torch 2.6.0 (épinglé dans Dockerfile) → AttributeError à l'import de chatterbox au build.
-transformers==5.12.1
+transformers==5.13.0
 # librosa: version gérée par ESPnet (0.9.2 pour espnet 202412) et chatterbox-tts
 
 # Cache et base de données
@@ -111,7 +111,7 @@ soxr==1.1.0  # Requis par transformers/audio_utils pour chatterbox-tts
 # ✓ Used for languages not supported by Chatterbox (e.g., Lingala)
 # Set TTS_MODEL=vits
 # Note: 202412 est la dernière version compatible numpy<2.0 (avant 202509 qui nécessite numpy>=2.2)
-espnet==202412
+espnet==202511
 espnet-model-zoo==0.1.7
 
 # ─────────────────────────────────────────────────────────────────────────────────
