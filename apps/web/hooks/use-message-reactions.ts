@@ -21,6 +21,7 @@ import type {
 } from '@meeshy/shared/types/reaction';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { useI18n } from '@/hooks/useI18n';
+import { isValidObjectId } from '@/utils/object-id';
 
 export interface UseMessageReactionsOptions {
   messageId: string;
@@ -62,10 +63,10 @@ export function useMessageReactions({
   // persisté) pour éviter d'envoyer un ID invalide au gateway (Prisma ObjectID
   // error). Un message optimiste porte un `cid_<uuid>` (generateClientMessageId)
   // jusqu'à ce que l'ACK/broadcast serveur le remplace par un ObjectId Mongo
-  // (24 hex). On gate donc sur le format ObjectId — même convention que
-  // use-conversation-messages-rq / use-socket-cache-sync — plutôt que sur un
-  // préfixe `temp-` qu'aucun chemin de production ne produit.
-  const isOptimistic = !/^[a-f\d]{24}$/i.test(messageId);
+  // (24 hex). On gate donc sur le format ObjectId via la source unique
+  // `utils/object-id` — plutôt que sur un préfixe `temp-` qu'aucun chemin de
+  // production ne produit.
+  const isOptimistic = !isValidObjectId(messageId);
   const effectiveEnabled = enabled && !isOptimistic;
 
   // État local
