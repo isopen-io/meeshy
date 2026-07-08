@@ -12,7 +12,7 @@ import {
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
-import { startOfLocalDayMs } from '@meeshy/shared/utils/calendar-date';
+import { startOfLocalDayMs, calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
@@ -288,16 +288,31 @@ export function formatContentPublishedAt(
 /**
  * Groups notifications by date period.
  * Returns entries in order: today, yesterday, this week, this month, older.
+ *
+ * Le découpage jour-à-jour (today / yesterday / this week) s'appuie sur
+ * {@link calendarDayDiff} — la SSOT DST-safe déjà utilisée par
+ * `formatContentPublishedAt` dans ce fichier — plutôt que sur une soustraction
+ * de millisecondes ancrée à un jour calendaire de la semaine.
+ *
+ * « This week » est une fenêtre glissante de 7 jours (jours J-2 à J-6), pas une
+ * semaine calendaire ancrée au dimanche. L'ancien calcul
+ * `startOfToday - getDay()*jour` s'effondrait le jour d'ancrage : `getDay()`
+ * valant 0 le dimanche, `startOfWeek` retombait sur `startOfToday`, rendant le
+ * bucket « This week » structurellement inatteignable ce jour-là et renvoyant
+ * toute notification vieille de 2 à 6 jours dans « This month ». La fenêtre
+ * glissante supprime cet effet de bord et rend le regroupement cohérent quel
+ * que soit le jour de la semaine et la locale (dimanche vs lundi).
+ *
+ * Le « maintenant » est injectable (`now`) pour rendre le regroupement
+ * déterministe en test — même convention que `calendarDayDiff(nowMs)`.
  */
 export function groupNotificationsByDate(
   notifications: Notification[],
-  labels: { today: string; yesterday: string; thisWeek: string; thisMonth: string; older: string }
+  labels: { today: string; yesterday: string; thisWeek: string; thisMonth: string; older: string },
+  now: Date = new Date()
 ): Array<{ label: string; notifications: Notification[] }> {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
-  const startOfWeek = new Date(startOfToday.getTime() - startOfToday.getDay() * 86400000);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nowMs = now.getTime();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
   const groups = new Map<string, Notification[]>([
     [labels.today, []],
@@ -313,14 +328,15 @@ export function groupNotificationsByDate(
       : new Date(notification.state.createdAt);
 
     const time = createdAt.getTime();
+    const dayDiff = calendarDayDiff(time, nowMs);
 
-    if (time >= startOfToday.getTime()) {
+    if (dayDiff <= 0) {
       groups.get(labels.today)!.push(notification);
-    } else if (time >= startOfYesterday.getTime()) {
+    } else if (dayDiff === 1) {
       groups.get(labels.yesterday)!.push(notification);
-    } else if (time >= startOfWeek.getTime()) {
+    } else if (dayDiff <= 6) {
       groups.get(labels.thisWeek)!.push(notification);
-    } else if (time >= startOfMonth.getTime()) {
+    } else if (time >= startOfMonth) {
       groups.get(labels.thisMonth)!.push(notification);
     } else {
       groups.get(labels.older)!.push(notification);
