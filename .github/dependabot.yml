@@ -60,6 +60,11 @@ updates:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     versioning-strategy: increase
+    # next 16 casse Turbopack contre @meeshy/shared transpilé (cf. PR #1542, #1676) —
+    # bloquer les majeures tant que la migration n'est pas vetée manuellement
+    ignore:
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
 
   # Service Gateway (Node.js/gRPC)
   - package-ecosystem: "npm"
