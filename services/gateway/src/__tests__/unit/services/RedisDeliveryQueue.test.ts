@@ -976,7 +976,7 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     expect(drained.map(d => d.eventType ?? 'new')).toEqual(['new', 'deleted']);
   });
 
-  test('dedup (memory): a repeated "edited" event for the same messageId IS still deduped', async () => {
+  test('dedup (memory): a repeated "edited" event for the same messageId IS still collapsed to one entry', async () => {
     const queue = new RedisDeliveryQueue(makeCacheStore(null));
     const edited = makePayload({ messageId: 'msg-edit-twice', eventType: 'edited' });
 
@@ -984,6 +984,52 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     await queue.enqueue('user-offline', edited);
 
     expect(await queue.size('user-offline')).toBe(1);
+  });
+
+  test('supersede (memory): a second "edited" replaces the queued payload — the FINAL content replays, not the stale intermediate', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const original = makePayload({ messageId: 'msg-edit-race', payload: { content: 'original' } });
+    const firstEdit = makePayload({ messageId: 'msg-edit-race', eventType: 'edited', payload: { content: 'hello world' } });
+    const secondEdit = makePayload({ messageId: 'msg-edit-race', eventType: 'edited', payload: { content: 'goodbye' } });
+
+    await queue.enqueue('user-offline', original);
+    await queue.enqueue('user-offline', firstEdit);
+    await queue.enqueue('user-offline', secondEdit);
+
+    const drained = await queue.drain('user-offline');
+    // Exactly two entries survive (the 'new' and a single collapsed 'edited'),
+    // and the surviving edit carries the SENDER'S FINAL content.
+    expect(drained).toHaveLength(2);
+    expect(drained.map(d => d.eventType ?? 'new')).toEqual(['new', 'edited']);
+    expect(drained[1].payload.content).toBe('goodbye');
+  });
+
+  test('supersede (memory): a superseding "edited" keeps its FIFO slot after the "new" it targets', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const original = makePayload({ messageId: 'msg-fifo', enqueuedAt: '2026-07-08T10:00:00.000Z', payload: { content: 'v0' } });
+    const firstEdit = makePayload({ messageId: 'msg-fifo', eventType: 'edited', enqueuedAt: '2026-07-08T10:00:01.000Z', payload: { content: 'v1' } });
+    const secondEdit = makePayload({ messageId: 'msg-fifo', eventType: 'edited', enqueuedAt: '2026-07-08T10:00:02.000Z', payload: { content: 'v2' } });
+
+    await queue.enqueue('user-offline', original);
+    await queue.enqueue('user-offline', firstEdit);
+    await queue.enqueue('user-offline', secondEdit);
+
+    const drained = await queue.drain('user-offline');
+    expect(drained.map(d => d.messageId + ':' + (d.eventType ?? 'new'))).toEqual(['msg-fifo:new', 'msg-fifo:edited']);
+    expect(drained[1].payload.content).toBe('v2');
+  });
+
+  test('supersede (memory): a "new" retry stays idempotent — the FIRST payload is kept', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const first = makePayload({ messageId: 'msg-new-retry', payload: { content: 'first' } });
+    const retry = makePayload({ messageId: 'msg-new-retry', payload: { content: 'should-be-ignored' } });
+
+    await queue.enqueue('user-offline', first);
+    await queue.enqueue('user-offline', retry);
+
+    const drained = await queue.drain('user-offline');
+    expect(drained).toHaveLength(1);
+    expect(drained[0].payload.content).toBe('first');
   });
 });
 
@@ -1015,6 +1061,23 @@ describe('RedisDeliveryQueue (Redis dedup via eval)', () => {
     expect(redis.eval).toHaveBeenCalledTimes(2);
     // Memory queue remains empty since Redis was available both times
     expect(await queue.size('user-rd')).toBe(0);
+  });
+
+  test('supersede (Redis): eval returns 2 (in-place replace) — handled without a memory fallback push', async () => {
+    const redis = makeMockRedis({
+      eval: jest.fn()
+        .mockResolvedValueOnce(1)  // first edit: pushed
+        .mockResolvedValueOnce(2), // second edit: superseded in place
+      llen: jest.fn().mockResolvedValue(1),
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-sup', makePayload({ messageId: 'm-sup', eventType: 'edited', payload: { content: 'v1' } }));
+    await queue.enqueue('user-sup', makePayload({ messageId: 'm-sup', eventType: 'edited', payload: { content: 'v2' } }));
+
+    expect(redis.eval).toHaveBeenCalledTimes(2);
+    // Redis owned both enqueues — nothing leaks into the memory fallback.
+    expect(await queue.size('user-sup')).toBe(1); // llen returns 1 (single collapsed entry)
   });
 
   test('dedup (Redis): eval returns 1 on first push, correctly logs dedup on second', async () => {

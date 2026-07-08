@@ -15,22 +15,37 @@ redis.call('DEL', KEYS[1])
 return entries
 `.trim();
 
-// Idempotent enqueue: only push if no entry with the same messageId AND
-// eventType already exists. A queued 'new' must NOT block a later 'edited'
-// or 'deleted' for the same message — those are distinct events that must
-// all replay on drain, in FIFO order, so the recipient's final state matches
-// the sender's (edit/delete after an offline 'new' must not be dropped).
-// Returns 1 when pushed, 0 when the (messageId, eventType) pair was already present.
+// Enqueue keyed on (messageId, eventType). A queued 'new' must NOT block a
+// later 'edited'/'deleted' for the same message — those are distinct events
+// that must all replay on drain, in FIFO order, so the recipient's final state
+// matches the sender's (edit/delete after an offline 'new' must not be dropped).
+//
+// 'new' is IMMUTABLE: a re-enqueue is a retry of the identical event, so it is
+// idempotently dropped (return 0). Every other event type ('edited'/'deleted')
+// is MUTABLE: the LATEST payload must win. A message edited twice while a
+// recipient is offline enqueues two 'edited' entries; keeping the first would
+// replay the stale intermediate content on drain. So a matching mutable entry
+// is SUPERSEDED in place (LSET at its FIFO slot, return 2) rather than dropped —
+// preserving the one-entry-per-(messageId, eventType) invariant the drain/prune
+// paths rely on while carrying the newest content and enqueuedAt.
+//
+// Returns 1 when pushed as a new entry, 0 when an identical 'new' was deduped,
+// 2 when a mutable entry was superseded in place.
 // KEYS[1] = queue key, ARGV[1] = serialized entry, ARGV[2] = messageId,
 // ARGV[3] = TTL, ARGV[4] = normalized eventType
 const ENQUEUE_DEDUP_LUA = `
 local entries = redis.call('LRANGE', KEYS[1], 0, -1)
-for _, entry in ipairs(entries) do
+for i, entry in ipairs(entries) do
   local ok, decoded = pcall(cjson.decode, entry)
   if ok and decoded and decoded.messageId == ARGV[2] then
     local decodedEventType = decoded.eventType or 'new'
     if decodedEventType == ARGV[4] then
-      return 0
+      if ARGV[4] == 'new' then
+        return 0
+      end
+      redis.call('LSET', KEYS[1], i - 1, ARGV[1])
+      redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+      return 2
     end
   end
 end
@@ -105,7 +120,9 @@ export class RedisDeliveryQueue {
           serialized, entry.messageId, String(DELIVERY_QUEUE_TTL_SECONDS), normalizedEventType(entry)
         );
         if (pushed === 0) {
-          logger.debug('Delivery queue dedup: messageId already queued', { userId, messageId: entry.messageId });
+          logger.debug('Delivery queue dedup: identical messageId already queued', { userId, messageId: entry.messageId });
+        } else if (pushed === 2) {
+          logger.debug('Delivery queue supersede: newer payload replaced queued entry', { userId, messageId: entry.messageId, eventType: normalizedEventType(entry) });
         }
         return;
       } catch (error) {
@@ -123,8 +140,20 @@ export class RedisDeliveryQueue {
       }
     }
     const existing = this.memoryQueue.get(userId) ?? [];
-    if (existing.some(e => e.messageId === entry.messageId && normalizedEventType(e) === normalizedEventType(entry))) {
-      logger.debug('Delivery queue dedup (memory): messageId+eventType already queued', { userId, messageId: entry.messageId, eventType: normalizedEventType(entry) });
+    const eventType = normalizedEventType(entry);
+    const dupIndex = existing.findIndex(e => e.messageId === entry.messageId && normalizedEventType(e) === eventType);
+    if (dupIndex !== -1) {
+      // Mirror ENQUEUE_DEDUP_LUA: 'new' is idempotent (drop the retry); every
+      // other event type is mutable, so the latest payload supersedes the queued
+      // one in place — keeping a single entry per (messageId, eventType) while
+      // carrying the newest content, so a message edited twice offline replays
+      // the final content on drain, not the stale intermediate one.
+      if (eventType === 'new') {
+        logger.debug('Delivery queue dedup (memory): identical messageId+eventType already queued', { userId, messageId: entry.messageId, eventType });
+        return;
+      }
+      logger.debug('Delivery queue supersede (memory): newer payload replaced queued entry', { userId, messageId: entry.messageId, eventType });
+      this.memoryQueue.set(userId, existing.map((e, i) => (i === dupIndex ? entry : e)));
       return;
     }
     const bounded = existing.length >= MEMORY_QUEUE_MAX_PER_USER
