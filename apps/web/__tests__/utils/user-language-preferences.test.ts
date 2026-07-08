@@ -316,6 +316,51 @@ describe('getUserLanguagePreferences', () => {
     const user = makeUser({ systemLanguage: 'EN', regionalLanguage: 'en' });
     expect(getUserLanguagePreferences(user)).toEqual(['en']);
   });
+
+  describe('deviceLocale as 4th priority (Prisme étendu)', () => {
+    it('appends persisted deviceLocale after in-app preferences', () => {
+      const user = makeUser({
+        systemLanguage: 'fr',
+        regionalLanguage: 'en',
+        deviceLocale: 'it',
+      } as Partial<User>);
+      expect(getUserLanguagePreferences(user)).toEqual(['fr', 'en', 'it']);
+    });
+
+    it('falls back to navigator.language when deviceLocale is not persisted', () => {
+      mockGetDeviceLocale.mockReturnValue('pt-BR');
+      const user = makeUser({ systemLanguage: 'fr', regionalLanguage: '' });
+      expect(getUserLanguagePreferences(user)).toEqual(['fr', 'pt']);
+    });
+
+    it('prefers persisted deviceLocale over navigator.language', () => {
+      mockGetDeviceLocale.mockReturnValue('es-ES');
+      const user = makeUser({
+        systemLanguage: 'fr',
+        regionalLanguage: '',
+        deviceLocale: 'it',
+      } as Partial<User>);
+      expect(getUserLanguagePreferences(user)).toEqual(['fr', 'it']);
+    });
+
+    it('surfaces deviceLocale as the sole preference when in-app prefs are empty', () => {
+      mockGetDeviceLocale.mockReturnValue('de-DE');
+      const user = makeUser({
+        systemLanguage: undefined as unknown as string,
+        regionalLanguage: '',
+      });
+      expect(getUserLanguagePreferences(user)).toEqual(['de']);
+    });
+
+    it('deduplicates deviceLocale when it matches an in-app preference', () => {
+      const user = makeUser({
+        systemLanguage: 'fr',
+        regionalLanguage: 'en',
+        deviceLocale: 'EN',
+      } as Partial<User>);
+      expect(getUserLanguagePreferences(user)).toEqual(['fr', 'en']);
+    });
+  });
 });
 
 describe('getRequiredLanguagesForConversation', () => {

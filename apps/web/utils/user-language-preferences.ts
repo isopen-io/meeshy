@@ -5,8 +5,20 @@
 import type { User } from '@/types';
 import type { LanguageChoice } from '@/types/bubble-stream';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
-import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveUserLanguage, resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { getDeviceLocale } from '@/lib/device-locale';
+
+/**
+ * Résout la `deviceLocale` d'un utilisateur pour l'injection en 4e priorité du
+ * Prisme Linguistique : préfère la valeur persistée côté serveur
+ * (`user.deviceLocale`) à celle du navigateur courant, pour rester cohérent
+ * avec la résolution effectuée par le gateway/translator quand iOS et web
+ * partagent un compte.
+ */
+function resolveDeviceLocale(user: User): string | undefined {
+  const persisted = (user as { deviceLocale?: string | null }).deviceLocale;
+  return persisted ?? getDeviceLocale() ?? undefined;
+}
 
 /**
  * Génère les choix de langues disponibles pour un utilisateur
@@ -85,41 +97,28 @@ export function getUserLanguageChoices(user: User): LanguageChoice[] {
  * le translator quand iOS et web partagent un compte.
  */
 export function resolveUserPreferredLanguage(user: User): string {
-  const persisted = (user as { deviceLocale?: string | null }).deviceLocale;
-  const deviceLocale = persisted ?? getDeviceLocale() ?? undefined;
-  return resolveUserLanguage(user, { deviceLocale });
+  return resolveUserLanguage(user, { deviceLocale: resolveDeviceLocale(user) });
 }
 
 /**
- * Obtient la liste des langues utilisées par l'utilisateur
+ * Obtient la liste ordonnée et dédupliquée des langues préférées de
+ * l'utilisateur — les cibles pour lesquelles une traduction doit être requise.
+ *
+ * Délègue à `resolveUserLanguagesOrdered()` depuis `@meeshy/shared` — source de
+ * vérité unique du Prisme Linguistique — et injecte la `deviceLocale` en 4e
+ * priorité (Prisme étendu 2026-05-26), à parité avec
+ * `resolveUserPreferredLanguage`. Sans cette injection, un utilisateur dont le
+ * seul signal de langue est la locale appareil (préférences in-app vides)
+ * voyait son contenu résolu vers cette locale mais aucune traduction n'était
+ * jamais demandée pour elle.
+ *
+ *   1. systemLanguage → 2. regionalLanguage → 3. customDestinationLanguage
+ *   → 4. deviceLocale (persistée ?? navigator.language)
+ *
+ * Pas de fallback `'fr'` : si tous les signaux sont vides, la liste est vide.
  */
 export function getUserLanguagePreferences(user: User): string[] {
-  // Lowercase avant déduplication — parité avec resolveUserLanguagesOrdered
-  // (@meeshy/shared) : 'EN' et 'en' sont la même langue, un seul code émis.
-  const systemCode = user.systemLanguage?.toLowerCase();
-  const regionalCode = user.regionalLanguage?.toLowerCase();
-  const customCode = user.customDestinationLanguage?.toLowerCase();
-
-  const languages = new Set<string>();
-
-  // Toujours inclure la langue système
-  if (systemCode) {
-    languages.add(systemCode);
-  }
-
-  // Inclure la langue régionale si différente
-  if (regionalCode && regionalCode !== systemCode) {
-    languages.add(regionalCode);
-  }
-
-  // Inclure la langue personnalisée si définie et différente
-  if (customCode &&
-      customCode !== systemCode &&
-      customCode !== regionalCode) {
-    languages.add(customCode);
-  }
-
-  return Array.from(languages);
+  return resolveUserLanguagesOrdered(user, { deviceLocale: resolveDeviceLocale(user) });
 }
 
 /**
