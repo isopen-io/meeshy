@@ -1867,6 +1867,85 @@ describe('PushNotificationService', () => {
         jest.useRealTimers();
       }
     });
+
+    it('should block push in an overnight window morning tail when the window START day is selected', async () => {
+      // dndDays ['mon'] + 22:00→08:00 means "quiet Monday night → Tuesday morning".
+      // Tuesday 2026-01-06 07:00 UTC is the tail of Monday night's window and must
+      // be blocked — even though today's weekday ('tue') is not itself in dndDays.
+      jest.useFakeTimers({ now: new Date('2026-01-06T07:00:00Z') });
+      try {
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: {
+              pushEnabled: true,
+              dndEnabled: true,
+              dndDays: ['mon'],
+              dndStartTime: '22:00',
+              dndEndTime: '08:00', // overnight
+            },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'tok', token: 'any', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-morning-tail-blocked',
+          payload: { title: 'Test', body: 'Test' },
+        });
+
+        expect(result).toEqual([]);
+        expect(mockLoggerInfo).toHaveBeenCalledWith(
+          'Push blocked by user preferences',
+          expect.objectContaining({ userId: 'user-morning-tail-blocked' })
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should allow push in an overnight window morning tail when the window START day is NOT selected', async () => {
+      // Monday 2026-01-05 07:00 UTC is the tail of Sunday night's window. With
+      // dndDays ['mon'] the Sunday-night window is not selected, so the push must
+      // be allowed — the naive "check today's weekday" logic wrongly blocked it.
+      jest.useFakeTimers({ now: new Date('2026-01-05T07:00:00Z') });
+      try {
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: {
+              pushEnabled: true,
+              dndEnabled: true,
+              dndDays: ['mon'],
+              dndStartTime: '22:00',
+              dndEndTime: '08:00', // overnight
+            },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([]);
+
+        await service.sendToUser({
+          userId: 'user-morning-tail-allowed',
+          payload: { title: 'Test', body: 'Test' },
+        });
+
+        expect(mockLoggerInfo).not.toHaveBeenCalledWith(
+          'Push blocked by user preferences',
+          expect.anything()
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   // ==============================================
