@@ -14,15 +14,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.chat.LocallyHiddenMessages
+import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.MessageEditability
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -47,8 +55,10 @@ data class ChatUiState(
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
-    val typingUsers: List<String> = emptyList(),
+    val typingParticipants: List<TypingParticipant> = emptyList(),
     val conversationTitle: String? = null,
+    val memberCount: Int = 0,
+    val isGroup: Boolean = false,
     val accentColorHex: String? = null,
     val actionMessageId: String? = null,
     val emojiPickerMessageId: String? = null,
@@ -59,6 +69,10 @@ data class ChatUiState(
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
     val imageViewer: ImageViewerTarget? = null,
+    val scrollToMessageId: String? = null,
+    val search: ChatSearchState = ChatSearchState(),
+    val mention: MentionAutocompleteState = MentionAutocompleteState(),
+    val mentionDisplayNames: Map<String, String> = emptyMap(),
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -71,9 +85,12 @@ class ChatViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val reactionRepository: ReactionRepository,
     private val emojiUsageStore: EmojiUsageStore,
+    private val locallyHiddenStore: LocallyHiddenMessagesStore,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
+    private val clock: CacheClock,
+    private val draftStore: ConversationDraftStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -86,14 +103,32 @@ class ChatViewModel @Inject constructor(
 
     private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     private val showingOriginal = MutableStateFlow<Set<String>>(emptySet())
+    private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
+    private var mentionRoster: List<MentionCandidate> = emptyList()
+    private var avatarByUserId: Map<String, String?> = emptyMap()
     private var isEmittingTyping = false
     private var typingReemitJob: Job? = null
     private var typingIdleJob: Job? = null
+    private var lastPersistedDraft: ConversationDraft? = null
+    private var draftPersistJob: Job? = null
 
     init {
         viewModelScope.launch { markConversationRead() }
+
+        viewModelScope.launch {
+            val stored = draftStore.load(conversationId)
+            lastPersistedDraft = stored?.takeIf { it.text.isNotBlank() || it.replyToId != null }
+            _state.update { current ->
+                val restored = DraftAutosave.restore(stored, current.draft, current.isEditing)
+                if (restored != null) {
+                    current.copy(draft = restored.text, replyingToMessageId = restored.replyToId)
+                } else {
+                    current
+                }
+            }
+        }
 
         viewModelScope.launch {
             emojiUsageStore.usage.collect { usage ->
@@ -109,10 +144,26 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
                 if (conversation == null) return@collect
+                val currentUserId = sessionRepository.currentUser.value?.id
+                val roster = MentionRoster.fromParticipants(
+                    participants = conversation.participants,
+                    excludeUserId = currentUserId,
+                )
+                mentionRoster = roster
+                avatarByUserId = conversation.participants
+                    .associate { (it.userId ?: it.id) to it.avatar }
+                recipientCount.value = conversation.participants
+                    .mapNotNull { it.userId }
+                    .filterNot { it == currentUserId }
+                    .distinct()
+                    .size
                 _state.update {
                     it.copy(
-                        conversationTitle = conversation.displayTitle(),
+                        conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
+                        memberCount = conversation.memberCount,
+                        isGroup = conversation.type.lowercase() != "direct",
                         accentColorHex = conversation.accentHex(),
+                        mentionDisplayNames = MentionRoster.displayNames(roster),
                     )
                 }
             }
@@ -131,11 +182,18 @@ class ChatViewModel @Inject constructor(
                 sessionRepository.currentUser,
                 ownReactions,
                 showingOriginal,
-            ) { result, user, own, originals -> BubbleInputs(result, user, own, originals) }
-                .collect { (result, user, own, originals) ->
+                recipientCount,
+            ) { result, user, own, originals, recipients ->
+                BubbleInputs(result, user, own, originals, recipients)
+            }
+                .combine(locallyHiddenStore.hidden) { inputs, hidden -> inputs to hidden }
+                .collect { (inputs, hidden) ->
+                    val (result, user, own, originals, recipients) = inputs
                     latestMessages = result.valueOrNull() ?: latestMessages
-                    _state.update {
-                        it.applyResult(result, user, own, originals, config.socketUrl)
+                    _state.update { current ->
+                        val next =
+                            current.applyResult(result, user, own, originals, config.socketUrl, recipients, hidden)
+                        next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
                 }
         }
@@ -195,11 +253,19 @@ class ChatViewModel @Inject constructor(
                         val name = event.displayName ?: event.username ?: event.userId
                         typingCleanupJobs[event.userId]?.cancel()
                         _state.update { s ->
-                            s.copy(typingUsers = (s.typingUsers - name) + name)
+                            s.copy(
+                                typingParticipants = TypingParticipants.started(
+                                    current = s.typingParticipants,
+                                    userId = event.userId,
+                                    name = name,
+                                    selfId = sessionRepository.currentUser.value?.id,
+                                    avatarUrl = avatarByUserId[event.userId],
+                                ),
+                            )
                         }
                         typingCleanupJobs[event.userId] = viewModelScope.launch {
                             delay(TYPING_TIMEOUT_MS)
-                            removeTypingUser(event.userId, event.displayName ?: event.username ?: event.userId)
+                            removeTypingUser(event.userId)
                         }
                     }
                 }
@@ -208,7 +274,7 @@ class ChatViewModel @Inject constructor(
                 messageSocketManager.typingStopped.collect { event ->
                     if (event.conversationId == conversationId) {
                         typingCleanupJobs.remove(event.userId)?.cancel()
-                        removeTypingUser(event.userId, event.displayName ?: event.username ?: event.userId)
+                        removeTypingUser(event.userId)
                     }
                 }
             }
@@ -240,16 +306,67 @@ class ChatViewModel @Inject constructor(
         messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
     }
 
-    private fun removeTypingUser(userId: String, displayName: String) {
-        _state.update { s -> s.copy(typingUsers = s.typingUsers - displayName) }
+    private fun removeTypingUser(userId: String) {
+        _state.update { s -> s.copy(typingParticipants = TypingParticipants.stopped(s.typingParticipants, userId)) }
     }
 
     fun onDraftChange(value: String) {
-        _state.update { it.copy(draft = value) }
+        _state.update { it.copy(draft = value, mention = it.mention.onTextChange(value, mentionRoster)) }
         if (value.isBlank()) {
             stopTypingEmission()
         } else {
             startTypingEmission()
+        }
+        persistDraft(value, _state.value.replyingToMessageId)
+    }
+
+    /**
+     * Best-effort auto-save of the new-message composer to the durable
+     * [draftStore] (iOS `ConversationDraftManager`). Never persists while an
+     * edit is in flight — the edit content is not a draft — and skips the write
+     * entirely when the store already matches ([DraftAutosave.resolve] → [DraftPersist.None]).
+     * The single [draftPersistJob] coalesces rapid keystrokes to a last-write-wins.
+     * [replyToId] carries the currently-armed reply so it is persisted alongside the text
+     * (iOS app-side `DraftStore` reply-reference parity).
+     */
+    private fun persistDraft(rawText: String, replyToId: String?) {
+        if (_state.value.isEditing) return
+        val decision = DraftAutosave.resolve(
+            conversationId = conversationId,
+            rawText = rawText,
+            replyToId = replyToId,
+            nowIso = java.time.Instant.ofEpochMilli(clock.nowMillis()).toString(),
+            previous = lastPersistedDraft,
+        )
+        lastPersistedDraft = when (decision) {
+            is DraftPersist.Save -> decision.draft
+            is DraftPersist.Clear -> null
+            DraftPersist.None -> return
+        }
+        draftPersistJob?.cancel()
+        draftPersistJob = viewModelScope.launch {
+            try {
+                when (decision) {
+                    is DraftPersist.Save -> draftStore.save(decision.draft)
+                    is DraftPersist.Clear -> draftStore.clear(decision.conversationId)
+                    DraftPersist.None -> Unit
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Draft persistence is best-effort; a failed write never disrupts composing.
+            }
+        }
+    }
+
+    /**
+     * Insert the picked candidate's handle into the draft (replacing the trailing
+     * `@fragment`), record it as a draft mention, and dismiss the suggestion panel.
+     */
+    fun onMentionSelected(candidate: MentionCandidate) {
+        _state.update { current ->
+            val (newDraft, newMention) = current.mention.select(candidate, current.draft)
+            current.copy(draft = newDraft, mention = newMention)
         }
     }
 
@@ -302,7 +419,8 @@ class ChatViewModel @Inject constructor(
         }
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = _state.value.replyingToMessageId
-        _state.update { it.copy(draft = "", replyingToMessageId = null) }
+        _state.update { it.copy(draft = "", replyingToMessageId = null, mention = it.mention.reset()) }
+        persistDraft("", replyToId = null)
         viewModelScope.launch {
             try {
                 messageRepository.sendOptimistic(
@@ -337,8 +455,45 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(imageViewer = ImageViewerTarget(messageId, imageIndex)) }
     }
 
+    /**
+     * A quoted-reply preview was tapped on the bubble [messageId]. When the quoted
+     * original is currently loaded, request a scroll to it; a paged-out original or a
+     * non-reply is inert (never a crash on an absent target). See [ReplyJumpResolver].
+     */
+    fun onReplyPreviewTap(messageId: String) {
+        val links = _state.value.messages.map { ReplyLink(it.messageId, it.replyToId) }
+        val target = (ReplyJumpResolver.resolve(messageId, links) as? ReplyJump.Scroll)?.targetMessageId
+            ?: return
+        _state.update { it.copy(scrollToMessageId = target) }
+    }
+
+    /** The pending reply-jump scroll has been performed by the screen. */
+    fun onScrollHandled() {
+        _state.update { it.copy(scrollToMessageId = null) }
+    }
+
     fun dismissImageViewer() {
         _state.update { it.copy(imageViewer = null) }
+    }
+
+    fun openSearch() {
+        _state.update { it.copy(search = it.search.activated()) }
+    }
+
+    fun closeSearch() {
+        _state.update { it.copy(search = it.search.deactivated()) }
+    }
+
+    fun onSearchQueryChange(query: String) {
+        _state.update { it.copy(search = it.search.withQuery(query, it.messages.toSearchable())) }
+    }
+
+    fun nextSearchMatch() {
+        _state.update { it.copy(search = it.search.movedToNext()) }
+    }
+
+    fun previousSearchMatch() {
+        _state.update { it.copy(search = it.search.movedToPrev()) }
     }
 
     fun toggleShowOriginal(messageId: String) {
@@ -381,6 +536,13 @@ class ChatViewModel @Inject constructor(
             it.message.id == messageId && it.sendState == LocalSendState.SYNCED
         }?.message ?: return
         if (message.deletedAt != null) return
+        val editable = MessageEditability.canEdit(
+            isOwn = message.senderId != null &&
+                message.senderId == sessionRepository.currentUser.value?.id,
+            createdAtMillis = isoToEpochMillisOrNull(message.createdAt),
+            nowMillis = clock.nowMillis(),
+        )
+        if (!editable) return
         _state.update {
             it.copy(
                 editingMessageId = messageId,
@@ -404,17 +566,24 @@ class ChatViewModel @Inject constructor(
                 draft = if (it.isEditing) "" else it.draft,
             )
         }
+        persistDraft(_state.value.draft, replyToId = messageId)
     }
 
     fun cancelReply() {
         _state.update { it.copy(replyingToMessageId = null) }
+        persistDraft(_state.value.draft, replyToId = null)
     }
 
     fun cancelEdit() {
         _state.update { it.copy(editingMessageId = null, draft = "") }
     }
 
-    fun deleteMessage(messageId: String) {
+    /**
+     * "Delete for everyone" — a server round-trip that tombstones the message
+     * for all participants. Only offered for an own message within the
+     * [me.meeshy.sdk.model.MessageDeletability] window (gated in the UI).
+     */
+    fun deleteForEveryone(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
         viewModelScope.launch {
             try {
@@ -427,6 +596,16 @@ class ChatViewModel @Inject constructor(
                 _state.update { it.copy(errorMessage = e.message) }
             }
         }
+    }
+
+    /**
+     * "Delete for me" — hides the message locally only (WhatsApp-style), never
+     * reaching the server. The durable [locallyHiddenStore] emits the new hidden
+     * set, which the message stream re-filters, so the bubble disappears at once.
+     */
+    fun deleteForMe(messageId: String) {
+        _state.update { it.copy(actionMessageId = null) }
+        locallyHiddenStore.hide(messageId)
     }
 
     private fun applyEdit(messageId: String, content: String) {
@@ -502,6 +681,7 @@ private data class BubbleInputs(
     val user: MeeshyUser?,
     val ownReactions: Map<String, Set<String>>,
     val showingOriginal: Set<String>,
+    val recipientCount: Int,
 )
 
 private fun <T> CacheResult<List<T>>.valueOrNull(): List<T>? = when (this) {
@@ -517,22 +697,24 @@ private fun ChatUiState.applyResult(
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
     mediaBaseUrl: String,
+    recipientCount: Int,
+    hidden: LocallyHiddenMessages,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
         ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = false,
         errorMessage = null,
     )
     is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = false,
     )
     is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl)
+        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden)
             ?: messages,
         ownReactions = ownReactions,
         isSyncing = true,
@@ -551,7 +733,9 @@ private fun List<LocalMessage>.toBubbles(
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
     mediaBaseUrl: String,
-): List<BubbleContent> = map { local ->
+    recipientCount: Int,
+    hidden: LocallyHiddenMessages,
+): List<BubbleContent> = filterNot { hidden.isHidden(it.message.id) }.map { local ->
     BubbleContentBuilder.build(
         message = local.message,
         currentUserId = currentUser?.id,
@@ -560,10 +744,24 @@ private fun List<LocalMessage>.toBubbles(
         isPending = local.sendState == LocalSendState.SENDING,
         isFailed = local.sendState == LocalSendState.FAILED,
         ownReactions = ownReactions[local.message.id] ?: emptySet(),
+        recipientCount = recipientCount,
         showOriginal = local.message.id in showingOriginal,
         mediaBaseUrl = mediaBaseUrl,
     )
 }
+
+/**
+ * Project the visible bubbles into the opaque searchable model. Deleted bubbles
+ * (placeholder text) and bubbles with no textual body (image/file only) carry no
+ * searchable text and are skipped; the stored original is searched alongside the
+ * displayed translation so search stays translation-match aware.
+ */
+private fun List<BubbleContent>.toSearchable(): List<SearchableMessage> =
+    mapNotNull { bubble ->
+        if (bubble.isDeleted) return@mapNotNull null
+        val texts = listOfNotNull(bubble.text, bubble.originalText).filter { it.isNotBlank() }
+        if (texts.isEmpty()) null else SearchableMessage(bubble.messageId, texts)
+    }
 
 private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
     override val systemLanguage: String? = null

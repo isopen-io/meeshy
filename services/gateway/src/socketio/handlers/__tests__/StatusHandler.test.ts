@@ -611,6 +611,31 @@ describe('StatusHandler', () => {
 
       expect(statusService.updateLastSeen).not.toHaveBeenCalled();
     });
+
+    it('clears the throttle so a fresh typing:start after stop re-emits within the throttle window', async () => {
+      jest.useFakeTimers();
+      const now = 1_000_000;
+      jest.setSystemTime(now);
+
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      // 1. start → emits typing:start, arms the throttle
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      // 2. stop 0.5s later → emits typing:stop, MUST clear the throttle entry
+      jest.setSystemTime(now + 500);
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+      // 3. start again 1s after the first start (< 2s throttle window) → the
+      //    explicit stop ended the burst, so this new burst MUST re-emit.
+      jest.setSystemTime(now + 1_000);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      // start + stop + start = 3 room broadcasts. Without the throttle clear the
+      // second start is swallowed and only 2 broadcasts occur.
+      expect((socket.to as jest.Mock).mock.calls.length).toBe(3);
+    });
   });
 
   // ── blocking privacy ─────────────────────────────────────────────────────────
@@ -866,79 +891,6 @@ describe('StatusHandler', () => {
 
       expect(() => handler.clearTypingThrottle('unknown-user')).not.toThrow();
       expect(throttleMap.size).toBe(1);
-    });
-  });
-
-  // ── drainActiveTypingState ───────────────────────────────────────────────────
-
-  describe('drainActiveTypingState', () => {
-    const TTL_MS = 30_000;
-
-    it('returns active conversation IDs and clears throttle entries', () => {
-      const handler = makeHandler();
-      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
-      const now = Date.now();
-      throttleMap.set(`${USER_ID}:conv-1`, now);
-      throttleMap.set(`${USER_ID}:conv-2`, now);
-      throttleMap.set('other-user:conv-3', now);
-
-      const result = handler.drainActiveTypingState(USER_ID);
-
-      expect(result.conversationIds.sort()).toEqual(['conv-1', 'conv-2'].sort());
-      // user entries removed, other user entry untouched
-      expect(throttleMap.has(`${USER_ID}:conv-1`)).toBe(false);
-      expect(throttleMap.has(`${USER_ID}:conv-2`)).toBe(false);
-      expect(throttleMap.has('other-user:conv-3')).toBe(true);
-    });
-
-    it('excludes stale entries (older than TTL) from returned conversation IDs', () => {
-      const handler = makeHandler();
-      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
-      const staleTs = Date.now() - TTL_MS - 1_000;
-      throttleMap.set(`${USER_ID}:conv-stale`, staleTs);
-      throttleMap.set(`${USER_ID}:conv-fresh`, Date.now());
-
-      const result = handler.drainActiveTypingState(USER_ID);
-
-      expect(result.conversationIds).toEqual(['conv-fresh']);
-      // Both entries (stale and fresh) should be cleared
-      expect(throttleMap.has(`${USER_ID}:conv-stale`)).toBe(false);
-      expect(throttleMap.has(`${USER_ID}:conv-fresh`)).toBe(false);
-    });
-
-    it('returns null identity when user has no cached identity', () => {
-      const handler = makeHandler();
-      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
-      throttleMap.set(`${USER_ID}:conv-1`, Date.now());
-
-      const result = handler.drainActiveTypingState(USER_ID);
-
-      expect(result.identity).toBeNull();
-    });
-
-    it('returns cached identity when available and not expired', () => {
-      const handler = makeHandler();
-      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
-      const identityCache = (handler as any).identityCache as Map<string, { username: string; displayName: string; expiresAt: number }>;
-      throttleMap.set(`${USER_ID}:conv-1`, Date.now());
-      identityCache.set(`user:${USER_ID}`, {
-        username: 'alice',
-        displayName: 'Alice',
-        expiresAt: Date.now() + 60_000
-      });
-
-      const result = handler.drainActiveTypingState(USER_ID);
-
-      expect(result.identity).toEqual({ username: 'alice', displayName: 'Alice' });
-    });
-
-    it('returns empty conversationIds and null identity when user has no state', () => {
-      const handler = makeHandler();
-
-      const result = handler.drainActiveTypingState('unknown-user');
-
-      expect(result.conversationIds).toEqual([]);
-      expect(result.identity).toBeNull();
     });
   });
 

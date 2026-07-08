@@ -331,7 +331,8 @@ export class CallEventsHandler {
             data: { type: 'call_cancel', callId }
           },
           types: ['apns'],
-          platforms: ['ios']
+          platforms: ['ios'],
+          bypassDnd: true
         }).catch((error) => {
           logger.error('call_cancel push failed', { callId, userId: uid, error });
         })
@@ -576,16 +577,27 @@ export class CallEventsHandler {
 
       const dcStatus = leftSession.status as string;
       if (dcStatus === 'ended' || dcStatus === 'missed') {
-        this.clearQualityDegradedStreaks(participation.callSessionId);
         const dcEndedEvent: CallEndedEvent = {
           callId: leftSession.id,
           duration: leftSession.duration || 0,
           endedBy: userId,
           reason: (leftSession.endReason || 'completed') as CallEndReason
         };
-        io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
-        io.to(ROOMS.conversation(leftSession.conversationId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
+        // CALL-RESILIENCE — use the shared fanout (call + conversation + every
+        // active member's user room), not a narrow two-room emit: a still-ringing
+        // callee has joined neither room yet and would otherwise keep ringing
+        // until its own client-side timeout (see resolveCallEndedRooms).
+        await this.broadcastCallEnded(io, leftSession.id, leftSession.conversationId, dcEndedEvent);
         await this.postCallSummary(leftSession.id);
+        if (dcStatus === 'missed') {
+          /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+          this.handleMissedCall(leftSession.id).catch((err) => {
+            logger.error('❌ handleMissedCall failed after disconnect-grace leave', {
+              callId: leftSession.id,
+              err
+            });
+          });
+        }
       }
 
       logger.info('✅ Socket: Auto-left call on disconnect', {
@@ -641,21 +653,34 @@ export class CallEventsHandler {
           );
 
           if (forceEnded) {
-            this.clearQualityDegradedStreaks(participation.callSessionId);
             logger.info('✅ Socket: Force-ended call after disconnect error', {
               callId: participation.callSessionId,
-              duration: forceEnded.duration
+              duration: forceEnded.duration,
+              status: forceEnded.status
             });
 
             const dcForceEndedEvent: CallEndedEvent = {
               callId: participation.callSessionId,
               duration: forceEnded.duration,
               endedBy: userId,
-              reason: CallEndReason.connectionLost
+              reason: forceEnded.endReason
             };
-            io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
-            io.to(ROOMS.conversation(participation.callSession.conversationId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
+            await this.broadcastCallEnded(
+              io,
+              participation.callSessionId,
+              participation.callSession.conversationId,
+              dcForceEndedEvent
+            );
             await this.postCallSummary(participation.callSessionId);
+            if (forceEnded.status === CallStatus.missed) {
+              /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+              this.handleMissedCall(participation.callSessionId).catch((err) => {
+                logger.error('❌ handleMissedCall failed after force-cleanup on disconnect error', {
+                  callId: participation.callSessionId,
+                  err
+                });
+              });
+            }
           }
         }
 
@@ -737,20 +762,64 @@ export class CallEventsHandler {
   }
 
   /**
-   * call:end's fast-path broadcast tells the room the call ended before the
-   * authoritative endCall() write runs (see the comment at that call site).
-   * If that write never completes — the ender doesn't resolve to a
-   * participant, or endCall() itself throws — the CallSession would
-   * otherwise be left ACTIVE, blocking every future call:initiate in the
-   * conversation until CallCleanupService's GC tier reaps it (~120s).
+   * call:end's fast-path broadcast tells the ROOM (only) the call ended
+   * before the authoritative endCall() write runs (see the comment at that
+   * call site) — it never reaches conversation members who haven't joined
+   * the call room (a still-ringing callee). If the authoritative write never
+   * completes — the ender doesn't resolve to a participant, or endCall()
+   * itself throws — the CallSession would otherwise be left ACTIVE, blocking
+   * every future call:initiate in the conversation until
+   * CallCleanupService's GC tier reaps it (~120s).
+   *
+   * Audit Vague 26 (sibling-drift) — this used to only force-end the DB row
+   * and conditionally call handleMissedCall, silently SKIPPING the wide
+   * call:ended fanout (broadcastCallEnded: clearQualityDegradedStreaks +
+   * the same call+conversation+every-member's-user-room audience as
+   * call:initiated + the phantom-ring call_cancel push), and skipping
+   * postCallSummary (the chat "Appel …" system message) — unlike its exact
+   * sibling, the disconnect force-cleanup path a few hundred lines up, which
+   * already does all of this. A still-ringing callee whose caller's
+   * call:end hit this failure branch would keep ringing (exactly the prod
+   * incident 2026-07-03 06:14 that broadcastCallEnded's fanout exists to
+   * prevent), the quality-streak map would leak, and no summary message
+   * would appear in chat. Fixed by mirroring the disconnect force-cleanup
+   * path exactly: broadcastCallEnded + postCallSummary + conditional
+   * handleMissedCall.
+   *
    * Best-effort: a failure here is logged, not thrown — this handler's
    * listener isn't awaited by Socket.IO's emit() (see the gateway's
    * async-EventEmitter hazard note), so letting this reject would surface as
    * an unhandled rejection instead of the clean error response already sent.
    */
-  private async forceEndOrphanedCallAfterOptimisticBroadcast(callId: string, reason?: string): Promise<void> {
+  private async forceEndOrphanedCallAfterOptimisticBroadcast(
+    io: SocketIOServer,
+    callId: string,
+    endedBy: string,
+    reason?: string
+  ): Promise<void> {
     try {
-      await this.callService.forceEndOrphanedCallSession(callId, (reason || 'completed') as CallEndReason);
+      const forceEnded = await this.callService.forceEndOrphanedCallSession(callId, (reason || 'completed') as CallEndReason);
+      if (!forceEnded) return;
+
+      const forceEndedEvent: CallEndedEvent = {
+        callId,
+        duration: forceEnded.duration,
+        endedBy,
+        reason: forceEnded.endReason
+      };
+      await this.broadcastCallEnded(io, callId, forceEnded.conversationId, forceEndedEvent);
+      await this.postCallSummary(callId);
+
+      if (forceEnded.status === CallStatus.missed) {
+        // Mirror the sibling call:end/call:leave paths (see their doc
+        // comments): a call force-ended before it was ever answered must
+        // still notify the other party it was missed, not just resolve the
+        // DB row — otherwise the callee never sees a missed-call banner/badge.
+        /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+        await this.handleMissedCall(callId).catch((err) => {
+          logger.error('❌ handleMissedCall failed after force-end orphaned call', { callId, err });
+        });
+      }
     } catch (err) {
       logger.error('❌ Failed to force-end orphaned call after call:end failure', { callId, error: err });
     }
@@ -1123,7 +1192,25 @@ export class CallEventsHandler {
     // the app was foreground. iOS emits this on scenePhase transitions while the
     // socket is still alive (`.inactive` fires before suspension). Stored on the
     // socket so the per-user fanout (which uses fetchSockets) can read it.
-    socket.on('presence:app-state', (data: { foreground?: boolean }) => {
+    // Audit gateway calling-stack 2026-07-08 — this was the last call-adjacent
+    // handler with no auth/rate-limit gate at all (every sibling lifecycle
+    // event does). Impact per-event is minimal (flips a socket-local flag, no
+    // DB write, no broadcast) but a flooding client should still be bounded
+    // like every other handler here, not left as the one exception.
+    socket.on('presence:app-state', async (data: { foreground?: boolean }) => {
+      const userId = getUserId(socket.id);
+      if (!userId) return;
+      rememberAuth(userId);
+
+      const rateLimitPassed = await checkSocketRateLimit(
+        socket,
+        userId,
+        SOCKET_RATE_LIMITS.PRESENCE_APP_STATE,
+        this.rateLimiter,
+        CALL_EVENTS.ERROR
+      );
+      if (!rateLimitPassed) return;
+
       socket.data.appForeground = data?.foreground === true;
     });
 
@@ -1477,6 +1564,7 @@ export class CallEventsHandler {
                 },
               },
               types: ['voip'],
+              bypassDnd: true,
             }).catch(err => {
               logger.error('Failed to send VoIP push', { userId: offlineUserId, error: err });
             });
@@ -1512,13 +1600,17 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
+          ack?.({ success: false, error: 'User not authenticated' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
             message: 'User not authenticated'
           } as CallError);
           return;
         }
-        if (denyAnonymous()) return;
+        if (denyAnonymous()) {
+          ack?.({ success: false, error: 'Anonymous users cannot join calls' } as unknown as CallJoinAck);
+          return;
+        }
         rememberAuth(userId);
 
         // CVE-002: Rate limiting check
@@ -1529,12 +1621,16 @@ export class CallEventsHandler {
           this.rateLimiter,
           CALL_EVENTS.ERROR
         );
-        if (!rateLimitPassed) return;
+        if (!rateLimitPassed) {
+          ack?.({ success: false, error: 'Rate limit exceeded' } as unknown as CallJoinAck);
+          return;
+        }
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketJoinCallSchema, data);
         if (isValidationFailure(validation)) {
           const { error: validationError, details: validationDetails } = validation;
+          ack?.({ success: false, error: validationError } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
@@ -1558,6 +1654,7 @@ export class CallEventsHandler {
         // Resolve participantId from userId + callId
         const joinParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!joinParticipantId) {
+          ack?.({ success: false, error: 'You are not a participant in this conversation' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'
@@ -1721,35 +1818,6 @@ export class CallEventsHandler {
           callId: data.callId
         });
 
-        // Multi-device socketless — the socket event above cannot reach a
-        // secondary device woken by the VoIP push whose WebSocket never came
-        // up: it would ring until its local timeout although the call was
-        // answered elsewhere. Mirror of the call_cancel hardening: a silent
-        // background push to the joiner's devices; the answering device (and
-        // any device not ringing on this callId) drops it via the client-side
-        // FSM guard. Only on a real ANSWER (callee, initiated/ringing →
-        // connecting) — never for the initiator's own room join nor rejoins.
-        // Best-effort: a push failure must never fail the join.
-        if (this.pushService
-            && userId !== callSession.initiatorId
-            && (callSession.status as string) === 'connecting') {
-          this.pushService.sendToUser({
-            userId,
-            payload: {
-              title: '',
-              body: '',
-              silent: true,
-              data: { type: 'call_answered_elsewhere', callId: data.callId }
-            },
-            types: ['apns'],
-            platforms: ['ios']
-          }).catch((error) => {
-            logger.error('call_answered_elsewhere push failed (join unaffected)', {
-              callId: data.callId, userId, error
-            });
-          });
-        }
-
         logger.info('✅ Socket: User joined call', {
           callId: data.callId,
           userId,
@@ -1764,6 +1832,7 @@ export class CallEventsHandler {
           ? errorMessage.split(':').slice(1).join(':').trim()
           : errorMessage;
 
+        ack?.({ success: false, error: message } as unknown as CallJoinAck);
         socket.emit(CALL_EVENTS.ERROR, {
           code: errorCode,
           message
@@ -1926,6 +1995,17 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error leaving call', error);
 
+        // Sibling-drift fix (Vague 27, mirrors call:end's catch) — if
+        // leaveCall() itself threw, the CallSession may be left stuck
+        // non-terminal (ACTIVE), blocking every future call:initiate in this
+        // conversation until CallCleanupService's GC tier reaps it (~120s).
+        // Force it to a terminal state and run the same fanout/summary/
+        // missed-call side effects the happy path would have run. `userId`
+        // was declared inside the try block above and is out of scope here —
+        // re-resolve it the same way call:end's catch does.
+        const recoveryUserId = getUserId(socket.id) ?? 'unknown';
+        await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, recoveryUserId);
+
         const errorMessage = error.message || 'Failed to leave call';
         const errorCode = errorMessage.split(':')[0];
         const message = errorMessage.includes(':')
@@ -2054,6 +2134,15 @@ export class CallEventsHandler {
                 participantId: cleanupParticipantId || userId
               });
 
+              // Sibling-drift fix — mirrors the `call:leave` handler above:
+              // this is an explicit leave just like `call:leave`, so it must
+              // clear the same per-call in-memory state. Without this, a
+              // still-armed ringing timer or buffered offer for this callId
+              // lingers in memory until its own unrelated sweep/timeout,
+              // instead of being released the moment the leave is known.
+              this.callService.clearRingingTimeout(call.id);
+              this.clearBufferedOffer(call.id);
+
               // Broadcast participant left event
               const leftEvent: CallParticipantLeftEvent = {
                 callId: callSession.id,
@@ -2085,8 +2174,9 @@ export class CallEventsHandler {
                   reason: (callSession.endReason || 'completed') as CallEndReason
                 };
 
-                io.to(ROOMS.call(call.id)).emit(CALL_EVENTS.ENDED, endedEvent);
-                io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+                // CALL-RESILIENCE — shared fanout (call + conversation + every
+                // active member's user room); see broadcastCallEnded.
+                await this.broadcastCallEnded(io, callSession.id, callSession.conversationId, endedEvent);
 
                 // P3 — post the call-summary system message (idempotent).
                 await this.postCallSummary(callSession.id);
@@ -2100,6 +2190,14 @@ export class CallEventsHandler {
               }
             } catch (leaveError) {
               logger.error('❌ Error force leaving call', { callId: call.id, error: leaveError });
+
+              // Sibling-drift fix (Vague 27, mirrors call:end/call:leave's
+              // catch) — if leaveCall() itself threw, this specific call may
+              // be left stuck non-terminal (ACTIVE), blocking every future
+              // call:initiate in this conversation until CallCleanupService's
+              // GC tier reaps it (~120s) — defeating the whole point of
+              // call:force-leave, whose job is exactly to unstick this.
+              await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, call.id, userId);
             }
           }
         }
@@ -2298,7 +2396,46 @@ export class CallEventsHandler {
           this.callService.clearRingingTimeout(data.callId);
           // §4.6 — negotiation complete, the buffered offer is no longer needed.
           this.clearBufferedOffer(data.callId);
+          // `callSession` was read (line ~2302) BEFORE this update — its
+          // `answeredAt` is the true pre-update value, so this correctly
+          // identifies the FIRST answer (never a later renegotiation answer,
+          // e.g. enabling video mid-call, which would already have it set).
+          const isFirstAnswer = !callSession.answeredAt;
           await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on answer)', { callId: data.callId, err }));
+
+          // Audit Vague 27 — relocated from call:join, where this was
+          // permanently dead: it gated on `callSession.status === 'connecting'`,
+          // a status the FSM (Item F) never actually writes (joinCallAttempt
+          // only ever transitions initiated/ringing → ringing). The real
+          // "callee answered" transition happens HERE, on the SDP answer.
+          // Multi-device socketless — the ALREADY_ANSWERED socket event above
+          // cannot reach a secondary device woken by the VoIP push whose
+          // WebSocket never came up: it would ring until its local timeout
+          // although the call was answered elsewhere. Mirror of the
+          // call_cancel hardening: a silent background push to the
+          // answerer's OTHER devices; the answering device (and any device
+          // not ringing on this callId) drops it via the client-side FSM
+          // guard. Never for the initiator's own answer, never for a later
+          // renegotiation answer. Best-effort: a push failure must never
+          // fail the signal relay.
+          if (this.pushService && userId !== callSession.initiatorId && isFirstAnswer) {
+            this.pushService.sendToUser({
+              userId,
+              payload: {
+                title: '',
+                body: '',
+                silent: true,
+                data: { type: 'call_answered_elsewhere', callId: data.callId }
+              },
+              types: ['apns'],
+              platforms: ['ios'],
+              bypassDnd: true
+            }).catch((error) => {
+              logger.error('call_answered_elsewhere push failed (signal unaffected)', {
+                callId: data.callId, userId, error
+              });
+            });
+          }
         }
 
         ack?.({ success: true });
@@ -2575,7 +2712,7 @@ export class CallEventsHandler {
           // state ourselves so it isn't left stuck ACTIVE — otherwise it
           // blocks every future call:initiate in this conversation until
           // CallCleanupService's GC tier reaps it (~120s).
-          await this.forceEndOrphanedCallAfterOptimisticBroadcast(data.callId, data.reason);
+          await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, userId, data.reason);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'
@@ -2642,7 +2779,10 @@ export class CallEventsHandler {
         // a no-op if endCall() actually succeeded before a later step failed
         // (broadcastCallEnded/postCallSummary), since the session is already
         // terminal by then.
-        await this.forceEndOrphanedCallAfterOptimisticBroadcast(data.callId, data.reason);
+        // `userId` was declared inside the try block above and is out of
+        // scope here — re-resolve it the same way the try block did.
+        const endedByUserId = getUserId(socket.id) ?? 'unknown';
+        await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, endedByUserId, data.reason);
         const errorMessage = error.message || 'Failed to end call';
         const errorCode = errorMessage.split(':')[0];
         const message = errorMessage.includes(':')
@@ -3230,24 +3370,6 @@ export class CallEventsHandler {
           return;
         }
 
-        // ZOMBIE-SOCKET GUARD (2026-07-02) — a stale socket from a previous
-        // session expiring must NOT tear down calls the user is actively on
-        // through ANOTHER live socket (prod: two expired zombies killed call
-        // 6a464c61 mid-ring while the active socket still received messages).
-        // This handler listens on 'disconnect', so the closing socket has
-        // already left its rooms — any member left in the user room is a
-        // different, live connection: no leave, no grace, the user is here.
-        const remainingUserSockets =
-          io?.sockets?.adapter?.rooms?.get(ROOMS.user(userId))?.size ?? 0;
-        if (remainingUserSockets > 0) {
-          logger.info('📞 Socket disconnect ignored for calls — user still has live sockets', {
-            socketId: socket.id,
-            userId,
-            remainingUserSockets
-          });
-          return;
-        }
-
         logger.info('📞 Socket: disconnect - checking for active calls', {
           socketId: socket.id,
           userId
@@ -3298,6 +3420,43 @@ export class CallEventsHandler {
           // timeout stays the hard cap).
           const dcStatus = participation.callSession.status as string;
           const isAnswered = dcStatus === 'active' || dcStatus === 'reconnecting';
+          const callId = participation.callSessionId;
+
+          // ZOMBIE-SOCKET GUARD (2026-07-02, scoped per-call 2026-07-08) — a
+          // stale socket from a previous session expiring must NOT tear down
+          // a call the user is actively on through ANOTHER live socket (prod:
+          // two expired zombies killed call 6a464c61 mid-ring while the
+          // active socket still received messages). This handler listens on
+          // 'disconnect', so the closing socket has already left its rooms.
+          //
+          // Pre-answer calls have no `ROOMS.call` membership yet (joined only
+          // on answer/explicit join) — the only signal of "user is still
+          // here" is a live socket anywhere in their user room. Answered
+          // calls DO have call-room membership, and checking there instead
+          // (rather than the user's global presence) is what actually proves
+          // the user is still on THIS call: an unrelated idle second device
+          // (never joined to this call) must not mask a crashed in-call
+          // device and suppress grace for a call nobody is actually still on.
+          if (!isAnswered) {
+            const remainingUserSockets =
+              io?.sockets?.adapter?.rooms?.get(ROOMS.user(userId))?.size ?? 0;
+            if (remainingUserSockets > 0) {
+              logger.info('📞 Socket disconnect ignored for pre-answer call — user still has live sockets', {
+                socketId: socket.id, userId, callId, remainingUserSockets
+              });
+              continue;
+            }
+          } else {
+            const socketsInCallRoom = await io.in(ROOMS.call(callId)).fetchSockets();
+            const stillInCallRoom = socketsInCallRoom.some((s: { id: string }) => getUserId(s.id) === userId);
+            if (stillInCallRoom) {
+              logger.info('📞 Socket disconnect ignored for call — user still has a live socket in the call room', {
+                socketId: socket.id, userId, callId
+              });
+              continue;
+            }
+          }
+
           this.armDisconnectGrace(
             {
               io,

@@ -116,6 +116,18 @@ interface PostApi {
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
 
+    /**
+     * Vertical full-screen reel thread (`GET /posts/feed/reels`). With [seed] (a
+     * reel touched in the Feed) the gateway returns an affinity thread starting at
+     * that reel; without a seed it returns the default reel feed.
+     */
+    @GET("posts/feed/reels")
+    suspend fun getReels(
+        @Query("seed") seed: String? = null,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPost>>
+
     @POST("posts")
     suspend fun create(@Body body: CreatePostRequest): ApiResponse<ApiPost>
 

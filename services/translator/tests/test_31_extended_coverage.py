@@ -161,6 +161,25 @@ class TestTranslationMLServiceExtended:
         for lang in expected_langs:
             assert lang in mock_service.lang_codes
 
+    def test_lang_codes_cover_every_supported_language(self, mock_service):
+        """Every ISO code the service advertises in SUPPORTED_LANGUAGES must map
+        to a real NLLB code — otherwise `.get(code, 'eng_Latn'/'fra_Latn')` at the
+        translate call sites silently mistranslates it (e.g. requesting Russian
+        would return French)."""
+        from config.settings import LANGUAGE_MAPPINGS, get_settings
+
+        supported = get_settings().supported_languages_list
+        for iso in supported:
+            assert iso in mock_service.lang_codes, f"missing NLLB mapping for '{iso}'"
+            assert mock_service.lang_codes[iso] == LANGUAGE_MAPPINGS[iso]
+
+    def test_lang_codes_map_representative_iso_codes_to_nllb(self, mock_service):
+        """Spot-check codes that the former hard-coded 8-entry dict dropped."""
+        assert mock_service.lang_codes.get('it') == 'ita_Latn'
+        assert mock_service.lang_codes.get('ru') == 'rus_Cyrl'
+        assert mock_service.lang_codes.get('ko') == 'kor_Hang'
+        assert mock_service.lang_codes.get('nl') == 'nld_Latn'
+
     def test_stats_tracking(self, mock_service):
         """Test statistics tracking"""
         mock_service.stats['translations_count'] = 100

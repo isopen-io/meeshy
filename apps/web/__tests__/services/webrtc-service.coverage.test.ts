@@ -958,6 +958,45 @@ describe('negotiate', () => {
     await service.negotiate({ iceRestart: false });
     expect(pc.createOffer).toHaveBeenCalledWith(undefined);
   });
+
+  it('defers an ICE restart that arrives while an unrelated offer is in flight, and replays it once that offer settles', async () => {
+    // Reproduces a real dead-call scenario: an A/V-switch renegotiation
+    // (onnegotiationneeded → negotiate()) is in flight when ICE transitions
+    // to 'failed' and fires restartIce() → negotiate({ iceRestart: true }).
+    // The re-entrancy guard used to drop the ICE restart on the floor with
+    // no retry — the connection then stays permanently 'failed'.
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+
+    let resolveFirstOffer!: (v: RTCSessionDescriptionInit) => void;
+    pc.createOffer = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<RTCSessionDescriptionInit>((res) => {
+            resolveFirstOffer = res;
+          })
+      )
+      .mockResolvedValue({ type: 'offer' as RTCSdpType, sdp: 'v=0\r\n' });
+
+    const inFlight = service.negotiate();
+    const dropped = service.negotiate({ iceRestart: true });
+    await dropped;
+
+    // The ICE restart must not be silently discarded: it should not fire a
+    // second createOffer yet (the first is still in flight)...
+    expect(pc.createOffer).toHaveBeenCalledTimes(1);
+
+    resolveFirstOffer({ type: 'offer', sdp: 'v=0\r\n' });
+    await inFlight;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // ...but must be replayed automatically once the in-flight offer settles.
+    expect(pc.createOffer).toHaveBeenCalledTimes(2);
+    expect(pc.createOffer).toHaveBeenLastCalledWith({ iceRestart: true });
+  });
 });
 
 // ===========================================================================
@@ -1707,6 +1746,38 @@ describe('close', () => {
     const onLocalDesc = jest.fn();
     (service as unknown as { config: WebRTCServiceConfig }).config.onLocalDescription = onLocalDesc;
     pc2.onnegotiationneeded!();
+    expect(onLocalDesc).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// createPeerConnection — reused without an intervening close() (participant
+// leave→rejoin: use-webrtc-p2p.ts caches one WebRTCService per participantId
+// and only calls close() on full teardown, not on a single participant leave)
+// ===========================================================================
+
+describe('createPeerConnection — reused without close (participant rejoin)', () => {
+  it('resets autoNegotiate and other perfect-negotiation flags on reuse, even without close() first', async () => {
+    const { service } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer(); // sets autoNegotiate=true on the FIRST connection
+
+    // Participant rejoins: a new peer connection is built on the SAME
+    // service instance, with no close() call in between (mirrors
+    // use-webrtc-p2p.ts's per-participant service cache).
+    const pc2 = service.createPeerConnection('p2') as unknown as FakeRTCPeerConnection;
+
+    // A stale autoNegotiate=true would let onnegotiationneeded fire a second,
+    // racing offer concurrently with the explicit createOffer() the rejoin
+    // flow is about to await.
+    const onLocalDesc = jest.fn();
+    (service as unknown as { config: WebRTCServiceConfig }).config.onLocalDescription = onLocalDesc;
+    pc2.onnegotiationneeded!();
+    // negotiate() awaits createOffer() then setLocalDescription() before
+    // emitting onLocalDescription — flush those microtasks before asserting.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(onLocalDesc).not.toHaveBeenCalled();
   });
 });

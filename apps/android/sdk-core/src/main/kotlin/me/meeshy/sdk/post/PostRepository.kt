@@ -166,6 +166,17 @@ class PostRepository @Inject constructor(
     suspend fun getFeed(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =
         apiCall { postApi.getFeed(cursor, limit) }
 
+    /**
+     * Vertical reel thread (`GET /posts/feed/reels`). [seed] is a reel touched in
+     * the Feed to anchor the affinity thread; null returns the default reel feed.
+     */
+    suspend fun getReels(
+        seed: String? = null,
+        cursor: String? = null,
+        limit: Int = 20,
+    ): NetworkResult<List<ApiPost>> =
+        apiCall { postApi.getReels(seed, cursor, limit) }
+
     suspend fun create(
         content: String? = null,
         type: String = "POST",

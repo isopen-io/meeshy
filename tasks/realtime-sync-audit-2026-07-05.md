@@ -95,11 +95,114 @@ l'état local final s'inverse jusqu'à la prochaine réconciliation REST.
 le timestamp est plus ancien que le dernier appliqué pour ce tuple
 `(messageId, emoji, participantId)`.
 
+## 5. Dedup read/delivery receipt : clé sur la constante `"latest"` avale un message plus récent — ✅ Corrigé 2026-07-06
+
+`services/gateway/src/services/MessageReadStatusService.ts` — `markMessagesAsRead`
+et `markMessagesAsReceived`
+
+Le garde de déduplication à 2 s construisait sa clé sur `latestMessageId ?? "latest"`
+ET faisait son early-return AVANT de résoudre le message réel en base. Pour les
+nombreux appelants sans `latestMessageId` (`routes/conversations/messages.ts`,
+`routes/message-read-status.ts`), deux appels rapprochés qui résolvent des
+messages *différents* entraient donc en collision sur la clé constante `"latest"`
+— le second était silencieusement ignoré. Le commentaire inline (« keyed by
+messageId … so a genuinely newer message is never dropped ») était donc faux pour
+ce chemin.
+
+**Scénario de défaillance** : participant P lit la conversation C → `markMessagesAsRead(P, C)`
+(sans id) résout M5, avance le curseur, pose la clé `P:C:read:latest`. 500 ms plus
+tard M6 arrive. 800 ms : `markMessagesAsRead(P, C)` (sans id) → clé `P:C:read:latest`
+présente et < 2000 ms → return anticipé sans requête. Le curseur reste à M5 ;
+`getUnreadCount` renvoie 1 et le tick « lu » de l'expéditeur n'avance pas vers M6
+jusqu'à expiration de la fenêtre.
+
+**Fix** : résoudre le message le plus récent AVANT le garde de dédup et construire
+la clé sur le `messageId` **résolu** (`…:read:${messageId}` / `…:received:${messageId}`).
+Un message réellement plus récent produit désormais une clé distincte et n'est
+jamais avalé ; seuls les vrais doublons (même message dans la fenêtre) sont
+dédupliqués. Tests de régression :
+`MessageReadStatusService.test.ts` → describe « dedup key reflects the resolved
+latest message (regression) » (3 tests : avance vers un message plus récent
+après un mark sans id, pour read ET received ; conservation du dédup sur le même
+message). Vérifié : suite gateway complète 508/508 suites, 13767 tests verts,
+`tsc --noEmit` OK.
+
+## 6. `markMessagesAsRead` n'avançait jamais le curseur de livraison — "lu" sans "livré" (invariant read⇒delivered violé) — ✅ Corrigé 2026-07-07
+
+`services/gateway/src/services/MessageReadStatusService.ts` — `markMessagesAsRead`
+
+`markMessagesAsRead` n'avançait que le curseur de LECTURE (`lastReadMessageId`/
+`lastReadAt`) et ne figeait que `readAt`. Il ne touchait jamais
+`lastDeliveredMessageId`/`lastDeliveredAt` ni ne figeait `deliveredAt`/`receivedAt`.
+Or les lecteurs de statut (`getLatestMessageSummary`, `getConversationReadStatuses`,
+`getMessageReadStatus`, `getMessageStatusDetails`) comptent livré et lu de manière
+**indépendante** (curseur `lastDeliveredAt >= createdAt` vs `lastReadAt >= createdAt`).
+
+**Scénario de défaillance** : A envoie M à B pendant que B est hors-ligne (donc
+`_autoDeliverToOnlineRecipients` ne marque jamais B « reçu », aucun accusé de
+livraison/drain de reconnexion ne passe pour M). B ouvre la conversation →
+`POST /conversations/C/mark-as-read` → `markMessagesAsRead(B, C)` avance `lastReadAt`
+mais laisse `lastDeliveredAt` null. Le broadcast de coche de l'expéditeur via
+`getLatestMessageSummary` renvoie alors `{ deliveredCount: 0, readCount: 1 }` — un
+état impossible (la lecture implique strictement la livraison). L'expéditeur voit
+la coche « lu » DEVANT la coche « livré », et les onglets `delivered`/`read` de
+`getMessageStatusDetails` se contredisent (lecteur listé sous « lu » mais absent de
+« livré »).
+
+**Fix** : après l'avance du curseur de lecture et le gel `readAt`, `markMessagesAsRead`
+avance aussi le curseur de livraison (`_advanceCursor` sur `lastDeliveredMessageId`/
+`lastDeliveredAt`) et fige `deliveredAt`/`receivedAt` sur la même fenêtre (borne
+`prevDeliveredAt` lue en même temps que `prevReadAt`). Les deux opérations sont
+idempotentes — le garde de curseur no-op si la livraison est déjà en avance, le gel
+est write-once — donc coût nul sur le chemin sain livré-puis-lu. Corrige d'un coup
+les 4 lecteurs (curseurs ET entrées gelées). Tests de régression :
+`MessageReadStatusService.test.ts` → 2 tests (« read implies delivered: also
+advances the delivery cursor » + « frozen status entries carry deliveredAt/receivedAt »).
+Vérifié : suite `MessageReadStatusService` 153/153, suites voisines
+(MessagingService/MessageHandler/routes/socketio) 18 suites 1160 tests verts,
+`tsc --noEmit` OK.
+
+## 7. Utilisateur anonyme dans une salle personnelle nue — `conversation:unread-updated` jamais reçu — ✅ Corrigé 2026-07-07
+
+`services/gateway/src/socketio/handlers/AuthHandler.ts` — `_authenticateAnonymousUser`
+(jointure) vs. `MessageHandler._updateUnreadCounts` / `MeeshySocketIOManager.broadcastMessage`
++ `routes/conversations/messages.ts` + `routes/message-read-status.ts` (émission)
+
+Le chemin JWT rejoint la salle personnelle via `socket.join(ROOMS.user(user.id))`
+(= `user:<userId>`). Le chemin anonyme rejoignait une salle **nue**
+`socket.join(socketUser.id)` (= `<participantId>`, sans préfixe `user:`). Or **tous**
+les émetteurs d'événements personnels adressent `io.to(ROOMS.user(participant.userId ??
+participant.id))` — pour un anonyme (pas de `userId`), cela résout `user:<participantId>`,
+une salle qu'aucun socket anonyme ne rejoint jamais.
+
+**Scénario de défaillance** : un anonyme A (participant `pA`, sans `userId`) est connecté,
+joint à la conversation C mais posé sur la liste / une autre conversation. B envoie un
+message dans C → `broadcastNewMessage → _updateUnreadCounts` calcule `unreadCount = 1`
+pour `pA` et émet `CONVERSATION_UNREAD_UPDATED` vers `ROOMS.user(pA)` = `"user:pA"`. Le
+socket de A est dans la salle `"pA"`, pas `"user:pA"` → l'event est **droppé**. Le badge
+de non-lus de A reste figé jusqu'à un refetch REST sans rapport. Le repli `?? participant.id`
+présent dans les deux sites d'émission montrait l'intention de servir les anonymes ; la
+livraison échouait par pure divergence salle-de-jointure vs salle-d'émission (les
+destinataires enregistrés n'étaient pas touchés, d'où le silence du bug).
+
+**Fix** : le chemin anonyme rejoint désormais `ROOMS.user(socketUser.id)`, alignant
+jointure et émission sur la convention unique (la même qu'utilisent notifications,
+`CONVERSATION_UPDATED`, `emitWithSeq`, etc.). Balayage exhaustif préalable de tous les
+`io.to(...)`/`io.in(...)` du gateway : **aucun** émetteur ne ciblait la salle nue
+`<participantId>` — elle était morte — donc zéro régression. Test de régression :
+`AuthHandler.test.ts` → « joins the anonymous socket to the ROOMS.user personal room
+emitters target (regression: unread badge) » (RED→GREEN vérifié : la jointure asserte
+`user:anon-123` et **jamais** `anon-123`). Vérifié : 52 tests AuthHandler verts,
+`tsc --noEmit` OK.
+
 ## Priorisation suggérée pour le suivi
 
 | Priorité | Item | Raison |
 |---|------|--------|
 | ~~P1~~ | ~~#1 deinit typing leak~~ | ✅ Corrigé 2026-07-05 (à vérifier en CI macOS) |
+| ~~P1~~ | ~~#5 dedup read/delivery sur clé constante~~ | ✅ Corrigé 2026-07-06 (gateway, vérifié 13767 tests verts) |
+| ~~P1~~ | ~~#6 markMessagesAsRead n'avance pas le curseur de livraison (read⇒delivered)~~ | ✅ Corrigé 2026-07-07 (gateway, vérifié 153 + 1160 tests verts) |
+| ~~P1~~ | ~~#7 anonyme dans salle personnelle nue — unread jamais reçu~~ | ✅ Corrigé 2026-07-07 (gateway, vérifié 52 tests verts + tsc OK) |
 | P2 | #2 double boucle reconnexion | Peut prolonger une coupure déjà en cours, pas de perte de données mais UX dégradée |
 | P2 | #3 pas de gap detection message/reaction | Silencieux — aucune donnée perdue de façon visible pour l'utilisateur avant refetch, mais viole "eventual consistency garantie" |
 | P3 | #4 reaction reorder | Fenêtre étroite (dépend de #3 pour se manifester), corrigible avec le timestamp déjà présent au payload |

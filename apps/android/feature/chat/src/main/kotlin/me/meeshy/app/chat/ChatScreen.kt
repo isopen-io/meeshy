@@ -1,6 +1,8 @@
 package me.meeshy.app.chat
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,11 +11,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -23,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.automirrored.filled.Reply
@@ -32,7 +38,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,18 +58,27 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
@@ -68,7 +89,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
@@ -76,13 +100,18 @@ import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.MessageDeletability
+import me.meeshy.sdk.model.MessageEditability
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
+import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -114,8 +143,30 @@ fun ChatScreen(
         }
     }
 
-    val showScrollToBottom by remember(listItems.lastIndex) {
-        derivedStateOf { !listState.isNearBottom(listItems.lastIndex) }
+    // Jump to the focused search hit whenever it changes (new query, next/prev).
+    LaunchedEffect(state.search.activeMessageId) {
+        val target = state.search.activeMessageId ?: return@LaunchedEffect
+        val index = listItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
+        if (index >= 0) listState.animateScrollToItem(index)
+    }
+
+    // Jump to the quoted original when a reply-preview tap requests it, then consume.
+    LaunchedEffect(state.scrollToMessageId) {
+        val target = state.scrollToMessageId ?: return@LaunchedEffect
+        val index = listItems.indexOfFirst { it is ChatListItem.Message && it.bubble.messageId == target }
+        if (index >= 0) listState.animateScrollToItem(index)
+        viewModel.onScrollHandled()
+    }
+
+    val affordanceMessages = remember(state.messages) {
+        state.messages.map { it.toAffordanceMessage() }
+    }
+    val isNearBottom by remember(listItems) {
+        derivedStateOf { listState.isNearBottom(listItems.lastIndex) }
+    }
+    var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
+    LaunchedEffect(affordanceMessages, isNearBottom) {
+        scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isNearBottom)
     }
 
     LaunchedEffect(listState) {
@@ -131,58 +182,106 @@ fun ChatScreen(
         ?.takeIf { it != Color.Unspecified }
         ?: MeeshyPalette.Indigo500
 
+    MeeshyBackground {
     Scaffold(
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        containerColor = Color.Transparent,
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(accentColor),
-                        )
-                        Text(
-                            text = state.conversationTitle ?: stringResource(R.string.chat_title),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = MeeshySpacing.sm),
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_back))
-                    }
-                },
-                actions = {
-                    val peerName = state.conversationTitle.orEmpty()
-                    IconButton(onClick = { onStartCall(peerName, false) }) {
-                        Icon(Icons.Filled.Call, contentDescription = stringResource(R.string.chat_call_audio))
-                    }
-                    IconButton(onClick = { onStartCall(peerName, true) }) {
-                        Icon(Icons.Filled.Videocam, contentDescription = stringResource(R.string.chat_call_video))
-                    }
-                },
-            )
+            if (state.search.isActive) {
+                ChatSearchBar(
+                    search = state.search,
+                    accentColor = accentColor,
+                    onQueryChange = viewModel::onSearchQueryChange,
+                    onPrevious = viewModel::previousSearchMatch,
+                    onNext = viewModel::nextSearchMatch,
+                    onClose = viewModel::closeSearch,
+                )
+            } else {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                        titleContentColor = MeeshyTheme.tokens.textPrimary,
+                        navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
+                        actionIconContentColor = MeeshyPalette.Indigo500,
+                    ),
+                    title = {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(accentColor),
+                                )
+                                Text(
+                                    text = state.conversationTitle ?: stringResource(R.string.chat_title),
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(start = MeeshySpacing.sm),
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                            ) {
+                                TypingAvatarCluster(
+                                    stack = TypingAvatarStack.of(state.typingParticipants),
+                                    accentColor = accentColor,
+                                )
+                                ChatHeaderSubtitleRow(
+                                    subtitle = ChatHeaderSubtitle.of(
+                                        memberCount = state.memberCount,
+                                        isGroup = state.isGroup,
+                                        typing = state.typingParticipants,
+                                    ),
+                                    accentColor = accentColor,
+                                )
+                            }
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_back))
+                        }
+                    },
+                    actions = {
+                        val peerName = state.conversationTitle.orEmpty()
+                        IconButton(onClick = viewModel::openSearch) {
+                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.chat_search))
+                        }
+                        IconButton(onClick = { onStartCall(peerName, false) }) {
+                            Icon(Icons.Filled.Call, contentDescription = stringResource(R.string.chat_call_audio))
+                        }
+                        IconButton(onClick = { onStartCall(peerName, true) }) {
+                            Icon(Icons.Filled.Videocam, contentDescription = stringResource(R.string.chat_call_video))
+                        }
+                    },
+                )
+            }
         },
         bottomBar = {
             val replyTarget = state.replyingToMessageId?.let { id ->
                 state.messages.firstOrNull { it.messageId == id }
             }
-            ChatComposer(
-                draft = state.draft,
-                canSend = state.canSend,
-                isEditing = state.isEditing,
-                replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
-                accentColor = accentColor,
-                onDraftChange = viewModel::onDraftChange,
-                onSend = viewModel::send,
-                onCancelEdit = viewModel::cancelEdit,
-                onCancelReply = viewModel::cancelReply,
-            )
+            Column {
+                MentionSuggestionStrip(
+                    mention = state.mention,
+                    accentColor = accentColor,
+                    onSelect = viewModel::onMentionSelected,
+                )
+                ChatComposer(
+                    draft = state.draft,
+                    canSend = state.canSend,
+                    isEditing = state.isEditing,
+                    replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
+                    accentColor = accentColor,
+                    onDraftChange = viewModel::onDraftChange,
+                    onSend = viewModel::send,
+                    onCancelEdit = viewModel::cancelEdit,
+                    onCancelReply = viewModel::cancelReply,
+                )
+            }
         },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -223,24 +322,35 @@ fun ChatScreen(
                                 is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
                                 is ChatListItem.Message -> {
                                     val bubble = item.bubble
-                                    MessageBubble(
-                                        content = bubble,
-                                        outgoingColor = accentColor,
-                                        onLongPress = {
-                                            viewModel.onMessageLongPress(bubble.messageId)
-                                        },
-                                        onReactionClick = { emoji ->
-                                            viewModel.toggleReaction(bubble.messageId, emoji)
-                                        },
-                                        onImageClick = { index ->
-                                            viewModel.openImageViewer(bubble.messageId, index)
-                                        },
-                                    )
+                                    SwipeToReplyContainer(
+                                        isOutgoing = bubble.isOutgoing,
+                                        accentColor = accentColor,
+                                        onReply = { viewModel.startReply(bubble.messageId) },
+                                    ) {
+                                        MessageBubble(
+                                            content = bubble,
+                                            outgoingColor = accentColor,
+                                            mentionDisplayNames = state.mentionDisplayNames.ifEmpty { null },
+                                            highlightTerm = state.search.highlightTerm,
+                                            onLongPress = {
+                                                viewModel.onMessageLongPress(bubble.messageId)
+                                            },
+                                            onReactionClick = { emoji ->
+                                                viewModel.toggleReaction(bubble.messageId, emoji)
+                                            },
+                                            onImageClick = { index ->
+                                                viewModel.openImageViewer(bubble.messageId, index)
+                                            },
+                                            onReplyPreviewClick = {
+                                                viewModel.onReplyPreviewTap(bubble.messageId)
+                                            },
+                                        )
+                                    }
                                     if (bubble.deliveryStatus == DeliveryStatus.Failed) {
                                         Text(
                                             text = stringResource(R.string.chat_send_failed_retry),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.error,
+                                            color = MeeshyPalette.Error,
                                             textAlign = TextAlign.End,
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -255,29 +365,28 @@ fun ChatScreen(
                             }
                         }
                     }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showScrollToBottom,
+                    ScrollToBottomControl(
+                        affordance = scrollAffordance,
+                        typingParticipants = state.typingParticipants,
+                        accentColor = accentColor,
+                        onClick = {
+                            scrollAffordance = ScrollAffordance.next(
+                                scrollAffordance,
+                                affordanceMessages,
+                                isNearBottom = true,
+                            )
+                            scope.launch {
+                                if (listItems.isNotEmpty()) {
+                                    listState.animateScrollToItem(listItems.lastIndex)
+                                }
+                            }
+                        },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(MeeshySpacing.lg),
-                    ) {
-                        SmallFloatingActionButton(
-                            onClick = {
-                                scope.launch {
-                                    listState.animateScrollToItem(listItems.lastIndex)
-                                }
-                            },
-                            containerColor = accentColor,
-                            contentColor = MeeshyPalette.White,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.ArrowDownward,
-                                contentDescription = stringResource(R.string.chat_scroll_to_bottom),
-                            )
-                        }
+                    )
                     }
-                    }
-                    TypingIndicator(typingUsers = state.typingUsers)
+                    TypingIndicator(participants = state.typingParticipants)
                 }
             }
         }
@@ -300,15 +409,28 @@ fun ChatScreen(
         state.messages.firstOrNull { it.messageId == id }
     }
     if (actionTarget != null) {
+        val nowMillis = System.currentTimeMillis()
+        val createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso)
         MessageActionsSheet(
             bubble = actionTarget,
+            canEdit = MessageEditability.canEdit(
+                isOwn = actionTarget.isOutgoing,
+                createdAtMillis = createdAtMillis,
+                nowMillis = nowMillis,
+            ),
+            canDeleteForEveryone = MessageDeletability.canDeleteForEveryone(
+                isOwn = actionTarget.isOutgoing,
+                createdAtMillis = createdAtMillis,
+                nowMillis = nowMillis,
+            ),
             ownReactions = state.ownReactions[actionTarget.messageId] ?: emptySet(),
             quickReactions = state.quickReactions,
             accentColor = accentColor,
             onReact = { emoji -> viewModel.toggleReaction(actionTarget.messageId, emoji) },
             onExpandPicker = { viewModel.openEmojiPicker(actionTarget.messageId) },
             onEdit = { viewModel.startEdit(actionTarget.messageId) },
-            onDelete = { viewModel.deleteMessage(actionTarget.messageId) },
+            onDeleteForEveryone = { viewModel.deleteForEveryone(actionTarget.messageId) },
+            onDeleteForMe = { viewModel.deleteForMe(actionTarget.messageId) },
             onReply = { viewModel.startReply(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
@@ -328,6 +450,7 @@ fun ChatScreen(
             )
         }
     }
+    }
 }
 
 private const val LOAD_OLDER_THRESHOLD = 2
@@ -337,6 +460,78 @@ private fun LazyListState.isNearBottom(lastIndex: Int): Boolean {
     if (lastIndex <= 0) return true
     val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
     return lastVisible >= lastIndex - BOTTOM_TOLERANCE_ITEMS
+}
+
+/**
+ * Wraps a message bubble with the swipe-to-reply gesture. The bubble tracks the
+ * finger toward its reply direction (incoming → right, own → left) with the
+ * rubber-banded resistance of [SwipeToReply], revealing a reply glyph behind it,
+ * and fires [onReply] with a haptic once released past the commit threshold. The
+ * "when to arm / when to commit" product decision is the pure [SwipeToReply]
+ * core; this is the exempt Compose gesture glue.
+ */
+@Composable
+private fun SwipeToReplyContainer(
+    isOutgoing: Boolean,
+    accentColor: Color,
+    onReply: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val direction = replyDirection(isOutgoing)
+    val haptic = LocalHapticFeedback.current
+    var swipe by remember { mutableStateOf(SwipeReplyState()) }
+    var rawTranslation by remember { mutableStateOf(0f) }
+    val animatedOffset by animateFloatAsState(
+        targetValue = swipe.offset,
+        label = "swipe-to-reply-offset",
+    )
+    val revealProgress = (abs(animatedOffset) / SwipeToReply.COMMIT_THRESHOLD).coerceIn(0f, 1f)
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.Reply,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier
+                .align(if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart)
+                .padding(horizontal = MeeshySpacing.lg)
+                .size(24.dp)
+                .alpha(revealProgress),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(animatedOffset.roundToInt(), 0) }
+                .pointerInput(direction) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { rawTranslation = 0f },
+                        onDragCancel = {
+                            rawTranslation = 0f
+                            swipe = SwipeReplyState()
+                        },
+                        onDragEnd = {
+                            if (SwipeToReply.onRelease(swipe, direction) == SwipeReplyRelease.Commit) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onReply()
+                            }
+                            rawTranslation = 0f
+                            swipe = SwipeReplyState()
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            rawTranslation += dragAmount
+                            val drag = SwipeToReply.onDrag(swipe, rawTranslation, direction)
+                            if (drag.armedHaptic) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                            swipe = drag.state
+                            change.consume()
+                        },
+                    )
+                },
+        ) {
+            content()
+        }
+    }
 }
 
 @Composable
@@ -368,17 +563,318 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * The scroll-to-bottom affordance: a badged FAB that surfaces when the reader has
+ * scrolled away, with a live count and a compact preview of the newest unread message
+ * (iOS `ConversationScrollControlsView`). Tapping either the pill or the button jumps
+ * to the latest and clears the badge. Pure decisions (visibility, count, preview) live
+ * in [ScrollAffordance]; this is only the render.
+ */
+@Composable
+private fun ScrollToBottomControl(
+    affordance: ScrollAffordanceState,
+    typingParticipants: List<TypingParticipant>,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val content = ScrollControlContent.of(affordance, typingParticipants)
+    androidx.compose.animation.AnimatedVisibility(
+        visible = content != ScrollControlContent.Hidden,
+        modifier = modifier,
+    ) {
+        Column(horizontalAlignment = Alignment.End) {
+            when (content) {
+                is ScrollControlContent.Typing ->
+                    TypingPill(label = content.label, accentColor = accentColor, onClick = onClick)
+                is ScrollControlContent.Unread ->
+                    content.preview?.let { preview ->
+                        UnreadPreviewPill(preview = preview, accentColor = accentColor, onClick = onClick)
+                    }
+                else -> Unit
+            }
+            val badgeCount = (content as? ScrollControlContent.Unread)?.count ?: 0
+            BadgedBox(
+                badge = {
+                    if (badgeCount > 0) {
+                        Badge(containerColor = accentColor, contentColor = MeeshyPalette.White) {
+                            Text(unreadBadgeLabel(badgeCount))
+                        }
+                    }
+                },
+            ) {
+                SmallFloatingActionButton(
+                    onClick = onClick,
+                    containerColor = accentColor,
+                    contentColor = MeeshyPalette.White,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowDownward,
+                        contentDescription = stringResource(R.string.chat_scroll_to_bottom),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UnreadPreviewPill(
+    preview: UnreadPreview,
+    accentColor: Color,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(MeeshyRadius.pill),
+        color = MeeshyTheme.tokens.backgroundSecondary,
+        modifier = Modifier
+            .padding(bottom = MeeshySpacing.sm)
+            .widthIn(max = 220.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = MeeshySpacing.md,
+                vertical = MeeshySpacing.xs,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            unreadPreviewIcon(preview.kind)?.let { icon ->
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Column {
+                preview.senderName?.let { name ->
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = unreadPreviewLabel(preview),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TypingPill(label: TypingLabel, accentColor: Color, onClick: () -> Unit) {
+    val text = typingLabelText(label) ?: return
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(MeeshyRadius.pill),
+        color = MeeshyTheme.tokens.backgroundSecondary,
+        modifier = Modifier
+            .padding(bottom = MeeshySpacing.sm)
+            .widthIn(max = 220.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = MeeshySpacing.md,
+                vertical = MeeshySpacing.xs,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Edit,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = accentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun typingLabelText(label: TypingLabel): String? = when (label) {
+    TypingLabel.None -> null
+    is TypingLabel.One -> stringResource(R.string.chat_typing_one, label.name)
+    is TypingLabel.Two -> stringResource(R.string.chat_typing_two, label.first, label.second)
+    is TypingLabel.Many -> stringResource(R.string.chat_typing_many, label.count)
+}
+
+@Composable
+private fun ChatHeaderSubtitleRow(subtitle: ChatHeaderSubtitle, accentColor: Color) {
+    val (text, color) = when (subtitle) {
+        ChatHeaderSubtitle.None -> return
+        is ChatHeaderSubtitle.Members ->
+            stringResource(R.string.chat_header_members, subtitle.count) to
+                MeeshyTheme.tokens.textSecondary
+        is ChatHeaderSubtitle.Typing ->
+            (typingLabelText(subtitle.label) ?: return) to accentColor
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(start = MeeshySpacing.md),
+    )
+}
+
+/**
+ * Overlapping avatar chips of who is composing, shown in the header beside the typing
+ * subtitle (iOS parity — avatars, not just the name). The count and truncation are
+ * decided by the pure [TypingAvatarStack]; this only overlaps the chips and renders a
+ * "+N" pill for the overflow. Each chip carries a surface-coloured ring so the overlap
+ * reads cleanly; avatars degrade to accent-tinted initials.
+ */
+@Composable
+private fun TypingAvatarCluster(stack: TypingAvatarStack, accentColor: Color) {
+    if (stack.visible.isEmpty()) return
+    val ringColor = MeeshyTheme.tokens.backgroundPrimary
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy((-6).dp),
+    ) {
+        stack.visible.forEach { chip ->
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(ringColor)
+                    .padding(1.5.dp),
+            ) {
+                MeeshyAvatar(name = chip.name, size = 20.dp, containerColor = accentColor)
+            }
+        }
+        if (stack.overflow > 0) {
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(ringColor)
+                    .padding(1.5.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(MeeshyTheme.tokens.backgroundSecondary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "+${stack.overflow}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun unreadPreviewIcon(kind: UnreadPreviewKind): ImageVector? = when (kind) {
+    UnreadPreviewKind.Image -> Icons.Filled.Image
+    UnreadPreviewKind.File -> Icons.Filled.AttachFile
+    UnreadPreviewKind.Text -> null
+}
+
+@Composable
+private fun unreadPreviewLabel(preview: UnreadPreview): String = when {
+    preview.text.isNotBlank() -> preview.text
+    preview.kind == UnreadPreviewKind.Image -> stringResource(R.string.chat_unread_photo)
+    preview.kind == UnreadPreviewKind.File -> stringResource(R.string.chat_unread_attachment)
+    else -> stringResource(R.string.chat_unread_new_message)
+}
+
+private fun unreadBadgeLabel(count: Int): String = if (count > 99) "99+" else count.toString()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatSearchBar(
+    search: ChatSearchState,
+    accentColor: Color,
+    onQueryChange: (String) -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onClose: () -> Unit,
+) {
+    TopAppBar(
+        navigationIcon = {
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_search_close))
+            }
+        },
+        title = {
+            TextField(
+                value = search.query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.chat_search_hint)) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = accentColor,
+                ),
+            )
+        },
+        actions = {
+            val term = search.query.isNotBlank()
+            if (term) {
+                Text(
+                    text = if (search.hasMatches) {
+                        stringResource(R.string.chat_search_count, search.currentPosition, search.matchCount)
+                    } else {
+                        stringResource(R.string.chat_search_no_results)
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    modifier = Modifier.padding(horizontal = MeeshySpacing.xs),
+                )
+                IconButton(onClick = onPrevious, enabled = search.hasMatches) {
+                    Icon(Icons.Filled.KeyboardArrowUp, contentDescription = stringResource(R.string.chat_search_previous))
+                }
+                IconButton(onClick = onNext, enabled = search.hasMatches) {
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.chat_search_next))
+                }
+            }
+        },
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MessageActionsSheet(
     bubble: BubbleContent,
+    canEdit: Boolean,
+    canDeleteForEveryone: Boolean,
     ownReactions: Set<String>,
     quickReactions: List<String>,
     accentColor: Color,
     onReact: (String) -> Unit,
     onExpandPicker: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit,
+    onDeleteForEveryone: () -> Unit,
+    onDeleteForMe: () -> Unit,
     onReply: () -> Unit,
     onToggleOriginal: () -> Unit,
     onDismiss: () -> Unit,
@@ -434,17 +930,27 @@ private fun MessageActionsSheet(
                     },
                 )
             }
-            if (bubble.isOutgoing && isActionable) {
+            if (bubble.isOutgoing && isActionable && canEdit) {
                 SheetAction(
                     icon = Icons.Filled.Edit,
                     label = stringResource(R.string.chat_action_edit),
                     onClick = onEdit,
                 )
+            }
+            if (bubble.isOutgoing && isActionable && canDeleteForEveryone) {
                 SheetAction(
                     icon = Icons.Filled.Delete,
-                    label = stringResource(R.string.chat_action_delete),
-                    tint = MaterialTheme.colorScheme.error,
-                    onClick = onDelete,
+                    label = stringResource(R.string.chat_action_delete_for_everyone),
+                    tint = MeeshyPalette.Error,
+                    onClick = onDeleteForEveryone,
+                )
+            }
+            if (isActionable) {
+                SheetAction(
+                    icon = Icons.Filled.Delete,
+                    label = stringResource(R.string.chat_action_delete_for_me),
+                    tint = MeeshyPalette.Error,
+                    onClick = onDeleteForMe,
                 )
             }
         }
@@ -473,19 +979,70 @@ private fun SheetAction(
 }
 
 @Composable
-private fun TypingIndicator(typingUsers: List<String>, modifier: Modifier = Modifier) {
-    if (typingUsers.isEmpty()) return
-    val text = when (typingUsers.size) {
-        1 -> stringResource(R.string.chat_typing_one, typingUsers[0])
-        2 -> stringResource(R.string.chat_typing_two, typingUsers[0], typingUsers[1])
-        else -> stringResource(R.string.chat_typing_many, typingUsers.size)
-    }
+private fun TypingIndicator(participants: List<TypingParticipant>, modifier: Modifier = Modifier) {
+    val text = typingLabelText(TypingLabel.of(participants)) ?: return
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,
         color = MeeshyTheme.tokens.textSecondary,
         modifier = modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
     )
+}
+
+/**
+ * Autocomplete panel floating above the composer while an `@mention` is in
+ * progress. Neutral surface (input-assistance chrome, like the keyboard's suggestion
+ * bar) — the accent tint stays reserved for message-content surfaces. Rows are
+ * capped and scroll; tapping one inserts the handle via [onSelect].
+ */
+@Composable
+private fun MentionSuggestionStrip(
+    mention: MentionAutocompleteState,
+    accentColor: Color,
+    onSelect: (me.meeshy.sdk.model.MentionCandidate) -> Unit,
+) {
+    if (!mention.isActive || mention.suggestions.isEmpty()) return
+    Surface(
+        color = MeeshyTheme.tokens.backgroundSecondary,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
+            items(mention.suggestions, key = { it.id }) { candidate ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(candidate) }
+                        .semantics { role = Role.Button }
+                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+                ) {
+                    MeeshyAvatar(
+                        name = candidate.displayName,
+                        size = 36.dp,
+                        containerColor = accentColor,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = candidate.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MeeshyTheme.tokens.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "@${candidate.username}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MeeshyTheme.tokens.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

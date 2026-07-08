@@ -624,7 +624,8 @@ export function registerMessagesAdvancedRoutes(
           if (mime.startsWith('audio/')) return 'audio';
           if (mime.startsWith('video/')) return 'video';
           return 'file';
-        })
+        }),
+        existingMessage.messageType || 'text'
       ).catch(err => logger.error('[MESSAGES] Stats delete update error:', err));
 
       // Invalider et recalculer les stats
@@ -1061,6 +1062,13 @@ export function registerMessagesAdvancedRoutes(
 
       if (!addResult) {
         return sendInternalError(reply, 'Failed to add reaction');
+      }
+
+      if (addResult.unchanged) {
+        // Idempotent no-op: the participant already had exactly this emoji.
+        // Skip the REACTION_ADDED broadcast (nothing changed) but still report
+        // success. Parity with the socket `reaction:add` handler.
+        return sendSuccess(reply, { added: true, emoji });
       }
 
       // Broadcast via Socket.IO to all conversation participants

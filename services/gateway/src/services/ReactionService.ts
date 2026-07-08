@@ -38,6 +38,16 @@ export interface AddReactionResult {
    * a REACTION_REMOVED event per entry so other clients drop the old emoji.
    */
   replacedEmojis: string[];
+  /**
+   * True when the participant already had exactly this emoji on this message,
+   * so addReaction made no DB change. Callers MUST skip the REACTION_ADDED
+   * broadcast and the author notification — nothing changed, and re-emitting
+   * both spams every participant in the room and (once the anti-spam window
+   * has elapsed) double-notifies the author for a single logical reaction.
+   * Mirrors `removeReaction`'s `false` return, which every consumer already
+   * respects to avoid a no-op REACTION_REMOVED broadcast.
+   */
+  unchanged: boolean;
 }
 
 export class ReactionService {
@@ -99,7 +109,7 @@ export class ReactionService {
         where: { messageId, participantId, emoji: sanitized }
       });
       if (existingReaction) {
-        return { reaction: this.mapReactionToData(existingReaction), replacedEmojis: [] };
+        return { reaction: this.mapReactionToData(existingReaction), replacedEmojis: [], unchanged: true };
       }
     }
 
@@ -121,7 +131,7 @@ export class ReactionService {
 
     await this.updateMessageReactionSummary(messageId);
 
-    return { reaction: this.mapReactionToData(reaction), replacedEmojis };
+    return { reaction: this.mapReactionToData(reaction), replacedEmojis, unchanged: false };
   }
 
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {

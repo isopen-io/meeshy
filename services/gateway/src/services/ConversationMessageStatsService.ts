@@ -16,17 +16,43 @@ interface CacheEntry {
   expiresAt: number;
 }
 
+// Maps an attachment token (derived from a message's MIME types) to its
+// conversation-level counter. Location is NOT here: it is a `messageType`,
+// never an attachment token, so it is counted by `messageType === 'location'`
+// on both the incremental path AND recompute() — see isLocationMessageStat.
 const ATTACHMENT_TYPE_FIELDS: Record<string, string> = {
   image: 'imageCount',
   audio: 'audioCount',
   video: 'videoCount',
   file: 'fileCount',
-  location: 'locationCount',
 };
 
 function countWords(content: string): number {
   if (!content || !content.trim()) return 0;
   return content.trim().split(/\s+/).length;
+}
+
+// A message counts as "text" for stats iff it has no attachments AND its
+// messageType is 'text'. This mirrors the authoritative recompute()
+// (`msgType === 'text' && attachments.length === 0`); the incremental path
+// MUST use the same rule or a non-text message (e.g. 'location', 'system')
+// with a caption inflates contentTypes.text until the next recompute.
+function isTextMessageStat(
+  attachmentTypes: string[],
+  content: string,
+  messageType?: string,
+): boolean {
+  const hasTextContent = !!(content && content.trim().length > 0);
+  return attachmentTypes.length === 0 && hasTextContent && (messageType || 'text') === 'text';
+}
+
+// A message counts as "location" for stats iff its messageType is 'location'.
+// Location is a messageType dimension (like 'text'/'system'), NOT an attachment
+// token, so the incremental path MUST count it by messageType — exactly like
+// the authoritative recompute() (`msgType === 'location'`) — or locationCount
+// silently stays frozen at its seed value forever (no periodic recompute).
+function isLocationMessageStat(messageType?: string): boolean {
+  return messageType === 'location';
 }
 
 function countCharacters(content: string): number {
@@ -96,6 +122,7 @@ export class ConversationMessageStatsService {
     content: string,
     attachmentTypes: string[],
     originalLanguage: string | null,
+    messageType: string = 'text',
   ): Promise<void> {
     const existing = await prisma.conversationMessageStats.findUnique({
       where: { conversationId },
@@ -120,8 +147,8 @@ export class ConversationMessageStatsService {
       }
     }
 
-    const hasTextContent = content && content.trim().length > 0;
-    const isTextMessage = attachmentTypes.length === 0 && hasTextContent;
+    const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
+    const isLocationMessage = isLocationMessageStat(messageType);
 
     const participantStats = (typeof existing.participantStats === 'string'
       ? JSON.parse(existing.participantStats)
@@ -175,6 +202,7 @@ export class ConversationMessageStatsService {
         totalWords: { increment: words },
         totalCharacters: { increment: chars },
         textMessages: isTextMessage ? { increment: 1 } : undefined,
+        locationCount: isLocationMessage ? { increment: 1 } : undefined,
         ...Object.fromEntries(
           Object.entries(attachmentIncrements).map(([field, count]) => [field, { increment: count }]),
         ),
@@ -241,6 +269,7 @@ export class ConversationMessageStatsService {
     senderId: string,
     content: string,
     attachmentTypes: string[],
+    messageType: string = 'text',
   ): Promise<void> {
     const existing = await prisma.conversationMessageStats.findUnique({
       where: { conversationId },
@@ -250,8 +279,8 @@ export class ConversationMessageStatsService {
 
     const words = countWords(content);
     const chars = countCharacters(content);
-    const hasTextContent = content && content.trim().length > 0;
-    const isTextMessage = attachmentTypes.length === 0 && hasTextContent;
+    const isTextMessage = isTextMessageStat(attachmentTypes, content, messageType);
+    const isLocationMessage = isLocationMessageStat(messageType);
 
     const decrements: Record<string, number> = {};
     for (const t of attachmentTypes) {
@@ -287,6 +316,10 @@ export class ConversationMessageStatsService {
 
     if (isTextMessage) {
       updateData.textMessages = { decrement: 1 };
+    }
+
+    if (isLocationMessage) {
+      updateData.locationCount = { decrement: 1 };
     }
 
     for (const [field, count] of Object.entries(decrements)) {

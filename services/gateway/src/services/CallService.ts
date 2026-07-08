@@ -197,7 +197,17 @@ export class CallService {
   private readonly PHANTOM_CONNECTING_GRACE_MS = 90 * 1000;
   private readonly PHANTOM_HEARTBEAT_GRACE_MS = 120 * 1000;
 
-  constructor(private prisma: PrismaClient) {
+  constructor(
+    private prisma: PrismaClient,
+    // CALL-RESILIENCE (item H bug class, re-opened by the 2026-07-06 P0 fix)
+    // — liveness floor for `isPhantomCallStale`'s no-heartbeat-data fallback:
+    // `this.heartbeats` is always empty right after a restart, so without
+    // this floor a real, healthy, long-running call reads as instantly stale
+    // (its DB `startedAt` is old) the moment ANY user's phantom-cleanup sweep
+    // touches it, before clients have had a chance to reconnect and re-beat.
+    // Mirrors `CallCleanupService`'s own `bootedAt` floor. Injectable for tests.
+    private readonly bootedAt: Date = new Date()
+  ) {
     this.turnCredentialService = new TURNCredentialService();
   }
 
@@ -328,24 +338,47 @@ export class CallService {
   async forceEndOrphanedCallSession(
     callId: string,
     endReason: CallEndReason
-  ): Promise<{ duration: number; conversationId: string } | null> {
+  ): Promise<{ duration: number; conversationId: string; status: CallStatus; endReason: CallEndReason } | null> {
     const session = await this.prisma.callSession.findUnique({
       where: { id: callId },
-      select: { startedAt: true, conversationId: true }
+      select: { startedAt: true, conversationId: true, answeredAt: true }
     });
     if (!session) return null;
 
     const now = new Date();
-    const duration = Math.max(0, Math.floor((now.getTime() - session.startedAt.getTime()) / 1000));
+
+    // Audit Vague 25 — mirror endCall()'s wasPreAnswered handling (see its
+    // doc comment): a call force-ended before it was ever answered (e.g. the
+    // caller's own participant row can't be resolved, or endCall() itself
+    // threw, while the callee never picked up) must resolve to `missed`, not
+    // `ended` — otherwise the callee gets no missed-call notification and
+    // call history shows a phantom "completed" 0-duration call. `answeredAt`
+    // is the authoritative "was ever answered" signal, stamped once on the
+    // SDP answer. An explicit non-default reason (e.g. connectionLost) is
+    // preserved; only the generic default `completed` is normalized to
+    // `missed`, same rule as endCall().
+    const wasPreAnswered = !session.answeredAt;
+    const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
+    const targetEndReason = wasPreAnswered && endReason === CallEndReason.completed
+      ? CallEndReason.missed
+      : endReason;
+    // Audit Vague 27 — anchor duration on answeredAt (talk time), exactly
+    // like endCall()'s `call.answeredAt ? … : 0`. This was the one terminal
+    // writer still anchoring on startedAt unconditionally (ring+talk time),
+    // producing a duration inconsistent with the same real-world call ending
+    // via a different path (e.g. the explicit "End Call" button).
+    const duration = wasPreAnswered
+      ? 0
+      : Math.max(0, Math.floor((now.getTime() - session.answeredAt!.getTime()) / 1000));
 
     const ended = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.callSession.updateMany({
         where: { id: callId, status: { in: ACTIVE_STATUSES } },
         data: {
-          status: CallStatus.ended,
+          status: targetStatus,
           endedAt: now,
           duration,
-          endReason,
+          endReason: targetEndReason,
           version: { increment: 1 }
         }
       });
@@ -356,6 +389,17 @@ export class CallService {
         data: { leftAt: now }
       });
       return true;
+    }).catch((error) => {
+      // Same protocol as joinCall/endCall/leaveCall (isTransientWriteConflict's
+      // doc comment): a P2034 here means another terminal writer (call:end,
+      // call:leave, the ringing-timeout GC) touched this same CallSession
+      // document concurrently and won — functionally identical to this
+      // transaction's own `updated.count === 0` no-op above, not a real
+      // failure. Without this, it was misreported to the caller's catch as
+      // "force cleanup also failed" and could leave the call non-terminal
+      // until the 60s GC tier reaps it.
+      if (this.isTransientWriteConflict(error)) return false;
+      throw error;
     });
 
     if (!ended) return null;
@@ -364,7 +408,7 @@ export class CallService {
     this.clearRingingTimeout(callId);
     await this.releaseActiveCallClaim(session.conversationId, callId);
 
-    return { duration, conversationId: session.conversationId };
+    return { duration, conversationId: session.conversationId, status: targetStatus, endReason: targetEndReason };
   }
 
   /**
@@ -439,6 +483,9 @@ export class CallService {
    * timeout, a connecting call gets the GC's connecting budget anchored on
    * `answeredAt`, and an active/reconnecting call is stale only when there is
    * no evidence — in memory or otherwise — that anyone is still beating.
+   *
+   * The no-heartbeat-data fallback additionally floors its anchor at
+   * `this.bootedAt` (CALL-RESILIENCE item H) — see constructor comment.
    */
   private isPhantomCallStale(
     session: { id: string; status?: CallStatus; startedAt: Date | null; answeredAt?: Date | null },
@@ -461,7 +508,12 @@ export class CallService {
       const staleCount = this.getStaleHeartbeats(session.id, this.PHANTOM_HEARTBEAT_GRACE_MS).length;
       return staleCount >= this.getHeartbeatParticipantCount(session.id);
     }
-    return now.getTime() - startedAtMs > this.PHANTOM_HEARTBEAT_GRACE_MS;
+    // Floored at `bootedAt` (CALL-RESILIENCE item H) — right after a restart
+    // `this.heartbeats` is empty for every call regardless of true age, so an
+    // anchor on `startedAt` alone would misclassify a real, long-running call
+    // as stale the instant any sweep touches it, before clients re-beat.
+    const anchorMs = Math.max(startedAtMs, this.bootedAt.getTime());
+    return now.getTime() - anchorMs > this.PHANTOM_HEARTBEAT_GRACE_MS;
   }
 
   /**
@@ -747,7 +799,12 @@ export class CallService {
                 status: CallStatus.ended,
                 endedAt: now,
                 duration: Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000)),
-                endReason: CallEndReason.garbageCollected
+                endReason: CallEndReason.garbageCollected,
+                // Terminal write protocol: every terminal writer MUST bump `version`
+                // (see endCall/markCallAsMissed) — otherwise a version-guarded writer
+                // that read this row a moment earlier still matches its stale `version`
+                // and clobbers this terminal state right after.
+                version: { increment: 1 }
               }
             });
           });
@@ -798,11 +855,17 @@ export class CallService {
             status: CallStatus.ended,
             endedAt: now,
             duration,
-            endReason: CallEndReason.garbageCollected
+            endReason: CallEndReason.garbageCollected,
+            // Terminal write protocol: every terminal writer MUST bump `version`
+            // (see endCall/markCallAsMissed) — otherwise a version-guarded writer
+            // that read this row a moment earlier still matches its stale `version`
+            // and clobbers this terminal state right after.
+            version: { increment: 1 }
           }
         });
 
         this.clearHeartbeats(activeCall.id);
+        this.clearRingingTimeout(activeCall.id);
         await this.releaseActiveCallClaim(conversationId, activeCall.id);
 
         logger.info('Zombie call cleaned up', { zombieCallId: activeCall.id });
@@ -1029,6 +1092,16 @@ export class CallService {
       );
     }
 
+    // Privacy gate (audit 2026-07-07): the joiner's isVideoEnabled must be
+    // derived from the call's actual media type, exactly like the
+    // initiator's is at create time above — never trust `settings.videoEnabled`
+    // on its own. Without this, a stale or malicious client answering an
+    // AUDIO call with `videoEnabled: true` gets recorded (and, via the web
+    // client, actually transmits) live camera video the callee never
+    // consented to for this call.
+    const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
+    const isVideoCall = metadataType === 'video';
+
     // Join call in transaction, guarded by an optimistic-lock claim on
     // CallSession.version so a concurrent joiner can't silently slip past
     // the cap check above (see joinCallAttempt's doc comment).
@@ -1044,7 +1117,7 @@ export class CallService {
           role: ParticipantRole.participant,
           leftAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
-          isVideoEnabled: settings?.videoEnabled ?? true
+          isVideoEnabled: isVideoCall ? (settings?.videoEnabled ?? true) : false
         }
       });
 
@@ -1176,6 +1249,15 @@ export class CallService {
       const idemNow = new Date();
       // Same `answeredAt` criterion as the main path below (2026-07-03).
       const idemPreAnswered = !existing.answeredAt;
+      // Audit Vague 27 — anchor duration on answeredAt (talk time), mirroring
+      // endCall()'s `call.answeredAt ? … : 0`. This idempotent branch was
+      // still anchoring on startedAt unconditionally (ring+talk time),
+      // producing a duration inconsistent with the same real-world call
+      // ending via a different path (e.g. the main leaveCall branch, or the
+      // explicit "End Call" button).
+      const idemDuration = idemPreAnswered
+        ? 0
+        : Math.max(0, Math.floor((idemNow.getTime() - existing.answeredAt!.getTime()) / 1000));
       // Version-guarded (see endCall()'s doc comment): a racing terminal
       // writer (call:end, force-end) could resolve this same call between
       // the `existing` read above and this write; scope to `existing.version`
@@ -1193,7 +1275,7 @@ export class CallService {
             status: idemPreAnswered ? CallStatus.missed : CallStatus.ended,
             endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
             endedAt: idemNow,
-            duration: Math.max(0, Math.floor((idemNow.getTime() - existing.startedAt.getTime()) / 1000)),
+            duration: idemDuration,
             version: { increment: 1 }
           }
         });
@@ -1203,7 +1285,7 @@ export class CallService {
       }).then(
         () => 'ended' as const,
         (error) => {
-          if (error === idemVersionConflict) {
+          if (error === idemVersionConflict || this.isTransientWriteConflict(error)) {
             return 'conflict' as const;
           }
           throw error;
@@ -1327,9 +1409,14 @@ export class CallService {
           data: { leftAt }
         });
 
-        const duration = Math.floor(
-          (leftAt.getTime() - call.startedAt.getTime()) / 1000
-        );
+        // Audit Vague 27 — anchor duration on answeredAt (talk time),
+        // mirroring endCall()'s `call.answeredAt ? … : 0`. This was still
+        // anchoring on startedAt unconditionally (ring+talk time), producing
+        // a duration inconsistent with the same real-world call ending via
+        // a different path (e.g. the explicit "End Call" button).
+        const duration = wasPreAnswered
+          ? 0
+          : Math.max(0, Math.floor((leftAt.getTime() - call.answeredAt!.getTime()) / 1000));
 
         const lock = await tx.callSession.updateMany({
           where: { id: callId, version: call.version },

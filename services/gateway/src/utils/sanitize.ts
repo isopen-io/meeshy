@@ -16,6 +16,32 @@ import { NotificationTypeEnum } from '@meeshy/shared';
 
 export class SecuritySanitizer {
   /**
+   * Single source of truth for dangerous object keys shared by every
+   * structural sanitizer (`sanitizeJSON`, `sanitizeMongoQuery`).
+   *
+   * Blocks, under one threat model:
+   * - `$`-prefixed keys → MongoDB query operators ($ne, $gt, $where, …)
+   * - `__`-prefixed keys → prototype-pollution vectors, incl. `__proto__`
+   * - `constructor` / `prototype` → prototype-pollution vectors
+   *
+   * Note: values parsed via `JSON.parse` (Fastify request bodies) expose an
+   * OWN enumerable `__proto__` key. Copying it with `target[key] = value`
+   * mutates the target's prototype, so the injected object escapes
+   * sanitization via the prototype chain. This guard drops it before copy.
+   *
+   * @param key - Object key to evaluate
+   * @returns true if the key must be dropped
+   */
+  private static isDangerousKey(key: string): boolean {
+    return (
+      key.startsWith('__') ||
+      key.startsWith('$') ||
+      key === 'constructor' ||
+      key === 'prototype'
+    );
+  }
+
+  /**
    * Sanitize plain text content - strips ALL HTML tags and dangerous characters
    * Use for: notification titles, content, message previews, usernames
    *
@@ -94,7 +120,7 @@ export class SecuritySanitizer {
 
     for (const [key, value] of Object.entries(input)) {
       // Block dangerous keys (MongoDB operators, prototype pollution)
-      if (key.startsWith('__') || key.startsWith('$') || key === 'constructor' || key === 'prototype') {
+      if (this.isDangerousKey(key)) {
         continue;
       }
 
@@ -235,8 +261,9 @@ export class SecuritySanitizer {
 
     const sanitized: any = {};
     for (const [key, value] of Object.entries(obj)) {
-      // Block MongoDB operators ($ne, $gt, $regex, $where, etc.)
-      if (key.startsWith('$')) {
+      // Block MongoDB operators ($ne, $gt, …) AND prototype-pollution keys
+      // (__proto__, constructor, prototype) — unified with sanitizeJSON.
+      if (this.isDangerousKey(key)) {
         continue;
       }
 

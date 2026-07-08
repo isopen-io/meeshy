@@ -20,9 +20,10 @@ class MeeshyDimensTest {
 
     @Test
     fun `radius scale is ascending up to the pill`() {
-        val values = listOf(MeeshyRadius.sm, MeeshyRadius.md, MeeshyRadius.lg, MeeshyRadius.xl)
-            .map { it.value }
+        val values = listOf(
+            MeeshyRadius.sm, MeeshyRadius.md, MeeshyRadius.lg, MeeshyRadius.xl, MeeshyRadius.xxl,
+        ).map { it.value }
         assertThat(values).isInStrictOrder()
-        assertThat(MeeshyRadius.pill.value).isGreaterThan(MeeshyRadius.xl.value)
+        assertThat(MeeshyRadius.pill.value).isGreaterThan(MeeshyRadius.xxl.value)
     }
 }

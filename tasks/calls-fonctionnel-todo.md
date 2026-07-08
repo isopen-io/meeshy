@@ -1015,3 +1015,1208 @@ sessions gateway-only précédentes). Gateway et web audités en profondeur.
   socket, seuls les numéros de ligne décalent — confirmé par diff textuel, aucune nouvelle erreur).
 - **Reste ouvert** (inchangé) : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non
   vidée (piste basse-priorité, toujours pas de scénario d'exploitation concret).
+
+## Vague 16 — le P0 fix du jour (682c35279) a rouvert le bug de floor-boot ET introduit une race d'initiateur côté web (2026-07-06)
+
+Point d'entrée : routine calling-feature. Le seul commit calling non-documenté depuis la Vague 15 était
+`682c35279` (même jour, quelques heures plus tôt) — deux bugs P0 corrigés (l'initiateur web n'entrait
+jamais dans son propre appel ; le phantom-cleanup gateway tuait des appels cross-conversation vivants).
+Trois agents d'exploration dédiés (gateway, web, iOS — lecture seule, mandatés à croiser tout candidat
+contre ce fichier + lessons.md avant de rapporter) ont audité ce diff et son voisinage en profondeur.
+iOS n'a rien trouvé de nouveau (le bug de classe "initiateur jamais notifié" n'existe pas côté iOS —
+`CallManager.startCall` ne dépend jamais de recevoir `call:initiated` en retour, il pose son état
+directement depuis l'ACK locale ; confirmé par lecture complète du chemin sortant). Gateway et web ont
+chacun trouvé un bug réel, tous deux des régressions introduites par le fix du jour lui-même.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `isPhantomCallStale` rouvrait exactement le bug de
+  classe "item H" qu'il était censé éviter** — `services/gateway/src/services/CallService.ts`. La
+  branche `active`/`reconnecting` sans données de heartbeat en mémoire (`this.heartbeats` toujours vide
+  juste après un restart) retombait sur `now - startedAtMs > PHANTOM_HEARTBEAT_GRACE_MS` — un ancrage
+  purement basé sur `startedAt` (l'ancienneté RÉELLE de l'appel), sans aucun plancher lié au moment du
+  boot du process. Le commentaire de la méthode prétendait "mirror CallCleanupService's tiered liveness
+  semantics" mais omettait précisément le morceau de sémantique tier-4 qui existe pour survivre à un
+  restart (`CallCleanupService.bootedAt`, item H, déjà documenté vagues précédentes). Scénario concret :
+  gateway redémarre pendant qu'un appel réel de 10+ minutes est en cours (`startedAt` ancien) ; juste
+  après boot, `hasHeartbeatData` est faux pour TOUS les appels (personne n'a encore eu le temps de
+  re-battre) ; si N'IMPORTE QUEL utilisateur (potentiellement le même que celui de l'appel, sur un 2e
+  appareil/onglet) initie un appel dans une AUTRE conversation dans cette fenêtre, le sweep phantom lit
+  l'appel réel comme "stale" (startedAt vieux de plusieurs minutes) et le force-end silencieusement —
+  `CallService` n'a pas de référence Socket.IO, donc l'autre partie ne reçoit jamais `call:ended` et
+  reste "connecté" indéfiniment. Exactement le symptôme que `682c35279` visait à corriger, réouvert par
+  le timing de restart au lieu du cas cross-conversation en régime permanent. Fix : `CallService` reçoit
+  désormais un 2e paramètre constructeur `bootedAt: Date = new Date()` (miroir exact du pattern déjà
+  utilisé par `CallCleanupService`, injectable pour les tests) ; la branche sans heartbeat ancre
+  maintenant sur `Math.max(startedAtMs, bootedAtMs)` au lieu de `startedAtMs` seul — un appel réel garde
+  sa fenêtre de grâce complète (120s) après CHAQUE boot avant d'être jugé stale, même si `startedAt` est
+  ancien. 3 tests dans `CallService.test.ts` : `beforeEach` de la describe passé à un `bootedAt` vieux de
+  24h (la plupart des tests de ce bloc simulent un régime permanent, pas l'instant post-restart — sinon
+  le défaut `new Date()` du constructeur aurait rendu TOUT candidat "frais" au moment du test) + nouveau
+  test dédié `boot-floor regression` avec un `CallService` fraîchement construit (`bootedAt = new Date()`)
+  reproduisant exactement le scénario post-restart. RED confirmé manuellement (revert de la seule ligne
+  `Math.max` → le nouveau test échoue, les 174 autres restent verts) puis GREEN restauré. Suite
+  `CallService.test.ts` : 175/175. Suite gateway filtrée `*[Cc]all*` : 30/30 suites, 844/844 tests verts.
+  `tsc --noEmit` gateway : propre (aucune erreur, y compris la `SequenceService.ts` pré-existante des
+  sessions précédentes — absente de cette exécution).
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ] Le nouveau `currentCall` synthétique de l'initiateur (fix du
+  jour) pouvait être définitivement écrasé par un `call:participant-joined` gagnant la course, bloquant
+  l'appel en silence** — `apps/web/hooks/conversations/use-video-call.ts` + `apps/web/stores/
+  call-store.ts`. `startCall`'s ack handler pose `currentCall` de façon asynchrone (aller-retour réseau
+  vers le propre serveur) avec `participants: []` codé en dur. `addParticipant` (appelé par
+  `CallManager.handleParticipantJoined` sur `call:participant-joined`) était un no-op garde par
+  `if (currentCall)` — si l'événement de jointure du callee arrive AVANT l'ACK de l'initiateur (callee
+  rapide/latence asymétrique, plausible sans être le cas nominal), la jointure est perdue silencieusement,
+  puis l'ACK écrase `currentCall` avec un tableau vide, effaçant définitivement la trace que le callee a
+  rejoint. `VideoCallInterface` ne crée jamais l'offre SDP pour un participant absent de ce tableau — les
+  deux côtés se croient "en appel", personne ne progresse, aucune erreur ne le distingue d'une sonnerie
+  normale. Fix (store, source de vérité unique) : nouveau buffer module-level
+  `pendingParticipantsByCallId` (miroir du style déjà utilisé par `heartbeatInterval`/
+  `beforeUnloadHandler` dans ce même fichier) — `addParticipant` bufferise par `callSessionId` au lieu de
+  no-op silencieux quand `currentCall` est encore null ; `setCurrentCall` réclame et fusionne le buffer
+  correspondant au `call.id` qu'il pose, AVANT de committer l'état (donc `use-video-call.ts` n'a besoin
+  d'aucun changement — le fix est entièrement contenu dans le store, cohérent avec le principe "single
+  source of truth"). Buffer vidé sur `reset()` (hygiène : un appel annulé avant que son ACK n'arrive
+  jamais ne doit pas fuiter indéfiniment). 3 nouveaux tests `call-store.test.ts` (bufferise + fusionne au
+  bon callId ; ne fuite pas vers un callId différent jamais réclamé ; `reset()` vide le buffer). RED
+  confirmé (revert du store seul → le test de fusion échoue, les 57 autres restent verts) puis GREEN.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ] Le timeout 30s "pas de réponse" de l'initiateur était devenu du
+  code mort** — `apps/web/components/video-call/CallManager.tsx`. `startCallTimeout` n'était appelé que
+  depuis les 2 branches de `handleIncomingCall` (le gestionnaire de l'événement socket
+  `call:initiated`) — or la branche `isInitiator` de cette fonction est, par construction du fix du jour,
+  définitivement inatteignable pour l'appelant (le gateway ne réémet jamais `call:initiated` vers son
+  propre socket). Le nouveau chemin `setCurrentCall` direct de `startCall` n'arme aucun timeout. Avant ce
+  fix, l'écran de sonnerie de l'appelant restait affiché indéfiniment si le callee ne répond jamais,
+  dépendant à 100 % du timeout serveur de 60s (2x plus long que prévu) et de la réception effective du
+  broadcast `call:ended` correspondant. Fix : nouveau `useEffect` dans `CallManager.tsx`, réactif aux
+  primitives `currentCall?.id`/`status`/`initiatorId`/`user?.id` — arme `startCallTimeout(currentCall.id)`
+  dès que le propre appel sortant de l'utilisateur devient courant en statut `initiated` (mirroir de la
+  branche `isInitiator` qu'il rend redondante, conservée pour défense en profondeur si le comportement
+  gateway change un jour). Nouveau fichier `CallManager.initiatorTimeout.test.tsx` (2 cas : le timeout
+  s'arme et émet `call:leave` + reset après 30s sans réponse ; ne se déclenche pas si le callee a rejoint
+  avant l'expiration — le guard de statut interne à `startCallTimeout` protège même sans clear explicite).
+  RED confirmé (revert de `CallManager.tsx` seul → le 1er test échoue, le 2e reste vert) puis GREEN. Suite
+  web filtrée `*[Cc]all*` : 17/17 suites, 227/227 tests verts (+5 vs baseline 222). `tsc --noEmit` web :
+  même 29 erreurs pré-existantes avant/après (aucune nouvelle, confirmé par diff textuel de la sortie
+  filtrée sur les 3 fichiers touchés).
+- **iOS (lecture seule, aucun changement)** : audit dédié confirmant que la classe de bug "initiateur
+  jamais notifié" n'affecte pas iOS (état posé localement depuis l'ACK `call:initiate`, jamais depuis un
+  event `call:initiated` reçu) et qu'aucune implication côté iOS de la staleness gate cross-conversation
+  du gateway n'a été trouvée (le preflight `emitCallForceLeave` d'iOS est déjà scopé à la conversation
+  cible, indépendant du sweep cross-conversation). Audit élargi (commits `4eb6fcdbb`/`98a447c5a` du
+  2026-07-05 non encore documentés) : rien de nouveau, tout vérifié correct par lecture complète.
+- **Reste ouvert** (inchangé) : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non
+  vidée.
+
+## Note d'audit — couverture de test illusoire sur `CallManager.swift` (2026-07-06)
+
+Point d'entrée : routine calling-feature, audit dédié (agent d'exploration, lecture seule, environnement
+Linux sans toolchain Swift/Xcode). Pendant que cette session auditait le voisinage du P0 fix `682c35279`,
+une PR concurrente (`#1558`, session parallèle) avait déjà couvert et corrigé les deux régressions
+réelles introduites par ce fix (gateway boot-floor + course d'initiateur web) — voir sa description pour
+le détail, pas dupliqué ici pour éviter un conflit de merge sur ce même fichier. Cette note documente
+la seule piste NON couverte par `#1558` trouvée cette session : un problème de qualité de test, pas un
+bug runtime.
+
+- **[QUALITÉ TEST, iOS, CONFIRMÉ, NON CORRIGÉ — nécessite Xcode]** `apps/ios/MeeshyTests/Unit/Services/
+  CallManagerTests.swift` (~5250 lignes) et `CallManagerAudioSessionTests.swift` (~4000 lignes) —
+  ensemble le plus volumineux de tests sur le fichier le plus critique du système d'appel (`CallManager.swift`,
+  ~4783 lignes, `CXProvider`/`CXCallController`) — ne contiennent **aucune instanciation de `CallManager`**.
+  Les centaines d'assertions (~400/fichier) sont des checks regex/substring sur le **texte source** du
+  fichier via un helper `callManagerSource()` (`CallManagerAudioSessionTests.swift:7-15`), par exemple
+  `XCTAssertFalse(source.contains("audioSession.setActive(true, options:")...)` ou une extraction regex du
+  corps de `providerDidReset` vérifiant qu'il contient certains tokens. Même chose dans
+  `P2PWebRTCClientConcurrencySourceTests.swift` (le nom du fichier le dit explicitement : "SourceTests").
+  Par contraste, `CallReconnectPolicyTests.swift`/`CallQualityIndicatorPolicyTests.swift` (les parties
+  extraites en fonctions pures) ont une vraie couverture comportementale — l'écart concerne spécifiquement
+  le câblage CallKit/AVAudioSession à l'intérieur du singleton et son proxy `CXProviderDelegate`
+  (`CallManager.swift:4460-4669`) : aucun test n'exerce réellement `providerDidReset`,
+  `provider(_:perform: CXAnswerCallAction)`, `provider(_:didActivate:)` ou `provider(_:didDeactivate:)`
+  contre un vrai double de test. Conséquence concrète : un futur changement qui inverserait l'ordre
+  `rtc.isAudioEnabled = false` vs. `audioSessionDidActivate`, ou qui casserait le séquencement réel
+  `didActivate`/`didDeactivate` sous le timing CallKit, laisserait la suite complètement verte — elle ne
+  vérifie que la présence de tokens dans le fichier, jamais le comportement réel à l'exécution.
+- **Pourquoi non corrigé cette session** : le fix correct (rendre `CallManager` testable — abstraire
+  `CXProvider`/`CXCallController` derrière un protocole injectable, à l'image du pattern
+  `{ServiceName}Providing` déjà utilisé ailleurs dans la codebase, cf. CLAUDE.md "iOS TDD Requirements")
+  est un changement architectural sur le fichier le plus sensible du système d'appel — risqué à tenter en
+  aveugle sans compilateur Swift local pour vérifier chaque étape (cet environnement reste Linux, sans
+  Xcode). Cohérent avec la discipline déjà établie dans ce backlog (vagues 11/15 : "God object refactor,
+  hors de portée sans compilateur local").
+- **Piste pour une session future avec accès macOS/Xcode** : extraire un protocole
+  `CXCallProviding`/`CXCallControlling` (ou équivalent) derrière lequel `CallManager` pilote CallKit,
+  permettant un double de test qui simule réellement `providerDidReset`/`didActivate`/`didDeactivate` et
+  vérifie l'ordonnancement effectif (pas juste la présence de code), puis remplacer progressivement les
+  ~800 assertions source-grep des deux fichiers ci-dessus par des tests comportementaux équivalents.
+- **Vérification effectuée cette session (SAFE, aucun changement)** : lecture complète de `CallManager.swift`,
+  `WebRTCService.swift`, `P2PWebRTCClient.swift`, `VoIPPushManager.swift`, `PiPCallController.swift` —
+  tous les closures/`Task` échantillonnés utilisent correctement `[weak self]`, aucune mutation `@Published`
+  hors main thread trouvée, les bascules `@MainActor`/`nonisolated` autour du `CXProviderDelegate` (qui
+  s'exécute sur la queue privée de CallKit, pas main — commenté explicitement `CallManager.swift:4488-4498`)
+  sont gérées correctement via des hops `Task { @MainActor [weak self] in ... }`. Gateway
+  (`CallEventsHandler.ts`/`CallService.ts`/`CallCleanupService.ts`) : aucune Map non bornée, aucun
+  `clearTimeout` manquant, aucun chemin de signalisation non authentifié trouvé au-delà de ce qui est déjà
+  documenté dans les vagues précédentes.
+
+## Vague 17 — régression silencieuse gateway (commit `8ebd497b`, PR #1525) : ~450 lignes de fixes calling perdues (2026-07-06)
+
+Point d'entrée : routine calling-feature. Lecture complète du backlog (825 lignes) + lessons.md avant
+tout diagnostic. `git log` a montré 4 commits gateway/iOS non encore documentés ici, postérieurs à la
+Vague 12 (2026-07-04) : `6908bcc` (version-bump GC/missed), `fb2bafa` (fix P2034 sur `joinCall`),
+`560926b` (durcissement types, cosmétique), `0f5eefe` (fast-path `call:ended` + UI iOS). Audit ciblé sur
+ces 4 diffs plutôt qu'un balayage général — la routine ayant déjà 12 vagues très denses sur le code
+inchangé, la zone la plus probable pour un bug réel et neuf est le code touché depuis la dernière
+session documentée.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `fb2bafa` (2026-07-04) a corrigé un incident prod réel
+  sur `CallService.joinCallAttempt` : deux `call:join` quasi simultanés (3-11 ms d'écart, même appel) font
+  détecter par MongoDB un conflit d'écriture AU NIVEAU DOCUMENT, à l'intérieur du `$transaction`, AVANT
+  que le garde applicatif (`updateMany` scopé sur `version` + `count === 0`) ne puisse résoudre la course
+  lui-même — Prisma remonte ça en `PrismaClientKnownRequestError` code `P2034` ("write conflict or
+  deadlock, please retry"), qui partait BRUT au client au lieu d'emprunter le chemin `versionConflict`
+  déjà prévu pour cette même course. Le fix a bien été appliqué à `joinCallAttempt` — mais **`endCall()`
+  (`CallService.ts:1395-1431`) et `leaveCall()` (`CallService.ts:1158-1222`) utilisent EXACTEMENT le même
+  patron** (transaction avec `updateMany` scopé `version` + throw d'un Symbol local `versionConflict`/
+  `leaveVersionConflict` + `.then(() => ok, (error) => error === conflictSymbol ? 'conflict' : throw)`)
+  et n'avaient reçu AUCUN des deux traitements P2034 — sibling-drift classique de ce backlog (même famille
+  que lessons.md #40/#42/#45/#58, et le commentaire de `joinCallAttempt` ne référence même pas ces deux
+  autres sites). Impact concret : `call:end`/`call:leave` sont déclenchés par une action utilisateur
+  (bouton raccrocher) qui peut légitimement raconter à peu près N'IMPORTE QUEL scénario de course avec un
+  autre writer terminal touchant le MÊME document `CallSession` — l'autre participant qui raccroche
+  presque au même instant (cas *extrêmement* courant, pas un edge-case exotique), ou une course avec
+  `CallCleanupService.forceEndCall`/le ringing-timeout. Avant ce fix, un utilisateur qui "perdait" cette
+  course recevait une erreur Prisma brute (`Transaction failed due to a write conflict or a deadlock...`)
+  via `CALL_EVENTS.ERROR` au lieu de la résolution idempotente attendue ("l'appel est déjà terminé, voici
+  son état actuel") — alors même que l'appel s'était terminé PROPREMENT côté serveur (l'autre transaction
+  a gagné). Confirmé par lecture complète des deux méthodes + de leurs tests existants : **aucun test
+  n'exerçait le chemin `versionConflict`/`leaveVersionConflict` pour `endCall`/`leaveCall`** avant cette
+  session (seul `joinCall` avait une couverture de course, ajoutée par `fb2bafa`).
+- **Fix** : nouvelle méthode privée partagée `CallService.isTransientWriteConflict(error)` (juste avant
+  `joinCall()`, `CallService.ts`) qui isole le check `(error as { code?: string })?.code === 'P2034'` —
+  remplace le bloc dupliqué inline de `joinCallAttempt` (même comportement, code partagé au lieu de
+  copier-coller pour les 2 nouveaux sites) et est réutilisée par les `.then` de `endCall()` et
+  `leaveCall()` : `error === versionConflict || this.isTransientWriteConflict(error)` /
+  `error === leaveVersionConflict || this.isTransientWriteConflict(error)`. Aucune signature changée,
+  diff minimal (le comportement "retour à l'état frais" existait déjà pour le Symbol local — seule
+  l'ORIGINE de l'erreur reconnue comme conflit transitoire est élargie).
+- **Tests TDD** : 2 nouveaux cas dans `CallService.test.ts` (un par méthode), miroir exact du test
+  `fb2bafa` pour `joinCall` — `$transaction` rejette une erreur `{ code: 'P2034' }` au 1er essai, assertion
+  que `endCall`/`leaveCall` résolvent quand même vers l'état DB frais (`status: ended`) au lieu de rejeter.
+  RED confirmé manuellement (`git stash` du seul fix `CallService.ts`, tests re-exécutés → 2 échecs avec
+  l'erreur Prisma brute remontée telle quelle) puis GREEN restauré. Suite `CallService.test.ts` complète :
+  169/169. Suite gateway filtrée `*[Cc]all*` : 28/28 suites, 814/814 tests verts. Suite gateway complète
+  (`bun run test:coverage`, prisma generate + `packages/shared` build réussis cette session — network OK
+  cette fois) : 480/506 suites vertes, 13234/13235 tests verts, 1 skip pré-existant ; les 26 suites en
+  échec le sont TOUTES sur la même erreur pré-existante et non liée (`SequenceService.ts` important
+  `PrismaClient` depuis `@prisma/client` racine, jamais généré dans ce sandbox — déjà documentée Vague 11,
+  confirmée absente de tout fichier touché par ce diff). `tsc --noEmit` gateway : une seule erreur, la
+  même `SequenceService.ts` pré-existante ; zéro erreur nouvelle sur `CallService.ts`.
+- **Web + iOS (lecture seule, aucun changement)** : aucun commit web sur les fichiers d'appel depuis la
+  Vague 12 (`git log --since 2026-07-03` sur `webrtc-service.ts`/`use-webrtc-p2p.ts`/`components/
+  video-call/` ne remonte qu'un merge sans rapport) — pas de nouvelle zone à auditer côté web cette
+  session. Les 4 commits iOS/gateway du 2026-07-04 examinés (`0f5eefe` fast-path `call:end`, glyphes
+  qualité transitoires, bye in-band P2P ; `560926b` durcissement types + suppression d'un force-unwrap)
+  ont été lus en entier : le fast-path `call:end` (émission `call:ended` à la room dès que
+  `socket.rooms.has(ROOMS.call(...))`, AVANT la résolution d'autorisation) a été vérifié en détail —
+  l'appartenance à la room est bien acquise uniquement après un `joinCall()`/`initiateCall()` validé en
+  DB (`socket.join` n'intervient qu'APRÈS l'écriture Prisma réussie), et tous les chemins qui posent
+  `leftAt` sur un `CallParticipant` (call:leave, call:end, call:force-leave) font aussi sortir le socket
+  de la room dans le même handler — la seule exception est `CallCleanupService.forceEndCall` (GC
+  heartbeat/boot) qui ne fait JAMAIS `socket.leave` ; risque résiduel jugé faible (nécessite un socket
+  vivant mais un appel GC-terminé + un `call:end` rejoué sur un callId périmé pour produire un
+  `call:ended` fantôme redondant, déjà couvert par le dédup client documenté ligne 2098 de
+  `CallManager.swift` et `handleCallEnded`/`reset()` côté web) — noté ici comme piste basse-priorité,
+  non traitée cette session (pas de scénario d'exploitation concret trouvé, contrairement au P2034
+  ci-dessus qui a un incident prod daté). `duration: 0` du fast-path est bien inerte côté client (iOS ne
+  lit jamais `event.duration`, calcule sa propre durée locale ; web `handleCallEnded` logge la valeur
+  sans l'utiliser) — la durée persistée vient uniquement de `postCallSummary` (lecture DB fraîche côté
+  serveur), donc pas de bug d'affichage de durée malgré le double-broadcast.
+- **Reste ouvert** (inchangé) : items J (validation device réel restante), C6 (court-circuit dédup
+  cosmétique), CALL-DIAG retagging (12 sites, cosmétique) ; nouvelle piste basse-priorité notée ci-dessus
+  (`forceEndCall` ne vide pas la room Socket.IO) pour une session future si un scénario d'exploitation
+  concret émerge.
+
+## Vague 14 — `call:check-active` : feature de replay morte côté web + dernier handler `call:*` sans rate limit (2026-07-05)
+
+Point d'entrée : routine calling-feature, agent d'exploration dédié (gateway/web, lecture seule) mandaté à
+croiser tout candidat contre ce fichier + lessons.md avant de rapporter quoi que ce soit — a indépendamment
+convergé vers la même zone qu'un audit manuel des `checkSocketRateLimit` du fichier.
+
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ]** `call:check-active` (ajouté 2026-06-06, commit `9324b3317`) existe
+  côté gateway (`CallEventsHandler.ts:1103-1170`) pour rejouer un `call:initiated` manqué à un socket qui se
+  (re)connecte pendant la fenêtre de sonnerie de 60s (page rechargée, onglet réveillé, blip réseau bref).
+  iOS l'émet sans condition à CHAQUE connexion (`MessageSocketManager.swift`) — mais **web ne l'a jamais
+  émis nulle part** : `CLIENT_EVENTS.CALL_CHECK_ACTIVE` est bien déclaré dans
+  `packages/shared/types/socketio-events.ts` mais avait zéro site d'appel web. Le composant réellement monté
+  (`apps/web/components/video-call/CallManager.tsx`, cf. vague 10) ne fait que `rejoinActiveCallAfterReconnect`
+  sur reconnect — qui ne rejoue QUE l'appel que le store Zustand local pense déjà actif, jamais une
+  découverte d'un NOUVEL appel entrant manqué. Conséquence : un callee web dont l'onglet recharge/se réveille/
+  subit un blip réseau pendant qu'un pair l'appelle ne voit JAMAIS la bannière d'appel entrant — l'appel sonne
+  côté serveur jusqu'au timeout 60s et résout en `missed`, silencieusement, sans aucune UI côté web. Même
+  thème "sibling drift" que la vague 10 (un chemin iOS déjà résilient, son jumeau web jamais branché) mais sur
+  un event différent. Fix : nouvelle fonction `checkForActiveCall(socket)` dans `CallManager.tsx`, appelée à
+  CHAQUE connexion (mount déjà connecté, `onConnect`, et la branche de poll du socket pas encore disponible) —
+  émet `CLIENT_EVENTS.CALL_CHECK_ACTIVE` sans condition sur `hasConnectedRef` (contrairement à
+  `rejoinActiveCallAfterReconnect`, le replay doit aussi couvrir le tout premier connect : un onglet ouvert
+  pendant qu'un appel sonne déjà doit voir la bannière immédiatement). Idempotent côté gateway (fenêtre
+  60s + dédup client par callId). Tests : 2 nouveaux cas dans `CallManager.reconnect.test.tsx` (1er connect
+  ET reconnect émettent l'event). Suite web filtrée `*call*` : 15 suites/214 tests verts (+2 vs vague 13).
+- **[BUG SÉCURITÉ, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `call:check-active` était aussi le DERNIER handler
+  `call:*` sans AUCUN rate limit (échappé au sweep 2026-07-03 — item Vague 11 — car enregistré en littéral de
+  chaîne brut `'call:check-active'` plutôt qu'une constante `CALL_EVENTS.X`, invisible au grep de cet audit-là).
+  Contrairement à ses siblings, il ne requiert AUCUN payload client pour être déclenché et exécute 2-4 requêtes
+  Prisma (`participant.findMany`, `callSession.findMany`, `callParticipant.findMany`) PLUS un
+  `generateIceServers()` (mint HMAC du secret TURN) PAR appel en cours trouvé — une surface d'amplification par
+  invocation plus large que `CALL_ICE_SERVERS_REFRESH` (déjà rate-limité 10/min pour la même raison). Fix :
+  nouvelle entrée `SOCKET_RATE_LIMITS.CALL_CHECK_ACTIVE` (20/min, miroir de `CALL_RECONNECTING`/
+  `CALL_RECONNECTED` — un client légitime ne se reconnecte pas plus souvent que ça hors abus scripté) +
+  `checkSocketRateLimit` inséré immédiatement après la résolution `userId`, avant toute requête DB, identique
+  au pattern déjà utilisé par les 6 handlers voisins durcis en vague 11. Nouveau fichier de test
+  `CallEventsHandler-check-active-rate-limit.test.ts` (2 tests : rate-limité + dropped-on-limit sans requête
+  DB) — aucun test existant ne couvrait ce handler avant cette session. Suite gateway filtrée `*[Cc]all*` :
+  29/29 suites, 827/827 tests verts (+1 suite/+2 tests vs vague 13). Suite gateway complète
+  (`bun run test:coverage`, prisma generate échoué réseau cette session — `binaries.prisma.sh` injoignable,
+  même limitation documentée vagues 11/13, mais le client Prisma généré n'est requis QUE par
+  `SequenceService.ts`, sans rapport avec ce diff) : 481/507 suites vertes, 13262/13263 tests verts (1 skip
+  pré-existant), les 26 mêmes suites en échec pré-existantes (`@prisma/client` non généré) — comportement
+  identique aux vagues 11/13, aucune régression nouvelle.
+- **iOS (lecture seule, aucun changement)** : `MessageSocketManager.swift` émet déjà `call:check-active`
+  correctement à chaque connexion — rien à faire côté iOS pour ce bug, confirmé par lecture du code réel
+  avant de conclure que web était bien la seule moitié cassée de la paire.
+
+## Vague 15 — GC path leaked `qualityDegradedStreaks` (gateway) + web toast noise on transient `call:error` (2026-07-05)
+
+Point d'entrée : routine calling-feature. `git fetch --unshallow` d'abord (le clone shallow local
+masquait la vraie relation avec `origin/main` — après unshallow, branche et main pointaient sur le
+même commit, rien à réconcilier). Lecture complète du backlog (902 lignes) + `lessons.md` avant audit.
+5 commits gateway/iOS non encore documentés depuis la Vague 13 (`a813b31`, `3a6c006`, `08aa433`,
+`6b6e335`, `2d240d1`) — les 3 commits iOS (hold/unhold SDP renegotiation, audio-effect capture-hook
+guard, audio-session mode reapplication) relus en entier et jugés corrects, structurellement identiques
+aux sibling call-sites déjà établis (`toggleVideo`/`applySurvivalVideoSend`) ; pas de nouveau candidat
+côté iOS cette session (pas de toolchain Swift dans cet environnement, review lecture seule comme les
+sessions gateway-only précédentes). Gateway et web audités en profondeur.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `a813b31` (2026-07-05, plus tôt aujourd'hui) a ajouté
+  `CallEventsHandler.clearQualityDegradedStreaks(callId)` — un sweep qui purge toutes les entrées
+  `qualityDegradedStreaks` (map keyée `callId:participantId`, jamais nettoyée autrement qu'un sweep
+  size-capped à 5000) d'un appel terminé — câblé sur les 3 chemins terminaux que `CallEventsHandler`
+  possède lui-même (`broadcastCallEnded`, disconnect leave à 0 participant, disconnect force-cleanup via
+  `forceEndOrphanedCallSession`). **Un 4e chemin terminal existe et n'a reçu AUCUN des deux traitements** :
+  `CallCleanupService.forceEndCall` (le tier GC — cron 60s, spec section 2.6 : `initiated/ringing` >120s
+  → missed, `connecting` >90s → failed, `active`/`reconnecting` >2h → garbageCollected, heartbeat stale
+  >120s → heartbeatTimeout) vit dans une classe séparée sans aucune référence à l'instance
+  `CallEventsHandler` (contrairement à `CallService`, partagé via `setCallService`). Sibling-drift exact
+  du même thème que `a813b31` lui-même documente pour `forceEndOrphanedCallSession` vs. l'ancien
+  `endCall`/`leaveCall` non traités — sauf qu'ici c'est le fix du jour qui a lui-même introduit le drift
+  en oubliant son propre 4e chemin. Impact : un appel GC-terminé (abandonné, personne n'a raccroché
+  proprement — exactement le scénario "dernier rapport dégradé" que ce nettoyage cible) laisse fuir son
+  entrée `qualityDegradedStreaks` pour de bon ; sur une gateway à trafic modéré, le cap de 5000 peut
+  n'être jamais atteint.
+- **Fix** : `clearQualityDegradedStreaks` passé `private` → publique sur `CallEventsHandler` (aucun
+  changement de comportement — la visibilité seule). Nouveau bridge symétrique de
+  `setPostSummaryCallback` (même raison, même pattern) : `CallCleanupService.setQualityStreakCleanupCallback(fn)`,
+  appelé dans `forceEndCall` juste après `clearHeartbeats`/`clearRingingTimeout`, câblé dans `server.ts`
+  juste après `setPostSummaryCallback` (`callEventsHandler.clearQualityDegradedStreaks`). No-op silencieux
+  si le callback n'est pas encore attaché (miroir exact de `postSummary`).
+- **Tests TDD** : 3 nouveaux cas dans `CallCleanupService.test.ts` (`setQualityStreakCleanupCallback`,
+  miroir exact de la suite `setPostSummaryCallback` : invoque avec le bon callId, no-op si la race guard
+  saute l'écriture, no-op silencieux sans callback enregistré). Suite `CallCleanupService.test.ts` complète :
+  55/55. Suite gateway filtrée `*[Cc]all*` : 28/28 suites, 828/828 tests verts (825 + 3 nouveaux).
+  `tsc --noEmit` : aucune nouvelle erreur (seule l'erreur `SequenceService.ts` pré-existante, confirmée
+  déjà présente avant ce diff).
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ]** Audit dédié web (agent lecture seule, mandaté à falsifier ses
+  propres candidats avant de rapporter). `CallManager.tsx` (`handleCallError`, le composant réellement
+  monté) n'inspectait que `error.message` (une substring `"not in this call"`) et affichait un
+  `toast.error()` pour absolument tout le reste — **jamais `error.code`**. iOS (`CallManager.swift`
+  ~3480-3510) whiteliste explicitement 3 codes comme transitoires/non-fatals, chacun documenté avec un
+  **incident prod réel** : `RATE_LIMIT_EXCEEDED` (throttle d'UN candidat ICE — redondant par design, le
+  cap gateway est 50/5s vs. un flush de gathering légitime de 15-25/ms — a tué un appel sain 382ms après
+  connexion en prod) ; `TARGET_NOT_FOUND` (le socket du pair est momentanément absent de la room pendant
+  un churn/reconnect — le média P2P est intact — a tué un appel sain pendant le chaos-test prod du
+  2026-07-02) ; `INVALID_SIGNAL` (rejet de relais d'UN message, pas une erreur d'opération). Le gateway
+  émet ces 3 codes de façon identique à web et iOS (`CallEventsHandler.ts` `call:signal`/
+  `call:toggle-*`/etc.) — rien ne gate ce comportement à iOS. Repro : deux onglets web en appel, l'un
+  churn son socket (blip réseau) pendant que l'autre émet un burst de candidats ICE ou une offre
+  ICE-restart au même instant → le gateway relaie l'échec transitoire via `call:error` → web affiche un
+  `toast.error()` brut et inquiétant en plein appel par ailleurs sain, pour une condition qui
+  s'auto-guérit et ne requiert aucune action.
+- **Fix** : `handleCallError` court-circuite maintenant sur `error.code === 'RATE_LIMIT_EXCEEDED' |
+  'TARGET_NOT_FOUND' | 'INVALID_SIGNAL'` (log debug, pas de toast), exactement le même whitelist qu'iOS,
+  juste après le check `"not in this call"` préexistant (inchangé). Nouveau fichier de test
+  `CallManager.callError.test.tsx` (5 cas : les 3 codes transitoires silencieux, un code inconnu/fatal
+  affiche bien le toast, le message `"not in this call"` préexistant reste ignoré quel que soit le code).
+  Suite `*CallManager*` web : 2 suites/9 tests verts (4 préexistants + 5 nouveaux). `tsc --noEmit` web :
+  diff avant/après identique sur `CallManager.tsx` (mêmes erreurs `unknown`/`{}` préexistantes du typage
+  socket, seuls les numéros de ligne décalent — confirmé par diff textuel, aucune nouvelle erreur).
+- **Reste ouvert** (inchangé) : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non
+  vidée (piste basse-priorité, toujours pas de scénario d'exploitation concret).
+
+## Vague 18 — restauration du reste du web calling (currentCall initiateur, check-active replay, transient-error whitelist) touché par 8ebd497b (2026-07-06)
+
+- **Portée non traitée (inchangée du principe Vague 17)** : `8ebd497b` touche 97 fichiers gateway au total
+  et un nombre significatif de fichiers iOS (Swift) — `CallSignalGlyph.swift`, `CallTypeBadgeView.swift`,
+  plusieurs suites de tests iOS (`CallSignalIndicatorTests`, `CallViewLayoutGuardTests`,
+  `CallViewObservedObjectInjectionTests`, `CallQualityIndicatorsUITests`, `FloatingCallPillViewTests`
+  partiellement) supprimées dans le même commit, ainsi qu'un remaniement substantiel de `CallManager.swift`/
+  `CallAudioEffectsService.swift` (ce dernier semble être un remplacement de service plutôt qu'une pure
+  perte — nécessite une lecture approfondie avec compilateur Swift pour distinguer refactor légitime de
+  régression, cf. `docs/audit-calls-2026-05-11.md` et `scripts/call-reliability-report.sh` également tronqués/
+  supprimés côté docs/scripts, non restaurés — impact nul sur le runtime, priorité basse). **Non traité
+  cette session** (environnement Linux sans toolchain Xcode/Swift — cf. discipline établie vagues 11/15/17) —
+  candidat prioritaire pour une session avec accès macOS : auditer `git diff cc9380a5 8ebd497b8 --
+  'apps/ios/**'` fichier par fichier avant de restaurer quoi que ce soit (certains fichiers ont légitimement
+  évolué depuis et un `checkout` naïf écraserait ce travail).
+- **Tests** : suite gateway filtrée `*[Cc]all*` : 30/30 suites, 844/844 tests verts (dont le nouveau test
+  boot-floor). Suite web filtrée `*[Cc]all*` : 17/17 suites, 227/227 tests verts (dont les 2 fichiers de
+  test restaurés/recréés + le nouveau `CallManager.initiatorTimeout.test.tsx`). `tsc --noEmit` gateway :
+  327 erreurs avant/après diff, identiques (toutes `@prisma/client` non généré, limitation sandbox connue,
+  aucune nouvelle). `tsc --noEmit` web : 1512→1513 erreurs, diff textuel confirmé — le +1 est une occurrence
+  supplémentaire de la même catégorie pré-existante (`socket` typé faiblement dans ce fichier, 27
+  occurrences déjà tolérées) sur le site `checkForActiveCall` restauré, pas une nouvelle classe d'erreur.
+  Suite web complète (non filtrée) : 413/436 suites vertes, les 23 échecs sont TOUS la même cause
+  pré-existante documentée dans `CLAUDE.md` (`packages/shared` non buildé dans ce sandbox — résolution de
+  module `@meeshy/shared/dist/*` échoue), zéro suite `*call*` parmi les échecs, zéro nouvelle régression.
+- **Leçon pour la prochaine session** : une entrée de backlog documentant un fix ("Vague N: FIXED") n'est
+  une preuve de RIEN si elle n'a pas été vérifiée contre le code réel de `main` au moment de la lecture —
+  ce fichier lui-même a été partiellement effacé par la régression qu'il aurait dû aider à détecter. Avant
+  de faire confiance à une entrée de ce backlog pour "passer" une zone du code, `grep` la primitive
+  technique citée (nom de fonction, champ, constante) directement dans le fichier source sur `HEAD` — ne
+  jamais supposer qu'une doc présente sur `main` implique que le code l'est aussi.
+
+## Vague 19 — `call:join` n'ackait jamais un échec (gateway ET web) + 2 sites P2034 non traités dans `CallService.ts` (2026-07-06)
+
+Point d'entrée : routine calling-feature. Lecture complète du backlog (1383 lignes, 18 vagues) +
+`lessons.md` en entier avant tout diagnostic. Environnement Linux sans Xcode/Swift — 3 agents de lecture
+seule dédiés (gateway `CallService.ts` en entier, gateway `CallCleanupService.ts` + reste de
+`CallEventsHandler.ts`, web les 5 fichiers d'appel) mandatés en parallèle à falsifier leurs propres
+candidats contre le backlog avant de rapporter quoi que ce soit — web et gateway, aucun changement Swift.
+
+- **[BUG RÉEL, gateway + web, CONFIRMÉ + CORRIGÉ, TDD, priorité la plus haute]** `call:join`
+  (`CallEventsHandler.ts:1511-1780`) déclare `ack?: (response: CallJoinAck) => void` mais ne l'invoquait
+  QUE sur le chemin de succès (ligne 1649 pré-fix) — les 5 branches d'échec (non-authentifié, anonyme,
+  rate-limité, validation, `NOT_A_PARTICIPANT`) et le `catch` externe faisaient seulement
+  `socket.emit(CALL_EVENTS.ERROR, ...)`, jamais `ack?.(...)`. Sibling-drift direct contre le handler
+  `call:initiate` immédiatement au-dessus, qui acke `success:false` sur CHACUNE de ses propres branches
+  d'échec (7 sites). Côté web, `apps/web/components/video-call/CallManager.tsx:352-414`
+  (`handleAcceptCall`, le composant réellement monté à `app/call/[callId]/page.tsx`) aggravait le même
+  bug : `setCurrentCall(...)` + `setInCall(true)` + `setIncomingCall(null)` s'exécutaient
+  INCONDITIONNELLEMENT juste après `socket.emit(CLIENT_EVENTS.CALL_JOIN, ...)`, sans même attendre l'ack
+  — seul le remplissage `iceServers` était gated sur `ack?.success`. Le sibling correct existe pourtant
+  dans le même repo : `apps/web/hooks/conversations/use-video-call.ts:157-165` (`answerCall`) fait bien
+  `if (!response?.success) { setError(...); return; }` — mais cette fonction n'est jamais appelée par
+  aucun composant monté (seul `startCall` de ce hook est consommé), donc sa couverture de test est
+  illusoire pour le chemin qui compte réellement. Scénario concret : le callee tape "Accepter" au moment
+  précis où l'appelant raccroche (fenêtre de course extrêmement plausible en usage normal, pas un
+  edge-case exotique) — le join est rejeté côté serveur (`CALL_ALREADY_ANSWERED`-class ou
+  `NOT_A_PARTICIPANT` si l'appel a déjà été nettoyé), mais le callee se retrouve quand même avec
+  `VideoCallInterface` monté plein écran, caméra/micro acquis, sans aucune connexion pair jamais établie
+  — un faux écran d'appel figé et silencieux. Côté iOS, `VoIPPushManager`/`MessageSocketManager` masque
+  partiellement ce même trou gateway via un timeout client 3s (`emitCallJoinWithAck`), dégradant un échec
+  immédiat en délai silencieux de 3s au lieu d'un rapport instantané — non touché cette session (pas de
+  toolchain Swift), mais bénéficiera de la même correction gateway sans changement de code iOS requis.
+  **Fix gateway** : `ack?.({ success: false, error: '...' } as unknown as CallJoinAck)` ajouté sur
+  chacune des 6 branches d'échec de `call:join`, exact miroir du pattern déjà utilisé par `call:initiate`.
+  **Fix web** : `handleAcceptCall` réécrit pour `await` l'ack (Promise autour de `socket.emit`) et jeter
+  si `!ack?.success` (capturé par le `catch` existant : toast d'erreur + `setIncomingCall(null)`) —
+  `setCurrentCall`/`setInCall`/l'application des `iceServers` ne s'exécutent plus qu'après un ack
+  `success:true` confirmé, miroir du pattern correct de `answerCall`.
+  **Tests TDD** : nouveau fichier gateway `CallEventsHandler-join-ack.test.ts` (6 cas, un par branche
+  d'échec, RED confirmé par `git stash` du seul fix source → les 6 échouent avec 0 appel à `ack`, GREEN
+  restauré) ; nouveau fichier web `CallManager.acceptCall.test.tsx` (2 cas : commit UI seulement après
+  ack `success:true`, aucun commit + toast d'erreur sur `success:false` — RED confirmé de la même façon,
+  les 2 échouaient avant le fix car `isInCall` passait à `true` immédiatement, avant même la résolution
+  de l'ack).
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** Deux sites `$transaction` de forme identique à
+  `joinCallAttempt`/`endCall()`/`leaveCall()` (qui ont chacun déjà reçu le traitement P2034 — vagues 13 et
+  17) n'avaient JAMAIS reçu le même traitement, malgré une forme de transaction rigoureusement identique :
+  - `CallService.leaveCall()`, branche idempotente (`CallService.ts:1202-1229`, prise quand la ligne
+    `CallParticipant` active de l'appelant a déjà disparu — départ auto sur `disconnect` concurrent,
+    double `call:leave`) : son propre `.then(resolve, reject)` local ne vérifiait QUE
+    `error === idemVersionConflict`, jamais `this.isTransientWriteConflict(error)` — contrairement au
+    chemin principal de la MÊME fonction, 100 lignes plus bas (`leaveVersionConflict`, ligne 1378), qui
+    vérifie bien les deux. Sibling-drift À L'INTÉRIEUR d'une seule fonction, pas seulement entre
+    fonctions. Un P2034 brut sur cette branche remontait tel quel jusqu'au `catch` de `call:leave`
+    (`CallEventsHandler.ts`), qui fait `errorMessage.split(':')[0]` sur le message Prisma brut et émet un
+    `error.code` incohérent au client, au lieu de la résolution idempotente prévue ("l'appel est déjà
+    terminé, voici son état").
+  - `CallService.forceEndOrphanedCallSession()` (`CallService.ts:338-378`) — transaction structurellement
+    identique (updateMany scopé + version bump) mais sans AUCUN traitement de conflit : un P2034 brut
+    remontait non capturé jusqu'aux 2 sites appelants (`CallEventsHandler.ts` disconnect force-cleanup et
+    `forceEndOrphanedCallAfterOptimisticBroadcast`), qui le loggent comme un échec générique
+    ("force cleanup also failed") au lieu du cas bénin "un autre writer a déjà résolu cet appel" que les
+    3 autres sites traitent maintenant correctement — l'appel pouvait rester non-terminal jusqu'au
+    passage du GC 60s.
+  **Fix** : `idemVersionConflict` étendu à `|| this.isTransientWriteConflict(error)` (1 ligne, miroir
+  exact du chemin principal) ; `forceEndOrphanedCallSession` enveloppé d'un `.catch` qui traite P2034
+  comme le `count === 0` déjà géré (retourne `false`/`null` au lieu de jeter).
+  **Tests TDD** : 2 nouveaux cas dans `CallService.test.ts` (un par site), miroir exact des tests P2034
+  déjà existants pour `endCall`/`leaveCall` principal — RED confirmé par `git stash` du seul fix source
+  (2 échecs, l'erreur Prisma brute remonte), GREEN restauré.
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, mineur]** `CallService.initiateCall()`, branche de nettoyage
+  d'appel zombie avant un nouvel appel (`CallService.ts:804-837`) : appelle `this.clearHeartbeats(...)`
+  mais jamais `this.clearRingingTimeout(...)`, contrairement à son sibling immédiat 40 lignes plus haut
+  (la boucle de phantom-cleanup de l'initiateur, qui nettoie bien les deux) et à tous les autres chemins
+  terminaux du fichier. Impact borné et auto-guérissant (si un timer de ringing vivant existe encore pour
+  cet appel zombie, il se déclenche jusqu'à 60s plus tard mais son écriture est scopée
+  `status IN (initiated, ringing)` — no-op silencieux puisque le zombie est déjà `ended` ici) — corrigé
+  quand même car le fix est trivial et sûr (1 ligne, appel à une méthode déjà existante).
+- **Vérification (gateway)** : suite gateway filtrée `*[Cc]all*` : 31/31 suites (+1 nouveau fichier),
+  852/852 tests verts (+8 vs vague 18 : 6 join-ack + 2 P2034). Suite gateway COMPLÈTE
+  (`bun run test:coverage`, prisma generate + build `packages/shared` réussis cette session) : 509/509
+  suites, 13779/13780 tests verts (1 skip pré-existant), **0 échec** — meilleur que la baseline
+  documentée des vagues précédentes (qui listait 26 suites en échec sur l'import `@prisma/client` non
+  généré dans leur sandbox) : le client Prisma a été généré proprement cette session, donc ce bruit
+  pré-existant n'apparaît pas ici. `tsc --noEmit` gateway : 0 erreur.
+- **Vérification (web)** : suite web filtrée `*[Cc]all*` : 19/19 suites (+2 nouveaux fichiers), tests tous
+  verts. Suite web COMPLÈTE : 439/439 suites, 10941/10962 tests verts (21 skips pré-existants), **0
+  échec** — meilleur que la baseline documentée (413/436 avec 23 échecs pré-existants sur
+  `@meeshy/shared/dist/*` non résolu) : `packages/shared` a été buildé proprement cette session. `tsc
+  --noEmit` web : nombre d'erreurs sur `CallManager.tsx` identique avant/après (29/29, vérifié par
+  `git stash` du seul fix) — même classe de bruit pré-existant (socket typé faiblement dans ce fichier),
+  aucune nouvelle erreur introduite.
+- **iOS (lecture seule, aucun changement)** : non audité en profondeur cette session au-delà de la
+  confirmation que `MessageSocketManager.emitCallJoinWithAck` masque partiellement le bug gateway
+  ci-dessus via un timeout 3s — aucun changement Swift nécessaire, le fix gateway suffit à raccourcir ce
+  délai à un rapport immédiat pour tout futur appelant qui écoute l'ack.
+- **Reste ouvert (nouveau, trouvé cette session, PAS corrigé — trop risqué/complexe pour une seule
+  session, cf. discipline établie de ne pas tout corriger d'un coup)** :
+  - **`call:force-leave` court-circuite `broadcastCallEnded()`** (`CallEventsHandler.ts:2079-2100`,
+    handler démarrant ligne 1946) — HIGH confidence. Contrairement à `call:leave`/`call:end`, qui routent
+    tous deux leur événement terminal via `broadcastCallEnded()` (nettoie `qualityDegradedStreaks`,
+    diffuse vers l'audience complète via `resolveCallEndedRooms`, envoie le push silencieux
+    `call_cancel`), `call:force-leave` fait son propre double-emit inline (call room + conversation room
+    seulement) et n'appelle jamais `broadcastCallEnded`/`clearQualityDegradedStreaks`/
+    `clearRingingTimeout`/`clearBufferedOffer`. Depuis le fix Audit-C7 qui fait résoudre les force-leave
+    pré-réponse en `missed` (exactement le scénario que cible `sendCallCancellationPushes`), un callee en
+    sonnerie fantôme (push VoIP livré, socket jamais entré dans la room) reste à sonner jusqu'à son propre
+    timeout client quand l'appelant est nettoyé via ce chemin (le chemin standard de récupération
+    `CALL_ALREADY_ACTIVE`). Piste pour une session future : router `call:force-leave` à travers
+    `broadcastCallEnded()` comme ses siblings — nécessite de vérifier l'audience exacte attendue par ce
+    handler (boucle sur PLUSIEURS appels obsolètes par itération, contrairement à `call:leave`/`call:end`
+    qui traitent un seul appel) avant de changer son fanout.
+  - **GC tier-1 (ringing/initiated obsolète) ne crée jamais de `Notification` persistée** —
+    (`CallCleanupService.ts:456-486` + câblage `server.ts:1315-1332`). Seuls
+    `setPostSummaryCallback`/`setMissedCallCancelPushCallback` sont câblés vers `CallCleanupService` ; pas
+    d'équivalent pour `handleMissedCall`/`createMissedCallNotifications`. Un appel résolu SEULEMENT par ce
+    backstop GC (double-échec du timer in-process ET de la réhydratation au boot — réel mais rare) ne crée
+    aucune entrée notification-center/badge pour le callee. MEDIUM confidence, sévérité plus basse que
+    ci-dessus (le chemin primaire et `rehydrateActiveCalls` couvrent déjà le cas commun).
+  - **Web : `VideoCallInterface.offersCreatedFor` (ref, `components/video-calls/VideoCallInterface.tsx:189-213`)
+    n'est jamais invalidé sur `participant-left`** — seulement ajouté ou nettoyé sur échec de
+    `createOffer`. Si l'AUTRE participant quitte puis rejoint en cours d'appel (blip réseau, reload
+    d'onglet) pendant que le composant reste monté, `createOffer` est silencieusement sauté pour ce
+    userId indéfiniment — pas de reconnexion possible sans redémarrer tout l'appel. HIGH confidence,
+    complexité de fix non-triviale (état WebRTC de renégociation par participant) — nécessite une session
+    dédiée avec tests de renégociation soignés.
+  - **Web : le refresh des credentials TURN n'est jamais implémenté** — gateway a un round-trip complet
+    `call:request-ice-servers`/`call:ice-servers-refreshed` testé, iOS l'utilise (périodique 80% TTL + à
+    chaque ICE restart), mais AUCUN site d'appel web pour ces events (`apps/web/services/webrtc-service.ts`,
+    `apps/web/hooks/use-webrtc-p2p.ts`) — confirmé par grep, zéro occurrence. Un appel web dépassant la
+    TTL TURN (~3600s) qui a besoin d'un ICE restart (changement réseau) retente avec des credentials
+    expirés et peut échouer à se rétablir définitivement pour un pair en NAT symétrique, sans aucun
+    mécanisme client pour le détecter. HIGH confidence, mais c'est un GAP de fonctionnalité entière
+    (implémenter le refresh périodique + sur ICE-restart côté web), pas un bug ponctuel — hors de portée
+    d'une seule session, candidat prioritaire pour une prochaine vague dédiée.
+  - `call:force-leave` ne nettoie pas non plus `ringingTimeout`/`bufferedOffer` (distinct du bug
+    `broadcastCallEnded` ci-dessus) — impact borné/auto-guérissant (le timeout re-vérifie le statut avant
+    d'écrire, le buffered-offer a son propre TTL de sweep), noté pour complétude, pas une priorité.
+  - `negotiate()` (`webrtc-service.ts:750-755`) : le guard `makingOffer` peut potentiellement abandonner
+    silencieusement un ICE-restart en attente s'il court-circuite une renégociation A/V déjà en vol —
+    spéculatif, fenêtre de course étroite, non vérifié comme atteignable en pratique.
+
+## Vague 20 — 3 des 5 items ouverts de la Vague 19 traités (item 1 déjà corrigé entre-temps) (2026-07-07)
+
+Point d'entrée : routine calling-feature. Un agent d'exploration dédié (lecture seule) a re-vérifié les 5
+items "Reste ouvert" de la Vague 19 contre `HEAD` avant tout fix — `git log` confirme qu'aucun commit
+postérieur à `4c99916d` n'avait touché ces fichiers.
+
+- **Item 1 (`call:force-leave` court-circuite `broadcastCallEnded()`) — DÉJÀ CORRIGÉ**, par le commit
+  `164efcf9` ("repair phantom-ringing fanout gap + call teardown edge cases", même journée que la Vague 19).
+  Vérifié par lecture directe : `CallEventsHandler.ts` route bien ce chemin via `broadcastCallEnded()`
+  depuis ce commit. Aucune action nécessaire.
+- **[FIX RÉEL, gateway, TDD] Item 5 — `call:force-leave` ne nettoyait ni `ringingTimeout` ni
+  `bufferedOffer`** — contrairement à `call:leave` (même fichier, juste au-dessus), qui appelle les deux
+  juste après `leaveCall()`. Fix : mêmes deux appels ajoutés dans la boucle de force-leave, juste après
+  `leaveCall()`. 2 tests TDD (`CallEventsHandler-force-leave.test.ts`) : clearRingingTimeout appelé avec le
+  bon callId, bufferedOffer supprimé (seedé via accès `(handler as any).bufferedOffers`).
+- **[FIX RÉEL, gateway, TDD] Item 2 — GC tier 1 (initiated/ringing > 120s → missed) ne créait jamais de
+  `Notification` persistée** pour les participants n'ayant pas répondu, contrairement au chemin in-process
+  (`CallEventsHandler.handleMissedCall` → `createMissedCallNotifications`). `CallCleanupService.forceEndCall`
+  mirrorait déjà les DEUX autres effets de bord d'un missed (résumé via `postSummary`, push silencieux via
+  `missedCallCancelPush`) mais pas la notification badge/centre-de-notifications elle-même — un appel résolu
+  UNIQUEMENT par ce filet GC laissait le callee sans aucune trace qu'on l'avait appelé. Fix : nouveau bridge
+  `setMissedCallNotificationCallback` (miroir exact de `setMissedCallCancelPushCallback`), câblé dans
+  `server.ts` vers `callEventsHandler.createMissedCallNotifications(callId)` — PAS `handleMissedCall` (qui
+  ré-invoquerait `markCallAsMissed`, déjà fait par la transaction GC elle-même ; seul l'effet de bord
+  notification manquait). 6 tests TDD dans `CallCleanupService.test.ts` (miroir exact de la suite
+  `setMissedCallCancelPushCallback` : invoqué tier-1 seulement, pas tier-2/3, pas sur race-guard skip, ne
+  jette pas si le callback rejette, no-op sans callback).
+- **[FIX RÉEL, web, TDD] Item 3 — `VideoCallInterface.offersCreatedFor` (ref, composant réellement monté via
+  `CallManager.tsx` → confirmé, pas le jumeau mort) n'était jamais invalidé sur `participant-left`** — un
+  participant qui quitte puis rejoint pendant que le composant reste monté (blip réseau, reload d'onglet) ne
+  recevait plus jamais d'offer, la guard le croyant déjà offert pour toujours. Fix : `offersCreatedFor.current.delete(participantId)`
+  ajouté dans le même bloc `setTimeout` (2s) qui fait déjà `removeRemoteStream`/`removePeerConnection` —
+  au moment où la peer connection est réellement démontée, pas avant. Test TDD dans
+  `VideoCallInterface.test.tsx` : simule quitter (event participant-left + avance des timers 2s) puis
+  rejoindre (round-trip `participants.length` 1→0→1 via `rerender`, la vraie dépendance de l'effet
+  d'offer) → `createOffer` doit être rappelé une 2e fois pour le même participantId. RED confirmé (revert
+  du seul fix source → 1/6 rouge, `createOffer` jamais rappelé).
+- **[FIX RÉEL, web, TDD] Item 4 — le refresh périodique des credentials TURN n'était jamais implémenté côté
+  web** (gap de fonctionnalité entière, documenté 3 vagues de suite comme "hors scope, nécessite une session
+  dédiée" — traité ici avec un scope volontairement réduit pour rester sûr). Le gateway expose depuis
+  longtemps le round-trip complet `call:request-ice-servers`/`call:ice-servers-refreshed` (iOS le consomme :
+  refresh périodique à 80% du TTL + refresh sur ICE-restart) mais `apps/web/hooks/use-webrtc-p2p.ts` n'avait
+  AUCUN site d'appel pour l'un ou l'autre event — un appel web dépassant la TTL TURN (~3600s par défaut) qui
+  a besoin d'un ICE restart retentait avec des credentials expirés, sans échappatoire pour un pair en NAT
+  symétrique. Fix scope volontairement réduit (évite de threader `ttl` à travers tous les acks/events
+  `call:initiate`/`call:join`/`call:initiated`/`call:participant-joined`, qui aurait cassé plusieurs mocks
+  `CallService` de tests gateway existants sans `getIceServerTtl` stubé — vérifié en amont, pas tenté) :
+  timer de refresh périodique armé au montage avec un TTL par défaut conservateur (3600s, miroir du défaut
+  documenté ailleurs dans ce fichier), ET refresh immédiat déclenché sur `iceConnectionState === 'disconnected'`
+  (signal de network-change/ICE-restart imminent, avant même l'échec). La réponse `call:ice-servers-refreshed`
+  (qui, elle, porte bien un `ttl` réel per-event) met à jour le store ET applique en direct
+  `service.setIceServers(...)` à chaque `WebRTCService` déjà existant dans `webrtcServicesRef` (le fix RC-1
+  antérieur fait que `setIceServers` applique déjà via `RTCPeerConnection.setConfiguration` si la connexion
+  existe), puis reprogramme le prochain refresh sur le VRAI ttl reçu — donc après le premier cycle, le
+  scheduling converge vers la valeur serveur réelle même si le défaut de démarrage était approximatif.
+  5 tests TDD (`use-webrtc-p2p.test.tsx`, nouveau describe `TURN credential refresh`) : écoute l'event au
+  montage + arme le timer par défaut ; refresh immédiat sur `disconnected` ; applique store+peer connections
+  existantes et reprogramme sur le TTL réel reçu ; ignore un refresh pour un autre callId ; nettoie le timer
+  au démontage. RED confirmé (revert du seul fix source → 5/29 rouges dans ce fichier). Mock `useCallStore`
+  du fichier de test converti de littéral figé vers `Object.assign(buildState, { getState: buildState })`
+  (le hook appelle maintenant `useCallStore.getState().setIceServers(...)`, motif déjà établi ailleurs dans
+  la codebase pour les stores Zustand mockés).
+- **Non traité (déféré à une session dédiée, comme documenté depuis 3 vagues)** : threader le VRAI `ttl` à
+  travers `call:join`/`call:initiate`/`call:initiated`/`call:participant-joined` remplacerait le défaut
+  conservateur ci-dessus par la valeur serveur exacte dès le premier cycle — gain marginal (le premier
+  refresh utilise de toute façon le TTL réel dès la 1re réponse), coût réel (≥5 fichiers de test gateway à
+  mettre à jour avec un mock `getIceServerTtl`), jugé hors scope pour cette session.
+- **Vérification (gateway)** : suite filtrée `*[Cc]all*` : 31/31 suites, 863/863 tests verts (+11 vs Vague
+  19 : 2 force-leave clear + 6 missed-notification callback + 3 déjà comptés côté web n'affectent pas ce
+  total). `tsc --noEmit` gateway : 0 erreur (client Prisma généré + `packages/shared` buildé proprement
+  cette session, réseau OK).
+- **Vérification (web)** : suite filtrée `*[Cc]all*` + `*webrtc*` : 21 suites, 427 tests verts (aucune
+  régression). `tsc --noEmit` web : 1513 erreurs avant/après (identique, diff textuel confirmé) — les 11
+  restantes sur `VideoCallInterface.tsx` sont pré-existantes (typage `unknown` sur `window`/`event`, non
+  liées à ce diff).
+- **iOS (lecture seule, aucun changement)** : aucun commit iOS sur les fichiers d'appel depuis la Vague 19 —
+  pas de nouvelle zone à auditer cette session (toujours pas de toolchain Swift/Xcode dans cet
+  environnement Linux).
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `forceEndCall` room Socket.IO non vidée, `negotiate()` guard `makingOffer`
+  spéculatif ; nouveau : threading complet du `ttl` TURN à travers tous les événements call (voir item 4
+  ci-dessus).
+
+## Vague 21 — privacy: un callee répondant à un appel AUDIO activait quand même sa caméra et transmettait de la vidéo, gateway+web (2026-07-07)
+
+Point d'entrée : routine calling-feature. 4 PRs calls concurrentes déjà ouvertes au démarrage (#1601
+socket-room eviction sur GC force-end, #1606 version-bump `initiateCall` + web quality-report, #1597 typo
+prop `DraggableParticipantOverlay`, #1610 docs-only) — cible retenue strictement disjointe, trouvée par un
+agent d'exploration dédié (lecture seule) scopé explicitement à éviter ces 4 zones et le backlog déjà
+déprioritisé (C6/CALL-DIAG/`negotiate()`/threading TTL).
+
+**Mécanisme** : le CALLER respecte déjà le type d'appel — `use-video-call.ts` (`startCall`) acquiert le
+stream via `getUserMedia({ audio, video: isVideo ? VIDEO_CONSTRAINTS : false })` puis le pré-autorise via
+`window.__preauthorizedMediaStream` (consommé par `VideoCallInterface` au mount, chemin Safari-compatible).
+Le CALLEE, lui, n'appelait JAMAIS `getUserMedia` dans `CallManager.handleAcceptCall` — aucun
+pré-autorization n'était posé, donc `VideoCallInterface` retombait sur `initializeLocalStream()` →
+`WebRTCService.getLocalStream()` sans contraintes → `DEFAULT_MEDIA_CONSTRAINTS` (audio+vidéo
+inconditionnels), quel que soit `incomingCall.type`. Sibling-drift confirmé côté gateway : `CallService.ts`
+gate déjà `isVideoEnabled` par `type === 'video'` pour l'INITIATEUR (`initiateCall`, ligne ~877) mais PAS
+pour le JOINEUR (`joinCallAttempt`, `isVideoEnabled: settings?.videoEnabled ?? true` sans lien avec
+`call.metadata.type`) — un joiner (ou un client web bugué/malveillant) pouvait faire persister
+`isVideoEnabled: true` sur un appel audio-only.
+
+**Impact** : un appelant démarre un appel AUDIO ; le callee accepte ; son navigateur active la caméra et
+transmet de la vidéo live à l'appelant sans consentement pour CET appel — vrai gap privacy/consentement,
+atteignable en usage normal (pas de fenêtre de course), et un défaut de conformité "usage justifié de la
+caméra" au sens des guidelines plateforme.
+
+**Fix (bounded, TDD)** :
+- **Gateway** (`services/gateway/src/services/CallService.ts`, `joinCallAttempt`) : lit
+  `call.metadata.type` (même pattern déjà établi ligne ~2065 pour `buildCallSummaryWithMetadata`) et
+  applique la même garde que l'initiateur : `isVideoEnabled: isVideoCall ? (settings?.videoEnabled ?? true)
+  : false`. 1 nouveau test TDD (`CallService.test.ts`, describe `joinCall`) : un joiner qui ENVOIE
+  `videoEnabled: true` sur un appel dont `metadata.type === 'audio'` doit quand même persister
+  `isVideoEnabled: false`. RED confirmé (échec `Received value: true` avant fix). Suite `CallService.test.ts`
+  complète : 179/179 ; suite gateway filtrée `*[Cc]all*` : 31/31 suites, 864/864 tests ; `tsc --noEmit`
+  gateway : 0 erreur.
+- **Web** : extraction d'une source unique `apps/web/lib/calls/call-media-constraints.ts`
+  (`AUDIO_CONSTRAINTS`/`VIDEO_CONSTRAINTS`/`getCallMediaConstraints(type)`/`stopPreauthorizedStream`) —
+  élimine exactement la classe de duplication qui a causé ce bug (le callee n'avait jamais reçu la version
+  caller de cette logique). `use-video-call.ts` refactoré pour consommer la source unique (comportement
+  caller inchangé, 46/46 tests toujours verts). `CallManager.handleAcceptCall` mirrore maintenant le
+  pré-authorization pattern du caller : `getUserMedia(getCallMediaConstraints(incomingCall.type === 'video'
+  ? 'video' : 'audio'))` AVANT d'émettre `call:join`, stream posé sur `__preauthorizedMediaStream`,
+  `settings.videoEnabled` du payload `call:join` dérivé du même booléen (au lieu du `true` hardcodé) ;
+  cleanup (`stopPreauthorizedStream`) sur tout échec après acquisition (pas de socket, ack rejeté) pour ne
+  jamais laisser micro/caméra actifs sans rien pour consommer le stream — bénéfice UX en prime : un refus
+  de permission est maintenant intercepté AVANT de joindre l'appel, au lieu d'atterrir dans un état "in
+  call" déjà commité avec un stream jamais obtenu. 3 nouveaux tests TDD
+  (`CallManager.acceptCall.test.tsx`) : audio→`getUserMedia({video:false})`+`call:join{videoEnabled:false}`,
+  video→`getUserMedia({video:{...}})`+`call:join{videoEnabled:true}`, permission refusée→`call:join` jamais
+  émis + tracks partiels stoppés. RED confirmé (3/5 rouges, `git stash` scoped aux seuls fichiers source via
+  patch, tests inchangés) → GREEN après fix. + 4 tests unitaires du nouvel helper
+  (`lib/calls/__tests__/call-media-constraints.test.ts`). Suite `*[Cc]all*|webrtc*` web : 21 suites/430
+  tests + les 2 nouveaux fichiers (acceptCall 5/5, helper 4/4) ; `tsc --noEmit` web : 1535 erreurs
+  avant/après identique (bruit préexistant `(socket as unknown)` déjà présent partout dans ce fichier,
+  confirmé par `git stash` du seul diff source).
+- **iOS** : non audité cette session (pas de toolchain Swift/Xcode dans cet environnement Linux) — la
+  logique CallKit `hasVideo` iOS lit déjà `type` correctement à l'INITIATION
+  (`CallInitiatedEvent.type`/`hasVideo`, cf. commentaire ligne 415 `video-call.ts`) ; non revérifié pour le
+  chemin JOIN iOS dans cette session, candidat pour une prochaine passe iOS dédiée.
+- **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non vidée,
+  `negotiate()` guard spéculatif, threading TTL complet.
+
+## Vague 22 — `forceEndCall` ne vidait jamais la room Socket.IO du call GC-terminé (2026-07-07)
+
+Point d'entrée : routine calling-feature. Un agent d'exploration dédié (lecture seule) a re-vérifié la
+piste basse-priorité notée Vague 13 et reconfirmée "reste ouvert" depuis (Vagues 13/19/20) contre `HEAD`
+avant tout fix — toujours vrai, aucun commit entre-temps ne l'avait traité.
+
+- **[FIX RÉEL, gateway, TDD]** Les trois chemins de terminaison client (`call:end`, `call:leave`,
+  `call:force-leave`, tous dans `CallEventsHandler.ts`) font systématiquement `fetchSockets()` +
+  `s.leave(ROOMS.call(callId))` sur la room `call:<id>` juste après le broadcast `call:ended`.
+  `CallCleanupService.forceEndCall` (le tier GC — cron 60s : ringing>120s→missed,
+  connecting>90s→failed, active>2h ou heartbeat stale>120s→ended) ne le faisait JAMAIS : un socket
+  encore connecté au moment où GC réclame un appel zombie restait membre de la room `call:<id>`
+  indéfiniment, jusqu'à sa propre déconnexion. Sur un process long-lived (Redis adapter en scale
+  horizontal notamment), c'est une fuite de membership de room non bornée, pas seulement le risque
+  cosmétique de `call:ended` fantôme redondant déjà noté Vague 13. Fix : même paire d'appels
+  `this.io.in(ROOMS.call(callId)).fetchSockets()` / `Promise.all(sockets.map(s => s.leave(...)))`
+  ajoutée dans `forceEndCall`, juste après le broadcast existant — miroir exact du bloc
+  `CallEventsHandler.ts` (`call:end`, lignes ~2650-2652). 3 tests TDD (`CallCleanupService.test.ts`,
+  nouveau describe `room cleanup`) : évince chaque socket restée dans la room après un force-end,
+  ne jette pas quand la room est déjà vide, ne tente aucun accès `io` quand aucun serveur Socket.IO
+  n'est attaché. RED confirmé (revert du seul fix source → le test d'éviction échoue, `io.in` jamais
+  appelé ; les deux autres tests passent déjà car ils n'assertent que l'absence de throw/le compte
+  `cleaned`, comportement inchangé par le fix).
+- **Vérification (gateway)** : suite filtrée `*[Cc]all*` : 31/31 suites, 866/866 tests verts (+3 vs
+  Vague 20). `tsc --noEmit` gateway : 0 erreur (client Prisma généré + `packages/shared` buildé
+  proprement cette session).
+- **iOS/Android/web (lecture seule, aucun changement)** : aucun fichier touché hors gateway cette
+  session ; pas de nouvelle zone candidate identifiée côté client par l'agent d'exploration pour ce tour.
+- **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, `negotiate()` guard `makingOffer`
+  spéculatif, threading complet du `ttl` TURN à travers tous les événements call (voir Vague 20 item 4).
+
+## Vague 23 — gap protocole `version` sur 2 sites `initiateCall` (gateway) + `call:quality-report` web jamais réellement émis (2026-07-07)
+
+Point d'entrée : routine calling-feature. `git log` confirme aucun commit sur les fichiers gateway/web
+calling depuis `b4b5a8a1` (Vague 20, déjà mergé sur `main` — cette branche pointait déjà sur le même
+commit que `origin/main`). Deux agents d'exploration dédiés (gateway, web — lecture seule, mandatés à
+falsifier tout candidat contre ce fichier + `lessons.md` avant de rapporter) lancés en parallèle.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallService.initiateCall()` — les deux écritures
+  terminales de nettoyage pré-initiate (phantom-cleanup cross-conversation, `CallService.ts:773-781`, et
+  nettoyage zombie same-conversation, `:824-832`) ne bumpaient PAS `version`, contrairement à TOUS les
+  autres writers terminaux du fichier (`forceEndOrphanedCallSession`, `updateCallStatus`,
+  `joinCallAttempt`, `leaveCall` (les 2 branches), `endCall`, `markCallAsMissed`) qui portent tous
+  explicitement le commentaire "terminal write protocol : tout writer terminal DOIT bumper `version`,
+  même un writer gardé par statut plutôt que par version — sinon un writer version-gardé qui a lu la ligne
+  juste avant peut encore matcher son `version` périmé et écraser cet état terminal juste après". Ces deux
+  sites précèdent probablement l'introduction du protocole (ils ne s'appellent pas `forceEndX`, donc
+  invisibles aux sweeps "grep tous les `forceEnd*`" des vagues 13/15/17/19/20) et le commentaire de test
+  existant (`CallService.test.ts:112`, "Version-guarded writes (updateCallStatus/initiateCall zombie
+  cleanup) default to 'lock won'") montre que l'équipe elle-même les considère déjà comme faisant partie
+  de la famille version-gardée — confirmant un oubli, pas un choix. Scénario concret : un appel
+  fantôme/zombie (par définition à clients peu fiables — exactement les scénarios de churn déjà chassés
+  dans ce backlog) est force-terminé par un de ces deux sweeps sans bump de version ; un writer légitime
+  concurrent sur le MÊME appel (retry `call:leave`/`call:end` en retard, `updateCallStatus` déclenché par
+  une SDP-answer tardive, ou le callback de ringing-timeout) qui a lu la ligne un instant plus tôt détient
+  encore l'ancienne version inchangée et son propre `updateMany` version-gardé réussit — écrasant l'état
+  terminal qui vient d'être écrit (mauvais `endReason`/`duration`/`endedAt`, un 2e `call:ended`
+  contradictoire, voire une résurrection vers un statut non-terminal via `updateCallStatus`). Exactement la
+  classe de bug "résurrection version-guard" que le protocole existe pour fermer.
+  **Fix** : `version: { increment: 1 }` ajouté aux deux `data` des `updateMany`, miroir exact des autres
+  writers terminaux. **Tests TDD** : assertion `version` ajoutée au test existant `should cleanup zombie
+  call before initiating new call` + nouveau test dédié `phantom cleanup: bumps version on the terminal
+  write` (capture les args du `tx.callSession.updateMany` mocké). RED confirmé (`git stash` du seul fix
+  source → les 2 échouent, `data` sans `version`), GREEN restauré. Suite `CallService.test.ts` : 178/178
+  (+1). Suite gateway filtrée sur les 31 fichiers `*[Cc]all*` (via `bunx jest --testPathPatterns`, `bun
+  test` natif crashe sur un module NAPI sans rapport avec ce diff — `uv_async_init` non supporté par le
+  runtime bun sur cet hôte, contournement : passer par `bunx jest`) : 31/31 suites, 864/864 tests verts
+  (863 + 1 nouveau). `tsc --noEmit` gateway : 0 erreur.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ]** `apps/web/hooks/use-call-quality.ts` — l'effet qui arme
+  l'intervalle 10s d'émission de `CLIENT_EVENTS.CALL_QUALITY_REPORT` dépendait de `[callId, qualityStats]`.
+  Or `qualityStats` est un NOUVEL objet à chaque tick du monitoring (`updateInterval`, 2000ms pour le seul
+  appelant réel `VideoCallInterface.tsx`) — chaque changement de référence démonte et recrée le
+  `setInterval` de 10s, qui n'a donc jamais l'occasion de survivre jusqu'à son propre déclenchement (un
+  timer de 10s armé à T est toujours nettoyé à T+2s avant de pouvoir tirer). **Conséquence : le client web
+  n'émettait jamais réellement `call:quality-report` en production**, ce qui rend inopérants côté web à la
+  fois le suivi `qualityDegradedStreaks` du gateway (tout le sujet du leak-fix de la Vague 15 — sans objet
+  pour web puisque l'entrée n'est jamais créée) et la télémétrie "data/qualité réseau" persistée sur le
+  résumé d'appel que les commentaires du code attribuent explicitement à cet event. **Pourquoi ça a survécu
+  aux tests** : le test existant (`emits CALL_QUALITY_REPORT every 10s`) fait un seul
+  `jest.advanceTimersByTime(10_000)` — les fake timers de Jest déclenchent tous les callbacks dus en un
+  seul batch synchrone, sans laisser React re-rendre/reflow les effets entre chaque tick de 2s ; l'effet
+  dépendant de `qualityStats` n'est donc recréé qu'UNE fois pendant tout le test au lieu de 5 fois comme en
+  production réelle — artefact de fake-timer identique en substance à l'"illusory coverage" déjà documenté
+  côté iOS (source-grep) mais ici une variante timer JS. Le contraste : `use-adaptive-degradation.ts`
+  documente et gère EXPLICITEMENT la même sémantique "nouvel objet à chaque tick" via un `lastSampleRef`
+  plutôt que comme dépendance d'effet nue — preuve que le pattern était compris ailleurs dans le fichier
+  voisin, juste raté ici. **Fix** : nouveau `qualityStatsRef` (mis à jour à chaque render, miroir du
+  pattern `actionsRef` déjà utilisé dans `use-adaptive-degradation.ts`) ; l'effet d'émission ne dépend plus
+  que de `[callId]` et lit `qualityStatsRef.current` à l'intérieur du callback d'intervalle. **Test TDD**
+  (`use-call-quality.test.ts`) : nouveau cas qui avance le temps par pas de 1s (`updateInterval` par défaut)
+  dans des `act()` SÉPARÉS (donc avec un vrai flush de rendu/effet entre chaque tick, contrairement à
+  l'ancien test single-shot) — reproduit exactement la fenêtre de production. RED confirmé (`git stash` du
+  seul fix source → 0 appel à `emit` après 10×1s), GREEN restauré. Suite `use-call-quality.test.ts` :
+  40/40 (+1). Suite web filtrée `*[Cc]all*`/`*webrtc*`/`*quality*` : 21 suites, 428/428 tests verts (+1 vs
+  Vague 20). `tsc --noEmit` web : 1513 erreurs avant/après (identique, confirmé par comparaison directe
+  `git stash`), aucune nouvelle.
+- **iOS (lecture seule, aucun changement)** : non audité cette session au-delà de la confirmation qu'aucun
+  commit iOS n'a touché les fichiers d'appel depuis la Vague 20 (pas de toolchain Swift/Xcode dans cet
+  environnement Linux).
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call (`forceEndCall` room Socket.IO résolu par la Vague 22 ci-dessus).
+
+## Vague 24 — disconnect-grace missed calls never notified (gateway) + stale perfect-negotiation state on participant rejoin (web) (2026-07-07)
+
+Point d'entrée : routine calling-feature. `git log` confirme HEAD (`0ea62a8`) inchangé depuis la Vague 23 —
+cette branche pointait déjà sur le même commit que `origin/main`. Trois agents d'exploration dédiés
+(lecture seule, mandatés à falsifier tout candidat contre ce fichier + `lessons.md` avant de rapporter,
+lancés en parallèle) : cartographie complète de la pile d'appel iOS (aucune régression trouvée,
+confirmation que l'`actor CallEventQueue` évoqué par l'ADR SOTA n'existe pas encore sous ce nom — candidat
+pour une future session avec toolchain Swift), audit gateway, audit web.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallEventsHandler.leaveParticipationAndBroadcast()`
+  (le chemin partagé qui termine un appel quand le socket d'un participant tombe et ne revient pas, couvrant
+  à la fois la grâce pré-réponse ~10s et la grâce post-réponse ~30s+extensions) diffusait bien `call:ended`
+  et postait le résumé de chat quand `leftSession.status === 'missed'`, mais n'appelait jamais
+  `this.handleMissedCall(leftSession.id)` — contrairement à ses trois siblings structurels (`call:leave`
+  l.1918-1927, `call:force-leave` l.2119-2124, `call:end` l.2643-2648) qui font tous exactement cet appel
+  sur la même transition de statut. `handleMissedCall()` fait deux choses : `markCallAsMissed()` (no-op
+  idempotent ici, la ligne est déjà terminale) et surtout `createMissedCallNotifications()` — la
+  **notification persistée** (badge/centre de notifications) pour chaque participant n'ayant pas répondu,
+  distincte des pushes silencieux `call_cancel` (qui ne font que fermer l'UI CallKit) et du message de
+  résumé en chat. **Scénario concret** : A appelle B ; avant que B décroche, le socket de A tombe (coupure
+  réseau, app backgroundée/tuée — bien plus fréquent en pratique qu'un raccroché explicite pendant la
+  sonnerie, d'où l'existant appareillage de grâce). Après `PRE_ANSWER_GRACE_MS` (10s) sans reconnexion, le
+  serveur résout l'appel `missed` via exactement ce chemin. L'UI CallKit/sonnerie de B est bien fermée
+  (broadcast + push silencieux), mais B ne reçoit **aucune trace persistée** qu'un appel a eu lieu — le seul
+  enregistrement qui survit si B ne regardait pas l'app à cet instant précis. Aucun test n'exerçait ce cas
+  (`CallEventsHandler-disconnect.test.ts` n'assertait que sur `status: 'ended'`/`'active'`, jamais sur
+  `'missed'` ni sur `handleMissedCall`). **Fix** : ajout du même bloc `this.handleMissedCall(leftSession.id)`
+  (catché + loggé, jamais rejeté) que les 3 siblings, juste après `postCallSummary`, gardé sur
+  `dcStatus === 'missed'` uniquement. **Tests TDD** (`CallEventsHandler-disconnect.test.ts`, nouveau describe
+  imbriqué) : `jest.spyOn(handler, 'handleMissedCall')` — appelé avec le bon `callId` quand `dcStatus ===
+  'missed'`, jamais appelé quand `dcStatus === 'ended'`. RED confirmé (`git stash` du seul fix source → le
+  test positif échoue, 0 appel), GREEN restauré. Suite gateway filtrée `[Cc]all` : 31/31 suites, 870/870
+  tests verts (+2). `tsc --noEmit` gateway : 0 erreur.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ]** `WebRTCService.createPeerConnection()`
+  (`apps/web/services/webrtc-service.ts`) construisait toujours une nouvelle `RTCPeerConnection` mais ne
+  réinitialisait JAMAIS l'état de perfect-negotiation (`autoNegotiate`/`makingOffer`/
+  `isSettingRemoteAnswerPending`/`ignoreOffer`/`videoTransceiver`) — seul `close()` le faisait. Or
+  `use-webrtc-p2p.ts` cache **un service par `participantId`** (`webrtcServicesRef`) et ne le vide QUE sur
+  cleanup complet ou changement de `userId` — jamais sur le départ d'un seul participant. Un participant qui
+  quitte puis **rejoint** un appel pendant qu'un autre reste connecté récupère donc la MÊME instance
+  `WebRTCService`, avec `autoNegotiate` resté à `true` depuis la négociation initiale déjà aboutie. Le
+  rejoin appelle `createPeerConnection()` sur cette instance réutilisée : une toute nouvelle
+  `RTCPeerConnection` est créée (transceivers ajoutés par `addLocalMedia()` juste après programment un
+  `negotiationneeded` navigateur), mais `autoNegotiate` étant resté vrai, ce `negotiationneeded` déclenche
+  un `negotiate()` (donc un `createOffer()`/`setLocalDescription()`) CONCURREMMENT à l'appel explicite
+  `createOffer()` que le hook de rejoin est déjà en train d'attendre — deux séquences d'offre indépendantes
+  courent sur la même connexion ; celle qui résout en dernier gagne `pc.localDescription`, tandis que
+  l'autre chemin signale quand même sa propre offre (désormais périmée) au pair via
+  `CLIENT_EVENTS.CALL_SIGNAL` — le pair répond à partir d'une SDP qui ne correspond plus à ce qui est
+  réellement posé en local. Net : un rejoin peut silencieusement échouer à rétablir le média, sapant
+  exactement le travail de reconnexion que la Vague 20 visait à livrer, sans aucun test couvrant le chemin
+  « pas de `close()` avant réutilisation ». **Fix** : réinitialisation des 5 champs de perfect-negotiation
+  au DÉBUT de `createPeerConnection()` elle-même (pas seulement dans `close()`), puisque cette méthode
+  construit toujours une ressource neuve et que tout état lié à une connexion antérieure y est
+  catégoriquement périmé, que l'appelant ait pensé à `close()` avant ou non. **Test TDD**
+  (`webrtc-service.coverage.test.ts`, nouveau describe) : `createOffer()` (arme `autoNegotiate=true`) →
+  `createPeerConnection()` À NOUVEAU sans `close()` → déclenche `onnegotiationneeded` → assert
+  `onLocalDescription` PAS appelé (variante du test existant l.1696 sans le `close()` intercalé, avec flush
+  de microtasks car `negotiate()` est asynchrone — piège découvert en écrivant le test : sans `await
+  Promise.resolve()` × 3, l'assertion passe trivialement avant que la promesse de négociation n'ait eu la
+  chance de résoudre, RED silencieux). RED confirmé (`git stash` du seul fix source → 1 appel constaté au
+  lieu de 0), GREEN restauré. Suite web filtrée `[Cc]all|webrtc` : 22 suites, 436/436 tests verts (+1).
+  `tsc --noEmit` web : 1534 erreurs avant/après identique (confirmé par comparaison directe `git stash`),
+  aucune nouvelle — bruit préexistant `(socket as unknown)`/mocks de test déjà présent partout dans ce
+  fichier.
+- **iOS (lecture seule, aucun changement)** : cartographie complète effectuée (CallKit, PushKit, WebRTC,
+  signaling, audio session, UI, tests — voir résumé agent) ; aucun bug candidat retenu au-delà de ce qui
+  était déjà connu. Piste à creuser dans une session avec toolchain Swift réel : l'`actor CallEventQueue`
+  documenté dans l'ADR SOTA (`docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md` §10) comme
+  devant sérialiser les entrées concurrentes socket/CallKit/WebRTC/réseau n'a pas été trouvé sous ce nom
+  dans `CallManager.swift` — à vérifier si l'intention a été absorbée autrement (ex. `@MainActor` seul) ou
+  si c'est un gap réel de l'ADR jamais implémenté. Drift documentaire mineur aussi noté :
+  `apps/ios/CLAUDE.md` indique WebRTC 141.0 alors que `Package.swift`/`Package.resolved` épinglent 146.0.0.
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call.
+
+## Vague 25 — `forceEndOrphanedCallSession` était le 4e writer terminal à ignorer `answeredAt` (gateway) + field-name mort `poorStreak`/`goodStreak` (web, TS2353) (2026-07-07)
+
+Point d'entrée : routine calling-feature. `git log` confirme HEAD (`119ccd8`) inchangé côté calling depuis
+la Vague 24 (seul commit intermédiaire : un fix translator emoji, hors scope). Deux agents d'exploration
+dédiés (gateway, web — lecture seule, mandatés à falsifier tout candidat contre ce fichier + `lessons.md`)
+lancés en parallèle ; iOS non ré-audité cette session (pas de toolchain Swift/Xcode dans cet environnement).
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallService.forceEndOrphanedCallSession()`
+  (`CallService.ts:338`) lisait seulement `{ startedAt, conversationId }` et écrivait
+  inconditionnellement `status: CallStatus.ended` — contrairement à ses 3 siblings structurels
+  (`endCall`/`leaveCall`/`markCallAsMissed`) qui branchent tous sur `answeredAt` (`wasPreAnswered`) pour
+  résoudre en `missed` un appel jamais décroché. Cette méthode est le filet de sécurité de dernier
+  recours de `CallEventsHandler` : (1) le catch du disconnect-handler quand `leaveCall()` échoue et 0
+  participant ne reste, (2) `forceEndOrphanedCallAfterOptimisticBroadcast` — appelée à la fois quand
+  `resolveParticipantIdFromCall` échoue à résoudre l'appelant sur `call:end`, et depuis le catch-all de ce
+  même handler. **Scénario concret** : A appelle B ; avant que B décroche, le socket de A tombe pendant que
+  sa ligne `Participant` de conversation est temporairement non résolue (course de membership), ou
+  `endCall()` lève une exception (ex. `NOT_A_PARTICIPANT` déjà consommé par un autre writer terminal
+  concurrent). Le gateway force-termine la session en `status: ended` au lieu de `missed`, et
+  `handleMissedCall()` → `createMissedCallNotifications()` n'est jamais invoqué sur AUCUN des 3 sites
+  d'appel — B ne reçoit aucune notification/badge d'appel manqué persisté pour un appel qui a réellement
+  sonné sans jamais être décroché, et l'historique affiche un `status: ended`/`endReason` incohérent avec
+  `direction: missed` (dérivé indépendamment de `answeredAt` par `deriveCallDirection`). Le test existant
+  (`CallService.test.ts`, ex-ligne 4694) confirmait le bug : il asserte `status: CallStatus.ended`
+  inconditionnellement, mock `findUnique` sans jamais sélectionner `answeredAt`.
+  **Fix** : `forceEndOrphanedCallSession` sélectionne désormais `answeredAt`, calcule `wasPreAnswered =
+  !session.answeredAt`, branche `status`/`endReason` exactement comme `endCall()` (une raison explicite
+  non-`completed` est préservée ; seule la raison par défaut `completed` est normalisée en `missed`), et
+  retourne `{ status, endReason }` en plus de `{ duration, conversationId }`. Les 3 sites d'appel dans
+  `CallEventsHandler.ts` invoquent désormais `this.handleMissedCall(callId)` quand
+  `forceEnded.status === CallStatus.missed` (même pattern try/catch-jamais-rejeté que les autres
+  sites), et le `reason` du `CallEndedEvent` diffusé utilise `forceEnded.endReason` (résolu) au lieu du
+  paramètre brut hardcodé. **Tests TDD** : `CallService.test.ts` — test existant adapté (mock avec
+  `answeredAt` réel → statut `ended` toujours correctement asserté) + 2 nouveaux cas (`answeredAt: null` →
+  `missed` avec raison explicite préservée / raison par défaut normalisée). `CallEventsHandler-
+  disconnect.test.ts` — 2 nouveaux cas (`handleMissedCall` appelé quand `status === missed`, PAS appelé
+  quand `status === ended`). RED confirmé par `git stash` du seul diff source (4 échecs : 3 sur
+  `CallService.test.ts`, 1 sur `CallEventsHandler-disconnect.test.ts`), GREEN restauré. Suite gateway
+  filtrée `.*[Cc]all.*\.test\.ts$` : 31/31 suites, 874/874 tests verts. `tsc --noEmit` gateway : 0 erreur.
+- **[BUG RÉEL (type-correctness), web, CONFIRMÉ + CORRIGÉ]** `apps/web/hooks/use-adaptive-degradation.ts:95,104`
+  — les branches catch de `suspend()`/`resume()` écrivaient `poorStreak: 0`/`goodStreak: 0`, deux champs
+  qui n'existent PAS sur `DegradationState` (seuls `poorSince`/`goodSince` existent,
+  `lib/calls/adaptive-degradation.ts:37-45`) — confirmé `tsc --noEmit` TS2353 "Object literal may only
+  specify known properties" sur les 2 lignes, isolé via `git stash` du seul fichier source (2 erreurs
+  présentes avant le fix, absentes après ; 1534→1532 sur le compte total du projet, aucune erreur
+  nouvelle ailleurs). **Falsification du scénario de reproduction** : l'hypothèse initiale (un rejet
+  répété hammer `getUserMedia()`/`disableVideoSend()` toutes les ~2s) a été tracée pas-à-pas contre
+  `reduceDegradation` — invalidée : chaque transition optimiste (`suspend-video`/`resume-video`) met déjà
+  `poorSince`/`goodSince` à `null` de façon SYNCHRONE avant même l'appel async, et le flag `state.sending`
+  empêche structurellement que le champ concerné soit repeuplé pendant la fenêtre d'attente (les ticks
+  reçus pendant que `sending` est encore à sa valeur optimiste retombent tous dans la branche qui ne
+  touche PAS le champ que le catch tente de réinitialiser). Confirmé empiriquement : un test reproduisant
+  exactement le scénario proposé passe IDENTIQUEMENT sur le code bogué et corrigé (`git stash` du seul
+  fichier source, suite inchangée 7/7 verte dans les deux cas) — donc AUCUN impact runtime observable
+  actuellement, uniquement un bug de type mort/latent (fragile si `reduceDegradation` change un jour sa
+  logique de reset optimiste). Fix conservé (noms de champs corrects, dette de type réelle, `tsc` RED→GREEN
+  comme preuve de régression pour ce type de bug) mais le rapport initial de l'agent d'audit surestimait la
+  gravité runtime — corrigé ici pour ne pas polluer un futur audit avec une fausse causalité. 2 nouveaux
+  tests de comportement ajoutés (`use-adaptive-degradation.test.tsx`) couvrant les branches catch
+  (auparavant 0% de couverture) : revert + retry après un rejet de `suspend()`/`resume()` — passent sur
+  les deux versions (couverture, pas régression), utiles pour verrouiller le comportement si
+  `reduceDegradation` évolue. Suite web filtrée `.*([Cc]all|webrtc|quality|degradation).*\.test\.` :
+  24/24 suites, 452/452 tests verts.
+- **iOS (lecture seule, aucun changement)** : non ré-audité cette session au-delà de la confirmation
+  qu'aucun commit iOS n'a touché les fichiers d'appel depuis la Vague 24.
+- **Règle réutilisable** : quand un candidat de bug repose sur "un champ n'est jamais réinitialisé", ne
+  pas se contenter de la preuve `tsc`/lecture statique — tracer l'ENTIÈRE fenêtre temporelle entre la
+  transition optimiste et le catch (quels ticks peuvent arriver entre les deux, quelle branche du FSM ils
+  empruntent) avant d'écrire le scénario de reproduction dans le rapport. Un bug de type peut être réel et
+  valoir d'être corrigé (dette, fragilité future) sans que le scénario runtime dramatique décrit soit
+  falsifiable — les deux affirmations (bug de type / impact runtime) doivent être vérifiées et rapportées
+  séparément, jamais fusionnées par défaut.
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call.
+
+## Vague 26 — `call:end` recovery path bypassait le fanout d'appel + web n'émettait jamais `call:heartbeat` (2026-07-07)
+(voir section suivante pour le détail — laissée en place, non dupliquée)
+
+## Vague 27 — 3 bugs gateway (recovery + duration + push mort) + boucle self-triggering web + banner iOS non re-armée (2026-07-08)
+
+Point d'entrée : routine calling-feature, reprise après compaction de session. `git fetch origin main`
+confirme HEAD (`37d9522`) déjà à jour avec `origin/main` — aucune divergence, pas de merge à résoudre.
+Trois agents d'exploration dédiés (gateway, web, iOS — lecture seule, mandatés à falsifier tout candidat
+contre ce fichier + `lessons.md` avant de rapporter) lancés en parallèle.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `call:leave`/`call:force-leave` n'avaient aucun filet de
+  récupération orpheline quand l'écriture terminale lève — contrairement à leur sibling `call:end`.**
+  `call:end`'s catch appelle `forceEndOrphanedCallAfterOptimisticBroadcast` depuis la Vague 26 (voir
+  ci-dessous) ; `call:leave` (catch top-level) et `call:force-leave` (catch par-appel dans la boucle)
+  se contentaient de logger + émettre une erreur client. `CallService.leaveCall()` peut réellement lever
+  (`CALL_NOT_FOUND`, une erreur DB non-transitoire dans sa transaction) — la session restait alors
+  bloquée non-terminale (ACTIVE), bloquant tout `call:initiate` futur dans la conversation jusqu'au GC
+  (~120s). Pour `call:force-leave` en particulier, c'est ironique : sa RAISON D'ÊTRE est de débloquer
+  exactement ce genre d'appel zombie. **Fix** : les deux catch appellent désormais
+  `forceEndOrphanedCallAfterOptimisticBroadcast(io, callId, userId)` (userId ré-résolu via
+  `getUserId(socket.id)` dans le catch de `call:leave`, où il est hors scope du try — même pattern que
+  `call:end`). **Tests TDD** : 2 nouveaux cas (un par handler), RED confirmé par lecture (0 appel avant
+  fix) puis GREEN. Suite gateway filtrée `[Cc]all` : 31/31 suites, 880/880 tests verts.
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `duration` incohérent entre 3 writers terminaux
+  (ring+talk time) et `endCall()` (talk time seul).** `endCall()` calcule
+  `duration = call.answeredAt ? (endedAt-answeredAt) : 0`. Trois siblings — `forceEndOrphanedCallSession`,
+  et les 2 branches de `leaveCall` (idempotente + principale) — calculaient tous
+  `duration = now - startedAt` INCONDITIONNELLEMENT, incluant le temps de sonnerie et ignorant
+  `wasPreAnswered` (déjà utilisé par ces mêmes méthodes pour le statut/endReason depuis les Vagues 19/25,
+  juste jamais étendu à `duration`). Un même appel réel (55s de sonnerie + 5s parlé) affiche donc
+  `duration=60` s'il se termine via `leaveCall`/force-end, mais `duration≈5` via le bouton "Terminer" —
+  et ce champ alimente directement la bulle résumé chat + l'historique (`createCallSummaryMessage`). Le
+  test existant de `forceEndOrphanedCallSession` encodait littéralement le bug
+  (`expect(result?.duration).toBeGreaterThanOrEqual(42)` avec startedAt=42s/answeredAt=30s dans la
+  fixture) — recadré sur l'invariant corrigé (talk-time ~30s) plutôt que contourné, cf. Leçon 58.
+  **Fix** : les 3 sites anchorent désormais sur `answeredAt` (0 si jamais répondu), miroir exact de
+  `endCall()`. **Tests TDD** : 3 tests adaptés + 2 nouveaux (fixtures avec `startedAt`/`answeredAt`
+  délibérément écartés de 60s pour qu'un anchor startedAt-régressé échoue bruyamment plutôt que par
+  coïncidence). RED confirmé (2 échecs avant fix sur les tests adaptés), GREEN restauré. Suite
+  `CallService.test.ts` : 183/183 verts.
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ] Push silencieux "call_answered_elsewhere" mort depuis
+  l'introduction du FSM Item F.** Ce push (notifie les AUTRES devices de l'answerer pour qu'ils arrêtent
+  de sonner — utile pour un device réveillé par VoIP push dont le WebSocket n'est jamais monté) était
+  gaté dans `call:join` sur `callSession.status === 'connecting'`. Or `CallStatus.connecting` n'est plus
+  JAMAIS écrit en production depuis l'Item F (`joinCallAttempt` ne transitionne que
+  `initiated/ringing → ringing`) — confirmé par grep exhaustif de tout `status: CallStatus.connecting`
+  dans `services/gateway/src`. Condition en permanence fausse : mort depuis l'introduction du FSM Item F
+  (Vague 7/8), jamais détecté par 26 vagues d'audit car aucune n'avait vérifié qu'une condition de statut
+  correspondait à un statut RÉELLEMENT écrit quelque part. **Fix** : relocalisé vers le vrai site de
+  transition (`call:signal`, type `answer`, juste avant `updateCallStatus(active)`) — gaté sur
+  `isFirstAnswer = !callSession.answeredAt` (lu AVANT la mise à jour, donc jamais re-déclenché par une
+  renégociation ultérieure, ex. activer la vidéo en cours d'appel) et `userId !== callSession.initiatorId`
+  (jamais pour la propre réponse de l'initiateur). Les tests de l'ancien site (fixture `status: 'connecting'`,
+  qui n'arrive jamais en vrai) ont été supprimés et reconstruits sous `call:signal` avec la fixture
+  correcte (`answeredAt: null` = première réponse / `answeredAt: <date>` = renégociation). 4 tests
+  (premier answer → push ; renégociation → pas de push ; initiateur → pas de push ; échec push
+  n'interrompt pas l'ack). RED confirmé sur le cas nominal (0 appel avant fix), GREEN restauré.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ] `use-call-quality.ts` : boucle self-triggering sur transition de
+  niveau de qualité, indépendante de `updateInterval`.** `updateStats` dépendait de `qualityStats?.level`
+  (uniquement pour un log de debug comparant l'ancien/nouveau niveau). Chaque VRAIE transition de niveau
+  (excellent↔bon↔correct↔mauvais) changeait donc l'identité de `updateStats`, ce qui redéclenchait
+  l'effet de monitoring (qui dépend de `updateStats` et appelle inconditionnellement un "Initial update"
+  à chaque exécution) — un appel `getStats()` hors-bande, sans rapport avec `updateInterval`. Sur une
+  connexion réellement instable (exactement le cas que ce moniteur existe pour détecter), cet appel
+  supplémentaire peut lui-même produire un niveau différent et boucler indéfiniment (reproduit dans un
+  test : timeout par dépassement de boucle infinie). Sibling du bug déjà corrigé Vague 23 dans le même
+  fichier (l'effet d'émission `CALL_QUALITY_REPORT` à 10s), mais un mécanisme distinct (l'effet de
+  MONITORING ici, pas celui d'émission). **Fix** : miroir du pattern `qualityStatsRef` déjà utilisé 20
+  lignes plus bas dans le même fichier — un nouveau `previousLevelRef` remplace la dépendance directe,
+  `updateStats` ne dépend plus que de `[peerConnection, calculateQualityLevel]`. **Test TDD** : nouveau
+  cas (niveau alterné à chaque `getStats()`, `updateInterval` volontairement énorme pour isoler tout
+  appel hors-timer) — RED confirmé par timeout (boucle infinie réelle, pas juste une assertion), GREEN
+  restauré. Suite `use-call-quality.test.ts` : 41/41 verts. Suite web filtrée
+  `.*(call|webrtc|quality).*\.test\.` : 23 suites/440 tests verts (+1). `tsc --noEmit` web : 1532 erreurs
+  avant/après identique (confirmé par diff des lignes touchées), aucune nouvelle.
+- **[BUG RÉEL, iOS, CONFIRMÉ (lecture seule, pas de toolchain Swift ici — fix mécanique appliqué par
+  inspection) — timer d'auto-dismiss de `CallWaitingBannerView` non ré-armé quand un 3e appelant
+  supplante un 2e en attente.]** Le fix du jour même (commit `97c94dc`, "third caller silently dropped")
+  fait que `rejectSupersededPendingCall` termine proprement le 2e appelant côté serveur et écrase
+  `pendingIncomingCall` avec le 3e — mais `showCallWaitingBanner` reste `true` tout du long, donc SwiftUI
+  RÉUTILISE la même identité de vue : `onAppear`/`scheduleAutoDismiss()` ne se redéclenche pas, et le
+  `Task` de 15s armé pour le 2e appelant continue son compte à rebours inchangé. **Scénario concret** : A
+  en appel actif ; B appelle (banner, timer à 15s) ; à T+10s, C appelle pendant que B attend encore —
+  B est proprement raccroché serveur, mais le Task original (toujours armé pour B) tire à T+15s (5s
+  seulement dans le ring réel de C) et auto-rejette C au lieu de B. Aucune trace dans `lessons.md`/backlog
+  (classe de bug introduite par le fix du jour même, jamais auditée avant). **Fix appliqué** (mécanique,
+  un seul modifier SwiftUI par site, 2 sites identiques) : `.id(callManager.pendingIncomingCall?.callId)`
+  ajouté aux deux mounts (`RootView.swift`, `iPadRootView+Sheets.swift`) — force un remount (donc un
+  ré-armement du timer) à chaque supersession. **Non vérifié par compilation** (environnement Linux sans
+  Xcode) — la CI `ios-tests` (macOS) reste le garde-fou définitif ; changement volontairement borné à un
+  seul modifier de vue par site pour rester dans l'enveloppe "mécanique, vérifiable par lecture" des
+  sessions sans toolchain (cf. `lessons.md`, règle post-2026-07-02).
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call.
+
+## Vague 26 — `call:end` recovery path bypassait le fanout d'appel + web n'émettait jamais `call:heartbeat` (2026-07-07)
+
+Point d'entrée : routine calling-feature. `git log` confirme HEAD (`ec73d65`) inchangé côté calling depuis
+la Vague 25. Trois agents d'exploration dédiés (gateway, web, iOS — lecture seule, mandatés à falsifier
+tout candidat contre ce fichier + `lessons.md` avant de rapporter, lancés en parallèle) : iOS n'a rien
+trouvé de nouveau (aucun commit iOS sur les fichiers d'appel depuis la Vague 24, hormis la feature bulle
+swipe-to-collapse déjà couverte par son propre design doc — pas de toolchain Swift/Xcode dans cet
+environnement de toute façon).
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `forceEndOrphanedCallAfterOptimisticBroadcast` (le chemin
+  de récupération de `call:end` quand l'ender ne résout pas en participant, OU quand `endCall()` lève)
+  bypassait `broadcastCallEnded()`** — sibling-drift confirmé contre son jumeau exact, le chemin de
+  force-cleanup sur disconnect (`CallEventsHandler.ts` ~l.667-682), qui fait déjà
+  `broadcastCallEnded` (clearQualityDegradedStreaks + fanout call+conversation+chaque user room membre,
+  la même audience que `call:initiated`) + `postCallSummary` + `handleMissedCall` conditionnel. La
+  méthode de récupération de `call:end`, elle, ne faisait QUE le force-end DB + `handleMissedCall`
+  conditionnel — sautant entièrement le fanout large, le nettoyage quality-streak, et le message de
+  résumé en chat. Le fast-path optimiste de `call:end` (avant l'écriture autoritative) ne notifie QUE la
+  call room, et seulement si l'émetteur y est déjà — un callee encore en sonnerie (jamais dans la call
+  room, souvent pas non plus dans la conversation room) ne recevait donc AUCUNE notification de fin
+  d'appel sur ce chemin de récupération précis : exactement l'incident prod 2026-07-03 06:14 que
+  `broadcastCallEnded` existe pour prévenir, réouvert par un chemin différent. **Fix** :
+  `forceEndOrphanedCallAfterOptimisticBroadcast` prend maintenant `io` + `endedBy` en paramètres et
+  mirrore exactement le chemin disconnect — `broadcastCallEnded` + `postCallSummary` + `handleMissedCall`
+  conditionnel sur statut `missed`. Les 2 sites d'appel (branche `NOT_A_PARTICIPANT`, catch-all de
+  `endCall()`) passent désormais `io` et `userId` (ré-résolu via `getUserId(socket.id)` dans le catch,
+  `userId` du `try` n'étant pas visible dans son scope). **Tests TDD** (`CallEventsHandler.test.ts`,
+  describe `call:end`) : 2 nouveaux cas (un par site d'appel) asserting le fanout large
+  (`io.to` avec call+conversation+chaque user room membre) + le résumé chat posté (`messageBroadcaster`).
+  RED confirmé (`git stash` du seul fix source → les 2 échouent, `io.to` jamais appelé avec l'audience
+  large), GREEN restauré. Suite gateway filtrée `.*[Cc]all.*\.test\.ts$` : 31/31 suites, 876/876 tests
+  verts (+2). `tsc --noEmit` gateway : 0 erreur.
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ] Web n'émettait JAMAIS `call:heartbeat`** — `stores/call-store.ts`
+  définit `startHeartbeat`/`stopHeartbeat` (intervalle 15s, miroir du contrat iOS
+  `CallManager.startHeartbeat()`) mais AUCUN composant monté ne les appelait (confirmé : seul le fichier
+  de test du store référence `startHeartbeat`). Le tier GC de `CallCleanupService` (gateway) traite
+  `hasHeartbeatData`/`recordHeartbeat` comme le signal de liveness ; sans lui, un appel purement web↔web
+  n'a jamais d'entrée heartbeat sur AUCUN participant — indiscernable pour le GC d'un zombie authentique
+  une fois la fenêtre de grâce post-boot passée, donc un appel web↔web sain de plus de ~2 minutes se
+  faisait force-terminer (`endReason: heartbeatTimeout`) malgré un média P2P parfaitement fonctionnel.
+  Drift protocolaire iOS/web jamais détecté par les audits précédents (focalisés sur le drift
+  gateway-side, pas sur "cette obligation client est-elle seulement implémentée"). **Fix** :
+  `CallManager.tsx` (composant réellement monté, cf. vague 10) — nouvel effet démarrant
+  `startHeartbeat(currentCall.id)` dès que `isInCall && currentCall?.id`, cleanup `stopHeartbeat()` au
+  départ (déjà redondant avec le `reset()` du store qui stoppe aussi l'intervalle, mais symétrique avec le
+  pattern des autres effets du fichier). **Test TDD** (nouveau fichier
+  `CallManager.heartbeat.test.tsx`, miroir du pattern `CallManager.reconnect.test.tsx`) : 3 cas (émet
+  `call:heartbeat` toutes les 15s en appel actif / n'émet rien sans appel actif / s'arrête après
+  `reset()`). RED confirmé (`git stash` du seul fix source → 2/3 rouges, le socket n'émettait que
+  `call:check-active`), GREEN restauré. Suite web filtrée `.*(call|webrtc|quality).*\.test\.` : 23
+  suites/439 tests verts (+1 suite/+3 tests). `tsc --noEmit` web : 1532 erreurs avant/après identique
+  (confirmé par `git stash` du seul diff source), aucune nouvelle.
+- **iOS (lecture seule, aucun changement)** : aucun bug candidat retenu — voir résumé agent en tête de
+  section. `actor CallEventQueue` (ADR SOTA) toujours absent du code sous ce nom, gap déjà documenté.
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, `negotiate()` guard `makingOffer` spéculatif, threading complet du `ttl` TURN à
+  travers tous les événements call.
+
+## Vague 28 — `negotiate()` guard `makingOffer` speculative item finally verified real (web) + cross-platform verification near-miss on `call:force-leave` (2026-07-08)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, PHASE 1-12 mandate). `git log`
+confirme HEAD (`1b28c39`) déjà à jour avec `origin/main`, 2 commits après `b62f4ba` (Vague 27's aggregate),
+tous deux hors scope calling (Android empty-state, mentions). Trois agents d'exploration dédiés (iOS
+CallManager/WebRTC core, iOS call UI screens, gateway signaling/backend) lancés en parallèle, lecture
+seule, mandatés à croiser tout candidat contre ce fichier + `lessons.md`.
+
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ, TDD] Le `negotiate()` guard `makingOffer` spéculatif (noté "non
+  vérifié comme atteignable en pratique" depuis la Vague 19, jamais retraité en 8 vagues) est réel et a
+  été corrigé.** `WebRTCService.negotiate({iceRestart:true})` (`apps/web/services/webrtc-service.ts:759`)
+  droppait silencieusement un ICE restart si le guard de ré-entrance `makingOffer` était déjà posé par une
+  renégociation SANS RAPPORT en vol (ex. le `onnegotiationneeded` d'un A/V switch). Scénario concret :
+  `oniceconnectionstatechange` passe à `'failed'` pendant qu'une offre d'A/V switch attend son
+  `createOffer()`/`setLocalDescription()` (potentiellement lent) → `restartIce()` →
+  `negotiate({iceRestart:true})` retourne immédiatement sans jamais relancer la collecte ICE — aucun
+  filet, aucun retry, la connexion reste `failed` pour toujours (l'A/V switch qui complète ensuite ne
+  régénère pas de nouvel ufrag/pwd puisqu'il n'est pas lui-même un ICE restart). Cette classe de bug
+  ("un appel établi ne doit jamais mourir d'une condition transitoire/racy") est exactement celle que la
+  routine a corrigée à répétition côté gateway (`TARGET_NOT_FOUND`, `RATE_LIMIT_EXCEEDED`) — jamais
+  vérifiée côté web jusqu'ici faute de scénario de repro écrit. **Fix** : nouveau flag
+  `pendingIceRestart` — un ICE restart dropé par le guard est mémorisé au lieu d'être perdu ; le bloc
+  `finally` de `negotiate()` le rejoue automatiquement (`void this.negotiate({iceRestart:true})`,
+  fire-and-forget avec `.catch` miroir du pattern `restartIce().catch()` déjà utilisé ailleurs dans le
+  fichier) une fois l'offre en vol réglée — sans boucle infinie (le flag n'est consommé qu'une fois, la
+  relecture elle-même ne peut pas se re-marquer sauf nouvelle collision réelle). Reset ajouté aux 2 points
+  de remise à zéro existants de l'état perfect-negotiation (`createPeerConnection` reuse-sans-close et
+  `close()`), miroir exact des 4 autres flags (`makingOffer`/`isSettingRemoteAnswerPending`/`ignoreOffer`/
+  `autoNegotiate`). **Test TDD** (`webrtc-service.coverage.test.ts`, describe `negotiate`) : offre A/V
+  switch mise en pause (`createOffer` hangé), ICE restart concurrent → dropé (0 second `createOffer`
+  avant résolution) → résolution de la 1ʳᵉ offre → le restart est rejoué automatiquement
+  (`createOffer` appelé 2×, 2e appel avec `{iceRestart:true}`). RED confirmé (0 échec de la suite avant
+  le fix ne suffisait pas à prouver le bug — nouveau test écrit AVANT le fix source, `toHaveBeenCalledTimes(2)`
+  échouait avec `1` reçu), GREEN restauré. Suite `webrtc-service.coverage.test.ts` +
+  `webrtc-service.test.ts` : 170/170. Suite web filtrée `.*(call|webrtc|quality).*\.test\.` : 23
+  suites/442 tests verts (+1 vs Vague 27). `tsc --noEmit` web : 1201 erreurs identiques avant/après sur
+  `webrtc-service.ts` (0 nouvelle erreur sur ce fichier, confirmé par grep ciblé).
+- **[FAUX POSITIF confirmé, gateway] `call:toggle-video` "skips the audio-only privacy gate"
+  n'est PAS un bug — c'est la feature FIX 7 (Vague "2026-07-02 (suite)") qui fonctionne comme prévu.**
+  Un agent d'exploration gateway a rapporté en HIGH que `updateParticipantMedia`/le handler
+  `call:toggle-video` n'appliquent aucun gate "call.metadata.type === 'video'" avant d'écrire
+  `isVideoEnabled: true`, contrairement au gate join-time (`joinCallAttempt`, audit 2026-07-07). Vérifié
+  FAUX par lecture complète + confrontation à ce fichier : le join-time gate protège contre un
+  `videoEnabled: true` **implicite/non consenti** envoyé automatiquement par un client au moment de
+  répondre à un appel audio (état client périmé, la victime n'a fait qu'appuyer sur "répondre" à un appel
+  qu'elle croit audio). `call:toggle-video {enabled:true}` mid-call est au contraire une action
+  **utilisateur explicite** (bouton caméra local, `CallManager.toggleVideo` iOS / `CallControls` web) —
+  et la Vague "FIX 7" (2026-07-02) documente EXPLICITEMENT ce chemin comme une feature livrée et testée
+  ("l'user a activé sa caméra pendant l'appel audio → renégociation entrante OK... l'affichage du flux
+  distant fonctionne partout"). Appliquer le gate suggéré aurait cassé cette feature shippée. **Règle
+  réutilisable** : un event `X:Y {enabled:true}` déclenché par un bouton UI explicite et un champ du même
+  nom écrit implicitement à une transition d'état (join/answer) NE partagent PAS le même modèle de
+  consentement, même s'ils appellent la même méthode service — vérifier QUI déclenche l'event
+  (action utilisateur explicite vs valeur par défaut héritée d'un client) avant de proposer un gate
+  symétrique. Non corrigé (à raison) ; noté ici pour ne pas re-flaguer.
+- **[NEAR-MISS méthodologique, gateway+iOS, aucun changement net] `SERVER_EVENTS.CALL_FORCE_LEAVE`
+  ('call:force-leave' server→client) a failli être supprimé comme "mort" — vérification cross-repo a
+  révélé un récepteur iOS réel et testé.** Un agent gateway a rapporté ce type/const comme
+  "aspirationnel, jamais émis" (grep gateway + web : zéro émetteur, commentaire source disant
+  "no emitter yet"). Suppression appliquée puis **annulée** après avoir grep `apps/ios` (pas fait par
+  l'agent, scope gateway/web uniquement) : `MessageSocketManager.swift:3052` écoute bien
+  `socket.on("call:force-leave")` server→client, publie via `callForcedLeave` (Combine), et
+  `CallManager.swift:3689` s'y abonne — le tout couvert par une suite de tests dédiée
+  (`CallManagerTests.swift:3230-3276`, vérifie teardown `.remote` + report CallKit). Investigation
+  complémentaire (safe, lecture seule) : `CallCleanupService.forceEndCall` (le seul chemin qui aurait dû
+  émettre ce SERVER_EVENTS-là) broadcast en réalité `call:ended` à la même audience large
+  (call+conversation+user rooms, cf. Vague 15/26) — donc le récepteur iOS `callForcedLeave`, bien que
+  réel et testé, est aujourd'hui **inatteignable en pratique** (le serveur ne l'émet jamais, `call:ended`
+  couvre déjà le même besoin UX). Ni clairement mort (receiver réel, testé, documenté) ni clairement
+  manquant (`call:ended` fait déjà le travail) — **aucun changement appliqué**, ambiguïté non tranchée
+  volontairement plutôt que de deviner. **Leçon méthodologique pour la prochaine session** : avant de
+  supprimer une déclaration TS "SERVER_EVENTS.X, jamais émis" repérée par un audit gateway/web-only,
+  grep AUSSI `apps/ios` et `packages/MeeshySDK` pour un récepteur `socket.on("...")`/Combine correspondant
+  — "aucun émetteur" côté serveur ne prouve pas que la déclaration est morte si un client a déjà construit
+  et testé le côté réception en attendant l'implémentation serveur. Décision produit à trancher dans une
+  session future : émettre réellement `call:force-leave` en plus de `call:ended` (défense en profondeur,
+  risque de double-traitement à gérer) OU supprimer le récepteur iOS mort (nécessite Xcode pour vérifier
+  qu'aucun autre test/appelant n'en dépend).
+- **[iOS, lecture seule, aucun changement — nécessite Xcode]** Deux agents dédiés (CallManager/WebRTC core,
+  UI/accessibilité) ont audité l'intégralité de la pile iOS. Aucun changement appliqué (toujours pas de
+  toolchain Swift/Xcode dans cet environnement) ; findings consignés pour une session avec accès macOS :
+  - `CallManager.switchCamera()`/`selectCamera(id:)` posent `isUsingFrontCamera` de façon optimiste AVANT
+    que `WebRTCService.switchCamera()` (fire-and-forget) confirme — un échec (format caméra indisponible,
+    thermal throttling) laisse le flag à la mauvaise valeur pour le reste de l'appel (preview mirroré à
+    tort, cf. contrat §7.7 "bug k"). Même pattern sur `toggleSpeaker()`/`applyRouteOverride` (sévérité
+    moindre, `handleAudioRouteChange` peut se re-corriger sur un futur route-change).
+  - `CallManagerTests.swift`/`CallManagerAudioSessionTests.swift` (~800 assertions cumulées) sont des
+    tests "source-reflection" (regex/substring sur le texte source du fichier, zéro instanciation réelle
+    de `CallManager`/`CXProvider`) — déjà documenté par une note d'audit du 2026-07-06, toujours vrai,
+    toujours hors de portée sans compilateur (nécessite d'abstraire `CXProvider`/`CXCallController`
+    derrière un protocole injectable).
+  - UI/accessibilité (8 findings, triés par sévérité) : `IncomingCallView`/`CallWaitingBannerView` sans
+    fallback landscape/Dynamic-Type (risque de clipper les boutons Accepter/Refuser — safety-critical) ;
+    `CallsTab`'s `CallRowDialButton` (40×40, sous les 44pt HIG) et filter chips (~28-30pt) sous le tap
+    target minimum ; `BubbleCallNoticeView` hardcode `indigo500` au lieu de recevoir `accentColor` en
+    paramètre (violation de la règle documentée SDK/app) ; `CallDetailSheet`/`CallSummaryDetailSheet`
+    sans plafond de largeur iPad/Mac (contrairement à `FloatingCallPillView`'s 560pt déjà établi) ;
+    `CallsTab`'s `.accessibilityElement(children: .combine)` rend le menu "Rappeler" inatteignable en
+    VoiceOver. Aucun n'est un crash/perte de données — reportés pour une session avec Xcode plutôt que
+    risqués en aveugle (cf. lessons.md : édits Swift mécaniques uniquement, vérifiables par lecture, dans
+    cet environnement).
+- **Reste ouvert (inchangé sauf `negotiate()` retiré, ajout `call:force-leave`)** : items J (validation
+  device réel), C6 (court-circuit dédup cosmétique), CALL-DIAG retagging, threading complet du `ttl` TURN
+  à travers tous les événements call, `call:force-leave` server-emit ambiguïté (voir ci-dessus), 5 findings
+  iOS structurels listés ci-dessus (nécessitent Xcode).
+
+## Vague 29 — 4 des 8 findings iOS UI/accessibilité de la Vague 28 corrigés mécaniquement (lecture seule, toujours pas de toolchain Swift) (2026-07-08)
+
+Toujours pas de Swift/Xcode dans cet environnement — seuls les 4 findings de la Vague 28 qui sont des
+édits mécaniques, à un seul fichier, vérifiables intégralement par lecture (renommage de paramètre,
+changement de constante numérique, déplacement de modifier) ont été appliqués. Les 2 restants (route
+`switchCamera`/`toggleSpeaker` optimiste, tests source-reflection `CallManagerTests`) et le finding
+landscape/Dynamic-Type d'`IncomingCallView`/`CallWaitingBannerView` (nécessite un nouveau pattern
+`verticalSizeClass` jamais utilisé ailleurs dans la codebase — pas un simple mirroring, donc hors
+scope sans compilateur pour vérifier le layout réel) restent des follow-ups Xcode.
+
+- **[FIX RÉEL, iOS, mécanique] `BubbleCallNoticeView`/`CallSummaryDetailSheet` hardcodaient
+  `MeeshyColors.indigo500`** au lieu de recevoir l'accent de la conversation — violation de la règle
+  documentée (`apps/ios/CLAUDE.md` "Conversation Accent Color" : tout composant conversation-context DOIT
+  utiliser `accentColor`, jamais une couleur codée en dur). Fix : nouveau paramètre `accentHex: String`
+  (mirroring exact de `BubbleQuotedReply.accentHex`), threadé dans `CallNoticePresentation.tint` (cas
+  `.completed`), `callBackButton`, `qualityRow`/`detailRow` (icônes). `ThemedMessageBubble.swift:200`
+  passe désormais `accentHex: contactColor` (même valeur que tous les autres sous-composants Bubble).
+  `qualityColor` (indigo400 pour le palier "bonne" qualité réseau) intentionnellement PAS touché — c'est
+  une échelle sémantique à 4 paliers (excellent/bonne/moyenne/faible), pas une teinte de conversation.
+- **[FIX RÉEL, iOS, mécanique] `CallsTab.CallRowDialButton` (40×40pt) et les filter chips (~27-30pt de
+  haut) sous le tap target minimum HIG (44×44pt).** Fix : `CallRowDialButton.frame` 40→44 ; les chips
+  gardent leur taille visuelle (padding horizontal 14/vertical 7 inchangé) mais gagnent
+  `.frame(minHeight: 44).contentShape(Rectangle())` pour élargir la zone tactile sans changer l'esthétique
+  du pill compact.
+- **[FIX RÉEL, iOS, mécanique] `CallsTab.CallJournalRow`'s `.accessibilityElement(children: .combine)`
+  groupait TOUTE la ligne (bouton nom/avatar + `CallRowDialButton`) en un seul élément VoiceOver** — le
+  menu "Rappeler" (avec son propre `accessibilityLabel`/`Hint`) devenait inatteignable, absorbé dans le
+  libellé combiné de la ligne. Fix : le `.accessibilityElement(children: .combine)` +
+  `.accessibilityLabel` (+ le `.contentShape(Rectangle())` associé) sont maintenant scopés au seul
+  `Button(action: onTap)` (nom/avatar/direction) ; `CallRowDialButton` reste un élément VoiceOver séparé
+  et atteignable, hors du HStack combiné.
+- **[FIX RÉEL, iOS, mécanique] `CallDetailSheet`/`CallSummaryDetailSheet` sans plafond de largeur
+  iPad/Mac** — sur une fenêtre large, les `Spacer()` des `redialButtons`/`detailRow`/`callBackButton`
+  s'étirent bord à bord au lieu de rester un enregistrement centré et lisible. Fix : mirroring du
+  plafond déjà établi par `FloatingCallPillView` (560pt) — `.frame(maxWidth: 560).frame(maxWidth:
+  .infinity)` sur le VStack de contenu des deux sheets (cap puis centrage explicite, indépendant du
+  comportement par défaut du `ScrollView` sur l'axe perpendiculaire). Pleine largeur inchangée sur
+  iPhone (<560pt).

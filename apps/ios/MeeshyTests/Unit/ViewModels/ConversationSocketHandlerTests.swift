@@ -1200,6 +1200,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         // fires exactly once per inbound message — `armSocketSubscriptions`
         // early-returns on the second call so only one subscription is wired.
         XCTAssertEqual(delegate.markAsReadCallCount, 1, "Should receive message only once despite double armSocketSubscriptions()")
+        _ = sut
     }
 
     // MARK: - Persistence Actor Integration

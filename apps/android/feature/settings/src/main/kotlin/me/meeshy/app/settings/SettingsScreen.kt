@@ -12,14 +12,28 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import me.meeshy.ui.theme.MeeshyRadius
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,6 +54,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
+import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,9 +99,17 @@ fun SettingsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    MeeshyBackground {
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MeeshyTheme.tokens.textPrimary,
+                    navigationIconContentColor = MeeshyTheme.tokens.textPrimary,
+                ),
                 title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -101,7 +128,11 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            SettingsSection(title = stringResource(R.string.settings_section_profile)) {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_profile),
+                icon = Icons.Filled.Person,
+                iconColor = MeeshyPalette.Indigo500,
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -127,7 +158,7 @@ fun SettingsScreen(
                             Text(
                                 text = it,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MeeshyTheme.tokens.textSecondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -136,7 +167,11 @@ fun SettingsScreen(
                 }
             }
 
-            SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_appearance),
+                icon = Icons.Filled.DarkMode,
+                iconColor = MeeshyPalette.Purple500,
+            ) {
                 ThemePickerRow(
                     label = stringResource(R.string.settings_theme),
                     selected = state.themeMode,
@@ -144,7 +179,11 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsSection(title = stringResource(R.string.settings_section_language)) {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_language),
+                icon = Icons.Filled.Language,
+                iconColor = MeeshyPalette.Success,
+            ) {
                 InterfaceLanguageRow(
                     label = stringResource(R.string.settings_display_language),
                     selected = state.interfaceLanguage,
@@ -161,7 +200,11 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsSection(title = stringResource(R.string.settings_section_notifications)) {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_notifications),
+                icon = Icons.Filled.Notifications,
+                iconColor = MeeshyPalette.Warning,
+            ) {
                 val notifications = state.notifications
                 NotificationToggleRow(
                     label = stringResource(R.string.settings_push_notifications),
@@ -201,7 +244,11 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsSection(title = stringResource(R.string.settings_section_privacy)) {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_privacy),
+                icon = Icons.Filled.Lock,
+                iconColor = MeeshyPalette.Purple600,
+            ) {
                 SettingsRow(label = stringResource(R.string.settings_two_factor), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_active_sessions), detail = null, onClick = {})
@@ -209,7 +256,11 @@ fun SettingsScreen(
                 SettingsRow(label = stringResource(R.string.settings_blocked_users), detail = null, onClick = {})
             }
 
-            SettingsSection(title = stringResource(R.string.settings_section_data)) {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_data),
+                icon = Icons.Filled.Storage,
+                iconColor = MeeshyPalette.Info,
+            ) {
                 SettingsRow(label = stringResource(R.string.settings_export_data), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_clear_media_cache), detail = null, onClick = {})
@@ -217,7 +268,11 @@ fun SettingsScreen(
                 SettingsRow(label = stringResource(R.string.settings_storage_used), detail = null, onClick = {})
             }
 
-            SettingsSection(title = stringResource(R.string.settings_section_about)) {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_about),
+                icon = Icons.Filled.Info,
+                iconColor = MeeshyPalette.Neutral500,
+            ) {
                 SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = null)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = {})
@@ -225,7 +280,11 @@ fun SettingsScreen(
                 SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = {})
             }
 
-            SettingsSection(title = stringResource(R.string.settings_section_danger)) {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_danger),
+                icon = Icons.Filled.Warning,
+                iconColor = MeeshyPalette.Error,
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -236,7 +295,7 @@ fun SettingsScreen(
                         onClick = onLogout,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
+                            containerColor = MeeshyPalette.Error,
                         ),
                     ) {
                         Text(stringResource(R.string.settings_log_out))
@@ -245,13 +304,14 @@ fun SettingsScreen(
                         label = stringResource(R.string.settings_delete_account),
                         detail = null,
                         onClick = {},
-                        labelColor = MaterialTheme.colorScheme.error,
+                        labelColor = MeeshyPalette.Error,
                     )
                 }
             }
 
             Spacer(Modifier.height(MeeshySpacing.xl))
         }
+    }
     }
 }
 
@@ -433,7 +493,7 @@ private fun RegionalLanguageDialog(
                     Text(
                         text = stringResource(R.string.settings_regional_language_empty),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MeeshyTheme.tokens.textSecondary,
                         modifier = Modifier.padding(vertical = MeeshySpacing.sm),
                     )
                 } else {
@@ -484,9 +544,9 @@ private fun DndScheduleRows(
             ),
             style = MaterialTheme.typography.bodySmall,
             color = if (active) {
-                MaterialTheme.colorScheme.primary
+                MeeshyPalette.Indigo500
             } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
+                MeeshyTheme.tokens.textSecondary
             },
             modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
         )
@@ -573,7 +633,7 @@ private fun DndDayChips(
                 if (selected.isEmpty()) R.string.settings_dnd_every_day else R.string.settings_dnd_days,
             ),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
         )
         Spacer(Modifier.height(MeeshySpacing.xs))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
@@ -616,7 +676,7 @@ private fun NotificationTypesEditor(
     Text(
         text = stringResource(R.string.settings_notification_types_title),
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MeeshyTheme.tokens.textSecondary,
         modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
     )
     OutlinedTextField(
@@ -633,7 +693,7 @@ private fun NotificationTypesEditor(
         Text(
             text = stringResource(R.string.settings_notification_types_empty),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         )
         return
@@ -643,7 +703,7 @@ private fun NotificationTypesEditor(
             text = stringResource(notificationCategoryLabelRes(section.category)),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+            color = MeeshyPalette.Indigo500,
             modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
         )
         section.items.forEach { item ->
@@ -702,9 +762,9 @@ private fun NotificationToggleRow(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
             color = if (enabled) {
-                MaterialTheme.colorScheme.onSurface
+                MeeshyTheme.tokens.textPrimary
             } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
+                MeeshyTheme.tokens.textSecondary
             },
             modifier = Modifier.weight(1f),
         )
@@ -719,16 +779,37 @@ private fun NotificationToggleRow(
 @Composable
 private fun SettingsSection(
     title: String,
+    icon: ImageVector,
+    iconColor: Color,
     content: @Composable () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
-        )
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(iconColor),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MeeshyPalette.White,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Spacer(Modifier.width(MeeshySpacing.sm))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MeeshyPalette.Indigo500,
+            )
+        }
         content()
         Spacer(Modifier.height(MeeshySpacing.sm))
     }
@@ -739,7 +820,7 @@ private fun SettingsRow(
     label: String,
     detail: String?,
     onClick: (() -> Unit)?,
-    labelColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
+    labelColor: androidx.compose.ui.graphics.Color = MeeshyTheme.tokens.textPrimary,
 ) {
     val modifier = if (onClick != null) {
         Modifier
@@ -767,7 +848,7 @@ private fun SettingsRow(
             Text(
                 text = detail,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MeeshyTheme.tokens.textSecondary,
             )
             Spacer(Modifier.width(MeeshySpacing.xs))
         }
@@ -775,7 +856,7 @@ private fun SettingsRow(
             Icon(
                 Icons.AutoMirrored.Filled.ArrowForwardIos,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = MeeshyTheme.tokens.textSecondary,
                 modifier = Modifier.size(14.dp),
             )
         }

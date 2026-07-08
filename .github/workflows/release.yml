@@ -91,13 +91,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          # A tag pushed with the default GITHUB_TOKEN does NOT trigger other
-          # workflows (GitHub's anti-recursion rule), so the `v*` tag created
-          # below would never fire ios-release.yml (`on: push: tags: v*`).
-          # Prefer a PAT (repo + workflow scope) when configured so cutting a
-          # release also kicks the iOS release; fall back to GITHUB_TOKEN
-          # (version bump still works, iOS release then run manually via its
-          # workflow_dispatch).
+          # ios-release.yml is manual-only (workflow_dispatch) — cutting this
+          # release's `v*` tag never triggers an iOS build/upload, regardless
+          # of token. RELEASE_PAT is kept (falling back to GITHUB_TOKEN) only
+          # so the version-bump commit/tag push itself isn't blocked by branch
+          # protection; it no longer serves to chain into another workflow.
           token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Setup bun

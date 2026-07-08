@@ -207,7 +207,7 @@ struct CallView: View {
                 VStack {
                     HStack {
                         Button {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
                                 callManager.displayMode = .pip
                             }
                             HapticFeedback.medium()
@@ -1093,7 +1093,7 @@ struct CallView: View {
                             let dropped = CGPoint(x: base.x + value.translation.width,
                                                   y: base.y + value.translation.height)
                             let corner = nearestCorner(to: dropped, in: geo.size, safeArea: geo.safeAreaInsets)
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
                                 pipCorner = corner
                                 pipDragOffset = .zero
                             }
@@ -1103,7 +1103,7 @@ struct CallView: View {
                 // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
                 // Camera flip also sits on the self-view frame itself.
                 .onTapGesture {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) {
                         swapStreams.toggle()
                     }
                     HapticFeedback.light()

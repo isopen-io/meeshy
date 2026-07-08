@@ -1002,23 +1002,14 @@ export class MeeshySocketIOManager {
         logger.debug('socket disconnect', { socketId: socket.id, reason });
         const disconnectedUserId = this.socketToUser.get(socket.id);
         if (disconnectedUserId) {
-          // Drain active typing state BEFORE invalidating cache: broadcasts
-          // typing:stop to every conversation the user was typing in so
-          // clients clear the indicator immediately (vs waiting up to 15s for
-          // their safety timer). drainActiveTypingState also clears the
-          // throttle map entries, superseding the old clearTypingThrottle call.
-          const { conversationIds, identity } = this.statusHandler.drainActiveTypingState(disconnectedUserId);
-          if (conversationIds.length > 0 && identity) {
-            for (const convId of conversationIds) {
-              this.io.to(ROOMS.conversation(convId)).emit(SERVER_EVENTS.TYPING_STOP, {
-                userId: disconnectedUserId,
-                username: identity.username,
-                displayName: identity.displayName,
-                conversationId: convId,
-                isTyping: false
-              });
-            }
-          }
+          // typing:stop-on-disconnect is broadcast exclusively by the
+          // 'disconnecting' handler above (StatusHandler.handleSocketDisconnecting):
+          // it is the authoritative path — per-socket precision (activeTypers),
+          // multi-device suppression (no false stop when another device is still
+          // typing), blocked-viewer exclusion, and throttle-map cleanup. Emitting
+          // again here from the per-user throttle map re-broadcast the stop
+          // without any of those guarantees, producing duplicate and false
+          // typing:stop events on multi-device disconnects.
           this.statusHandler.invalidateIdentityCache(disconnectedUserId);
           // Invalider le snapshot de présence pour forcer un recalcul à la prochaine connexion
           this.presenceSnapshotCache.delete(disconnectedUserId);
@@ -1046,9 +1037,44 @@ export class MeeshySocketIOManager {
       }
       
       
+      // Charger le message pour connaître sa conversation, PUIS vérifier
+      // l'appartenance AVANT de servir toute traduction (cache OU on-demand).
+      // Sans cette garde en amont, la branche cache divulguait le contenu
+      // traduit à un non-participant : le contrôle n'existait que côté on-demand,
+      // donc un message déjà mis en cache fuitait vers n'importe quel socket
+      // connaissant son id (IDOR / message-content disclosure).
+      const message = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
+      });
+
+      if (!message || !message.content) {
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: 'Message not found or empty'
+        });
+        return;
+      }
+
+      // Verify requesting user is a participant of the message's conversation
+      const connectedUser = this.connectedUsers.get(userId);
+      const membershipCheck = connectedUser?.isAnonymous
+        ? await this.prisma.participant.findFirst({
+            where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
+            select: { id: true },
+          })
+        : await this.prisma.participant.findFirst({
+            where: { userId, conversationId: message.conversationId, isActive: true },
+            select: { id: true },
+          });
+
+      if (!membershipCheck) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
+        return;
+      }
+
       // Récupérer la traduction (depuis le cache ou la base de données)
       const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
-      
+
       if (translation) {
         socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, {
           messageId: data.messageId,
@@ -1062,35 +1088,6 @@ export class MeeshySocketIOManager {
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
         try {
-          const message = await this.prisma.message.findUnique({
-            where: { id: data.messageId },
-            select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
-          });
-
-          if (!message || !message.content) {
-            socket.emit(SERVER_EVENTS.ERROR, {
-              message: 'Message not found or empty'
-            });
-            return;
-          }
-
-          // Verify requesting user is a participant of the message's conversation
-          const connectedUser = this.connectedUsers.get(userId);
-          const membershipCheck = connectedUser?.isAnonymous
-            ? await this.prisma.participant.findFirst({
-                where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
-                select: { id: true },
-              })
-            : await this.prisma.participant.findFirst({
-                where: { userId, conversationId: message.conversationId, isActive: true },
-                select: { id: true },
-              });
-
-          if (!membershipCheck) {
-            socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
-            return;
-          }
-
           await this.translationService.handleNewMessage({
             id: message.id,
             conversationId: message.conversationId,
@@ -2234,6 +2231,14 @@ export class MeeshySocketIOManager {
 
       if (!result) {
         logger.warn(`[Agent] Reaction failed — conv=${reaction.conversationId} msg=${reaction.targetMessageId}`);
+        return;
+      }
+
+      if (result.unchanged) {
+        // Idempotent no-op: the agent already had exactly this emoji on the
+        // message. Skip the REACTION_ADDED broadcast and author notification —
+        // nothing changed. Parity with the human socket/REST add paths.
+        logger.info(`[Agent] Reaction unchanged (already present) — conv=${reaction.conversationId} msg=${reaction.targetMessageId}`);
         return;
       }
 

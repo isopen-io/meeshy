@@ -291,7 +291,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Cache-first instant load done ; pull-to-refresh done (`PullToRefreshBox`,
       spinner gated sur le geste utilisateur — les revalidations SWR de fond
       restent silencieuses) ; cursor-based infinite scroll / branding pending
-- [ ] Sectioned list with collapsible user categories + pinned section + drag-to-category
+- [~] Sectioned list with collapsible user categories + pinned section + drag-to-category —
+      **pinned section done** (slice `conversations-section-model`, 2026-07-08): the pinned/others
+      split, previously scattered `filter`/`filterNot` glue inside `ConversationListScreen`, is now
+      the pure `:feature:conversations` `ConversationSections.of(conversations)` SSOT
+      (Pinned first → All), each `ConversationSection` preserving the incoming (draft/filter) order.
+      An **empty section is omitted**, so an all-pinned account no longer shows a phantom empty
+      "Mes conversations" header. Rendered via the existing `CollapsibleSection` (collapse state is
+      its own saved UI state). +9 tests. **Reste**: collapsible *user categories* (needs category
+      metadata) + drag-to-category.
 - [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
       — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
       (port fidèle de `filterConversations` : soft-delete masqué partout, archivés
@@ -310,10 +318,52 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Hard-press conversation preview popover
 - [~] Conversation row: rich last-message preview done (labels type média
       📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,
-      « Vous » pour soi) + unread badge done ; ephemeral/expired/hidden/view-once/
-      draft/typing, activity-heat, tags, presence/story-ring/mood pending
-- [ ] Draft-aware ordering (drafts float to top); bump-to-top on send/receive
-- [ ] Cold-start skeletons + error-with-retry empty state
+      « Vous » pour soi) + unread badge + **draft preview** done (slice
+      `conversations-draft-aware-ordering`, 2026-07-07 : `draftPreview` accent-teinté
+      « Brouillon : … » prime sur le last-message quand un brouillon utile existe ;
+      reply-only → préfixe + « … ») ; **discard-draft** done (slice
+      `conversations-draft-discard`, 2026-07-08 : action contextuelle « Supprimer le
+      brouillon » offerte seulement sur une ligne portant un brouillon *utile* — pure
+      `DraftDiscard.isDiscardable`/`afterDiscard` `:feature:conversations` + effacement
+      optimiste `ConversationListViewModel.discardDraft` (retrait immédiat de l'état,
+      `draftStore.clear`, rollback si échec) ; la ligne perd son aperçu et redescend
+      sous le groupe flottant) ; ephemeral/expired/hidden/view-once/
+      typing, activity-heat, tags, presence/story-ring/mood pending
+- [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
+      **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
+      2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
+      draftsById)` fait flotter en tête toute conversation portant un brouillon
+      *utile* (`ConversationDraft.isMeaningful` SSOT `:core:model` — texte non vide
+      **ou** reply armé), triées par `updatedAt` desc (null en dernier du groupe,
+      tri stable) ; le reste garde son ordre en dessous. `ConversationDraftStore`
+      gagne `observeAll()` (`:sdk-core`, InMemory StateFlow + DataStore préfixe-scan,
+      entrée corrompue omise) ; `ConversationListViewModel` collecte les brouillons
+      et les applique dans `withVisible` après le filtre. La split épinglés-en-tête
+      de l'écran reste au-dessus (Épingles > brouillons > reste). +23 tests.
+      **Reste** : bump-to-top on send/receive (déjà couvert par refresh backend).
+- [x] Cold-start skeletons + error-with-retry empty state — the skeleton + error+retry
+      renders existed but the *decision* lived as an untestable scattered `when` inside
+      `ConversationListScreen` (with a redundant `conversations.isEmpty() &&` guard). Slice
+      `conversations-empty-state-content` (2026-07-08) lifts it into the pure
+      `:feature:conversations` `ConversationListContent.of(state)` SSOT (sealed
+      Populated | Skeleton | Error(message) | FilteredEmpty | ColdEmpty). Cache-first
+      (ARCHITECTURE.md §4): a populated list wins over a stale skeleton flag **or** a
+      background sync error, so on-screen data is never hidden; only an empty list falls
+      through to skeleton → error(+retry) → filtered-empty → cold-empty in precedence
+      order. The screen renders straight from the reducer. +11 tests
+      (`ConversationListContentTest`, every branch + the two cache-first overrides + the
+      skeleton-over-error / error-over-filter precedence + blank-search-is-cold boundary).
+      **Card upgrade** (slice `conversations-cold-start-error-card`, 2026-07-08): the three
+      empty arms (Error / FilteredEmpty / ColdEmpty) rendered as a bare secondary label +
+      plain retry button; iOS shows an iconified card (glyph + title + subtitle + Réessayer).
+      New pure `:feature:conversations` `EmptyStateVisual.of(content)` SSOT maps each non-list
+      arm → `{glyph, title, subtitle, cta?}` (enum-keyed copy so the choice is JVM-testable,
+      free of `R` ids; the server error travels as a trimmed `Literal`, blank/empty → generic
+      `Resource(ErrorSubtitle)`, still retryable; Populated/Skeleton → null). Rendered on a
+      `MeeshyGlassSurface` card — error glyph tints `MeeshyPalette.Error`, the others accent
+      Indigo — with the retry wired to `refresh`. +8 tests (`EmptyStateVisualTest`: error
+      literal / trim / blank-fallback / empty-fallback / filtered / cold / populated-null /
+      skeleton-null).
 - [x] Connection-health banner — `SocketManager.connectionState` (StateFlow
       DISCONNECTED/CONNECTING/CONNECTED) → mapping pur `bannerFor` (la reconnexion
       prime sur le sync) → strip animée sous l'app bar (Hors ligne / Reconnexion… /
@@ -330,7 +380,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
 ## C. Chat / Messaging
-- [ ] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
+- [~] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
+      **Edit 2-hour window now enforced** via pure `:core:model` `MessageEditability.canEdit(isOwn,
+      createdAtMillis, nowMillis, windowMillis=2h)` SSOT (port of iOS's `Date().timeIntervalSince(createdAt)
+      < 2h` gate): an own message is editable only while <2h elapsed; a future-dated createdAt (clock skew)
+      is treated as just-created (still editable); an unknown createdAt cannot be windowed → stays editable
+      (refusing to edit merely because the wire omitted a timestamp is a worse gap). `ChatViewModel` injects
+      `CacheClock` and gates `startEdit` (own + within window); `ChatScreen` hides the Edit sheet action once
+      the window has passed (Delete stays available) (slice `chat-edit-time-window`, 2026-07-07, +13 tests).
+      **Delete for-me vs for-everyone split now shipped** (slice `chat-delete-for-me-vs-everyone`, 2026-07-07,
+      +23 tests): pure `:core:model` `MessageDeletability.canDeleteForEveryone(isOwn, createdAtMillis, nowMillis,
+      windowMillis=2h)` SSOT (port of iOS `ConversationCommandHandler.canDeleteForEveryone`, **inclusive `<=`**
+      window unlike the exclusive edit window) + pure `:sdk-core` `LocallyHiddenMessages` value object
+      (`hide`/`isHidden`/`visible`, idempotent, same-instance-on-no-op) backed by the durable
+      `SharedPrefsLocallyHiddenMessagesStore` (port of iOS `LocallyHiddenMessagesStore` UserDefaults set).
+      `ChatViewModel.deleteForEveryone` keeps the server round-trip; `deleteForMe` hides locally (no network),
+      the hidden set threads into the message-stream combine so the bubble disappears at once; `ChatScreen`
+      offers "Delete for everyone" (own + within window) and "Delete for me" (any delivered message).
+      **Pending:** forward.
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
 - [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
       `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine
@@ -345,7 +412,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       add/remove optimistic done ; reaction detail breakdown (who-reacted sheet) pending
 - [ ] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
-      replyToId optimiste + aperçu cité dans la bulle ; swipe / forward / jump pending
+      replyToId optimiste + aperçu cité dans la bulle + **tap-aperçu → scroll vers l'original**
+      (`ReplyJumpResolver`, inerte si original paginé hors écran) + **swipe-to-reply**
+      (`SwipeToReply` : incoming→droite / own→gauche, rubber-band + seuil de commit + haptique,
+      révèle un glyphe reply, commit → `startReply`) ; forward pending
 - [ ] Reply-count pills + reply thread overlay
 - [~] Message bubbles: text done ; pièces jointes image (grille 1–4 + overlay « +N »,
       URL relative résolue contre l'origine gateway, `ApiMessage.attachments` persisté
@@ -353,9 +423,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       emoji-only oversized done (`EmojiDetector` port iOS 90/60/45, free-floating
       sans bulle, dans la bulle centré si reply) ;
       carousel / audio / location / contact pending
-- [ ] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight)
+- [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
+      (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
+      `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
+      `__underline__` (recursive nesting), `@username` (+ display-name resolution), `m+TOKEN`, `http(s)`
+      URLs; plus `highlightRanges` (case-insensitive/non-overlapping), `extractUrls` (meeshy→mention→http),
+      `resolvedLinkUrl` (tracked-link redirect). Rendered via `:sdk-ui` `RichMessageText` (`AnnotatedString`
+      + `LinkAnnotation.Url`/`withLink` real taps, highlight over rendered plain text) wired into the bubble;
+      `mentionDisplayNames`/`highlightTerm`/`trackedLinks` params ready for `ChatScreen` to feed. +34 tests.
+      **Search-highlight half now wired** (`chat-search-highlight-wiring` 2026-07-06): `ChatViewModel` supplies
+      the live `highlightTerm` end-to-end (see the in-conversation search row below). **Member-roster →
+      `mentionDisplayNames` now wired** (`chat-mention-autocomplete` 2026-07-06): `ChatViewModel` builds the
+      roster from the conversation participants via `MentionRoster` and threads `mentionDisplayNames` into every
+      `MessageBubble`, so `@username` resolves to the display name in-bubble. **Pending:** in-app browser / OG cards.
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
-- [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
+- [~] Delivery status checkmarks + offline-pending hourglass + failed-message retry —
+      ✓/✓✓/✓✓-read tier + Pending/Failed done ; **group all-or-nothing semantics done**
+      (`chat-delivery-status-group-semantics` 2026-07-06): pure `:core:model` `DeliveryStatusResolver`
+      (port of iOS `DeliveryStatusResolver`) — in a group the delivered/read tier lights up only once
+      EVERY recipient has received/read (never on the first peer), trusting `readByAllAt`/`deliveredToAllAt`
+      markers ahead of the counters ; `BubbleContentBuilder` consumes it with a reactive `recipientCount`
+      (distinct other members) threaded from `ChatViewModel`. **Pending:** the finer 8-state
+      send-lifecycle glyphs (clock/slow/invisible), offline hourglass, tap-checks → read-status sheet
 - [ ] Edited / pinned / forwarded indicators; edit-history viewer
 - [ ] Ephemeral (self-destruct) messages with duration picker + countdown badges
 - [ ] Blurred ("tap to reveal") + view-once messages with fog effect
@@ -369,12 +458,80 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Large-paste detection → clipboard-content attachment
 - [ ] In-app camera: photo capture + video recording (flash, front/back toggle)
 - [ ] Live sentiment + language detection ("smart context zone") with language pill/picker override
-- [ ] @-mention autocomplete (debounced API + local merge)
-- [ ] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral)
+- [◐] @-mention autocomplete (debounced API + local merge) — local roster done
+      (`chat-mention-autocomplete` 2026-07-06): pure `:feature:chat` `ChatMention` SSOT (port of iOS
+      `MentionComposerController` pure logic) — `extractQuery` (trailing `@fragment`, bare `@` → full roster,
+      space → inactive), `filterCandidates` (trimmed case-insensitive over username **or** display name, blank →
+      all), `insertMention` (rewrite trailing fragment → `@username `, inert without an active fragment); plus a
+      pure reducer over `MentionAutocompleteState(activeQuery, suggestions, draftMentions)` — `onTextChange`,
+      `cleared` (idempotent, keeps draft mentions), `select` (rewrite + record + dismiss), `reset`. `MentionRoster`
+      builds candidates from participants (excludes self, drops blank handles, degrades display name→username).
+      `ChatViewModel` recomputes on `onDraftChange`, exposes `onMentionSelected`, resets on send; `ChatScreen`
+      renders a neutral accent-avatar suggestion strip above the composer. +40 tests. **Pending:** debounced
+      backend `/mentions` API merge over the local roster (online enrichment).
+- [◐] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text + reply-ref done**
+      (slice `chat-draft-autosave`, 2026-07-07): pure `:feature:chat` `DraftAutosave` SSOT (blank composer
+      purges, non-blank saves raw, unchanged writes nothing → `Save`/`Clear`/`None`; restore seeds an idle empty
+      composer only, never clobbering an in-flight edit or already-typed text) + durable `:sdk-core`
+      `ConversationDraftStore` (DataStore-backed, per-conversation key, corrupt→miss; port of iOS
+      `ConversationDraftManager`). `ChatViewModel` restores on open, auto-saves on `onDraftChange` (guarded off
+      during edit, coalesced last-write-wins), purges on send. +32 tests. **Reply-ref persistence done**
+      (slice `chat-draft-reply-ref`, 2026-07-07): `ConversationDraft` gained a `replyToId`; `DraftAutosave.resolve`
+      now treats a draft as *meaningful* when it holds text **or** an armed reply (a reply armed on an empty
+      composer persists and survives navigation; cancelling it on an empty composer purges), normalising the
+      reference (trim/blank→null); `DraftAutosave.restore` returns a `DraftRestore(text, replyToId)` snapshot that
+      re-arms a reply-only or half-typed reply draft. `ChatViewModel` persists on `startReply`/`cancelReply`/
+      `onDraftChange` and re-arms `replyingToMessageId` on open; the durable store round-trips the reference. +16
+      tests. **Pending:** the language/effects/blur/ephemeral fields (those composer features are not yet built on
+      Android — no state to persist).
 - [ ] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress
-- [ ] In-conversation message search (debounced, translation-match aware) + jump-to-result
-- [ ] Scroll-to-bottom control with rich unread/typing/offline/search states
-- [ ] Typing indicators (header + inline)
+- [◐] In-conversation message search (translation-match aware) + jump-to-result — core+wiring done
+      (`chat-search-highlight-wiring` 2026-07-06): pure `:feature:chat` `ChatSearch` SSOT over the opaque
+      `SearchableMessage` — `matchIds` (trimmed/case-insensitive `contains` across **every** text of a message,
+      so the displayed translation *and* the stored original both match → translation-aware) + a pure reducer
+      (`activated`/`deactivated`/`withQuery`/`reconciled`/`movedToNext`/`movedToPrev`) over `ChatSearchState`
+      (matches, wraparound next/prev, one-based `currentPosition`, `highlightTerm`). `ChatViewModel` intents
+      (`openSearch`/`onSearchQueryChange`/`nextSearchMatch`/`previousSearchMatch`/`closeSearch`) recompute on
+      each keystroke and **reconcile against the live message stream keeping the user's focused hit** (deleted /
+      body-less bubbles excluded); `ChatScreen` renders a search TopAppBar (accent cursor, `x / y` counter,
+      up/down nav) and jumps the list to the active hit via `animateScrollToItem`; `highlightTerm` threads into
+      every `MessageBubble` (reusing the tested `MessageTextParser.highlightRanges`). Local match is instant — no
+      debounce needed (surpasses iOS's debounced-but-online search). +29 tests (24 pure-core, 5 VM). **Pending:**
+      server-side/remote search over uncached history.
+- [~] Scroll-to-bottom control with rich unread/typing/offline/search states —
+      **unread badge + preview done** (`chat-scroll-to-bottom-control` 2026-07-07): pure
+      `:feature:chat` `ScrollAffordance.next(previous, messages, isNearBottom) → ScrollAffordanceState`
+      (port of iOS `ConversationScrollControlsView` book-keeping) computes the control's visibility,
+      an unread badge that grows only on incoming (non-own, undeleted) messages arriving while the
+      reader is scrolled away, and a compact preview (sender + text + kind icon) of the newest such
+      message; scrolling back to bottom clears the badge; top-pruned history never resurrects as unread
+      and a lost anchor re-baselines to the newest. `ChatScreen` renders a `BadgedBox` FAB + preview pill,
+      tap acknowledges + jumps. +19 tests (`ScrollAffordanceTest` 14 reducer branches,
+      `AffordanceMessageMappingTest` 5 mapping). Typing-in-control now live: pure `ScrollControlContent.of`
+      (Hidden/Typing/Unread/Plain) folds the typing roster into the control with **typing taking priority
+      over the unread count** (iOS `ConversationScrollControlsView` rule), rendered as a `TypingPill`
+      (slice `chat-typing-in-control`, 2026-07-07, +10 tests). **Pending:** offline
+      indicator (needs a `NetworkMonitor` flow — iOS hard-codes `false`), slow-scroll search state.
+- [~] Typing indicators (header + inline) — inline indicator live via pure `:feature:chat` `TypingParticipants`
+      keyed roster SSOT (userId-keyed dedup so two same-named typists stay distinct + refresh-to-tail +
+      self-exclusion + blank-name→userId fallback) + `TypingLabel` presentation (None/One/Two/Many), driven
+      by `ChatViewModel.typingParticipants` and rendered by `ChatScreen.TypingIndicator` (slice
+      `chat-typing-participants-core`, 2026-07-07, +21 tests). Typing roster also folded into the
+      scroll-to-bottom control via `ScrollControlContent` (slice `chat-typing-in-control`, 2026-07-07).
+      **Header-level indicator now live** via pure `:feature:chat` `ChatHeaderSubtitle.of(memberCount,
+      isGroup, typing) → None | Members(count) | Typing(label)` SSOT — while a peer composes the header
+      subtitle shows who is typing (reusing `TypingLabel`), otherwise a group shows its member count and a
+      direct chat shows nothing; **typing supersedes the member count** (iOS `ConversationHeaderState`
+      typing-dot parity), and a non-positive count never renders "0 members". `ChatViewModel` now exposes
+      `memberCount`/`isGroup`; `ChatScreen` renders the subtitle under the title (typing in `accentColor`,
+      members in `textSecondary`) (slice `chat-typing-header`, 2026-07-07, +11 tests). **Header avatar chips
+      now live** — pure `:feature:chat` `TypingAvatarStack.of(participants, maxVisible=3) → visible chips +
+      overflow count` SSOT (roster-order, cap-truncation, `+N` overflow, negative/zero cap → all overflow),
+      with `TypingParticipant` extended to carry a roster-resolved `avatarUrl` (blank→null); `ChatViewModel`
+      builds an `avatarByUserId` map from the conversation participants and resolves each `typing:start`'s
+      avatar (the socket payload carries none), and `ChatScreen` renders overlapping accent-tinted avatar
+      chips beside the subtitle (slice `chat-typing-header-avatars`, 2026-07-07, +20 tests). Closes iOS parity
+      (avatars, not just the name).
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background

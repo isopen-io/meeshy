@@ -139,7 +139,7 @@ class ConversationRepository @Inject constructor(
         val snapshot = database.withTransaction {
             val row = conversationDao.find(id) ?: return@withTransaction null
             val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
-            val current = conversation.preferences ?: ApiConversationPreferences()
+            val current = conversation.resolvedPreferences ?: ApiConversationPreferences()
             val next = transform(current)
             if (next == current) return@withTransaction null
             conversationDao.upsertAll(

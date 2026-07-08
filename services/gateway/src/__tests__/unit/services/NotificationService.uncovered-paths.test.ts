@@ -384,7 +384,14 @@ describe('NotificationService — Uncovered Paths', () => {
   // ==============================================
 
   describe('shouldCreateNotification — DND active', () => {
+    // These three tests read the current clock to decide whether the DND window
+    // is active. With dndEndTime '23:59' as an "all day" proxy and isDNDActive's
+    // exclusive upper bound (currentTime < end), they flaked for the one minute
+    // per day at 23:59 UTC (blocked CI on unrelated PRs). Freeze the clock to a
+    // deterministic mid-window instant — same pattern as the isDNDActive tests
+    // below — so the day/time logic is exercised without wall-clock dependence.
     it('should return false when DND is active (no time restriction)', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-15T12:00:00Z'));
       prisma.userPreferences.findUnique.mockResolvedValue({
         notification: {
           newMessageEnabled: true,
@@ -396,10 +403,12 @@ describe('NotificationService — Uncovered Paths', () => {
       });
 
       const allowed = await (service as any).shouldCreateNotification('user-1', 'new_message');
+      jest.useRealTimers();
       expect(allowed).toBe(false);
     });
 
     it('should block DND when current day is in dndDays', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-15T12:00:00Z'));
       const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
       const today = dayMap[new Date().getUTCDay()];
       prisma.userPreferences.findUnique.mockResolvedValue({
@@ -413,10 +422,12 @@ describe('NotificationService — Uncovered Paths', () => {
       });
 
       const allowed = await (service as any).shouldCreateNotification('user-1', 'new_message');
+      jest.useRealTimers();
       expect(allowed).toBe(false);
     });
 
     it('should allow when current day is NOT in dndDays', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-15T12:00:00Z'));
       const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
       const todayIdx = new Date().getUTCDay();
       const otherDay = dayMap[(todayIdx + 1) % 7];
@@ -432,6 +443,7 @@ describe('NotificationService — Uncovered Paths', () => {
       prisma.notification.create.mockResolvedValue(mockNotif('new_message'));
 
       const allowed = await (service as any).shouldCreateNotification('user-1', 'new_message');
+      jest.useRealTimers();
       expect(allowed).toBe(true);
     });
 

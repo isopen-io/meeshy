@@ -1,9 +1,12 @@
 import type { MentionedUser } from '@meeshy/shared/types/mention';
-import { MENTION_HANDLE_CHARS } from '@meeshy/shared/utils/mention-parser';
+import { MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT } from '@meeshy/shared/utils/mention-parser';
 
 // Handle @username : lettres/chiffres/underscore/tiret (SSOT MENTION_HANDLE_CHARS) — `\w` seul
 // tronquait le rendu de `@marie-claire` en `marie`.
-const MENTION_DISPLAY_REGEX = new RegExp(`@([${MENTION_HANDLE_CHARS}]{1,30})`, 'g');
+// Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `parseMentions`) : un `@` collé après un mot
+// appartient à une adresse e-mail (`bob@alice.com`) et ne doit PAS être réécrit en display name.
+// Flag `u` requis (classes `\p{...}`).
+const MENTION_DISPLAY_REGEX = new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]{1,30})`, 'gu');
 
 export function buildMentionDisplayMap(mentionedUsers: readonly MentionedUser[]): Map<string, string> {
   const map = new Map<string, string>();

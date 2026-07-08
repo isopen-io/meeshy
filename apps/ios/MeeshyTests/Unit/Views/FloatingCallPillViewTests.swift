@@ -206,17 +206,17 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    func test_avatar_resolvesRemoteProfile_cacheFirst() throws {
+    func test_pillContent_delegatesAvatarToCallParticipantVisual() throws {
         let source = try pillSource()
         XCTAssertTrue(
-            source.contains("CacheCoordinator.shared.profiles.load(for:"),
-            "The banner must resolve the remote user's real avatar cache-first " +
-            "(Instant App) instead of always showing the initial fallback."
+            source.contains("CallParticipantVisual(diameter: 44)"),
+            "FloatingCallPillView must delegate its video/avatar visual to the shared " +
+            "CallParticipantVisual component (reused at 56pt by CallBubbleView) instead " +
+            "of reimplementing the cache-first avatar resolution locally."
         )
         XCTAssertFalse(
             source.contains("UserService.shared.getProfileById"),
-            "The banner must NOT hit the network for the profile — CallView already " +
-            "refreshes and re-feeds the cache; the banner serves cached data only."
+            "The pill must NOT hit the network for the profile directly."
         )
     }
 
@@ -331,6 +331,36 @@ final class FloatingCallPillViewTests: XCTestCase {
             source.contains(".frame(height: pillHeight)"),
             "pillContent must not force an exact height on the pill — that clips " +
             "userInfoSection's text at large accessibility text sizes."
+        )
+    }
+}
+
+// MARK: - CallParticipantVisual Source Inspection Tests
+
+@MainActor
+final class CallParticipantVisualTests: XCTestCase {
+
+    private func source() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallParticipantVisual.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_resolvesRemoteProfile_cacheFirst() throws {
+        let src = try source()
+        XCTAssertTrue(
+            src.contains("CacheCoordinator.shared.profiles.load(for:"),
+            "CallParticipantVisual must resolve the remote user's real avatar cache-first " +
+            "(Instant App) instead of always showing the initial fallback."
+        )
+        XCTAssertFalse(
+            src.contains("UserService.shared.getProfileById"),
+            "CallParticipantVisual must NOT hit the network for the profile — CallView " +
+            "already refreshes and re-feeds the cache; this component serves cached data only."
         )
     }
 }

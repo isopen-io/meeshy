@@ -1,7 +1,7 @@
 name: iOS Release
 
-# Mirrors `./apps/ios/meeshy.sh release` (the do_release function) so a tag push
-# or manual dispatch reproduces EXACTLY what a maintainer runs locally:
+# Mirrors `./apps/ios/meeshy.sh release` (the do_release function) so a manual
+# dispatch reproduces EXACTLY what a maintainer runs locally:
 #   - lane: beta (TestFlight, default) or release (App Store)
 #   - fastlane args built the same way: `skip_tests:true` ONLY when requested,
 #     `changelog:…` / `version:…` only when provided. skip_metadata /
@@ -13,15 +13,11 @@ name: iOS Release
 #     and the local toolchain meeshy.sh uses. Xcode 16 cannot resolve the
 #     swift-tools-version 6.2 package graph.
 
-# Trigger: a `v*` tag push (cut by release.yml's changesets job) OR a manual
-# workflow_dispatch. NOTE: release.yml must push that tag with a PAT
-# (secrets.RELEASE_PAT) for the push to fire this workflow — a tag pushed with
-# the default GITHUB_TOKEN is intentionally ignored by GitHub. Without the PAT,
-# trigger this release manually via "Run workflow" (workflow_dispatch) below.
+# Trigger: manual only (workflow_dispatch) — an iOS TestFlight/App Store
+# release must now be started explicitly via "Run workflow", never as a side
+# effect of release.yml cutting a `v*` tag. (Previously this workflow also
+# listened for `push: tags: v*`; that automatic trigger has been removed.)
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       lane:
@@ -107,24 +103,16 @@ jobs:
         run: |
           echo "${{ secrets.ASC_KEY_CONTENT }}" | base64 --decode > /tmp/AuthKey.p8
 
-      # Resolve the lane + the optional knobs exactly like meeshy.sh's do_release:
-      # a tag push behaves like `./meeshy.sh release` (lane: beta), a manual
-      # dispatch maps the inputs to the same RELEASE_TARGET / SKIP_TESTS /
-      # RELEASE_VERSION / RELEASE_CHANGELOG variables.
+      # Resolve the lane + the optional knobs exactly like meeshy.sh's do_release,
+      # mapping the workflow_dispatch inputs (the only trigger now) to the same
+      # RELEASE_TARGET / SKIP_TESTS / RELEASE_VERSION / RELEASE_CHANGELOG variables.
       - name: Determine fastlane parameters
         id: lane
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "lane=${{ github.event.inputs.lane }}" >> "$GITHUB_OUTPUT"
-            echo "skip_tests=${{ github.event.inputs.skip_tests }}" >> "$GITHUB_OUTPUT"
-            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
-            echo "changelog=${{ github.event.inputs.changelog }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "lane=beta" >> "$GITHUB_OUTPUT"
-            echo "skip_tests=true" >> "$GITHUB_OUTPUT"
-            echo "version=" >> "$GITHUB_OUTPUT"
-            echo "changelog=" >> "$GITHUB_OUTPUT"
-          fi
+          echo "lane=${{ github.event.inputs.lane }}" >> "$GITHUB_OUTPUT"
+          echo "skip_tests=${{ github.event.inputs.skip_tests }}" >> "$GITHUB_OUTPUT"
+          echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          echo "changelog=${{ github.event.inputs.changelog }}" >> "$GITHUB_OUTPUT"
 
       # Same invocation contract as meeshy.sh's do_release: build the fastlane
       # args in a bash array (preserves spaces in the changelog), then

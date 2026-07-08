@@ -84,7 +84,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
   };
 });
 
-import { MentionService, MentionSuggestion, MentionValidationResult } from '../../../services/MentionService';
+import { MentionService, MentionSuggestion, MentionValidationResult, resolveMentionedUsers } from '../../../services/MentionService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../../services/CacheStore';
 
@@ -278,13 +278,22 @@ describe('MentionService', () => {
       expect(mentions).not.toContain(longUsername);
     });
 
-    it('should handle email-like patterns correctly', () => {
+    it('should NOT treat an @ glued after a word (email address) as a mention', () => {
       const content = 'Contact john@example.com for info';
       const mentions = service.extractMentions(content);
 
-      // Should extract 'john' as a mention (before @)
-      // but actually the regex /@(\w+)/ captures after @, so it gets 'example'
-      expect(mentions).toContain('example');
+      // `@example` is part of an email address, not a mention. Same left boundary as the
+      // SSOT parseMentions/hasMentions (mention-parser.ts): a `@` preceded by a name char
+      // belongs to an email — extracting `example` would fire a spurious mention notification.
+      expect(mentions).toEqual([]);
+    });
+
+    it('extracts a real mention but ignores an adjacent email fragment', () => {
+      const content = 'ping @alice about john@example.com';
+      const mentions = service.extractMentions(content);
+
+      expect(mentions).toContain('alice');
+      expect(mentions).not.toContain('example');
     });
   });
 
@@ -1579,5 +1588,115 @@ describe('MentionService', () => {
 
       expect(prisma.postMention.create).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+// ==============================================
+// resolveMentionedUsers (module-level export) — mixed-case username resolution
+// ==============================================
+//
+// Regression guard: `resolveMentionedUsers` lowercases parsed handles and must
+// still resolve a mention against a stored username that preserves case
+// (e.g. `@Alice_B` → DB `Alice_B`). MongoDB's Prisma connector ignores
+// `mode: 'insensitive'` when combined with `in` (documented in
+// MentionService.resolveUsernames), so the query must use OR + case-insensitive
+// `equals`, not a lowercased `in` list.
+describe('resolveMentionedUsers (module export)', () => {
+  type FakeUser = {
+    id: string;
+    username: string;
+    isActive: boolean;
+    displayName: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    avatar: string | null;
+  };
+
+  // Faithful emulation of MongoDB+Prisma matching semantics for User.findMany:
+  //  - `OR: [{ username: { equals, mode: 'insensitive' } }]` → case-INSENSITIVE
+  //  - `username: { in: [...], mode: 'insensitive' }`        → mode IGNORED,
+  //    i.e. case-SENSITIVE membership (the real-world MongoDB behavior)
+  const mongoLikeFindMany = (db: readonly FakeUser[]) =>
+    jest.fn(async ({ where }: { where: any }) => {
+      const isActiveOk = (u: FakeUser) =>
+        where.isActive === undefined || u.isActive === where.isActive;
+
+      const matchesUsername = (u: FakeUser): boolean => {
+        if (Array.isArray(where.OR)) {
+          return where.OR.some((clause: any) => {
+            const eq = clause.username?.equals;
+            if (eq === undefined) return false;
+            return clause.username?.mode === 'insensitive'
+              ? u.username.toLowerCase() === String(eq).toLowerCase()
+              : u.username === eq;
+          });
+        }
+        const inList = where.username?.in;
+        if (Array.isArray(inList)) {
+          // MongoDB ignores `mode` with `in` → exact, case-sensitive membership
+          return inList.includes(u.username);
+        }
+        return false;
+      };
+
+      return db.filter((u) => isActiveOk(u) && matchesUsername(u));
+    });
+
+  const aliceB: FakeUser = {
+    id: 'u-alice',
+    username: 'Alice_B',
+    isActive: true,
+    displayName: null,
+    firstName: 'Alice',
+    lastName: 'B',
+    avatar: null,
+  };
+
+  it('resolves a mention of a mixed-case username (@Alice_B → Alice_B)', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([aliceB]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['hey @Alice_B look at this']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ userId: 'u-alice', username: 'Alice_B', displayName: 'Alice B' });
+  });
+
+  it('resolves a lowercased mention of a mixed-case username (@alice_b → Alice_B)', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([aliceB]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['ping @alice_b']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].username).toBe('Alice_B');
+  });
+
+  it('queries with OR + case-insensitive equals, never a lowercased `in` list', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prismaMock = { user: { findMany } } as any;
+
+    await resolveMentionedUsers(prismaMock, ['yo @Alice_B']);
+
+    const where = findMany.mock.calls[0][0].where;
+    expect(where.username?.in).toBeUndefined();
+    expect(where.OR).toEqual([{ username: { equals: 'alice_b', mode: 'insensitive' } }]);
+    expect(where.isActive).toBe(true);
+  });
+
+  it('dedupes case-variant mentions of the same user', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([aliceB]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['@Alice_B and @alice_b']);
+
+    expect(result).toHaveLength(1);
+  });
+
+  it('returns [] when there are no mentions', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prismaMock = { user: { findMany } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['no handles here']);
+
+    expect(result).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
   });
 });

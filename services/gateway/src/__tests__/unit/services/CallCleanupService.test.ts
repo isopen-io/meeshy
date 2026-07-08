@@ -74,7 +74,12 @@ const createMockCallService = (hasData = true) => ({
 const createMockIo = () => {
   const to = jest.fn().mockReturnThis() as MockFn;
   const emit = jest.fn() as MockFn;
-  const mock = { to, emit } as any;
+  // `in(room).fetchSockets()` — used by the room-eviction cleanup mirrored
+  // from the client-driven call:end/call:leave/call:force-leave handlers.
+  // Defaults to an empty room so existing broadcast-only tests are unaffected.
+  const fetchSockets = jest.fn().mockResolvedValue([]) as MockFn;
+  const inRoom = jest.fn().mockReturnValue({ fetchSockets }) as MockFn;
+  const mock = { to, emit, in: inRoom } as any;
   // Make `to(...)` return an object with `emit`
   to.mockReturnValue({ emit });
   return mock;
@@ -1269,6 +1274,125 @@ describe('CallCleanupService', () => {
   });
 
   // -------------------------------------------------------------------------
+  // setMissedCallNotificationCallback — sibling-drift fix (2026-07-07): the
+  // in-process ringing-timeout path (`CallEventsHandler.handleMissedCall`)
+  // both marks a call missed AND creates a persisted notification for every
+  // unresponded participant. GC tier 1 is the backstop for when that timer
+  // never fires; before this fix it mirrored the summary message and the
+  // cancel push but never created the notification itself, so a call
+  // resolved ONLY by GC left the callee with no notification-center/badge
+  // trace it happened.
+  // -------------------------------------------------------------------------
+  describe('setMissedCallNotificationCallback', () => {
+    it('invokes the callback with callId for a tier-1 missed force-end', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const notify = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setMissedCallNotificationCallback(notify);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-notify-1');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-1' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(notify).toHaveBeenCalledWith('call-notify-1');
+    });
+
+    it('does not invoke the callback for a tier-2 (failed) force-end', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const notify = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setMissedCallNotificationCallback(notify);
+
+      const staleConnecting = makeStaleCall(CallStatus.connecting, 100_000, 'call-notify-2');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([staleConnecting])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-2' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(notify).not.toHaveBeenCalled();
+    });
+
+    it('does not invoke the callback for a tier-3 (garbageCollected) force-end', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const notify = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setMissedCallNotificationCallback(notify);
+
+      const staleCall = makeStaleCall(CallStatus.active, 3 * 60 * 60 * 1000, 'call-notify-3');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([staleCall]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-3' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(notify).not.toHaveBeenCalled();
+    });
+
+    it('does not invoke the callback when the race guard skips the write (call already transitioned)', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const notify = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setMissedCallNotificationCallback(notify);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-notify-race');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-race' });
+      setupTransactionPassthrough(prisma, 0); // already transitioned — no write
+
+      await service.runCleanup();
+
+      expect(notify).not.toHaveBeenCalled();
+    });
+
+    it('does not throw and still counts the call as cleaned when the callback rejects', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const notify = jest.fn().mockRejectedValue(new Error('notify failed')) as MockFn;
+      service.setMissedCallNotificationCallback(notify);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-notify-fail');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-fail' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+      expect(result.errors).toBe(0);
+    });
+
+    it('is a no-op (no crash) when no callback was registered', async () => {
+      const service = new CallCleanupService(prisma as any);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-notify-none');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-none' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // forceEndCall (tested indirectly via runCleanup)
   // -------------------------------------------------------------------------
   describe('forceEndCall — broadcast variants', () => {
@@ -1399,6 +1523,74 @@ describe('CallCleanupService', () => {
         expect.stringContaining('No Socket.IO server'),
         expect.objectContaining({ callId: 'call-noio' })
       );
+    });
+
+    // Vague 21 (2026-07-07) — every client-driven termination path (call:end,
+    // call:leave, call:force-leave) evicts sockets from `ROOMS.call(callId)`
+    // right after broadcasting call:ended; forceEndCall (GC) never did,
+    // leaving still-connected sockets permanently joined to a dead call room.
+    // Tracked as an open item in tasks/calls-fonctionnel-todo.md.
+    describe('room cleanup (GC must mirror the client-driven leave-room behavior)', () => {
+      it('evicts every socket still in the call room after force-ending a call', async () => {
+        const io = createMockIo();
+        const service = new CallCleanupService(prisma as any);
+        service.attachSocketServer(io);
+
+        const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-room-cleanup');
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([staleCall])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]);
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-room-cleanup' });
+        setupTransactionPassthrough(prisma);
+
+        const socketA = { leave: jest.fn() };
+        const socketB = { leave: jest.fn() };
+        const fetchSockets = jest.fn().mockResolvedValue([socketA, socketB]);
+        (io.in as MockFn).mockReturnValue({ fetchSockets });
+
+        await service.runCleanup();
+
+        expect(io.in).toHaveBeenCalledWith('call:call-room-cleanup');
+        expect(socketA.leave).toHaveBeenCalledWith('call:call-room-cleanup');
+        expect(socketB.leave).toHaveBeenCalledWith('call:call-room-cleanup');
+      });
+
+      it('does not throw and still reports the call as cleaned when the room is already empty', async () => {
+        const io = createMockIo();
+        const service = new CallCleanupService(prisma as any);
+        service.attachSocketServer(io);
+
+        const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-room-empty');
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([staleCall])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]);
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-room-empty' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(1);
+        expect(result.errors).toBe(0);
+      });
+
+      it('skips room cleanup without throwing when no io is attached', async () => {
+        const service = new CallCleanupService(prisma as any);
+        // No attachSocketServer call.
+
+        const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-room-noio');
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([staleCall])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]);
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-room-noio' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result).toEqual({ cleaned: 1, errors: 0 });
+      });
     });
 
     it('calls callService.clearHeartbeats after transaction when callService provided', async () => {

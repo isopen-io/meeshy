@@ -11,6 +11,7 @@
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import type { Server as SocketIOServer } from 'socket.io';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { logger } from '../utils/logger';
 import type { CallService } from './CallService';
@@ -78,6 +79,21 @@ export class CallCleanupService {
   // background push that tears it down.
   private missedCallCancelPush: ((callId: string, conversationId: string | undefined, duration: number) => Promise<void>) | null = null;
 
+  // Sibling-drift fix (2026-07-07) — set via `setMissedCallNotificationCallback()`.
+  // `CallEventsHandler.handleMissedCall` (the in-process ringing-timeout path)
+  // both marks the call missed AND creates a persisted `Notification` (badge/
+  // notification-center entry) for every unresponded participant. GC tier 1
+  // (initiated/ringing > 120s → missed) is the backstop for when that
+  // in-process timer never fires — it already mirrors the OTHER two side
+  // effects of a missed call (the `postSummary` system message and the
+  // `missedCallCancelPush` silent APNs push above) but had no bridge for the
+  // notification itself, so a call resolved ONLY by this GC path left the
+  // callee with no notification-center/badge trace it was ever called.
+  // `markCallAsMissed` is NOT re-invoked here — GC's own transaction above
+  // already performed the terminal write, so only the notification side
+  // effect is needed.
+  private missedCallNotify: ((callId: string) => Promise<void>) | null = null;
+
   constructor(
     private prisma: PrismaClient,
     private callService?: CallService,
@@ -128,6 +144,15 @@ export class CallCleanupService {
   ): void {
     this.missedCallCancelPush = cancelPush;
     logger.info('[CallCleanupService] Missed-call cancel-push callback attached — phantom-ringing callees will be released on GC tier 1');
+  }
+
+  // Mirrors `setMissedCallCancelPushCallback` (see the field doc above) —
+  // injected from server startup once CallEventsHandler exists, so a call
+  // resolved only by GC tier 1 also gets its persisted missed-call
+  // notification, not just the silent cancel push.
+  setMissedCallNotificationCallback(notify: (callId: string) => Promise<void>): void {
+    this.missedCallNotify = notify;
+    logger.info('[CallCleanupService] Missed-call notification callback attached — GC tier 1 will create notifications for unresponded participants');
   }
 
   start(): void {
@@ -485,6 +510,16 @@ export class CallCleanupService {
       });
     }
 
+    // Sibling-drift fix (2026-07-07) — same tier-1-only scope as the cancel
+    // push above: only a still-ringing call GC'd into `missed` has
+    // unresponded participants who never got the missed-call notification
+    // any other path (`handleMissedCall`) would have created for them.
+    if (this.missedCallNotify && endReason === CallEndReason.missed) {
+      this.missedCallNotify(callId).catch((error) => {
+        logger.error('[CallCleanupService] Failed to create missed-call notification for GC-ended call', { callId, error });
+      });
+    }
+
     // Broadcast `call:ended` to the FULL termination audience — call room,
     // conversation room AND every conversation member's user room (same
     // audience as `call:initiated`). Without the user-room fanout, a callee
@@ -503,6 +538,15 @@ export class CallCleanupService {
       const rooms = await resolveCallEndedRooms(this.prisma, callId, session?.conversationId);
       this.io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
       logger.info('[CallCleanupService] Broadcast call:ended', { callId, endReason, conversationId: session?.conversationId });
+
+      // Vague 21 (2026-07-07) — every client-driven termination path
+      // (call:end, call:leave, call:force-leave) evicts sockets from
+      // `ROOMS.call(callId)` right after this same broadcast; this GC path
+      // never did, leaving still-connected sockets permanently joined to a
+      // dead call room until they disconnect. Mirrors CallEventsHandler's
+      // call:end room cleanup exactly.
+      const socketsInCallRoom = await this.io.in(ROOMS.call(callId)).fetchSockets();
+      await Promise.all(socketsInCallRoom.map((s) => s.leave(ROOMS.call(callId))));
     } else {
       logger.warn('[CallCleanupService] No Socket.IO server attached — clients will not receive call:ended', { callId });
     }

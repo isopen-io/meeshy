@@ -3,6 +3,158 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-07 (`conversations-draft-aware-ordering`): an expression-body `= runBlocking { … }` JVM test must NOT
+  end on a Truth assertion that returns a value.** `Truth.assertThat(x).containsExactly(…)` returns an `Ordered`
+  (and `.inOrder()`/`.isInstanceOf()` also return non-Unit), so a test written `@Test fun t() = runBlocking { …;
+  assertThat(m).containsExactly(k, v) }` makes the method's return type `Ordered`, and JUnit rejects the whole class
+  at load time with `InvalidTestClassError: Method t() should be void` — which fails **every** test in that class,
+  not just the offender (the report shows one `initializationError`, easy to misread as a single flake). Fixes:
+  end the block on a void-returning assertion (`.isEqualTo(...)` returns void in Truth's Java API), split the map
+  assertion into `assertThat(m.keys).containsExactly(k)` **then** `assertThat(m.getValue(k)).isEqualTo(v)`, or give
+  the function a block body `{ … }` (block bodies are always Unit — this is why the sibling non-`runBlocking` tests
+  using `{ assertThat(...).containsExactly(...) }` never tripped it). Note `runBlocking { … isEqualTo }` is fine
+  because `isEqualTo` is void; only the collection/ordering matchers bite.
+- **2026-07-07 (`conversations-draft-aware-ordering`): a store that a list needs to observe wholesale needs an
+  `observeAll()`, and a shared "is this meaningful" predicate belongs in `:core:model`, not duplicated per feature.**
+  The conversation list had to know *which* conversations carry a draft — a per-id `load()` can't drive that, so
+  `ConversationDraftStore` grew `observeAll(): Flow<Map<..>>` (InMemory backed by a `MutableStateFlow` so it's
+  reactive; DataStore maps over `data` filtering the `draft:` key prefix and `value is String`, decoding each,
+  corrupt→omitted). The "does a draft count" rule already lived inline in `:feature:chat` `DraftAutosave` twice;
+  extracting `val ConversationDraft.isMeaningful` to `:core:model` and having both `DraftAutosave` and the new
+  `:feature:conversations` ordering/preview consume it kept one definition. Semantics matched exactly
+  (`text.isNotBlank() || !replyToId.isNullOrBlank()` == the old `restore` guard; the `resolve` had-draft check used
+  `replyToId != null` but a stored draft is always reply-normalised, so equivalent) — the existing chat suite stayed
+  green. The "when to float / how to sort / which preview" product decision is a pure `:feature` atom
+  (`DraftAwareOrdering`, `draftPreview`); the row overlap/tint is exempt Compose glue.
+- **2026-07-07 (`chat-draft-autosave`): DataStore test files must end `.preferences_pb`, and use the explicit
+  serializer for `encodeToString`/`decodeFromString`.** Two traps in one slice: (1) `PreferenceDataStoreFactory
+  .create { file }` throws `IllegalStateException` at construction unless the produced file's extension is exactly
+  `preferences_pb` — so Robolectric/TemporaryFolder tests must name the file e.g. `tmp.newFile("d1.preferences_pb")`
+  (mirror `ThemeStoreTest`), never a bare name. (2) `json.encodeToString(draft)` resolved to the two-arg
+  `(SerializationStrategy, value)` overload and failed to compile ("Cannot infer type … Argument type mismatch");
+  use the explicit `json.encodeToString(ConversationDraft.serializer(), draft)` /
+  `json.decodeFromString(ConversationDraft.serializer(), raw)` to avoid the reified-vs-strategy overload
+  ambiguity. Also: DataStore forbids **two live instances over one file** — to test "survives process death",
+  reuse the *same* backing `DataStore` for a fresh wrapper (as `ThemeStoreTest.hydrate` does) rather than
+  cancelling one scope and opening a second over the same path (flaky active-files race). Pattern reused: durable
+  seam = stateless building block in `:sdk-core` (interface + `InMemory…` + `DataStore…`), the "when to
+  save/purge/restore" product decision = pure atom in `:feature:chat`, composer render = exempt Compose glue.
+- **2026-07-07 (`chat-typing-header-avatars`): resolve socket-payload gaps from the roster the VM already holds,
+  and cover the flaky-suite timeout.** The `typing:start` `TypingEvent` carries no avatar, so the header-avatar
+  chip's URL has to come from the conversation participants. The `ChatViewModel` conversation collector already
+  builds `mentionRoster`/`recipientCount` from `conversation.participants`; add one more derived field
+  (`avatarByUserId = participants.associate { (it.userId ?: it.id) to it.avatar }`) and read it in the typing
+  collector — no new stream, no new repo. Keep the "how many chips + overflow" decision a pure `:core`-style
+  atom (`TypingAvatarStack.of`, in `:feature:chat`), test every cap branch incl. zero/negative → all-overflow,
+  and leave the overlap/ring render as exempt Compose glue. **Flaky-suite gotcha:** a *full*
+  `gradle assembleDebug testDebugUnitTest` occasionally fails `:sdk-core`
+  `NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` with a 5000 ms
+  `TimeoutCancellationException` — it's a real DataStore-backed test whose 5 s `first()` wait starves under the
+  parallel-module test load, **not** a regression. Re-run that single test/module in isolation to confirm green
+  (it passes in ~4 s), then re-run the full suite; don't chase it as a slice failure.
+- **2026-07-07 (`chat-edit-time-window`): a time source is already in the Hilt graph — inject it, don't
+  `System.currentTimeMillis()` inside a ViewModel.** `SdkModule.providesCacheClock()` binds `CacheClock`
+  (`@Singleton`), so a VM that needs "now" can add `private val clock: CacheClock` to its `@Inject constructor`
+  with **zero DI changes** and tests pass a fixed clock (deterministic window/expiry assertions). Gotcha:
+  `CacheClock` is a **plain `interface`, not a `fun interface`** — the SAM lambda `CacheClock { fixedNow }` fails
+  to compile ("interface does not have constructors"); use an anonymous object `object : CacheClock { override
+  fun nowMillis() = fixedNow }`. When you gate a VM action on a window, put the predicate in a pure `:core:model`
+  object (here `MessageEditability.canEdit`, beside `DeliveryStatusResolver`) taking `nowMillis: Long` + a
+  nullable `createdAtMillis` — parse the wire's ISO string with the `isoToEpochMillisOrNull` SSOT, and decide the
+  null case deliberately (here: null → editable, since a message factory / optimistic row often has no
+  `createdAt` and the existing green edit tests rely on it; blocking on a missing timestamp would both break
+  them and be worse UX than a stale edit).
+- **2026-07-07 (`chat-typing-in-control`): render-priority rules belong in a pure content SSOT, not `if`s in the
+  Composable.** iOS `ConversationScrollControlsView` documents "typing indicator takes priority over count"; on
+  Android that lived nowhere until `ScrollControlContent.of(affordance, typing)` made the four states
+  (Hidden/Typing/Unread/Plain) an explicit, branch-swept decision. The Composable then just maps a variant to a
+  pill and reads the badge count from the `Unread` variant only — so "typing hides the badge" is enforced by the
+  type, not by remembering to guard it. When two feature slices need the same `TypingLabel`→string mapping,
+  extract one `@Composable typingLabelText(label): String?` and reuse it (killed the duplicated `when` in
+  `TypingIndicator`).
+- **2026-07-07 (`chat-typing-participants-core`): two `runTest` gotchas that silently emptied a just-populated
+  ViewModel roster.** (1) **mockk stub name-shadowing:** a socket flow field on the *test class* that shares a
+  name with the mocked property (`private val typingStarted = MutableSharedFlow<TypingEvent>()`) makes a bare
+  `every { typingStarted } returns …` resolve to the **outer test field**, not the mock's property — the mock
+  property stays unstubbed. Qualify it: `every { this@mockk.typingStarted } returns this@ChatViewModelTest.
+  typingStarted` (the existing `messageReceived`/`reactionAdded` stubs already do this — follow the pattern for any
+  new same-named flow). (2) **`advanceUntilIdle()` fires pending `delay()`s:** the typing collector schedules a 5 s
+  `delay(TYPING_TIMEOUT_MS)` cleanup that removes the participant, so `emit(start)` **then** `advanceUntilIdle()`
+  runs the clock past 5 s and the roster is empty again by the assertion. Use `runCurrent()` (process the emission
+  at the current virtual time, no clock advance) to assert the *pre-timeout* roster; reserve `advanceTimeBy(6_000)`
+  for the expiry test. Symptom for both: `expected [X] but was []` with no exception.
+- **2026-07-07 (`chat-typing-participants-core`): dedup incoming presence rosters by a stable id, never by the
+  display name.** The old inline typing roster keyed on displayName (`(list - name) + name`) collapsed two distinct
+  users named "Alex" into one and let a `typing:stop` from one remove the other. Keying `TypingParticipant` by
+  `userId` fixes both; the same rule applies to any future presence/reaction/read roster.
+- **2026-07-06 (`chat-mention-autocomplete`): the monorepo CI's `services/translator` Python jobs can fail on a
+  PyTorch-CDN TLS outage that has nothing to do with an `apps/android` diff — recognise it and do NOT merge past
+  it, but also do NOT churn re-triggers.** Symptom: `Test Python (translator)` + `Voice API Tests` +
+  `TTS/STT Integration` + `Audio Pipeline Tests` all red at the **same** step "Install Python dependencies (CPU
+  backend for CI)" with `Failed to fetch torch-…whl.metadata → received fatal alert: HandshakeFailure`
+  (`download-r2.pytorch.org`). Every JS/TS job stays green. It is a global infra flake, not our code. Gotchas:
+  (1) the GitHub integration **cannot** `rerun-failed-jobs` (403 "Resource not accessible by integration") — an
+  empty-commit push re-triggers the *whole* suite instead, but if the CDN is still down it just fails again
+  (verified: two runs, same 4 reds). (2) The PR shows `mergeable_state: "unstable"` = mergeable, **no required
+  check blocks it** — so the platform *would* let you merge, but the routine hard rule "never merge past red CI"
+  says don't. Correct move: mark the slice **⚠ blocked-on-infra** in PROGRESS (impl done + reviewer PASS), leave
+  the PR open, record the one-line unblock path (re-run the 4 translator jobs once the CDN recovers → merge), and
+  report to the user. Don't loop re-triggers on a persistent outage.
+- **2026-07-06 (`chat-mention-autocomplete`): mentions are one pure `:feature:chat` core, and the roster→display-
+  name wiring is free value alongside autocomplete.** Ported iOS `MentionComposerController`'s pure logic to
+  `ChatMention` (`extractQuery`/`filterCandidates`/`insertMention` + a `MentionAutocompleteState` reducer) and
+  `MentionRoster` (participants→candidates, self-excluded). Threading `mentionDisplayNames` (from the same roster)
+  into `MessageBubble` makes received `@username` resolve in-bubble — so the autocomplete slice also lands the
+  previously-pending display-name resolution. Keep the suggestion strip **neutral** (input chrome), not accent-
+  tinted, matching the iOS decision (accent stays for message-content surfaces).
+- **2026-07-06 (`chat-rich-text-segments`): the Gradle *wrapper* download 403s through the proxy — use the
+  preinstalled system Gradle 8.14.3 (`/opt/gradle/bin/gradle`) instead of `./gradlew`.** `./gradlew` tries to
+  fetch `gradle-8.11.1-bin.zip` from `services.gradle.org` → `github.com/gradle/gradle-distributions`, which
+  returns HTTP 403 via the agent proxy. `gradle` is on PATH at 8.14.3 and builds every module fine (`gradle
+  :app:assembleDebug testDebugUnitTest`). ROUTINE's `meeshy.sh` wrappers assume `./gradlew`; when the wrapper is
+  unavailable just call `gradle` directly with the same tasks. (Recorded so future runs skip the wrapper dead end.)
+- **2026-07-06 (`chat-rich-text-segments`): rich-text is one pure segmenter, not a view concern — and Compose 1.7
+  gives real link taps for free.** Ported iOS `MessageTextRenderer` to a pure `:core:model` `MessageTextParser`
+  (`parse`/`highlightRanges`/`extractUrls`/`resolvedLinkUrl`) so every treatment decision is JVM-testable
+  (earliest-match-wins over a priority rule list, recursive markdown nesting, lookbehind-guarded mention/`m+`/URL,
+  display-name mentions winning ties by registering first). Kotlin `Regex.find(text, startIndex)` keeps full-input
+  lookbehind visibility (unlike a bounded `Matcher.region`), so `(?<![a-zA-Z0-9])` still sees the char before the
+  cursor — the direct analogue of `NSRegularExpression.firstMatch(in:range:)`. The `:sdk-ui` render glue uses
+  `LinkAnnotation.Url` + `withLink` (Compose 1.7+, BOM 2024.10.01) so taps open via `LocalUriHandler` with **zero
+  callback plumbing**. Apply highlight over the **rendered** plain text (markers stripped), never the raw source
+  offsets — iOS's raw-offset highlight drifts once markdown is present; ours can't.
+- **2026-07-06 (`delivery-status-resolver`): `main` was force-reset and lost merged Android work — and the
+  monorepo CI does NOT build Android, so a broken `main` compiles "green".** On this run `origin/main` had been
+  force-updated (`6cd1a3c4…→5ee31e52`, a forced push) to a state whose `apps/android/tasks/*` docs had regressed
+  ~21 slices AND whose `:core:model` `IsoTime.kt` was missing `isoToEpochMillisOrNull` — yet the just-merged
+  message-effects `ChatScreen.kt` references it, so `main` was **uncompilable for Android**. `ci.yml` only tests
+  JS/TS/Python, so it never caught it. **Takeaways:** (1) after a step-0 rebase onto `main`, run `meeshy.sh check`
+  locally before trusting — CI green ≠ Android compiles; (2) when resolving doc conflicts from a force-reset, the
+  feature-branch side is the superset (verified: 0 `main`-unique slices) so keep it; (3) restoring a
+  force-dropped helper that a merged file needs is legitimate in-scope work (`apps/android` only) and required to
+  leave `main` green; (4) a dedicated Android CI job (`.github/`, its own run) would have flagged this — still a
+  tracked follow-up.
+- **2026-07-06 (`delivery-status-resolver`): the delivery indicator must be honest — resolve at the display point
+  with an all-or-nothing rule, never a `> 0` count threshold.** iOS centralises this in a pure
+  `DeliveryStatusResolver`; Android now mirrors it: `resolve(base, deliveredCount, readCount, recipientCount,
+  deliveredToAllAt?, readByAllAt?)` returns Delivered/Read only when the count `>= recipientCount` (recipients =
+  `memberCount - 1`), trusts `> 0` when `recipientCount <= 1` (1:1 / unknown denominator), and lets unambiguous
+  "all" markers win denominator-independent. **Under-report, never over-report** — an upstream Read downgrades
+  honestly when group counts are partial. Thread `recipientCount` as a reactive `MutableStateFlow` in the
+  ViewModel (from the conversation stream) into the bubble `combine`, so the check refreshes when *either* the
+  counts or the member list arrives — not a one-shot read.
+- **2026-07-06 (`message-effects-lifecycle`): a new nullable field on `ApiMessage` needs NO DB migration.**
+  `MessageEntity.payload` stores the serialized `ApiMessage` JSON (not columns), so `val effects: MessageEffects?
+  = null` decodes from the wire, persists in the payload, and reloads for free — kotlinx lenient decode tolerates
+  the older payloads that lack it. Adding message-shaped optional fields is a pure `:core:model` change; reserve
+  DB-version bumps for genuinely new tables/columns (stats cache, friends cache).
+- **2026-07-06 (`message-effects-lifecycle`): centralise per-message "lifecycle state" as a pure `:core:model`
+  SSOT, not scattered in Compose.** iOS recomputes ephemeral-expiry / view-once-consumed / blur-revealed ad hoc
+  inside its message views. On Android, `MessageLifecyclePresentation.of(effects, createdAtMillis, nowMillis,
+  revealed, viewCount)` is one total, side-effect-free decision the bubble just draws — trivially 90%+ covered
+  (25 cases) and reusable by any surface (story reply). Runtime inputs (`now`/`revealed`/`viewCount`) are pushed
+  in by the UI each frame; the core owns no state. Gate the 1 Hz countdown clock on `messages.any { it.effects
+  ?.isEphemeral == true }` so there are no idle wake-ups when no ephemeral message is on screen.
 - **2026-07-06 (`settings-regional-content-language`): `:sdk-core` `ThemeStoreTest` (and other DataStore
   tests) flake under the FULL parallel run, not in isolation.** They use a real `Dispatchers.IO` DataStore
   with `withTimeout(5_000)`; when `gradle :app:assembleDebug testDebugUnitTest` compiles+tests every module
@@ -1181,3 +1333,16 @@ Append-only log of gotchas and decisions that save time next run.
   `store.preferences.value`, so a single toggle never clobbers the others (tested by the
   successive-toggles-compose case). Screen: push is the **master** — sub-toggles `enabled = pushEnabled`
   so a coherent parent/child relationship, no dead ends.
+
+## 2026-07-07 — Kotlin `combine` arity cap (5 typed flows) — chain, don't widen
+- `ChatViewModel`'s message-stream already `combine`d **5** flows (the typed-overload ceiling:
+  messagesStream, currentUser, ownReactions, showingOriginal, recipientCount). Adding a 6th (the
+  locally-hidden set for `chat-delete-for-me-vs-everyone`) can't extend the same call — the 6-arg
+  `combine` is the untyped `vararg`/`Array<*>` form and would lose all the types.
+- **Fix:** keep the typed 5-combine producing `BubbleInputs`, then `.combine(store.hidden) { inputs,
+  hidden -> inputs to hidden }` and destructure in `collect`. Preserves full typing, no `Array` casts.
+  Prefer this two-stage chain over promoting to the vararg overload whenever you cross 5 sources.
+- **Local-only "delete for me" pattern:** a durable `SharedPrefs…StringSet` store exposed as
+  `StateFlow<LocallyHiddenMessages>`, `.combine`d into the stream, and applied as a pure
+  `filterNot { hidden.isHidden(id) }` before building bubbles — no repo/outbox/network touched. The
+  pure set value returns `this` on a no-op `hide` so the SharedPrefs layer skips redundant writes.

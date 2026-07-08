@@ -39,6 +39,8 @@ dependencies {
     implementation(platform(libs.compose.bom))
     api(libs.bundles.compose)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

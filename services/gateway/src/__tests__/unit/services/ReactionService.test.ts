@@ -303,6 +303,25 @@ describe('ReactionService', () => {
 
       expect(result).toBeDefined();
       expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
+      // No-op re-react: the participant already had this exact emoji. Callers
+      // rely on `unchanged` to skip the REACTION_ADDED broadcast + author notif.
+      expect(result?.unchanged).toBe(true);
+    });
+
+    it('should flag a genuine first-time reaction as changed (unchanged=false)', async () => {
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
+
+      const result = await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      // Distinguishing a real add from a no-op re-react: both return
+      // replacedEmojis: [], so `unchanged` is the ONLY signal that tells the
+      // broadcast/notify side-effects apart.
+      expect(result?.unchanged).toBe(false);
+      expect(result?.replacedEmojis).toEqual([]);
     });
 
     it('should replace the previous reaction when adding a different emoji', async () => {
@@ -325,6 +344,8 @@ describe('ReactionService', () => {
       expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
       expect(result?.reaction.emoji).toBe('🔥');
       expect(result?.replacedEmojis).toEqual(['👍']);
+      // A swap changes DB state — it must broadcast, so unchanged is false.
+      expect(result?.unchanged).toBe(false);
     });
 
     it('should not report a replaced emoji when the user has no previous reaction', async () => {
@@ -369,6 +390,7 @@ describe('ReactionService', () => {
       expect(result).toBeDefined();
       expect(result?.reaction.emoji).toBe('👍');
       expect(result?.replacedEmojis).toEqual([]);
+      expect(result?.unchanged).toBe(true);
       expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
 

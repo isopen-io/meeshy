@@ -226,7 +226,7 @@ jest.mock('../handlers/StatusHandler', () => ({
       handleTypingStop: jest.fn().mockResolvedValue(undefined),
       invalidateIdentityCache: jest.fn(),
       clearTypingThrottle: jest.fn(),
-      drainActiveTypingState: jest.fn().mockReturnValue({ conversationIds: [], identity: null }),
+      handleSocketDisconnecting: jest.fn().mockResolvedValue(undefined),
     };
     return mockStatusHandlerInstance;
   }),
@@ -925,13 +925,79 @@ describe('MeeshySocketIOManager', () => {
       expect(mockAuthHandlerInstance.handleDisconnection).toHaveBeenCalledWith(socket);
     });
 
-    it('invalidates identity cache and clears typing throttle on disconnect when userId found', () => {
+    it('invalidates identity cache on disconnect when userId found', () => {
       const socket = makeSocket('sock-d3');
       (manager as any).socketToUser.set('sock-d3', 'user-d3');
       triggerConnection(socket);
       socket._handlers['disconnect']('transport close');
-      expect(mockStatusHandlerInstance.drainActiveTypingState).toHaveBeenCalledWith('user-d3');
       expect(mockStatusHandlerInstance.invalidateIdentityCache).toHaveBeenCalledWith('user-d3');
+    });
+
+    it('does NOT re-broadcast typing:stop from the disconnect handler (delegated to disconnecting)', () => {
+      // Regression: the disconnect handler previously drained the per-user
+      // throttle map and re-emitted typing:stop without multi-device
+      // suppression or blocked-viewer exclusion, producing duplicate/false
+      // stops. That broadcast now belongs solely to the disconnecting handler.
+      const socket = makeSocket('sock-d3b');
+      (manager as any).socketToUser.set('sock-d3b', 'user-d3b');
+      triggerConnection(socket);
+      ioState.toEmit.mockClear();
+      socket._handlers['disconnect']('transport close');
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.TYPING_STOP, expect.anything());
+    });
+
+    it('delegates typing:stop cleanup to handleSocketDisconnecting, passing sibling sockets', () => {
+      const socket = makeSocket('sock-dc1');
+      (manager as any).socketToUser.set('sock-dc1', 'user-dc1');
+      (manager as any).userSockets.set('user-dc1', new Set(['sock-dc1', 'sock-dc2']));
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      expect(mockStatusHandlerInstance.handleSocketDisconnecting).toHaveBeenCalledWith(
+        'sock-dc1',
+        expect.any(Function),
+        expect.any(Set)
+      );
+      const otherSockets = mockStatusHandlerInstance.handleSocketDisconnecting.mock.calls[0][2];
+      expect([...otherSockets]).toEqual(['sock-dc2']);
+    });
+
+    it('omits sibling-socket set when the disconnecting socket is the only one', () => {
+      const socket = makeSocket('sock-dc-solo');
+      (manager as any).socketToUser.set('sock-dc-solo', 'user-dc-solo');
+      (manager as any).userSockets.set('user-dc-solo', new Set(['sock-dc-solo']));
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      expect(mockStatusHandlerInstance.handleSocketDisconnecting.mock.calls[0][2]).toBeUndefined();
+    });
+
+    it('routes the handleSocketDisconnecting broadcast through io.to(room).except(blocked)', () => {
+      const socket = makeSocket('sock-dc3');
+      (manager as any).socketToUser.set('sock-dc3', 'user-dc3');
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      const broadcastFn = mockStatusHandlerInstance.handleSocketDisconnecting.mock.calls[0][1];
+      ioState.to.mockClear();
+      ioState.except.mockClear();
+      ioState.toEmit.mockClear();
+      broadcastFn('conversation:c1', SERVER_EVENTS.TYPING_STOP, { isTyping: false }, ['blocked-sock']);
+      expect(ioState.to).toHaveBeenCalledWith('conversation:c1');
+      expect(ioState.except).toHaveBeenCalledWith(['blocked-sock']);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.TYPING_STOP, { isTyping: false });
+    });
+
+    it('routes the handleSocketDisconnecting broadcast without except when no blocked sockets', () => {
+      const socket = makeSocket('sock-dc4');
+      (manager as any).socketToUser.set('sock-dc4', 'user-dc4');
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      const broadcastFn = mockStatusHandlerInstance.handleSocketDisconnecting.mock.calls[0][1];
+      ioState.to.mockClear();
+      ioState.except.mockClear();
+      ioState.toEmit.mockClear();
+      broadcastFn('conversation:c2', SERVER_EVENTS.TYPING_STOP, { isTyping: false });
+      expect(ioState.to).toHaveBeenCalledWith('conversation:c2');
+      expect(ioState.except).not.toHaveBeenCalled();
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.TYPING_STOP, { isTyping: false });
     });
 
     it('deletes presenceSnapshotCache entry on disconnect', () => {
@@ -1023,6 +1089,17 @@ describe('MeeshySocketIOManager', () => {
         translatedText: 'Bonjour',
         confidenceScore: 0.95,
       });
+      // The membership guard now runs on the cached path too — the requester
+      // must be an active participant of the message's conversation.
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-cached',
+        conversationId: 'conv-mine',
+        content: 'Hello',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-t4' });
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
       await handler({ messageId: 'msg-cached', targetLanguage: 'fr' });
@@ -1033,6 +1110,32 @@ describe('MeeshySocketIOManager', () => {
       }));
     });
 
+    it('does NOT serve a cached translation to a non-participant (IDOR guard)', async () => {
+      const socket = makeSocket('sock-t4b');
+      (manager as any).socketToUser.set('sock-t4b', 'user-t4b');
+      // Cache HIT — before the fix this branch emitted the translated content
+      // with no authorization check at all.
+      (translationService.getTranslation as jest.Mock).mockResolvedValue({
+        translatedText: 'Bonjour',
+        confidenceScore: 0.95,
+      });
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-cached-foreign',
+        conversationId: 'conv-not-mine',
+        content: 'Hello',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      // Requester is not an active participant of conv-not-mine.
+      prisma.participant.findFirst.mockResolvedValue(null);
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: 'msg-cached-foreign', targetLanguage: 'fr' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Access denied' }));
+      expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
+    });
+
     it('increments translations_sent stat when translation found', async () => {
       const socket = makeSocket('sock-t5');
       (manager as any).socketToUser.set('sock-t5', 'user-t5');
@@ -1040,6 +1143,15 @@ describe('MeeshySocketIOManager', () => {
         translatedText: 'Hello',
         confidenceScore: 0.9,
       });
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-stat',
+        conversationId: 'conv-mine',
+        content: 'Bonjour',
+        originalLanguage: 'fr',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-t5' });
       const before = manager.getStats().translations_sent;
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-stat', targetLanguage: 'en' });
@@ -2049,10 +2161,27 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.REACTION_ADDED, expect.anything());
     });
 
+    it('returns early without broadcasting when addReaction reports unchanged (agent already had this emoji)', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
+      const mockReactionSvc = {
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [], unchanged: true }),
+        createUpdateEvent: jest.fn(),
+      };
+      const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
+      ReactionService.mockImplementation(() => mockReactionSvc);
+
+      await manager.handleAgentReaction(baseReaction);
+
+      // Nothing changed — no REACTION_ADDED fan-out, no notification.
+      expect(mockReactionSvc.createUpdateEvent).not.toHaveBeenCalled();
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.REACTION_ADDED, expect.anything());
+      expect(mockNotificationServiceInstance.createReactionNotification).not.toHaveBeenCalled();
+    });
+
     it('emits REACTION_ADDED to conversation room on success', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [], unchanged: false }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -2396,6 +2525,15 @@ describe('MeeshySocketIOManager', () => {
       const oldTime = Date.now() - 70_000;
       (manager as any).socketRateLimits.set(rateLimitKey, Array(10).fill(oldTime));
       (translationService.getTranslation as any).mockResolvedValue({ translatedText: 'Hi', confidenceScore: 0.9 });
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-fresh2',
+        conversationId: 'conv-mine',
+        content: 'Hi there',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-rw1' });
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-fresh2', targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
@@ -2915,6 +3053,16 @@ describe('MeeshySocketIOManager', () => {
     it('emits ERROR "Failed to get translation" when getTranslation throws', async () => {
       const socket = makeSocket('sock-trans-outer-err');
       (manager as any).socketToUser.set('sock-trans-outer-err', 'user-outer-err');
+      // Message + membership resolve so execution reaches getTranslation, which throws.
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-1',
+        conversationId: 'conv-mine',
+        content: 'Hello',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-outer' });
       (translationService.getTranslation as any).mockRejectedValue(new Error('Redis crash'));
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-1', targetLanguage: 'en' });

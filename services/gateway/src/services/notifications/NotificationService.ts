@@ -43,7 +43,10 @@ function formatDuration(ms: number): string {
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  // Bascule le tier sur la valeur ARRONDIE (comme formatCallDataSize) : sinon
+  // p.ex. 1 048 500 o (< 1 Mio) affiche "1024 Ko" au lieu de "1.0 Mo".
+  const ko = Math.round(bytes / 1024);
+  if (ko < 1024) return `${ko} Ko`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
@@ -3727,7 +3730,9 @@ export class NotificationService {
     notificationLogger.info('✅ [SOCKET.IO] this.io configuré avec succès', {
       hasThisIo: !!this.io,
     });
-    // userSocketsMap non utilisé dans V2 (utilise io.to(userId) directement)
+    // userSocketsMap non utilisé dans V2 : les émissions user-scoped ciblent la
+    // room `ROOMS.user(userId)` (`user:${id}`) que chaque socket enregistré
+    // rejoint à l'auth — Socket.IO gère le fan-out multi-device.
   }
 
   setPushNotificationService(pushService: PushNotificationService): void {

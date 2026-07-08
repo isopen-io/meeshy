@@ -1363,6 +1363,26 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(fastify._mockEmit).toHaveBeenCalledWith('reaction:added', expect.any(Object));
     });
 
+    it('returns success but skips the broadcast when addReaction reports unchanged (idempotent re-react)', async () => {
+      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+      // Duplicate add for an emoji the participant already has — a DB no-op.
+      // The route must still report success but must NOT re-broadcast
+      // REACTION_ADDED (nothing changed). Parity with the socket handler.
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [], unchanged: true });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { emoji: '👍' },
+      });
+      const reply = makeReply();
+
+      await getAddReactionHandler(fastify)(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
+      expect(fastify._mockEmit).not.toHaveBeenCalledWith('reaction:added', expect.any(Object));
+    });
+
     it('returns 400 on Invalid emoji format error', async () => {
       prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
       prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
@@ -1957,7 +1977,8 @@ describe('registerMessagesAdvancedRoutes', () => {
         CONV_ID,
         '', // null?.userId ?? '' = ''
         expect.any(String),
-        []
+        [],
+        expect.anything()
       );
     });
 
@@ -1984,7 +2005,8 @@ describe('registerMessagesAdvancedRoutes', () => {
         CONV_ID,
         USER_ID,
         '', // null ?? '' = ''
-        []
+        [],
+        expect.anything()
       );
     });
 
@@ -2011,7 +2033,8 @@ describe('registerMessagesAdvancedRoutes', () => {
         CONV_ID,
         USER_ID,
         'hello',
-        [] // null ?? [] = []
+        [], // null ?? [] = []
+        expect.anything()
       );
     });
 
@@ -2035,7 +2058,8 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockOnMessageDeleted).toHaveBeenCalledWith(
         expect.anything(), CONV_ID, USER_ID, 'hello',
-        ['file'] // '' doesn't start with any prefix → 'file'
+        ['file'], // '' doesn't start with any prefix → 'file'
+        expect.anything()
       );
     });
 
@@ -2062,7 +2086,8 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockOnMessageDeleted).toHaveBeenCalledWith(
         expect.anything(), CONV_ID, USER_ID, 'hello',
-        ['video', 'file']
+        ['video', 'file'],
+        expect.anything()
       );
     });
 

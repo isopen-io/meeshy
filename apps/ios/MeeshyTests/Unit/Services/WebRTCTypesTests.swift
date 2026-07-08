@@ -22,6 +22,27 @@ final class QualityThresholdsHeartbeatTests: XCTestCase {
     }
 }
 
+// MARK: - Pending Answer Action Safety Net vs SDP Offer Timeout Ordering
+
+/// Regression guard: the CXAnswerCallAction safety net (`holdPendingAnswerAction`
+/// in CallManager) MUST fire strictly AFTER `sdpOfferTimeoutSeconds`. If it fired
+/// first, CallKit would be told the call "connected" (starting the Recents
+/// elapsed timer) only for the SDP-offer timeout to fail the call moments
+/// later — Recents would show a call that lasted the gap between the two
+/// timeouts but never actually connected.
+@MainActor
+final class QualityThresholdsPendingAnswerActionSafetyNetTests: XCTestCase {
+
+    func test_pendingAnswerActionSafetyNetSeconds_isStrictlyGreaterThanSdpOfferTimeout() {
+        XCTAssertGreaterThan(
+            QualityThresholds.pendingAnswerActionSafetyNetSeconds,
+            QualityThresholds.sdpOfferTimeoutSeconds,
+            "the safety net must never force-fulfill the answer action before the SDP-offer " +
+            "timeout has a chance to fail the call — otherwise CallKit shows a phantom 'connected' call"
+        )
+    }
+}
+
 // MARK: - Audio Bitrate Tier Constants
 
 /// `adjustBitrate` in WebRTCService drives Opus audio bitrate through three tiers:

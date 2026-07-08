@@ -172,6 +172,14 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       const { reaction, replacedEmojis } = addResult;
 
+      if (addResult.unchanged) {
+        // Idempotent no-op: the participant already had exactly this emoji.
+        // Return the existing reaction (200, not 201 — nothing was created)
+        // without broadcasting or notifying, since nothing changed. Parity
+        // with the socket `reaction:add` handler's unchanged guard.
+        return sendSuccess(reply, reaction, { statusCode: 200 });
+      }
+
       // Récupérer la conversation pour savoir à qui broadcaster
       const message = await prisma.message.findUnique({
         where: { id: messageId },

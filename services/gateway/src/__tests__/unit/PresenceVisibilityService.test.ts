@@ -32,14 +32,12 @@ function makePrefs(over: Partial<PrivacyPreferences> = {}): PrivacyPreferences {
 function makeMocks(opts: {
   blocked?: boolean;
   friend?: boolean;
-  affiliate?: boolean;
   sharesConversation?: boolean;
   prefs?: Partial<PrivacyPreferences>;
 } = {}) {
   const prisma = {
     user: { findFirst: jest.fn<any>().mockResolvedValue(opts.blocked ? { id: 'x' } : null) },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(opts.friend ? { id: 'fr' } : null) },
-    affiliateRelation: { findFirst: jest.fn<any>().mockResolvedValue(opts.affiliate ? { id: 'af' } : null) },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue(opts.sharesConversation ? [{ conversationId: 'c1' }] : []),
       findFirst: jest.fn<any>().mockResolvedValue(opts.sharesConversation ? { id: 'p1' } : null),
@@ -78,10 +76,11 @@ describe('PresenceVisibilityService.resolveForTarget', () => {
     expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
   });
 
-  it('shows presence to an affiliate even without friendship', async () => {
-    const { service } = makeMocks({ friend: false, affiliate: true });
+  it('hides presence for an affiliate relation without an accepted friendship', async () => {
+    const { service, prisma } = makeMocks({ friend: false });
     const v = await service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
-    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(prisma.friendRequest.findFirst).toHaveBeenCalled();
   });
 
   it('hides the timestamp for a friend when showLastSeen is off', async () => {
@@ -136,7 +135,6 @@ describe('PresenceVisibilityService.resolveForTarget', () => {
 
 function makeBatchMocks(state: {
   friendIds?: string[];
-  affiliateIds?: string[];
   blockedTargetIds?: string[];
   viewerBlocks?: string[];
   deactivatedIds?: string[];
@@ -155,9 +153,6 @@ function makeBatchMocks(state: {
     },
     friendRequest: {
       findMany: jest.fn<any>().mockResolvedValue((state.friendIds ?? []).map((id) => ({ senderId: id, receiverId: VIEWER }))),
-    },
-    affiliateRelation: {
-      findMany: jest.fn<any>().mockResolvedValue((state.affiliateIds ?? []).map((id) => ({ affiliateUserId: VIEWER, referredUserId: id }))),
     },
     participant: {
       findMany: jest.fn<any>().mockImplementation(({ where }: any) =>

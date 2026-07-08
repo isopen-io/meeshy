@@ -197,7 +197,7 @@ struct ThemedMessageBubble: View {
         switch content.kind {
         case .system:
             if let callNotice = content.callNotice {
-                BubbleCallNoticeView(notice: callNotice, isDark: isDark, onCallBack: onCallBack)
+                BubbleCallNoticeView(notice: callNotice, accentHex: contactColor, isDark: isDark, onCallBack: onCallBack)
             } else {
                 BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark)
             }

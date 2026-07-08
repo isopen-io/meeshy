@@ -7,6 +7,9 @@
     <string name="tab_feed">Feed</string>
     <string name="tab_activity">Atividade</string>
     <string name="tab_profile">Perfil</string>
+    <string name="menu_new_conversation">Novo</string>
+    <string name="menu_reels">Reels</string>
+    <string name="menu_contacts">Contatos</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Bem-vindo de volta</string>
@@ -23,7 +26,7 @@
     <string name="chat_retry">Tentar novamente</string>
 
     <!-- Conversation list screen -->
-    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_title">Meeshy Chats</string>
     <string name="conversations_logout">Sair</string>
     <string name="conversations_empty">Ainda não há conversas</string>
     <string name="conversations_retry">Tentar novamente</string>

@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.LoginRequest
+import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
@@ -13,7 +14,7 @@ import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import org.junit.Test
 
-private class FakeAuthApi(var meResponse: ApiResponse<MeeshyUser>) : AuthApi {
+private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
     override suspend fun login(body: LoginRequest) = ApiResponse<AuthSession>(success = false)
     override suspend fun register(body: RegisterRequest) = ApiResponse<AuthSession>(success = false)
     override suspend fun refresh(body: RefreshTokenRequest) = ApiResponse<AuthSession>(success = false)
@@ -57,7 +58,7 @@ class SessionRepositoryTest {
 
     @Test
     fun `refresh with a token loads the user from the gateway`() = runTest {
-        val api = FakeAuthApi(ApiResponse(success = true, data = user("u9")))
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
         val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
 
         repo.refresh()
