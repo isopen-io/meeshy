@@ -32,6 +32,7 @@ import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { requestIdPlugin } from './middleware/request-id';
+import { CORS_METHODS } from './config/cors-methods';
 import { conditionalGetOnSend } from './utils/etag';
 import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
@@ -497,7 +498,8 @@ class MeeshyServer {
         logger.warn(`CORS rejected origin: "${origin}"`);
         return cb(new Error('Not allowed by CORS'), false);
       },
-      credentials: true
+      credentials: true,
+      methods: CORS_METHODS
     });
 
     // OpenAPI/Swagger documentation
