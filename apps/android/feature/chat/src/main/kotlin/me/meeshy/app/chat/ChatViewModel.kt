@@ -153,6 +153,14 @@ class ChatViewModel @Inject constructor(
     private var lastPersistedDraft: ConversationDraft? = null
     private var draftPersistJob: Job? = null
 
+    /**
+     * sourceMessageId -> target conversation currently being forwarded to.
+     * Durable across closeForward()/openForward() (unlike ForwardUiState, which
+     * is recreated on open) so a dismiss-and-reopen mid-send can't lose the
+     * in-flight guard and let a second forwardTo() double-send the message.
+     */
+    private val sendingForwards = mutableMapOf<String, String>()
+
     init {
         viewModelScope.launch { markConversationRead() }
 
@@ -623,7 +631,15 @@ class ChatViewModel @Inject constructor(
      * conversation list is already loaded (the collector fills it in live).
      */
     fun openForward(messageId: String) {
-        _state.update { it.copy(actionMessageId = null, forward = ForwardUiState(sourceMessageId = messageId)) }
+        _state.update {
+            it.copy(
+                actionMessageId = null,
+                forward = ForwardUiState(
+                    sourceMessageId = messageId,
+                    sendingConversationId = sendingForwards[messageId],
+                ),
+            )
+        }
         recomputeForwardTargets()
     }
 
@@ -645,14 +661,20 @@ class ChatViewModel @Inject constructor(
      */
     fun forwardTo(targetConversationId: String) {
         val forward = _state.value.forward ?: return
-        if (forward.sendingConversationId != null) return
+        val sourceMessageId = forward.sourceMessageId
+        if (sendingForwards.containsKey(sourceMessageId)) return
         if (targetConversationId in forward.sentConversationIds) return
         val user = sessionRepository.currentUser.value ?: return
         val source = latestMessages
-            .firstOrNull { it.message.id == forward.sourceMessageId && it.sendState == LocalSendState.SYNCED }
+            .firstOrNull { it.message.id == sourceMessageId && it.sendState == LocalSendState.SYNCED }
             ?.message ?: return
+        sendingForwards[sourceMessageId] = targetConversationId
         _state.update { s ->
-            s.forward?.let { s.copy(forward = it.copy(sendingConversationId = targetConversationId)) } ?: s
+            if (s.forward?.sourceMessageId == sourceMessageId) {
+                s.copy(forward = s.forward.copy(sendingConversationId = targetConversationId))
+            } else {
+                s
+            }
         }
         viewModelScope.launch {
             try {
@@ -665,21 +687,30 @@ class ChatViewModel @Inject constructor(
                     forwardedFromConversationId = conversationId,
                 )
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+                sendingForwards.remove(sourceMessageId)
                 _state.update { s ->
-                    s.forward?.let {
+                    if (s.forward?.sourceMessageId == sourceMessageId) {
                         s.copy(
-                            forward = it.copy(
+                            forward = s.forward.copy(
                                 sendingConversationId = null,
-                                sentConversationIds = it.sentConversationIds + targetConversationId,
+                                sentConversationIds = s.forward.sentConversationIds + targetConversationId,
                             ),
                         )
-                    } ?: s
+                    } else {
+                        s
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                sendingForwards.remove(sourceMessageId)
                 _state.update { s ->
-                    s.copy(errorMessage = e.message, forward = s.forward?.copy(sendingConversationId = null))
+                    val forwardUpdate = if (s.forward?.sourceMessageId == sourceMessageId) {
+                        s.forward.copy(sendingConversationId = null)
+                    } else {
+                        s.forward
+                    }
+                    s.copy(errorMessage = e.message, forward = forwardUpdate)
                 }
             }
         }

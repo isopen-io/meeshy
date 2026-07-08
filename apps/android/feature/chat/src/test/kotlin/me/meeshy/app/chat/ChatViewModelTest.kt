@@ -9,6 +9,7 @@ import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -891,6 +892,63 @@ class ChatViewModelTest {
         h.vm.closeForward()
 
         assertThat(h.vm.state.value.forward).isNull()
+    }
+
+    @Test
+    fun forwardTo_completing_after_the_sheet_reopened_on_another_message_does_not_corrupt_that_session() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+            coEvery {
+                h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any())
+            } coAnswers { gate.await(); "cmid_1" }
+            advanceUntilIdle()
+
+            h.vm.openForward("m1")
+            advanceUntilIdle()
+            h.vm.forwardTo("c2")
+            advanceUntilIdle()
+
+            // Sheet dismissed and reopened on a DIFFERENT message before the send resolves.
+            h.vm.closeForward()
+            h.vm.openForward("m2")
+            advanceUntilIdle()
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            val forward = h.vm.state.value.forward!!
+            assertThat(forward.sourceMessageId).isEqualTo("m2")
+            assertThat(forward.sentConversationIds).isEmpty()
+            assertThat(forward.sendingConversationId).isNull()
+        }
+
+    @Test
+    fun forwardTo_reopening_the_same_message_mid_send_does_not_allow_a_duplicate_send() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
+        coEvery {
+            h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers { gate.await(); "cmid_1" }
+        advanceUntilIdle()
+
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+
+        // Sheet dismissed and reopened on the SAME message while the send is still in flight.
+        h.vm.closeForward()
+        h.vm.openForward("m1")
+        advanceUntilIdle()
+
+        h.vm.forwardTo("c2")
+        advanceUntilIdle()
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
