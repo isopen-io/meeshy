@@ -87,11 +87,20 @@ final class UserProfileSheetPresenceTests: XCTestCase {
         XCTAssertEqual(sut.resolvedPresence, .away)
     }
 
-    func test_resolvedPresence_noProvider_onlineButIdle_returnsAway() {
+    func test_resolvedPresence_noProvider_recentlyActive_returnsRecent() {
+        let sut = UserProfileSheet(
+            user: makeUser(isOnline: true, lastActiveAt: Date().addingTimeInterval(-180))
+        )
+        XCTAssertEqual(sut.resolvedPresence, .recent)
+    }
+
+    func test_resolvedPresence_noProvider_onlineButIdleOver30min_returnsOffline() {
+        // La regle temporelle prime : un flag isOnline obsolete ne maintient pas
+        // le dot au-dela de 30min d'inactivite.
         let sut = UserProfileSheet(
             user: makeUser(isOnline: true, lastActiveAt: Date().addingTimeInterval(-2700))
         )
-        XCTAssertEqual(sut.resolvedPresence, .away)
+        XCTAssertEqual(sut.resolvedPresence, .offline)
     }
 
     func test_resolvedPresence_noProvider_offlinePast30min_returnsOffline() {

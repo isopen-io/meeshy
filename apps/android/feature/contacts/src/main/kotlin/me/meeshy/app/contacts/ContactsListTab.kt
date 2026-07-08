@@ -48,9 +48,9 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** Presence dot colours (semantic, kept static per the design system): green online, amber away. */
-private val OnlineIndicator = Color(0xFF34D399)
-private val AwayIndicator = Color(0xFFFBBF24)
+/** Presence dot colours : orange (actif <= 5min), gris (absent 5-30min). */
+private val OnlineIndicator = Color(0xFFFBBF24)
+private val AwayIndicator = Color(0xFF9CA3AF)
 
 /**
  * The Contacts (all-friends) tab — the online-first friend list with a filter
@@ -166,7 +166,7 @@ private fun FriendRow(friend: FriendRequestUser) {
 
 /** The dot colour for a resolved presence, or null when no dot should show (offline). */
 private fun presenceDotColor(state: PresenceState): Color? = when (state) {
-    PresenceState.ONLINE -> OnlineIndicator
+    PresenceState.ONLINE, PresenceState.RECENT -> OnlineIndicator
     PresenceState.AWAY -> AwayIndicator
     PresenceState.OFFLINE -> null
 }

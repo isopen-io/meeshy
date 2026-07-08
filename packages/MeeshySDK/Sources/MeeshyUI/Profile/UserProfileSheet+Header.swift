@@ -192,12 +192,11 @@ extension UserProfileSheet {
         ).state
     }
 
-    /// Couleur du libellé de présence selon l'ancienneté : vert < 5 min,
-    /// orange < 30 min, gris sinon. Miroir de `presenceColorClass` (web).
+    /// Couleur du libellé de présence selon l'ancienneté : orange <= 5 min
+    /// (actif), gris au-delà. Miroir de `presenceColorClass` (web). Pas de vert.
     func presenceColor(for date: Date, now: Date = Date()) -> Color {
         let minutes = now.timeIntervalSince(date) / 60
-        if minutes < 5 { return MeeshyColors.success }
-        if minutes < 30 { return MeeshyColors.warning }
+        if minutes <= 5 { return MeeshyColors.warning }
         return theme.textSecondary
     }
 

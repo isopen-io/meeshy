@@ -1591,6 +1591,8 @@ private struct StoryGroupIntroOverlay: View {
         switch state {
         case .online:
             return String(localized: "story.groupIntro.online", defaultValue: "En ligne")
+        case .recent:
+            return String(localized: "story.groupIntro.recent", defaultValue: "Actif·ve récemment")
         case .away:
             return String(localized: "story.groupIntro.away", defaultValue: "Absent·e")
         case .offline:

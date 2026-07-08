@@ -42,27 +42,30 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_state_whenOnlineRecentActivity_returnsOnline() {
-        let recentDate = Date().addingTimeInterval(-60)
+        // -30s : confortablement dans la fenetre online (<= 60s), robuste aux ms
+        // ecoulees avant que `.state` relise Date() (la borne exacte 60s est
+        // testee de maniere deterministe dans UserPresenceStateTests via state(now:)).
+        let recentDate = Date().addingTimeInterval(-30)
         let presence = AppUserPresence(isOnline: true, lastActiveAt: recentDate)
         XCTAssertEqual(presence.state, PresenceState.online)
     }
 
-    func test_state_whenOnlineActivityUnder300s_returnsOnline() {
-        let borderDate = Date().addingTimeInterval(-299)
+    func test_state_whenActiveWithin5min_returnsRecent() {
+        let borderDate = Date().addingTimeInterval(-240) // 4 min
         let presence = AppUserPresence(isOnline: true, lastActiveAt: borderDate)
-        XCTAssertEqual(presence.state, PresenceState.online)
+        XCTAssertEqual(presence.state, PresenceState.recent)
     }
 
-    func test_state_whenOnlineActivityOver300s_returnsAway() {
-        let staleDate = Date().addingTimeInterval(-301)
+    func test_state_whenInactiveBetween5And30min_returnsAway() {
+        let staleDate = Date().addingTimeInterval(-600) // 10 min
         let presence = AppUserPresence(isOnline: true, lastActiveAt: staleDate)
         XCTAssertEqual(presence.state, PresenceState.away)
     }
 
-    func test_state_whenOnlineActivityLongAgo_returnsAway() {
-        let veryStaleDate = Date().addingTimeInterval(-3600)
+    func test_state_whenInactiveOver30min_returnsOffline() {
+        let veryStaleDate = Date().addingTimeInterval(-3600) // 60 min : plus aucun dot
         let presence = AppUserPresence(isOnline: true, lastActiveAt: veryStaleDate)
-        XCTAssertEqual(presence.state, PresenceState.away)
+        XCTAssertEqual(presence.state, PresenceState.offline)
     }
 
     // MARK: - presenceState(for:)

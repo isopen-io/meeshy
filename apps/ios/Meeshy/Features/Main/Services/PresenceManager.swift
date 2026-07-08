@@ -131,9 +131,10 @@ final class PresenceManager: ObservableObject {
     nonisolated static func isNearStateFlip(_ presence: UserPresence, now: Date = Date()) -> Bool {
         guard let last = presence.lastActiveAt else { return false }
         let elapsed = now.timeIntervalSince(last)
-        return presence.isOnline
-            ? elapsed > 300 && elapsed <= 360
-            : elapsed > 1800 && elapsed <= 1860
+        // Fenetres de bascule (60s online→recent, 300s recent→away, 1800s away→offline).
+        return (elapsed > 60 && elapsed <= 120)
+            || (elapsed > 300 && elapsed <= 360)
+            || (elapsed > 1800 && elapsed <= 1860)
     }
 
     /// Apply a bulk presence snapshot. Used by:
