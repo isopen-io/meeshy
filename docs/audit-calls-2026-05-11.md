@@ -1,6 +1,57 @@
 # Audit 360° — Sous-systeme Appels Audio/Video Meeshy
 
-> **Statut au 2026-07-08** (session `claude/loving-thompson-ccnlsc`, pas d'acces
+> **Statut au 2026-07-08 (2)** (session `claude/loving-thompson-wyzy59`, meme
+> environnement Linux sans Xcode/simulateur ni acces SSH prod) :
+> - **P1-GW-8 (nouveau, corrige)** — `call:end` attendait `postCallSummary()`
+>   (retry interne 3 tentatives, backoff 1s/2s) **avant** son `ack?.({ success:
+>   true })`. Le client iOS (`emitCallEndWithAck`, 3s timeout) traite un ack en
+>   retard comme un echec : il ré-émet `call:end` en fire-and-forget ET arme
+>   `pendingEndReconciliationCallId` pour rejouer l'event à la prochaine
+>   reconnexion — alors que l'appel s'est en réalité terminé proprement côté
+>   serveur. Meme defaut dans `forceEndOrphanedCallAfterOptimisticBroadcast`
+>   (branches d'erreur de `call:end`, avant son propre `ack?.({ success: false
+>   })`). Fix : les deux sites postent desormais le resume ("Appel … · MM:SS")
+>   en fire-and-forget (`.catch()`, meme idiome que `handleMissedCall` juste en
+>   dessous) — `createCallSummaryMessage` est deja idempotent, aucune
+>   dependance d'ordre avec l'ack. Les 4 autres sites d'appel de
+>   `postCallSummary` (ringing-timeout, disconnect-grace, `call:leave`,
+>   `call:force-leave`) ne bloquent aucun ack cote client (evenements
+>   fire-and-forget ou callbacks internes sans socket en attente) — non
+>   touches, portee volontairement minimale. Nouveau test dans
+>   `CallEventsHandler-summary-retry.test.ts` (« acks call:end before
+>   postCallSummary retries resolve ») + suite gateway complete verifiee
+>   (513/513 suites, 13954/13955 tests, 1 skip pre-existant) + `tsc --noEmit`
+>   gateway (0 erreur).
+> - **iOS — identifie, NON corrige (pas d'acces Xcode/simulateur dans cet
+>   environnement)** : `CallManager.failCall()` n'a pas le meme guard
+>   `callState.isActive` que ses paths freres (`endCall()`/`handleRemoteEnd()`).
+>   Plusieurs sites async (`handleRemoteAnswer:2109`, `answerCall:1524`,
+>   `answerCallReady:1591`, `handleSignalOffer:1393`, offer de
+>   participant-joined:3838) n'utilisent que `currentCallId == callId` comme
+>   garde de vivacite — or `currentCallId` reste peuple pendant les 1.5s de la
+>   fenetre de "settle" apres une fin d'appel locale. Repro : l'utilisateur
+>   raccroche pile pendant qu'un SDP answer/offer est in-flight → l'operation
+>   echoue sur la connexion demontee → `failCall()` re-declenche
+>   `endCallInternal` en `.failed`, ecrasant la vraie raison de fin
+>   (`.local`/`.missed`/`.rejected`) dans l'UI, le snapshot UserDefaults ET le
+>   call-history cote gateway (le commentaire in-code le confirme :
+>   "le gateway écrase le dernier snapshot in_progress avec la raison
+>   terminale réelle"). Fix suggere (non applique) : `guard callState.isActive
+>   else { return }` en tete de `failCall()` — ferme les 6 sites d'un coup,
+>   meme style de garde que `endCall()`/`handleRemoteEnd()`. **A traiter dans
+>   une session avec build iOS pour compiler + faire tourner
+>   `./apps/ios/meeshy.sh test` avant tout commit** (regle CLAUDE.md non
+>   négociable, aucune modification Swift ce soir sans verification possible).
+> - **Gateway — identifie, non corrige (hors-scope volontaire cette session)** :
+>   `leaveParticipationAndBroadcast` (disconnect-grace expiry) et
+>   `forceEndOrphanedCallAfterOptimisticBroadcast` n'evacuent jamais les
+>   sockets survivants de `ROOMS.call(callId)` — contrairement au path
+>   `call:end` direct (`CallEventsHandler.ts:2762-2764`) et au GC
+>   (`CallCleanupService.forceEndCall`, deja corrige pour ce meme defaut de
+>   classe). Impact contenu (callId unique par session, pas de fuite d'evenements
+>   vers un appel different — juste une entree de room Socket.IO orpheline pour
+>   la duree de vie du socket). Backlog pour une session dediee.
+> - **Statut au 2026-07-08** (session `claude/loving-thompson-ccnlsc`, pas d'acces
 > Xcode/simulateur ni SSH prod dans cet environnement — memes contraintes que la
 > session precedente) :
 > - **Premier audit approfondi cote WEB** (jusqu'ici les audits se concentraient
