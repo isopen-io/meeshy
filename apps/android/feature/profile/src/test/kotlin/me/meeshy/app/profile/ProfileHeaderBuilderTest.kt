@@ -148,9 +148,13 @@ class ProfileHeaderBuilderTest {
     }
 
     @Test
-    fun `presence is away when online but idle past the window`() {
+    fun `presence is away when disconnected and idle past the window`() {
+        // isOnline=false here (not true): the anti-stale guard makes isOnline
+        // authoritative up to 30min, so a connected user stays ONLINE even with
+        // a 10min-old lastActiveAt (see the test above). The away-decay path
+        // only applies to a disconnected user with a frozen timestamp.
         val stale = java.time.Instant.ofEpochMilli(now - 600_000L).toString()
-        assertThat(ProfileHeaderBuilder.build(user(isOnline = true, lastActiveAt = stale), now).presence)
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = stale), now).presence)
             .isEqualTo(PresenceState.AWAY)
     }
 
