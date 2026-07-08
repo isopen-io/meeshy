@@ -1440,39 +1440,50 @@ private struct ReelImageCell: View {
     }
 }
 
-/// Ambient blurred fill behind a `.fit` carousel image — the media's small
-/// thumbnail (or its thumbHash when there is no thumbnail) scaled to fill,
-/// blurred and slightly dimmed. NEVER loads the full image (`fullUrl: nil`): a
-/// 28pt blur hides the low resolution, and the full image is already fetched by
-/// the `.fit` foreground — loading it twice would double the fullscreen network
-/// + bitmap cost. Falls back to the media's tint colour.
+/// Ambient blurred fill behind a `.fit` carousel image/video — the media's
+/// **thumbHash** decoded locally, scaled to fill, blurred and slightly dimmed.
+/// Falls back to the media's tint colour when no thumbHash exists.
+///
+/// Deliberately renders ONLY the thumbHash (via `UIImage.fromThumbHash`) — it
+/// NEVER loads the thumbnail URL. A sharp thumbnail popping into the blurred
+/// letterbox fill reads as a rendering glitch (user report 2026-07-08 : « le
+/// thumbnail donne l'impression d'un bogue »). This mirrors the story letterbox
+/// backdrop (`storyBlurredBackdrop`), which is thumbHash-only too. The full
+/// image is already fetched by the `.fit` foreground; a 60pt blur over the
+/// upscaled thumbHash hides its low resolution at zero extra network cost.
 private struct ReelImageBackdrop: View, Equatable {
     let media: FeedMedia
 
-    /// Equatable so `.equatable()` memoizes the expensive 28pt blur across the
-    /// parent's 10 Hz playback-time re-renders. The backdrop depends only on the
-    /// media identity + the thumbnail inputs it actually reads, so SwiftUI reuses
-    /// the rasterized blur as long as those are unchanged (the real GPU heat win).
+    /// Decoded lazily inside `body` (≈16×16 → upscaled, < 0.5 ms). Because the
+    /// view is `.equatable()`, `body` — and thus this decode — only runs when the
+    /// media identity / thumbHash actually changes, not on the parent's 10 Hz
+    /// playback-time re-renders (the real GPU/CPU heat win).
+    private var backdropImage: UIImage? {
+        guard let hash = media.thumbHash, !hash.isEmpty else { return nil }
+        return UIImage.fromThumbHash(hash)
+    }
+
     static func == (lhs: ReelImageBackdrop, rhs: ReelImageBackdrop) -> Bool {
         lhs.media.id == rhs.media.id
             && lhs.media.thumbHash == rhs.media.thumbHash
-            && lhs.media.thumbnailUrl == rhs.media.thumbnailUrl
             && lhs.media.thumbnailColor == rhs.media.thumbnailColor
     }
 
     var body: some View {
-        ProgressiveCachedImage(
-            thumbHash: media.thumbHash,
-            thumbnailUrl: media.thumbnailUrl,
-            fullUrl: nil,
-            autoLoad: true
-        ) {
+        ZStack {
             Color(hex: media.thumbnailColor)
+            if let img = backdropImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .interpolation(.low)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .scaleEffect(1.18)
+                    .blur(radius: 60)
+                    .opacity(0.85)
+            }
         }
-        .aspectRatio(contentMode: .fill)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .scaleEffect(1.15)
-        .blur(radius: 28)
         .clipped()
         .overlay(Color.black.opacity(0.22))
     }
