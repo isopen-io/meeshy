@@ -52,6 +52,7 @@ function invalidEmoji() {
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     attachmentReaction: {
+      findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
       findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
       deleteMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 0 }),
       upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
@@ -100,6 +101,53 @@ describe('addAttachmentReaction', () => {
       create: { attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji },
       update: { emoji },
     });
+  });
+
+  it('reports changed=true and upserts when the user has no existing reaction', async () => {
+    const emoji = makeEmoji('👍');
+    const prisma = makePrisma();
+    const svc = new AttachmentReactionService(prisma);
+
+    const result = await svc.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji });
+
+    expect(result).toEqual({ changed: true });
+    expect(prisma.attachmentReaction.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports changed=false and skips the upsert when the user already has exactly this emoji (idempotent no-op)', async () => {
+    const emoji = makeEmoji('👍');
+    const prisma = makePrisma({
+      attachmentReaction: {
+        findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue({ emoji: '👍' }),
+        findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
+        deleteMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 0 }),
+        upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
+      },
+    });
+    const svc = new AttachmentReactionService(prisma);
+
+    const result = await svc.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji });
+
+    expect(result).toEqual({ changed: false });
+    expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+  });
+
+  it('reports changed=true when swapping the user from one emoji to a different one', async () => {
+    const emoji = makeEmoji('❤️');
+    const prisma = makePrisma({
+      attachmentReaction: {
+        findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue({ emoji: '👍' }),
+        findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
+        deleteMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 0 }),
+        upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
+      },
+    });
+    const svc = new AttachmentReactionService(prisma);
+
+    const result = await svc.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji });
+
+    expect(result).toEqual({ changed: true });
+    expect(prisma.attachmentReaction.upsert).toHaveBeenCalledTimes(1);
   });
 
   it('re-adding the same emoji the user already has still goes through the atomic upsert (no delete)', async () => {
@@ -170,6 +218,29 @@ describe('removeAttachmentReaction', () => {
     expect(prisma.attachmentReaction.deleteMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ emoji: '👍' }) })
     );
+  });
+
+  it('returns true when deleteMany removed a row', async () => {
+    makeEmoji('👍');
+    const prisma = makePrisma({
+      attachmentReaction: {
+        findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
+        findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
+        deleteMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 1 }),
+        upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
+      },
+    });
+    const svc = new AttachmentReactionService(prisma);
+
+    expect(await svc.removeAttachmentReaction({ attachmentId: ATTACH_ID, participantId: PARTICIPANT_ID, emoji: '👍' })).toBe(true);
+  });
+
+  it('returns false when nothing matched (reaction already absent — idempotent)', async () => {
+    makeEmoji('👍');
+    const prisma = makePrisma(); // deleteMany default count: 0
+    const svc = new AttachmentReactionService(prisma);
+
+    expect(await svc.removeAttachmentReaction({ attachmentId: ATTACH_ID, participantId: PARTICIPANT_ID, emoji: '👍' })).toBe(false);
   });
 });
 
