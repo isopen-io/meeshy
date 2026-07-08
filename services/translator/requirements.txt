@@ -27,7 +27,7 @@ grpcio==1.76.0
 grpcio-tools==1.76.0
 grpcio-reflection==1.76.0
 protobuf==6.33.6
-pyzmq==26.2.0
+pyzmq==27.1.0
 
 # Machine Learning et NLP
 # Versions gérées par chatterbox-tts pour compatibilité
