@@ -344,6 +344,31 @@ describe('useCallQuality', () => {
       expect(result.current.qualityStats?.level).toBe('poor');
     });
 
+    it('aggregates packet loss across all inbound streams (a lossy audio stream is not masked by a healthy video stream)', async () => {
+      // audio: 20 lost / 80 received (20% loss) ; video: 0 lost / 100 received.
+      // Reassigning per-report kept only the last (video) stream → 0% → 'excellent'.
+      // Aggregated: 20 lost / 200 total = 10% loss → 'poor'.
+      const mockPC = {
+        getStats: jest.fn().mockResolvedValue({
+          forEach: (cb: Function) => {
+            cb({ type: 'inbound-rtp', kind: 'audio', packetsLost: 20, packetsReceived: 80, jitter: 0, bytesReceived: 3000 });
+            cb({ type: 'inbound-rtp', kind: 'video', packetsLost: 0, packetsReceived: 100, jitter: 0, bytesReceived: 10000 });
+            cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.05 });
+            cb({ type: 'outbound-rtp', bytesSent: 2000 });
+          },
+        }),
+      };
+
+      const { result } = renderHook(() =>
+        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+
+      expect(result.current.qualityStats?.packetLoss).toBe(10);
+      expect(result.current.qualityStats?.level).toBe('poor');
+    });
+
     it('uses remote-inbound-rtp roundTripTime as RTT source', async () => {
       // Very high RTT from remote-inbound-rtp → poor
       const mockPC = {
