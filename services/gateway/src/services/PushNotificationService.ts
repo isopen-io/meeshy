@@ -339,15 +339,26 @@ export class PushNotificationService {
       return [];
     }
 
+    // The `ENABLE_VOIP_PUSH` kill switch must gate every path that can reach
+    // a `voip` token, not just a narrow helper — the real incoming-call push
+    // (CallEventsHandler) calls sendToUser({ types: ['voip'] }) directly.
+    // Excluding `voip` here means a disabled kill switch never even queries
+    // voip tokens, rather than querying them and failing the send later.
+    const requestedTypes = types && types.length > 0 ? types : (['apns', 'fcm', 'voip'] as const);
+    const effectiveTypes = config.voipEnabled
+      ? requestedTypes
+      : requestedTypes.filter((type) => type !== 'voip');
+
+    if (effectiveTypes.length === 0) {
+      return [];
+    }
+
     // Build query for user's push tokens
     const whereClause: any = {
       userId,
       isActive: true,
+      type: { in: effectiveTypes },
     };
-
-    if (types && types.length > 0) {
-      whereClause.type = { in: types };
-    }
 
     if (platforms && platforms.length > 0) {
       whereClause.platform = { in: platforms };
@@ -427,50 +438,6 @@ export class PushNotificationService {
     );
 
     return results;
-  }
-
-  /**
-   * Send VoIP push notification for incoming calls
-   */
-  async sendVoIPPush(userId: string, callData: {
-    callId: string;
-    callerName: string;
-    callerAvatar?: string;
-    conversationId?: string;
-    callerUserId?: string;
-    isVideo?: boolean;
-  }): Promise<PushResult[]> {
-    if (!config.voipEnabled) {
-      return [];
-    }
-
-    // Audit P1-14 — include `callerUserId` and `isVideo` in the data
-    // payload. Without these the iOS PKPushRegistry handler defaulted to
-    // `callerUserId = ""` (anonymous CXHandle) and `isVideo = false` for
-    // every call routed through this code path (recovery / fallback path),
-    // causing every call to be reported to CallKit as audio-only with no
-    // identifiable caller.
-    return this.sendToUser({
-      userId,
-      payload: {
-        title: 'Incoming Call',
-        body: `${callData.callerName} is calling...`,
-        callId: callData.callId,
-        callerName: callData.callerName,
-        callerAvatar: callData.callerAvatar,
-        data: {
-          type: 'voip_call',
-          callId: callData.callId,
-          callerName: callData.callerName,
-          callerUserId: callData.callerUserId || '',
-          isVideo: String(callData.isVideo ?? false),
-          conversationId: callData.conversationId || '',
-        },
-      },
-      types: ['voip'],
-      platforms: ['ios'],
-      bypassDnd: true,
-    });
   }
 
   /**

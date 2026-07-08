@@ -4,8 +4,8 @@
  * Tests:
  * - Service initialization with Firebase and APNS providers
  * - Configuration flags (enabled/disabled)
- * - sendToUser method with various token types
- * - sendVoIPPush method for VoIP calls
+ * - sendToUser method with various token types, incl. VoIP calls and the
+ *   ENABLE_VOIP_PUSH kill switch
  * - sendViaFCM method (private, tested via sendToUser)
  * - sendViaAPNS method (private, tested via sendToUser)
  * - handleFailedToken method for invalid tokens
@@ -498,6 +498,40 @@ describe('PushNotificationService', () => {
       expect(result[0].success).toBe(true);
     });
 
+    // Gateway audit finding (2026-07-08): the `ENABLE_VOIP_PUSH` kill switch
+    // was only enforced inside the unused `sendVoIPPush` helper. The real
+    // incoming-call path (CallEventsHandler) calls `sendToUser({types:
+    // ['voip']})` directly, so setting ENABLE_VOIP_PUSH=false never actually
+    // stopped VoIP pushes from going out.
+    it('does not deliver a voip push when ENABLE_VOIP_PUSH=false, even called via sendToUser directly', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        ENABLE_VOIP_PUSH: 'false',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+        APNS_VOIP_BUNDLE_ID: 'me.meeshy.app.voip',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+
+      const result = await service.sendToUser({
+        userId: 'user-123',
+        payload: {
+          title: 'Incoming Call',
+          body: 'John is calling...',
+          callId: 'call-123',
+          callerName: 'John',
+        },
+        types: ['voip'],
+        bypassDnd: true,
+      });
+
+      expect(result).toEqual([]);
+      expect(mockPrisma.pushToken.findMany).not.toHaveBeenCalled();
+      expect(mockApnsProviderSend).not.toHaveBeenCalled();
+    });
+
     // Gateway audit finding (2026-07-08): DND blocked call-management pushes
     // with no exemption, unlike every comparable calling product (FaceTime,
     // WhatsApp, Signal all ring through Do Not Disturb).
@@ -711,6 +745,10 @@ describe('PushNotificationService', () => {
         where: {
           userId: 'user-123',
           isActive: true,
+          // No explicit `types` filter was passed, so all token types are
+          // queried (equivalent to no type filter — apns/fcm/voip are the
+          // only token types that exist).
+          type: { in: ['apns', 'fcm', 'voip'] },
           platform: { in: ['ios', 'android'] },
         },
         select: expect.any(Object),
@@ -1273,81 +1311,42 @@ describe('PushNotificationService', () => {
   // ==============================================
   // SEND VOIP PUSH TESTS
   // ==============================================
+  //
+  // There is no dedicated sendVoIPPush() method — real callers (e.g. the
+  // incoming-call push in CallEventsHandler) send VoIP pushes via
+  // sendToUser({ types: ['voip'], platforms: ['ios'], bypassDnd: true }).
+  // Coverage lives in the `sendToUser` describe block above, including the
+  // ENABLE_VOIP_PUSH kill-switch test.
 
-  describe('sendVoIPPush', () => {
-    it('should return empty array when VoIP push is disabled', async () => {
-      const { PushNotificationService } = await getServiceWithEnv({
-        ENABLE_PUSH_NOTIFICATIONS: 'true',
-        ENABLE_VOIP_PUSH: 'false',
-      });
-      const service = new PushNotificationService(mockPrisma as any);
+  it('only targets iOS VoIP tokens when types/platforms scope to voip', async () => {
+    const { PushNotificationService } = await getServiceWithEnv({
+      ENABLE_PUSH_NOTIFICATIONS: 'true',
+      ENABLE_VOIP_PUSH: 'true',
+      ENABLE_APNS_PUSH: 'true',
+      APNS_KEY_ID: 'test-key-id',
+      APNS_TEAM_ID: 'test-team-id',
+      APNS_KEY_PATH: '/path/to/key.p8',
+    });
+    const service = new PushNotificationService(mockPrisma as any);
 
-      const result = await service.sendVoIPPush('user-123', {
-        callId: 'call-123',
-        callerName: 'John Doe',
-        callerAvatar: 'https://example.com/avatar.png',
-        conversationId: 'conv-456',
-      });
+    mockPrisma.pushToken.findMany.mockResolvedValue([]);
 
-      expect(result).toEqual([]);
+    await service.sendToUser({
+      userId: 'user-123',
+      payload: { title: 'Incoming Call', body: 'John Doe is calling...', callId: 'call-123', callerName: 'John Doe' },
+      types: ['voip'],
+      platforms: ['ios'],
+      bypassDnd: true,
     });
 
-    it('should send VoIP push notification successfully', async () => {
-      mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'voip-token-123' }], failed: [] });
-
-      const { PushNotificationService } = await getServiceWithEnv({
-        ENABLE_PUSH_NOTIFICATIONS: 'true',
-        ENABLE_VOIP_PUSH: 'true',
-        ENABLE_APNS_PUSH: 'true',
-        APNS_KEY_ID: 'test-key-id',
-        APNS_TEAM_ID: 'test-team-id',
-        APNS_KEY_PATH: '/path/to/key.p8',
-      });
-      const service = new PushNotificationService(mockPrisma as any);
-
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'token-1', token: 'voip-token-123', type: 'voip', platform: 'ios', bundleId: null },
-      ]);
-      mockPrisma.pushToken.update.mockResolvedValue({});
-
-      const result = await service.sendVoIPPush('user-123', {
-        callId: 'call-123',
-        callerName: 'John Doe',
-        callerAvatar: 'https://example.com/avatar.png',
-        conversationId: 'conv-456',
-      });
-
-      expect(result).toHaveLength(1);
-      expect(result[0].success).toBe(true);
-    });
-
-    it('should only target iOS VoIP tokens', async () => {
-      const { PushNotificationService } = await getServiceWithEnv({
-        ENABLE_PUSH_NOTIFICATIONS: 'true',
-        ENABLE_VOIP_PUSH: 'true',
-        ENABLE_APNS_PUSH: 'true',
-        APNS_KEY_ID: 'test-key-id',
-        APNS_TEAM_ID: 'test-team-id',
-        APNS_KEY_PATH: '/path/to/key.p8',
-      });
-      const service = new PushNotificationService(mockPrisma as any);
-
-      mockPrisma.pushToken.findMany.mockResolvedValue([]);
-
-      await service.sendVoIPPush('user-123', {
-        callId: 'call-123',
-        callerName: 'John Doe',
-      });
-
-      expect(mockPrisma.pushToken.findMany).toHaveBeenCalledWith({
-        where: {
-          userId: 'user-123',
-          isActive: true,
-          type: { in: ['voip'] },
-          platform: { in: ['ios'] },
-        },
-        select: expect.any(Object),
-      });
+    expect(mockPrisma.pushToken.findMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-123',
+        isActive: true,
+        type: { in: ['voip'] },
+        platform: { in: ['ios'] },
+      },
+      select: expect.any(Object),
     });
   });
 
