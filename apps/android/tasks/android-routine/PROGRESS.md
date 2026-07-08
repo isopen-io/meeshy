@@ -4,6 +4,36 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-08 the **who-reacted breakdown sheet** landed (slice `chat-reaction-who-reacted-sheet`, Chat parity §C —
+> feature-parity.md "reaction detail breakdown (who-reacted sheet)"). Reactions were add/remove-only; long-pressing a
+> reaction chip did nothing. iOS opens a sheet listing who reacted, grouped by emoji. New pure `:feature:chat`
+> `ReactionBreakdown.of(response: ReactionSyncResponse, currentUserId) → ReactionBreakdown(tabs)` SSOT: each non-blank
+> emoji group with an effective count > 0 becomes a `ReactionTab.Emoji(emoji, count, reactors)` — count is the server
+> `count` when positive else the reactor size (so a truncated-reactor group keeps an honest total with an empty list
+> rather than lying); tabs sort by count **descending**, ties preserving original group order (Kotlin `sortedByDescending`
+> is stable). Within each tab the current user floats to the top (once per emoji) and is flagged `isSelf`; the rest keep
+> incoming order; duplicate reactor ids within a group collapse to the first; `username` trimmed→`userId` fallback,
+> `avatar` blank→null. A leading `ReactionTab.All(sumCount, reactorsConcatenatedInTabOrder-selfFirst)` appears **only
+> when ≥2 emoji tabs** (redundant for a single emoji). A blank `currentUserId` flags nobody. `ReactionDetailsUiState`
+> (messageId, isLoading, breakdown, selectedTabIndex) carries a `withSelectedTab(index)` that is **inert out of range**
+> and a derived `selectedTab`. Wired cache-first: `ChatViewModel.openReactionDetails` shows the sheet **immediately**
+> (empty + loading) then fills from `reactionRepository.fetchDetails` (also refreshing `ownReactions`); a **failed fetch
+> leaves an empty, non-loading sheet** (never a crash); a stale response for a since-changed target is ignored.
+> `selectReactionTab`/`closeReactionDetails` complete the UDF. `MessageBubble` gains an `onReactionLongPress`
+> (`combinedClickable` on each chip); `ChatScreen` renders a `ModalBottomSheet` — accent-tinted tab pills (LazyRow) +
+> a reactor `LazyColumn` (`MeeshyAvatar` + name/"Vous" + emoji), a spinner only while loading-empty, an empty label
+> otherwise. EN/FR/ES/PT strings. +24 tests (`ReactionBreakdownTest` 19 — empty/blank-emoji/no-reactors-drop, single-tab
+> no-All, blank-username→id, trim, self-flag, blank-currentUser, self-float-order, count-desc order, stable ties, All
+> summed count + concatenation order + self-float-across-tabs, count-fallback-to-size, positive-count-empty-list,
+> dup-collapse, avatar carry, blank-avatar→null; `ChatViewModelTest` +5 — immediate-loading, fetch-fills+self-float,
+> failed-fetch-empty, tab-select+out-of-range-inert, close-clears). `assembleDebug` + `:feature:chat`/`:sdk-ui`
+> `testDebugUnitTest` green (system Gradle 8.14.3; a **pre-existing** `:sdk-core` `InterfaceLanguageStoreTest` DataStore
+> timeout flakes under parallel load — passes in isolation, outside this apps/android-chat/sdk-ui diff). Reviewer: PASS
+> (diff apps/android only; behaviour-through-public-API `ReactionBreakdown.of`, no tautologies, boundary coverage on
+> the count fallback / stable ties / self-float / out-of-range select; SDK-purity honoured — the "how to group / order /
+> whom to float" product decision is a pure atom in `:feature:chat`, the sheet is exempt Compose glue; UDF immutable
+> state; accent-coherent; natural long-press gesture; no dead end — the chip now opens the sheet).
+
 > On 2026-07-07 the **header typing-avatar chips** landed (slice `chat-typing-header-avatars`, Chat parity §C —
 > feature-parity.md "Typing indicators … avatar chips"). The header showed only a "X is typing…" label; iOS shows
 > overlapping avatars of who is composing. New pure `:feature:chat` `TypingAvatarStack.of(participants,
@@ -662,7 +692,25 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-08): `conversations-section-model`** — the conversation-list pinned/others
+**⏳ AWAITING MERGE (2026-07-08): `chat-reaction-who-reacted-sheet` — PR [#1663](https://github.com/isopen-io/meeshy/pull/1663) OPEN.**
+Code-complete, `apps/android`-only diff, local `assembleDebug`+`testDebugUnitTest` green, reviewer PASS.
+CI: **12 of 14 checks green** (Security, Quality-bun, Prisma, shared/web/gateway/agent tests, all voice/audio
+jobs); only `Build (bun)` and `Test Python (translator)` — both unrelated to the android diff — were still
+in-flight when the **GitHub MCP token expired mid-poll** (non-interactive session can't re-auth). **NEXT RUN
+STEP 0: re-check PR #1663 CI, and squash-merge it to `main` before starting a new slice** (per the routine's
+"merge the open PR first" rule). Nothing is blocked on the code — only on GitHub re-authorization.
+
+**Just shipped (2026-07-08): `chat-reaction-who-reacted-sheet`** — long-press a reaction chip →
+who-reacted bottom sheet, driven by the pure `:feature:chat` `ReactionBreakdown.of()` SSOT (emoji
+tabs by count desc, leading "All" tab when ≥2 emojis, self floated + flagged "Vous", honest counts,
+inert out-of-range tab select). Cache-first sheet (loads → fills from `fetchDetails`, empty on failure).
++24 tests. See run log. **Recommended next (highest value, Chat §C):**
+- **`chat-message-pin`** / §C "Pin/unpin message; starred/bookmarked messages list" — pure pin-rule +
+  optimistic toggle + a pinned-messages strip (larger, rich pure core).
+- **`chat-reply-count-pills`** / §C "Reply-count pills + reply thread overlay" — pure thread-grouping SSOT.
+- **`chat-forward-message`** / §C forward (the remaining half of send/edit/delete/reply/forward).
+
+**Earlier — `conversations-section-model`** — the conversation-list pinned/others
 section split, previously scattered `filter { isPinned }` / `filterNot` glue inside
 `ConversationListScreen`, is now the pure `:feature:conversations` `ConversationSections.of()` SSOT
 (`ConversationSection(kind: PINNED|ALL, items)` — Pinned first, then All, each preserving the incoming

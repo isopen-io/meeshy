@@ -73,6 +73,7 @@ data class ChatUiState(
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
+    val reactionDetails: ReactionDetailsUiState? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -453,6 +454,49 @@ class ChatViewModel @Inject constructor(
 
     fun openImageViewer(messageId: String, imageIndex: Int) {
         _state.update { it.copy(imageViewer = ImageViewerTarget(messageId, imageIndex)) }
+    }
+
+    /**
+     * Open the who-reacted sheet for [messageId]. Shows immediately (cache-first:
+     * the sheet appears with an empty, loading breakdown) then fills in the
+     * reactor list from a fresh detail fetch. A failed fetch leaves the sheet
+     * on an empty (non-loading) breakdown rather than crashing. Reuses the
+     * fetch to refresh `ownReactions` too. See [ReactionBreakdown].
+     */
+    fun openReactionDetails(messageId: String) {
+        _state.update {
+            it.copy(
+                reactionDetails = ReactionDetailsUiState(
+                    messageId = messageId,
+                    isLoading = true,
+                    breakdown = ReactionBreakdown(emptyList()),
+                ),
+            )
+        }
+        viewModelScope.launch {
+            val details = reactionRepository.fetchDetails(messageId).getOrNull()
+            if (details != null) {
+                ownReactions.update { it + (messageId to details.userReactions.toSet()) }
+            }
+            val currentUserId = sessionRepository.currentUser.value?.id.orEmpty()
+            val breakdown = details?.let { ReactionBreakdown.of(it, currentUserId) }
+                ?: ReactionBreakdown(emptyList())
+            _state.update { state ->
+                val open = state.reactionDetails
+                if (open == null || open.messageId != messageId) return@update state
+                state.copy(reactionDetails = open.copy(isLoading = false, breakdown = breakdown))
+            }
+        }
+    }
+
+    /** Select a tab in the open who-reacted sheet; an out-of-range index is inert. */
+    fun selectReactionTab(index: Int) {
+        _state.update { it.copy(reactionDetails = it.reactionDetails?.withSelectedTab(index)) }
+    }
+
+    /** Dismiss the who-reacted sheet. */
+    fun closeReactionDetails() {
+        _state.update { it.copy(reactionDetails = null) }
     }
 
     /**

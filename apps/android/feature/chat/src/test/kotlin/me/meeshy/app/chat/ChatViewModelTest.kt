@@ -38,7 +38,9 @@ import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ReactionGroup
 import me.meeshy.sdk.model.ReactionSyncResponse
+import me.meeshy.sdk.model.ReactionUserDetail
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
@@ -1478,5 +1480,106 @@ class ChatViewModelTest {
         vm.onScrollHandled()
 
         assertThat(vm.state.value.scrollToMessageId).isNull()
+    }
+
+    @Test
+    fun opening_reaction_details_shows_the_sheet_immediately_while_the_fetch_is_in_flight() =
+        runTest(dispatcher) {
+            val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+            advanceUntilIdle()
+
+            h.vm.openReactionDetails("m1")
+
+            // Synchronous state update precedes the launched fetch: sheet is up, loading.
+            val details = h.vm.state.value.reactionDetails
+            assertThat(details).isNotNull()
+            assertThat(details!!.messageId).isEqualTo("m1")
+            assertThat(details.isLoading).isTrue()
+            assertThat(details.breakdown.isEmpty).isTrue()
+        }
+
+    @Test
+    fun opening_reaction_details_fills_the_breakdown_from_the_fetch_and_flags_self() =
+        runTest(dispatcher) {
+            val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+            coEvery { h.reactions.fetchDetails("m1") } returns NetworkResult.Success(
+                ReactionSyncResponse(
+                    messageId = "m1",
+                    reactions = listOf(
+                        ReactionGroup(
+                            emoji = "👍",
+                            count = 2,
+                            users = listOf(
+                                ReactionUserDetail(userId = "a", username = "Alice"),
+                                ReactionUserDetail(userId = "me", username = "atabeth"),
+                            ),
+                        ),
+                    ),
+                    userReactions = listOf("👍"),
+                ),
+            )
+            advanceUntilIdle()
+
+            h.vm.openReactionDetails("m1")
+            advanceUntilIdle()
+
+            val details = h.vm.state.value.reactionDetails!!
+            assertThat(details.isLoading).isFalse()
+            val tab = details.breakdown.tabs.single()
+            assertThat(tab.count).isEqualTo(2)
+            // Self floats to the top.
+            assertThat(tab.reactors.first().isSelf).isTrue()
+            assertThat(tab.reactors.first().userId).isEqualTo("me")
+        }
+
+    @Test
+    fun a_failed_reaction_detail_fetch_leaves_an_empty_non_loading_sheet() =
+        runTest(dispatcher) {
+            val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+            // Harness default: fetchDetails fails.
+            advanceUntilIdle()
+
+            h.vm.openReactionDetails("m1")
+            advanceUntilIdle()
+
+            val details = h.vm.state.value.reactionDetails!!
+            assertThat(details.isLoading).isFalse()
+            assertThat(details.breakdown.isEmpty).isTrue()
+        }
+
+    @Test
+    fun selecting_a_tab_updates_the_selection_and_out_of_range_is_inert() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        coEvery { h.reactions.fetchDetails("m1") } returns NetworkResult.Success(
+            ReactionSyncResponse(
+                messageId = "m1",
+                reactions = listOf(
+                    ReactionGroup(emoji = "👍", count = 1, users = listOf(ReactionUserDetail("a", "Alice"))),
+                    ReactionGroup(emoji = "❤️", count = 1, users = listOf(ReactionUserDetail("b", "Bob"))),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        h.vm.openReactionDetails("m1")
+        advanceUntilIdle()
+
+        h.vm.selectReactionTab(1)
+        assertThat(h.vm.state.value.reactionDetails!!.selectedTabIndex).isEqualTo(1)
+
+        h.vm.selectReactionTab(99)
+        assertThat(h.vm.state.value.reactionDetails!!.selectedTabIndex).isEqualTo(1)
+    }
+
+    @Test
+    fun closing_reaction_details_clears_the_sheet() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReactionDetails("m1")
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.reactionDetails).isNotNull()
+
+        h.vm.closeReactionDetails()
+
+        assertThat(h.vm.state.value.reactionDetails).isNull()
     }
 }
