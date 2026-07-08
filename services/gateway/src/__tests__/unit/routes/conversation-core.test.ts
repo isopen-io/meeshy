@@ -110,6 +110,14 @@ jest.mock('../../../services/MessageReadStatusService', () => ({
   })),
 }));
 
+const mockResolvePrefsOnly = jest.fn<any>();
+
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+  }),
+}));
+
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   conversationListResponseSchema: { type: 'object' },
   conversationResponseSchema: { type: 'object' },
@@ -290,6 +298,7 @@ describe('registerCoreRoutes', () => {
     mockResolveConversationId.mockResolvedValue(CONV_ID);
     mockCanAccessConversation.mockResolvedValue(true);
     mockIsBlockedBetween.mockResolvedValue(false);
+    mockResolvePrefsOnly.mockResolvedValue(new Map());
     mockSendWithETag.mockReturnValue(false);
     mockBuildCursorPaginationMeta.mockReturnValue({ nextCursor: null, hasMore: false });
     mockEnsureUniqueConversationIdentifier.mockResolvedValue('mshy_unique');
@@ -654,6 +663,107 @@ describe('registerCoreRoutes', () => {
       expect(body.data[0].participants[0].isOnline).toBe(true);
     });
 
+    it('masks participant presence when showOnlineStatus is hidden, even if live-online', async () => {
+      fastify.presenceChecker = { isOnline: jest.fn().mockReturnValue(true) };
+      mockResolvePrefsOnly.mockResolvedValue(new Map([
+        [USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
+      ]));
+      const conv = makeConversation();
+      conv.participants[0].lastActiveAt = new Date();
+      conv.participants[0].user.lastActiveAt = new Date();
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const participant = reply._body.data[0].participants[0];
+      expect(participant.isOnline).toBe(false);
+      expect(participant.lastActiveAt).toBeNull();
+      expect(participant.user.isOnline).toBe(false);
+      expect(participant.user.lastActiveAt).toBeNull();
+    });
+
+    it('masks only lastActiveAt when showLastSeen is hidden but showOnlineStatus is visible', async () => {
+      mockResolvePrefsOnly.mockResolvedValue(new Map([
+        [USER_ID, { showOnline: true, showLastSeenTimestamp: false }],
+      ]));
+      const conv = makeConversation();
+      conv.participants[0].lastActiveAt = new Date();
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const participant = reply._body.data[0].participants[0];
+      expect(participant.isOnline).toBe(true);
+      expect(participant.lastActiveAt).toBeNull();
+    });
+
+    const makeSentLastMessage = () => ({
+      id: 'msg-presence',
+      content: 'yo',
+      createdAt: new Date(),
+      senderId: 'participant-2',
+      messageType: 'text',
+      isBlurred: false,
+      isViewOnce: false,
+      effectFlags: 0,
+      expiresAt: null,
+      sender: {
+        id: 'participant-2',
+        userId: OTHER_USER_ID,
+        displayName: 'Bob',
+        avatar: null,
+        type: 'user',
+        user: {
+          id: OTHER_USER_ID,
+          username: 'bob',
+          displayName: 'Bob',
+          avatar: null,
+          isOnline: true,
+          lastActiveAt: new Date(),
+        },
+      },
+      attachments: [],
+      _count: { attachments: 0 },
+    });
+
+    it('masks lastMessage sender presence when showOnlineStatus is hidden', async () => {
+      mockResolvePrefsOnly.mockResolvedValue(new Map([
+        [OTHER_USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
+      ]));
+      const conv = makeConversation({ messages: [makeSentLastMessage()] });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const sender = reply._body.data[0].lastMessage.sender;
+      expect(sender.isOnline).toBe(false);
+      expect(sender.lastActiveAt).toBeNull();
+    });
+
+    it('applies live presence to lastMessage sender when visible', async () => {
+      fastify.presenceChecker = { isOnline: jest.fn().mockReturnValue(false) };
+      const conv = makeConversation({ messages: [makeSentLastMessage()] });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const sender = reply._body.data[0].lastMessage.sender;
+      expect(fastify.presenceChecker.isOnline).toHaveBeenCalledWith(OTHER_USER_ID);
+      expect(sender.isOnline).toBe(false);
+    });
+
     it('sets hasMore correctly when totalCount > 0 and includeCount=true', async () => {
       const convs = Array.from({ length: 30 }, (_, i) => makeConversation({ id: `conv-${i}` }));
       prisma.conversation.findMany.mockResolvedValue(convs);
@@ -772,6 +882,59 @@ describe('registerCoreRoutes', () => {
         reply,
         expect.objectContaining({ id: CONV_ID, unreadCount: expect.any(Number) })
       );
+    });
+
+    const makeDetailParticipant = (overrides: any = {}) => ({
+      id: PARTICIPANT_ID,
+      userId: OTHER_USER_ID,
+      type: 'user',
+      displayName: 'Bob',
+      avatar: null,
+      role: 'member',
+      permissions: null,
+      isActive: true,
+      isOnline: false,
+      lastActiveAt: new Date(),
+      joinedAt: new Date(),
+      user: { id: OTHER_USER_ID, username: 'bob', displayName: 'Bob', firstName: 'Bob', lastName: 'Jones' },
+      ...overrides,
+    });
+
+    it('overrides participant isOnline from presenceChecker on detail', async () => {
+      fastify.presenceChecker = { isOnline: jest.fn().mockReturnValue(true) };
+      prisma.conversation.findFirst.mockResolvedValue(
+        makeFullConversation({ participants: [makeDetailParticipant()] })
+      );
+      prisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
+
+      const req = makeRequest({ params: { id: CONV_ID } });
+      const reply = makeReply();
+
+      await getDetailHandler(fastify)(req, reply);
+
+      expect(fastify.presenceChecker.isOnline).toHaveBeenCalledWith(OTHER_USER_ID);
+      const sent = mockSendSuccess.mock.calls[0][1];
+      expect(sent.participants[0].isOnline).toBe(true);
+    });
+
+    it('masks participant presence on detail when showOnlineStatus is hidden', async () => {
+      fastify.presenceChecker = { isOnline: jest.fn().mockReturnValue(true) };
+      mockResolvePrefsOnly.mockResolvedValue(new Map([
+        [OTHER_USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
+      ]));
+      prisma.conversation.findFirst.mockResolvedValue(
+        makeFullConversation({ participants: [makeDetailParticipant({ isOnline: true })] })
+      );
+      prisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
+
+      const req = makeRequest({ params: { id: CONV_ID } });
+      const reply = makeReply();
+
+      await getDetailHandler(fastify)(req, reply);
+
+      const sent = mockSendSuccess.mock.calls[0][1];
+      expect(sent.participants[0].isOnline).toBe(false);
+      expect(sent.participants[0].lastActiveAt).toBeNull();
     });
 
     it('unreadCount silently fails when participant not found', async () => {

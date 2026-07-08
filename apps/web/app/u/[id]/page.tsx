@@ -63,9 +63,15 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 
   // Hook pour écouter les changements de statut en temps réel
   const { } = useSocketIOMessaging({
-    onUserStatus: (statusUserId: string, username: string, isOnline: boolean) => {
+    onUserStatus: (statusUserId: string, username: string, isOnline: boolean, lastActiveAt?: Date | null) => {
       if (statusUserId === userId) {
-        setUser(prevUser => prevUser ? { ...prevUser, isOnline } : null);
+        setUser(prevUser => prevUser
+          ? {
+              ...prevUser,
+              isOnline,
+              lastActiveAt: lastActiveAt ?? (isOnline ? new Date() : prevUser.lastActiveAt),
+            }
+          : null);
       }
     }
   });

@@ -511,6 +511,17 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(scrollToMessageId = target) }
     }
 
+    /**
+     * The reply-count pill on message [messageId] was tapped: scroll to the first
+     * reply in its thread. A message with no replies has no thread and is inert.
+     * See [ReplyThreads].
+     */
+    fun onReplyCountTap(messageId: String) {
+        val links = _state.value.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) }
+        val thread = ReplyThreads.of(links).threadFor(messageId) ?: return
+        _state.update { it.copy(scrollToMessageId = thread.firstReplyId) }
+    }
+
     /** The pending reply-jump scroll has been performed by the screen. */
     fun onScrollHandled() {
         _state.update { it.copy(scrollToMessageId = null) }

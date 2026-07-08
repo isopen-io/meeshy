@@ -2,19 +2,6 @@ import Foundation
 import Combine
 import MeeshySDK
 
-// MARK: - User Presence
-
-struct UserPresence: Codable {
-    let isOnline: Bool
-    let lastActiveAt: Date?
-
-    var state: PresenceState {
-        guard isOnline else { return .offline }
-        guard let last = lastActiveAt else { return .online }
-        return Date().timeIntervalSince(last) > 300 ? .away : .online
-    }
-}
-
 // MARK: - Presence Manager
 
 @MainActor
@@ -91,15 +78,12 @@ final class PresenceManager: ObservableObject {
         }
 
         // Recalculate every 60s — déclenche un re-render seulement si un utilisateur
-        // passe de online → away dans cette fenêtre (lastActiveAt entre 300 et 360s)
+        // traverse une frontière d'état dans cette fenêtre : online → away à 300s
+        // d'inactivité, ou away → offline à 1800s après déconnexion
         recalcTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                let hasTransition = self.presenceMap.values.contains { presence in
-                    guard presence.isOnline, let last = presence.lastActiveAt else { return false }
-                    let elapsed = Date().timeIntervalSince(last)
-                    return elapsed > 300 && elapsed <= 360
-                }
+                let hasTransition = self.presenceMap.values.contains { Self.isNearStateFlip($0) }
                 if hasTransition {
                     self.objectWillChange.send()
                 }
@@ -134,6 +118,22 @@ final class PresenceManager: ObservableObject {
     /// les profils hors du périmètre suivi (contacts jamais croisés).
     func knownPresenceState(for userId: String) -> PresenceState? {
         presenceMap[userId]?.state
+    }
+
+    /// Pastille tri-state pour les listes : présence temps réel du manager si
+    /// l'utilisateur est suivi, sinon calcul depuis le snapshot REST
+    /// (`isOnline` + `lastActiveAt`) du modèle de la row.
+    func resolvedState(userId: String?, isOnline: Bool?, lastActiveAt: Date? = nil) -> PresenceState {
+        if let userId, let live = knownPresenceState(for: userId) { return live }
+        return UserPresence(isOnline: isOnline ?? false, lastActiveAt: lastActiveAt).state
+    }
+
+    nonisolated static func isNearStateFlip(_ presence: UserPresence, now: Date = Date()) -> Bool {
+        guard let last = presence.lastActiveAt else { return false }
+        let elapsed = now.timeIntervalSince(last)
+        return presence.isOnline
+            ? elapsed > 300 && elapsed <= 360
+            : elapsed > 1800 && elapsed <= 1860
     }
 
     /// Apply a bulk presence snapshot. Used by:

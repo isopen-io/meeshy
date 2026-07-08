@@ -9,6 +9,7 @@ import { User, SUPPORTED_LANGUAGES } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
+import { UserPresenceBadge } from '@/components/presence/UserPresenceBadge';
 
 interface UserSelectorProps {
   users: User[];
@@ -18,6 +19,7 @@ interface UserSelectorProps {
 
 export function UserSelector({ users, onUserSelect, isLoading = false }: UserSelectorProps) {
   const { t } = useI18n('conversations');
+  const { t: tStatus } = useI18n('contacts');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const getLanguageFlag = (languageCode: string): string => {
@@ -92,15 +94,11 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
                 </div>
                 <CardTitle className="text-lg">{user.username}</CardTitle>
                 <CardDescription>
-                  {user.isOnline ? (
-                    <Badge variant="default" className="bg-green-500">
-                      {t('userSelector.online')}
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary">
-                      {t('userSelector.offline')}
-                    </Badge>
-                  )}
+                  <UserPresenceBadge
+                    userId={user.id}
+                    fallbackUser={user}
+                    t={(key) => tStatus(key)}
+                  />
                 </CardDescription>
               </CardHeader>
               

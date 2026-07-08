@@ -5,8 +5,7 @@ import MeeshySDK
 @MainActor
 final class PresenceManagerTests: XCTestCase {
 
-    // Use typealias to disambiguate the app's UserPresence from the SDK's
-    private typealias AppUserPresence = Meeshy.UserPresence
+    private typealias AppUserPresence = UserPresence
 
     private var sut: PresenceManager!
 
@@ -27,8 +26,13 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(presence.state, PresenceState.offline)
     }
 
-    func test_state_whenOfflineWithLastActiveAt_returnsOffline() {
-        let presence = AppUserPresence(isOnline: false, lastActiveAt: Date())
+    func test_state_whenOfflineRecentActivity_returnsAway() {
+        let presence = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-600))
+        XCTAssertEqual(presence.state, PresenceState.away)
+    }
+
+    func test_state_whenOfflineInactiveOver30min_returnsOffline() {
+        let presence = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-1860))
         XCTAssertEqual(presence.state, PresenceState.offline)
     }
 
@@ -85,6 +89,74 @@ final class PresenceManagerTests: XCTestCase {
         sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: staleDate)
         let state = sut.presenceState(for: "user-1")
         XCTAssertEqual(state, PresenceState.away)
+    }
+
+    // MARK: - resolvedState(userId:isOnline:lastActiveAt:)
+
+    func test_resolvedState_knownUser_liveMapWins() {
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        let state = sut.resolvedState(userId: "user-1", isOnline: false, lastActiveAt: nil)
+        XCTAssertEqual(state, PresenceState.online)
+    }
+
+    func test_resolvedState_unknownUserOnline_returnsOnline() {
+        let state = sut.resolvedState(userId: "unknown", isOnline: true, lastActiveAt: nil)
+        XCTAssertEqual(state, PresenceState.online)
+    }
+
+    func test_resolvedState_unknownUserOnlineInactive_returnsAway() {
+        let state = sut.resolvedState(userId: "unknown", isOnline: true, lastActiveAt: Date().addingTimeInterval(-600))
+        XCTAssertEqual(state, PresenceState.away)
+    }
+
+    func test_resolvedState_unknownUserOfflineRecent_returnsAway() {
+        let state = sut.resolvedState(userId: "unknown", isOnline: false, lastActiveAt: Date().addingTimeInterval(-600))
+        XCTAssertEqual(state, PresenceState.away)
+    }
+
+    func test_resolvedState_unknownUserOfflineStale_returnsOffline() {
+        let state = sut.resolvedState(userId: "unknown", isOnline: false, lastActiveAt: Date().addingTimeInterval(-1860))
+        XCTAssertEqual(state, PresenceState.offline)
+    }
+
+    func test_resolvedState_nilUserIdNilIsOnline_returnsOffline() {
+        let state = sut.resolvedState(userId: nil, isOnline: nil, lastActiveAt: nil)
+        XCTAssertEqual(state, PresenceState.offline)
+    }
+
+    // MARK: - isNearStateFlip(_:now:)
+
+    func test_isNearStateFlip_onlineInsideAwayWindow_returnsTrue() {
+        let now = Date()
+        let presence = AppUserPresence(isOnline: true, lastActiveAt: now.addingTimeInterval(-330))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(presence, now: now))
+    }
+
+    func test_isNearStateFlip_onlineOutsideAwayWindow_returnsFalse() {
+        let now = Date()
+        XCTAssertFalse(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: true, lastActiveAt: now.addingTimeInterval(-200)), now: now))
+        XCTAssertFalse(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: true, lastActiveAt: now.addingTimeInterval(-400)), now: now))
+    }
+
+    func test_isNearStateFlip_offlineInsideOfflineWindow_returnsTrue() {
+        let now = Date()
+        let presence = AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-1830))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(presence, now: now))
+    }
+
+    func test_isNearStateFlip_offlineOutsideOfflineWindow_returnsFalse() {
+        let now = Date()
+        XCTAssertFalse(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-1700)), now: now))
+        XCTAssertFalse(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-1900)), now: now))
+    }
+
+    func test_isNearStateFlip_noLastActiveAt_returnsFalse() {
+        XCTAssertFalse(PresenceManager.isNearStateFlip(AppUserPresence(isOnline: true, lastActiveAt: nil)))
+        XCTAssertFalse(PresenceManager.isNearStateFlip(AppUserPresence(isOnline: false, lastActiveAt: nil)))
     }
 
     // MARK: - seed(from:currentUserId:)

@@ -10,6 +10,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { SearchQuery } from './types';
 import { sendSuccess, sendInternalError } from '../../utils/response';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
@@ -157,6 +158,14 @@ export function registerSearchRoutes(
         ? await readStatusService.getUnreadCountsForUser(userId, conversationIds)
         : new Map<string, number>();
 
+      // Présence des expéditeurs de lastMessage : gate showOnlineStatus —
+      // même règle que GET /conversations (cf. core.ts).
+      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        conversations
+          .map((conversation) => (conversation.messages[0]?.sender as any)?.userId)
+          .filter((uid: string | null | undefined): uid is string => !!uid)
+      );
+
       // Transformer les conversations pour un payload léger (search)
       const results = conversations.map((conversation) => {
         const displayTitle = (conversation as any).type === 'direct'
@@ -195,7 +204,9 @@ export function registerSearchRoutes(
             username: sender.user?.username ?? null,
             displayName: sender.displayName ?? sender.user?.displayName ?? null,
             avatar: resolveParticipantAvatar(sender),
-            isOnline: sender.user?.isOnline ?? false,
+            isOnline: senderPresenceVis.get(sender.userId ?? '')?.showOnline === false
+              ? false
+              : (sender.user?.isOnline ?? false),
           } : null,
           attachments: msg.attachments || [],
           _count: (msg as any)._count,

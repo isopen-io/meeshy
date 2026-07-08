@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { getInitials } from '@/utils/initials';
+import { useLiveUserStatus } from '@/hooks/use-live-user-status';
 import { useContactsV2, useFriendRequestsV2, useBlockedUsersV2 } from '@/hooks/v2';
 import type { ContactV2 } from '@/hooks/v2/use-contacts-v2';
 import { useUser } from '@/stores';
@@ -72,16 +73,24 @@ function RowShell({
   name,
   username,
   meta,
+  userId,
   isOnline,
+  lastActiveAt,
   actions,
 }: {
   avatar?: string | null;
   name: string;
   username?: string;
   meta?: string;
+  userId?: string;
   isOnline?: boolean;
+  lastActiveAt?: Date | string | null;
   actions?: React.ReactNode;
 }) {
+  const status = useLiveUserStatus(
+    userId,
+    typeof isOnline === 'boolean' ? { isOnline, lastActiveAt } : null
+  );
   return (
     <li className="flex items-center gap-4 p-4">
       <div className="relative flex-shrink-0">
@@ -91,7 +100,7 @@ function RowShell({
         </Avatar>
         {typeof isOnline === 'boolean' && (
           <span className="absolute -bottom-0.5 -right-0.5 rounded-full ring-2 ring-white dark:ring-gray-950">
-            <OnlineIndicator isOnline={isOnline} size="md" />
+            <OnlineIndicator isOnline={status === 'online'} status={status} size="md" />
           </span>
         )}
       </div>
@@ -219,7 +228,9 @@ export default function ContactsPage() {
           name={contact.name}
           username={contact.username}
           meta={formatLastSeen(t, locale, contact.isOnline, contact.lastActiveAt)}
+          userId={contact.id}
           isOnline={contact.isOnline}
+          lastActiveAt={contact.lastActiveAt}
           actions={
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -277,7 +288,9 @@ export default function ContactsPage() {
           avatar={other?.avatar}
           name={name}
           username={other?.username ? `@${other.username}` : undefined}
+          userId={otherId}
           isOnline={other?.isOnline}
+          lastActiveAt={other?.lastActiveAt}
           actions={
             <div className="flex items-center gap-2">
               {variant === 'pending' && isIncoming && (

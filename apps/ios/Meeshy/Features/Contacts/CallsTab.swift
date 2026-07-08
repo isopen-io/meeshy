@@ -116,7 +116,6 @@ private struct CallJournalRow: View, Equatable {
     var body: some View {
         let name = record.displayName
         let color = DynamicColorGenerator.colorForName(name)
-        let isOnline = record.peer?.isOnline ?? false
 
         HStack(spacing: 14) {
             Button(action: onTap) {
@@ -126,7 +125,7 @@ private struct CallJournalRow: View, Equatable {
                         context: .userListItem,
                         accentColor: color,
                         avatarURL: record.avatarURL,
-                        presenceState: isOnline ? .online : .offline
+                        presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
                     )
 
                     VStack(alignment: .leading, spacing: 3) {

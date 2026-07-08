@@ -26,6 +26,7 @@ import { formatCompactNumber } from '@/utils/format-number';
 import { useProfileV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 import { useI18n } from '@/hooks/use-i18n';
+import { useLiveUserStatus } from '@/hooks/use-live-user-status';
 import {
   Pencil,
   Settings,
@@ -170,6 +171,7 @@ export default function ProfilePage() {
   const { addToast } = useToast();
   const { profile, stats, isLoading, error, isCurrentUser, updateProfile, isUpdating } = useProfileV2();
   const { t } = useI18n('settings');
+  const presenceStatus = useLiveUserStatus(profile?.id, profile);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -247,7 +249,7 @@ export default function ProfilePage() {
                 </AvatarFallback>
               </Avatar>
               <span className="absolute bottom-2 right-2">
-                <OnlineIndicator isOnline={profile.isOnline} size="lg" />
+                <OnlineIndicator isOnline={presenceStatus === 'online'} status={presenceStatus} size="lg" />
               </span>
             </div>
             {isCurrentUser && (

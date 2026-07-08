@@ -206,6 +206,7 @@ struct NewConversationView: View {
                 accentColor: DynamicColorGenerator.colorForName(user.username),
                 secondaryColor: accentColor,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
+                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
 
@@ -339,6 +340,7 @@ struct NewConversationView: View {
                     accentColor: userColor,
                     secondaryColor: accentColor,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
+                    presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
@@ -414,7 +416,7 @@ struct SearchedUser: Decodable, Identifiable {
     let displayName: String?
     let email: String?
     let isOnline: Bool?
-    let lastActiveAt: String?
+    let lastActiveAt: Date?
     let avatar: String?
 }
 

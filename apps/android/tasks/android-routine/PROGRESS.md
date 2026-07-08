@@ -692,22 +692,20 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**⏳ AWAITING MERGE (2026-07-08): `chat-reaction-who-reacted-sheet` — PR [#1663](https://github.com/isopen-io/meeshy/pull/1663) OPEN.**
-Code-complete, `apps/android`-only diff, local `assembleDebug`+`testDebugUnitTest` green, reviewer PASS.
-CI: **12 of 14 checks green** (Security, Quality-bun, Prisma, shared/web/gateway/agent tests, all voice/audio
-jobs); only `Build (bun)` and `Test Python (translator)` — both unrelated to the android diff — were still
-in-flight when the **GitHub MCP token expired mid-poll** (non-interactive session can't re-auth). **NEXT RUN
-STEP 0: re-check PR #1663 CI, and squash-merge it to `main` before starting a new slice** (per the routine's
-"merge the open PR first" rule). Nothing is blocked on the code — only on GitHub re-authorization.
+**✅ MERGED (2026-07-08): `chat-reaction-who-reacted-sheet` — PR [#1663](https://github.com/isopen-io/meeshy/pull/1663) merged to `main`** (verified this run: `merged: true`, merged_at 2026-07-08T10:54:40Z). Step 0 clear — no open PRs.
 
-**Just shipped (2026-07-08): `chat-reaction-who-reacted-sheet`** — long-press a reaction chip →
-who-reacted bottom sheet, driven by the pure `:feature:chat` `ReactionBreakdown.of()` SSOT (emoji
-tabs by count desc, leading "All" tab when ≥2 emojis, self floated + flagged "Vous", honest counts,
-inert out-of-range tab select). Cache-first sheet (loads → fills from `fetchDetails`, empty on failure).
-+24 tests. See run log. **Recommended next (highest value, Chat §C):**
+**Just shipped (2026-07-08): `chat-reply-count-pills`** — an accent-tinted reply-count pill under any
+message that has quoted replies, driven by the pure `:feature:chat` `ReplyThreads.of(messages)` SSOT
+(group by trimmed/non-self/non-deleted `replyToId` → `ReplyThread(parentId, count, firstReplyId=earliest
+live reply)`; a parent whose every reply is deleted/absent has no thread). Tapping the pill
+(`ChatViewModel.onReplyCountTap`) scrolls to the earliest reply (reuses `scrollToMessageId`; a no-reply
+message is inert). +16 tests. See run log. **Recommended next (highest value, Chat §C):**
 - **`chat-message-pin`** / §C "Pin/unpin message; starred/bookmarked messages list" — pure pin-rule +
   optimistic toggle + a pinned-messages strip (larger, rich pure core).
-- **`chat-reply-count-pills`** / §C "Reply-count pills + reply thread overlay" — pure thread-grouping SSOT.
+- **`chat-forward-message`** / §C forward (the remaining half of send/edit/delete/reply/forward) — pure
+  forward-target validation + optimistic send into the chosen conversation.
+- **reply thread overlay** — the remaining half of §C "Reply-count pills + reply thread overlay": a
+  focused reply-thread sheet listing a parent's replies (the `ReplyThreads` grouping is already the SSOT).
 - **`chat-forward-message`** / §C forward (the remaining half of send/edit/delete/reply/forward).
 
 **Earlier — `conversations-section-model`** — the conversation-list pinned/others
@@ -1385,6 +1383,52 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-08 — slice `chat-reply-count-pills` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/chat-reply-count-pills`
+- **Step 0:** verified PR #1663 (`chat-reaction-who-reacted-sheet`) is already **merged** to `main`
+  (`merged: true`, merged_at 2026-07-08T10:54:40Z); no open PRs; synced local `main` to `origin/main`.
+- **What:** reply-count pills (parity §C "Reply-count pills + reply thread overlay"). A message with
+  quoted replies now shows an accent-tinted, bubble-side-aligned "N réponses" pill; tapping it jumps to
+  the earliest reply in the thread. (iOS shows a reply-count affordance; Android's grouping is a pure SSOT.)
+- **Added (production):**
+  - `ReplyThreads.kt` (`:feature:chat`, pure SSOT) — `ReplyThreads.of(messages: List<ReplyLink>)` groups
+    the loaded messages by their reply target into `ReplyThread(parentId, count, firstReplyId)`. A message
+    counts only when it is a reply: `replyToId` is non-blank (**trimmed**), not equal to its own id (a
+    self-reference is inert), and the reply itself is **not deleted** (a deleted reply never inflates the
+    count). `firstReplyId` is the **earliest live reply in list order** (the jump anchor). A reply to a
+    paged-out parent is still grouped under that parent id (the consumer just never reads an off-screen
+    parent's thread); a parent whose every reply is deleted/absent has no thread. `threadFor(id)` /
+    `size` / `EMPTY`.
+  - `ReplyLink` (in `ReplyJump.kt`) gained `isDeleted: Boolean = false` (default keeps every existing
+    `ReplyJumpResolver` caller working); reused so the reply projection stays a single SDK-agnostic atom.
+  - `ChatViewModel.onReplyCountTap(messageId)` — builds `ReplyThreads` from the current messages, looks up
+    the thread, and sets `scrollToMessageId = thread.firstReplyId` (reuses the existing reply-jump scroll
+    plumbing + `onScrollHandled`); a message with no thread is **inert** (early return, never a crash).
+  - `ChatScreen` — a `remember(state.messages)` `ReplyThreads`, and a `ReplyCountPill` composable
+    (accent-tinted rounded pill, `Icons.AutoMirrored.Filled.Reply` glyph + `pluralStringResource`, aligned
+    to the bubble's own side) rendered under any bubble whose message has a thread; `onClick →
+    onReplyCountTap`. `chat_reply_count` plural in en/fr/es/pt.
+- **Tests (+16):**
+  - `ReplyThreadsTest` (new, 13): empty → no threads; no-replies → none; single reply → count 1 on parent;
+    several replies accumulate; earliest-in-order kept as anchor; distinct parents → distinct threads;
+    self-reference ignored; blank target ignored; padded target trimmed; deleted reply excluded from count
+    + anchor; parent whose only reply is deleted has no thread; reply to a paged-out parent still grouped;
+    looking up a message with no replies → null.
+  - `ChatViewModelTest` (+3): tapping the pill scrolls to the first reply; a no-reply message is inert;
+    a parent with several replies anchors on the earliest.
+- **Edge cases covered:** empty/single/many collections; self-reference (inert); blank & padded reply
+  targets; deleted replies (excluded); all-replies-deleted parent (no thread); paged-out parent id;
+  no-thread lookup (null); no-reply tap (inert, no scroll).
+- **Verify:** `gradle :app:assembleDebug testDebugUnitTest` (system Gradle 8.14.3 — the wrapper 403s via the
+  proxy) → **BUILD SUCCESSFUL** (full `assembleDebug` + every module's JVM unit tests); targeted
+  `:feature:chat:testDebugUnitTest` green.
+- **Reviewer:** PASS — scope `apps/android` only (feature/chat + tracking docs; no web/ios/gateway/shared);
+  behaviour-through-public-API `ReplyThreads.of` + `onReplyCountTap`, no tautologies, boundary coverage on
+  the trim/self/deleted/all-deleted/first-anchor branches; SDK-purity — the "how to group / count / which
+  reply anchors" product decision is a pure atom in `:feature:chat`, the pill is exempt Compose glue;
+  single source of truth (`scrollToMessageId` reuse, one `ReplyLink` projection); UDF + immutable `UiState`;
+  accent-coherent visuals, natural tap gesture, no dead end (the pill jumps to the reply).
 
 ### 2026-07-08 — slice `conversations-section-model` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/conversations-section-model`
