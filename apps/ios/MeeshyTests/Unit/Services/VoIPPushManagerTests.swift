@@ -290,4 +290,35 @@ final class VoIPPushManagerTests: XCTestCase {
 
         XCTAssertEqual(sut.debug_lastRegisteredRecord?.token, "priorToken")
     }
+
+    // MARK: - unregisterAndClearToken (logout teardown)
+
+    /// Regression test: on logout, the device's VoIP registration must be
+    /// fully purged so a different user logging in on the same device does
+    /// not inherit the previous account's VoIP push registration. Prior to
+    /// this fix, only `unregister()` (PushKit registry teardown) was ever
+    /// called, and only from the login path — the keychain-backed token
+    /// record and in-memory cooldown snapshot survived logout untouched.
+    func test_unregisterAndClearToken_purgesTokenStoreAndCooldownSnapshot() async {
+        let priorRecord = VoIPTokenRecord(token: "userAToken", at: Date())
+        let store = MockVoIPTokenStore(initial: priorRecord)
+        let sut = VoIPPushManager(tokenStore: store)
+        sut.debug_setLastRegisteredRecord(priorRecord)
+
+        await sut.unregisterAndClearToken()
+
+        XCTAssertEqual(store.clearCallCount, 1, "The persisted VoIP token record must be cleared from the keychain-backed store")
+        XCTAssertNil(sut.debug_lastRegisteredRecord, "The in-memory cooldown snapshot must not survive logout")
+        XCTAssertNil(sut.voipToken, "The published token must be nilled out")
+    }
+
+    func test_unregisterAndClearToken_withNoPriorRegistration_doesNotCrash() async {
+        let store = MockVoIPTokenStore()
+        let sut = VoIPPushManager(tokenStore: store)
+
+        await sut.unregisterAndClearToken()
+
+        XCTAssertEqual(store.clearCallCount, 1)
+        XCTAssertNil(sut.debug_lastRegisteredRecord)
+    }
 }

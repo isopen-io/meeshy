@@ -601,6 +601,19 @@ struct MeeshyApp: App {
                         // namespaced by userId and would otherwise expose
                         // user A's data to user B on the next login.
                         Task { await CacheCoordinator.shared.reset() }
+                        // Purge the device's VoIP registration (PushKit +
+                        // keychain-backed token record) — without this, a
+                        // different user logging in on this device inherits
+                        // user A's VoIP push registration until the
+                        // registration cooldown naturally expires.
+                        Task { await VoIPPushManager.shared.unregisterAndClearToken() }
+                        // End any active call before the sockets go down —
+                        // otherwise the call is orphaned locally: the peer
+                        // keeps ringing/connecting to a device that vanished
+                        // without sending a hangup signal.
+                        if CallManager.shared.callState.isActive {
+                            CallManager.shared.endCall()
+                        }
                         MessageSocketManager.shared.disconnect()
                         SocialSocketManager.shared.disconnect()
                         // Drop the store subscriptions so an event from user A

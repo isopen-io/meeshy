@@ -114,7 +114,7 @@ private struct CallJournalRow: View, Equatable {
     }
 
     var body: some View {
-        let name = record.displayName
+        let name = record.displayName(fallback: String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
         let color = DynamicColorGenerator.colorForName(name)
 
         HStack(spacing: 14) {
