@@ -8,7 +8,7 @@
 import { PrismaClient, User } from '@meeshy/shared/prisma/client';
 import { getCacheStore, type CacheStore } from './CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { parseMentions, MENTION_HANDLE_CHARS, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import { parseMentions, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import type { MentionedUser } from '@meeshy/shared/types';
 
 // Logger dédié pour MentionService
@@ -36,7 +36,10 @@ export class MentionService {
   // Regex pour détecter les mentions @username (lettres, chiffres, underscore, tiret).
   // Charset aligné sur MENTION_HANDLE_CHARS (SSOT) et la validation username /^[a-zA-Z0-9_-]+$/ :
   // `\w` seul tronquait `@marie-claire` en `marie`.
-  private readonly MENTION_REGEX = new RegExp(`@([${MENTION_HANDLE_CHARS}]+)`, 'g');
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `parseMentions`) : un `@` collé après un mot
+  // appartient à une adresse e-mail (`john@example.com`) et ne doit PAS être extrait comme
+  // mention — sinon `@example` déclenche une fausse notification. Flag `u` requis (classes `\p{...}`).
+  private readonly MENTION_REGEX = new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]+)`, 'gu');
 
   // Regex stricte pour valider les usernames (alphanumeric + underscore + tiret, 1-30 caractères),
   // appliquée après lowercase — parité avec le charset username.
