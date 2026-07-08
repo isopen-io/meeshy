@@ -958,6 +958,45 @@ describe('negotiate', () => {
     await service.negotiate({ iceRestart: false });
     expect(pc.createOffer).toHaveBeenCalledWith(undefined);
   });
+
+  it('defers an ICE restart that arrives while an unrelated offer is in flight, and replays it once that offer settles', async () => {
+    // Reproduces a real dead-call scenario: an A/V-switch renegotiation
+    // (onnegotiationneeded → negotiate()) is in flight when ICE transitions
+    // to 'failed' and fires restartIce() → negotiate({ iceRestart: true }).
+    // The re-entrancy guard used to drop the ICE restart on the floor with
+    // no retry — the connection then stays permanently 'failed'.
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+
+    let resolveFirstOffer!: (v: RTCSessionDescriptionInit) => void;
+    pc.createOffer = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<RTCSessionDescriptionInit>((res) => {
+            resolveFirstOffer = res;
+          })
+      )
+      .mockResolvedValue({ type: 'offer' as RTCSdpType, sdp: 'v=0\r\n' });
+
+    const inFlight = service.negotiate();
+    const dropped = service.negotiate({ iceRestart: true });
+    await dropped;
+
+    // The ICE restart must not be silently discarded: it should not fire a
+    // second createOffer yet (the first is still in flight)...
+    expect(pc.createOffer).toHaveBeenCalledTimes(1);
+
+    resolveFirstOffer({ type: 'offer', sdp: 'v=0\r\n' });
+    await inFlight;
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // ...but must be replayed automatically once the in-flight offer settles.
+    expect(pc.createOffer).toHaveBeenCalledTimes(2);
+    expect(pc.createOffer).toHaveBeenLastCalledWith({ iceRestart: true });
+  });
 });
 
 // ===========================================================================
