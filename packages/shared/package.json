@@ -112,7 +112,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/coverage-v8": "^4.1.10",
     "prisma": "^6.19.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
