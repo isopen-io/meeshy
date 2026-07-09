@@ -1,7 +1,9 @@
 package me.meeshy.app.chat
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -375,6 +377,7 @@ fun ChatScreen(
                                             isOutgoing = bubble.isOutgoing,
                                             accentColor = accentColor,
                                             onClick = { viewModel.onReplyCountTap(bubble.messageId) },
+                                            onLongClick = { viewModel.openReplyThread(bubble.messageId) },
                                         )
                                     }
                                     if (bubble.deliveryStatus == DeliveryStatus.Failed) {
@@ -512,6 +515,21 @@ fun ChatScreen(
                 pins = state.pinnedMessages,
                 accentColor = accentColor,
                 onTap = viewModel::onPinnedMessageTap,
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
+    }
+
+    val replyThread = state.replyThreadOverlay
+    if (replyThread != null) {
+        ModalBottomSheet(
+            onDismissRequest = viewModel::closeReplyThread,
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
+            ReplyThreadSheet(
+                overlay = replyThread,
+                accentColor = accentColor,
+                onReplyTap = viewModel::onReplyThreadReplyTap,
                 modifier = Modifier.navigationBarsPadding(),
             )
         }
@@ -764,13 +782,16 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
  * pure [ReplyThreads] SSOT; this is only the render.
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun ReplyCountPill(
     count: Int,
     isOutgoing: Boolean,
     accentColor: Color,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val openThreadLabel = stringResource(R.string.chat_reply_thread_open)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -782,7 +803,11 @@ private fun ReplyCountPill(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             modifier = Modifier
                 .clip(RoundedCornerShape(MeeshyRadius.pill))
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    onLongClickLabel = openThreadLabel,
+                )
                 .background(accentColor.copy(alpha = 0.12f))
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         ) {
@@ -1157,6 +1182,118 @@ private fun PinnedMessagesSheet(
             }
         }
     }
+}
+
+@Composable
+private fun ReplyThreadSheet(
+    overlay: ReplyThreadOverlayModel,
+    accentColor: Color,
+    onReplyTap: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = MeeshySpacing.lg),
+    ) {
+        Text(
+            text = stringResource(R.string.chat_reply_thread_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MeeshyTheme.tokens.textPrimary,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        )
+        ReplyThreadRowContent(
+            row = overlay.parent,
+            accentColor = accentColor,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        )
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+            color = MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.5f),
+        )
+        Text(
+            text = pluralStringResource(
+                R.plurals.chat_reply_count,
+                overlay.replyCount,
+                overlay.replyCount,
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            color = accentColor,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        )
+        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+            itemsIndexed(overlay.replies, key = { _, row -> row.messageId }) { index, row ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
+                        color = MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.5f),
+                    )
+                }
+                ReplyThreadRowContent(
+                    row = row,
+                    accentColor = accentColor,
+                    leadingIcon = Icons.AutoMirrored.Filled.Reply,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onReplyTap(row.messageId) }
+                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReplyThreadRowContent(
+    row: ReplyThreadRow,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+) {
+    val sender = row.senderName
+        ?: if (row.isOutgoing) stringResource(R.string.chat_pinned_you) else null
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        if (leadingIcon != null) {
+            Icon(
+                imageVector = leadingIcon,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            if (sender != null) {
+                Text(
+                    text = sender,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = accentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = replyThreadRowLabel(row),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun replyThreadRowLabel(row: ReplyThreadRow): String = when {
+    row.isDeleted -> stringResource(R.string.chat_reply_thread_deleted)
+    row.snippet is PinnedSnippet.Text -> (row.snippet as PinnedSnippet.Text).value
+    row.snippet == PinnedSnippet.Image -> stringResource(R.string.chat_unread_photo)
+    row.snippet == PinnedSnippet.File -> stringResource(R.string.chat_unread_attachment)
+    else -> stringResource(R.string.chat_unread_new_message)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

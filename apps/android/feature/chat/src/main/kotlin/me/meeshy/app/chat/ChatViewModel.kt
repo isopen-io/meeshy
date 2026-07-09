@@ -78,6 +78,7 @@ data class ChatUiState(
     val mentionDisplayNames: Map<String, String> = emptyMap(),
     val reactionDetails: ReactionDetailsUiState? = null,
     val isPinnedSheetOpen: Boolean = false,
+    val replyThreadParentId: String? = null,
     val forward: ForwardUiState? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
@@ -88,6 +89,14 @@ data class ChatUiState(
 
     /** The pinned-message banner surfaced above the list, or null when nothing is pinned. */
     val pinnedBanner: PinnedBanner? get() = PinnedMessages.of(messages.map { it.toPinnable() })
+
+    /**
+     * The focused reply-thread overlay for [replyThreadParentId], derived live from the
+     * loaded messages (a new reply appears in an open overlay). Null when closed, or when
+     * the parent has drained to no live reply / paged out. See [ReplyThreadOverlay].
+     */
+    val replyThreadOverlay: ReplyThreadOverlayModel? get() =
+        replyThreadParentId?.let { ReplyThreadOverlay.of(it, messages.map { m -> m.toThreadMessage() }) }
 }
 
 /**
@@ -112,6 +121,17 @@ private fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessa
     override val isOutgoing: Boolean = this@toPinnable.isOutgoing
     override val senderName: String? = this@toPinnable.senderName
     override val text: String = this@toPinnable.text
+    override val hasImage: Boolean = images.isNotEmpty()
+    override val hasFile: Boolean = files.isNotEmpty()
+}
+
+private fun BubbleContent.toThreadMessage(): ThreadMessage = object : ThreadMessage {
+    override val id: String = messageId
+    override val replyToId: String? = this@toThreadMessage.replyToId
+    override val isDeleted: Boolean = this@toThreadMessage.isDeleted
+    override val isOutgoing: Boolean = this@toThreadMessage.isOutgoing
+    override val senderName: String? = this@toThreadMessage.senderName
+    override val text: String = this@toThreadMessage.text
     override val hasImage: Boolean = images.isNotEmpty()
     override val hasFile: Boolean = files.isNotEmpty()
 }
@@ -590,6 +610,33 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Long-pressing the reply-count pill on message [messageId] opens the focused
+     * reply-thread overlay (the pill *tap* still scrolls to the first reply). Inert when
+     * the message has no live thread — no empty overlay. See [ReplyThreadOverlay].
+     */
+    fun openReplyThread(messageId: String) {
+        val links = _state.value.messages.map { it.toThreadMessage() }
+        if (ReplyThreadOverlay.of(messageId, links) == null) return
+        _state.update { it.copy(replyThreadParentId = messageId) }
+    }
+
+    /** Dismisses the reply-thread overlay. */
+    fun closeReplyThread() {
+        _state.update { it.copy(replyThreadParentId = null) }
+    }
+
+    /**
+     * A reply row in the thread overlay was tapped: scroll to that reply and close the
+     * overlay. A messageId not among the overlay's current replies is inert (never a
+     * crash on a since-removed / absent target).
+     */
+    fun onReplyThreadReplyTap(messageId: String) {
+        val overlay = _state.value.replyThreadOverlay ?: return
+        if (overlay.replies.none { it.messageId == messageId }) return
+        _state.update { it.copy(scrollToMessageId = messageId, replyThreadParentId = null) }
+    }
+
+    /**
      * The pinned-message banner was tapped: scroll to the newest pinned message.
      * When nothing is pinned the banner is absent, so this is inert.
      * See [PinnedMessages].
@@ -1028,10 +1075,19 @@ private fun ChatUiState.applyResult(
     // here too. Resetting isPinnedSheetOpen itself (not just hiding the rendering)
     // matters: a later new pin must require an explicit re-open, not silently
     // resurrect a sheet the user already dismissed by running out of content.
-    return if (updated.isPinnedSheetOpen && updated.pinnedMessages.isEmpty()) {
+    val pinReconciled = if (updated.isPinnedSheetOpen && updated.pinnedMessages.isEmpty()) {
         updated.copy(isPinnedSheetOpen = false)
     } else {
         updated
+    }
+    // Same standing invariant for the reply-thread overlay: if the focused thread drains
+    // to no live reply (every reply deleted) or its parent pages out while the overlay is
+    // open, close it — no dead-end empty overlay, and a later new reply requires an
+    // explicit re-open rather than silently resurrecting a dismissed overlay.
+    return if (pinReconciled.replyThreadParentId != null && pinReconciled.replyThreadOverlay == null) {
+        pinReconciled.copy(replyThreadParentId = null)
+    } else {
+        pinReconciled
     }
 }
 

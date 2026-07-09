@@ -3,6 +3,22 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-09 (`chat-reply-thread-overlay`): a read-side "detail sheet" for a thing that already has a pure
+  grouping SSOT is a thin slice — reuse the predicate, don't re-derive it.** The reply-count pill already had
+  `ReplyThreads.of` (group by trimmed/non-self/non-deleted `replyToId`). The overlay just needed the *same*
+  membership predicate applied to one parent id → keep it literally identical (I re-stated the three rules in
+  `ReplyThreadOverlay.isReplyTo` matching `ReplyThreads`) so the pill count and the sheet can never disagree.
+  Two coherence idioms already in the codebase carried the whole UX: (1) **long-press opens the detail sheet,
+  tap keeps the primary action** — same as the reaction-chip who-reacted sheet; wire it with
+  `combinedClickable(onClick, onLongClick)` (needs `@OptIn(ExperimentalFoundationApi::class)`). (2) **derive the
+  open sheet's content live from `messages` + a single `parentId`/`isOpen` field, then add a standing invariant
+  in `applyResult` that resets that field when the derived content drains** — copied verbatim from the
+  pinned-sheet auto-close. Don't store a snapshot of the sheet content; a live-derived `val overlay get() =
+  parentId?.let { Overlay.of(it, messages...) }` means a new reply appears in the open sheet and a drained
+  thread self-closes for free. **Snippet SSOT:** the text›image›file›empty preview projection was a private
+  `PinnedMessage.snippet()`; extracted it to a top-level `messageSnippetOf(text, hasImage, hasFile) →
+  PinnedSnippet` so pinned rows and reply rows read identically — a pure rename-and-lift keeps every existing
+  pinned test green (behaviour byte-identical) and satisfies the reviewer's SSOT box without a risky refactor.
 - **2026-07-08 (`chat-forward-message`): a "re-send elsewhere" feature is just the existing optimistic-send path
   plus two nullable wire fields — don't build a second send.** Forward needed only: (1) `forwardedFromId`/
   `forwardedFromConversationId` on `SendMessageRequest` **and** `ApiMessage` (the request so the gateway
