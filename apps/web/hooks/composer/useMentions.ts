@@ -8,6 +8,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT } from '@meeshy/shared/utils/mention-parser';
 
 interface MentionPosition {
   top?: number;
@@ -51,9 +52,18 @@ interface UseMentionsReturn {
   getMentionedUserIds: () => string[];
 }
 
-// Regex pour détecter une mention en cours de frappe. Inclut le tiret (charset username
-// /^[a-zA-Z0-9_-]+$/) pour que l'autocomplete continue après un tiret (`@marie-cl…`).
-const MENTION_REGEX = /@([\w-]{0,30})$/;
+// Regex pour détecter une mention en cours de frappe, construite depuis la SSOT partagée
+// (`packages/shared/utils/mention-parser.ts`) pour éliminer tout drift :
+// - `NAME_BOUNDARY_LEFT` (lookbehind Unicode) : un `@` collé après un caractère de nom
+//   appartient à une adresse e-mail (`contact@ali…`) et n'ouvre PAS l'autocomplete —
+//   même contrat que `parseMentions`, `hasMentions` et `mention-display`.
+// - `MENTION_HANDLE_CHARS` (`\w-`) : tiret inclus pour que l'autocomplete continue après un
+//   tiret (`@marie-cl…`). `{0,30}` autorise 0 caractère pour ouvrir le pop dès le `@` seul.
+// Le flag `u` est requis par les classes `\p{...}` du lookbehind.
+const MENTION_REGEX = new RegExp(
+  `${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]{0,30})$`,
+  'u'
+);
 
 // Regex pour valider un ObjectId MongoDB
 const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;

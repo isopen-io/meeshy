@@ -606,6 +606,52 @@ describe('useMentions', () => {
       expect(result.current.mentionQuery).toBe('john');
     });
 
+    it('should not show autocomplete for the @ inside an email address', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      // `contact@ali` : le `@` est collé après une lettre → adresse e-mail, pas une mention.
+      const textarea = createMockTextarea('contact@ali', 11);
+
+      act(() => {
+        result.current.handleTextChange('contact@ali', 11, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(false);
+      expect(result.current.mentionQuery).toBe('');
+    });
+
+    it('should not show autocomplete when @ follows a non-latin name character', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      // Frontière gauche Unicode : un `@` après une lettre accentuée reste une adresse e-mail.
+      const textarea = createMockTextarea('café@bob', 8);
+
+      act(() => {
+        result.current.handleTextChange('café@bob', 8, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(false);
+    });
+
+    it('should show autocomplete for a mention right after a space', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('mail contact@x.com @ali', 23);
+
+      act(() => {
+        result.current.handleTextChange('mail contact@x.com @ali', 23, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(true);
+      expect(result.current.mentionQuery).toBe('ali');
+    });
+
     it('should handle @ at beginning of text', () => {
       const { result } = renderHook(() =>
         useMentions({ conversationId: VALID_CONVERSATION_ID })
