@@ -240,6 +240,14 @@ export class ZmqTranslationClient extends EventEmitter {
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('translationCompleted', event);
+      // Also forward the per-messageId scoped event (ZmqMessageHandler emits
+      // both) so callers — PostService's story-caption translation,
+      // CallEventsHandler's call-transcription translation — can subscribe
+      // narrowly instead of filtering every global translation completion
+      // in the process.
+      if (event.result?.messageId) {
+        this.emit(`translationCompleted:${event.result.messageId}`, event);
+      }
     });
 
     this.messageHandler.on('translationError', (event) => {
