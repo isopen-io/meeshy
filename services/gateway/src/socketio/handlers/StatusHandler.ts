@@ -256,6 +256,19 @@ export class StatusHandler {
       const identity = await this._resolveTypingIdentity(userId, connectedUser.isAnonymous);
       if (!identity) return;
 
+      // Track THIS socket as typing before the emit-throttle gate below. The
+      // throttle is keyed per (user, conversation) — shared across all of the
+      // user's devices — so a second device that starts typing within the
+      // window is throttled out of BROADCASTING. But it is still genuinely
+      // typing, and `handleSocketDisconnecting`'s multi-device suppression
+      // relies on every typing socket being present in `activeTypers` to avoid
+      // emitting a premature typing:stop when one device drops. Tracking after
+      // the throttle return left that second device untracked, so an unrelated
+      // device dropping cleared the indicator while the user was still typing.
+      // `_trackTyping` is idempotent per (socket, conversation), so running it
+      // on every start — throttled or not — is safe.
+      this._trackTyping(socket.id, normalizedId, userId, identity.username, identity.displayName);
+
       const typingEvent: TypingEvent = {
         userId: userId,
         username: identity.username,
@@ -277,7 +290,6 @@ export class StatusHandler {
       const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, normalizedId);
       const emitter = blockedSocketIds.length > 0 ? socket.to(room).except(blockedSocketIds) : socket.to(room);
       emitter.emit(SERVER_EVENTS.TYPING_START, typingEvent);
-      this._trackTyping(socket.id, normalizedId, userId, identity.username, identity.displayName);
     } catch (error) {
       logger.error('typing:start failed', { error });
     }

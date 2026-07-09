@@ -873,6 +873,33 @@ describe('StatusHandler', () => {
       expect(broadcastFn).not.toHaveBeenCalled();
     });
 
+    it('suppresses typing:stop when a second device started typing within the throttle window (no manual reset)', async () => {
+      // Real-world multi-device flow: both devices start typing within the 2s
+      // per-user throttle, so device 2's start is throttled out of BROADCASTING
+      // but must still be tracked as typing. Unlike the test above, the throttle
+      // map is NOT cleared between the two starts.
+      const SOCKET_1 = 'socket-device-1';
+      const SOCKET_2 = 'socket-device-2';
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket1 = makeSocket({ id: SOCKET_1 });
+      const socket2 = makeSocket({ id: SOCKET_2 });
+      const socketToUser = new Map([[SOCKET_1, USER_ID], [SOCKET_2, USER_ID]]);
+      const handler = makeHandler({ prisma, socketToUser });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+
+      await handler.handleTypingStart(socket1, { conversationId: CONV_ID });
+      // Device 2 within the throttle window — throttled from re-broadcasting.
+      await handler.handleTypingStart(socket2, { conversationId: CONV_ID });
+
+      // Device 1 drops; device 2 is still genuinely typing in this conversation.
+      const broadcastFn = jest.fn();
+      await handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
+
+      expect(broadcastFn).not.toHaveBeenCalled();
+    });
+
     it('broadcasts typing:stop when another socket exists but is NOT typing in the same conversation', async () => {
       const SOCKET_1 = 'socket-device-1';
       const SOCKET_2 = 'socket-device-2';
