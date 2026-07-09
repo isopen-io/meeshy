@@ -2265,8 +2265,40 @@ avant de rapporter.
   `tsc --noEmit` web : 1193 erreurs identiques avant/après (confirmé par `git stash` du seul fichier
   source, diff de compte nul), aucune nouvelle — toutes préexistantes sur du typage `unknown` du socket,
   non liées à ce fix.
-- **Gateway** : audit en cours au moment de la rédaction de cette entrée (résultat à documenter dans une
-  entrée de suivi si un bug neuf est confirmé).
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `CallCleanupService.forceEndCall` (GC) calculait encore
+  `duration` depuis `startedAt` inconditionnellement — le sibling que le fix duration de la Vague 27 avait
+  raté.** Vague 27 avait ancré `endCall()`/`leaveCall()` (2 branches)/`forceEndOrphanedCallSession()` sur
+  `answeredAt` (talk time), mais `forceEndCall` vit dans un fichier/classe différent
+  (`CallCleanupService.ts`, pas `CallService.ts`) et n'avait jamais été touché — même classe de bug sibling-
+  drift que la Vague 15 (`clearQualityDegradedStreaks`) et la Vague 22 (éviction de room) avaient déjà
+  trouvée dans cette même fonction. **Scénario concret** : le tier 1 du GC (cron 60s) force-termine en
+  `missed` tout appel encore `initiated`/`ringing` après 120s — par définition JAMAIS répondu
+  (`answeredAt` est `null`) — mais persistait quand même `duration ≈ 120-180s`. Cette valeur remonte telle
+  quelle via `GET /calls/history` (`deriveDurationSec`, dont le docstring dit pourtant explicitement 0 pour
+  un appel manqué) jusqu'à `APICallRecord.durationLabel` (SDK iOS, gardé seulement sur `durationSec > 0`,
+  pas sur `isMissed`), affiché sans garde par `CallsTab.swift`/`CallDetailSheet.swift` : un appel qui a
+  sonné 2 minutes sans réponse s'affichait **« Manqué · 2:00 »** au lieu de juste « Manqué ». Le résumé de
+  bulle chat (`BubbleCallNoticeView.swift`/`CallSystemMessage.tsx`) était lui déjà correctement gardé sur
+  `outcome === 'completed'` — la fuite ne touchait QUE le journal d'appels. Aucun test existant n'épinglait
+  la valeur numérique (`expect.any(Number)` seulement). **Fix** : `forceEndCall` prend désormais
+  `answeredAt: Date | null` (au lieu de `startedAt: Date`) et calcule `duration = answeredAt ? max(0,
+  floor((now-answeredAt)/1000)) : 0`, miroir exact de `endCall()`. Les 5 sites d'appel passent
+  `call.answeredAt` au lieu de `call.startedAt` (tiers 1/2/3/4×2) — un no-op pour le tier 1 (jamais
+  répondu par construction) et une correction pour les tiers 2/3/4 (qui ancraient déjà sur du temps de
+  conversation réel dans les autres writers, désormais cohérent ici aussi). **Tests TDD** : 2 nouveaux cas
+  — tier 1 jamais répondu → `duration: 0` persisté ; tier 3 GC 2h avec `startedAt`/`answeredAt`
+  délibérément écartés de 60s → `duration` ancré sur `answeredAt` (10800s), pas `startedAt` (10860s), pour
+  qu'un anchor régressé échoue bruyamment plutôt que par coïncidence (méthodologie Vague 27). RED confirmé
+  (`git stash` du seul fichier source → 130/10860 reçus au lieu de 0/10800), GREEN restauré. Suite
+  `CallCleanupService.test.ts` : 72/72 verts (+2). Suite gateway filtrée `[Cc]all` : 32 suites/888 tests
+  verts. `tsc --noEmit` gateway : erreurs identiques avant/après, toutes préexistantes
+  (`Cannot find module '@meeshy/shared/prisma/client'` — client Prisma non généré dans ce sandbox réseau-
+  restreint, cf. `lessons.md` 2026-07-02 ; aucune nouvelle erreur sur `CallCleanupService.ts` au-delà de
+  cet import préexistant).
+- Note en passant (non corrigée, hors scope de cette passe) : `CallService.updateCallStatus()` a le même
+  pattern inconditionnel `duration = now - startedAt` dans sa branche terminale, mais cette branche est
+  aujourd'hui du code mort (jamais appelée qu'avec `active`/`reconnecting`, des statuts non-terminaux) —
+  pas urgent, mais à corriger dans la même passe si elle devient un jour atteignable.
 - **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
   CALL-DIAG retagging, threading complet du `ttl` TURN, `call:force-leave` server-emit ambiguïté, 3
   findings iOS structurels restants de la Vague 28 (switchCamera/toggleSpeaker rollback optimiste, tests
