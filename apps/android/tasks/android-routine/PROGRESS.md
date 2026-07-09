@@ -789,7 +789,23 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `chat-starred-messages-list`** — the dedicated starred-messages **list screen**,
+**Just shipped (2026-07-09): `chat-reply-preview-media`** — the media quoted-reply preview, first half of §C
+"Quoted-reply previews incl. story-reply previews (counts, thumbnails)". The wired `ApiMessageReplyPreview`
+gained `attachments` (matching iOS `APIMessageReplyTo.attachments`; the dead duplicate `ApiMessageReplyTo`
+was removed), `BubbleContentBuilder` derives `replyToMediaKind` (None|Image|File) + a resolved
+`replyToThumbnailUrl` (deleted target suppresses both), and `MessageBubble` renders a 32dp accent thumbnail
+or an icon + "Photo"/"Attachment" placeholder so a reply to a media-only message no longer shows a blank
+quote. EN/FR/ES/PT strings. +9 tests. See run log.
+**Recommended next (highest value):**
+- **Story-reply previews (counts, thumbnails)** — the remaining half of §C line 530: iOS decodes
+  `APIPostReplyTarget` (`postReplyTo`/legacy `storyReplyTo`) with `thumbnailUrl`/`previewText`/`reactionCount`/
+  `commentCount`/`moodEmoji`. Add the DTO + a `storyReplyToId`/quoted-post preview render (a distinct block
+  from the message quoted-reply). Larger — likely its own pure projection + a dedicated preview composable.
+- **`removeConversation` dangling-star cleanup** — hook `StarredMessagesStore.removeConversation` on
+  conversation leave/clear so a star can't outlive its conversation (store method exists and is tested).
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-09): `chat-starred-messages-list`** — the dedicated starred-messages **list screen**,
 the last pending half of Chat §C "Pin/unpin message; **starred/bookmarked messages list** with
 navigate-to-conversation" — **§C is now complete**. Reachable from Settings (new "Chats" section → "Starred
 messages" row → `Routes.STARRED`). The pure `:feature:chat` `StarredMessagesUiState.of(StarredMessages)` SSOT
@@ -1587,6 +1603,40 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-09 — slice `chat-reply-preview-media` ✅ impl + reviewer PASS
+- **Rule #0 first:** two open PRs (#1750 gateway-delivery, #1751 ios-calls) but both are **other sessions'**
+  branches touching production logic — **not** Android, not mine to merge. No open Android PR for my branch.
+  Branched clean off latest `origin/main` (`1142cc58`, "feat(android/chat): starred-messages list screen #1749").
+- **Parity:** §C "Quoted-reply previews incl. story-reply previews (counts, thumbnails)" (feature-parity.md,
+  still `[ ]`). Investigated first: iOS `APIMessageReplyTo` carries `attachments`, but Android's wired
+  `ApiMessageReplyPreview` dropped them (a slim `id`/`content`/`senderDisplayName`/`deletedAt` DTO), so a
+  reply to a **photo/file-only** message rendered a **blank** quote. A richer-but-**dead** duplicate
+  `ApiMessageReplyTo` (with `attachments`) existed unused — the classic two-models-one-concept wart.
+- **Change:** added `attachments: List<ApiMessageAttachment>? = null` to the **wired** `ApiMessageReplyPreview`
+  (`:core:model`), removed the dead `ApiMessageReplyTo` (SSOT — one reply-preview model). `BubbleContentBuilder`
+  (`:sdk-ui`, same stateless-building-block layer as `isEdited`/`isForwarded`) derives two new `BubbleContent`
+  fields: `replyToMediaKind` (`ReplyMediaKind` None|Image|File — `firstOrNull { isImage }` wins, else any
+  attachment → File, else None) and `replyToThumbnailUrl` (image `thumbnailUrl` ?: `fileUrl`, run through the
+  shared `resolveMediaUrl`; **a deleted reply target suppresses both**, mirroring the existing content-suppress).
+  `MessageBubble`'s `ReplyPreview` (exempt Compose glue) shows a 32dp accent-clipped `AsyncImage` thumbnail when
+  present, else a media icon + a localized "Photo"/"Attachment" placeholder when the quoted message is
+  media-only (blank content); a text reply is unchanged. EN/FR/ES/PT strings (`bubble_reply_photo`,
+  `bubble_reply_attachment`).
+- **Tests (TDD red→green, `:sdk-ui` through public `BubbleContentBuilder.build`):** +9 in
+  `BubbleContentBuilderTest` (46 total, 0 fail) — text-only→None/no-thumb, image→Image+resolved-thumbnail,
+  image-no-thumbnail→fileUrl-fallback, image-no-urls→Image+null-thumb, non-image→File+no-thumb,
+  file+image-any-order→prefers-image-thumb, deleted-target→suppressed, no-reply→None, absolute-url→unchanged.
+- **Verify:** `assembleDebug testDebugUnitTest` (all modules) → BUILD SUCCESSFUL (system Gradle 8.14.3;
+  wrapper 403-blocked in container — `/opt/gradle`). `BubbleContentBuilderTest` 46/0.
+- **Reviewer:** PASS — diff `apps/android` only (no web/ios/gateway/shared); behaviour-through-public-API
+  `BubbleContentBuilder.build`, no tautologies, boundary coverage (all 3 media kinds + thumbnail-fallback
+  chain + deleted-suppress + no-reply + absolute-vs-relative url); **SDK-purity** — the "is this reply media,
+  which thumbnail" derivation is a pure `:sdk-ui` building block, the DTO field is `:core:model`, the thumbnail
+  strip is exempt Compose glue; **SSOT** — one reply-preview model (dead duplicate removed), reuses
+  `resolveMediaUrl`/`isImage`; **instant-app** thumbnail via Coil `AsyncImage` (cache-first); **UDF** immutable
+  fields; **accent-coherent** thumbnail clip + icon tint; **no dead end** — a media reply now reads, the tap
+  still jumps to the original.
 
 ### 2026-07-09 — slice `chat-star-toggle` ✅ impl + reviewer PASS
 - **Rule #0 first:** no open Android PR (`list_pull_requests state=open` → `[]`). Branched clean off latest

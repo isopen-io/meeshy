@@ -9,6 +9,7 @@ data class ApiMessageReplyPreview(
     val content: String = "",
     val senderDisplayName: String? = null,
     val deletedAt: String? = null,
+    val attachments: List<ApiMessageAttachment>? = null,
 )
 
 /** A pre-loaded text translation — port of APITextTranslation (MessageModels.swift). */

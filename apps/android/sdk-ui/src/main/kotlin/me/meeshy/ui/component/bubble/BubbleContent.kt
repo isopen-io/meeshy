@@ -11,6 +11,10 @@ sealed class DeliveryStatus {
     @Immutable data object Failed : DeliveryStatus()
 }
 
+/** The kind of media a quoted-reply target carries, for previewing a media-only reply. */
+@Immutable
+public enum class ReplyMediaKind { None, Image, File }
+
 @Immutable
 data class ReactionEntry(
     val emoji: String,
@@ -53,6 +57,8 @@ public data class BubbleContent(
     val replyToText: String? = null,
     val replyToSenderName: String? = null,
     val replyToDeleted: Boolean = false,
+    val replyToMediaKind: ReplyMediaKind = ReplyMediaKind.None,
+    val replyToThumbnailUrl: String? = null,
     val isPending: Boolean = false,
     val clientMessageId: String? = null,
     val images: List<BubbleImage> = emptyList(),

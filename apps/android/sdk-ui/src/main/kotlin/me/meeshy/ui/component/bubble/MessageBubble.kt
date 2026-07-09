@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
@@ -132,9 +133,19 @@ public fun MessageBubble(
             }
 
             if (content.replyToText != null || content.replyToDeleted) {
+                val mediaLabel = when (content.replyToMediaKind) {
+                    ReplyMediaKind.Image -> stringResource(R.string.bubble_reply_photo)
+                    ReplyMediaKind.File -> stringResource(R.string.bubble_reply_attachment)
+                    ReplyMediaKind.None -> null
+                }
+                val replyText = content.replyToText?.takeIf { it.isNotBlank() }
+                    ?: mediaLabel
+                    ?: stringResource(R.string.bubble_message_deleted)
                 ReplyPreview(
                     senderName = content.replyToSenderName,
-                    previewText = content.replyToText ?: stringResource(R.string.bubble_message_deleted),
+                    previewText = replyText,
+                    mediaKind = if (content.replyToDeleted) ReplyMediaKind.None else content.replyToMediaKind,
+                    thumbnailUrl = content.replyToThumbnailUrl,
                     accentColor = onColor,
                     onClick = onReplyPreviewClick?.takeIf { content.replyToId != null },
                     modifier = Modifier.padding(bottom = MeeshySpacing.xs),
@@ -394,6 +405,8 @@ internal fun formatFileSize(bytes: Int): String = when {
 private fun ReplyPreview(
     senderName: String?,
     previewText: String,
+    mediaKind: ReplyMediaKind,
+    thumbnailUrl: String?,
     accentColor: Color,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
@@ -404,6 +417,7 @@ private fun ReplyPreview(
             .let { base -> if (onClick == null) base else base.clickable(onClick = onClick) }
             .background(accentColor.copy(alpha = 0.12f))
             .padding(vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
@@ -411,6 +425,18 @@ private fun ReplyPreview(
                 .fillMaxHeight()
                 .background(accentColor),
         )
+        if (thumbnailUrl != null) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .padding(start = MeeshySpacing.xs)
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(accentColor.copy(alpha = 0.15f)),
+            )
+        }
         Column(
             modifier = Modifier.padding(
                 start = MeeshySpacing.xs,
@@ -425,13 +451,30 @@ private fun ReplyPreview(
                     color = accentColor,
                 )
             }
-            Text(
-                text = previewText,
-                style = MaterialTheme.typography.bodySmall,
-                color = accentColor.copy(alpha = 0.8f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val mediaIcon = when (mediaKind) {
+                    ReplyMediaKind.Image -> Icons.Filled.Image
+                    ReplyMediaKind.File -> Icons.Filled.AttachFile
+                    ReplyMediaKind.None -> null
+                }
+                if (mediaIcon != null && thumbnailUrl == null) {
+                    Icon(
+                        imageVector = mediaIcon,
+                        contentDescription = null,
+                        tint = accentColor.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .padding(end = 2.dp)
+                            .size(14.dp),
+                    )
+                }
+                Text(
+                    text = previewText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = accentColor.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
