@@ -2220,3 +2220,55 @@ scope sans compilateur pour vérifier le layout réel) restent des follow-ups Xc
   .infinity)` sur le VStack de contenu des deux sheets (cap puis centrage explicite, indépendant du
   comportement par défaut du `ScrollView` sur l'axe perpendiculaire). Pleine largeur inchangée sur
   iPhone (<560pt).
+
+## Vague 30 — callee's own incoming-call timeout was dead code (web) (2026-07-09)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). `git fetch
+origin main` confirme HEAD (`236f8ca6`) à jour, aucune divergence. Trois agents d'exploration dédiés
+(iOS CallManager/WebRTC core, gateway CallEventsHandler/CallService, web webrtc-service/CallManager.tsx)
+lancés en parallèle, lecture seule, mandatés à falsifier tout candidat contre ce fichier + `lessons.md`
+avant de rapporter.
+
+- **iOS** : aucun bug neuf retenu. Trois pistes soulevées (PushKit registry sur `.main` queue — trade-off
+  déjà documenté dans le code, pas un oversight ; double hop MainActor redondant `P2PWebRTCClient`→
+  `WebRTCService` — inefficacité mineure, pas un bug de correction ; double chemin de settlement de
+  `CXAnswerCallAction` — fragile par construction mais fonctionne aujourd'hui, aucun test ne l'exerce)
+  sont documentées ici pour une session future avec Xcode, aucune n'a été appliquée à l'aveugle (pas de
+  scénario de repro falsifiable sans device/compilateur). Zéro retain cycle, force-unwrap ou API dépréciée
+  trouvé — cette pile est déjà très mature (annotations d'audit P0-P3 partout, ~600 tests ciblés).
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ, TDD] Le timeout 30s d'auto-dismiss de la bannière d'appel entrant
+  du CALLEE était du code mort.** `apps/web/components/video-call/CallManager.tsx`, `startCallTimeout`'s
+  callback (déjà réputé fragile depuis le fix initiateur de la Vague 16 — voir la note à ce sujet dans ce
+  même fichier) garde sur `useCallStore.getState().{isInCall,currentCall}`. Le branch callee de
+  `handleIncomingCall` (l.213-224, `else` du check `isInitiator`) appelle seulement `setIncomingCall(event)`
+  + `startCallTimeout(event.callId)` — jamais `setCurrentCall`/`setInCall` (réservés à `handleAcceptCall`).
+  Donc pour TOUT appel entrant jamais répondu, le guard voit `isInCall=false`/`currentCall=null` et
+  retourne avant d'atteindre `setIncomingCall(null)` — la bannière de sonnerie (boutons Accepter/Refuser)
+  ne se referme JAMAIS via ce timer. Seul `handleCallEnded` (réception de `call:ended`) la referme encore ;
+  un callee dont le socket est transitoirement déconnecté quand l'appelant raccroche/timeout serveur (60s)
+  rate ce fanout — `call:check-active` ne rejoue que les appels ENCORE en sonnerie, jamais les événements
+  terminaux — et la bannière reste bloquée indéfiniment avec Accepter/Refuser actifs sur un appel mort
+  (tap Accepter → `call:join` rejeté, toast "Failed to join call" déjà connu de la Vague 19).
+  Sibling exact du bug initiateur de la Vague 16, jamais revisité sur le branch callee en 29 vagues
+  (confirmé par grep du backlog entier pour "callee"+"timeout"/"CallNotification" — seuls des findings
+  iOS bannière sans rapport ressortent). **Fix** : le callback du timeout efface désormais son propre
+  `incomingCall` (par callId, `setIncomingCall(current => current?.callId === callId ? null : current)`)
+  AVANT le guard store — no-op pour l'initiateur (dont `incomingCall` n'est jamais posé). Le guard
+  store existant reste inchangé pour la branche initiateur (emit `call:leave` + `reset()`), qui ne
+  s'applique jamais au callee (jamais dans le call-store tant qu'il n'a pas accepté). **Tests TDD**
+  (nouveau fichier `CallManager.calleeTimeout.test.tsx`, miroir du pattern `CallManager.initiatorTimeout.
+  test.tsx`) : 2 cas — la bannière se referme après 30s malgré `isInCall`/`currentCall` jamais posés ;
+  aucun `call:leave` n'est émis pour un callee qui n'a jamais rejoint. RED confirmé (nouveau test échoue
+  sur le code non modifié — bannière encore présente après avance des timers), GREEN restauré. Suite
+  `__tests__/components/video-call/` : 6 suites/23 tests verts (+1 suite/+2 tests). Suite web filtrée
+  `.*(call|webrtc|quality).*\.test\.` : 24 suites/451 tests verts (+1 suite/+2 tests vs Vague 29).
+  `tsc --noEmit` web : 1193 erreurs identiques avant/après (confirmé par `git stash` du seul fichier
+  source, diff de compte nul), aucune nouvelle — toutes préexistantes sur du typage `unknown` du socket,
+  non liées à ce fix.
+- **Gateway** : audit en cours au moment de la rédaction de cette entrée (résultat à documenter dans une
+  entrée de suivi si un bug neuf est confirmé).
+- **Reste ouvert (inchangé)** : items J (validation device réel), C6 (court-circuit dédup cosmétique),
+  CALL-DIAG retagging, threading complet du `ttl` TURN, `call:force-leave` server-emit ambiguïté, 3
+  findings iOS structurels restants de la Vague 28 (switchCamera/toggleSpeaker rollback optimiste, tests
+  source-reflection CallManagerTests, landscape/Dynamic-Type IncomingCallView/CallWaitingBannerView) +
+  les 3 nouvelles pistes iOS de cette vague (nécessitent toutes Xcode).
