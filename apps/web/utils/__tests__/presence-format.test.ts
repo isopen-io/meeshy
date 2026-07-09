@@ -22,6 +22,17 @@ describe('formatPresenceLabel', () => {
     expect(formatPresenceLabel(opts(new Date(NOW + 5 * 60_000), true))).toBe('status.online');
   });
 
+  it('returns "online" when the backend flags the user online despite a stale heartbeat', () => {
+    // isOnline=true is authoritative within the away window: the label must
+    // agree with presenceColorClass (green) instead of reading "last seen 10 min".
+    expect(formatPresenceLabel(opts(new Date(NOW - 10 * 60_000), true))).toBe('status.online');
+  });
+
+  it('decays past the away window even when isOnline is stale-true', () => {
+    // Beyond 30 min, isOnline=true is treated as stale — label falls back to "last seen".
+    expect(formatPresenceLabel(opts(new Date(NOW - 45 * 60_000), true))).toBe('status.lastSeenMinutes|count');
+  });
+
   it('returns relative minutes between 1 and 59', () => {
     expect(formatPresenceLabel(opts(new Date(NOW - 5 * 60_000), false))).toBe('status.lastSeenMinutes|count');
   });
