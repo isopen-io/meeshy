@@ -1725,31 +1725,38 @@ describe('MeeshySocketIOManager', () => {
       expect(senderSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({ id: msg.id }));
     });
 
-    it('emits MENTION_CREATED to mentioned user room', async () => {
+    it('emits MENTION_CREATED to mentioned user room (validatedMentions is String[] of usernames)', async () => {
+      // validatedMentions is persisted as String[] of usernames (schema.prisma), NOT objects.
+      // The broadcaster must resolve those usernames to User.ids before emitting.
       const msg = makeMessage({
         conversationId: 'conv-123456789012',
-        validatedMentions: [{ userId: 'user-mentioned', participantId: 'part-m1', username: 'bob' }],
+        validatedMentions: ['bob'],
         senderId: 'other-sender',
       });
       prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
+      mockResolveUsernamesToIds.mockResolvedValueOnce(['user-mentioned']);
 
       await manager.broadcastMessage(msg, 'conv-123456789012');
 
+      expect(mockResolveUsernamesToIds).toHaveBeenCalledWith(expect.anything(), ['bob']);
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-mentioned'));
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MENTION_CREATED, expect.objectContaining({
         mentionedUserId: 'user-mentioned',
       }));
     });
 
-    it('does NOT emit MENTION_CREATED when sender mentions themselves', async () => {
+    it('does NOT emit MENTION_CREATED when sender mentions themselves (resolved User.id equals sender)', async () => {
+      // sender is null → resolvedSenderId falls back to message.senderId. The mentioned
+      // username resolves to that same User.id, so the self-mention must be excluded.
       const msg = makeMessage({
         conversationId: 'conv-123456789012',
-        validatedMentions: [{ userId: 'sender-participantId', username: 'alice' }],
+        validatedMentions: ['alice'],
         senderId: 'sender-participantId',
       });
       prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
+      mockResolveUsernamesToIds.mockResolvedValueOnce(['sender-participantId']);
 
       await manager.broadcastMessage(msg, 'conv-123456789012');
 
@@ -4014,20 +4021,25 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('_broadcastNewMessage - validatedMentions loop', () => {
-    it('emits MENTION_CREATED for each non-self, non-null userId mention', async () => {
+    it('emits MENTION_CREATED for each mentioned user, excluding the sender', async () => {
       prisma.participant.findMany.mockResolvedValue([]);
 
+      // validatedMentions holds usernames; the resolver maps them to User.ids. The sender's
+      // own resolved id ('sender-mention') must be filtered out of the emit set.
       const msg = makeMessage({
         conversationId: '507f1f77bcf86cd799439140',
         senderId: 'sender-mention',
-        validatedMentions: [
-          { userId: 'user-mentioned', participantId: 'part-mentioned' },   // should emit
-          { userId: 'sender-mention', participantId: 'part-self' },        // same as senderId → skipped
-          { userId: null, participantId: 'part-null' },                    // null userId → skipped
-        ],
+        validatedMentions: ['bob', 'sam'],
       });
+      mockResolveUsernamesToIds.mockResolvedValueOnce([
+        'user-mentioned',  // bob → should emit
+        'sender-mention',  // sam happens to resolve to the sender → skipped
+      ]);
 
       await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439140');
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-mentioned'));
+      expect(ioState.to).not.toHaveBeenCalledWith(ROOMS.user('sender-mention'));
       expect(ioState.toEmit).toHaveBeenCalledWith(
         SERVER_EVENTS.MENTION_CREATED,
         expect.objectContaining({ mentionedUserId: 'user-mentioned' })
