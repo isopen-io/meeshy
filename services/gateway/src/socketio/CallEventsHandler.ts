@@ -1049,6 +1049,17 @@ export class CallEventsHandler {
       return;
     }
 
+    // Scoped to this call+segment (shared across the segment's target
+    // languages, disambiguated below by taskId) — NOT the global
+    // `translationCompleted` bus. Subscribing to the global event here used
+    // to leave a listener (per segment × target language, up to 10s) on a
+    // process-wide EventEmitter with no cap, so every translation completing
+    // anywhere (chat messages, stories, other calls) re-ran every pending
+    // call's taskId filter. Listener count is now bounded by this call's
+    // active target languages instead of process-wide traffic.
+    const messageId = `call-${data.callId}-${data.segment.startMs}`;
+    const scopedEvent = `translationCompleted:${messageId}`;
+
     await Promise.allSettled(
       targetLanguages.map(async (targetLanguage) => {
         try {
@@ -1056,7 +1067,7 @@ export class CallEventsHandler {
             data.segment.text,
             data.segment.language,
             targetLanguage,
-            `call-${data.callId}-${data.segment.startMs}`,
+            messageId,
             data.callId
           );
 
@@ -1065,7 +1076,7 @@ export class CallEventsHandler {
           return new Promise<void>((resolve) => {
             const TIMEOUT_MS = 10_000;
             const timer = setTimeout(() => {
-              zmqClient.off('translationCompleted', onResult);
+              zmqClient.off(scopedEvent, onResult);
               socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
                 callId: data.callId,
                 segment: {
@@ -1085,7 +1096,7 @@ export class CallEventsHandler {
             const onResult = (event: { taskId: string; result: { translatedText: string; targetLanguage: string } }) => {
               if (event.taskId !== taskId) return;
               clearTimeout(timer);
-              zmqClient.off('translationCompleted', onResult);
+              zmqClient.off(scopedEvent, onResult);
               socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
                 callId: data.callId,
                 segment: {
@@ -1102,7 +1113,7 @@ export class CallEventsHandler {
               });
               resolve();
             };
-            zmqClient.on('translationCompleted', onResult);
+            zmqClient.on(scopedEvent, onResult);
           });
         } catch (err) {
           logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
