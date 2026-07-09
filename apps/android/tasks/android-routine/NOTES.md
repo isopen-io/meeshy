@@ -1445,3 +1445,15 @@ Append-only log of gotchas and decisions that save time next run.
   Epoch-millis (`starredAtMillis`) not ISO → parse-free `sortedByDescending`.
 - **`.copy(isStarred = id in starredIds)` after `BubbleContentBuilder.build`** keeps the builder untouched —
   the "is this starred" flag is a VM-side overlay on the pure-built bubble, not a builder concern.
+
+- **Starred-messages list screen (`chat-starred-messages-list`).** The snapshot store built for
+  `chat-star-toggle` paid off exactly as designed: the list screen needs **zero new data plumbing** — the
+  `StarredMessage` snapshot already carries conversationId/name/accent, sender, preview and kind, so a row
+  renders + taps back into `Routes.chat(id)` with no re-fetch. Keep the list's pure core to a one-liner
+  factory `StarredMessagesUiState.of(StarredMessages)` that **delegates ordering to
+  `StarredMessages.sortedByStarredAtDesc`** (never re-sort in the VM/screen — same SSOT the bubble indicator
+  reads, so they can't drift) and reuses `messageSnippetOf` for the preview (Photo/Attachment reads identical
+  to the pinned list). VM = `stateIn(viewModelScope, Eagerly, of(store.starred.value))` for instant cache-first
+  paint + live re-derivation; no coroutine failure path because starring is local-only (no network/outbox).
+  A new `SettingsScreen` callback must default (`onOpenStarred: () -> Unit = {}`) so the only call site
+  (`MeeshyApp`) is the sole thing that changes — no other caller breaks.

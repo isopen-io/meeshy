@@ -27,6 +27,11 @@
     <string name="chat_action_unpin">Dejar de fijar</string>
     <string name="chat_action_star">Guardar</string>
     <string name="chat_action_unstar">Quitar de guardados</string>
+    <string name="starred_title">Mensajes guardados</string>
+    <string name="starred_back">Atrás</string>
+    <string name="starred_no_preview">Mensaje</string>
+    <string name="starred_empty_title">No hay mensajes guardados</string>
+    <string name="starred_empty_hint">Mantén pulsado un mensaje y toca Guardar para verlo aquí.</string>
     <string name="chat_action_delete_for_everyone">Eliminar para todos</string>
     <string name="chat_action_delete_for_me">Eliminar para mí</string>
     <string name="chat_editing_label">Editando mensaje</string>

@@ -27,6 +27,11 @@
     <string name="chat_action_unpin">Retirer</string>
     <string name="chat_action_star">Enregistrer</string>
     <string name="chat_action_unstar">Ne plus enregistrer</string>
+    <string name="starred_title">Messages enregistrés</string>
+    <string name="starred_back">Retour</string>
+    <string name="starred_no_preview">Message</string>
+    <string name="starred_empty_title">Aucun message enregistré</string>
+    <string name="starred_empty_hint">Appuyez longuement sur un message puis touchez Enregistrer pour le retrouver ici.</string>
     <string name="chat_action_delete_for_everyone">Supprimer pour tout le monde</string>
     <string name="chat_action_delete_for_me">Supprimer pour moi</string>
     <string name="chat_editing_label">Modification du message</string>

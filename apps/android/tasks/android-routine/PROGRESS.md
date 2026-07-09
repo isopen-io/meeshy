@@ -789,7 +789,39 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `chat-star-toggle`** — local-only star/unstar of a message (iOS parity: the
+**Just shipped (2026-07-09): `chat-starred-messages-list`** — the dedicated starred-messages **list screen**,
+the last pending half of Chat §C "Pin/unpin message; **starred/bookmarked messages list** with
+navigate-to-conversation" — **§C is now complete**. Reachable from Settings (new "Chats" section → "Starred
+messages" row → `Routes.STARRED`). The pure `:feature:chat` `StarredMessagesUiState.of(StarredMessages)` SSOT
+projects every star **newest-first** (ordering delegated to `StarredMessages.sortedByStarredAtDesc` — the same
+pure SSOT the bubble indicator reads, so list and bubble can never disagree) into a `StarredMessageRow` carrying
+the shared `PinnedSnippet` preview (reuses `messageSnippetOf`: a media-only star reads Photo/Attachment exactly
+like the pinned list / reply-thread overlay). `StarredMessagesViewModel` (@HiltViewModel, injects
+`StarredMessagesStore`) is **cache-first** — the initial value is projected synchronously from the store's
+hydrated snapshot (instant paint, no spinner) and `stateIn(Eagerly)` re-derives on every star change anywhere —
+and exposes `unstar` (delegates straight to the durable store; no network, no outbox). `StarredMessagesScreen`
+renders the list (each row taps into `Routes.chat(conversationId)` — the snapshot already carries id/name/accent
+so no re-fetch; trailing star removes the bookmark in place) or an iconified empty state; avatar tint is
+accent-coherent (snapshot `conversationAccentColor` → name-hash `DynamicColorGenerator` fallback). EN/FR/ES/PT
+strings (5 chat + 2 settings keys × 4 locales). +12 tests (`StarredMessagesViewModelTest`: `of` orders desc /
+empty→isEmpty / Text-trim / Image-only / File-only / text-beats-attachment / blank→Empty; VM initial-hydrated /
+reacts-to-new-star / unstar-removes-via-store / unstar-unknown-inert). `:app:assembleDebug` +
+`:feature:chat:testDebugUnitTest` + `:feature:settings:testDebugUnitTest` green (system Gradle 8.14.3 at
+`/opt/gradle`; wrapper download 403-blocked in this container). Reviewer: PASS (diff apps/android only;
+behaviour-through-public-API `StarredMessagesUiState.of` + VM handlers, no tautologies, boundary coverage on
+empty/blank-preview/media-only/unknown-unstar; SDK-purity — ordering+projection is a pure `:feature:chat` atom
+reusing `:core:model` `StarredMessages` + `messageSnippetOf`, the screen is exempt Compose glue; SSOT — ordering
+shared with the bubble indicator, snippet shared with pinned/reply-thread; instant-app cache-first hydration;
+UDF immutable state; accent-coherent; natural back/tap-into-conversation gesture; no dead end — the list reads
+and jumps into each conversation).
+**Recommended next (highest value):**
+- **Quoted-reply previews incl. story-reply previews (counts, thumbnails)** — `feature-parity.md` line 494,
+  still `[ ]` — enrich the in-bubble quoted-reply preview with a thumbnail / media badge.
+- **`removeConversation` dangling-star cleanup** — hook `StarredMessagesStore.removeConversation` on
+  conversation leave/clear so a star can't outlive its conversation (the store method exists and is tested).
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-09): `chat-star-toggle`** — local-only star/unstar of a message (iOS parity: the
 gateway has no message-star endpoint, iOS' `StarredMessagesStore` is UserDefaults-only). Pure `:core:model`
 `StarredMessages` SSOT (snapshot set: star/unstar/toggle/isStarred/removeConversation + sortedByStarredAtDesc,
 same-instance-when-unchanged) + durable `:sdk-core` `StarredMessagesStore` (SharedPrefs JSON, synchronous
