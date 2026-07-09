@@ -1357,7 +1357,14 @@ export class MessageHandler {
     return {
       id: message.id,
       conversationId,
-      senderId: message.senderId,
+      // `message.senderId` is a Participant.id, but clients compare the wire
+      // `senderId` against their own User.id (apps/web use-socket-cache-sync.ts)
+      // to detect own messages and reconcile the optimistic bubble across
+      // devices. Resolve to the sender's User.id — mirroring the REST/ZMQ
+      // writer (MeeshySocketIOManager.broadcastMessage) — so both transports
+      // emit the same id-space. Falls back to Participant.id for anonymous
+      // senders (no userId), matching the anonymous room convention.
+      senderId: senderParticipant?.userId ?? senderUser?.id ?? message.senderId,
       content: message.content,
       originalLanguage: message.originalLanguage || 'fr',
       messageType: message.messageType || 'text',

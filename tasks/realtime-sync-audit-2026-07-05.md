@@ -195,6 +195,48 @@ emitters target (regression: unread badge) » (RED→GREEN vérifié : la jointu
 `user:anon-123` et **jamais** `anon-123`). Vérifié : 52 tests AuthHandler verts,
 `tsc --noEmit` OK.
 
+## 8. `message:new.senderId` émis en Participant.id sur le chemin WS `message:send` (vs User.id sur REST/ZMQ) — auto-message multi-device jamais réconcilié — ✅ Corrigé 2026-07-09
+
+`services/gateway/src/socketio/handlers/MessageHandler.ts` — `_buildMessagePayload`
+(chemin WS `message:send` → `broadcastNewMessage`) vs. `MeeshySocketIOManager.broadcastMessage`
+(chemin REST `POST /messages` + re-broadcast ZMQ traduction).
+
+Le champ `senderId` du payload `message:new` (`MESSAGE_NEW`) était construit dans deux
+writers, en **deux id-spaces différents**. `Message.senderId` est un `Participant.id`
+(schema.prisma:546 → relation `MessageSender` vers `Participant`). Le writer REST/ZMQ
+(`broadcastMessage`, l.1846) le **résolvait** vers le `User.id` via
+`senderParticipant?.userId || senderParticipant?.user?.id || message.senderId`, avec le
+commentaire explicite « les clients comparent senderId avec leur userId ». Le writer WS
+(`_buildMessagePayload`, l.1360) émettait le `message.senderId` **brut** (Participant.id).
+Or les clients comparent ce champ à leur propre `User.id` :
+`apps/web/hooks/queries/use-socket-cache-sync.ts:156` (`isOwnMessage = message.senderId
+=== currentUser.id`, qui garde la promotion de l'optimistic) et
+`use-conversation-messages-rq.ts:210`.
+
+**Scénario de défaillance** : l'utilisateur A (User.id `A`, Participant.id `pA`) envoie
+un texte via le chemin WS primaire `message:send`. `message:new` est émis avec
+`senderId = pA`. Sur un **autre device** de A (multi-device), le handler calcule
+`isOwnMessage = (pA === A)` → **faux** : la bulle optimistic n'est jamais réconciliée
+(le remplacement par `_serverMessageId` est sauté) → A voit son propre message en
+**double**, rendu comme une bulle entrante. La même action via REST `POST /messages`
+touche l'autre writer (`senderId = A`) et réconcilie correctement — le comportement
+divergeait donc purement selon le transport d'envoi.
+
+**Fix** : `_buildMessagePayload` résout désormais `senderId` de façon identique au writer
+REST/ZMQ — `senderParticipant?.userId ?? senderUser?.id ?? message.senderId` (fallback
+Participant.id pour les anonymes sans `userId`, cohérent avec la convention de salle
+anonyme). Aucun nouveau query : `sender.userId`/`sender.user` sont déjà chargés (utilisés
+plus bas dans le même objet `sender`). Même idiome de résolution qu'à deux autres endroits
+déjà en place (`MeeshySocketIOManager.ts:1846`, `MessagingService.ts:451` pour la
+sérialisation REST) — pas de sibling-drift restant. Le champ `sender.id` (Participant.id)
+reste disponible pour les consommateurs qui en ont besoin ; `CONVERSATION_UPDATED` garde
+volontairement le `senderId` brut (cohérent entre ses deux writers, consommateur distinct).
+Test de régression : `MessageHandler.test.ts` → « exposes the sender User.id (not
+Participant.id) in the message:new senderId — matches the REST/ZMQ writer contract » (RED→GREEN
+vérifié : tous les payloads `message:new` émis assertent `senderId === USER_ID` et jamais
+`PARTICIPANT_ID`). Vérifié : suites `MessageHandler` 7/7 (434 tests), suite gateway complète
+verte, `tsc --noEmit` OK.
+
 ## Priorisation suggérée pour le suivi
 
 | Priorité | Item | Raison |
@@ -203,6 +245,7 @@ emitters target (regression: unread badge) » (RED→GREEN vérifié : la jointu
 | ~~P1~~ | ~~#5 dedup read/delivery sur clé constante~~ | ✅ Corrigé 2026-07-06 (gateway, vérifié 13767 tests verts) |
 | ~~P1~~ | ~~#6 markMessagesAsRead n'avance pas le curseur de livraison (read⇒delivered)~~ | ✅ Corrigé 2026-07-07 (gateway, vérifié 153 + 1160 tests verts) |
 | ~~P1~~ | ~~#7 anonyme dans salle personnelle nue — unread jamais reçu~~ | ✅ Corrigé 2026-07-07 (gateway, vérifié 52 tests verts + tsc OK) |
+| ~~P1~~ | ~~#8 message:new.senderId en Participant.id sur le chemin WS (auto-message multi-device non réconcilié)~~ | ✅ Corrigé 2026-07-09 (gateway, vérifié 516 suites / 14008 tests verts + tsc OK) |
 | P2 | #2 double boucle reconnexion | Peut prolonger une coupure déjà en cours, pas de perte de données mais UX dégradée |
 | P2 | #3 pas de gap detection message/reaction | Silencieux — aucune donnée perdue de façon visible pour l'utilisateur avant refetch, mais viole "eventual consistency garantie" |
 | P3 | #4 reaction reorder | Fenêtre étroite (dépend de #3 pour se manifester), corrigible avec le timestamp déjà présent au payload |
