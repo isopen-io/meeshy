@@ -556,7 +556,7 @@ private struct GalleryVideoPage: View {
                 playOrDownloadButton
             }
         }
-        .task(id: attachment.fileUrl) {
+        .task(id: attachment.id) {
             if !downloader.isDownloading {
                 downloader.isCached = false
             }
