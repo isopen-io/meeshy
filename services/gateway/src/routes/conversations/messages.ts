@@ -2031,11 +2031,22 @@ export function registerMessagesRoutes(
 
       // Broadcast pin event via Socket.IO
       if (socketIOHandler) {
-        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:pinned', {
+        const pinPayload = {
           messageId,
           conversationId,
           pinnedAt: now.toISOString(),
           pinnedBy: userId
+        };
+        const manager = fastify.socketIOHandler.getManager();
+        manager?.getIO().to(`conversation:${conversationId}`).emit('message:pinned', pinPayload);
+        // Replay the pin to offline participants on reconnect (parity with
+        // edit/delete/reaction offline delivery) so their pin state converges.
+        void manager?.enqueueOfflineMessageMutation({
+          conversationId,
+          actorUserId: userId,
+          eventType: 'pinned',
+          messageId,
+          payload: pinPayload
         });
       }
 
@@ -2100,9 +2111,20 @@ export function registerMessagesRoutes(
 
       // Broadcast unpin event via Socket.IO
       if (socketIOHandler) {
-        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:unpinned', {
+        const unpinPayload = {
           messageId,
           conversationId
+        };
+        const manager = fastify.socketIOHandler.getManager();
+        manager?.getIO().to(`conversation:${conversationId}`).emit('message:unpinned', unpinPayload);
+        // Replay the unpin to offline participants on reconnect (parity with
+        // edit/delete/reaction offline delivery) so their pin state converges.
+        void manager?.enqueueOfflineMessageMutation({
+          conversationId,
+          actorUserId: userId,
+          eventType: 'unpinned',
+          messageId,
+          payload: unpinPayload
         });
       }
 

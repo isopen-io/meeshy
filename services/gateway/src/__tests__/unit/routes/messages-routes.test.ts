@@ -271,7 +271,8 @@ const createMockFastify = () => {
   const mockEmit = jest.fn();
   const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
-  const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO });
+  const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
+  const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO, enqueueOfflineMessageMutation: mockEnqueueOfflineMutation });
 
   const fastify: any = {
     get: jest.fn((path: string, _opts: any, handler: Function) => {
@@ -295,6 +296,7 @@ const createMockFastify = () => {
     _mockTo: mockTo,
     _mockEmit: mockEmit,
     _mockGetManager: mockGetManager,
+    _mockEnqueueOfflineMutation: mockEnqueueOfflineMutation,
   };
   return fastify;
 };
@@ -1278,6 +1280,16 @@ describe('PUT /conversations/:id/messages/:messageId/pin', () => {
     expect(mockSendSuccess).toHaveBeenCalled();
     const successData = mockSendSuccess.mock.calls[0][1] as any;
     expect(successData.pinnedBy).toBe(USER_ID);
+    // offline replay: the pin is queued for offline participants (parity with
+    // edit/delete/reaction offline delivery)
+    expect(fastify._mockEnqueueOfflineMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'resolved-conv-id',
+        actorUserId: USER_ID,
+        eventType: 'pinned',
+        messageId: MSG_ID,
+      }),
+    );
   });
 
   it('happy path without socketIO: registers fine and returns success when socket not present at init', async () => {
@@ -1332,6 +1344,15 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
     );
     expect(fastify.socketIOHandler.getManager).toHaveBeenCalled();
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, null);
+    // offline replay: the unpin is queued for offline participants
+    expect(fastify._mockEnqueueOfflineMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'resolved-conv-id',
+        actorUserId: USER_ID,
+        eventType: 'unpinned',
+        messageId: MSG_ID,
+      }),
+    );
   });
 
   it('error path → 500', async () => {

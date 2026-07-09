@@ -1956,6 +1956,19 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.REACTION_REMOVED, { messageId: 'msg-r', emoji: '👍' });
     });
 
+    it('routes pin entries: pinned → MESSAGE_PINNED, unpinned → MESSAGE_UNPINNED', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { messageId: 'msg-pin', pinnedBy: 'u1' }, eventType: 'pinned' },
+          { payload: { messageId: 'msg-pin' }, eventType: 'unpinned' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-pins', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_PINNED, { messageId: 'msg-pin', pinnedBy: 'u1' });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_UNPINNED, { messageId: 'msg-pin' });
+    });
+
     it('drains an anonymous identity (participant-id key) without emitting delivery receipts', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
@@ -1981,6 +1994,67 @@ describe('MeeshySocketIOManager', () => {
       const receiptsSpy = jest.spyOn(manager as any, '_emitDeliveryForDrainedMessages').mockResolvedValue(undefined);
       await (manager as any)._drainPendingMessages('user-reg', false);
       expect(receiptsSpy).toHaveBeenCalledWith('user-reg', expect.any(Array));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 23b. enqueueOfflineMessageMutation (pin/unpin offline replay)
+  // -------------------------------------------------------------------------
+
+  describe('enqueueOfflineMessageMutation', () => {
+    const pinParams = () => ({
+      conversationId: 'conv-pin',
+      actorUserId: 'actor-1',
+      eventType: 'pinned' as const,
+      messageId: 'msg-pin',
+      payload: { messageId: 'msg-pin', conversationId: 'conv-pin', pinnedBy: 'actor-1' },
+    });
+
+    it('returns early (no enqueue) when no deliveryQueue is set', async () => {
+      await manager.enqueueOfflineMessageMutation(pinParams());
+      expect(prisma.participant.findMany).not.toHaveBeenCalled();
+    });
+
+    it('enqueues the pin for offline participants, excluding the actor and online peers', async () => {
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      manager.setDeliveryQueue({ drain: jest.fn(), enqueue } as any);
+      (manager as any).connectedUsers.set('online-peer', { id: 'online-peer', socketId: 's', isAnonymous: false, language: 'fr', resolvedLanguages: [] });
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'p-actor', userId: 'actor-1' },
+        { id: 'p-online', userId: 'online-peer' },
+        { id: 'p-offline', userId: 'offline-peer' },
+      ]);
+
+      await manager.enqueueOfflineMessageMutation(pinParams());
+
+      expect(enqueue).toHaveBeenCalledTimes(1);
+      expect(enqueue).toHaveBeenCalledWith('offline-peer', expect.objectContaining({
+        messageId: 'msg-pin',
+        conversationId: 'conv-pin',
+        eventType: 'pinned',
+        payload: expect.objectContaining({ pinnedBy: 'actor-1' }),
+      }));
+    });
+
+    it('keys the queue on participant id for anonymous participants (no userId)', async () => {
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      manager.setDeliveryQueue({ drain: jest.fn(), enqueue } as any);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'anon-part', userId: null },
+      ]);
+
+      await manager.enqueueOfflineMessageMutation({ ...pinParams(), eventType: 'unpinned' });
+
+      expect(enqueue).toHaveBeenCalledWith('anon-part', expect.objectContaining({ eventType: 'unpinned' }));
+    });
+
+    it('swallows a participant lookup failure without throwing', async () => {
+      const enqueue = jest.fn();
+      manager.setDeliveryQueue({ drain: jest.fn(), enqueue } as any);
+      prisma.participant.findMany.mockRejectedValue(new Error('db down'));
+
+      await expect(manager.enqueueOfflineMessageMutation(pinParams())).resolves.toBeUndefined();
+      expect(enqueue).not.toHaveBeenCalled();
     });
   });
 
