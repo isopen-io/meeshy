@@ -718,6 +718,50 @@ describe('CallEventsHandler', () => {
       await expect(socket._trigger('call:join', validData)).resolves.not.toThrow();
     });
 
+    // CALL-RESILIENCE follow-up — a reconnect attempt that itself fails
+    // transiently (DB hiccup in joinCall, not a real "call already ended")
+    // must not silently disarm the reconnect-grace safety net that's
+    // protecting a call which is still genuinely active. Previously
+    // `cancelDisconnectGrace` ran unconditionally BEFORE resolveParticipantIdFromCall/
+    // joinCall could fail, so a failed join left the participant with
+    // neither an active socket in the room NOR a grace timer — the call now
+    // depended solely on CallCleanupService's much slower GC tiers.
+    it('does not lose the reconnect grace window when the join itself fails transiently', async () => {
+      jest.useFakeTimers();
+      mockCallServiceLeaveCall.mockResolvedValue(makeCallSession({ status: 'active' }));
+
+      const activeParticipation = {
+        id: PARTICIPANT_ID,
+        callSessionId: CALL_ID,
+        participantId: PARTICIPANT_ID,
+        callSession: { status: 'active', mode: 'p2p', conversationId: CONV_ID },
+      };
+
+      const { socket, io } = setupWithSocket({
+        callParticipant: {
+          findMany: jest.fn<any>().mockResolvedValue([activeParticipation]),
+          findUnique: jest.fn<any>().mockResolvedValue({ leftAt: null, callSession: { status: 'active' } }),
+        },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      // Socket drops mid-call — grace armed (30s budget).
+      await socket._trigger('disconnect');
+      expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
+
+      // Reconnect attempt inside the grace window, but the join itself fails
+      // transiently — this must not disarm the ORIGINAL grace timer.
+      mockCallServiceJoinCall.mockRejectedValue(new Error('DB error'));
+      await socket._trigger('call:join', validData);
+
+      // The original grace timer must still be live: advancing past its
+      // window still triggers the terminal leaveCall.
+      await jest.advanceTimersByTimeAsync(31_000);
+
+      expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID }));
+      jest.useRealTimers();
+    });
+
   });
 
   // ── call:leave ───────────────────────────────────────────────────────────
