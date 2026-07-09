@@ -22,9 +22,16 @@ export type FormatPresenceLabelOptions = {
 export function formatPresenceLabel(o: FormatPresenceLabelOptions): string {
   const lastMs = new Date(o.lastActiveAt).getTime();
   const nowMs = o.now ?? Date.now();
-  const minutesAgo = (nowMs - lastMs) / 60_000;
 
-  if (minutesAgo < 1) return o.t('status.online');
+  // Le libellé « En ligne » suit la règle canonique (source de vérité partagée),
+  // pas un seuil local : ainsi il s'accorde toujours avec `presenceColorClass`.
+  // `isOnline === true` est autoritatif dans la fenêtre away (backend gardé contre
+  // les données périmées), sinon online = activité < 60 s.
+  if (getUserPresenceStatus({ isOnline: o.isOnline, lastActiveAt: o.lastActiveAt }, nowMs) === 'online') {
+    return o.t('status.online');
+  }
+
+  const minutesAgo = (nowMs - lastMs) / 60_000;
   if (minutesAgo < 60) return o.t('status.lastSeenMinutes', { count: Math.floor(minutesAgo) });
 
   const hoursAgo = minutesAgo / 60;
