@@ -119,6 +119,38 @@ function byEnqueuedAt(a: QueuedMessagePayload, b: QueuedMessagePayload): number 
   return new Date(a.enqueuedAt).getTime() - new Date(b.enqueuedAt).getTime();
 }
 
+// Dedup identity: the same key enqueue() keeps unique per slice — the entry's
+// `dedupKey` if set (reactions scope it to messageId:reactor:emoji), else its
+// `messageId` — paired with the normalized eventType. Mirrors ENQUEUE_DEDUP_LUA
+// and the memory-path findIndex.
+function dedupIdentity(entry: QueuedMessagePayload): string {
+  return `${entry.dedupKey ?? entry.messageId}\u0000${normalizedEventType(entry)}`;
+}
+
+// Collapse duplicate (dedup identity, eventType) entries left by MERGING the
+// memory-fallback and Redis slices. enqueue() enforces one-entry-per-identity
+// WITHIN each slice independently (Redis via ENQUEUE_DEDUP_LUA, memory via
+// findIndex), but a mid-outage interleave can leave one copy in EACH slice —
+// e.g. an 'edited' for message M reached Redis, then a transient blip sent the
+// next 'edited' to memory. Concatenating both replays the event twice:
+// harmless-but-redundant for an idempotent edit/reaction, a DUPLICATE message
+// bubble for a 'new'. Keep only the newest copy per identity — the same
+// supersede rule enqueue() applies in-slice — restoring the one-entry-per-
+// identity invariant the drain/peek consumers rely on. Input is assumed already
+// byEnqueuedAt-sorted (ascending); walking newest→oldest keeps the newest copy
+// at its own slot, so the surviving order stays byEnqueuedAt.
+function collapseCrossSliceDuplicates(sorted: QueuedMessagePayload[]): QueuedMessagePayload[] {
+  const seen = new Set<string>();
+  const kept: QueuedMessagePayload[] = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const identity = dedupIdentity(sorted[i]);
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    kept.push(sorted[i]);
+  }
+  return kept.reverse();
+}
+
 const MEMORY_QUEUE_MAX_USERS = 1000;
 const MEMORY_QUEUE_MAX_PER_USER = 50;
 
@@ -222,7 +254,7 @@ export class RedisDeliveryQueue {
         const rawEntries = await redis.eval(DRAIN_LUA, 1, key);
 
         const redisEntries = !Array.isArray(rawEntries) ? [] : parseRawEntries(rawEntries as string[], userId, 'drain');
-        return [...memoryEntries, ...redisEntries].sort(byEnqueuedAt);
+        return collapseCrossSliceDuplicates([...memoryEntries, ...redisEntries].sort(byEnqueuedAt));
       } catch (error) {
         logger.warn('Redis drain failed, falling back to memory', { userId, error });
       }
@@ -261,7 +293,9 @@ export class RedisDeliveryQueue {
         // the memory-fallback entries entirely — the very orphaning drain()
         // guards against.
         const rawEntries = await redis.lrange(key, 0, -1);
-        const merged = [...memoryEntries, ...parseRawEntries(rawEntries, userId, 'peek')].sort(byEnqueuedAt);
+        const merged = collapseCrossSliceDuplicates(
+          [...memoryEntries, ...parseRawEntries(rawEntries, userId, 'peek')].sort(byEnqueuedAt)
+        );
         return limit ? merged.slice(0, limit) : merged;
       } catch (error) {
         logger.warn('Redis peek failed, falling back to memory', { userId, error });

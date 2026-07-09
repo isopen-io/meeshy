@@ -388,6 +388,111 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     expect(peeked.map(p => p.messageId)).toEqual(['mem-early']);
   });
 
+  // ---------------------------------------------------------------------------
+  // Cross-slice dedup: enqueue() keeps (dedupId, eventType) unique WITHIN each
+  // slice independently, but drain()/peek() MERGE the memory-fallback slice with
+  // the Redis slice. A mid-outage interleave can leave one copy of the same
+  // (dedupId, eventType) in EACH slice — the merge must collapse them to the
+  // newest, or the reconnecting user replays the event twice.
+  // ---------------------------------------------------------------------------
+
+  test('drain — collapses a cross-slice `new` duplicate so a reconnecting user never sees the message twice', async () => {
+    const memNew = makePayload({ messageId: 'M', enqueuedAt: new Date(1000).toISOString(), payload: { content: 'M' } });
+    const redisNew = makePayload({ messageId: 'M', enqueuedAt: new Date(2000).toISOString(), payload: { content: 'M' } });
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue([JSON.stringify(redisNew)]) });
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)  // enqueue → memory fallback (transient outage)
+      .mockReturnValue(redis);    // drain → recovered Redis holds the same message
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-x', memNew);
+
+    const drained = await queue.drain('user-x');
+    expect(drained).toHaveLength(1);
+    expect(drained[0].messageId).toBe('M');
+  });
+
+  test('drain — a cross-slice `edited` duplicate collapses to the newest payload', async () => {
+    const memEdit = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(1000).toISOString(), payload: { content: 'v1' } });
+    const redisEdit = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(2000).toISOString(), payload: { content: 'v2' } });
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue([JSON.stringify(redisEdit)]) });
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)  // enqueue → memory fallback
+      .mockReturnValue(redis);    // drain → recovered Redis
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-x', memEdit);
+
+    const drained = await queue.drain('user-x');
+    expect(drained).toHaveLength(1);
+    expect(drained[0].payload).toEqual({ content: 'v2' });
+  });
+
+  test('drain — cross-slice collapse keeps distinct events and preserves enqueuedAt order', async () => {
+    // Same message M edited on both sides (collapses) interleaved with a
+    // distinct new message N (kept). Survivors stay in enqueuedAt order.
+    const memEdit = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(1000).toISOString(), payload: { content: 'v1' } });
+    const redisNewN = makePayload({ messageId: 'N', enqueuedAt: new Date(2000).toISOString(), payload: { content: 'N' } });
+    const redisEditM = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(3000).toISOString(), payload: { content: 'v2' } });
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue([JSON.stringify(redisNewN), JSON.stringify(redisEditM)]) });
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)  // enqueue → memory fallback
+      .mockReturnValue(redis);    // drain → recovered Redis
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-x', memEdit);
+
+    const drained = await queue.drain('user-x');
+    expect(drained).toHaveLength(2);
+    // N (t2000) then the newest edit of M (t3000, v2) — old v1 dropped.
+    expect(drained.map(e => e.messageId)).toEqual(['N', 'M']);
+    expect(drained[1].payload).toEqual({ content: 'v2' });
+  });
+
+  test('drain — two different reactors on the same message survive the cross-slice merge (finer dedupKey)', async () => {
+    // Reactions dedup on (messageId, reactor, emoji); two reactors must NOT
+    // collapse into one even though both are `reaction-added` on message M.
+    const memReact = makePayload({ messageId: 'M', eventType: 'reaction-added', dedupKey: 'M:pA:😀', enqueuedAt: new Date(1000).toISOString() });
+    const redisReact = makePayload({ messageId: 'M', eventType: 'reaction-added', dedupKey: 'M:pB:😀', enqueuedAt: new Date(2000).toISOString() });
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue([JSON.stringify(redisReact)]) });
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)
+      .mockReturnValue(redis);
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-x', memReact);
+
+    const drained = await queue.drain('user-x');
+    expect(drained).toHaveLength(2);
+    expect(drained.map(e => e.dedupKey)).toEqual(['M:pA:😀', 'M:pB:😀']);
+  });
+
+  test('peek — collapses a cross-slice duplicate in the merged preview', async () => {
+    const memEdit = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(1000).toISOString(), payload: { content: 'v1' } });
+    const redisEdit = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(2000).toISOString(), payload: { content: 'v2' } });
+    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(redisEdit)]) });
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)  // enqueue → memory fallback
+      .mockReturnValue(redis);    // peek → recovered Redis
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-x', memEdit);
+
+    const peeked = await queue.peek('user-x');
+    expect(peeked).toHaveLength(1);
+    expect(peeked[0].payload).toEqual({ content: 'v2' });
+  });
+
   test('cleanup — removes only the stale entry by value, preserving the fresh one', async () => {
     const stale = makePayload({
       messageId: 'stale',
