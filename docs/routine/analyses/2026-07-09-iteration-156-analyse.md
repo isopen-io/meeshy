@@ -110,3 +110,29 @@ Triviale : 1 helper pur (+ JSDoc), 2 sites d'appel migrés, 6 tests purs de comp
   (produit défendable : détection permissive à la frappe, filtrage à l'envoi).
 - **Composer `MENTION_REGEX`** (`useMentions.ts:57`) : détection locale sans frontière gauche —
   même remarque UX-only que F122.
+
+### Fan-out gateway (agent Explore) — cibles réservées pour iter 157+
+
+- **F125 (recommandé iter 157, haute confiance)** — Les handlers REST de réaction
+  (`services/gateway/src/routes/reactions.ts`, `POST /reactions` ~163-240 et
+  `DELETE /reactions/:messageId/:emoji` ~350-395) **broadcastent** l'événement dans la room
+  live (`io.to(ROOMS.conversation(...)).emit(...)`) mais **n'enfilent jamais** l'événement dans
+  la delivery queue offline — `grep enqueue|deliveryQueue reactions.ts` = 0 hit. Le sibling
+  socket `ReactionHandler._enqueueOfflineReactionEvent` (ReactionHandler.ts:428-458) le fait à 3
+  sites (177/183/286). **Impact prod** : une réaction (dé)posée via le chemin REST (outbox iOS)
+  pendant qu'un participant est **hors ligne** n'est jamais rejouée à sa reconnexion
+  (`_drainPendingMessages`) — compteurs/emoji périmés jusqu'à un refetch complet. C'est
+  exactement le bug que l'iter 147 a corrigé côté socket, resté vivant côté REST. Non couvert
+  (`reactions-routes.test.ts` n'assert que DB + broadcast + `notifyReactionAdded`, jamais
+  `deliveryQueue.enqueue`). Queue accessible via `fastify.socketIOHandler.getManager()` (la route
+  y prend déjà `getIO()`).
+- **Runner-up (moyen)** — `CommentReactionService.ts:115` lève un `Error` brut pour la garde
+  max-1 « change emoji » alors que le sibling SSOT `PostReactionService.ts:116` lève un
+  `ConflictError(..., 'REACTION_LIMIT_REACHED')` mappé en 409 (fix fe6192a). Atténué : les
+  réactions de commentaire sont socket-only aujourd'hui → pas d'effet HTTP visible, divergence
+  latente si une route REST comment-reaction apparaît.
+- **Runner-up (faible-moyen)** — `middleware/rate-limiter.ts:101` `validateMentionCount` utilise
+  `/@([\w-]+)/g` sans `NAME_BOUNDARY_LEFT` (que ses siblings SSOT ont gagné iter 153) → `@example`
+  d'un `john@example.com` compte dans le cap 50-mentions (rejet 400 possible). Atténué : le test
+  `rate-limiter-pure.test.ts:87-93` reconnaît explicitement ce comportement comme accepté pour
+  cette garde anti-spam.
