@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import me.meeshy.sdk.lang.LanguageResolver
 
 @Serializable
@@ -10,6 +12,27 @@ data class ApiMessageReplyPreview(
     val senderDisplayName: String? = null,
     val deletedAt: String? = null,
     val attachments: List<ApiMessageAttachment>? = null,
+)
+
+/**
+ * Frozen snapshot of the post (status/story/reel/post) a message replies to —
+ * port of APIPostReplyTarget (MessageModels.swift). Received via the modern
+ * `postReplyTo` key (legacy `storyReplyTo`). Survives the post's expiry because
+ * it is captured at reply time. A non-null [moodEmoji] marks a mood/status
+ * reply (emoji + content render); otherwise it is a story reply (thumbnail +
+ * reaction/comment/share counts).
+ */
+@Serializable
+data class ApiPostReplyTarget(
+    val id: String,
+    val type: String? = null,
+    val reactionCount: Int = 0,
+    val commentCount: Int = 0,
+    val shareCount: Int = 0,
+    val createdAt: String? = null,
+    val thumbnailUrl: String? = null,
+    val previewText: String = "",
+    val moodEmoji: String? = null,
 )
 
 /** A pre-loaded text translation — port of APITextTranslation (MessageModels.swift). */
@@ -35,6 +58,7 @@ data class ApiMessageSender(
 )
 
 /** Message — port of APIMessage (MessageModels.swift). */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ApiMessage(
     val id: String,
@@ -47,6 +71,9 @@ data class ApiMessage(
     val editedAt: String? = null,
     val deletedAt: String? = null,
     val replyToId: String? = null,
+    val storyReplyToId: String? = null,
+    @JsonNames("storyReplyTo")
+    val postReplyTo: ApiPostReplyTarget? = null,
     val createdAt: String? = null,
     val sender: ApiMessageSender? = null,
     val translations: List<ApiTextTranslation> = emptyList(),

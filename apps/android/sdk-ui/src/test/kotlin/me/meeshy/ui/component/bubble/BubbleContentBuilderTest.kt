@@ -5,6 +5,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
+import me.meeshy.sdk.model.ApiPostReplyTarget
 import me.meeshy.sdk.model.ApiTextTranslation
 import org.junit.Test
 
@@ -757,6 +758,197 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.isForwarded).isFalse()
+    }
+
+    // --- Story / mood reply previews (postReplyTo / storyReplyToId) ---
+
+    @Test
+    fun `a message with no post reply carries a null storyReply`() {
+        val content = BubbleContentBuilder.build(
+            message(),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.storyReply).isNull()
+    }
+
+    @Test
+    fun `a story-reply snapshot projects its metrics and resolved thumbnail`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                postReplyTo = ApiPostReplyTarget(
+                    id = "p1",
+                    type = "STORY",
+                    reactionCount = 4,
+                    commentCount = 2,
+                    shareCount = 1,
+                    thumbnailUrl = "/thumbs/p1.jpg",
+                    previewText = "beach sunset",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val story = content.storyReply
+        assertThat(story).isNotNull()
+        assertThat(story!!.isMood).isFalse()
+        assertThat(story.reactionCount).isEqualTo(4)
+        assertThat(story.commentCount).isEqualTo(2)
+        assertThat(story.shareCount).isEqualTo(1)
+        assertThat(story.hasMetrics).isTrue()
+        assertThat(story.previewText).isEqualTo("beach sunset")
+        assertThat(story.thumbnailUrl).isEqualTo("https://cdn.meeshy.me/thumbs/p1.jpg")
+        assertThat(story.moodEmoji).isNull()
+    }
+
+    @Test
+    fun `a story reply with no engagement has no metrics`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                postReplyTo = ApiPostReplyTarget(id = "p1", previewText = ""),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        val story = content.storyReply
+        assertThat(story).isNotNull()
+        assertThat(story!!.hasMetrics).isFalse()
+        assertThat(story.thumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `an absolute story thumbnail url is passed through unchanged`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                postReplyTo = ApiPostReplyTarget(
+                    id = "p1",
+                    thumbnailUrl = "https://other.cdn/p1.jpg",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.storyReply?.thumbnailUrl).isEqualTo("https://other.cdn/p1.jpg")
+    }
+
+    @Test
+    fun `a blank story thumbnail url is dropped`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                postReplyTo = ApiPostReplyTarget(id = "p1", thumbnailUrl = "   "),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.storyReply?.thumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a mood-reply snapshot projects the emoji and preview text without metrics`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                postReplyTo = ApiPostReplyTarget(
+                    id = "p1",
+                    reactionCount = 9,
+                    previewText = "feeling great",
+                    moodEmoji = "😄",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        val story = content.storyReply
+        assertThat(story).isNotNull()
+        assertThat(story!!.isMood).isTrue()
+        assertThat(story.moodEmoji).isEqualTo("😄")
+        assertThat(story.previewText).isEqualTo("feeling great")
+        // A mood carries no story engagement metrics or thumbnail.
+        assertThat(story.hasMetrics).isFalse()
+        assertThat(story.thumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a blank mood emoji falls back to a story preview`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                postReplyTo = ApiPostReplyTarget(
+                    id = "p1",
+                    reactionCount = 3,
+                    previewText = "hi",
+                    moodEmoji = "  ",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        val story = content.storyReply
+        assertThat(story).isNotNull()
+        assertThat(story!!.isMood).isFalse()
+        assertThat(story.reactionCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `a bare story reply id yields a metadata-less story preview`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(storyReplyToId = "story-42"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        val story = content.storyReply
+        assertThat(story).isNotNull()
+        assertThat(story!!.isMood).isFalse()
+        assertThat(story.hasMetrics).isFalse()
+        assertThat(story.previewText).isEmpty()
+    }
+
+    @Test
+    fun `a blank story reply id yields no story preview`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(storyReplyToId = "   "),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.storyReply).isNull()
+    }
+
+    @Test
+    fun `a message reply takes precedence over a post reply snapshot`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(id = "r1", content = "quoted"),
+                postReplyTo = ApiPostReplyTarget(id = "p1", previewText = "story"),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.storyReply).isNull()
+        assertThat(content.replyToText).isEqualTo("quoted")
+    }
+
+    @Test
+    fun `a deleted message never carries a story reply`() {
+        val content = BubbleContentBuilder.build(
+            message(deletedAt = "2026-07-09T09:00:00Z").copy(
+                postReplyTo = ApiPostReplyTarget(id = "p1", previewText = "story", reactionCount = 5),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.storyReply).isNull()
     }
 
 }

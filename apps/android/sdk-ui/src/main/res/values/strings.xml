@@ -13,6 +13,10 @@
     <string name="avatar_fallback">Avatar</string>
     <string name="bubble_reply_photo">Photo</string>
     <string name="bubble_reply_attachment">Attachment</string>
+    <string name="bubble_reply_story">Story</string>
+    <string name="bubble_story_reactions">%1$d reactions</string>
+    <string name="bubble_story_comments">%1$d comments</string>
+    <string name="bubble_story_shares">%1$d shares</string>
     <string name="bubble_image_description">Image</string>
     <string name="bubble_attachment_file_fallback">File</string>
     <string name="bubble_file_size_bytes">%1$s B</string>
