@@ -114,7 +114,16 @@ private fun PinnableMessage.toRow(): PinnedMessageRow = PinnedMessageRow(
     snippet = snippet(),
 )
 
-private fun PinnableMessage.snippet(): PinnedSnippet {
+private fun PinnableMessage.snippet(): PinnedSnippet =
+    messageSnippetOf(text = text, hasImage = hasImage, hasFile = hasFile)
+
+/**
+ * Shared SSOT projecting a message's body/media into a [PinnedSnippet] preview —
+ * trimmed text wins, else an image beats a file, else Empty. Used by both the
+ * pinned banner/sheet and the reply-thread overlay so every message preview reads
+ * identically across the chat surfaces.
+ */
+fun messageSnippetOf(text: String, hasImage: Boolean, hasFile: Boolean): PinnedSnippet {
     val body = text.trim()
     return when {
         body.isNotEmpty() -> PinnedSnippet.Text(body)

@@ -2042,6 +2042,114 @@ class ChatViewModelTest {
         }
 
     @Test
+    fun long_pressing_the_reply_pill_opens_the_focused_thread_overlay() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.openReplyThread("orig")
+
+        val overlay = vm.state.value.replyThreadOverlay
+        assertThat(overlay).isNotNull()
+        assertThat(overlay!!.parentId).isEqualTo("orig")
+        assertThat(overlay.replies.map { it.messageId }).containsExactly("answer")
+    }
+
+    @Test
+    fun opening_the_thread_overlay_on_a_message_with_no_replies_is_inert() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+
+        vm.openReplyThread("plain")
+
+        assertThat(vm.state.value.replyThreadParentId).isNull()
+        assertThat(vm.state.value.replyThreadOverlay).isNull()
+    }
+
+    @Test
+    fun closing_the_thread_overlay_dismisses_it() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+        vm.openReplyThread("orig")
+
+        vm.closeReplyThread()
+
+        assertThat(vm.state.value.replyThreadOverlay).isNull()
+    }
+
+    @Test
+    fun tapping_a_reply_row_scrolls_to_it_and_closes_the_thread_overlay() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+        vm.openReplyThread("orig")
+
+        vm.onReplyThreadReplyTap("answer")
+
+        assertThat(vm.state.value.scrollToMessageId).isEqualTo("answer")
+        assertThat(vm.state.value.replyThreadOverlay).isNull()
+    }
+
+    @Test
+    fun tapping_an_unknown_reply_row_leaves_the_thread_overlay_open() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(replyThread(), currentUser = me)
+        advanceUntilIdle()
+        vm.openReplyThread("orig")
+
+        vm.onReplyThreadReplyTap("ghost")
+
+        assertThat(vm.state.value.scrollToMessageId).isNull()
+        assertThat(vm.state.value.replyThreadOverlay).isNotNull()
+    }
+
+    @Test
+    fun the_thread_overlay_auto_closes_when_its_replies_drain_while_open() = runTest(dispatcher) {
+        // Standing invariant, not just an open()-time guard: if the only live reply is
+        // deleted while the overlay is showing, close it rather than leave a dead-end
+        // empty overlay — and require an explicit re-open for any later new reply.
+        val stream = MutableStateFlow<CacheResult<List<LocalMessage>>>(
+            CacheResult.Fresh(
+                listOf(
+                    synced(ApiMessage(id = "orig", conversationId = "c1", senderId = "other", content = "root")),
+                    synced(
+                        ApiMessage(
+                            id = "answer",
+                            conversationId = "c1",
+                            senderId = "other",
+                            content = "the reply",
+                            replyTo = ApiMessageReplyPreview(id = "orig", content = "root"),
+                        ),
+                    ),
+                ),
+                ageMillis = 0,
+            ),
+        )
+        val h = harness(stream, currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReplyThread("orig")
+        assertThat(h.vm.state.value.replyThreadOverlay).isNotNull()
+
+        stream.value = CacheResult.Fresh(
+            listOf(
+                synced(ApiMessage(id = "orig", conversationId = "c1", senderId = "other", content = "root")),
+                synced(
+                    ApiMessage(
+                        id = "answer",
+                        conversationId = "c1",
+                        senderId = "other",
+                        content = "the reply",
+                        replyTo = ApiMessageReplyPreview(id = "orig", content = "root"),
+                        deletedAt = "2026-07-08T09:00:00Z",
+                    ),
+                ),
+            ),
+            ageMillis = 0,
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.replyThreadParentId).isNull()
+        assertThat(h.vm.state.value.replyThreadOverlay).isNull()
+    }
+
+    @Test
     fun opening_reaction_details_shows_the_sheet_immediately_while_the_fetch_is_in_flight() =
         runTest(dispatcher) {
             val h = harness(flowOf(CacheResult.Empty), currentUser = me)

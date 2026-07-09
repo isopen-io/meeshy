@@ -464,14 +464,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`ReplyJumpResolver`, inerte si original paginé hors écran) + **swipe-to-reply**
       (`SwipeToReply` : incoming→droite / own→gauche, rubber-band + seuil de commit + haptique,
       révèle un glyphe reply, commit → `startReply`) ; forward pending
-- [~] Reply-count pills + reply thread overlay — **pills done** (slice `chat-reply-count-pills`,
+- [x] Reply-count pills + reply thread overlay — **pills done** (slice `chat-reply-count-pills`,
       2026-07-08): pure `:feature:chat` `ReplyThreads.of(messages) → threadFor(id)` SSOT groups the
       loaded messages by their (trimmed, non-self, non-deleted) `replyToId` into
       `ReplyThread(parentId, count, firstReplyId=earliest live reply)`; a parent whose every reply is
       deleted/absent has no thread. `ChatScreen` renders an accent-tinted, bubble-side-aligned pill under
       any message with a thread; tapping it (`ChatViewModel.onReplyCountTap`) scrolls to the earliest
-      reply (reuses `scrollToMessageId`; a no-reply message is inert). +16 tests. **Pending:** the full
-      thread overlay (a focused reply-thread sheet).
+      reply (reuses `scrollToMessageId`; a no-reply message is inert). +16 tests. **Overlay done**
+      (slice `chat-reply-thread-overlay`, 2026-07-09, +25 tests): **long-pressing** the reply-count pill
+      (the tap still scrolls) opens a focused `ModalBottomSheet` via pure `:feature:chat`
+      `ReplyThreadOverlay.of(parentId, messages) → ReplyThreadOverlayModel?` SSOT — the parent row plus
+      every live reply quoting it, earliest-first. Reply membership is **identical to `ReplyThreads`**
+      (not-deleted, trimmed `replyToId == parentId`, no self-reference) so the pill count and the overlay
+      never disagree; a paged-out parent or a thread with no live reply yields `null` (inert open, no empty
+      sheet). A deleted parent still heads the overlay with its live replies (mirrors `ReplyThreads`
+      counting replies to a deleted parent). Snippet projection shared with the pinned banner/sheet via the
+      new SSOT `messageSnippetOf(text, hasImage, hasFile) → PinnedSnippet`. `ChatUiState.replyThreadOverlay`
+      derives live from the loaded messages (a new reply appears in an open overlay); a standing invariant
+      auto-closes it when the thread drains while open. Tapping a reply row scrolls to it and closes
+      (`onReplyThreadReplyTap`, unknown id inert). EN/FR/ES/PT strings.
 - [~] Message bubbles: text done ; pièces jointes image (grille 1–4 + overlay « +N »,
       URL relative résolue contre l'origine gateway, `ApiMessage.attachments` persisté
       via le payload Room) + repli fichier générique (nom + taille) done ;

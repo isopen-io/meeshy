@@ -4,6 +4,36 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-09 the **reply-thread overlay** landed (slice `chat-reply-thread-overlay`, Chat parity §C —
+> feature-parity.md "Reply-count pills + **reply thread overlay**", now fully checked). The pills shipped
+> earlier (tap → scroll to earliest reply); the overlay is the focused sheet. **Long-pressing** the
+> reply-count pill (tap unchanged) opens a `ModalBottomSheet` driven by the new pure `:feature:chat`
+> `ReplyThreadOverlay.of(parentId, messages) → ReplyThreadOverlayModel?` SSOT: the parent row plus every
+> **live** reply quoting it, earliest-first. The reply-membership predicate is **identical to `ReplyThreads`**
+> (not-deleted, trimmed `replyToId == parentId`, no self-reference) so the pill count and the overlay can
+> never disagree. A **paged-out parent** (parent not loaded) or a thread with **no live reply** → `null`
+> (open is inert — no empty sheet). A **deleted parent** still heads the overlay (its `isDeleted` row shows
+> "Message supprimé") with its live replies — mirrors `ReplyThreads` counting replies to a deleted parent.
+> Snippet projection is now the shared SSOT `messageSnippetOf(text, hasImage, hasFile) → PinnedSnippet`
+> (extracted from `PinnedMessages`' private `snippet()`, behaviour identical — pinned tests unchanged), so a
+> thread row and a pinned row describe the same message identically. `ChatUiState.replyThreadOverlay`
+> derives **live** from the loaded messages (a new reply appears in an open overlay); a standing invariant in
+> `applyResult` auto-closes it when the thread drains (last reply deleted / parent pages out) while open —
+> and requires an explicit re-open, never silently resurrecting a dismissed overlay (mirrors the pinned-sheet
+> invariant). `onReplyThreadReplyTap` scrolls to a reply and closes (unknown id inert). EN/FR/ES/PT strings.
+> +25 tests (`ReplyThreadOverlayTest` 18 — empty/blank-parent/paged-out/no-replies/other-parent/single/
+> deleted-reply-excluded/only-deleted→null/self-ref→null/order/whitespace-ref-matches/blank-ref→null/
+> deleted-parent-still-shown/blank-sender→null/trim-sender/image+file snippets/text-beats-media+image-beats-file/
+> outgoing-flag; `ChatViewModelTest` +7 — long-press-opens/no-thread-inert/close/reply-tap-scrolls+closes/
+> unknown-reply-inert/auto-close-on-drain, plus the shared pinned snippet helper stays green).
+> `:feature:chat:testDebugUnitTest` + `assembleDebug` green (system Gradle 8.14.3; wrapper 403-blocked in
+> this container — `/opt/gradle`). Reviewer: PASS (diff apps/android only; behaviour-through-public-API
+> `ReplyThreadOverlay.of` / VM handlers, no tautologies, boundary coverage on paged-out/no-reply/deleted/
+> self-ref/order/drain; SDK-purity — the "which messages form the thread / how each row reads" product
+> decision is a pure `:feature:chat` atom, the sheet is exempt Compose glue; SSOT — reply membership shared
+> with `ReplyThreads`, snippet with `PinnedMessages`; UDF immutable state; accent-coherent; natural long-press
+> gesture reusing the existing reaction-chip idiom; no dead end — the overlay reads and jumps into the thread).
+
 > On 2026-07-08 the **forwarded-message indicator** landed (slice `chat-forwarded-indicator`, Chat parity §C —
 > feature-parity.md "Edited / pinned / **forwarded** indicators"). Forward shipped the send side (#1730,
 > `forwardedFromId`/`forwardedFromConversationId` on `ApiMessage`/`SendMessageRequest`) but the read side
@@ -759,7 +789,22 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-08): `chat-forward-message`** — the last missing verb of §C "send, edit, delete,
+**Just shipped (2026-07-09): `chat-reply-thread-overlay`** — the focused reply-thread sheet, completing §C
+"Reply-count pills + **reply thread overlay**". Long-pressing the reply-count pill opens a `ModalBottomSheet`
+driven by pure `:feature:chat` `ReplyThreadOverlay.of(parentId, messages)` (parent + live replies,
+membership identical to `ReplyThreads`; paged-out/no-reply → inert; deleted parent still shown; snippet via
+the shared `messageSnippetOf`). `ChatUiState.replyThreadOverlay` derives live + auto-closes on drain. +25
+tests. See run log.
+**Recommended next (highest value, Chat §C):**
+- **starred/bookmarked messages list** — the remaining unchecked half of §C "Pin/unpin message;
+  starred/bookmarked messages list with navigate-to-conversation" (`feature-parity.md` line 433, still `[~]`,
+  "**Pending:** starred/bookmarked messages list"). Needs a star/bookmark toggle + a list; a distinct feature
+  from pins with its own outbox lane (mirror the pin-toggle slice).
+- **Quoted-reply previews incl. story-reply previews (counts, thumbnails)** — `feature-parity.md` line 494,
+  still `[ ]` — enrich the in-bubble quoted-reply preview with a thumbnail / media badge.
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-08): `chat-forward-message`** — the last missing verb of §C "send, edit, delete,
 reply, **forward**". Pure `:feature:chat` `ForwardTargets.of` SSOT (port of iOS `filteredConversations`) +
 nullable `forwardedFromId`/`forwardedFromConversationId` on `SendMessageRequest`/`ApiMessage` (`:core:model`)
 + `MessageRepository.sendOptimistic` forward params (retry-safe) + `ChatViewModel.openForward`/`forwardTo`
