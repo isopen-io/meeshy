@@ -11,6 +11,13 @@ import MeeshySDK
 extension StoryComposerView {
     // MARK: - Slide Strip
 
+    /// Chrome de la bande de slides, lisible sur le material de la top bar dans
+    /// les deux thèmes (blanc en sombre, indigo950 en clair). En light mode, le
+    /// blanc historique disparaissait sur le material clair.
+    var slideStripChrome: Color {
+        colorScheme == .dark ? .white : MeeshyColors.indigo950
+    }
+
     var slideStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
@@ -43,14 +50,14 @@ extension StoryComposerView {
         } label: {
             RoundedRectangle(cornerRadius: 3)
                 .strokeBorder(
-                    Color.white.opacity(0.35),
+                    slideStripChrome.opacity(0.35),
                     style: StrokeStyle(lineWidth: 1, dash: [3, 2.5])
                 )
                 .frame(width: thumbW, height: thumbH)
                 .overlay(
                     Image(systemName: "plus")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(slideStripChrome.opacity(0.85))
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 3))
         }
@@ -84,7 +91,7 @@ extension StoryComposerView {
             .overlay(
                 RoundedRectangle(cornerRadius: 3)
                     .strokeBorder(
-                        isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.2),
+                        isSelected ? MeeshyColors.brandPrimary : slideStripChrome.opacity(0.2),
                         lineWidth: isSelected ? 1.5 : 0.5
                     )
             )
