@@ -979,6 +979,58 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     expect(entries[49].messageId).toBe('msg-49');
   });
 
+  test('cap eviction (memory): drops the oldest entry by enqueuedAt, not array slot 0, so an in-place-superseded newest edit survives overflow', async () => {
+    // Regression sibling of the drain() enqueuedAt-sort fix (commit b2aeabf2).
+    // A mutable event superseded IN PLACE (enqueue()'s LSET-mirror) keeps its
+    // original, earlier array slot while carrying a NEWER enqueuedAt — so slot 0
+    // can hold the chronologically-NEWEST entry. Evicting by array slot (the old
+    // `.slice(len-49)`) would drop that newest edit on the 51st enqueue and
+    // strand the reconnecting offline recipient on stale content, since drain()'s
+    // byEnqueuedAt sort cannot recover an entry already gone from the map.
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+
+    // slot 0: an 'edited' event for M0, initially the OLDEST entry.
+    await queue.enqueue('user-evict', makePayload({
+      messageId: 'M0', eventType: 'edited', payload: { content: 'stale' },
+      enqueuedAt: '2026-01-01T00:00:00.000Z',
+    }));
+
+    // slots 1..49: 49 distinct fillers, each strictly newer than M0's first edit.
+    for (let i = 1; i <= 49; i++) {
+      await queue.enqueue('user-evict', makePayload({
+        messageId: `fill-${i}`,
+        enqueuedAt: `2026-01-01T00:00:${String(i).padStart(2, '0')}.000Z`,
+      }));
+    }
+    expect(await queue.size('user-evict')).toBe(50);
+
+    // Re-edit M0 → supersedes slot 0 IN PLACE with the sender's final content and
+    // the NEWEST enqueuedAt in the queue. Array order and chronological order now
+    // disagree at slot 0.
+    await queue.enqueue('user-evict', makePayload({
+      messageId: 'M0', eventType: 'edited', payload: { content: 'final' },
+      enqueuedAt: '2026-01-01T01:00:00.000Z',
+    }));
+    expect(await queue.size('user-evict')).toBe(50);
+
+    // 51st distinct entry triggers eviction. The victim must be the oldest by
+    // enqueuedAt (fill-1), NOT slot 0 (M0's freshly-superseded final edit).
+    await queue.enqueue('user-evict', makePayload({
+      messageId: 'overflow',
+      enqueuedAt: '2026-01-01T00:30:00.000Z',
+    }));
+
+    const drained = await queue.drain('user-evict');
+    expect(drained).toHaveLength(50);
+
+    const m0 = drained.find(e => e.messageId === 'M0');
+    expect(m0).toBeDefined();
+    expect(m0?.payload.content).toBe('final');
+    // The genuinely-oldest entry (by enqueuedAt) was the one evicted.
+    expect(drained.some(e => e.messageId === 'fill-1')).toBe(false);
+    expect(drained.some(e => e.messageId === 'overflow')).toBe(true);
+  });
+
   test('peek on an unknown userId returns empty array (memory ?? [] branch)', async () => {
     const queue = new RedisDeliveryQueue(makeCacheStore(null));
     const result = await queue.peek('unknown-user-peek');
