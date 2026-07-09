@@ -290,7 +290,11 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "func toggleVideo()") else {
             XCTFail("toggleVideo() not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
+        // Widened from 2000 (audit finding — toggleVideo() now also chains onto
+        // signalOfferAnswerTask before actuating, see the doc-comment on
+        // `survivalVideoTask`; the extra capture/await line pushes
+        // downgradeFromVideo() further into the body).
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2500, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
@@ -3240,11 +3244,12 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
         guard let fnRange = source.range(of: "private func scheduleICERestart(") else {
             XCTFail("scheduleICERestart() not found"); return
         }
-        // Widened from 1500 (audit finding — scheduleICERestart now also chains
-        // onto videoToggleTask/holdVideoTask/survivalVideoTask before arming the
-        // restart, see the doc-comment on `survivalVideoTask`; the extra
-        // capture/await lines push the post-backoff guard further into the body).
-        let fnBody = String(source[fnRange.upperBound...].prefix(3000))
+        // Widened from 1500, then 3000 (audit finding — scheduleICERestart now also
+        // chains onto videoToggleTask/holdVideoTask/survivalVideoTask/
+        // signalOfferAnswerTask before arming the restart, see the doc-comment on
+        // `survivalVideoTask`; the extra capture/await lines push the post-backoff
+        // guard further into the body).
+        let fnBody = String(source[fnRange.upperBound...].prefix(4000))
 
         // The post-backoff guard must pattern-match on `.reconnecting` (not just
         // isActive) to detect a natural recovery during the sleep window.
