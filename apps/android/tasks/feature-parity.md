@@ -458,7 +458,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ChatViewModel.openPinnedSheet` (inert when nothing pinned), `closePinnedSheet`, `onPinnedMessageTap`
       (scroll-to + close; an id not among the pins is inert). The banner grows a trailing affordance (shown
       only when count > 1) that opens a `ModalBottomSheet` list — each row taps to jump to that pin. +20
-      tests. **Pending:** starred/bookmarked messages list (a distinct feature from pins).
+      tests. **Star/unstar action + persistence done** (slice `chat-star-toggle`, 2026-07-09): starring is
+      **local-only** at exact iOS parity (the gateway has no message-star endpoint, mirrors iOS
+      `StarredMessagesStore` which is UserDefaults-backed). Pure `:core:model` `StarredMessages` SSOT (a
+      `List<StarredMessage>` snapshot set with `star`/`unstar`/`toggle`/`isStarred`/`removeConversation` +
+      `sortedByStarredAtDesc`; every mutator returns the **same instance** when unchanged so the store skips
+      redundant writes; blank-id star inert, idempotent star keeps the first snapshot). Durable `:sdk-core`
+      `StarredMessagesStore` (SharedPrefs JSON list under one key, synchronous hydrated `StateFlow` so the
+      bubble re-renders instantly — cache-first; corrupt blob → empty set). `ChatViewModel.toggleStar` snapshots
+      the bubble (conversationId/name/accent, sender, text preview, `StarredAttachmentKind` image>file, clock
+      `starredAtMillis`, `sentAtIso`) and delegates to the store (no network/outbox — mirrors `deleteForMe`);
+      inert on a deleted/unknown bubble (only the sheet closes). The starred set is combined into the message
+      stream so each `BubbleContent.isStarred` is set live; `MessageBubble` renders a subtle accent bookmark
+      glyph in the meta row of a starred bubble; the long-press sheet gains a "Star"/"Unstar" row (filled vs
+      outline bookmark) gated on an actionable bubble. EN/FR/ES/PT strings. +31 tests. **Pending:** the
+      dedicated starred-messages **list screen** (reachable from settings, navigate-to-conversation) — the
+      snapshot already carries everything that screen needs.
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle + **tap-aperçu → scroll vers l'original**
       (`ReplyJumpResolver`, inerte si original paginé hors écran) + **swipe-to-reply**

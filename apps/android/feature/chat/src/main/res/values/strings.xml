@@ -25,6 +25,8 @@
     <string name="chat_action_edit">Edit</string>
     <string name="chat_action_pin">Pin</string>
     <string name="chat_action_unpin">Unpin</string>
+    <string name="chat_action_star">Star</string>
+    <string name="chat_action_unstar">Unstar</string>
     <string name="chat_action_delete_for_everyone">Delete for everyone</string>
     <string name="chat_action_delete_for_me">Delete for me</string>
     <string name="chat_editing_label">Editing message</string>

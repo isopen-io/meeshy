@@ -27,6 +27,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryLocallyHiddenMessagesStore
+import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
 import me.meeshy.sdk.chat.LocallyHiddenMessages
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
@@ -112,6 +113,7 @@ class ChatViewModelTest {
         val socket: MessageSocketManager,
         val emojiUsage: InMemoryEmojiUsageStore,
         val locallyHidden: InMemoryLocallyHiddenMessagesStore,
+        val starred: InMemoryStarredMessagesStore,
         val draftStore: InMemoryConversationDraftStore,
     )
 
@@ -148,6 +150,7 @@ class ChatViewModelTest {
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
         val locallyHidden = InMemoryLocallyHiddenMessagesStore(hidden)
+        val starred = InMemoryStarredMessagesStore()
         val draftStore = InMemoryConversationDraftStore(drafts)
         val fixedNow = nowMillis
         val clock = object : CacheClock {
@@ -161,6 +164,7 @@ class ChatViewModelTest {
                 reactions,
                 emojiUsage,
                 locallyHidden,
+                starred,
                 socket,
                 workManager,
                 MeeshyConfig(),
@@ -175,6 +179,7 @@ class ChatViewModelTest {
             socket,
             emojiUsage,
             locallyHidden,
+            starred,
             draftStore,
         )
     }
@@ -705,6 +710,75 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.errorMessage).isEqualTo("boom")
+    }
+
+    @Test
+    fun toggleStar_stars_a_message_snapshotting_its_conversation_and_closing_the_sheet() =
+        runTest(dispatcher) {
+            val h = harness(syncedConversation(), currentUser = me)
+            advanceUntilIdle()
+
+            h.vm.onMessageLongPress("m2")
+            h.vm.toggleStar("m2")
+            advanceUntilIdle()
+
+            assertThat(h.starred.starred.value.isStarred("m2")).isTrue()
+            val snap = h.starred.starred.value.items.single()
+            assertThat(snap.messageId).isEqualTo("m2")
+            assertThat(snap.conversationId).isEqualTo("c1")
+            assertThat(snap.contentPreview).isEqualTo("yo")
+            assertThat(snap.starredAtMillis).isEqualTo(FIXED_NOW)
+            assertThat(h.vm.state.value.actionMessageId).isNull()
+        }
+
+    @Test
+    fun toggleStar_unstars_an_already_starred_message() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.toggleStar("m2")
+        advanceUntilIdle()
+        h.vm.toggleStar("m2")
+        advanceUntilIdle()
+
+        assertThat(h.starred.starred.value.isStarred("m2")).isFalse()
+    }
+
+    @Test
+    fun a_starred_message_is_reflected_on_its_bubble() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.toggleStar("m2")
+        advanceUntilIdle()
+
+        val bubble = h.vm.state.value.messages.first { it.messageId == "m2" }
+        assertThat(bubble.isStarred).isTrue()
+        assertThat(h.vm.state.value.messages.first { it.messageId == "m1" }.isStarred).isFalse()
+    }
+
+    @Test
+    fun toggleStar_is_inert_on_a_deleted_message_but_still_closes_the_sheet() = runTest(dispatcher) {
+        val h = harness(deletedStream(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onMessageLongPress("m3")
+        h.vm.toggleStar("m3")
+        advanceUntilIdle()
+
+        assertThat(h.starred.starred.value.items).isEmpty()
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun toggleStar_is_inert_on_an_unknown_message() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.toggleStar("nope")
+        advanceUntilIdle()
+
+        assertThat(h.starred.starred.value.items).isEmpty()
     }
 
     @Test

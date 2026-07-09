@@ -19,6 +19,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.LocallyHiddenMessages
 import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
+import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
@@ -33,6 +34,8 @@ import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.PinAction
+import me.meeshy.sdk.model.StarredAttachmentKind
+import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
@@ -144,6 +147,7 @@ class ChatViewModel @Inject constructor(
     private val reactionRepository: ReactionRepository,
     private val emojiUsageStore: EmojiUsageStore,
     private val locallyHiddenStore: LocallyHiddenMessagesStore,
+    private val starredStore: StarredMessagesStore,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
@@ -261,12 +265,16 @@ class ChatViewModel @Inject constructor(
                 BubbleInputs(result, user, own, originals, recipients)
             }
                 .combine(locallyHiddenStore.hidden) { inputs, hidden -> inputs to hidden }
-                .collect { (inputs, hidden) ->
+                .combine(starredStore.starred) { (inputs, hidden), starred ->
+                    Triple(inputs, hidden, starred.ids)
+                }
+                .collect { (inputs, hidden, starredIds) ->
                     val (result, user, own, originals, recipients) = inputs
                     latestMessages = result.valueOrNull() ?: latestMessages
                     _state.update { current ->
-                        val next =
-                            current.applyResult(result, user, own, originals, config.socketUrl, recipients, hidden)
+                        val next = current.applyResult(
+                            result, user, own, originals, config.socketUrl, recipients, hidden, starredIds,
+                        )
                         next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
                 }
@@ -949,6 +957,37 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Star or unstar a message (iOS `ConversationViewModel.toggleStar`). Starring
+     * is local-only — no network, no outbox — so this delegates straight to the
+     * durable [starredStore], which re-emits the starred set and re-renders the
+     * bubble's star indicator at once (mirrors [deleteForMe]). A deleted or
+     * unknown bubble is inert: only the sheet closes. The snapshot carries
+     * everything a starred-messages list needs to render + navigate back.
+     */
+    fun toggleStar(messageId: String) {
+        val bubble = _state.value.messages.firstOrNull { it.messageId == messageId }
+        _state.update { it.copy(actionMessageId = null) }
+        if (bubble == null || bubble.isDeleted) return
+        starredStore.toggle(bubble.toStarSnapshot())
+    }
+
+    private fun BubbleContent.toStarSnapshot(): StarredMessage = StarredMessage(
+        messageId = messageId,
+        conversationId = conversationId,
+        conversationName = _state.value.conversationTitle,
+        conversationAccentColor = _state.value.accentColorHex,
+        senderName = senderName,
+        contentPreview = text,
+        attachmentKind = when {
+            images.isNotEmpty() -> StarredAttachmentKind.IMAGE
+            files.isNotEmpty() -> StarredAttachmentKind.FILE
+            else -> null
+        },
+        starredAtMillis = clock.nowMillis(),
+        sentAtIso = createdAtIso,
+    )
+
     private fun applyEdit(messageId: String, content: String) {
         _state.update { it.copy(draft = "", editingMessageId = null) }
         viewModelScope.launch {
@@ -1040,23 +1079,24 @@ private fun ChatUiState.applyResult(
     mediaBaseUrl: String,
     recipientCount: Int,
     hidden: LocallyHiddenMessages,
+    starredIds: Set<String>,
 ): ChatUiState {
     val updated = when (result) {
         is CacheResult.Fresh -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds),
             ownReactions = ownReactions,
             isSyncing = false,
             showSkeleton = false,
             errorMessage = null,
         )
         is CacheResult.Stale -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds),
             ownReactions = ownReactions,
             isSyncing = true,
             showSkeleton = false,
         )
         is CacheResult.Syncing -> copy(
-            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden)
+            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds)
                 ?: messages,
             ownReactions = ownReactions,
             isSyncing = true,
@@ -1098,6 +1138,7 @@ private fun List<LocalMessage>.toBubbles(
     mediaBaseUrl: String,
     recipientCount: Int,
     hidden: LocallyHiddenMessages,
+    starredIds: Set<String>,
 ): List<BubbleContent> = filterNot { hidden.isHidden(it.message.id) }.map { local ->
     BubbleContentBuilder.build(
         message = local.message,
@@ -1110,7 +1151,7 @@ private fun List<LocalMessage>.toBubbles(
         recipientCount = recipientCount,
         showOriginal = local.message.id in showingOriginal,
         mediaBaseUrl = mediaBaseUrl,
-    )
+    ).copy(isStarred = local.message.id in starredIds)
 }
 
 /**
