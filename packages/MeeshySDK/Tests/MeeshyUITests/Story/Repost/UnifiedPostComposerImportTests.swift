@@ -144,6 +144,20 @@ final class UnifiedPostComposerImportTests: XCTestCase {
         XCTAssertEqual(payload.sourceStoryItemId, "story-99")
         XCTAssertEqual(payload.sourceCanvasSize, CanvasGeometry.designSize)
     }
+
+    /// Regression: a landscape-canvas StoryItem's repost payload must carry the
+    /// landscape source size, not the static portrait `CanvasGeometry.designSize`
+    /// — mirrors the StorySlide coverage in RepostPayloadTests.
+    func test_storyItem_extractRepostPayload_landscapeCanvas_reportsLandscapeSourceCanvasSize() {
+        var effects = StoryEffects()
+        effects.canvasAspectRatio = StoryCanvasAspect.landscape.ratio
+        let item = StoryItem(id: "story-landscape", content: nil, media: [],
+                             storyEffects: effects, createdAt: Date())
+        let payload = item.extractRepostPayload()
+        XCTAssertEqual(payload.sourceCanvasSize, CGSize(width: CanvasGeometry.designHeight,
+                                                          height: CanvasGeometry.designWidth))
+        XCTAssertNotEqual(payload.sourceCanvasSize, CanvasGeometry.designSize)
+    }
 }
 
 // MARK: - Testable shim
