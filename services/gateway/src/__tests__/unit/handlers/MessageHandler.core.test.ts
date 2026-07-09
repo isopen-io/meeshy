@@ -67,8 +67,10 @@ jest.mock('../../../services/ConversationMessageStatsService', () => ({
 }));
 
 const mockResolveMentionedUsers: any = jest.fn(async () => []);
+const mockResolveUsernamesToIds: any = jest.fn(async () => []);
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a),
+  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
 }));
 
 const mockIsBlockedBetween: any = jest.fn(async () => false);
@@ -1820,14 +1822,16 @@ describe('MessageHandler._resolveMentionUserIds (via handleMessageSend notifyAge
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
 
     const agentClient = { sendEvent: jest.fn(async () => {}) };
-    const userFindMany = jest.fn(async () => [{ id: 'user-bob' }]);
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },
       message: { findUnique: jest.fn(async () => ({ translations: [] })) },
-      user: { findMany: userFindMany, findFirst: jest.fn(async () => null) },
+      user: { findFirst: jest.fn(async () => null) },
     });
 
     const messagingService = makeMockMessagingService({ validatedMentions: ['bob'] });
+    // Delegates mention resolution to the canonical resolveUsernamesToIds (SSOT);
+    // its case-insensitive query shape is locked in MentionService.test.ts.
+    mockResolveUsernamesToIds.mockResolvedValue(['user-bob']);
 
     const { handler } = makeHandler({
       connectedUsers: connectedUsers as any,
@@ -1839,9 +1843,7 @@ describe('MessageHandler._resolveMentionUserIds (via handleMessageSend notifyAge
 
     await handler.handleMessageSend(socket, data as any, jest.fn());
 
-    const findManyCalls: any = (userFindMany as any).mock.calls;
-    expect(findManyCalls.length).toBeGreaterThan(0);
-    expect(findManyCalls[0][0]).toMatchObject({ where: { username: { in: ['bob'] } } });
+    expect(mockResolveUsernamesToIds).toHaveBeenCalledWith(expect.anything(), ['bob']);
     const sendEventCalls: any = (agentClient.sendEvent as any).mock.calls;
     expect(sendEventCalls.length).toBeGreaterThan(0);
     expect(sendEventCalls[0][0]).toMatchObject({ mentionedUserIds: ['user-bob'] });
@@ -1857,10 +1859,12 @@ describe('MessageHandler._resolveMentionUserIds (via handleMessageSend notifyAge
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },
       message: { findUnique: jest.fn(async () => ({ translations: [] })) },
-      user: { findMany: jest.fn(async () => { throw new Error('DB'); }), findFirst: jest.fn(async () => null) },
+      user: { findFirst: jest.fn(async () => null) },
     });
 
     const messagingService = makeMockMessagingService({ validatedMentions: ['bob'] });
+    // Resolver throws → handler swallows and forwards an empty mention list.
+    mockResolveUsernamesToIds.mockRejectedValue(new Error('DB'));
 
     const { handler } = makeHandler({
       connectedUsers: connectedUsers as any,

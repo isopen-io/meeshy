@@ -1087,3 +1087,37 @@ export async function resolveMentionedUsers(
     };
   });
 }
+
+/**
+ * Résout une liste de @username (déjà extraits/validés) en identifiants
+ * utilisateur. Source de vérité unique pour la résolution username→id de la
+ * couche temps réel (socket handlers, pipeline de mention agent).
+ *
+ * Ne filtre PAS sur `isActive`/`deletedAt` — parité avec
+ * {@link MentionService.resolveUsernames}, pour cohérence avec l'autocomplete
+ * (un utilisateur mentionnable via l'autocomplete doit rester résoluble).
+ *
+ * MongoDB ignore `mode: 'insensitive'` combiné à `in` (cf. la note dans
+ * {@link MentionService.resolveUsernames}), donc un `in` matche de façon
+ * SENSIBLE À LA CASSE. Les handles parsés sont lowercased alors que les
+ * usernames stockés préservent la casse (`normalizeUsername` ne lowercase
+ * jamais, ex. `Alice_B`), si bien qu'un `in` droppait silencieusement toute
+ * mention mixed-case — mention perdue, notification jamais émise. On utilise
+ * OR + `equals` insensible, une clause par handle — le pattern qui résout
+ * réellement de façon insensible à la casse sur Prisma + MongoDB.
+ */
+export async function resolveUsernamesToIds(
+  prisma: PrismaClient,
+  usernames: readonly string[]
+): Promise<string[]> {
+  if (usernames.length === 0) return [];
+  const users = await prisma.user.findMany({
+    where: {
+      OR: usernames.map((username) => ({
+        username: { equals: username, mode: 'insensitive' as const }
+      }))
+    },
+    select: { id: true }
+  });
+  return users.map((u) => u.id);
+}

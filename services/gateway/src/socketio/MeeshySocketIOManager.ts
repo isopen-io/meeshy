@@ -60,7 +60,7 @@ import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
-import { MentionService } from '../services/MentionService';
+import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
@@ -2184,12 +2184,9 @@ export class MeeshySocketIOManager {
       // Resolve mentionedUsernames to mentionedUserIds for the full mention pipeline
       let mentionedUserIds: string[] | undefined;
       if (response.mentionedUsernames && response.mentionedUsernames.length > 0) {
-        const users = await this.prisma.user.findMany({
-          where: { username: { in: response.mentionedUsernames.map((u) => u.toLowerCase()) } },
-          select: { id: true },
-        });
-        if (users.length > 0) {
-          mentionedUserIds = users.map((u) => u.id);
+        const ids = await resolveUsernamesToIds(this.prisma, response.mentionedUsernames);
+        if (ids.length > 0) {
+          mentionedUserIds = ids;
         }
       } else if (response.content?.includes('@')) {
         // Résolution @DisplayName depuis les participants de la conversation
@@ -2379,11 +2376,7 @@ export class MeeshySocketIOManager {
   private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
     if (usernames.length === 0) return [];
     try {
-      const users = await this.prisma.user.findMany({
-        where: { username: { in: usernames.map((u) => u.toLowerCase()) } },
-        select: { id: true },
-      });
-      return users.map((u) => u.id);
+      return await resolveUsernamesToIds(this.prisma, usernames);
     } catch {
       return [];
     }
