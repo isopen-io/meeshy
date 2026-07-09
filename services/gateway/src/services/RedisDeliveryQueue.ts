@@ -86,6 +86,20 @@ function queueKey(userId: string): string {
   return `${DELIVERY_QUEUE_PREFIX}${userId}`;
 }
 
+// Parse a Redis LRANGE result into typed entries, dropping (not throwing on)
+// any value that fails to decode so one corrupt entry can never poison a whole
+// drain/peek. `context` names the caller for the diagnostic log line.
+function parseRawEntries(raw: string[], userId: string, context: 'drain' | 'peek'): QueuedMessagePayload[] {
+  return raw.flatMap(entry => {
+    try {
+      return [JSON.parse(entry) as QueuedMessagePayload];
+    } catch {
+      logger.error(`RedisDeliveryQueue: malformed entry in ${context}, dropping`, { userId, raw: entry.substring(0, 120) });
+      return [];
+    }
+  });
+}
+
 function normalizedEventType(entry: QueuedMessagePayload): string {
   return entry.eventType ?? 'new';
 }
@@ -187,14 +201,7 @@ export class RedisDeliveryQueue {
         const key = queueKey(userId);
         const rawEntries = await redis.eval(DRAIN_LUA, 1, key);
 
-        const redisEntries = !Array.isArray(rawEntries) ? [] : (rawEntries as string[]).flatMap(raw => {
-          try {
-            return [JSON.parse(raw) as QueuedMessagePayload];
-          } catch {
-            logger.error('RedisDeliveryQueue: malformed entry in drain, dropping', { userId, raw: raw.substring(0, 120) });
-            return [];
-          }
-        });
+        const redisEntries = !Array.isArray(rawEntries) ? [] : parseRawEntries(rawEntries as string[], userId, 'drain');
         return [...memoryEntries, ...redisEntries].sort(byEnqueuedAt);
       } catch (error) {
         logger.warn('Redis drain failed, falling back to memory', { userId, error });
@@ -212,20 +219,30 @@ export class RedisDeliveryQueue {
 
   async peek(userId: string, limit?: number): Promise<QueuedMessagePayload[]> {
     const redis = this.getRedis();
+    const memoryEntries = this.memoryQueue.get(userId) ?? [];
 
     if (redis) {
       try {
         const key = queueKey(userId);
-        const end = limit ? limit - 1 : -1;
-        const rawEntries = await redis.lrange(key, 0, end);
-        return rawEntries.flatMap(raw => {
-          try {
-            return [JSON.parse(raw) as QueuedMessagePayload];
-          } catch {
-            logger.error('RedisDeliveryQueue: malformed entry in peek, dropping', { userId, raw: raw.substring(0, 120) });
-            return [];
-          }
-        });
+
+        // Fast path: no memory-fallback entries, so the Redis slice IS the whole
+        // queue — keep the bounded lrange range-read.
+        if (memoryEntries.length === 0) {
+          const end = limit ? limit - 1 : -1;
+          const rawEntries = await redis.lrange(key, 0, end);
+          return parseRawEntries(rawEntries, userId, 'peek');
+        }
+
+        // Mixed state: memory-fallback entries queued during a transient Redis
+        // outage coexist with the Redis-backed slice after recovery. Merge and
+        // order by enqueuedAt exactly like drain() so the preview reflects true
+        // replay order (a memory entry can sort ahead of a Redis one), then
+        // apply the limit across the merged set. Without this, peek() would omit
+        // the memory-fallback entries entirely — the very orphaning drain()
+        // guards against.
+        const rawEntries = await redis.lrange(key, 0, -1);
+        const merged = [...memoryEntries, ...parseRawEntries(rawEntries, userId, 'peek')].sort(byEnqueuedAt);
+        return limit ? merged.slice(0, limit) : merged;
       } catch (error) {
         logger.warn('Redis peek failed, falling back to memory', { userId, error });
       }
@@ -237,16 +254,20 @@ export class RedisDeliveryQueue {
 
   async size(userId: string): Promise<number> {
     const redis = this.getRedis();
+    const memoryCount = (this.memoryQueue.get(userId) ?? []).length;
 
     if (redis) {
       try {
-        return await redis.llen(queueKey(userId));
+        // Add the memory-fallback slice: entries stashed there during a transient
+        // Redis outage are still pending until drain() replays them (drain merges
+        // both slices). Returning llen alone would under-report the true backlog.
+        return (await redis.llen(queueKey(userId))) + memoryCount;
       } catch (error) {
         logger.warn('Redis size failed, falling back to memory', { userId, error });
       }
     }
 
-    return (this.memoryQueue.get(userId) ?? []).length;
+    return memoryCount;
   }
 
   async cleanup(): Promise<number> {
