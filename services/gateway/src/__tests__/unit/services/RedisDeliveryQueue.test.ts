@@ -336,6 +336,58 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     expect(await queue.size('user-r')).toBe(1);
   });
 
+  test('size — merges memory-fallback slice with the healthy-Redis count', async () => {
+    const redis = makeMockRedis({ llen: jest.fn().mockResolvedValue(2) });
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)  // enqueue → memory fallback (transient outage)
+      .mockReturnValue(redis);    // size → recovered Redis (llen = 2)
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-mix', makePayload({ messageId: 'mem-1' }));
+
+    // 2 Redis-backed + 1 memory-fallback = 3 truly pending (drain replays both).
+    expect(await queue.size('user-mix')).toBe(3);
+  });
+
+  test('peek — merges memory-fallback entries with the Redis slice, ordered by enqueuedAt', async () => {
+    const memEntry = makePayload({ messageId: 'mem-early', enqueuedAt: new Date(1000).toISOString() });
+    const redisEntry = makePayload({ messageId: 'redis-late', enqueuedAt: new Date(2000).toISOString() });
+    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(redisEntry)]) });
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)  // enqueue → memory fallback
+      .mockReturnValue(redis);    // peek → recovered Redis
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-mix', memEntry);
+
+    const peeked = await queue.peek('user-mix');
+
+    expect(redis.lrange).toHaveBeenCalledWith('delivery:queue:user-mix', 0, -1);
+    expect(peeked.map(p => p.messageId)).toEqual(['mem-early', 'redis-late']);
+  });
+
+  test('peek — applies limit across the merged memory + Redis set', async () => {
+    const memEntry = makePayload({ messageId: 'mem-early', enqueuedAt: new Date(1000).toISOString() });
+    const redisEntry = makePayload({ messageId: 'redis-late', enqueuedAt: new Date(2000).toISOString() });
+    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(redisEntry)]) });
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)
+      .mockReturnValue(redis);
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-mix', memEntry);
+
+    const peeked = await queue.peek('user-mix', 1);
+
+    expect(peeked.map(p => p.messageId)).toEqual(['mem-early']);
+  });
+
   test('cleanup — removes only the stale entry by value, preserving the fresh one', async () => {
     const stale = makePayload({
       messageId: 'stale',
