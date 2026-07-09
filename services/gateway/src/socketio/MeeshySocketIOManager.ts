@@ -74,6 +74,8 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
   if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
   if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
   if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
+  if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
+  if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
   return SERVER_EVENTS.MESSAGE_NEW;
 }
 
@@ -499,6 +501,54 @@ export class MeeshySocketIOManager {
         logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId });
       })
     );
+  }
+
+  /**
+   * Queue a message-aggregate mutation (currently pin/unpin, driven by the REST
+   * pin routes) for every OFFLINE conversation participant so their pin state
+   * converges on reconnect — the same offline-replay guarantee `MessageHandler`
+   * gives edits/deletes and `ReactionHandler` gives reactions. Without this a
+   * `message:pinned`/`message:unpinned` emitted only to the live conversation
+   * room is lost for anyone offline at that moment: their cached pin state
+   * stays stale until an unrelated full conversation refetch happens.
+   *
+   * The actor is excluded by userId (the REST pin routes run under
+   * `requiredAuth`, so the actor is always a registered user) and online
+   * participants are skipped — they already got the live emit. The default
+   * (messageId) dedup identity is correct here: `pinned` and `unpinned` carry
+   * distinct eventTypes so a pin-then-unpin keeps both entries in enqueue
+   * order, while a repeated same-direction toggle supersedes in place. Pin
+   * entries never bear a delivery receipt (`_emitDeliveryForDrainedMessages`
+   * already filters to `eventType === 'new'`).
+   */
+  async enqueueOfflineMessageMutation(params: {
+    conversationId: string;
+    actorUserId: string | null | undefined;
+    eventType: 'pinned' | 'unpinned';
+    messageId: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.deliveryQueue) return;
+    const { conversationId, actorUserId, eventType, messageId, payload } = params;
+    try {
+      const participants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true },
+        select: { id: true, userId: true }
+      });
+      for (const p of participants) {
+        const queueKey = p.userId ?? p.id;
+        if ((actorUserId && p.userId === actorUserId) || this.connectedUsers.has(queueKey)) continue;
+        this.deliveryQueue.enqueue(queueKey, {
+          messageId,
+          conversationId,
+          payload,
+          enqueuedAt: new Date().toISOString(),
+          eventType,
+        }).catch((err) => logger.warn('Failed to enqueue offline pin event', { userId: queueKey, eventType, error: err }));
+      }
+    } catch (err) {
+      logger.warn('Failed to fetch participants for offline pin enqueue', { conversationId, eventType, error: err });
+    }
   }
 
   /**
