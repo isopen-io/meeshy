@@ -3,6 +3,7 @@ package me.meeshy.ui.component.bubble
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.ApiPostReplyTarget
 import me.meeshy.sdk.model.DeliveryStatusResolver
 import me.meeshy.sdk.model.DeliveryTier
 
@@ -58,6 +59,15 @@ public object BubbleContentBuilder {
         val replyToThumbnailUrl = replyImage
             ?.let { it.thumbnailUrl ?: it.fileUrl }
             ?.let { resolveMediaUrl(it, mediaBaseUrl) }
+        // Story/mood-reply preview. A message reply (`replyTo`) takes precedence,
+        // and a deleted tombstone carries no metadata (mirrors the pinnedAtIso /
+        // isForwarded suppress rules) — so it only surfaces on a live message
+        // that quotes a post but not another message.
+        val storyReply = when {
+            isDeleted -> null
+            message.replyTo != null -> null
+            else -> buildStoryReply(message.postReplyTo, message.storyReplyToId, mediaBaseUrl)
+        }
         val visibleAttachments = if (isDeleted) emptyList() else message.attachments
         val images = visibleAttachments
             .filter { it.isImage && it.fileUrl != null }
@@ -104,6 +114,7 @@ public object BubbleContentBuilder {
             replyToDeleted = replyToDeleted,
             replyToMediaKind = replyToMediaKind,
             replyToThumbnailUrl = replyToThumbnailUrl,
+            storyReply = storyReply,
             replyToSenderName = message.replyTo?.senderDisplayName,
             isPending = isPending,
             clientMessageId = message.clientMessageId,
@@ -117,6 +128,43 @@ public object BubbleContentBuilder {
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
         )
+    }
+
+    /**
+     * Projects the quoted post/story into a [BubbleStoryReply] — port of the
+     * `postReplyTo` / `storyReplyToId` branch of iOS `APIMessage → ReplyReference`.
+     * A non-blank `moodEmoji` yields a mood preview (emoji + text); otherwise a
+     * story preview (thumbnail + metrics). A bare `storyReplyToId` with no
+     * snapshot yields a metadata-less story preview. Returns null when neither
+     * a snapshot nor a story id is present.
+     */
+    private fun buildStoryReply(
+        target: ApiPostReplyTarget?,
+        storyReplyToId: String?,
+        mediaBaseUrl: String?,
+    ): BubbleStoryReply? {
+        if (target != null) {
+            val moodEmoji = target.moodEmoji?.trim()?.ifBlank { null }
+            if (moodEmoji != null) {
+                return BubbleStoryReply(
+                    previewText = target.previewText,
+                    moodEmoji = moodEmoji,
+                )
+            }
+            return BubbleStoryReply(
+                previewText = target.previewText,
+                reactionCount = target.reactionCount,
+                commentCount = target.commentCount,
+                shareCount = target.shareCount,
+                thumbnailUrl = target.thumbnailUrl
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { resolveMediaUrl(it, mediaBaseUrl) },
+            )
+        }
+        if (!storyReplyToId.isNullOrBlank()) {
+            return BubbleStoryReply()
+        }
+        return null
     }
 
     private val ApiMessageAttachment.isImage: Boolean

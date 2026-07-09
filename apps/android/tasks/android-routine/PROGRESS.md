@@ -2,7 +2,7 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
 > On 2026-07-09 the **reply-thread overlay** landed (slice `chat-reply-thread-overlay`, Chat parity §C —
 > feature-parity.md "Reply-count pills + **reply thread overlay**", now fully checked). The pills shipped
@@ -789,7 +789,23 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `conversations-purge-on-removed`** — real-time conversation removal + star
+**Just shipped (2026-07-09): `chat-story-reply-preview`** — the last pending half of §C "Quoted-reply
+previews incl. story-reply previews (counts, thumbnails)", **§C quoted-reply previews now complete**. New
+`ApiPostReplyTarget` DTO (`:core:model`) decoded from `postReplyTo`/legacy `storyReplyTo` + bare
+`storyReplyToId` on `ApiMessage`. `BubbleContentBuilder` projects a pure `BubbleStoryReply` (`:sdk-ui`) —
+mood (emoji + text) vs story (reaction/comment/share counts + resolved thumbnail) vs bare metadata-less
+story; message-reply precedence + deleted-suppress. `MessageBubble`'s new `StoryReplyPreview` renders it.
++11 tests (RED-verified). See run log.
+**Recommended next (highest value):**
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`) — a
+  horizontal community rail + category chips over the conversation list (a larger §B slice: pure section/
+  filter model + a rail composable).
+- **Message bubble carousel / audio / location / contact attachments** (feature-parity §C line ~533, `[~]`,
+  "carousel / audio / location / contact pending") — pick one attachment kind (e.g. a location preview
+  projection + map-thumbnail render) as a thin vertical slice.
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-09): `conversations-purge-on-removed`** — real-time conversation removal + star
 hygiene (§B). The orphan `MessageSocketManager.conversationDeleted` / `participantLeft` streams (declared +
 listened, **zero consumers**) are now wired through the pure `:feature:conversations` `ConversationPurge` SSOT
 (`onConversationDeleted` → id / blank-inert; `onParticipantLeft(event, currentUserId)` → id **only when the
@@ -1604,6 +1620,51 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-09 — slice `chat-story-reply-preview` ✅ impl + reviewer PASS
+- **Rule #0 first:** the open PRs (#1768 web/gateway realtime, #1767 ios-calls, #1765 gateway-delivery,
+  #1764 web-calls) are all **other sessions'** branches touching production logic — not Android, not mine to
+  merge. No open Android PR. Branched clean off latest `origin/main` (`4c7f071`, "fix(gateway/calls)… #1766").
+- **Parity:** §C "Quoted-reply previews incl. story-reply previews (counts, thumbnails)" — the last pending
+  half (feature-parity.md was `[~]` "Pending: story-reply previews (counts/thumbnails via `APIPostReplyTarget`)").
+  Investigated iOS first: `APIMessage` decodes `postReplyTo` (legacy `storyReplyTo`) into `APIPostReplyTarget`
+  (id/type/reaction·comment·shareCount/createdAt/thumbnailUrl/previewText/moodEmoji) and, in `toMessage`,
+  projects it to a `ReplyReference` — a **mood** branch (`moodEmoji` set → emoji + previewText) and a **story**
+  branch (title "Story" + counts + thumbnail), plus a bare `storyReplyToId` → metadata-less story. Android's
+  `ApiMessage` dropped all of it, so a reply to a story/status rendered nothing.
+- **Core (`:core:model`):** new `ApiPostReplyTarget` DTO (all counts default 0 for wire-robustness; `previewText`
+  defaults ""). Wired `postReplyTo: ApiPostReplyTarget?` (with `@JsonNames("storyReplyTo")` for the legacy key —
+  first `@JsonNames` use in the module, `@OptIn(ExperimentalSerializationApi::class)`) + `storyReplyToId: String?`
+  onto `ApiMessage`.
+- **Projection (`:sdk-ui`, same stateless-building-block layer as `isForwarded`/`ReplyMediaKind`):** new
+  `BubbleStoryReply` value (previewText, reaction/comment/shareCount, thumbnailUrl, moodEmoji; derived `isMood`
+  = moodEmoji != null, `hasMetrics` = any count > 0). `BubbleContentBuilder` derives `storyReply` via
+  `buildStoryReply`: **precedence** — a message `replyTo` wins (→ null), a **deleted** tombstone → null (mirrors
+  the `pinnedAtIso`/`isForwarded` suppress rule); else a non-blank trimmed `moodEmoji` → mood preview (no metrics/
+  thumbnail), else a story preview (counts + `thumbnailUrl` run through the shared `resolveMediaUrl`, a blank
+  thumbnail dropped), else a bare non-blank `storyReplyToId` → empty `BubbleStoryReply()`, else null.
+- **Render (`:sdk-ui`, exempt Compose glue):** new `StoryReplyPreview` composable — mood shows emoji + preview
+  text; story shows a `PhotoCamera` glyph + "Story" label + 32dp accent-clipped `AsyncImage` thumbnail + a
+  metric row (`Favorite`/`ChatBubble`/`Share` icon + count, each rendered only when > 0, with an accessibility
+  `contentDescription`). Wired into `MessageBubble` right after the message reply-preview slot (mutually
+  exclusive by the builder's precedence). EN/FR/ES/PT strings (`bubble_reply_story` + 3 metric plurals).
+- **Tests (TDD red→green, `:sdk-ui` via public `BubbleContentBuilder.build`):** +11 in `BubbleContentBuilderTest`
+  (57 total, was 46) — no-post-reply→null, story-snapshot projects metrics+resolved-thumbnail, story-no-engagement→
+  !hasMetrics+null-thumb, absolute-thumb-unchanged, blank-thumb-dropped, mood projects emoji+text+!hasMetrics+null-thumb,
+  blank-mood-emoji→falls-back-to-story, bare-storyReplyToId→metadata-less, blank-storyReplyToId→null,
+  message-reply-precedence-over-post-reply, deleted-message→null.
+- **RED verified:** forcing `storyReply = null` in the builder fails exactly the 6 positive-projection tests
+  (the 5 null-expecting ones stay green) — the tests exercise the real branch, not a tautology.
+- **Verify:** `:core:model:testDebugUnitTest` + `:sdk-ui:testDebugUnitTest` green; full `assembleDebug`
+  + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (system Gradle 8.14.3 at `/opt/gradle`; wrapper download
+  403-blocked in this container, so `meeshy.sh check` — which uses the wrapper — can't run here).
+- **Reviewer:** PASS — diff `apps/android` only (no web/ios/gateway/shared/translator); behaviour-through-public-API
+  `BubbleContentBuilder.build`, no tautologies (RED-verified), boundary coverage (mood vs story, blank/absolute
+  thumbnail, blank-emoji fallback, bare/blank story id, message-reply precedence, deleted-suppress); **SDK-purity** —
+  the "is this a mood or a story, which metrics/thumbnail" derivation is a pure `:sdk-ui` building block, the DTO
+  is `:core:model`, the preview strip is exempt Compose glue; **SSOT** — reuses `resolveMediaUrl`, one story-reply
+  model; **UDF** immutable fields; **accent-coherent** thumbnail clip + icon/label tint; natural read-only preview,
+  no dead end (the story reply now reads with its counts + thumbnail).
 
 ### 2026-07-09 — slice `conversations-purge-on-removed` ✅ impl + reviewer PASS
 - **Rule #0 first:** the only open PR (#1758) is an **iOS** camera/composer PR by another author — not Android,

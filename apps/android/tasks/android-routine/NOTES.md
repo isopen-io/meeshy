@@ -3,6 +3,19 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-09 (`chat-story-reply-preview`): a legacy JSON key alias → `@JsonNames`, not a second field.**
+  iOS decodes `postReplyTo ?? storyReplyTo`. In kotlinx-serialization the faithful equivalent is a single
+  field annotated `@JsonNames("storyReplyTo")` (in `kotlinx.serialization.json`, needs
+  `@OptIn(ExperimentalSerializationApi::class)` on the class — `core/model` already `api(...)`s
+  serialization-json). Don't add a duplicate field. Decode-only alias; encoding still uses the primary name.
+- **2026-07-09: `sed -i 's/.../label = .../'` on a Compose file is a footgun — it renamed an *existing*
+  `AsyncImage(contentDescription = ...)` arg that happened to share the 32-space indent, breaking compile.**
+  When renaming a just-introduced parameter's call-sites, target them precisely (unique surrounding text via
+  `Edit`) instead of a whitespace-anchored global `sed`. Caught by the first `:sdk-ui:compileDebugKotlin`.
+- **2026-07-09 (`chat-story-reply-preview`): mirror the bubble-metadata suppress convention on every new
+  read-side field.** A deleted tombstone shows no `pinnedAtIso`/`isForwarded`; the new `storyReply` follows
+  suit (deleted → null) and a message `replyTo` takes precedence over a `postReplyTo` snapshot (iOS ordering).
+  Encoding both as explicit `when` arms gives clean branch coverage and a deleted-suppress test for free.
 - **2026-07-09 (`chat-reply-thread-overlay`): a read-side "detail sheet" for a thing that already has a pure
   grouping SSOT is a thin slice — reuse the predicate, don't re-derive it.** The reply-count pill already had
   `ReplyThreads.of` (group by trimmed/non-self/non-deleted `replyToId`). The overlay just needed the *same*
