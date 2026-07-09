@@ -948,7 +948,7 @@ struct CallView: View {
             // phone/tablet. `.ignoresSafeArea()` is on the VIDEO only so the feed
             // reaches the screen edges while the duration badge stays inside the
             // safe area (never under the notch / Dynamic Island).
-            videoStream(local: swapStreams, contentMode: primaryVideoContentMode)
+            videoStream(local: effectiveSwapStreams, contentMode: primaryVideoContentMode)
                 .ignoresSafeArea()
 
             VStack {
@@ -987,6 +987,22 @@ struct CallView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Effective primary-stream selector — `swapStreams` gated on local-track
+    /// availability. `CallVideoView` has no fallback for a nil LOCAL track
+    /// (unlike the remote branch, which degrades to a camera-off/connecting
+    /// placeholder), so rendering it as the full-screen primary while the
+    /// survival controller has dropped the outbound track shows a broken
+    /// black "Video non disponible" placeholder over a perfectly healthy peer
+    /// feed, with no gesture available to swap back (the PiP that owns the
+    /// swap tap is itself replaced by the gesture-less suspended tile in that
+    /// state). Falling back to `false` here keeps the peer's video primary —
+    /// and the suspended-tile/PiP selector below already renders correctly
+    /// for `swapStreams == false` — until the local track returns, at which
+    /// point the user's swap choice is restored automatically.
+    private var effectiveSwapStreams: Bool {
+        swapStreams && callManager.hasLocalVideoTrack
     }
 
     /// §7.2 — renders one call stream. `local == true` shows the (mirrored)
@@ -1118,7 +1134,7 @@ struct CallView: View {
             let base = pipCenter(pipCorner, in: geo.size, safeArea: geo.safeAreaInsets)
             // §7.2 — the PiP shows the SECONDARY stream (the opposite of the
             // primary). Swap flips both with one tap.
-            videoStream(local: !swapStreams, contentMode: .scaleAspectFill)
+            videoStream(local: !effectiveSwapStreams, contentMode: .scaleAspectFill)
                 .frame(width: Self.pipSize.width, height: Self.pipSize.height)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(

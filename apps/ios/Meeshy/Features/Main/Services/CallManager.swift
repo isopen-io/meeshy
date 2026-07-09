@@ -4663,10 +4663,15 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // `RTCAudioSession` stale if this fires without a matching
         // `didDeactivate` (e.g. after a system-level call reset). Disabling
         // it here is idempotent and independent of local call state.
-        let rtc = RTCAudioSession.sharedInstance()
-        rtc.lockForConfiguration()
-        rtc.isAudioEnabled = false
-        rtc.unlockForConfiguration()
+        // Routed through audioSessionQueue.sync — like didActivate/didDeactivate
+        // below — so this reset can never interleave with a concurrent
+        // RTCAudioSession reconfiguration dispatched from the MainActor.
+        manager?.audioSessionQueue.sync {
+            let rtc = RTCAudioSession.sharedInstance()
+            rtc.lockForConfiguration()
+            rtc.isAudioEnabled = false
+            rtc.unlockForConfiguration()
+        }
         Task { @MainActor [weak self] in
             self?.manager?.endCall()
         }
