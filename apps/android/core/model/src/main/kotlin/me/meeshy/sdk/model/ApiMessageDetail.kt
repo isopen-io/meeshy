@@ -110,16 +110,6 @@ data class ApiMessageAttachment(
     val translations: Map<String, ApiAttachmentTranslation>? = null,
 )
 
-/** The message a reply targets — port of APIMessageReplyTo (MessageModels.swift). */
-@Serializable
-data class ApiMessageReplyTo(
-    val id: String,
-    val content: String? = null,
-    val senderId: String? = null,
-    val sender: ApiMessageSenderDetail? = null,
-    val attachments: List<ApiMessageAttachment>? = null,
-)
-
 /** The message a forward originates from — port of APIForwardedFrom (MessageModels.swift). */
 @Serializable
 data class ApiForwardedFrom(

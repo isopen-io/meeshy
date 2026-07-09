@@ -11,6 +11,8 @@
     <string name="bubble_status_read">Lu</string>
     <string name="bubble_status_failed">Échec</string>
     <string name="avatar_fallback">Avatar</string>
+    <string name="bubble_reply_photo">Photo</string>
+    <string name="bubble_reply_attachment">Pièce jointe</string>
     <string name="bubble_image_description">Image</string>
     <string name="bubble_attachment_file_fallback">Fichier</string>
     <string name="bubble_file_size_bytes">%1$s o</string>

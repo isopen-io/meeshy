@@ -48,6 +48,16 @@ public object BubbleContentBuilder {
             ?: emptyList()
         val replyToDeleted = message.replyTo?.deletedAt != null
         val replyToText = message.replyTo?.content?.takeUnless { replyToDeleted }
+        val replyAttachments = if (replyToDeleted) emptyList() else message.replyTo?.attachments.orEmpty()
+        val replyImage = replyAttachments.firstOrNull { it.isImage }
+        val replyToMediaKind = when {
+            replyImage != null -> ReplyMediaKind.Image
+            replyAttachments.isNotEmpty() -> ReplyMediaKind.File
+            else -> ReplyMediaKind.None
+        }
+        val replyToThumbnailUrl = replyImage
+            ?.let { it.thumbnailUrl ?: it.fileUrl }
+            ?.let { resolveMediaUrl(it, mediaBaseUrl) }
         val visibleAttachments = if (isDeleted) emptyList() else message.attachments
         val images = visibleAttachments
             .filter { it.isImage && it.fileUrl != null }
@@ -92,6 +102,8 @@ public object BubbleContentBuilder {
             replyToId = message.replyTo?.id,
             replyToText = replyToText,
             replyToDeleted = replyToDeleted,
+            replyToMediaKind = replyToMediaKind,
+            replyToThumbnailUrl = replyToThumbnailUrl,
             replyToSenderName = message.replyTo?.senderDisplayName,
             isPending = isPending,
             clientMessageId = message.clientMessageId,

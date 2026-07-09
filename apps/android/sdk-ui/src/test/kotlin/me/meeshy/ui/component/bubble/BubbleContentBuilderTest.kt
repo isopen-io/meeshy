@@ -197,6 +197,186 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a reply to a text-only message has no media kind and no thumbnail`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(id = "r1", content = "hi"),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToMediaKind).isEqualTo(ReplyMediaKind.None)
+        assertThat(content.replyToThumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a reply to an image message is flagged Image with the resolved thumbnail url`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "",
+                    attachments = listOf(
+                        ApiMessageAttachment(
+                            id = "a1",
+                            mimeType = "image/jpeg",
+                            thumbnailUrl = "/thumbs/a1.jpg",
+                            fileUrl = "/files/a1.jpg",
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.replyToMediaKind).isEqualTo(ReplyMediaKind.Image)
+        assertThat(content.replyToThumbnailUrl).isEqualTo("https://cdn.meeshy.me/thumbs/a1.jpg")
+    }
+
+    @Test
+    fun `a reply to an image with no thumbnail falls back to the file url`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "",
+                    attachments = listOf(
+                        ApiMessageAttachment(id = "a1", mimeType = "image/png", fileUrl = "/files/a1.png"),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.replyToMediaKind).isEqualTo(ReplyMediaKind.Image)
+        assertThat(content.replyToThumbnailUrl).isEqualTo("https://cdn.meeshy.me/files/a1.png")
+    }
+
+    @Test
+    fun `a reply to an image with neither thumbnail nor file url is Image with a null thumbnail`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "",
+                    attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "image/webp")),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToMediaKind).isEqualTo(ReplyMediaKind.Image)
+        assertThat(content.replyToThumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a reply to a non-image attachment is flagged File with no thumbnail`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "",
+                    attachments = listOf(
+                        ApiMessageAttachment(id = "a1", mimeType = "application/pdf", fileUrl = "/files/report.pdf"),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToMediaKind).isEqualTo(ReplyMediaKind.File)
+        assertThat(content.replyToThumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a reply carrying both a file and an image prefers the image thumbnail regardless of order`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "look",
+                    attachments = listOf(
+                        ApiMessageAttachment(id = "f1", mimeType = "application/pdf", fileUrl = "/files/x.pdf"),
+                        ApiMessageAttachment(id = "i1", mimeType = "image/jpeg", thumbnailUrl = "/thumbs/i1.jpg"),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.replyToMediaKind).isEqualTo(ReplyMediaKind.Image)
+        assertThat(content.replyToThumbnailUrl).isEqualTo("https://cdn.meeshy.me/thumbs/i1.jpg")
+    }
+
+    @Test
+    fun `a reply to a deleted message suppresses its media kind and thumbnail`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "secret",
+                    deletedAt = "2026-05-18T10:00:00Z",
+                    attachments = listOf(
+                        ApiMessageAttachment(id = "a1", mimeType = "image/jpeg", thumbnailUrl = "/thumbs/a1.jpg"),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.replyToDeleted).isTrue()
+        assertThat(content.replyToMediaKind).isEqualTo(ReplyMediaKind.None)
+        assertThat(content.replyToThumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a message with no reply has no reply media`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(replyTo = null),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToMediaKind).isEqualTo(ReplyMediaKind.None)
+        assertThat(content.replyToThumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `an absolute reply thumbnail url is left unchanged by the media base url`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "",
+                    attachments = listOf(
+                        ApiMessageAttachment(
+                            id = "a1",
+                            mimeType = "image/jpeg",
+                            thumbnailUrl = "https://other.cdn/x.jpg",
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.replyToThumbnailUrl).isEqualTo("https://other.cdn/x.jpg")
+    }
+
+    @Test
     fun `the sender name shows only for incoming messages when requested`() {
         val sender = ApiMessageSender(displayName = "Alice")
 

@@ -11,6 +11,8 @@
     <string name="bubble_status_read">Lida</string>
     <string name="bubble_status_failed">Falha</string>
     <string name="avatar_fallback">Avatar</string>
+    <string name="bubble_reply_photo">Foto</string>
+    <string name="bubble_reply_attachment">Anexo</string>
     <string name="bubble_image_description">Imagem</string>
     <string name="bubble_attachment_file_fallback">Arquivo</string>
     <string name="bubble_file_size_bytes">%1$s B</string>
