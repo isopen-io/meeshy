@@ -8,6 +8,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { isValidMentionQuery } from '@meeshy/shared/types/mention';
 
 interface MentionPosition {
   top?: number;
@@ -202,7 +203,7 @@ export function useMentions({
     // Détecter la mention
     const detection = detectMentionAtCursor(value, cursorPosition);
 
-    if (detection && /^[\w-]{0,30}$/.test(detection.query)) {
+    if (detection && isValidMentionQuery(detection.query)) {
 
       // Calculer la position
       if (textarea) {

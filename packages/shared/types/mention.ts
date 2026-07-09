@@ -341,6 +341,21 @@ export function isValidMentionUsername(username: string): boolean {
 }
 
 /**
+ * Valide une query de mention EN COURS DE FRAPPE (détectée sous le curseur).
+ * Diffère de {@link isValidMentionUsername} par la longueur minimale 0 : juste après avoir
+ * tapé `@`, la query est encore vide et l'autocomplete doit s'ouvrir. Le charset reste la
+ * source de vérité unique {@link MENTION_HANDLE_CHARS} (lettres/chiffres/underscore/tiret),
+ * pour que les usernames à tiret (`@marie-claire`) restent autocomplétables — parité entre
+ * le composer (`useMentions`) et l'édition de message (`EditMessageView`), qui inlinaient
+ * chacun leur propre regex et divergeaient (`\w` vs `[\w-]`).
+ * @param query - Le texte tapé après `@`, sans le `@`
+ * @returns true si la query peut alimenter l'autocomplete de mention
+ */
+export function isValidMentionQuery(query: string): boolean {
+  return new RegExp(`^[${MENTION_HANDLE_CHARS}]{0,30}$`).test(query);
+}
+
+/**
  * Tronque le contenu d'un message pour la notification de mention
  * @param content - Le contenu du message
  * @param wordLimit - Nombre de mots maximum (défaut: 20)
