@@ -7,7 +7,8 @@ import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema } from './types';
-import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response';
+import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict } from '../../utils/response';
+import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
@@ -115,6 +116,12 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, { liked: true, reactionSummary: post.reactionSummary });
     } catch (error) {
+      // The max-1-reaction domain guard is reachable (a user changing their
+      // emoji) — surface it as 409, not a 500. Preserves the "max 1" semantics
+      // while keeping a reachable domain error out of INTERNAL_ERROR.
+      if (error instanceof ConflictError) {
+        return sendConflict(reply, error.message, { code: error.code });
+      }
       fastify.log.error(`[POST /posts/:postId/like] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }

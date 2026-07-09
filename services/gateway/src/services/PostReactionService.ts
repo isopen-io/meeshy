@@ -10,6 +10,7 @@
 
 import { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { ConflictError } from '../errors/custom-errors';
 
 export interface PostReactionAggregation {
   readonly emoji: string;
@@ -109,7 +110,13 @@ export class PostReactionService {
     const uniqueEmojis = new Set(userExistingReactions.map(r => r.emoji));
 
     if (uniqueEmojis.size >= MAX_REACTIONS_PER_USER && !uniqueEmojis.has(sanitized)) {
-      throw new Error(`Maximum ${MAX_REACTIONS_PER_USER} different reactions per post reached`);
+      // Reachable domain guard (the user is changing their emoji, e.g. iOS
+      // reacting to a story via REST `POST /posts/:id/like`). Signal a typed
+      // conflict so the route maps it to HTTP 409 — never a 500 INTERNAL_ERROR.
+      throw new ConflictError(
+        `Maximum ${MAX_REACTIONS_PER_USER} different reactions per post reached`,
+        'REACTION_LIMIT_REACHED',
+      );
     }
 
     const existingReaction = await this.prisma.postReaction.findFirst({
