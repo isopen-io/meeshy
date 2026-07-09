@@ -91,6 +91,44 @@ public data class BubbleLocation(
     }
 }
 
+/**
+ * An audio-message attachment (an `audio/…` mime) — port of the `.audio` branch of
+ * iOS `BubbleAttachmentView` / `AudioPlayerView`. The transcription is resolved
+ * through the Prisme Linguistique at build time: [transcriptionText] already holds
+ * the text in the viewer's preferred language when a matching translation exists,
+ * otherwise the original transcription. [url] is null until the audio is available
+ * locally, in which case [sizeBytes] drives a "needs download" affordance instead.
+ */
+@Immutable
+public data class BubbleAudio(
+    val attachmentId: String,
+    val url: String? = null,
+    val durationSeconds: Int? = null,
+    val sizeBytes: Int? = null,
+    val transcriptionText: String? = null,
+    val transcriptionLanguage: String? = null,
+    val isTranscriptionTranslated: Boolean = false,
+) {
+    /** True when the audio has a playable URL (already downloaded / remote-ready). */
+    val isPlayable: Boolean get() = !url.isNullOrBlank()
+
+    /** True when a non-blank transcription line is worth surfacing under the player. */
+    val hasTranscription: Boolean get() = !transcriptionText.isNullOrBlank()
+
+    /**
+     * Human-readable `m:ss` duration (unpadded minutes, zero-padded seconds — the
+     * same shape as iOS `String(format: "%d:%02d", …)`), or null when the duration
+     * is unknown or negative (a malformed value never renders a nonsense label).
+     */
+    val formattedDuration: String? get() {
+        val total = durationSeconds ?: return null
+        if (total < 0) return null
+        val minutes = total / 60
+        val seconds = total % 60
+        return "$minutes:${seconds.toString().padStart(2, '0')}"
+    }
+}
+
 @Immutable
 public data class BubbleContent(
     val messageId: String,
@@ -118,6 +156,7 @@ public data class BubbleContent(
     val images: List<BubbleImage> = emptyList(),
     val files: List<BubbleFile> = emptyList(),
     val locations: List<BubbleLocation> = emptyList(),
+    val audios: List<BubbleAudio> = emptyList(),
     val emojiOnlyCount: Int = 0,
     val pinnedAtIso: String? = null,
     val isForwarded: Boolean = false,

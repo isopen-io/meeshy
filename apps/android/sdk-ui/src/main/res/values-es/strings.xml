@@ -21,6 +21,7 @@
     <string name="bubble_attachment_file_fallback">Archivo</string>
     <string name="bubble_location_shared">Ubicación compartida</string>
     <string name="bubble_location_open">Abrir en mapas</string>
+    <string name="bubble_audio_play">Reproducir mensaje de voz</string>
     <string name="bubble_file_size_bytes">%1$s B</string>
     <string name="bubble_file_size_kb">%1$s KB</string>
     <string name="bubble_file_size_mb">%1$s MB</string>

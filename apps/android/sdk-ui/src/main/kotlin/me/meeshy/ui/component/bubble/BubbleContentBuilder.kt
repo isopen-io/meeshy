@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiPostReplyTarget
@@ -90,8 +91,13 @@ public object BubbleContentBuilder {
                     placeName = attachment.originalName?.trim()?.ifBlank { null },
                 )
             }
+        val audios = visibleAttachments
+            .filter { it.isAudio }
+            .map { attachment ->
+                buildAudio(attachment, preferences, mediaBaseUrl)
+            }
         val files = visibleAttachments
-            .filterNot { it.isImage || it.isLocation }
+            .filterNot { it.isImage || it.isLocation || it.isAudio }
             .map { attachment ->
                 BubbleFile(
                     attachmentId = attachment.id,
@@ -131,6 +137,7 @@ public object BubbleContentBuilder {
             images = images,
             files = files,
             locations = locations,
+            audios = audios,
             emojiOnlyCount = if (visibleAttachments.isEmpty()) {
                 EmojiDetector.emojiOnlyCount(text)
             } else {
@@ -178,6 +185,72 @@ public object BubbleContentBuilder {
         return null
     }
 
+    /**
+     * Projects an audio attachment into a [BubbleAudio], resolving the displayed
+     * transcription through the Prisme Linguistique — port of iOS `AudioPlayerView`
+     * transcription handling, but done at build time so the viewer sees the
+     * preferred-language transcription by default (iOS defaults to the original and
+     * requires a manual language pick; this surpasses it).
+     *
+     * The duration falls back to the transcription's `durationMs` when the
+     * attachment carries no explicit `duration`, matching the gateway's two sources.
+     */
+    private fun buildAudio(
+        attachment: ApiMessageAttachment,
+        preferences: LanguageResolver.ContentLanguagePreferences,
+        mediaBaseUrl: String?,
+    ): BubbleAudio {
+        val durationSeconds = attachment.duration
+            ?: attachment.transcription?.durationMs?.let { it / 1000 }
+        val resolved = resolveTranscription(attachment, preferences)
+        return BubbleAudio(
+            attachmentId = attachment.id,
+            url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+            durationSeconds = durationSeconds,
+            sizeBytes = attachment.fileSize,
+            transcriptionText = resolved?.text,
+            transcriptionLanguage = resolved?.language,
+            isTranscriptionTranslated = resolved?.isTranslated == true,
+        )
+    }
+
+    private data class ResolvedTranscription(
+        val text: String,
+        val language: String?,
+        val isTranslated: Boolean,
+    )
+
+    /**
+     * Prisme rule 1: prefer a translation targeting one of the viewer's preferred
+     * languages (in priority order); when the original transcription is already in
+     * a preferred language it wins as untranslated content; otherwise fall back to
+     * the ORIGINAL transcription (never an arbitrary translation). Returns null when
+     * no non-blank transcription exists at all.
+     */
+    private fun resolveTranscription(
+        attachment: ApiMessageAttachment,
+        preferences: LanguageResolver.ContentLanguagePreferences,
+    ): ResolvedTranscription? {
+        val transcription: ApiAttachmentTranscription? = attachment.transcription
+        val originalText = (transcription?.transcribedText ?: transcription?.text)
+            ?.trim()?.ifBlank { null }
+        val originalLanguage = transcription?.language?.trim()?.ifBlank { null }
+        val translations = attachment.translations.orEmpty()
+
+        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
+            if (originalText != null && originalLanguage.equals(language, ignoreCase = true)) {
+                return ResolvedTranscription(originalText, originalLanguage, isTranslated = false)
+            }
+            val translated = translations.entries
+                .firstOrNull { it.key.equals(language, ignoreCase = true) }
+                ?.value?.transcription?.trim()?.ifBlank { null }
+            if (translated != null) {
+                return ResolvedTranscription(translated, language, isTranslated = true)
+            }
+        }
+        return originalText?.let { ResolvedTranscription(it, originalLanguage, isTranslated = false) }
+    }
+
     private const val LOCATION_MIME = "application/x-location"
 
     private val ApiMessageAttachment.isImage: Boolean
@@ -185,6 +258,9 @@ public object BubbleContentBuilder {
 
     private val ApiMessageAttachment.isLocation: Boolean
         get() = mimeType == LOCATION_MIME
+
+    private val ApiMessageAttachment.isAudio: Boolean
+        get() = mimeType?.startsWith("audio/") == true
 
     private fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
         url.startsWith("http") -> url

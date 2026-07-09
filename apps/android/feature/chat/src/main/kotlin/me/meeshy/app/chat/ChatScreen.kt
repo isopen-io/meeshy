@@ -373,6 +373,9 @@ fun ChatScreen(
                                             onLocationClick = { location ->
                                                 location.geoUri?.let { runCatching { uriHandler.openUri(it) } }
                                             },
+                                            onAudioClick = { audio ->
+                                                audio.url?.let { runCatching { uriHandler.openUri(it) } }
+                                            },
                                             onReplyPreviewClick = {
                                                 viewModel.onReplyPreviewTap(bubble.messageId)
                                             },

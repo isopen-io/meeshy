@@ -534,7 +534,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       un attachment mime `application/x-location` devient un `BubbleLocation` pur (lat/lon nullable,
       `placeName` ← `originalName`, `geoUri` locale-safe) rendu en carte pin tappable → `geo:` URI
       ouvert dans Plans/Maps via `LocalUriHandler`, jamais fondu dans le bucket fichier générique) ;
-      carousel / audio / contact pending
+      audio done (`chat-bubble-audio` 2026-07-09 : port iOS `AudioPlayerView` message-bubble, SURPASSE le
+      Prisme — un attachment mime `audio/…` devient un `BubbleAudio` pur (url résolue, `durationSeconds`
+      explicite → repli `transcription.durationMs/1000`, `sizeBytes`, transcription résolue Prisme rule 1 :
+      langue préférée traduite sinon transcription originale, `formattedDuration` `m:ss`) rendu en player
+      compact (glyphe play/download + durée-ou-taille + ligne de transcription) tappable → URL au host ;
+      iOS affiche `orig` par défaut + sélecteur manuel, Android affiche la langue préférée d'emblée) ;
+      carousel / contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/

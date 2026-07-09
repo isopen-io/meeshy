@@ -21,6 +21,7 @@
     <string name="bubble_attachment_file_fallback">Fichier</string>
     <string name="bubble_location_shared">Position partagée</string>
     <string name="bubble_location_open">Ouvrir dans Plans</string>
+    <string name="bubble_audio_play">Lire le message vocal</string>
     <string name="bubble_file_size_bytes">%1$s o</string>
     <string name="bubble_file_size_kb">%1$s Ko</string>
     <string name="bubble_file_size_mb">%1$s Mo</string>
