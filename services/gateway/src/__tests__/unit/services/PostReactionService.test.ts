@@ -49,6 +49,7 @@ jest.mock('../../../utils/logger', () => ({
 import { PostReactionService, createPostReactionService } from '../../../services/PostReactionService';
 import type { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { ConflictError } from '../../../errors/custom-errors';
 
 describe('PostReactionService', () => {
   let service: PostReactionService;
@@ -262,6 +263,21 @@ describe('PostReactionService', () => {
           emoji: '❤️' // Trying to add 2nd different emoji
         })
       ).rejects.toThrow('Maximum 1 different reactions per post reached');
+    });
+
+    it('should throw a typed ConflictError (409) when max reactions per user reached', async () => {
+      // The reaction-limit guard is a reachable domain error (emoji change),
+      // not a server fault. It must be a typed ConflictError so the REST like
+      // route maps it to HTTP 409, never a 500 INTERNAL_ERROR.
+      mockPrisma.postReaction.findMany.mockResolvedValue([{ emoji: '👍' }]);
+
+      const error = await service
+        .addReaction({ postId: testPostId, userId: testUserId, emoji: '❤️' })
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).statusCode).toBe(409);
+      expect((error as ConflictError).code).toBe('REACTION_LIMIT_REACHED');
     });
 
     it('should allow adding same emoji again (returns existing)', async () => {
