@@ -1047,7 +1047,10 @@ export async function resolveMentionedUsers(
   const usernames = new Set<string>();
   // Charset aligné sur MENTION_HANDLE_CHARS (SSOT) : inclut le tiret, sinon `@marie-claire`
   // était résolu comme `marie` et l'utilisateur à tiret ne remontait jamais.
-  const mentionRegex = new RegExp(`@([${MENTION_HANDLE_CHARS}]{1,30})`, 'g');
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `parseMentions`, flag `u` requis) : un `@`
+  // collé après un caractère de nom appartient à une adresse e-mail (`john@example.com`) et
+  // ne doit PAS être extrait — sinon un tiers nommé `example` est faussement mentionné/notifié.
+  const mentionRegex = new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]{1,30})`, 'gu');
 
   for (const content of contents) {
     if (!content) continue;

@@ -1699,4 +1699,56 @@ describe('resolveMentionedUsers (module export)', () => {
     expect(result).toEqual([]);
     expect(findMany).not.toHaveBeenCalled();
   });
+
+  // The `@` in an e-mail address is glued to a preceding word character, so it
+  // belongs to the address — not a mention. The left boundary (NAME_BOUNDARY_LEFT,
+  // SSOT `parseMentions`) enforces this; without it `john@example.com` spuriously
+  // resolves a bystander named `example` across the entire posts/comments surface.
+  const exampleUser: FakeUser = {
+    id: 'u-example',
+    username: 'example',
+    isActive: true,
+    displayName: null,
+    firstName: 'Ex',
+    lastName: 'Ample',
+    avatar: null,
+  };
+
+  it('does not extract a handle out of an e-mail address (john@example.com)', async () => {
+    const findMany = mongoLikeFindMany([exampleUser]);
+    const prismaMock = { user: { findMany } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['Contact me at john@example.com']);
+
+    expect(result).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('ignores an `@` glued after a non-latin/accented word (adrià@example.io)', async () => {
+    const findMany = mongoLikeFindMany([exampleUser]);
+    const prismaMock = { user: { findMany } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['écris à adrià@example.io stp']);
+
+    expect(result).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('still resolves a real mention that follows a boundary (space)', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([exampleUser]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['hey @example look here']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].username).toBe('example');
+  });
+
+  it('still resolves a mention anchored at the start of the content', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([exampleUser]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['@example ping']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].username).toBe('example');
+  });
 });
