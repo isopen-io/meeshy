@@ -239,8 +239,11 @@ export class ConversationStatsService {
       }
     }
 
-    // Online users snapshot
-    const onlineUsers = await this.computeOnlineUsers(prisma, realConversationId, getConnectedUserIds());
+    // Online users snapshot. Pass the RAW identifier (not realConversationId): computeOnlineUsers
+    // re-derives the global flag by comparing its argument to the "meeshy" literal, and the global
+    // conversation has no Participant rows — handing it the resolved ObjectId sends it down the
+    // participant-filter branch, which finds nothing and yields []. Mirrors updateOnNewMessage.
+    const onlineUsers = await this.computeOnlineUsers(prisma, conversationId, getConnectedUserIds());
 
     return {
       messagesPerLanguage,
