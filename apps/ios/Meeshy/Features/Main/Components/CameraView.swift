@@ -471,11 +471,18 @@ final class CameraModel: NSObject, ObservableObject {
     }
 
     /// Concatenates ordered video segments (each a camera-switch boundary) into
-    /// one continuous file via `AVMutableComposition` + export — no camera
-    /// hardware involved, so this is exercised directly by
-    /// `CameraModelSegmentMergeTests` against synthetic fixture clips.
-    /// `nonisolated` so the composition/export work (CPU-bound, can take a few
-    /// seconds for longer recordings) never blocks the main actor.
+    /// one continuous file via `AVMutableComposition` + export. `nonisolated`
+    /// so the composition/export work (CPU-bound, can take a few seconds for
+    /// longer recordings) never blocks the main actor.
+    ///
+    /// Covered by `CameraModelSegmentMergeTests` (the real empty-input fast
+    /// path — no AVFoundation asset loading involved) and source-reflection
+    /// guards for the rest (`CameraModelSwitchDuringRecordingTests`):
+    /// synthesizing throwaway H.264 clips with `AVAssetWriter` purely to
+    /// round-trip them back through `AVURLAsset`/`AVAssetExportSession` proved
+    /// too fragile in CI (encoder/container edge cases unrelated to this
+    /// method's own logic caused spurious failures), so the merge/export
+    /// behavior itself is pinned structurally instead of via synthetic media.
     nonisolated static func mergeSegments(_ urls: [URL]) async -> URL? {
         guard !urls.isEmpty else { return nil }
         let composition = AVMutableComposition()
