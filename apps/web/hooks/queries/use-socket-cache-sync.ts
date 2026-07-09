@@ -106,6 +106,29 @@ function updateInfiniteConversationCache(
   );
 }
 
+// After a message is deleted, advance the conversation-list preview to the
+// newest remaining message — but only for conversations whose `lastMessage`
+// WAS the deleted message. Mirrors the lastMessage-update pattern used by the
+// edited-message handler, across both the flat and infinite conversation
+// caches.
+function advanceConversationPreviewOnDelete(
+  queryClient: ReturnType<typeof useQueryClient>,
+  conversationId: string,
+  deletedMessageId: string,
+  replacement: Message
+): void {
+  const replace = (conv: Conversation): Conversation =>
+    conv.id === conversationId && conv.lastMessage?.id === deletedMessageId
+      ? { ...conv, lastMessage: replacement, lastMessageAt: replacement.createdAt }
+      : conv;
+
+  queryClient.setQueriesData<Conversation[]>(
+    { queryKey: queryKeys.conversations.lists() },
+    (old) => (old ? old.map(replace) : old)
+  );
+  updateInfiniteConversationCache(queryClient, (convs) => convs.map(replace));
+}
+
 interface UseSocketCacheSyncOptions {
   conversationId?: string | null;
   enabled?: boolean;
@@ -333,11 +356,18 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // Handler for deleted messages
     const handleMessageDeleted = (messageId: string) => {
       const removeFromCache = (targetConversationId: string) => {
+        // Track the newest remaining message so the conversation-list preview
+        // can advance when the deleted message WAS that preview. The gateway
+        // recomputes `lastMessageAt` server-side but the `message:deleted`
+        // payload carries only { messageId, conversationId }, so without this
+        // the conversation list keeps showing the deleted message's content as
+        // the last-message preview until an unrelated full refetch occurs.
+        let newestRemaining: Message | null = null;
         queryClient.setQueryData(
           queryKeys.messages.infinite(targetConversationId),
           (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
             if (!old) return old;
-            return {
+            const next = {
               ...old,
               pages: old.pages.map((page) => ({
                 ...page,
@@ -350,8 +380,27 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                   ),
               })),
             };
+            for (const page of next.pages) {
+              for (const m of page.messages) {
+                if (
+                  !newestRemaining ||
+                  new Date(m.createdAt).getTime() > new Date(newestRemaining.createdAt).getTime()
+                ) {
+                  newestRemaining = m;
+                }
+              }
+            }
+            return next;
           }
         );
+
+        // Only advance the preview when a replacement is present in cache.
+        // If no message remains cached we cannot tell an empty conversation
+        // from one whose older messages simply aren't loaded — leaving the
+        // (stale) preview is strictly safer than blanking a non-empty chat.
+        if (newestRemaining) {
+          advanceConversationPreviewOnDelete(queryClient, targetConversationId, messageId, newestRemaining);
+        }
       };
 
       if (conversationId) {
