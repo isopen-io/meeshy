@@ -770,11 +770,19 @@ struct StoryCardView: View {
     /// attendu). La sidebar droite tombait alors hors écran à x=389+w=46
     /// → out of 402 (bug 2026-05-27). On force ici les dimensions explicites
     /// par calcul direct du fit ratio.
+    /// Ratio (largeur / hauteur) du canvas de la story courante. L'auteur a figé
+    /// la forme à la composition (« l'import de l'image de fond impose le cadre et
+    /// forme du Canvas ») : un fond paysage → 16:9 horizontal, sinon 9:16 vertical
+    /// par défaut. Fallback portrait pour toutes les stories antérieures.
+    private var readerCanvasRatio: CGFloat {
+        CGFloat(currentStory?.storyEffects?.canvasAspect.ratio ?? Double(CanvasGeometry.portraitRatio))
+    }
+
     private var canvasFitSize: CGSize {
         // Source de vérité partagée avec le composer (`CanvasGeometry.aspectFitSize`)
-        // pour garantir la parité 9:16 composer ↔ reader. Math identique à
-        // l'ancien calcul inline `min(w, h * 9/16)`.
-        CanvasGeometry.aspectFitSize(in: geometry.size)
+        // pour garantir la parité composer ↔ reader — même ratio (9:16 par défaut,
+        // 16:9 si l'auteur a importé un fond paysage).
+        CanvasGeometry.aspectFitSize(in: geometry.size, ratio: readerCanvasRatio)
     }
 
     /// Cadrage « carte → plein écran » du canvas reader, MUTUALISÉ avec le composer
@@ -812,7 +820,8 @@ struct StoryCardView: View {
             // Directive user 2026-07-04 : la carte se place DIRECTEMENT sous
             // la ligne d'expiration — le mou vertical va en bas, plus de vide
             // entre le header et la story.
-            verticalAlignment: .top))
+            verticalAlignment: .top,
+            canvasRatio: readerCanvasRatio))
     }
 
     var body: some View {

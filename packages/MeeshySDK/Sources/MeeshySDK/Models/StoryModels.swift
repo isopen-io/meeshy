@@ -1175,6 +1175,40 @@ public struct StoryBackgroundTransform: Codable, Sendable {
 
 // MARK: - Story Effects
 
+// MARK: - Story Canvas Aspect (forme du canvas : vertical par défaut, horizontal si fond paysage)
+
+/// Forme du canvas d'une story. Le canvas est **vertical 9:16 par défaut** ;
+/// l'import d'une image de fond **paysage** (largeur > hauteur) bascule le canvas
+/// en **horizontal 16:9** — « l'import de l'image de fond impose le cadre et forme
+/// du Canvas ». Décision pure, sans dépendance UI, réutilisée par le composer.
+public enum StoryCanvasAspect: String, Codable, Sendable, CaseIterable {
+    case portrait   // 9:16 (défaut)
+    case landscape  // 16:9
+
+    /// Ratio largeur / hauteur du canvas (portrait 0.5625, paysage 1.7778).
+    public var ratio: Double {
+        switch self {
+        case .portrait:  return 9.0 / 16.0
+        case .landscape: return 16.0 / 9.0
+        }
+    }
+
+    /// Décide la forme du canvas depuis les dimensions d'une image de fond importée.
+    /// Une image plus large que haute → canvas horizontal ; sinon (portrait ou carré,
+    /// ou dimensions invalides) → canvas vertical par défaut.
+    public static func from(width: Double, height: Double) -> StoryCanvasAspect {
+        guard width > 0, height > 0 else { return .portrait }
+        return width > height ? .landscape : .portrait
+    }
+
+    /// Reconstruit la forme depuis un ratio persisté (`canvasAspectRatio`). `nil`
+    /// ou ratio ≤ 1 → portrait ; ratio > 1 → paysage.
+    public static func from(ratio: Double?) -> StoryCanvasAspect {
+        guard let ratio, ratio > 1 else { return .portrait }
+        return .landscape
+    }
+}
+
 public struct StoryEffects: Codable, Sendable {
     public var background: String?
     public var textStyle: String?
@@ -1222,6 +1256,13 @@ public struct StoryEffects: Codable, Sendable {
     // Transform appliqué à l'image/vidéo de fond (scale, offset, rotation)
     public var backgroundTransform: StoryBackgroundTransform?
 
+    /// Ratio (largeur / hauteur) du canvas de CE slide. `nil` = canvas vertical
+    /// 9:16 par défaut (toutes les stories antérieures + la valeur par défaut).
+    /// L'import d'une image de fond paysage stampe `StoryCanvasAspect.landscape.ratio`
+    /// (16:9) ici — « l'import de l'image de fond impose le cadre et forme du Canvas ».
+    /// Lu par le composer, le reader et l'export pour reconstruire la forme du canvas.
+    public var canvasAspectRatio: Double?
+
     // Durée totale du slide (sérialisée au publish) — LEGACY : valeurs backend
     // héritées arbitraires, IGNORÉE par `computedTotalDuration()` (cf. doc).
     public var slideDuration: Float?
@@ -1262,7 +1303,8 @@ public struct StoryEffects: Codable, Sendable {
                 backgroundTransform: StoryBackgroundTransform? = nil,
                 slideDuration: Float? = nil,
                 timelineDuration: Double? = nil,
-                clipTransitions: [StoryClipTransition]? = nil) {
+                clipTransitions: [StoryClipTransition]? = nil,
+                canvasAspectRatio: Double? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.filterIntensity = filterIntensity; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
@@ -1285,6 +1327,7 @@ public struct StoryEffects: Codable, Sendable {
         self.slideDuration = slideDuration
         self.timelineDuration = timelineDuration
         self.clipTransitions = clipTransitions
+        self.canvasAspectRatio = canvasAspectRatio
     }
 
     // MARK: - Custom Codable (textObjects non-optional: fallback to [] when absent)
@@ -1298,6 +1341,7 @@ public struct StoryEffects: Codable, Sendable {
         case opening, closing
         case textObjects, mediaObjects, audioPlayerObjects, backgroundAudioVariants
         case thumbHash, backgroundTransform, slideDuration, timelineDuration, clipTransitions
+        case canvasAspectRatio
         case musicTrackId, musicStartTime, musicEndTime
     }
 
@@ -1344,6 +1388,7 @@ public struct StoryEffects: Codable, Sendable {
         slideDuration = try c.decodeIfPresent(Float.self, forKey: .slideDuration)
         timelineDuration = try c.decodeIfPresent(Double.self, forKey: .timelineDuration)
         clipTransitions = try c.decodeIfPresent([StoryClipTransition].self, forKey: .clipTransitions)
+        canvasAspectRatio = try c.decodeIfPresent(Double.self, forKey: .canvasAspectRatio)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1380,6 +1425,12 @@ public struct StoryEffects: Codable, Sendable {
         try c.encodeIfPresent(slideDuration, forKey: .slideDuration)
         try c.encodeIfPresent(timelineDuration, forKey: .timelineDuration)
         try c.encodeIfPresent(clipTransitions, forKey: .clipTransitions)
+        try c.encodeIfPresent(canvasAspectRatio, forKey: .canvasAspectRatio)
+    }
+
+    /// Forme du canvas de ce slide, dérivée de `canvasAspectRatio` (défaut portrait).
+    public var canvasAspect: StoryCanvasAspect {
+        StoryCanvasAspect.from(ratio: canvasAspectRatio)
     }
 
     public var parsedTextStyle: StoryTextStyle? {

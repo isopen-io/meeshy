@@ -83,7 +83,7 @@ extension StoryComposerView {
         Button { handleDismiss() } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundColor(.white)
+                .glassControlForeground()
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
@@ -100,7 +100,7 @@ extension StoryComposerView {
         } label: {
             Image(systemName: "play.fill")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white)
+                .glassControlForeground()
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
@@ -150,10 +150,10 @@ extension StoryComposerView {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
             }
-            .foregroundStyle(.white)
+            .glassControlForeground()
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .adaptiveGlass(in: Capsule(), tint: .white.opacity(0.18))
+            .adaptiveGlass(in: Capsule(), tint: MeeshyColors.brandPrimary.opacity(0.18))
         }
         .sheet(item: $audiencePickerMode) { mode in
             AudienceUserPickerView(mode: mode, initialSelection: visibilityUserIds) { ids in
@@ -168,7 +168,7 @@ extension StoryComposerView {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
+                .glassControlForeground()
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
@@ -235,7 +235,7 @@ extension StoryComposerView {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
+                .glassControlForeground()
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle())
                 .contentShape(Circle())

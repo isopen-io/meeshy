@@ -13,6 +13,9 @@ import MeeshySDK
 struct OpeningEffectChips: View {
     let selection: StoryTransitionEffect?
     let onSelect: (StoryTransitionEffect?) -> Void
+    // Les chips s'affichent sur le band opaque (blanc@92% en clair) : sans
+    // adaptation, un label blanc y était invisible en light mode.
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -33,28 +36,27 @@ struct OpeningEffectChips: View {
             defaultValue: "Aucune",
             bundle: .module
         )
+        let isDark = colorScheme == .dark
+        // Sélectionné : blanc sur brand (contrasté dans les deux thèmes).
+        // Non sélectionné : texte adaptatif sur remplissage subtil adaptatif.
+        let textColor: Color = isSelected ? .white : (isDark ? .white : MeeshyColors.indigo950)
+        let fillColor: Color = isSelected
+            ? MeeshyColors.brandPrimary.opacity(0.85)
+            : (isDark ? Color.white.opacity(0.10) : MeeshyColors.indigo950.opacity(0.06))
+        let strokeColor: Color = isSelected
+            ? MeeshyColors.brandPrimary.opacity(0.35)
+            : (isDark ? Color.white.opacity(0.12) : MeeshyColors.indigo950.opacity(0.14))
         return Button {
             onSelect(effect)
             HapticFeedback.light()
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                .foregroundColor(.white)
+                .foregroundColor(textColor)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(
-                    Capsule().fill(
-                        isSelected
-                        ? MeeshyColors.brandPrimary.opacity(0.85)
-                        : Color.white.opacity(0.10)
-                    )
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        Color.white.opacity(isSelected ? 0.35 : 0.12),
-                        lineWidth: 1
-                    )
-                )
+                .background(Capsule().fill(fillColor))
+                .overlay(Capsule().strokeBorder(strokeColor, lineWidth: 1))
         }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

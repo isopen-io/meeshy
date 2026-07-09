@@ -90,4 +90,66 @@ struct CanvasGeometryTests {
     func aspectFitSize_emptyArea_returnsInput() {
         #expect(CanvasGeometry.aspectFitSize(in: .zero) == .zero)
     }
+
+    // MARK: - Canvas aspect ratio (fond paysage → 16:9 horizontal)
+
+    @Test("portraitRatio is 9:16, landscapeRatio is 16:9")
+    func ratioConstants() {
+        #expect(abs(CanvasGeometry.portraitRatio - 9.0 / 16.0) < 0.0001)
+        #expect(abs(CanvasGeometry.landscapeRatio - 16.0 / 9.0) < 0.0001)
+    }
+
+    @Test("aspectFitSize with landscape ratio produces an exact 16:9 size")
+    func aspectFitSize_landscape_isSixteenNine() {
+        let fit = CanvasGeometry.aspectFitSize(in: CGSize(width: 402, height: 874),
+                                               ratio: CanvasGeometry.landscapeRatio)
+        #expect(abs(fit.width / fit.height - 16.0 / 9.0) < 0.0001)
+        // Zone plus haute que large → contrainte largeur : la carte 16:9 garde
+        // la largeur et devient bien plus courte que l'écran.
+        #expect(abs(fit.width - 402) < 0.0001)
+        #expect(abs(fit.height - 402 * 9.0 / 16.0) < 0.001)
+    }
+
+    @Test("aspectFitSize defaults to portrait 9:16 (call sites historiques inchangés)")
+    func aspectFitSize_defaultIsPortrait() {
+        let explicit = CanvasGeometry.aspectFitSize(in: CGSize(width: 402, height: 874),
+                                                    ratio: CanvasGeometry.portraitRatio)
+        let byDefault = CanvasGeometry.aspectFitSize(in: CGSize(width: 402, height: 874))
+        #expect(abs(explicit.width - byDefault.width) < 0.0001)
+        #expect(abs(explicit.height - byDefault.height) < 0.0001)
+    }
+
+    @Test("instance designHeight tracks the render bounds aspect")
+    func instanceDesignHeight_followsBoundsAspect() {
+        // Portrait bounds (9:16) → design 1080×1920 (identique aux constantes).
+        let portrait = CanvasGeometry(renderSize: CanvasGeometry.aspectFitSize(
+            in: CGSize(width: 402, height: 874)))
+        #expect(abs(portrait.designHeight - 1920) < 0.5)
+        #expect(abs(portrait.designSize.width - 1080) < 0.0001)
+
+        // Landscape bounds (16:9) → design 1080×607.5.
+        let landscape = CanvasGeometry(renderSize: CanvasGeometry.aspectFitSize(
+            in: CGSize(width: 402, height: 874), ratio: CanvasGeometry.landscapeRatio))
+        #expect(abs(landscape.designHeight - 607.5) < 0.5)
+        #expect(abs(landscape.designSize.width - 1080) < 0.0001)
+    }
+
+    @Test("designHeightLength maps normalized y onto the canvas design height")
+    func designHeightLength_normalized() {
+        let landscape = CanvasGeometry(renderSize: CGSize(width: 1920, height: 1080))
+        #expect(abs(landscape.designHeightLength(forNormalized: 0.0)) < 0.0001)
+        #expect(abs(landscape.designHeightLength(forNormalized: 1.0) - 607.5) < 0.5)
+        #expect(abs(landscape.designHeightLength(forNormalized: 0.5) - 303.75) < 0.5)
+    }
+
+    @Test("landscape y-projection round-trips onto the actual canvas height")
+    func landscapeYProjection_roundTripsToBounds() {
+        // Un canvas 16:9 rendu dans 800×450 : y normalisé = 1 doit atterrir sur
+        // le bord bas (450), pas sur 1920×scale (la régression portrait-only).
+        let bounds = CGSize(width: 800, height: 450)
+        let geo = CanvasGeometry(renderSize: bounds)
+        let designY = geo.designHeightLength(forNormalized: 1.0)
+        let screenY = geo.render(CGPoint(x: 0, y: designY)).y
+        #expect(abs(screenY - 450) < 0.5)
+    }
 }

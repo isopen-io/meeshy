@@ -210,7 +210,7 @@ public final class StoryMediaLayer: CALayer {
         let renderedSize = geometry.render(scaledDesignSize)
 
         let designCenterX = geometry.designLength(forNormalized: CGFloat(media.x))
-        let designCenterY = CGFloat(media.y) * CanvasGeometry.designHeight
+        let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(media.y))
         let renderedCenter = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
 
         bounds = CGRect(origin: .zero, size: renderedSize)

@@ -80,6 +80,17 @@ public enum StoryExporter {
         let effective = slide.computedTotalDuration()
         let totalDuration = CMTime(seconds: effective, preferredTimescale: 600)
 
+        // Taille de rendu MP4 selon la forme du canvas figée par l'auteur : un fond
+        // paysage impose un canvas 16:9 (1920×1080) ; sinon le vertical 9:16 par
+        // défaut (1080×1920, inchangé). Dimensions entières paires (contrainte H.264).
+        let canvasRenderSize: CGSize = {
+            switch slide.effects.canvasAspect {
+            case .portrait:  return CanvasGeometry.designSize   // 1080×1920
+            case .landscape: return CGSize(width: CanvasGeometry.designHeight,
+                                           height: CanvasGeometry.designWidth) // 1920×1080
+            }
+        }()
+
         // Asset référence du background video — capturée pour pouvoir
         // composer **aussi son audio track** dans la pipeline audio mix
         // (section 1.5 ci-dessous). nil quand la slide est static-only.
@@ -149,7 +160,7 @@ public enum StoryExporter {
                         to: videoTrack,
                         at: playableDuration,
                         duration: tailDuration,
-                        size: CanvasGeometry.designSize
+                        size: canvasRenderSize
                     )
                 }
             }
@@ -160,7 +171,7 @@ public enum StoryExporter {
             //    they don't need a real video track underneath.
             try await ensureVideoTrack(in: composition,
                                        duration: totalDuration,
-                                       size: CanvasGeometry.designSize)
+                                       size: canvasRenderSize)
         }
 
         // 1.5. Audio mixing. Le MP4 export est destiné au partage externe
@@ -186,7 +197,7 @@ public enum StoryExporter {
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.frameDuration = CMTime(value: 1, timescale: 60) // 60 fps master
-        videoComposition.renderSize = CanvasGeometry.designSize           // 1080×1920
+        videoComposition.renderSize = canvasRenderSize                    // 1080×1920 (portrait) / 1920×1080 (paysage)
         videoComposition.customVideoCompositorClass = StoryAVCompositor.self
         videoComposition.instructions = [
             StoryCompositionInstruction(

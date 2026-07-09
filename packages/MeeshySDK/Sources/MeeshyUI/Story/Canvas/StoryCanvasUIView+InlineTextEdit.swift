@@ -116,7 +116,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
     private func restoreLayerAfterEditing(_ layer: StoryTextLayer) {
         guard let textObject = layer.textObject else { return }
         let designX = geometry.designLength(forNormalized: CGFloat(textObject.x))
-        let designY = CGFloat(textObject.y) * CanvasGeometry.designHeight
+        let designY = geometry.designHeightLength(forNormalized: CGFloat(textObject.y))
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.position = geometry.render(CGPoint(x: designX, y: designY))

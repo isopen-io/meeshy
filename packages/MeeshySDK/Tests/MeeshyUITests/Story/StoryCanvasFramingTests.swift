@@ -177,6 +177,31 @@ final class StoryCanvasFramingTests: XCTestCase {
                        "compat : les call sites existants (composer) gardent le centrage")
     }
 
+    // MARK: - Canvas paysage (fond 16:9 impose la forme horizontale)
+
+    func test_resolve_landscapeRatio_cardIsSixteenNine() {
+        let vp = viewport()
+        let r = StoryCanvasFraming.resolve(StoryCanvasFraming.Input(
+            viewport: vp, headerInset: 100, bottomInset: 320,
+            state: .carded, cardedCornerRadius: 22,
+            canvasRatio: CanvasGeometry.landscapeRatio))
+        let intrinsic = CanvasGeometry.aspectFitSize(in: vp, ratio: CanvasGeometry.landscapeRatio)
+        // La carte est le canvas 16:9 intrinsèque réduit par framing.scale : son
+        // ratio présenté reste 16:9, et elle tient dans la région libre.
+        XCTAssertEqual(intrinsic.width / intrinsic.height, 16.0 / 9.0, accuracy: 0.0001)
+        XCTAssertGreaterThan(r.scale, 0)
+        XCTAssertLessThanOrEqual(r.scale, 1)
+    }
+
+    func test_resolve_defaultRatio_isPortrait() {
+        // Un `Input` sans `canvasRatio` explicite reste 9:16 — le comportement
+        // par défaut « vertical » attendu pour toutes les stories existantes.
+        let input = StoryCanvasFraming.Input(
+            viewport: viewport(), headerInset: 100, bottomInset: 320,
+            state: .carded, cardedCornerRadius: 22)
+        XCTAssertEqual(input.canvasRatio, CanvasGeometry.portraitRatio, accuracy: 0.0001)
+    }
+
     func test_readerPresentation_fullscreenSession_alwaysFree() {
         // En session plein écran, le canvas reste plein bord même quand le chrome
         // ré-apparaît temporairement (touch-and-hold peek) — pas de re-cardage.

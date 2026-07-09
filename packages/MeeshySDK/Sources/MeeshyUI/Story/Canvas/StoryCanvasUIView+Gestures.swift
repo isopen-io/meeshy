@@ -241,9 +241,12 @@ extension StoryCanvasUIView {
             // - y est mappé sur `1920 * scaleFactor` pour rester cohérent quand
             //   le canvas n'a pas un ratio exactement 9:16.
             let geo = CanvasGeometry(renderSize: bounds.size)
-            let renderHeightFor1920 = geo.render(CanvasGeometry.designHeight)
+            // Hauteur design projetée à l'écran pour CE canvas (9:16 → 1920×scale,
+            // 16:9 → 607.5×scale) — même base que la projection des layers, donc
+            // le geste écran→normalisé round-trip quel que soit le ratio du canvas.
+            let renderHeightForDesign = geo.render(geo.designHeight)
             let dxNorm = Double(translation.x / bounds.width)
-            let dyNorm = Double(translation.y / renderHeightFor1920)
+            let dyNorm = Double(translation.y / renderHeightForDesign)
 
             // Unification BG/FG (2026-05-29) : pour le bg, on ne snap pas
             // (le bg media n'a pas de "position" sémantique sur les rails
@@ -387,7 +390,7 @@ extension StoryCanvasUIView {
         let geo = CanvasGeometry(renderSize: bounds.size)
         func renderPosition(x: Double, y: Double) -> CGPoint {
             let designX = geo.designLength(forNormalized: CGFloat(x))
-            let designY = CGFloat(y) * CanvasGeometry.designHeight
+            let designY = geo.designHeightLength(forNormalized: CGFloat(y))
             return geo.render(CGPoint(x: designX, y: designY))
         }
 

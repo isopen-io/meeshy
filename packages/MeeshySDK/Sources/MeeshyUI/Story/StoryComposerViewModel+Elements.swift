@@ -47,6 +47,24 @@ extension StoryComposerViewModel {
         }
     }
 
+    /// Ratio (largeur / hauteur) du canvas courant, piloté par l'image de fond :
+    /// paysage → 16:9 horizontal, sinon 9:16 vertical par défaut. Lu par le
+    /// cadrage du canvas composer (`StoryComposerView+Canvas`) — réactif car
+    /// `currentEffects` dérive de `slides` (@Published).
+    var currentCanvasRatio: CGFloat {
+        CGFloat(currentEffects.canvasAspect.ratio)
+    }
+
+    /// Ratio de canvas à PERSISTER (`nil` = portrait 9:16 par défaut) dérivé de
+    /// l'image de fond d'un slide : « l'import de l'image de fond impose le cadre
+    /// et forme du Canvas ». Un fond **image paysage** impose un canvas 16:9 ;
+    /// tout le reste (fond portrait/carré, vidéo, ou aucun fond) reste vertical.
+    static func canvasAspectRatio(forBackgroundOf effects: StoryEffects) -> Double? {
+        guard let bg = effects.resolvedBackgroundMedia, bg.kind == .image else { return nil }
+        let aspect = StoryCanvasAspect.from(ratio: bg.aspectRatio)
+        return aspect == .landscape ? aspect.ratio : nil
+    }
+
     var isContentToolActive: Bool {
         guard let tool = activeTool else { return false }
         switch tool {
@@ -336,6 +354,10 @@ extension StoryComposerViewModel {
               let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
         medias[mediaIdx].aspectRatio = aspectRatio
         effects.mediaObjects = medias
+        // « L'import de l'image de fond impose le cadre et forme du Canvas » : dès
+        // que la forme réelle du fond est connue (mesure asset après import, ou
+        // recadrage), le ratio du canvas suit — paysage → 16:9, sinon 9:16.
+        effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
         slides[targetIndex].effects = effects
         // Miroir dans le side-cache si d'autres surfaces le lisent.
         mediaAspectRatios[id] = CGFloat(aspectRatio)
@@ -382,6 +404,8 @@ extension StoryComposerViewModel {
         effects.mediaObjects?.removeAll { $0.id == id }
         effects.audioPlayerObjects?.removeAll { $0.id == id }
         effects.stickerObjects?.removeAll { $0.id == id }
+        // Retirer l'image de fond rend au canvas sa forme verticale par défaut.
+        effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
         currentEffects = effects
         if selectedElementId == id { selectedElementId = nil }
         // Si on supprime le texte en cours d'édition flottante, sortir du mode.
@@ -487,6 +511,9 @@ extension StoryComposerViewModel {
                 // Matérialise le flag à `false` pour neutraliser la règle legacy.
                 effects.mediaObjects![idx].isBackground = false
             }
+            // Promotion → le canvas épouse la forme du nouveau fond ; rétrogradation
+            // → retour au canvas vertical par défaut (plus aucune image de fond).
+            effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
             currentEffects = effects
             return
         }

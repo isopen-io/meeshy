@@ -49,7 +49,8 @@ struct StoryDrawingToolbar: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
+                // Liquid Glass sur iOS 26, material sur versions antérieures.
+                .adaptiveGlass(in: Rectangle())
                 .padding(.bottom, bottomInset)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85),

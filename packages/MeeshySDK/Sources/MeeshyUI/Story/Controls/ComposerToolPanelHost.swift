@@ -732,7 +732,7 @@ struct ComposerToolPanelHost: View {
                 bundle: .module
             ))
             .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(.white.opacity(0.65))
+            .foregroundColor(mutedText)
             .padding(.horizontal, 2)
             .padding(.bottom, 8)
 

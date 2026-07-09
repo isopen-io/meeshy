@@ -360,7 +360,7 @@ public enum StoryRenderer {
         let overrides = applyKeyframes(keyframes: keyframes, at: currentTime, startTime: startTime)
         if let pos = overrides.position {
             let designX = geometry.designLength(forNormalized: pos.x)
-            let designY = pos.y * CanvasGeometry.designHeight
+            let designY = geometry.designHeightLength(forNormalized: pos.y)
             layer.position = geometry.render(CGPoint(x: designX, y: designY))
         }
         if let s = overrides.scale {

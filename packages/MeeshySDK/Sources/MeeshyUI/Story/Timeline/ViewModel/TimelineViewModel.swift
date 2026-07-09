@@ -198,14 +198,58 @@ public final class TimelineViewModel: ObservableObject {
 
     public func dragClipMoved(rawTime: Float, snapCandidates: [SnapCandidate]) {
         guard var drag = selection.activeDrag else { return }
-        let snapResult = snapEngine.snap(rawTime: rawTime,
-                                         candidates: snapCandidates,
-                                         disabled: !isSnapEnabled)
+        let previouslySnapped = drag.snappedTo != nil
+        // Aimantation : on complète les candidats fournis par les bords (début ET
+        // fin) de TOUS les autres objets du canvas, plus les bornes du slide et la
+        // tête de lecture — « coordinateurs entre le début et la fin des objets par
+        // effet magnet quand un objet est proche de la fin d'un autre ».
+        let magnetCandidates = magneticSnapCandidates(excludingClipId: drag.clipId)
+        // Tolérance adaptée au zoom (~8pt de doigt). L'engine figé à 0.06s était
+        // trop serré pour un aimant perceptible ; le magnet doit accrocher dès
+        // qu'un bord approche visuellement celui d'un autre.
+        let pixelsPerSecond = max(1, Float(50.0 * zoomScale))
+        let magnetEngine = SnapEngine(toleranceSeconds: 8.0 / pixelsPerSecond)
+        let snapResult = magnetEngine.snap(rawTime: rawTime,
+                                           candidates: snapCandidates + magnetCandidates,
+                                           disabled: !isSnapEnabled)
         drag.currentStartTime = snapResult.snappedTime
         drag.snappedTo = mapSnapKind(snapResult.matched?.kind)
+        // Retour haptique léger au MOMENT où l'aimant accroche (transition
+        // non-accroché → accroché), pas à chaque frame.
+        if drag.snappedTo != nil, !previouslySnapped {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
         selection.updateDrag(currentStartTime: drag.currentStartTime,
                              snappedTo: drag.snappedTo)
         applyClipPosition(clipId: drag.clipId, newStartTime: drag.currentStartTime)
+    }
+
+    /// Points d'accroche magnétiques pour un drag de clip : les bords `début` et
+    /// `fin` de chaque AUTRE objet du canvas (media, audio, texte), plus les
+    /// bornes du slide (`0` / `slideDuration`) et la tête de lecture. C'est ce
+    /// jeu de candidats qui manquait (tous les call sites passaient `[]`), rendant
+    /// l'aimantation inopérante malgré un moteur de snap déjà branché.
+    func magneticSnapCandidates(excludingClipId excluded: String) -> [SnapCandidate] {
+        var candidates: [SnapCandidate] = [
+            SnapCandidate(kind: .slideStart, time: 0),
+            SnapCandidate(kind: .slideEnd, time: project.slideDuration),
+            SnapCandidate(kind: .playhead, time: currentTime)
+        ]
+        func addEdges(id: String, start: Float, duration: Float) {
+            guard id != excluded else { return }
+            candidates.append(SnapCandidate(kind: .clipStart, time: start))
+            candidates.append(SnapCandidate(kind: .clipEnd, time: start + max(0, duration)))
+        }
+        for m in project.mediaObjects {
+            addEdges(id: m.id, start: Float(m.startTime ?? 0), duration: Float(m.duration ?? 0))
+        }
+        for a in project.audioPlayerObjects {
+            addEdges(id: a.id, start: a.startTime ?? 0, duration: a.duration ?? 0)
+        }
+        for t in project.textObjects {
+            addEdges(id: t.id, start: Float(t.startTime ?? 0), duration: Float(t.duration ?? 0))
+        }
+        return candidates
     }
 
     public func endClipDrag() {
