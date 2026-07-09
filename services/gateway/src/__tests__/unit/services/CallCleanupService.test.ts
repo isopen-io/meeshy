@@ -386,6 +386,76 @@ describe('CallCleanupService', () => {
       expect(result.errors).toBe(0);
     });
 
+    it('Vague 30 — tier-1 MISSED force-end persists duration:0, not the ring-time elapsed since startedAt', async () => {
+      // Sibling-drift fix: Vague 27 anchored endCall()/leaveCall()/
+      // forceEndOrphanedCallSession() on `answeredAt` (talk time only), but
+      // forceEndCall (this file, GC tier 1) still computed duration from
+      // `startedAt` unconditionally. Tier 1 only ever reaps calls still
+      // `initiated`/`ringing` — by definition never answered — so this
+      // persisted a phantom ring-length duration on every GC-missed call.
+      const service = new CallCleanupService(prisma as any);
+      const staleCall = { ...makeStaleCall(CallStatus.initiated, 130_000, 'call-never-answered'), answeredAt: null };
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+
+      const txCallSessionUpdateMany = jest.fn().mockResolvedValue({ count: 1 }) as MockFn;
+      prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: txCallSessionUpdateMany }
+        };
+        return cb(tx);
+      });
+
+      await service.runCleanup();
+
+      expect(txCallSessionUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ duration: 0 }) })
+      );
+    });
+
+    it('Vague 30 — tier-3 GC-ENDED force-end anchors duration on answeredAt (talk time), not startedAt (ring+talk time)', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const threeHoursMs = 3 * 60 * 60 * 1000;
+      const now = Date.now();
+      // Deliberately offset startedAt 60s earlier than answeredAt — a
+      // startedAt-regressed anchor would fail this assertion loudly instead
+      // of passing by coincidence (mirrors the Vague 27 test methodology).
+      const staleCall = {
+        id: 'call-gc-duration',
+        status: CallStatus.active,
+        startedAt: new Date(now - threeHoursMs - 60_000),
+        answeredAt: new Date(now - threeHoursMs),
+        conversationId: 'conv-1',
+        participants: []
+      };
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([staleCall]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+
+      const txCallSessionUpdateMany = jest.fn().mockResolvedValue({ count: 1 }) as MockFn;
+      prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: txCallSessionUpdateMany }
+        };
+        return cb(tx);
+      });
+
+      await service.runCleanup();
+
+      expect(txCallSessionUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ duration: Math.floor(threeHoursMs / 1000) }) })
+      );
+    });
+
     it('force-FAILED a stale connecting call (>30s) → cleaned:1', async () => {
       const service = new CallCleanupService(prisma as any);
       const staleCall = makeStaleCall(CallStatus.connecting, 45_000, 'call-connecting');

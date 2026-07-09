@@ -206,7 +206,7 @@ export class CallCleanupService {
     for (const call of staleInitiated) {
       try {
         const ended = await this.forceEndCall(
-          call.id, now, call.startedAt,
+          call.id, now, call.answeredAt,
           [CallStatus.initiated, CallStatus.ringing], CallStatus.missed, CallEndReason.missed
         );
         if (ended) {
@@ -236,7 +236,7 @@ export class CallCleanupService {
     for (const call of staleConnecting) {
       try {
         const ended = await this.forceEndCall(
-          call.id, now, call.startedAt,
+          call.id, now, call.answeredAt,
           [CallStatus.connecting], CallStatus.failed, CallEndReason.failed
         );
         if (ended) {
@@ -275,7 +275,7 @@ export class CallCleanupService {
       }
       try {
         const ended = await this.forceEndCall(
-          call.id, now, call.startedAt,
+          call.id, now, call.answeredAt,
           [CallStatus.active, CallStatus.reconnecting], CallStatus.ended, CallEndReason.garbageCollected
         );
         if (ended) {
@@ -309,7 +309,7 @@ export class CallCleanupService {
           if (staleParticipants.length > 0 && staleParticipants.length >= call.participants.length) {
             try {
               const ended = await this.forceEndCall(
-                call.id, now, call.startedAt,
+                call.id, now, call.answeredAt,
                 [CallStatus.active, CallStatus.reconnecting], CallStatus.ended, CallEndReason.heartbeatTimeout
               );
               if (ended) {
@@ -349,7 +349,7 @@ export class CallCleanupService {
           if (dbStaleParticipants.length > 0 && dbStaleParticipants.length >= call.participants.length) {
             try {
               const ended = await this.forceEndCall(
-                call.id, now, call.startedAt,
+                call.id, now, call.answeredAt,
                 [CallStatus.active, CallStatus.reconnecting], CallStatus.ended, CallEndReason.heartbeatTimeout
               );
               if (ended) {
@@ -420,12 +420,20 @@ export class CallCleanupService {
   private async forceEndCall(
     callId: string,
     now: Date,
-    startedAt: Date,
+    answeredAt: Date | null,
     fromStatuses: CallStatus[],
     status: CallStatus,
     endReason: CallEndReason
   ): Promise<boolean> {
-    const duration = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+    // Vague 30 — anchor duration on `answeredAt` (talk time), mirroring
+    // CallService.endCall()'s `call.answeredAt ? … : 0` (Vague 27's sibling
+    // fix covered every OTHER terminal writer but missed this one, in a
+    // different class/file). Tier 1 reaps calls still `initiated`/`ringing` —
+    // by definition never answered — so this was persisting a phantom
+    // ring-length `duration` on calls call history should report as 0.
+    const duration = answeredAt
+      ? Math.max(0, Math.floor((now.getTime() - answeredAt.getTime()) / 1000))
+      : 0;
 
     // Read conversationId BEFORE the transaction so we can broadcast to the
     // conversation room as well (the call room would already empty if every

@@ -74,6 +74,18 @@ export function CallManager() {
 
     // Start new timeout
     callTimeoutRef.current = setTimeout(() => {
+      // Bug fix (2026-07-09, sibling of the 2026-07-06 initiator-timeout fix,
+      // Vague 30): the callee branch of `handleIncomingCall` only calls
+      // `setIncomingCall` + `startCallTimeout` — it never sets
+      // `currentCall`/`isInCall` (those are only set by `handleAcceptCall`).
+      // The guard below can therefore never see an unanswered incoming call,
+      // and previously left the ringing banner stuck forever whenever the
+      // server's own `call:ended`/`call:missed` broadcast didn't reach this
+      // socket (e.g. a reconnect gap). Clear the callee's own stale banner
+      // here, independent of that guard — a no-op for the initiator (whose
+      // `incomingCall` is never set in the first place).
+      setIncomingCall((current) => (current?.callId === callId ? null : current));
+
       const { currentCall, isInCall } = useCallStore.getState();
 
       // Only cleanup if:
