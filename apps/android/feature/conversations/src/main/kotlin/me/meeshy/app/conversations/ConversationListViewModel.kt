@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationDraft
@@ -54,6 +55,7 @@ class ConversationListViewModel @Inject constructor(
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val draftStore: ConversationDraftStore,
+    private val starredStore: StarredMessagesStore,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -111,6 +113,37 @@ class ConversationListViewModel @Inject constructor(
                 messageSocketManager.conversationUpdated.collect {
                     repository.refresh()
                 }
+            }
+            launch {
+                messageSocketManager.conversationDeleted.collect { event ->
+                    ConversationPurge.onConversationDeleted(event)?.let(::purge)
+                }
+            }
+            launch {
+                messageSocketManager.participantLeft.collect { event ->
+                    ConversationPurge.onParticipantLeft(event, _state.value.currentUserId)?.let(::purge)
+                }
+            }
+        }
+    }
+
+    /**
+     * Purges a removed conversation from local state. The star cleanup runs
+     * first and synchronously — local-only, so a bookmark can never outlive the
+     * conversation it points at even if the follow-up refresh fails — then a
+     * refresh drops the vanished row from the list. A refresh failure is
+     * swallowed silently (background revalidation stays quiet; the SWR stream
+     * keeps the last good cache); cancellation is rethrown.
+     */
+    private fun purge(conversationId: String) {
+        starredStore.removeConversation(conversationId)
+        viewModelScope.launch {
+            try {
+                repository.refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Silent: a failed background refresh leaves the cached list intact.
             }
         }
     }

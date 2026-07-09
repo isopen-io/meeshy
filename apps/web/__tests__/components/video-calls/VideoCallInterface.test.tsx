@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // ---- Mocks for the container's heavy dependencies -------------------------
 
@@ -67,6 +67,12 @@ jest.mock('@/hooks/use-active-peer-connection', () => ({
 jest.mock('@/hooks/use-adaptive-degradation', () => ({
   useAdaptiveDegradation: (...args: unknown[]) => useAdaptiveDegradationMock(...(args as [])),
 }));
+jest.mock('sonner', () => ({
+  toast: {
+    success: jest.fn(),
+    error: jest.fn(),
+  },
+}));
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: jest.fn(() => null),
@@ -86,6 +92,7 @@ jest.mock('@/stores/call-store', () => {
 
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { toast } from 'sonner';
 
 describe('VideoCallInterface (container)', () => {
   beforeEach(() => {
@@ -265,6 +272,96 @@ describe('VideoCallInterface (container)', () => {
         jest.useRealTimers();
         storeState.peerConnections = new Map();
       }
+    });
+  });
+
+  // replaceTrack() is async and MDN warns the outgoing track must not be
+  // stopped until it resolves — the sender may still read from it. The
+  // camera-switch path used to stop/detach the old track synchronously,
+  // right after firing (not awaiting) replaceTrack, unlike the sibling
+  // audio-track-replacement effect a few lines above it in the same file.
+  describe('handleSwitchCamera — must not tear down the old track before replaceTrack settles', () => {
+    const setupCameraSwitchDom = (getUserMediaImpl: jest.Mock) => {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          enumerateDevices: jest.fn().mockResolvedValue([
+            { kind: 'videoinput' },
+            { kind: 'videoinput' },
+          ]),
+          getUserMedia: getUserMediaImpl,
+        },
+      });
+    };
+
+    afterEach(() => {
+      // @ts-expect-error -- test-only cleanup of a property we defined above
+      delete navigator.mediaDevices;
+      storeState.localStream = null;
+      storeState.peerConnections = new Map();
+    });
+
+    const clickSwitchCamera = async () => {
+      const button = await screen.findByRole('button', { name: 'calls.controls.switchCamera' });
+      fireEvent.click(button);
+    };
+
+    it('waits for every peer connection to finish replaceTrack before stopping/detaching the old track', async () => {
+      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }), stop: jest.fn() };
+      const localStream = {
+        getVideoTracks: () => [videoTrack],
+        removeTrack: jest.fn(),
+        addTrack: jest.fn(),
+      };
+      storeState.localStream = localStream as unknown as MediaStream;
+
+      let resolveReplace: () => void = () => {};
+      const replaceTrack = jest.fn(() => new Promise<void>((resolve) => { resolveReplace = resolve; }));
+      const pc = { getSenders: () => [{ track: { kind: 'video' }, replaceTrack }] };
+      storeState.peerConnections = new Map([['peer1', pc]]) as unknown as typeof storeState.peerConnections;
+
+      const newVideoTrack = {};
+      setupCameraSwitchDom(jest.fn().mockResolvedValue({ getVideoTracks: () => [newVideoTrack] }));
+
+      render(<VideoCallInterface callId="call1" />);
+      await clickSwitchCamera();
+
+      await waitFor(() => expect(replaceTrack).toHaveBeenCalledWith(newVideoTrack));
+      expect(videoTrack.stop).not.toHaveBeenCalled();
+      expect(localStream.removeTrack).not.toHaveBeenCalled();
+
+      resolveReplace();
+
+      await waitFor(() => expect(videoTrack.stop).toHaveBeenCalledTimes(1));
+      expect(localStream.removeTrack).toHaveBeenCalledWith(videoTrack);
+      expect(localStream.addTrack).toHaveBeenCalledWith(newVideoTrack);
+    });
+
+    it('surfaces cameraSwitchFailed and keeps the old track alive when a peer connection rejects replaceTrack', async () => {
+      const videoTrack = { kind: 'video', getConstraints: () => ({ facingMode: 'user' }), stop: jest.fn() };
+      const localStream = {
+        getVideoTracks: () => [videoTrack],
+        removeTrack: jest.fn(),
+        addTrack: jest.fn(),
+      };
+      storeState.localStream = localStream as unknown as MediaStream;
+
+      const replaceTrack = jest.fn().mockRejectedValue(new Error('sender closed'));
+      const pc = { getSenders: () => [{ track: { kind: 'video' }, replaceTrack }] };
+      storeState.peerConnections = new Map([['peer1', pc]]) as unknown as typeof storeState.peerConnections;
+
+      const newVideoTrack = {};
+      setupCameraSwitchDom(jest.fn().mockResolvedValue({ getVideoTracks: () => [newVideoTrack] }));
+
+      render(<VideoCallInterface callId="call1" />);
+      await clickSwitchCamera();
+
+      await waitFor(() => expect(replaceTrack).toHaveBeenCalled());
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('calls.toasts.cameraSwitchFailed'));
+
+      expect(videoTrack.stop).not.toHaveBeenCalled();
+      expect(localStream.removeTrack).not.toHaveBeenCalled();
+      expect(localStream.addTrack).not.toHaveBeenCalled();
     });
   });
 });

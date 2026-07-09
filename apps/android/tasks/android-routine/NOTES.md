@@ -1457,3 +1457,30 @@ Append-only log of gotchas and decisions that save time next run.
   paint + live re-derivation; no coroutine failure path because starring is local-only (no network/outbox).
   A new `SettingsScreen` callback must default (`onOpenStarred: () -> Unit = {}`) so the only call site
   (`MeeshyApp`) is the sole thing that changes — no other caller breaks.
+
+## Lesson (2026-07-09, `conversations-purge-on-removed`)
+- **Orphan socket streams are a real, greppable slice source.** `MessageSocketManager` declared + `listen()`ed
+  `conversationDeleted` / `participantLeft`, but `grep` for consumers outside `sdk-core/src/main` and `/test`
+  returned empty — the events were decoded and thrown away. Wiring an already-emitted-but-unconsumed stream is
+  a high-value, low-risk slice: no new plumbing, just a pure decision + a VM collector. Grep the socket-manager
+  flow names against feature/app code to find these.
+- **`participant-left` is per-participant — gate on the current user.** The event fires for *any* leaver, so
+  a naive "remove the row" would drop a conversation when a *third party* leaves. The pure
+  `ConversationPurge.onParticipantLeft(event, currentUserId)` returns the id only when `currentUserId` is
+  non-blank AND `== event.userId` AND the conv id is non-blank. `conversation:deleted` (whole-conversation) has
+  no such gate — it's a delete for everyone.
+- **Do the local, can't-fail cleanup BEFORE the fallible network step.** `purge()` calls
+  `starredStore.removeConversation(id)` synchronously first, *then* launches `repository.refresh()`. A star
+  bookmark is durable local state that must never outlive its conversation — sequencing the local write ahead
+  of the network guarantees it even when the refresh throws. Test it: `coEvery { repo.refresh() } throws …`,
+  emit the delete, assert the stars are gone and `errorMessage` stays null (background refresh failures are
+  silent — the SWR stream keeps the last good cache; don't surface a banner for them).
+- **Adding a collected `MessageSocketManager` flow ⇒ stub it in the non-relaxed test mock (again).** Same trap
+  as `chat-pinned-banner`: `ConversationListViewModelTest`'s `socketManager()` builds a non-relaxed `mockk`, so
+  the new `conversationDeleted` / `participantLeft` flows must get `every { this@mockk.<flow> } returns
+  MutableSharedFlow()` or construction throws `MockKException`. Return the `MutableSharedFlow` from the helper
+  (default arg) so a test can `emit()` into it.
+- **Injecting a new ctor dependency into a `@HiltViewModel` ⇒ verify `:app:assembleDebug`, not just the module
+  test.** The unit test passes its own store instance, but Hilt must also resolve it at the app graph — always
+  run `assembleDebug` after changing a VM constructor to catch a missing `@Provides` (here the `@Singleton
+  StarredMessagesStore` from `SdkModule` already existed, so it resolved).

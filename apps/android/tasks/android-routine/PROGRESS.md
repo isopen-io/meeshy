@@ -789,20 +789,21 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `chat-reply-preview-media`** — the media quoted-reply preview, first half of §C
-"Quoted-reply previews incl. story-reply previews (counts, thumbnails)". The wired `ApiMessageReplyPreview`
-gained `attachments` (matching iOS `APIMessageReplyTo.attachments`; the dead duplicate `ApiMessageReplyTo`
-was removed), `BubbleContentBuilder` derives `replyToMediaKind` (None|Image|File) + a resolved
-`replyToThumbnailUrl` (deleted target suppresses both), and `MessageBubble` renders a 32dp accent thumbnail
-or an icon + "Photo"/"Attachment" placeholder so a reply to a media-only message no longer shows a blank
-quote. EN/FR/ES/PT strings. +9 tests. See run log.
+**Just shipped (2026-07-09): `conversations-purge-on-removed`** — real-time conversation removal + star
+hygiene (§B). The orphan `MessageSocketManager.conversationDeleted` / `participantLeft` streams (declared +
+listened, **zero consumers**) are now wired through the pure `:feature:conversations` `ConversationPurge` SSOT
+(`onConversationDeleted` → id / blank-inert; `onParticipantLeft(event, currentUserId)` → id **only when the
+current user is the leaver**). `ConversationListViewModel.purge()` clears the conversation's dangling stars
+via the shared `@Singleton StarredMessagesStore.removeConversation` (synchronous, local-only) then silently
+`repository.refresh()`es to drop the vanished row. Closes the tracked `removeConversation` follow-up from
+`chat-star-toggle`. +12 tests. See run log.
 **Recommended next (highest value):**
 - **Story-reply previews (counts, thumbnails)** — the remaining half of §C line 530: iOS decodes
   `APIPostReplyTarget` (`postReplyTo`/legacy `storyReplyTo`) with `thumbnailUrl`/`previewText`/`reactionCount`/
   `commentCount`/`moodEmoji`. Add the DTO + a `storyReplyToId`/quoted-post preview render (a distinct block
   from the message quoted-reply). Larger — likely its own pure projection + a dedicated preview composable.
-- **`removeConversation` dangling-star cleanup** — hook `StarredMessagesStore.removeConversation` on
-  conversation leave/clear so a star can't outlive its conversation (store method exists and is tested).
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`) — a larger
+  §B slice (a horizontal community rail + category chips over the conversation list).
 - Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
 
 **Earlier (2026-07-09): `chat-starred-messages-list`** — the dedicated starred-messages **list screen**,
@@ -1603,6 +1604,48 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-09 — slice `conversations-purge-on-removed` ✅ impl + reviewer PASS
+- **Rule #0 first:** the only open PR (#1758) is an **iOS** camera/composer PR by another author — not Android,
+  not mine. No open Android PR for my branch. Branched clean off latest `origin/main` (`9b4102b2`, "fix(gateway/
+  mentions)… #1757").
+- **Parity:** §B real-time conversation handling. Investigated first: `MessageSocketManager` **declares and
+  listens** to `conversation:deleted` (`conversationDeleted`) and `conversation:participant-left`
+  (`participantLeft`) but **nothing consumed them** (`grep` for consumers outside `sdk-core/src/main` + `/test`
+  → empty). So a conversation deleted for everyone, or left by the current user, lingered in the Android list,
+  and — the tracked follow-up from `chat-star-toggle` — its bookmarked messages **dangled forever**
+  (`StarredMessagesStore.removeConversation` existed + was unit-tested but had no caller).
+- **Pure core (TDD red→green, `:feature:conversations`):** `ConversationPurge` SSOT decides which removal an
+  event owns. `onConversationDeleted(event) → String?` = the id, blank id → null (inert).
+  `onParticipantLeft(event, currentUserId) → String?` = the id **only when `currentUserId` is non-blank AND
+  equals `event.userId` AND the conversation id is non-blank** — a third party leaving, an unknown/blank
+  current user, or a blank id is inert. Kept store/repo-free so the decision is fully JVM-testable.
+- **Wiring (`ConversationListViewModel`):** injects the `@Singleton` `StarredMessagesStore` (shared with
+  `ChatViewModel`), adds two socket collectors that route each event through `ConversationPurge` → `purge(id)`.
+  `purge` runs `starredStore.removeConversation(id)` **first + synchronously** (local-only — a bookmark can't
+  outlive its conversation even if the refresh fails) then launches `repository.refresh()` to drop the vanished
+  row; a failed background refresh is **swallowed silently** (SWR keeps the last good cache, no error banner),
+  `CancellationException` rethrown.
+- **Tests (TDD, +12):** `ConversationPurgeTest` (7, through the public object): deleted-id / blank-delete-inert /
+  self-left→id / other-participant-inert / null-current-user-inert / blank-current-user-inert /
+  self-left-blank-conv-inert. `ConversationListViewModelTest` (+5, behaviour through the VM + a real
+  `InMemoryStarredMessagesStore`): a deleted conversation sheds only its own stars + refreshes; a blank delete
+  touches neither stars nor network; the current user leaving sheds its stars + refreshes; another participant
+  leaving leaves my stars + list untouched (no refresh); the star cleanup survives a **throwing** `refresh()`
+  with no crash and no surfaced error. The `socketManager()` test helper now stubs the two new flows
+  (non-relaxed mockk) and `session(userId)` builds a `MeeshyUser` so the self-left path is drivable.
+- **Verify:** `:feature:conversations:testDebugUnitTest` → BUILD SUCCESSFUL (all VM + pure tests green);
+  `:app:assembleDebug` → BUILD SUCCESSFUL (Hilt resolves the new `StarredMessagesStore` ctor dependency).
+  System Gradle 8.14.3 at `/opt/gradle` (wrapper download 403-blocked in this container).
+- **Reviewer:** PASS — diff `apps/android` only (no web/ios/gateway/shared/translator); behaviour-through-
+  public-API (`ConversationPurge` object + VM collectors observed via the store/state), no tautologies,
+  boundary coverage on blank ids / self-vs-other leaver / unknown-user / failing-refresh; **SDK-purity** — the
+  "which removal do I own" decision is a pure `:feature:conversations` atom, the durable store stays in
+  `:sdk-core`, the socket collectors are thin VM glue; **SSOT** — reuses the existing `StarredMessages.
+  removeConversation` + `MessageSocketManager` streams, no re-implementation; **instant-app** — star cleanup is
+  synchronous/local, refresh is silent SWR; **UDF** immutable state, `viewModelScope` work is cancellation-safe;
+  **UX coherence** — a vanished conversation now leaves no dangling bookmark and drops from the list live, no
+  dead end.
 
 ### 2026-07-09 — slice `chat-reply-preview-media` ✅ impl + reviewer PASS
 - **Rule #0 first:** two open PRs (#1750 gateway-delivery, #1751 ios-calls) but both are **other sessions'**

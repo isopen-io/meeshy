@@ -22,11 +22,18 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
+import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ParticipantLeftEvent
+import me.meeshy.sdk.model.StarredMessage
+import me.meeshy.sdk.model.StarredMessages
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
@@ -56,11 +63,16 @@ class ConversationListViewModelTest {
         every { it.conversationsStream(any(), any()) } returns stream
     }
 
-    private fun socketManager(): MessageSocketManager =
+    private fun socketManager(
+        conversationDeleted: MutableSharedFlow<ConversationDeletedSocketEvent> = MutableSharedFlow(),
+        participantLeft: MutableSharedFlow<ParticipantLeftEvent> = MutableSharedFlow(),
+    ): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { unreadUpdated } returns MutableSharedFlow()
             every { messageReceived } returns MutableSharedFlow()
             every { conversationUpdated } returns MutableSharedFlow()
+            every { this@mockk.conversationDeleted } returns conversationDeleted
+            every { this@mockk.participantLeft } returns participantLeft
         }
 
     private fun connectionSocket(
@@ -70,8 +82,9 @@ class ConversationListViewModelTest {
         every { connectionState } returns state
     }
 
-    private fun session(): SessionRepository = mockk<SessionRepository> {
-        every { currentUser } returns MutableStateFlow(null)
+    private fun session(userId: String? = null): SessionRepository = mockk<SessionRepository> {
+        every { currentUser } returns
+            MutableStateFlow(userId?.let { MeeshyUser(id = it, username = it) })
     }
 
     private val workManager: WorkManager = mockk(relaxed = true)
@@ -80,7 +93,10 @@ class ConversationListViewModelTest {
         repo: ConversationRepository,
         connection: SocketManager = connectionSocket(),
         draftStore: ConversationDraftStore = InMemoryConversationDraftStore(),
-    ) = ConversationListViewModel(repo, socketManager(), workManager, draftStore, connection, session())
+        socket: MessageSocketManager = socketManager(),
+        starredStore: StarredMessagesStore = InMemoryStarredMessagesStore(),
+        session: SessionRepository = session(),
+    ) = ConversationListViewModel(repo, socket, workManager, draftStore, starredStore, connection, session)
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
@@ -429,4 +445,97 @@ class ConversationListViewModelTest {
 
         verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
     }
+
+    private fun star(conversationId: String, messageId: String = "m-$conversationId") =
+        StarredMessage(messageId = messageId, conversationId = conversationId)
+
+    @Test
+    fun a_deleted_conversation_sheds_its_stars_and_refreshes_the_list() = runTest(dispatcher) {
+        val deleted = MutableSharedFlow<ConversationDeletedSocketEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"), star("c2"))))
+        val vm = viewModel(repo, socket = socketManager(conversationDeleted = deleted), starredStore = stars)
+        advanceUntilIdle()
+
+        deleted.emit(ConversationDeletedSocketEvent(conversationId = "c1"))
+        advanceUntilIdle()
+
+        // c1's bookmark is gone; c2's survives.
+        assertThat(stars.starred.value.items.map { it.conversationId }).containsExactly("c2")
+        coVerify { repo.refresh() }
+    }
+
+    @Test
+    fun a_blank_delete_event_touches_neither_the_stars_nor_the_network() = runTest(dispatcher) {
+        val deleted = MutableSharedFlow<ConversationDeletedSocketEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"))))
+        val vm = viewModel(repo, socket = socketManager(conversationDeleted = deleted), starredStore = stars)
+        advanceUntilIdle()
+
+        deleted.emit(ConversationDeletedSocketEvent(conversationId = "  "))
+        advanceUntilIdle()
+
+        assertThat(stars.starred.value.items.map { it.conversationId }).containsExactly("c1")
+        coVerify(exactly = 0) { repo.refresh() }
+    }
+
+    @Test
+    fun the_current_user_leaving_sheds_that_conversation_stars_and_refreshes() = runTest(dispatcher) {
+        val left = MutableSharedFlow<ParticipantLeftEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"))))
+        val vm = viewModel(
+            repo,
+            socket = socketManager(participantLeft = left),
+            starredStore = stars,
+            session = session(userId = "me"),
+        )
+        advanceUntilIdle()
+
+        left.emit(ParticipantLeftEvent(conversationId = "c1", userId = "me"))
+        advanceUntilIdle()
+
+        assertThat(stars.starred.value.items).isEmpty()
+        coVerify { repo.refresh() }
+    }
+
+    @Test
+    fun another_participant_leaving_leaves_my_stars_and_list_untouched() = runTest(dispatcher) {
+        val left = MutableSharedFlow<ParticipantLeftEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"))))
+        val vm = viewModel(
+            repo,
+            socket = socketManager(participantLeft = left),
+            starredStore = stars,
+            session = session(userId = "me"),
+        )
+        advanceUntilIdle()
+
+        left.emit(ParticipantLeftEvent(conversationId = "c1", userId = "someone-else"))
+        advanceUntilIdle()
+
+        assertThat(stars.starred.value.items.map { it.conversationId }).containsExactly("c1")
+        coVerify(exactly = 0) { repo.refresh() }
+    }
+
+    @Test
+    fun the_star_cleanup_survives_a_failing_refresh_without_crashing_or_surfacing_an_error() =
+        runTest(dispatcher) {
+            val deleted = MutableSharedFlow<ConversationDeletedSocketEvent>()
+            val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+            coEvery { repo.refresh() } throws RuntimeException("offline")
+            val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"))))
+            val vm = viewModel(repo, socket = socketManager(conversationDeleted = deleted), starredStore = stars)
+            advanceUntilIdle()
+
+            deleted.emit(ConversationDeletedSocketEvent(conversationId = "c1"))
+            advanceUntilIdle()
+
+            // The local star cleanup happened regardless of the refresh outcome; the
+            // background failure stays silent (no user-facing error banner).
+            assertThat(stars.starred.value.items).isEmpty()
+            assertThat(vm.state.value.errorMessage).isNull()
+        }
 }
