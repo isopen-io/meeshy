@@ -95,13 +95,29 @@ final class CameraModelSegmentMergeTests: XCTestCase {
             sourcePixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB]
         )
         writer.add(input)
-        writer.startWriting()
+        guard writer.startWriting() else {
+            throw NSError(domain: "CameraModelSegmentMergeTests", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "AVAssetWriter.startWriting() failed: \(writer.error?.localizedDescription ?? "unknown")"
+            ])
+        }
         writer.startSession(atSourceTime: .zero)
 
         let frameCount = max(1, Int(seconds * 10))
         let frameDuration = CMTime(value: 1, timescale: 10)
+        // Bounded wait per frame — `isReadyForMoreMediaData` never becoming
+        // true (a stalled/misconfigured writer) must fail the test loudly
+        // instead of spinning forever and hanging the whole CI job (exactly
+        // the failure mode this loop used to risk with no timeout at all).
         for frame in 0..<frameCount {
-            while !input.isReadyForMoreMediaData { Thread.sleep(forTimeInterval: 0.01) }
+            let deadline = Date().addingTimeInterval(3.0)
+            while !input.isReadyForMoreMediaData {
+                guard Date() < deadline else {
+                    throw NSError(domain: "CameraModelSegmentMergeTests", code: 2, userInfo: [
+                        NSLocalizedDescriptionKey: "AVAssetWriterInput never became ready for frame \(frame) within 3s"
+                    ])
+                }
+                Thread.sleep(forTimeInterval: 0.01)
+            }
             guard let pool = adaptor.pixelBufferPool else { break }
             var pixelBufferOut: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBufferOut)
