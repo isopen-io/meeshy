@@ -17,6 +17,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { SERVER_EVENTS, ROOMS, type SocketIOMessage } from '@meeshy/shared/types/socketio-events';
+import { emitConversationPreviewUpdate } from '../../socketio/emitConversationPreviewUpdate';
 import type {
   ConversationParams,
   EditMessageBody
@@ -478,6 +479,12 @@ export function registerMessagesAdvancedRoutes(
           const room = ROOMS.conversation(conversationId);
           socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse as unknown as SocketIOMessage);
           logger.info(`Edit - Broadcasted message:edited to room ${room}`);
+          // Refresh the last-message preview for list-screen participants —
+          // parity with the WS edit path and broadcastNewMessage.
+          await emitConversationPreviewUpdate(
+            prisma, socketIOManager.getIO(), conversationId,
+            (err) => logger.warn('conversation preview fanout (advanced edit) failed', err as Error)
+          );
         }
       } catch (socketError) {
         logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
@@ -645,6 +652,13 @@ export function registerMessagesAdvancedRoutes(
             messageId,
             conversationId
           });
+          // Refresh the last-message preview for list-screen participants:
+          // deleting the latest message changes their row, which
+          // MESSAGE_DELETED (conversation room only) never tells them.
+          await emitConversationPreviewUpdate(
+            prisma, socketIOManager.getIO(), conversationId,
+            (err) => logger.warn('conversation preview fanout (advanced delete) failed', err as Error)
+          );
         }
       } catch (socketError) {
         logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
@@ -815,6 +829,12 @@ export function registerMessagesAdvancedRoutes(
         if (socketIOManager) {
           const room = ROOMS.conversation(message.conversationId);
           socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse as unknown as SocketIOMessage);
+          // Refresh the last-message preview for list-screen participants —
+          // parity with the WS edit path and broadcastNewMessage.
+          await emitConversationPreviewUpdate(
+            prisma, socketIOManager.getIO(), message.conversationId,
+            (err) => logger.warn('conversation preview fanout (advanced edit alt) failed', err as Error)
+          );
         }
       } catch (socketError) {
         logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);

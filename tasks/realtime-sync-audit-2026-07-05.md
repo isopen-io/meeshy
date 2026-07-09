@@ -237,6 +237,45 @@ vérifié : tous les payloads `message:new` émis assertent `senderId === USER_I
 `PARTICIPANT_ID`). Vérifié : suites `MessageHandler` 7/7 (434 tests), suite gateway complète
 verte, `tsc --noEmit` OK.
 
+## 9. Édition/suppression du dernier message : aperçu figé sur l'écran liste — `conversation:updated` jamais émis vers les salles user — ✅ Corrigé 2026-07-09
+
+`services/gateway/src/socketio/handlers/MessageHandler.ts` (WS edit/delete) +
+`routes/messages.ts` (REST edit/delete) + `routes/conversations/messages-advanced.ts`
+(REST edit ×2 / delete) — 7 sites d'émission au total.
+
+`broadcastNewMessage` fanne `CONVERSATION_UPDATED` (portant `lastMessageId`/
+`lastMessagePreview`) vers **chaque salle user** des participants à l'envoi, précisément
+parce qu'un participant posé sur la **liste de conversations** a quitté la salle
+`conversation:<id>` mais reste dans `user:<id>` (documenté à `MeeshySocketIOManager.ts:480`
+et réutilisé par la livraison drainée iter 156). Or l'**édition** et la **suppression**
+n'émettaient `MESSAGE_EDITED`/`MESSAGE_DELETED` que vers `conversation:<id>` et **aucun**
+`CONVERSATION_UPDATED` vers les salles user — alors même que le handler delete recalcule
+déjà `lastMessageAt` sur le dernier message non supprimé (il *sait* que l'aperçu a changé).
+
+**Scénario de défaillance** : conversation de groupe C, membres A et B. B (enregistré,
+en ligne) est sur la **liste** (dans `user:B`, a quitté `conversation:C`). A supprime (ou
+édite) le dernier message de C — celui dont le contenu est l'aperçu en cache de la ligne de B.
+`MESSAGE_DELETED` → `conversation:C` seulement → B le rate. Aucun `CONVERSATION_UPDATED` vers
+`user:B`. B est en ligne → pas de replay offline. La ligne de liste de B continue d'afficher
+le texte supprimé (ou pré-édition) indéfiniment, jusqu'à ce que B rouvre C (refetch SWR). Le
+correctif client #1768 n'avance l'aperçu que depuis le **cache de thread** — un observateur
+liste-seule qui n'a jamais ouvert C n'a rien à avancer. Même classe de faille que le fanout
+`CONVERSATION_UPDATED` de l'envoi, laissée ouverte pour edit/delete.
+
+**Fix** : helper partagé `emitConversationPreviewUpdate(prisma, io, conversationId, onError?)`
+(`services/gateway/src/socketio/emitConversationPreviewUpdate.ts`) qui recalcule le dernier
+message non supprimé (`id`/`content`/`senderId`/`createdAt`) et fanne `CONVERSATION_UPDATED`
+vers chaque salle user de participant actif (anonymes sans `userId` ignorés, dédup par
+`userId`). Best-effort — ne jette jamais (les échecs remontent via `onError` sans faire échouer
+l'edit/delete déjà réussi). Appelé après chaque émission `MESSAGE_EDITED`/`MESSAGE_DELETED`
+sur les 7 sites (WS + les 2 routes REST), donc pas de dérive par transport (même raison que le
+fanout #8). L'aperçu recalculé est toujours auto-cohérent : éditer/supprimer un message
+**non-dernier** émet l'aperçu inchangé (no-op idempotent côté client). Tests de régression :
+`emitConversationPreviewUpdate.test.ts` (5 tests : fanout, skip anonyme + dédup, aperçu null
+après suppression du dernier message, no-op sans IO, `onError` sans throw) +
+`MessageHandlerEditDelete.test.ts` (« fans conversation:updated to participant user rooms …
+on edit »). Vérifié : suite gateway complète verte, `tsc --noEmit` OK.
+
 ## Priorisation suggérée pour le suivi
 
 | Priorité | Item | Raison |
@@ -246,6 +285,7 @@ verte, `tsc --noEmit` OK.
 | ~~P1~~ | ~~#6 markMessagesAsRead n'avance pas le curseur de livraison (read⇒delivered)~~ | ✅ Corrigé 2026-07-07 (gateway, vérifié 153 + 1160 tests verts) |
 | ~~P1~~ | ~~#7 anonyme dans salle personnelle nue — unread jamais reçu~~ | ✅ Corrigé 2026-07-07 (gateway, vérifié 52 tests verts + tsc OK) |
 | ~~P1~~ | ~~#8 message:new.senderId en Participant.id sur le chemin WS (auto-message multi-device non réconcilié)~~ | ✅ Corrigé 2026-07-09 (gateway, vérifié 516 suites / 14008 tests verts + tsc OK) |
+| ~~P2~~ | ~~#9 edit/delete du dernier message : aperçu figé sur l'écran liste (conversation:updated jamais fanné)~~ | ✅ Corrigé 2026-07-09 (gateway, helper partagé sur 7 sites, vérifié suite complète + tsc OK) |
 | P2 | #2 double boucle reconnexion | Peut prolonger une coupure déjà en cours, pas de perte de données mais UX dégradée |
 | P2 | #3 pas de gap detection message/reaction | Silencieux — aucune donnée perdue de façon visible pour l'utilisateur avant refetch, mais viole "eventual consistency garantie" |
 | P3 | #4 reaction reorder | Fenêtre étroite (dépend de #3 pour se manifester), corrigible avec le timestamp déjà présent au payload |
