@@ -376,13 +376,15 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
       const newVideoTrack = newStream.getVideoTracks()[0];
 
-      // Replace track in peer connections
-      useCallStore.getState().peerConnections.forEach((pc) => {
-        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) {
-          sender.replaceTrack(newVideoTrack);
-        }
-      });
+      // MDN warns the outgoing track must not be stopped until replaceTrack()
+      // resolves on every sender — the peer connection may still be reading
+      // from it. Await all replacements first; a rejection propagates to the
+      // catch block below and the old track is left untouched.
+      const replacements = Array.from(useCallStore.getState().peerConnections.values())
+        .map(pc => pc.getSenders().find(s => s.track?.kind === 'video'))
+        .filter((sender): sender is RTCRtpSender => Boolean(sender))
+        .map(sender => sender.replaceTrack(newVideoTrack));
+      await Promise.all(replacements);
 
       videoTrack.stop();
       localStream.removeTrack(videoTrack);

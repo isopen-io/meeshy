@@ -81,8 +81,10 @@ jest.mock('../../../services/CacheStore', () => ({
 }));
 
 const mockResolveMentionedUsers = jest.fn() as jest.Mock<any>;
+const mockResolveUsernamesToIds = jest.fn() as jest.Mock<any>;
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a),
+  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
 }));
 
 const mockBuildPostReplyTo = jest.fn() as jest.Mock<any>;
@@ -1292,14 +1294,19 @@ describe('MessageHandler', () => {
       (agentDeps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
       (agentDeps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue(null);
       (agentDeps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
-      (agentDeps.prisma.user.findMany as jest.Mock<any>).mockResolvedValue([{ id: 'alice-id' }]);
+      // Delegates to the canonical resolveUsernamesToIds (SSOT). Case-insensitive
+      // resolution against case-preserved usernames is asserted in that helper's
+      // own unmocked unit test (MentionService.test.ts); here we assert the
+      // handler delegates and forwards the resolved ids to the agent.
+      mockResolveUsernamesToIds.mockResolvedValue(['alice-id']);
       mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID });
       const agentHandler = new MessageHandler(agentDeps);
 
       await agentHandler.handleMessageSend(socket, makeValidSendData(), callback);
 
-      expect(agentDeps.prisma.user.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { username: { in: ['alice'] } } })
+      expect(mockResolveUsernamesToIds).toHaveBeenCalledWith(expect.anything(), ['alice']);
+      expect(agentClient.sendEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ mentionedUserIds: ['alice-id'] })
       );
     });
 
@@ -1319,7 +1326,7 @@ describe('MessageHandler', () => {
       (agentDeps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
       (agentDeps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue(null);
       (agentDeps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
-      (agentDeps.prisma.user.findMany as jest.Mock<any>).mockRejectedValue(new Error('DB error'));
+      mockResolveUsernamesToIds.mockRejectedValue(new Error('DB error'));
       mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID });
       const agentHandler = new MessageHandler(agentDeps);
 

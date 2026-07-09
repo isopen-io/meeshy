@@ -5806,4 +5806,176 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             "still emits a stale renegotiation offer after being superseded."
         )
     }
+
+    // MARK: - handleSignalOffer must join the renegotiation-serialization chain
+
+    /// Audit finding: `handleSignalOffer`'s `.connecting` (late-offer) and
+    /// `.connected`/`.reconnecting` (mid-call renegotiation) branches called
+    /// `webRTCService.createAnswer()` directly, unserialized against the
+    /// `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/`iceRestartTask`
+    /// family. `createOffer()` has no glare check against an in-flight
+    /// `createAnswer()` (only `createAnswer()` checks `makingOffer`), so a
+    /// peer-initiated renegotiation offer landing while a local hold/toggle/
+    /// ICE-restart is mid-`createOffer()` could run both concurrently on the
+    /// same `RTCPeerConnection` — a race the perfect-negotiation guard alone
+    /// does not catch.
+    func test_signalOfferAnswerTask_propertyExists() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("private var signalOfferAnswerTask: Task<Void, Never>?"),
+            "CallManager must declare `signalOfferAnswerTask` to track handleSignalOffer's " +
+            "in-flight createAnswer() so it can be chained with the other renegotiation tasks."
+        )
+    }
+
+    private func handleSignalOfferBranch(from startMarker: String, to endMarker: String) throws -> String {
+        let fnBody = try body(
+            from: "func handleSignalOffer(callId: String, sdp: SessionDescription, generation: Int = 0) {",
+            to: "// MARK: - Reliable call:join (incoming paths)",
+            in: try callManagerSource()
+        )
+        guard let start = fnBody.range(of: startMarker) else {
+            XCTFail("Marker not found in handleSignalOffer: \(startMarker)")
+            throw XCTSkip()
+        }
+        let end = fnBody.range(of: endMarker, range: start.upperBound..<fnBody.endIndex)?.lowerBound ?? fnBody.endIndex
+        return String(fnBody[start.lowerBound..<end])
+    }
+
+    func test_handleSignalOffer_connectingBranch_chainsOntoVideoTransitionFamily() throws {
+        let branch = try handleSignalOfferBranch(from: "case .connecting:", to: "case .connected, .reconnecting:")
+        for expected in [
+            "await previousToggleConnecting?.value",
+            "await previousHoldConnecting?.value",
+            "await previousSurvivalConnecting?.value",
+            "await previousICERestartConnecting?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "handleSignalOffer's .connecting branch must \(expected) before calling createAnswer() — " +
+                "otherwise a late-offer answer can race a concurrent local renegotiation."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("signalOfferAnswerTask = Task"),
+            "handleSignalOffer's .connecting branch must track its createAnswer() Task in " +
+            "signalOfferAnswerTask so later renegotiations can chain onto it."
+        )
+    }
+
+    func test_handleSignalOffer_renegotiationBranch_chainsOntoVideoTransitionFamily() throws {
+        let branch = try handleSignalOfferBranch(from: "case .connected, .reconnecting:", to: "default:")
+        for expected in [
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "handleSignalOffer's mid-call renegotiation branch must \(expected) before calling " +
+                "createAnswer() — createOffer() has no glare check against an in-flight answer."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("signalOfferAnswerTask = Task"),
+            "handleSignalOffer's renegotiation branch must track its createAnswer() Task in " +
+            "signalOfferAnswerTask so later renegotiations can chain onto it."
+        )
+    }
+
+    // MARK: The video-transition family must await signalOfferAnswerTask
+
+    func test_toggleVideo_awaitsSignalOfferAnswerTask() throws {
+        let body = try body(
+            from: "func toggleVideo() {",
+            to: "func switchCamera() {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousAnswer?.value"),
+            "toggleVideo must await the in-flight signalOfferAnswerTask before calling createOffer() — " +
+            "a peer-initiated renegotiation answer in flight must not race a manual toggle's offer."
+        )
+    }
+
+    func test_handleHold_holdBranch_awaitsSignalOfferAnswerTask() throws {
+        let fullBody = try body(
+            from: "func handleHold(_ isOnHold: Bool) {",
+            to: "func sendDTMF(digits: String) {",
+            in: try callManagerSource()
+        )
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let holdBranch = String(fullBody[fullBody.startIndex..<elseRange.lowerBound])
+        XCTAssertTrue(
+            holdBranch.contains("await previousAnswer?.value"),
+            "handleHold's hold branch must await the in-flight signalOfferAnswerTask."
+        )
+    }
+
+    func test_handleHold_unholdBranch_awaitsSignalOfferAnswerTask() throws {
+        let fullBody = try body(
+            from: "func handleHold(_ isOnHold: Bool) {",
+            to: "func sendDTMF(digits: String) {",
+            in: try callManagerSource()
+        )
+        guard let elseRange = fullBody.range(of: "\n        } else {\n") else {
+            XCTFail("Could not split handleHold into hold/unhold branches")
+            return
+        }
+        let unholdBranch = String(fullBody[elseRange.upperBound...])
+        XCTAssertTrue(
+            unholdBranch.contains("await previousAnswer?.value"),
+            "handleHold's unhold branch must await the in-flight signalOfferAnswerTask."
+        )
+    }
+
+    func test_applySurvivalVideoSend_awaitsSignalOfferAnswerTask() throws {
+        let body = try body(
+            from: "private func applySurvivalVideoSend(enabled: Bool) async -> Bool {",
+            to: "private func actuateSurvivalVideoSend(enabled: Bool, callId: String) async -> Bool {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousAnswer?.value"),
+            "applySurvivalVideoSend must await the in-flight signalOfferAnswerTask before actuating."
+        )
+    }
+
+    func test_thermalCritical_awaitsSignalOfferAnswerTask() throws {
+        let body = try body(
+            from: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {",
+            to: "} else if state == .serious {",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousAnswer?.value"),
+            "Thermal-critical video downgrade must await the in-flight signalOfferAnswerTask."
+        )
+    }
+
+    func test_scheduleICERestart_awaitsSignalOfferAnswerTask() throws {
+        let body = try body(
+            from: "private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
+            to: "private func armTurnCredentialsAfterConfigure",
+            in: try callManagerSource()
+        )
+        XCTAssertTrue(
+            body.contains("await previousAnswer?.value"),
+            "scheduleICERestart must await the in-flight signalOfferAnswerTask before calling " +
+            "performICERestart() — a peer-initiated renegotiation answer can otherwise race it."
+        )
+    }
+
+    func test_endCallInternal_cancelsSignalOfferAnswerTask() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("signalOfferAnswerTask?.cancel()") && source.contains("signalOfferAnswerTask = nil"),
+            "endCallInternal must cancel and nil signalOfferAnswerTask on teardown, matching the other " +
+            "renegotiation tasks."
+        )
+    }
 }

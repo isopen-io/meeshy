@@ -47,7 +47,7 @@ import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
-import { resolveMentionedUsers } from '../../services/MentionService';
+import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
 import { AttachmentService } from '../../services/attachments/AttachmentService';
@@ -1475,11 +1475,7 @@ export class MessageHandler {
   private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
     if (usernames.length === 0) return [];
     try {
-      const users = await this.prisma.user.findMany({
-        where: { username: { in: usernames.map((u) => u.toLowerCase()) } },
-        select: { id: true },
-      });
-      return users.map((u) => u.id);
+      return await resolveUsernamesToIds(this.prisma, usernames);
     } catch (error) {
       handlerLogger.warn('mention user lookup failed (mentions skipped)', { usernames, error });
       return [];

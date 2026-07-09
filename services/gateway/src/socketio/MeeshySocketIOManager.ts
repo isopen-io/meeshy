@@ -60,7 +60,7 @@ import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
-import { MentionService } from '../services/MentionService';
+import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
@@ -1893,22 +1893,30 @@ export class MeeshySocketIOManager {
       } else {
       }
 
-      // 2b. Emit mention:created to each mentioned user's personal room
-      const mentions = message.validatedMentions as unknown as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
-      if (mentions && mentions.length > 0) {
-        for (const mention of mentions) {
-          const targetUserId = mention.userId;
-          if (targetUserId && targetUserId !== message.senderId) {
-            this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
-              messageId: message.id,
-              conversationId: normalizedId,
-              senderId: message.senderId,
-              mentionedUserId: targetUserId,
-              mentionedParticipantId: mention.participantId,
-              content: message.content,
-              timestamp: new Date().toISOString(),
-            });
+      // 2b. Emit mention:created to each mentioned user's personal room.
+      // validatedMentions is persisted as String[] of usernames (schema.prisma), NOT objects —
+      // resolve them to User.ids before emitting. The self-mention guard compares against
+      // resolvedSenderId (the sender's User.id); message.senderId is a Participant.id and would
+      // never match a resolved User.id. Resolution is wrapped so a lookup failure never blocks
+      // the message broadcast (parity with MessageHandler._resolveMentionUserIds on the socket path).
+      const mentionUsernames = (message.validatedMentions ?? []) as unknown as string[];
+      if (mentionUsernames.length > 0) {
+        try {
+          const mentionedUserIds = await resolveUsernamesToIds(this.prisma, mentionUsernames);
+          for (const targetUserId of mentionedUserIds) {
+            if (targetUserId && targetUserId !== resolvedSenderId) {
+              this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+                messageId: message.id,
+                conversationId: normalizedId,
+                senderId: resolvedSenderId,
+                mentionedUserId: targetUserId,
+                content: message.content,
+                timestamp: new Date().toISOString(),
+              });
+            }
           }
+        } catch (error) {
+          logger.warn(`⚠️ [MENTION] Failed to resolve mention usernames for broadcast (mentions skipped): ${error}`);
         }
       }
 
@@ -2184,12 +2192,9 @@ export class MeeshySocketIOManager {
       // Resolve mentionedUsernames to mentionedUserIds for the full mention pipeline
       let mentionedUserIds: string[] | undefined;
       if (response.mentionedUsernames && response.mentionedUsernames.length > 0) {
-        const users = await this.prisma.user.findMany({
-          where: { username: { in: response.mentionedUsernames.map((u) => u.toLowerCase()) } },
-          select: { id: true },
-        });
-        if (users.length > 0) {
-          mentionedUserIds = users.map((u) => u.id);
+        const ids = await resolveUsernamesToIds(this.prisma, response.mentionedUsernames);
+        if (ids.length > 0) {
+          mentionedUserIds = ids;
         }
       } else if (response.content?.includes('@')) {
         // Résolution @DisplayName depuis les participants de la conversation
@@ -2379,11 +2384,7 @@ export class MeeshySocketIOManager {
   private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
     if (usernames.length === 0) return [];
     try {
-      const users = await this.prisma.user.findMany({
-        where: { username: { in: usernames.map((u) => u.toLowerCase()) } },
-        select: { id: true },
-      });
-      return users.map((u) => u.id);
+      return await resolveUsernamesToIds(this.prisma, usernames);
     } catch {
       return [];
     }
