@@ -430,7 +430,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       cache-first sheet (appears loading, fills from `fetchDetails`; failed fetch → empty non-loading),
       `MessageBubble` gains an `onReactionLongPress` combinedClickable. +24 tests. reaction-count is
       shown per tab
-- [~] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation —
+- [x] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation —
       **pinned banner done** (slice `chat-pinned-banner`, 2026-07-08): the wire carries `pinnedAt`/
       `pinnedBy` (`ApiMessage` + `BubbleContent.pinnedAtIso`, blank/deleted → null), the socket
       `message:pinned`/`message:unpinned` events (`MessagePinnedEvent`/`MessageUnpinnedEvent` +
@@ -471,9 +471,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       inert on a deleted/unknown bubble (only the sheet closes). The starred set is combined into the message
       stream so each `BubbleContent.isStarred` is set live; `MessageBubble` renders a subtle accent bookmark
       glyph in the meta row of a starred bubble; the long-press sheet gains a "Star"/"Unstar" row (filled vs
-      outline bookmark) gated on an actionable bubble. EN/FR/ES/PT strings. +31 tests. **Pending:** the
-      dedicated starred-messages **list screen** (reachable from settings, navigate-to-conversation) — the
-      snapshot already carries everything that screen needs.
+      outline bookmark) gated on an actionable bubble. EN/FR/ES/PT strings. +31 tests. **Starred-messages
+      list screen done** (slice `chat-starred-messages-list`, 2026-07-09): a dedicated screen reachable from
+      Settings (new "Chats" section → "Starred messages" row → `Routes.STARRED`) lists every bookmarked
+      message **newest-star first**, ordering delegated to the pure `StarredMessages.sortedByStarredAtDesc`
+      SSOT so the list and the bubble indicator can never disagree. The pure `:feature:chat`
+      `StarredMessagesUiState.of(StarredMessages)` projects each snapshot into a row carrying the shared
+      `PinnedSnippet` preview (reuses `messageSnippetOf`, so a media-only star reads Photo/Attachment
+      identically to the pinned list). `StarredMessagesViewModel` is cache-first (initial value hydrated
+      synchronously from the store, re-derives on every star change anywhere) and exposes `unstar` (delegates
+      to the durable store, no network). Each row taps back into `Routes.chat(conversationId)` (the snapshot
+      carries conversation id/name/accent so no re-fetch); the trailing star removes the bookmark in place;
+      an empty set shows an iconified empty state. Accent-coherent avatar tint (snapshot accent → name-hash
+      fallback). EN/FR/ES/PT strings. +12 tests. Chat §C complete.
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle + **tap-aperçu → scroll vers l'original**
       (`ReplyJumpResolver`, inerte si original paginé hors écran) + **swipe-to-reply**

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -95,6 +96,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
     onOpenProfile: (String) -> Unit,
+    onOpenStarred: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -241,6 +243,18 @@ fun SettingsScreen(
                     query = state.notificationTypeQuery,
                     onQueryChange = viewModel::setNotificationTypeQuery,
                     onToggleType = viewModel::setNotificationTypeEnabled,
+                )
+            }
+
+            SettingsSection(
+                title = stringResource(R.string.settings_section_chats),
+                icon = Icons.Filled.Star,
+                iconColor = MeeshyPalette.Warning,
+            ) {
+                SettingsRow(
+                    label = stringResource(R.string.settings_starred_messages),
+                    detail = null,
+                    onClick = onOpenStarred,
                 )
             }
 

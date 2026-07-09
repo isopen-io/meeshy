@@ -27,6 +27,11 @@
     <string name="chat_action_unpin">Desafixar</string>
     <string name="chat_action_star">Salvar</string>
     <string name="chat_action_unstar">Remover dos salvos</string>
+    <string name="starred_title">Mensagens salvas</string>
+    <string name="starred_back">Voltar</string>
+    <string name="starred_no_preview">Mensagem</string>
+    <string name="starred_empty_title">Nenhuma mensagem salva</string>
+    <string name="starred_empty_hint">Mantenha uma mensagem pressionada e toque em Salvar para vê-la aqui.</string>
     <string name="chat_action_delete_for_everyone">Excluir para todos</string>
     <string name="chat_action_delete_for_me">Excluir para mim</string>
     <string name="chat_editing_label">Editando mensagem</string>

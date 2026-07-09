@@ -27,6 +27,11 @@
     <string name="chat_action_unpin">Unpin</string>
     <string name="chat_action_star">Star</string>
     <string name="chat_action_unstar">Unstar</string>
+    <string name="starred_title">Starred messages</string>
+    <string name="starred_back">Back</string>
+    <string name="starred_no_preview">Message</string>
+    <string name="starred_empty_title">No starred messages</string>
+    <string name="starred_empty_hint">Long-press a message and tap Star to save it here.</string>
     <string name="chat_action_delete_for_everyone">Delete for everyone</string>
     <string name="chat_action_delete_for_me">Delete for me</string>
     <string name="chat_editing_label">Editing message</string>

@@ -50,6 +50,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
+import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.conversations.NewConversationScreen
@@ -78,6 +79,7 @@ object Routes {
     const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
+    const val STARRED = "starred"
     const val PROFILE_USER = "profile/{userId}"
     const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
@@ -314,6 +316,15 @@ fun MeeshyApp(
                         }
                     },
                     onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+                    onOpenStarred = { navController.navigate(Routes.STARRED) },
+                )
+            }
+            composable(Routes.STARRED) {
+                StarredMessagesScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(Routes.chat(conversationId))
+                    },
                 )
             }
             composable(

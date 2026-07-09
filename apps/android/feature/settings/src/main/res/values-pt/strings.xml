@@ -10,6 +10,8 @@
     <string name="settings_theme_dark">Escuro</string>
     <string name="settings_section_language">Idioma</string>
     <string name="settings_section_notifications">Notificações</string>
+    <string name="settings_section_chats">Conversas</string>
+    <string name="settings_starred_messages">Mensagens salvas</string>
     <string name="settings_section_privacy">Privacidade e segurança</string>
     <string name="settings_section_data">Dados</string>
     <string name="settings_section_about">Sobre</string>

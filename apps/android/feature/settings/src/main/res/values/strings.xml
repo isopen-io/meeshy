@@ -10,6 +10,8 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_section_language">Language</string>
     <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_section_chats">Chats</string>
+    <string name="settings_starred_messages">Starred messages</string>
     <string name="settings_section_privacy">Privacy &amp; Security</string>
     <string name="settings_section_data">Data</string>
     <string name="settings_section_about">About</string>
