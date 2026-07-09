@@ -54,6 +54,31 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// Every other CXProviderDelegate method that mutates RTCAudioSession
+    /// (`didActivate`, `didDeactivate`) routes the lock/mutate/unlock sequence
+    /// through `manager?.audioSessionQueue.sync { … }`, the dedicated serial
+    /// queue this file uses to serialize ALL RTCAudioSession reconfiguration.
+    /// `providerDidReset` bypassed that queue and mutated RTCAudioSession
+    /// directly on CallKit's own private delegate queue — a real (if rare,
+    /// since a full provider reset is a system-level event) race window
+    /// against a concurrent `audioSessionQueue` operation triggered from the
+    /// MainActor (e.g. configureAudioSession/deactivateAudioSession).
+    func test_providerDidReset_serializesRTCAudioSessionMutation_onAudioSessionQueue() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "func providerDidReset(_ provider: CXProvider) {") else {
+            XCTFail("providerDidReset not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("manager?.audioSessionQueue.sync"),
+            "providerDidReset must route its RTCAudioSession mutation through " +
+            "manager?.audioSessionQueue.sync, matching didActivate/didDeactivate, " +
+            "to avoid racing a concurrent audioSessionQueue operation."
+        )
+    }
+
     func test_callManager_toggleTranscription_doesNotHardcodeLanguage() throws {
         // Regression guard: toggleTranscription() must not hardcode language strings.
         // Language resolution is delegated to CallManager.preferredCallLanguage(for:)

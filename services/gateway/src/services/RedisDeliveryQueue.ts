@@ -176,10 +176,30 @@ export class RedisDeliveryQueue {
       logger.debug('Delivery queue supersede (memory): mutable event replaced in place', { userId, dedupId, eventType: normalizedEventType(entry) });
       return;
     }
-    const bounded = existing.length >= MEMORY_QUEUE_MAX_PER_USER
-      ? existing.slice(existing.length - MEMORY_QUEUE_MAX_PER_USER + 1)
-      : existing;
-    this.memoryQueue.set(userId, [...bounded, entry]);
+    const withNew = [...existing, entry];
+    if (withNew.length <= MEMORY_QUEUE_MAX_PER_USER) {
+      this.memoryQueue.set(userId, withNew);
+      return;
+    }
+    // Over capacity: evict the chronologically-OLDEST entries by `enqueuedAt`,
+    // NOT the head array slots. A mutable event superseded in place above keeps
+    // its original, earlier slot while carrying a NEWER enqueuedAt, so slot 0 is
+    // not necessarily the oldest — slicing by slot could drop the freshest
+    // edit/delete/reaction and strand the recipient on stale content after
+    // drain() (whose byEnqueuedAt sort cannot recover an entry already evicted
+    // here). Same array-slot-vs-enqueuedAt divergence that byEnqueuedAt fixed for
+    // the sibling drain path. Survivors keep their insertion order (drain()
+    // re-sorts, but the memory-before-Redis tiebreak in byEnqueuedAt relies on
+    // stable order).
+    const evictCount = withNew.length - MEMORY_QUEUE_MAX_PER_USER;
+    const evictIndices = new Set(
+      withNew
+        .map((e, index) => ({ ts: new Date(e.enqueuedAt).getTime(), index }))
+        .sort((a, b) => a.ts - b.ts)
+        .slice(0, evictCount)
+        .map(({ index }) => index),
+    );
+    this.memoryQueue.set(userId, withNew.filter((_, index) => !evictIndices.has(index)));
   }
 
   async drain(userId: string): Promise<QueuedMessagePayload[]> {

@@ -1,109 +1,129 @@
 # Iteration 152 — Analyse d'optimisation (2026-07-09)
 
 ## Protocole (démarrage)
-`main` @ `1142cc58` (dernier merge : PR #1749 iter — Android starred-messages list).
-Branche `claude/brave-archimedes-1o2vbq` synchronisée sur `origin/main` (0/0). Ce cycle
-prend **152**.
+`main` @ `ab919cd7` (dernier merge : PR #1746 iter — memory-fallback slice
+`size()`/`peek()` Redis-parity). Branche `claude/brave-archimedes-itvak7`
+synchronisée sur `origin/main` (0/0). Ce cycle prend **152**.
 
-Cible retenue = le **candidat gateway explicitement différé par l'itération 151** (voir
-`2026-07-09-iteration-151-analyse.md`, section « Candidat gateway écarté ce cycle ») :
-changer l'emoji d'une réaction post/story renvoie **HTTP 500**. L'itération 151 avait tranché
-l'ambiguïté produit : **Option B** (mapper vers un 4xx propre) est le fix minimal et défendable
-« sans décision produit ». Ce cycle implémente Option B avec une erreur **typée** (pas de
-string-matching fragile).
+Fan-out : deux agents Explore parallèles — (a) `services/gateway/src` (delivery
+queue, post/story views, présence, reactions, call-transcription, stats), (b)
+`apps/web` + `packages/shared` (mentions, présence, prisme, typing, reactions,
+story/canvas, translation display). Consigne : **un** défaut de logique
+quasi-pure, haute confiance, **actuellement en production**, non couvert par les
+tests. Priorité 1 = features récemment développées (la présence a été
+massivement retravaillée : PR #1729, #1735, #1727, iter 146, centralisation
+palette + source de vérité).
 
 ---
 
-## Cible retenue : F118 — un garde de domaine atteignable (max 1 réaction) remonte en `500 INTERNAL_ERROR` sur `POST /posts/:id/like`
+## Cible retenue : F118 — `formatPresenceLabel` accepte `isOnline` mais ne le lit jamais → le libellé contredit sa propre couleur
 
 ### Current state
-`PostReactionService.addReaction` (`services/gateway/src/services/PostReactionService.ts:99-113`)
-applique un garde délibéré `MAX_REACTIONS_PER_USER = 1` qui **throw** dès qu'un emoji
-différent est demandé :
-```ts
-if (uniqueEmojis.size >= MAX_REACTIONS_PER_USER && !uniqueEmojis.has(sanitized)) {
-  throw new Error(`Maximum ${MAX_REACTIONS_PER_USER} different reactions per post reached`);
-}
-```
-Ce garde est **délibéré** (test `PostReactionService.test.ts` l'asserte). Le problème n'est
-PAS le garde — c'est son **mapping HTTP**. La route `POST /posts/:postId/like`
-(`routes/posts/interactions.ts`) ne filtre que `POST_NOT_FOUND` (→ 404) ; tout autre throw
-tombe dans le `catch` générique → `sendInternalError` → **HTTP 500**.
+`apps/web/utils/presence-format.ts`. Deux fonctions sœurs, dans le **même
+fichier**, décident de l'état de présence à partir des mêmes entrées
+(`lastActiveAt`, `isOnline`) — et **divergent** :
 
-`PostService.likePost` (`PostService.ts:725-734`) ne rattrape que les messages contenant
-`not found` / `deleted` (→ `null`) et **rethrow** le reste — donc l'erreur du garde remonte
-intacte jusqu'au 500.
+- **`presenceColorClass`** (ligne 48) délègue correctement à la source de vérité
+  partagée :
+  ```ts
+  const status = getUserPresenceStatus({ isOnline, lastActiveAt }, now ?? Date.now());
+  return PRESENCE_TEXT_CLASS[presenceTone(status)];
+  ```
+- **`formatPresenceLabel`** (ligne 22) dérive « en ligne » d'un **seuil local**
+  et **ignore silencieusement** le paramètre `isOnline` qu'elle reçoit :
+  ```ts
+  const minutesAgo = (nowMs - lastMs) / 60_000;
+  if (minutesAgo < 1) return o.t('status.online');   // isOnline jamais lu
+  ```
+
+La règle canonique (`packages/shared/utils/user-presence.ts`,
+`getUserPresenceStatus`) traite `isOnline === true` comme **autoritatif** :
+online pendant 30 min après `lastActiveAt` (gardé contre les données périmées via
+la fenêtre away). `presenceColorClass` l'honore ; `formatPresenceLabel` non.
 
 ### Problems identified
-Reachability confirmée en production via **iOS** :
-- `StoryInteractionService.react(storyId:emoji:)` (`apps/ios/.../StoryInteractionService.swift:117-127`)
-  POST un emoji **arbitraire** sur `/posts/\(storyId)/like`.
-- `OutboxDispatcher` (`OutboxDispatcher.swift:485`) rejoue les likes/réactions post via le
-  même `POST /posts/:id/like`.
+Utilisateur avec `isOnline = true`, dernier heartbeat il y a 10 min (état normal
+d'un socket actif — les heartbeats sont throttlés) :
+- `presenceColorClass(lastActiveAt, true)` → `getUserPresenceStatus` → `'online'`
+  → texte **vert** (emerald).
+- `formatPresenceLabel({ lastActiveAt, isOnline: true })` → `minutesAgo = 10` →
+  **`"Vu il y a 10 minutes"`**.
 
-Scénario : un utilisateur réagit ❤️ à une story, puis change pour 😂 → `addReaction` throw →
-route → **HTTP 500**. Le web passe par le socket (`post:reaction-add`) qui, lui, dégrade déjà
-proprement (ACK `{success:false, error}`), donc le 500 est spécifique au **chemin REST**
-(iOS + tout appelant direct de l'API).
+Les deux sont rendus dans le **même `<span>`** (`apps/web/app/u/[id]/page.tsx:382-389`,
+le `user.isOnline` alimente couleur ET libellé). L'en-tête de profil affiche donc
+un libellé « vu il y a 10 min » **en couleur verte « en ligne »** — une
+contradiction visible pour tout utilisateur backend-online dont le dernier
+heartbeat a ≥ 1 min (le régime permanent d'une session active).
 
 ### Root causes
-Une erreur de **domaine attendue et atteignable** (l'utilisateur change son emoji) est levée
-comme un `Error` générique non typé. La route n'a aucun moyen de la distinguer d'un vrai
-défaut serveur → elle la classe en `INTERNAL_ERROR`. Il manque un **type d'erreur** portant
-sa sémantique HTTP (409 Conflict) le long de la chaîne service → route.
+Deux sources de vérité pour un même état. `presenceColorClass` a été centralisé
+sur `getUserPresenceStatus` (effort palette/SSOT présence — PR #1729) mais
+`formatPresenceLabel`, dans le même fichier, a conservé son seuil local
+`minutesAgo < 1` et n'a jamais propagé l'autorité `isOnline`. Le paramètre
+`isOnline?` a été ajouté à la signature (`FormatPresenceLabelOptions`) mais son
+corps ne le référence nulle part → paramètre mort.
 
 ### Business impact
-Un 500 sur un changement de réaction est un signal d'erreur serveur (bruit d'observabilité,
-alerte, ret– rien à corriger côté infra) pour un comportement produit **nominal**. Côté iOS,
-l'appel est fire-and-forget : l'UI optimiste garde le nouvel emoji tandis que le backend
-conserve l'ancien — mais le mapping 500 masque la vraie nature « conflit » de l'événement.
+Contradiction perçue dans l'en-tête de profil : un contact réellement connecté
+apparaît « vu il y a X minutes » alors que la pastille/couleur dit « en ligne ».
+Friction de confiance sur un signal social central (présence). WhatsApp-grade :
+« en ligne » doit vouloir dire en ligne.
 
 ### Technical impact
-- Pollution des logs `error` + métriques 5xx pour un cas 4xx légitime.
-- Contrat d'API incohérent : les autres gardes de domaine de la même route (`POST_NOT_FOUND`
-  → 404, `FORBIDDEN` → 403 sur pin/repost) sont mappés correctement ; seul le garde réaction
-  échappait au mapping.
+Feature morte (`isOnline` inatteignable dans `formatPresenceLabel`). Divergence
+de règle non testée entre libellé et couleur pour le même utilisateur.
 
 ### Risk assessment
-Très faible. Aucune sémantique produit modifiée : le garde `max 1` **throw toujours** et
-rejette toujours le 2e emoji. On change uniquement (a) le **type** de l'erreur levée
-(`Error` → `ConflictError`, message préservé à l'identique) et (b) le **code HTTP** rendu
-(500 → 409). Le test existant `.rejects.toThrow('Maximum 1 different reactions per post reached')`
-reste vert (message inchangé). Le chemin socket (`PostReactionHandler`) lit `error.message`
-→ inchangé. `likePost` rethrow le `ConflictError` intact (message ne matche pas
-`not found`/`deleted`).
+Très faible. On aligne le libellé sur la règle canonique déjà en production pour
+la couleur — aucune sémantique produit nouvelle. Les cas non-online (recent/away
+`isOnline=false` → « vu il y a X ») restent **inchangés** : `getUserPresenceStatus`
+ne renvoie `'online'` que pour `isOnline===true` (fenêtre away) OU activité < 60 s
+— exactement le comportement WhatsApp-style voulu. La décroissance au-delà de
+30 min (isOnline stale-true) retombe correctement sur « vu il y a X ».
 
 ### Proposed improvements
-1. `PostReactionService.addReaction` lève un `ConflictError` typé
-   (`errors/custom-errors.ts`, `statusCode = 409`, `code = 'REACTION_LIMIT_REACHED'`),
-   message identique.
-2. La route `POST /posts/:postId/like` mappe `instanceof ConflictError` → `sendConflict`
-   (409) avant le fallback `sendInternalError`.
+Gater le libellé « en ligne » sur la règle partagée, avant l'échelle relative :
+```ts
+if (getUserPresenceStatus({ isOnline: o.isOnline, lastActiveAt: o.lastActiveAt }, nowMs) === 'online') {
+  return o.t('status.online');
+}
+```
 
 ### Expected benefits
-- Un changement de réaction post/story renvoie **409 CONFLICT** (`code: REACTION_LIMIT_REACHED`),
-  plus jamais 500.
-- Erreur de domaine **typée** : la route décide le statut HTTP sans string-matching fragile.
-- Cohérence avec le reste de la route (404/403 déjà typés) et avec la hiérarchie
-  `BaseAppError` documentée.
+- Libellé et couleur s'accordent toujours (une seule règle : `getUserPresenceStatus`).
+- Un utilisateur backend-online affiche « En ligne », plus « vu il y a 10 min ».
+- Le paramètre `isOnline` de `formatPresenceLabel` cesse d'être mort.
+- Parité avec `presenceColorClass` (même fichier), iOS `UserPresence.state`,
+  Android `UserPresence.state`.
 
 ### Implementation complexity
-Triviale : 1 throw retypé + 3 lignes de mapping route + 2 imports. Tests RED→GREEN.
+Triviale : 1 branche de production (remplace `minutesAgo < 1`) + 2 tests de
+comportement (RED→GREEN). Toutes les branches relatives (< 60 min, < 24 h,
+hier/avant-hier/date) restent inchangées.
 
 ### Validation criteria
-- Nouveau test route « returns 409 (not 500) when the reaction-limit guard trips » vert.
-- Nouveau test service « throws a typed ConflictError (409) » vert.
-- Test existant « should throw error when max reactions per user reached » toujours vert.
-- Suites `PostReactionService.test.ts` + `interactions.test.ts` vertes, aucune régression.
+- Nouveau test « online despite stale heartbeat » (`isOnline=true`, 10 min →
+  `status.online`). RED avant fix, GREEN après.
+- Nouveau test « decays past away window » (`isOnline=true`, 45 min →
+  `status.lastSeenMinutes`) — garde la décroissance.
+- Suite `presence-format.test.ts` verte (14/14, +2), aucune régression sur les
+  branches minutes/heures/jours/date ni sur `presenceColorClass`.
 
 ---
 
-## Note de suivi (pour les cycles futurs)
-- **Option A (swap)** reste ouverte et nécessite un signal produit : aligner post/comment sur
-  le modèle message (upsert single-reaction, `replacedEmojis`, broadcast remove+add) pour que
-  changer d'emoji **remplace** au lieu de rejeter. Hors périmètre autonome tant qu'aucune
-  intention produit n'est signalée.
-- Le **chemin comment** (`CommentReactionService.addReaction`) applique le même garde
-  `max 1, throw new Error(...)`. Si un chemin REST comment expose un 500 équivalent, le même
-  retypage `ConflictError` s'y appliquera (non traité ce cycle — le chemin réaction commentaire
-  passe par le socket `CommentReactionHandler`, qui dégrade déjà via ACK).
+## Candidat gateway retenu pour un cycle futur (non pris ce cycle) : clé de bucket stats erronée sur la suppression d'un message anonyme
+
+L'agent gateway a trouvé un vrai défaut, gardé en réserve pour ne pas re-fan-outer :
+`DELETE` message (`services/gateway/src/routes/conversations/messages-advanced.ts:620`)
+appelle `onMessageDeleted(..., existingMessage.sender?.userId ?? '', ...)`. Or
+`onNewMessage` incrémente `participantStats` sous `userId || participantId`
+(`MessageHandler.ts:327,531`) et `recompute` sous `msg.sender?.userId || msg.senderId`
+(`ConversationMessageStatsService.ts:394`). Pour un **expéditeur anonyme**
+(`sender.userId === null`), le delete passe **`''`** au lieu de `senderId` → le
+garde `if (entry)` (`:298`) saute → le bucket par-participant n'est jamais
+décrémenté (les totaux le sont), dérive à la hausse jusqu'au prochain
+`recompute()`. Fix ciblé : `existingMessage.sender?.userId ?? existingMessage.senderId`
+(aligne la clé du delete sur `recompute`). Non couvert (tous les tests
+`onMessageDeleted` utilisent un `USER_A` enregistré). Réservé : le fix vit au site
+d'appel (route), donc requiert soit un test d'intégration route, soit un
+refactor du contrat — à trancher au prochain cycle.
