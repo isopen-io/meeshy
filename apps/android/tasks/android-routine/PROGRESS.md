@@ -789,7 +789,26 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `chat-story-reply-preview`** — the last pending half of §C "Quoted-reply
+**Just shipped (2026-07-09): `chat-bubble-location`** — location message-bubble attachment (§C line ~533,
+`carousel / audio / location / contact` list — **location now done**). Port of iOS
+`BubbleAttachmentView.location`: a mime `application/x-location` attachment becomes a pure `BubbleLocation`
+(`:sdk-ui`, nullable lat/lon, `placeName ← originalName`, locale-safe `geoUri`) rendered as a tappable pin
+card → `geo:` URI opened in the OS maps app via `LocalUriHandler` (`:feature:chat` `ChatScreen`), no longer
+mis-bucketed as a generic file. +16 tests (RED-verified). See run log.
+**Recommended next (highest value):**
+- **Message bubble audio / carousel / contact attachments** (feature-parity §C line ~533, still `[~]`,
+  now "carousel / audio / contact pending"). **Audio** is the highest-value port (voice messages are core to
+  Meeshy; the pipeline already lands transcription + translated audio on the wire — `ApiMessageAttachment`
+  carries `duration`/`transcription`/`translations`): a pure `BubbleAudio` projection (duration formatting,
+  transcription-preferred-language resolution via `LanguageResolver`) + an exempt player composable. **Contact**
+  (share a contact card) is smaller but the wire has no dedicated fields yet. **Carousel** extends the existing
+  image grid to a swipeable pager.
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`) — a
+  horizontal community rail + category chips over the conversation list (a larger §B slice: pure section/
+  filter model + a rail composable).
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-09): `chat-story-reply-preview`** — the last pending half of §C "Quoted-reply
 previews incl. story-reply previews (counts, thumbnails)", **§C quoted-reply previews now complete**. New
 `ApiPostReplyTarget` DTO (`:core:model`) decoded from `postReplyTo`/legacy `storyReplyTo` + bare
 `storyReplyToId` on `ApiMessage`. `BubbleContentBuilder` projects a pure `BubbleStoryReply` (`:sdk-ui`) —
@@ -1621,7 +1640,52 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
-### 2026-07-09 — slice `chat-story-reply-preview` ✅ impl + reviewer PASS · ⚠ merge blocked-on-infra (PR #1769 open)
+### 2026-07-09 — slice `chat-bubble-location` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/chat-bubble-location` (off latest `main`, `#1769` story-reply-preview merged).
+- **What:** location message-bubble attachment at iOS parity (`feature-parity.md` §C line ~533, the
+  `carousel / audio / location / contact pending` list — **location now done**). Port of iOS
+  `BubbleAttachmentView.location` / `LocationMessageView`. A message attachment with mime
+  `application/x-location` was previously dropped into the generic **file** bucket (an "attachment" row with
+  no name); now it becomes a first-class location preview.
+- **Added (production, all `:sdk-ui`):**
+  - `BubbleLocation` value type (`BubbleContent.kt`) — pure: `attachmentId`, nullable `latitude`/`longitude`,
+    `placeName`; computed `hasCoordinates` and a **locale-safe** `geoUri` (`geo:lat,lon?q=lat,lon(label)`;
+    `Double.toString()` is always dot-decimal so the URI is correct even under a comma-decimal locale; a
+    blank `placeName` drops the `(label)` suffix). `BubbleContent.locations: List<BubbleLocation>`.
+  - `BubbleContentBuilder`: new `isLocation` (mime `== application/x-location`) — location attachments are
+    projected into `locations` and **excluded** from the file bucket (`filterNot { isImage || isLocation }`);
+    `placeName ← originalName` (blank→null), coords passed through (nullable), suppressed on a deleted message
+    (mirrors images/files). Emoji-only treatment already off when any attachment is present.
+  - `MessageBubble`: `LocationPreview` composable (pin glyph + place name / "Shared location" fallback +
+    coordinate line when present) + `onLocationClick` callback (gated on `hasCoordinates`); `hasAttachments`
+    now includes locations so a caption-less location bubble doesn't render an empty text slot. EN/FR/ES/PT
+    strings (`bubble_location_shared`, `bubble_location_open`).
+  - `:feature:chat` `ChatScreen` wires `onLocationClick` → `LocalUriHandler.openUri(geoUri)` (wrapped in
+    `runCatching` — no crash if no maps app handles `geo:`), so the tap opens the point in the device maps app
+    (no dead end). This is the app-side product-orchestration half; the projection/render stays in `:sdk-ui`.
+- **Tests (+16, RED→GREEN):**
+  - `BubbleLocationTest` (9): `hasCoordinates` both-present / missing-lat / missing-lon; `geoUri` with
+    label / without label / blank-label→no-suffix / trimmed-label / no-coords→null / **FRANCE-locale still
+    dot-decimal**.
+  - `BubbleContentBuilderTest` (+7 → 64): location→`BubbleLocation` not a file; blank `originalName`→null
+    `placeName`; location without coords still surfaced (not a file); image+file+location each in its own
+    bucket; deleted message hides its location; location disables emoji-only; no-location→empty list.
+- **Edge cases covered:** missing one/both coordinates (placeholder path), blank/whitespace place name,
+  deleted-suppress, mixed attachment kinds partitioned, locale-dependent decimal formatting, no-maps-app tap
+  (graceful `runCatching`).
+- **Verify:** `:sdk-ui:testDebugUnitTest` → 9/9 + 64/64 (BUILD SUCCESSFUL 4m38s). Full
+  `assembleDebug + testDebugUnitTest` (all modules) → BUILD SUCCESSFUL (5m16s). `:app:assembleDebug +
+  :feature:chat:testDebugUnitTest` (covers the `ChatScreen` wiring) → BUILD SUCCESSFUL, chat 133/133.
+  (system Gradle 8.14.3 at `/opt/gradle`; wrapper download 403-blocked in this container.)
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API (`BubbleContentBuilder.build`
+  producing `locations`, `BubbleLocation.geoUri`/`hasCoordinates`), no tautologies, boundary coverage on
+  missing coords / blank name / deleted / locale / mixed buckets; SDK-purity — the "detect + project a
+  location" derivation is a pure `:sdk-ui` building block (same layer as image/file projection), the "when
+  tapped, open the OS maps app" decision is the `:feature:chat` `ChatScreen` (app-side orchestration), the
+  preview composable is exempt Compose glue; SSOT — reuses the existing attachment-partition pattern; UDF
+  immutable content; accent-coherent (`onColor`-tinted card); natural tap→maps gesture; no dead end.
+
+### 2026-07-09 — slice `chat-story-reply-preview` ✅ impl + reviewer PASS · ✅ merged (PR #1769)
 - **⚠ Merge status:** PR #1769 open. CI is red **only** because the monorepo's Python jobs (`TTS/STT Integration`,
   `Audio Pipeline Tests`, `Test Python (translator)`) hit repeated `503 Service Unavailable` from
   `download.pytorch.org` while `uv` fetches torch-family wheels (`matplotlib-inline`, `lazy-loader`) — a

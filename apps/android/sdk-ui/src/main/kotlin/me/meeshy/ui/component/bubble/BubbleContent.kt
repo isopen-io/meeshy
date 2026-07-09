@@ -60,6 +60,37 @@ public data class BubbleFile(
     val sizeBytes: Int? = null,
 )
 
+/**
+ * A shared-location attachment (mime `application/x-location`) — port of the
+ * `.location` branch of iOS `BubbleAttachmentView`. Coordinates are nullable so a
+ * malformed location still renders a "position shared" placeholder rather than
+ * collapsing into a generic file row.
+ */
+@Immutable
+public data class BubbleLocation(
+    val attachmentId: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val placeName: String? = null,
+) {
+    /** True when both coordinates are present and the point can be shown/opened. */
+    val hasCoordinates: Boolean get() = latitude != null && longitude != null
+
+    /**
+     * A `geo:` URI to hand to an external maps app, or null when coordinates are
+     * absent. `Double.toString()` is locale-independent (always a `.` separator),
+     * so the URI is safe to build in any locale. A non-blank [placeName] is added
+     * as the standard `(label)` suffix.
+     */
+    val geoUri: String? get() {
+        val lat = latitude ?: return null
+        val lon = longitude ?: return null
+        val base = "geo:$lat,$lon?q=$lat,$lon"
+        val label = placeName?.trim()?.ifBlank { null }
+        return if (label != null) "$base($label)" else base
+    }
+}
+
 @Immutable
 public data class BubbleContent(
     val messageId: String,
@@ -86,6 +117,7 @@ public data class BubbleContent(
     val clientMessageId: String? = null,
     val images: List<BubbleImage> = emptyList(),
     val files: List<BubbleFile> = emptyList(),
+    val locations: List<BubbleLocation> = emptyList(),
     val emojiOnlyCount: Int = 0,
     val pinnedAtIso: String? = null,
     val isForwarded: Boolean = false,

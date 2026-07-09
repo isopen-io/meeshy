@@ -623,6 +623,150 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a location attachment becomes a bubble location, not a file`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "loc1",
+                        originalName = "Tour Eiffel",
+                        mimeType = "application/x-location",
+                        latitude = 48.8584,
+                        longitude = 2.2945,
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        val location = content.locations.single()
+        assertThat(location.attachmentId).isEqualTo("loc1")
+        assertThat(location.latitude).isEqualTo(48.8584)
+        assertThat(location.longitude).isEqualTo(2.2945)
+        assertThat(location.placeName).isEqualTo("Tour Eiffel")
+        assertThat(content.files).isEmpty()
+        assertThat(content.images).isEmpty()
+    }
+
+    @Test
+    fun `a location with a blank original name carries a null place name`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "loc1",
+                        originalName = "   ",
+                        mimeType = "application/x-location",
+                        latitude = 1.0,
+                        longitude = 2.0,
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.locations.single().placeName).isNull()
+    }
+
+    @Test
+    fun `a location attachment without coordinates is still surfaced as a location`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "loc1", mimeType = "application/x-location"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        val location = content.locations.single()
+        assertThat(location.hasCoordinates).isFalse()
+        assertThat(content.files).isEmpty()
+    }
+
+    @Test
+    fun `an image, a file and a location land in their own buckets`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "img", mimeType = "image/jpeg", fileUrl = "/p.jpg"),
+                    ApiMessageAttachment(id = "doc", mimeType = "application/pdf", fileUrl = "/x.pdf"),
+                    ApiMessageAttachment(
+                        id = "loc",
+                        mimeType = "application/x-location",
+                        latitude = 1.0,
+                        longitude = 2.0,
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.images.single().attachmentId).isEqualTo("img")
+        assertThat(content.files.single().attachmentId).isEqualTo("doc")
+        assertThat(content.locations.single().attachmentId).isEqualTo("loc")
+    }
+
+    @Test
+    fun `a deleted message hides its location`() {
+        val content = BubbleContentBuilder.build(
+            message(deletedAt = "2026-05-18T10:00:00Z").copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "loc1",
+                        mimeType = "application/x-location",
+                        latitude = 1.0,
+                        longitude = 2.0,
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.locations).isEmpty()
+    }
+
+    @Test
+    fun `a location attachment disables the emoji-only treatment`() {
+        val content = BubbleContentBuilder.build(
+            message(content = "😂").copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "loc1",
+                        mimeType = "application/x-location",
+                        latitude = 1.0,
+                        longitude = 2.0,
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.emojiOnlyCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a message with no location attachment has an empty locations list`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "img", mimeType = "image/jpeg", fileUrl = "/p.jpg"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.locations).isEmpty()
+    }
+
+    @Test
     fun `an emoji-only message carries its cluster count`() {
         val content = BubbleContentBuilder.build(
             message(content = "😂🔥"),
