@@ -202,7 +202,7 @@ export function useMentions({
     // Détecter la mention
     const detection = detectMentionAtCursor(value, cursorPosition);
 
-    if (detection && /^\w{0,30}$/.test(detection.query)) {
+    if (detection && /^[\w-]{0,30}$/.test(detection.query)) {
 
       // Calculer la position
       if (textarea) {

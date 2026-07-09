@@ -679,5 +679,35 @@ describe('useMentions', () => {
       expect(result.current.showMentionAutocomplete).toBe(true);
       expect(result.current.mentionQuery).toBe('john_doe_123');
     });
+
+    it('should keep autocomplete open after a hyphen in the username', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('@marie-', 7);
+
+      act(() => {
+        result.current.handleTextChange('@marie-', 7, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(true);
+      expect(result.current.mentionQuery).toBe('marie-');
+    });
+
+    it('should handle hyphenated usernames', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('@marie-claire', 13);
+
+      act(() => {
+        result.current.handleTextChange('@marie-claire', 13, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(true);
+      expect(result.current.mentionQuery).toBe('marie-claire');
+    });
   });
 });
