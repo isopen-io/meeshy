@@ -18,6 +18,8 @@ import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.DataStoreConversationDraftStore
 import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
 import me.meeshy.sdk.chat.SharedPrefsLocallyHiddenMessagesStore
+import me.meeshy.sdk.chat.SharedPrefsStarredMessagesStore
+import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.language.DataStoreInterfaceLanguageStore
 import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.net.MeeshyApi
@@ -54,6 +56,13 @@ object SdkModule {
     fun providesLocallyHiddenMessagesStore(
         @ApplicationContext context: Context,
     ): LocallyHiddenMessagesStore = SharedPrefsLocallyHiddenMessagesStore(context)
+
+    @Provides
+    @Singleton
+    fun providesStarredMessagesStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): StarredMessagesStore = SharedPrefsStarredMessagesStore(context, json)
 
     @Provides
     @Singleton

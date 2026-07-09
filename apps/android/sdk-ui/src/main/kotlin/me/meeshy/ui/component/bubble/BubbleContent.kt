@@ -60,4 +60,5 @@ public data class BubbleContent(
     val emojiOnlyCount: Int = 0,
     val pinnedAtIso: String? = null,
     val isForwarded: Boolean = false,
+    val isStarred: Boolean = false,
 )

@@ -38,6 +38,8 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -472,6 +474,7 @@ fun ChatScreen(
             onReply = { viewModel.startReply(actionTarget.messageId) },
             onForward = { viewModel.openForward(actionTarget.messageId) },
             onPin = { viewModel.togglePin(actionTarget.messageId) },
+            onStar = { viewModel.toggleStar(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
         )
@@ -1509,6 +1512,7 @@ private fun MessageActionsSheet(
     onReply: () -> Unit,
     onForward: () -> Unit,
     onPin: () -> Unit,
+    onStar: () -> Unit,
     onToggleOriginal: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1576,6 +1580,16 @@ private fun MessageActionsSheet(
                         else R.string.chat_action_pin,
                     ),
                     onClick = onPin,
+                )
+            }
+            if (isActionable) {
+                SheetAction(
+                    icon = if (bubble.isStarred) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                    label = stringResource(
+                        if (bubble.isStarred) R.string.chat_action_unstar
+                        else R.string.chat_action_star,
+                    ),
+                    onClick = onStar,
                 )
             }
             if (bubble.isOutgoing && isActionable && canEdit) {

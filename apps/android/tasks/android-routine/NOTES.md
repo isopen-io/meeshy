@@ -1425,3 +1425,23 @@ Append-only log of gotchas and decisions that save time next run.
   (same pattern as `messageDeleted`/`messageUpdated`).
 - **Stable newest-pick on ties:** `maxByOrNull` keeps the *last* max; for "newest pin, ties→earliest in
   list order" write a small `maxByStable` that only replaces on a strict `>` — keeps the first max.
+
+## Lesson (2026-07-09, `chat-star-toggle`)
+- **Investigate the backend before choosing "local-only".** iOS features can be UserDefaults-only where the
+  gateway has no endpoint. Message starring is one: the gateway's only `bookmark` is `PostBookmark` (feed
+  posts); iOS' `StarredMessagesStore` header says outright "local-only … the backend does not yet have a
+  message-level star endpoint". So the Android slice is a durable local store + snapshot, **no** repo/outbox/
+  API — mirror `LocallyHiddenMessagesStore`, not the pin outbox. Grep `services/gateway` + `schema.prisma`
+  for the verb (bookmark/star/saved) first; don't assume a wire field exists.
+- **Extending the ChatViewModel combine past 5 (again):** the star set is the **7th** source. Chain a second
+  `.combine(starredStore.starred) { (inputs, hidden), starred -> Triple(inputs, hidden, starred.ids) }` after
+  the hidden `.combine` and destructure the Triple in `collect`. Same two-stage-typed trick as the hidden set
+  — never promote to the untyped vararg `combine`.
+- **Snapshot-set store vs id-set store.** "Delete for me" needs only ids (`SharedPrefs StringSet`). Starring
+  needs a **snapshot** per id (conversation name/accent, sender, preview, kind, timestamps) so a later list
+  screen renders + navigates without re-fetch → store a JSON list under one key (inject `Json`, mirror
+  `ConversationDraftStore`) but keep the synchronous-hydrated-`StateFlow` shape of the hidden store (not the
+  suspend DataStore) so it combines cheaply into the message stream and the bubble indicator is instant.
+  Epoch-millis (`starredAtMillis`) not ISO → parse-free `sortedByDescending`.
+- **`.copy(isStarred = id in starredIds)` after `BubbleContentBuilder.build`** keeps the builder untouched —
+  the "is this starred" flag is a VM-side overlay on the pure-built bubble, not a builder concern.

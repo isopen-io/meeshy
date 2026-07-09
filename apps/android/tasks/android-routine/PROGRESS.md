@@ -2,7 +2,7 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
 > On 2026-07-09 the **reply-thread overlay** landed (slice `chat-reply-thread-overlay`, Chat parity §C —
 > feature-parity.md "Reply-count pills + **reply thread overlay**", now fully checked). The pills shipped
@@ -789,7 +789,24 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `chat-reply-thread-overlay`** — the focused reply-thread sheet, completing §C
+**Just shipped (2026-07-09): `chat-star-toggle`** — local-only star/unstar of a message (iOS parity: the
+gateway has no message-star endpoint, iOS' `StarredMessagesStore` is UserDefaults-only). Pure `:core:model`
+`StarredMessages` SSOT (snapshot set: star/unstar/toggle/isStarred/removeConversation + sortedByStarredAtDesc,
+same-instance-when-unchanged) + durable `:sdk-core` `StarredMessagesStore` (SharedPrefs JSON, synchronous
+hydrated `StateFlow`) + `ChatViewModel.toggleStar` (snapshots the bubble, no network — mirrors `deleteForMe`) +
+`BubbleContent.isStarred` glyph + a Star/Unstar sheet row. +31 tests. See run log.
+**Recommended next (highest value, Chat §C):**
+- **starred-messages list screen** — the remaining pending half of §C: a dedicated screen (reachable from
+  settings, mirror `SettingsScreen`'s `onOpenProfile` wiring + a new `Routes.STARRED`) listing every starred
+  message newest-first (`StarredMessagesStore.starred.sortedByStarredAtDesc` — already the SSOT), each row
+  navigating to `Routes.chat(conversationId)`. The `StarredMessage` snapshot already carries conversation
+  name/accent, sender, preview, and attachment kind so no re-fetch is needed. Add a `removeConversation` hook
+  on conversation-leave/clear so stars don't dangle (the store method exists and is tested).
+- **Quoted-reply previews incl. story-reply previews (counts, thumbnails)** — `feature-parity.md` line 494,
+  still `[ ]` — enrich the in-bubble quoted-reply preview with a thumbnail / media badge.
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-09): `chat-reply-thread-overlay`** — the focused reply-thread sheet, completing §C
 "Reply-count pills + **reply thread overlay**". Long-pressing the reply-count pill opens a `ModalBottomSheet`
 driven by pure `:feature:chat` `ReplyThreadOverlay.of(parentId, messages)` (parent + live replies,
 membership identical to `ReplyThreads`; paged-out/no-reply → inert; deleted parent still shown; snippet via
@@ -1538,6 +1555,50 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-09 — slice `chat-star-toggle` ✅ impl + reviewer PASS
+- **Rule #0 first:** no open Android PR (`list_pull_requests state=open` → `[]`). Branched clean off latest
+  `origin/main` (`236f8ca6`, "fix(web/mentions)…iter 151").
+- **Parity:** §C "Pin/unpin message; **starred/bookmarked messages list**…" — the pending half. Investigated
+  first: the gateway has **no** message-star endpoint (only `PostBookmark` for feed posts) and iOS'
+  `StarredMessagesStore` is explicitly **local-only** (UserDefaults). So Android matches iOS: durable
+  local-only starring, no network. This slice ships the star/unstar **action + persistence + in-bubble
+  indicator**; the dedicated list screen is the next slice (mirrors how pins shipped incrementally).
+- **Pure core (TDD, `:core:model`):** `StarredMessage` (frozen snapshot: messageId, conversationId,
+  conversationName/accent, senderName, contentPreview, `StarredAttachmentKind?` image/file, `starredAtMillis`,
+  `sentAtIso` — port of iOS `StarredMessageSnapshot`, epoch-millis for parse-free ordering) + `StarredMessages`
+  value object (SSOT for membership/order: `star`/`unstar`/`toggle`/`isStarred`/`removeConversation` +
+  `sortedByStarredAtDesc`; every mutator returns the **same instance** when unchanged so persistence skips
+  redundant writes; blank-id star inert; idempotent star keeps the first snapshot; `ids` computed once).
+  +16 tests (`StarredMessagesTest`: empty, star/keep-snapshot, others-unstarred, idempotent-same-instance+
+  keep-first, blank-id-noop, accumulate, unstar-removes, unstar-absent-same-instance, toggle both ways,
+  toggle-ignores-snapshot-on-unstar, sort-desc, sort-stable-ties, sort-empty, removeConversation-selective,
+  removeConversation-none-same-instance).
+- **Durable store (`:sdk-core`):** `StarredMessagesStore` (interface + `InMemory` + `SharedPrefsStarred…`)
+  mirrors `LocallyHiddenMessagesStore` — SharedPrefs JSON list under one key, **synchronous hydrated
+  `StateFlow`** (cache-first; combines cheaply into the message stream), corrupt blob → empty set, redundant
+  writes skipped on the value object's referential check. DI provider in `SdkModule` (`json` injected). +8
+  tests (`SharedPrefsStarredMessagesStoreTest`, Robolectric: fresh-empty, toggle-stars, toggle-twice-unstars,
+  survives-fresh-construction, unstar-removes, removeConversation-selective, corrupt-blob→empty,
+  idempotent-no-op-same-flow-value).
+- **Wiring (`:feature:chat`):** `ChatViewModel.toggleStar` snapshots the bubble (conversation metadata from
+  state, `StarredAttachmentKind` image>file, `clock.nowMillis()`) and delegates to `starredStore.toggle`
+  (local-only, no viewModelScope — mirrors `deleteForMe`); inert on deleted/unknown (only the sheet closes).
+  `starredStore.starred.ids` combined into the message flow → each `BubbleContent.isStarred` set live.
+  `MessageBubble` renders a subtle accent bookmark glyph in the meta row of a starred bubble; the long-press
+  `MessageActionsSheet` gains a Star/Unstar row (filled vs outline bookmark, gated on an actionable bubble).
+  EN/FR/ES/PT strings (`chat_action_star`/`_unstar`, `bubble_starred`). +7 `ChatViewModelTest` (stars+snapshot+
+  closes, unstars-on-second-toggle, reflected-on-bubble, inert-deleted-closes-sheet, inert-unknown).
+- **Verify:** `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (system Gradle 8.14.3;
+  wrapper 403-blocked in container — `/opt/gradle`). `StarredMessagesTest` 16/0/0.
+- **Reviewer:** PASS — diff `apps/android` only (no web/ios/gateway/shared); behaviour-through-public-API
+  (`StarredMessages.*` / store / `toggleStar`), no tautologies, boundary coverage (empty/blank-id/idempotent/
+  same-instance/deleted/unknown/corrupt/ties); **SDK-purity** honoured — membership/order rule is a pure
+  `:core:model` atom, durability is `:sdk-core`, the "when to star / snapshot shape" product wiring is the
+  `:feature:chat` VM, sheet+glyph are exempt Compose glue; **SSOT** — one star predicate shared by store and
+  bubble; **instant-app** synchronous hydrated flow → optimistic in-bubble indicator; **UDF** immutable state;
+  accent-coherent glyph; natural long-press gesture reusing the pin idiom; **no dead end** — starring is
+  immediately visible on the bubble (the list screen is the tracked next slice).
 
 ### 2026-07-08 — slice `chat-forward-message` ✅ impl + reviewer PASS
 - **Rule #0 first:** no open Android PR (`list_pull_requests state=open` → `[]`). `main` had been

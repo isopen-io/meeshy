@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -209,6 +210,16 @@ public fun MessageBubble(
                     .padding(top = MeeshySpacing.xs),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (content.isStarred && !content.isDeleted) {
+                        Icon(
+                            imageVector = Icons.Filled.Bookmark,
+                            contentDescription = stringResource(R.string.bubble_starred),
+                            tint = onColor.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(14.dp)
+                                .padding(end = MeeshySpacing.xs),
+                        )
+                    }
                     if (content.isTranslated) {
                         Icon(
                             imageVector = Icons.Filled.Translate,

@@ -25,6 +25,8 @@
     <string name="chat_action_edit">Editar</string>
     <string name="chat_action_pin">Fixar</string>
     <string name="chat_action_unpin">Desafixar</string>
+    <string name="chat_action_star">Salvar</string>
+    <string name="chat_action_unstar">Remover dos salvos</string>
     <string name="chat_action_delete_for_everyone">Excluir para todos</string>
     <string name="chat_action_delete_for_me">Excluir para mim</string>
     <string name="chat_editing_label">Editando mensagem</string>
