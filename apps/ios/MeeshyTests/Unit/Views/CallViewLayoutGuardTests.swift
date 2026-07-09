@@ -86,4 +86,43 @@ final class CallViewLayoutGuardTests: XCTestCase {
             "captions). Use `.white.opacity(...)` like every other label here."
         )
     }
+
+    /// Regression 2026-07-09: with `swapStreams == true` (user tapped the PiP
+    /// to make their own camera the full-screen primary), if the survival
+    /// controller then drops the outbound track (`hasLocalVideoTrack` flips to
+    /// false — weak network / thermal downgrade), the primary stream call site
+    /// rendered `videoStream(local: swapStreams, …)` unconditionally with a nil
+    /// `localVideoTrack`. `CallVideoView` has no dedicated fallback for `local:
+    /// true` (unlike `local: false`, which degrades to a camera-off/connecting
+    /// placeholder), so it fell into its generic "unexpected track" branch: a
+    /// full-screen black "Video non disponible" placeholder — even though the
+    /// peer's video was perfectly healthy. Worse, the PiP (the only element
+    /// with the tap-to-swap gesture) was replaced by `localVideoSuspendedTile`,
+    /// which has no gesture, so the user was stuck on the broken full-screen
+    /// view until their own network recovered. Fix: gate the swap on local
+    /// track availability so the primary self-heals back to the peer's video.
+    func test_primaryStream_neverShowsUnavailableLocalTrack_whenLocalVideoSuspendedMidSwap() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("swapStreams && callManager.hasLocalVideoTrack"),
+            "CallView must gate which stream is primary on local-track " +
+            "availability (`effectiveSwapStreams`), so losing the outbound " +
+            "track while swapped auto-reverts the primary to the peer's video " +
+            "instead of rendering CallVideoView's generic nil-track fallback " +
+            "full-screen."
+        )
+        XCTAssertFalse(
+            source.contains("videoStream(local: swapStreams,"),
+            "The primary stream call site must use `effectiveSwapStreams`, " +
+            "not the raw `swapStreams` binding — the raw binding stays true " +
+            "even after the local track disappears, showing a broken " +
+            "full-screen placeholder over a healthy peer feed."
+        )
+        XCTAssertFalse(
+            source.contains("videoStream(local: !swapStreams,"),
+            "The PiP stream call site must mirror the primary via " +
+            "`!effectiveSwapStreams`, not the raw `!swapStreams` binding, or " +
+            "the two surfaces fall out of sync when the local track drops."
+        )
+    }
 }
