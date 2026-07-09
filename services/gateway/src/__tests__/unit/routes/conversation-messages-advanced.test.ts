@@ -462,6 +462,33 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendForbidden).not.toHaveBeenCalled();
     });
 
+    it('keys onMessageEdited by the message sender, not the editing moderator', async () => {
+      // An ADMIN/MODERATOR may edit another user's message. The per-participant
+      // stats delta must land on the original sender's key, not the editor's.
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage({
+        senderId: PART_ID,
+        sender: { id: PART_ID, userId: OTHER_USER_ID, role: 'USER' },
+      }));
+      prisma.participant.findFirst.mockResolvedValue({ user: { role: 'ADMIN' } });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'New content',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'New content' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(mockOnMessageEdited).toHaveBeenCalled();
+      expect(mockOnMessageEdited.mock.calls[0][2]).toBe(OTHER_USER_ID);
+    });
+
     it('returns 400 when content is whitespace only', async () => {
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
 
@@ -866,6 +893,46 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(fastify._mockTo).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
       expect(fastify._mockEmit).toHaveBeenCalledWith('message:deleted', expect.objectContaining({ messageId: MSG_ID }));
+    });
+
+    it('keys onMessageDeleted by the message sender (registered author)', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        sender: { id: PART_ID, userId: USER_ID },
+        attachments: [],
+      });
+      prisma.message.update.mockResolvedValue({});
+
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(req, reply);
+
+      expect(mockOnMessageDeleted).toHaveBeenCalled();
+      expect(mockOnMessageDeleted.mock.calls[0][2]).toBe(USER_ID);
+    });
+
+    it('keys onMessageDeleted by the Participant.id when an admin deletes an anonymous message', async () => {
+      // Anonymous senders have sender.userId === null; the participantStats map is
+      // keyed by Participant.id for them (matching the create/recompute contract).
+      // A moderator/admin can delete such a message, so the sender key must fall
+      // back to senderId, not '' (which would leave the participant breakdown stale).
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        senderId: PART_ID,
+        sender: { id: PART_ID, userId: null },
+        attachments: [],
+      });
+      prisma.participant.findFirst.mockResolvedValue({ user: { role: 'ADMIN' } });
+      prisma.message.update.mockResolvedValue({});
+
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(req, reply);
+
+      expect(mockOnMessageDeleted).toHaveBeenCalled();
+      expect(mockOnMessageDeleted.mock.calls[0][2]).toBe(PART_ID);
     });
 
     it('calls sendInternalError on outer error', async () => {
@@ -1952,7 +2019,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
-    it('handles null sender.userId using ?? empty string', async () => {
+    it('falls back to senderId (participant key) when sender.userId is absent', async () => {
       prisma.message.findFirst.mockResolvedValue({
         id: MSG_ID,
         conversationId: CONV_ID,
@@ -1975,7 +2042,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockOnMessageDeleted).toHaveBeenCalledWith(
         expect.anything(),
         CONV_ID,
-        '', // null?.userId ?? '' = ''
+        PART_ID, // sender?.userId undefined → ?? senderId (the participantStats key)
         expect.any(String),
         [],
         expect.anything()
