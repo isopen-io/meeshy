@@ -789,7 +789,38 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `chat-bubble-location`** — location message-bubble attachment (§C line ~533,
+**Just shipped (2026-07-09): `chat-bubble-audio`** — audio (voice-message) bubble attachment (§C line ~533,
+`carousel / audio / location / contact` list — **audio now done**; carousel + contact remain). Port of iOS
+`AudioPlayerView` message-bubble context, surpassing it on the Prisme Linguistique. An `audio/…`-mime
+attachment becomes a pure `BubbleAudio` (`:sdk-ui`) instead of being mis-bucketed as a generic file:
+`url` (resolved via `mediaBaseUrl`, null until downloadable → download affordance), `durationSeconds`
+(explicit `duration` → fallback `transcription.durationMs/1000`), `sizeBytes`, and a **Prisme-resolved
+transcription** (`transcriptionText`/`transcriptionLanguage`/`isTranscriptionTranslated`). The pure
+`BubbleContentBuilder.resolveTranscription` applies Prisme rule 1: for each preferred language in order,
+the original transcription wins when already in that language, else a non-blank `translations[lang]
+.transcription` (case-insensitive key match); with no preferred match it falls back to the **original**
+transcription (never an arbitrary one), and null when no non-blank transcription exists — so the viewer
+sees the transcription in their language by default (iOS defaults to `orig` + a manual selector).
+`BubbleAudio.formattedDuration` renders `m:ss` (iOS `%d:%02d`; null on unknown/negative). Rendered by the
+exempt `AudioBubble` composable (play/download glyph + duration-or-size + transcription line, accent-coherent
+`onColor`); tapping a playable clip hands its URL to the host (`ChatScreen` → `LocalUriHandler`, mirrors the
+location wiring). Strings `bubble_audio_play` in en/fr/es/pt. **+25 tests** (RED-verified — the audio
+projection returned an empty `audios` list before the builder change): `BubbleAudioTest` 12
+(duration 0/single-digit/over-a-minute/>59-min/unknown/negative; playable url/null/blank; transcription
+present/blank/null), `BubbleContentBuilderTest` +13 (audio-not-file bucketing; duration fallback;
+already-preferred→untranslated; translated-wins; case-insensitive key; no-match→original; blank-translation
+skipped; no-transcription→null; blank-original→null; transcribedText-preferred; deleted-hides; emoji-only
+disabled; no-file-url→null url). Reviewer: PASS. See run log. **Lesson:** a `` `audio/*` `` in a KDoc opens a
+nested block comment (`/*`) that swallows the rest of the file → "Unclosed comment" reported only in
+*referencing* files, not the broken one. Avoid `/*`/`*/` sequences inside KDoc backticks.
+**Recommended next (highest value):**
+- **Message bubble carousel / contact attachments** (feature-parity §C line ~533, now "carousel / contact
+  pending"). **Carousel** extends the image grid into a swipeable pager (pure page-model + exempt pager).
+  **Contact** (share a contact card) is smaller but the wire has no dedicated fields yet.
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-09): `chat-bubble-location`** — location message-bubble attachment (§C line ~533,
 `carousel / audio / location / contact` list — **location now done**). Port of iOS
 `BubbleAttachmentView.location`: a mime `application/x-location` attachment becomes a pure `BubbleLocation`
 (`:sdk-ui`, nullable lat/lon, `placeName ← originalName`, locale-safe `geoUri`) rendered as a tappable pin
@@ -1639,6 +1670,56 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-09 — slice `chat-bubble-audio` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/chat-bubble-audio` (off latest `main`, `#1776` gateway realtime merged).
+- **What:** audio (voice-message) message-bubble attachment (`feature-parity.md` §C line ~533, the
+  `carousel / audio / location / contact pending` list — **audio now done**). Port of iOS `AudioPlayerView`
+  message-bubble context, surpassing it on the Prisme Linguistique (iOS defaults the transcription to `orig`
+  and requires a manual language pick; Android resolves the preferred-language transcription at build time).
+- **Added (production):**
+  - `BubbleAudio` (`:sdk-ui` `BubbleContent.kt`) — `attachmentId`, nullable `url`, `durationSeconds`,
+    `sizeBytes`, `transcriptionText`/`transcriptionLanguage`/`isTranscriptionTranslated`; pure getters
+    `isPlayable` (non-blank url), `hasTranscription` (non-blank text), `formattedDuration` (`m:ss`, iOS
+    `%d:%02d`; null on unknown/negative). `BubbleContent.audios: List<BubbleAudio>`.
+  - `BubbleContentBuilder` — `isAudio` (mime `audio/…`), an `audios` bucket, and `files` now excludes audio
+    so a voice message is no longer mis-bucketed as a generic file. `buildAudio` resolves the URL via
+    `mediaBaseUrl`, the duration (`attachment.duration` → fallback `transcription.durationMs/1000`), and the
+    transcription via the pure `resolveTranscription`: Prisme rule 1 — per preferred language in order the
+    original wins if already in that language, else a non-blank `translations[lang].transcription`
+    (case-insensitive key); no match → the **original** transcription (never an arbitrary one); null when no
+    non-blank transcription exists. `transcribedText` is preferred over the raw `text` field.
+  - `MessageBubble` — exempt `AudioBubble` composable (play/download glyph + `formattedDuration`-or-size +
+    transcription line, all on accent-coherent `onColor`), rendered from `content.audios`; taps a playable
+    clip via `onAudioClick`. `hasAttachments` includes audios (emoji-only treatment correctly suppressed).
+  - `ChatScreen` — `onAudioClick` hands `audio.url` to `LocalUriHandler` (mirrors the location wiring).
+  - Strings `bubble_audio_play` in en/fr/es/pt.
+- **Tests (+25, RED-verified):** the audio-projection builder tests fail before the `buildAudio` change
+  (empty `audios`); `formattedDuration` tests are pure-getter behaviour.
+  - `BubbleAudioTest` 12 — duration 0→`0:00` / 5→`0:05` / 65→`1:05` / 3661→`61:01` / null / negative;
+    `isPlayable` url/null/blank; `hasTranscription` present/blank/null.
+  - `BubbleContentBuilderTest` +13 — audio→bubble-audio-not-file; duration fallback to transcription;
+    already-preferred→untranslated; preferred translation wins over original; case-insensitive key match;
+    no preferred match→original untranslated; blank translation skipped→original; no transcription→null;
+    blank original + no usable translation→null; `transcribedText` preferred; deleted hides audio;
+    audio disables emoji-only; no file url→null url still surfaced.
+- **Edge cases covered:** empty/single audio; unknown & negative duration; blank/null/missing url;
+  blank/null/missing transcription; case-insensitive translation keys; deleted tombstone; original-language
+  passthrough vs preferred-language translation; duration source fallback.
+- **Verify:** `:sdk-ui:testDebugUnitTest --tests me.meeshy.ui.component.bubble.*` → BUILD SUCCESSFUL
+  (`BubbleAudioTest` 12/0/0, `BubbleContentBuilderTest` 77/0/0); full `assembleDebug` + all-module
+  `testDebugUnitTest` → BUILD SUCCESSFUL (system Gradle 8.14.3 at `/opt/gradle`; the wrapper is 403-blocked
+  in this container).
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API (`BubbleContentBuilder.build`
+  with `preferences` + the `BubbleAudio` getters), no tautologies, boundary coverage on
+  unknown/negative/blank/deleted/case-insensitive/fallback; SDK-purity — the projection + Prisme resolution
+  is a stateless `:sdk-ui` building block (same layer as location/image), the player is exempt Compose glue,
+  the "when to open the URL" wiring is the app-side `ChatScreen`; SSOT — language order via `LanguageResolver
+  .preferredContentLanguages`; accent-coherent `onColor`; natural tap gesture, no dead end (tap plays the
+  clip; the transcription reads inline).
+- **Lesson:** a `` `audio/*` `` inside a KDoc opens a nested block comment (`/*`) that swallows the file to
+  EOF → "Unclosed comment" is reported **only in files that reference the broken symbols**, never in the
+  broken file itself. Cost ~4 build cycles chasing a phantom cascade. Avoid `/*`/`*/` in KDoc backticks.
 
 ### 2026-07-09 — slice `chat-bubble-location` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/chat-bubble-location` (off latest `main`, `#1769` story-reply-preview merged).

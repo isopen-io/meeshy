@@ -3,6 +3,17 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-09 (`chat-bubble-audio`): a `/*` or `*/` sequence inside a KDoc comment (even inside `` `backticks` ``)
+  opens/closes a nested block comment and silently swallows the rest of the file.** I wrote ``` `audio/*` ``` in a
+  `BubbleAudio` KDoc; the `/*` started a nested comment that ran to EOF → `BubbleContent.kt:EOF Syntax error:
+  Unclosed comment`. The killer: Kotlin K2 reports the *cascade* ("Unresolved reference 'text'/'images'/…") in
+  every file that references the now-invisible symbols — **not** in the broken file — so `MessageBubble.kt` lit up
+  with 24 phantom errors while the real one-line cause was elsewhere. Cost ~4 build cycles. When a whole class's
+  members go "unresolved" in *other* files but that class looks fine, grep the class's own file for `/*`·`*/` in
+  comments first. Write mimes as `audio/…` or `audio/x-*`-free prose in KDoc.
+- **2026-07-09 (`chat-bubble-audio`): don't edit a source file while a Gradle compile of it is running.** The
+  mid-edit read produced a half-written file → a confusing incremental-cache failure that persisted across a plain
+  re-run. `rm -rf <module>/build` (or at least `build/kotlin`) clears it. Kick the build only after all edits land.
 - **2026-07-09 (`chat-story-reply-preview`): a legacy JSON key alias → `@JsonNames`, not a second field.**
   iOS decodes `postReplyTo ?? storyReplyTo`. In kotlinx-serialization the faithful equivalent is a single
   field annotated `@JsonNames("storyReplyTo")` (in `kotlinx.serialization.json`, needs
