@@ -125,6 +125,7 @@ jest.mock('../../services/notifications/NotificationService', () => ({
 }));
 
 let mockMentionServiceInstance: any;
+const mockResolveUsernamesToIds = jest.fn().mockResolvedValue([]);
 jest.mock('../../services/MentionService', () => ({
   MentionService: jest.fn().mockImplementation(() => {
     mockMentionServiceInstance = {
@@ -133,6 +134,7 @@ jest.mock('../../services/MentionService', () => ({
     };
     return mockMentionServiceInstance;
   }),
+  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
 }));
 
 let mockMessagingServiceInstance: any;
@@ -2178,7 +2180,7 @@ describe('MeeshySocketIOManager', () => {
     };
 
     it('resolves mentionedUsernames to user ids', async () => {
-      prisma.user.findMany.mockResolvedValue([{ id: 'mentioned-user-1' }]);
+      mockResolveUsernamesToIds.mockResolvedValue(['mentioned-user-1']);
       prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
 
@@ -2187,9 +2189,9 @@ describe('MeeshySocketIOManager', () => {
         mentionedUsernames: ['bob'],
       });
 
-      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({ username: { in: ['bob'] } }),
-      }));
+      // Delegates to the canonical case-insensitive resolver (SSOT) rather than a
+      // case-sensitive `in` list that dropped mixed-case mentions.
+      expect(mockResolveUsernamesToIds).toHaveBeenCalledWith(expect.anything(), ['bob']);
     });
 
     it('returns early when messagingService.handleMessage fails', async () => {
@@ -2703,7 +2705,7 @@ describe('MeeshySocketIOManager', () => {
 
   describe('handleAgentResponse - mentionedUsernames with no DB hits', () => {
     it('proceeds without mentionedUserIds when no users found', async () => {
-      prisma.user.findMany.mockResolvedValue([]);
+      mockResolveUsernamesToIds.mockResolvedValue([]);
       prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
       prisma.participant.findFirst.mockResolvedValue({ id: 'agent-1-participant' });
@@ -3079,14 +3081,20 @@ describe('MeeshySocketIOManager', () => {
       expect(result).toEqual([]);
     });
 
-    it('returns user IDs for found usernames', async () => {
-      prisma.user.findMany.mockResolvedValue([{ id: 'user-alice' }, { id: 'user-bob' }]);
+    it('delegates to the canonical resolveUsernamesToIds (SSOT) and forwards its ids', async () => {
+      // Case-insensitive resolution against case-preserved usernames — the actual
+      // bug: MongoDB ignores `mode: 'insensitive'` with `in`, so a lowercased
+      // `in` list silently dropped mixed-case mentions — is locked in
+      // resolveUsernamesToIds' own unmocked unit test. Here we assert the manager
+      // delegates to that SSOT and forwards the resolved ids verbatim.
+      mockResolveUsernamesToIds.mockResolvedValue(['user-alice', 'user-bob']);
       const result = await (manager as any)._resolveMentionUserIds(['alice', 'bob']);
+      expect(mockResolveUsernamesToIds).toHaveBeenCalledWith(expect.anything(), ['alice', 'bob']);
       expect(result).toEqual(['user-alice', 'user-bob']);
     });
 
     it('returns empty array on DB error', async () => {
-      prisma.user.findMany.mockRejectedValue(new Error('DB fail'));
+      mockResolveUsernamesToIds.mockRejectedValue(new Error('DB fail'));
       const result = await (manager as any)._resolveMentionUserIds(['alice']);
       expect(result).toEqual([]);
     });
