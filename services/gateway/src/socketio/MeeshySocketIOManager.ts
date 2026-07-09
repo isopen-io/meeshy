@@ -1893,22 +1893,30 @@ export class MeeshySocketIOManager {
       } else {
       }
 
-      // 2b. Emit mention:created to each mentioned user's personal room
-      const mentions = message.validatedMentions as unknown as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
-      if (mentions && mentions.length > 0) {
-        for (const mention of mentions) {
-          const targetUserId = mention.userId;
-          if (targetUserId && targetUserId !== message.senderId) {
-            this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
-              messageId: message.id,
-              conversationId: normalizedId,
-              senderId: message.senderId,
-              mentionedUserId: targetUserId,
-              mentionedParticipantId: mention.participantId,
-              content: message.content,
-              timestamp: new Date().toISOString(),
-            });
+      // 2b. Emit mention:created to each mentioned user's personal room.
+      // validatedMentions is persisted as String[] of usernames (schema.prisma), NOT objects —
+      // resolve them to User.ids before emitting. The self-mention guard compares against
+      // resolvedSenderId (the sender's User.id); message.senderId is a Participant.id and would
+      // never match a resolved User.id. Resolution is wrapped so a lookup failure never blocks
+      // the message broadcast (parity with MessageHandler._resolveMentionUserIds on the socket path).
+      const mentionUsernames = (message.validatedMentions ?? []) as unknown as string[];
+      if (mentionUsernames.length > 0) {
+        try {
+          const mentionedUserIds = await resolveUsernamesToIds(this.prisma, mentionUsernames);
+          for (const targetUserId of mentionedUserIds) {
+            if (targetUserId && targetUserId !== resolvedSenderId) {
+              this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+                messageId: message.id,
+                conversationId: normalizedId,
+                senderId: resolvedSenderId,
+                mentionedUserId: targetUserId,
+                content: message.content,
+                timestamp: new Date().toISOString(),
+              });
+            }
           }
+        } catch (error) {
+          logger.warn(`⚠️ [MENTION] Failed to resolve mention usernames for broadcast (mentions skipped): ${error}`);
         }
       }
 
