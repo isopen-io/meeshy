@@ -368,6 +368,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       DISCONNECTED/CONNECTING/CONNECTED) → mapping pur `bannerFor` (la reconnexion
       prime sur le sync) → strip animée sous l'app bar (Hors ligne / Reconnexion… /
       Synchronisation…)
+- [x] Real-time conversation removal + star hygiene (slice `conversations-purge-on-removed`,
+      2026-07-09): the `MessageSocketManager.conversationDeleted` / `participantLeft` streams
+      existed but had **zero consumers** — a conversation deleted for everyone, or left by the
+      current user, lingered in the Android list until some other refresh trigger, and its
+      bookmarked messages dangled forever. Now the pure `:feature:conversations` `ConversationPurge`
+      SSOT decides which removal an event owns: `onConversationDeleted` → the id (blank id inert);
+      `onParticipantLeft(event, currentUserId)` → the id **only when the current user is the leaver**
+      (another participant, an unknown/blank current user, or a blank id is inert — a departing
+      third party never drops my row). `ConversationListViewModel` collects both streams and
+      `purge()`s: `StarredMessagesStore.removeConversation` runs first and synchronously (local-only,
+      so a bookmark can never outlive its conversation even if the follow-up fails) then
+      `repository.refresh()` drops the vanished row; a failed background refresh stays silent (SWR
+      keeps the last good cache), cancellation rethrown. +12 tests (7 `ConversationPurgeTest`:
+      deleted-id / blank-delete-inert / self-left / other-left-inert / null-user-inert /
+      blank-user-inert / self-left-blank-conv-inert; 5 VM: deleted-sheds-stars+refresh /
+      blank-delete-touches-nothing / self-left-sheds+refresh / other-left-untouched /
+      cleanup-survives-failing-refresh-silently).
 - [ ] Conversation category create + expand/collapse; client-side tag aggregation for autocomplete
 - [x] Create direct/group conversation via user search; add participants —
       FAB sur la liste → `NewConversationScreen` : recherche debouncée (300 ms,
