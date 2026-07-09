@@ -1621,7 +1621,16 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
-### 2026-07-09 — slice `chat-story-reply-preview` ✅ impl + reviewer PASS
+### 2026-07-09 — slice `chat-story-reply-preview` ✅ impl + reviewer PASS · ⚠ merge blocked-on-infra (PR #1769 open)
+- **⚠ Merge status:** PR #1769 open. CI is red **only** because the monorepo's Python jobs (`TTS/STT Integration`,
+  `Audio Pipeline Tests`, `Test Python (translator)`) hit repeated `503 Service Unavailable` from
+  `download.pytorch.org` while `uv` fetches torch-family wheels (`matplotlib-inline`, `lazy-loader`) — a
+  pytorch.org package-mirror outage, entirely external and unrelated to this **apps/android-only** Kotlin diff.
+  All JS/TS checks are green (`Quality (bun)`, `Security`, `Test web/gateway/shared/agent`, `Prisma`), and the
+  **real Android gate is green locally** (`assembleDebug` + all `testDebugUnitTest`). `rerun_failed_jobs` is 403
+  for this integration; an empty re-trigger commit hit the same mirror outage. Do NOT merge past red — merge once
+  pytorch.org recovers (re-trigger with an empty commit or a rebase on `main`), CI is green, and the diff is still
+  apps/android-only.
 - **Rule #0 first:** the open PRs (#1768 web/gateway realtime, #1767 ios-calls, #1765 gateway-delivery,
   #1764 web-calls) are all **other sessions'** branches touching production logic — not Android, not mine to
   merge. No open Android PR. Branched clean off latest `origin/main` (`4c7f071`, "fix(gateway/calls)… #1766").
