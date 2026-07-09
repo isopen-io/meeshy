@@ -848,16 +848,19 @@ describe('reactionRoutes', () => {
       expect(reply.statusCode).toBe(403);
     });
 
-    it('returns 200 for anonymous user who is a participant (id matches sessionToken)', async () => {
+    it('returns 200 for anonymous participant (participant id is an ObjectId, not the sessionToken)', async () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'GET', '/reactions/:messageId');
 
+      // Realistic anonymous shape: createAnonymousUserContext sets
+      // participantId to the Participant.id (an ObjectId) and keeps the raw
+      // sessionToken separate. PARTICIPANT_ID !== SESSION_TOKEN by construction.
       fastify.prisma.message.findUnique.mockResolvedValue({
         id: MESSAGE_ID,
         conversationId: CONV_ID,
         conversation: {
           participants: [
-            { id: SESSION_TOKEN, userId: null, isActive: true },
+            { id: PARTICIPANT_ID, userId: null, isActive: true },
           ],
         },
       });
@@ -867,8 +870,8 @@ describe('reactionRoutes', () => {
         params: { messageId: MESSAGE_ID },
         authContext: makeAuthContext({
           isAnonymous: true,
-          userId: undefined,
-          participantId: undefined,
+          userId: PARTICIPANT_ID,
+          participantId: PARTICIPANT_ID,
           sessionToken: SESSION_TOKEN,
         }),
       });
@@ -882,11 +885,12 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'GET', '/reactions/:messageId');
 
+      const otherParticipantId = '507f1f77bcf86cd799439066';
       fastify.prisma.message.findUnique.mockResolvedValue({
         id: MESSAGE_ID,
         conversationId: CONV_ID,
         conversation: {
-          participants: [{ id: 'some-other-anon-id', userId: null, isActive: true }],
+          participants: [{ id: otherParticipantId, userId: null, isActive: true }],
         },
       });
 
@@ -894,8 +898,8 @@ describe('reactionRoutes', () => {
         params: { messageId: MESSAGE_ID },
         authContext: makeAuthContext({
           isAnonymous: true,
-          userId: undefined,
-          participantId: undefined,
+          userId: PARTICIPANT_ID,
+          participantId: PARTICIPANT_ID,
           sessionToken: SESSION_TOKEN,
         }),
       });
