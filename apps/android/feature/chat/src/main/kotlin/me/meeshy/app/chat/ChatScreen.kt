@@ -88,6 +88,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.pluralStringResource
@@ -140,6 +141,7 @@ fun ChatScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     val listItems = remember(state.messages) {
         buildChatListItems(state.messages, ZoneId.systemDefault())
     }
@@ -367,6 +369,9 @@ fun ChatScreen(
                                             },
                                             onImageClick = { index ->
                                                 viewModel.openImageViewer(bubble.messageId, index)
+                                            },
+                                            onLocationClick = { location ->
+                                                location.geoUri?.let { runCatching { uriHandler.openUri(it) } }
                                             },
                                             onReplyPreviewClick = {
                                                 viewModel.onReplyPreviewTap(bubble.messageId)

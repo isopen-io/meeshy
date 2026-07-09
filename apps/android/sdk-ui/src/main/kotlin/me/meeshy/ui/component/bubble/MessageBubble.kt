@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
@@ -72,6 +73,7 @@ public fun MessageBubble(
     onReactionClick: ((String) -> Unit)? = null,
     onReactionLongPress: (() -> Unit)? = null,
     onImageClick: ((Int) -> Unit)? = null,
+    onLocationClick: ((BubbleLocation) -> Unit)? = null,
     onReplyPreviewClick: (() -> Unit)? = null,
     mentionDisplayNames: Map<String, String>? = null,
     highlightTerm: String? = null,
@@ -182,7 +184,21 @@ public fun MessageBubble(
                 }
             }
 
-            val hasAttachments = content.images.isNotEmpty() || content.files.isNotEmpty()
+            if (!content.isDeleted && content.locations.isNotEmpty()) {
+                content.locations.forEach { location ->
+                    LocationPreview(
+                        location = location,
+                        onColor = onColor,
+                        onClick = onLocationClick?.takeIf { location.hasCoordinates }
+                            ?.let { { it(location) } },
+                        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                    )
+                }
+            }
+
+            val hasAttachments = content.images.isNotEmpty() ||
+                content.files.isNotEmpty() ||
+                content.locations.isNotEmpty()
             if (content.isDeleted) {
                 Text(
                     text = stringResource(R.string.bubble_message_deleted),
@@ -397,6 +413,63 @@ private fun BubbleFileRow(
                     text = size,
                     style = MaterialTheme.typography.labelSmall,
                     color = onColor.copy(alpha = 0.7f),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Compact preview of a shared-location attachment — Android render of the iOS
+ * `LocationMessageView` / "Position partagée" placeholder. Shows a pin, the place
+ * name (or a generic label), and the coordinates when present; tapping hands the
+ * location's `geo:` URI to the host to open in an external maps app.
+ */
+@Composable
+private fun LocationPreview(
+    location: BubbleLocation,
+    onColor: Color,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val openLabel = stringResource(R.string.bubble_location_open)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(onColor.copy(alpha = 0.1f))
+            .let { base ->
+                if (onClick == null) base
+                else base.clickable(onClick = onClick).semantics {
+                    role = Role.Button
+                    contentDescription = openLabel
+                }
+            }
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.LocationOn,
+            contentDescription = null,
+            tint = onColor.copy(alpha = 0.8f),
+            modifier = Modifier.size(20.dp),
+        )
+        Column {
+            Text(
+                text = location.placeName ?: stringResource(R.string.bubble_location_shared),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = onColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (location.hasCoordinates) {
+                Text(
+                    text = "${location.latitude}, ${location.longitude}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = onColor.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

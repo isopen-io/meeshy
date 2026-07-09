@@ -80,8 +80,18 @@ public object BubbleContentBuilder {
                     height = attachment.height,
                 )
             }
+        val locations = visibleAttachments
+            .filter { it.isLocation }
+            .map { attachment ->
+                BubbleLocation(
+                    attachmentId = attachment.id,
+                    latitude = attachment.latitude,
+                    longitude = attachment.longitude,
+                    placeName = attachment.originalName?.trim()?.ifBlank { null },
+                )
+            }
         val files = visibleAttachments
-            .filterNot { it.isImage }
+            .filterNot { it.isImage || it.isLocation }
             .map { attachment ->
                 BubbleFile(
                     attachmentId = attachment.id,
@@ -120,6 +130,7 @@ public object BubbleContentBuilder {
             clientMessageId = message.clientMessageId,
             images = images,
             files = files,
+            locations = locations,
             emojiOnlyCount = if (visibleAttachments.isEmpty()) {
                 EmojiDetector.emojiOnlyCount(text)
             } else {
@@ -167,8 +178,13 @@ public object BubbleContentBuilder {
         return null
     }
 
+    private const val LOCATION_MIME = "application/x-location"
+
     private val ApiMessageAttachment.isImage: Boolean
         get() = mimeType?.startsWith("image/") == true
+
+    private val ApiMessageAttachment.isLocation: Boolean
+        get() = mimeType == LOCATION_MIME
 
     private fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
         url.startsWith("http") -> url

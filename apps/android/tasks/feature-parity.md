@@ -530,7 +530,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       via le payload Room) + repli fichier générique (nom + taille) done ;
       emoji-only oversized done (`EmojiDetector` port iOS 90/60/45, free-floating
       sans bulle, dans la bulle centré si reply) ;
-      carousel / audio / location / contact pending
+      location done (`chat-bubble-location` 2026-07-09 : port iOS `BubbleAttachmentView.location` —
+      un attachment mime `application/x-location` devient un `BubbleLocation` pur (lat/lon nullable,
+      `placeName` ← `originalName`, `geoUri` locale-safe) rendu en carte pin tappable → `geo:` URI
+      ouvert dans Plans/Maps via `LocalUriHandler`, jamais fondu dans le bucket fichier générique) ;
+      carousel / audio / contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
