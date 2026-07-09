@@ -786,7 +786,16 @@ export class CallService {
           });
           continue;
         }
-        const startedAt = staleSession?.startedAt ? new Date(staleSession.startedAt) : now;
+        // Audit — anchor duration on `answeredAt` (talk time), mirroring
+        // endCall()/forceEndCall()'s `answeredAt ? … : 0` (Vague 25/27/30's
+        // sibling fixes in CallCleanupService). This phantom-cleanup terminal
+        // writer was still anchoring on `startedAt` unconditionally, so a
+        // call that rang for minutes and was NEVER answered (status still
+        // `initiated`/`ringing`/`connecting`) got a `duration` equal to its
+        // ring time instead of 0 — the same "Manqué · N:NN" call-history leak
+        // already fixed for the GC tiers, reproduced here via a different
+        // caller (CallService.initiateCall's own phantom sweep).
+        const answeredAt = staleSession?.answeredAt ? new Date(staleSession.answeredAt) : null;
         try {
           await this.prisma.$transaction(async (tx) => {
             await tx.callParticipant.updateMany({
@@ -798,7 +807,9 @@ export class CallService {
               data: {
                 status: CallStatus.ended,
                 endedAt: now,
-                duration: Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000)),
+                duration: answeredAt
+                  ? Math.max(0, Math.floor((now.getTime() - answeredAt.getTime()) / 1000))
+                  : 0,
                 endReason: CallEndReason.garbageCollected,
                 // Terminal write protocol: every terminal writer MUST bump `version`
                 // (see endCall/markCallAsMissed) — otherwise a version-guarded writer
@@ -842,7 +853,12 @@ export class CallService {
         });
 
         const now = new Date();
-        const duration = Math.floor((now.getTime() - activeCall.startedAt.getTime()) / 1000);
+        // Audit — same anchor fix as the phantom-cleanup sweep above: a
+        // zombie call that was never answered (all participants left before
+        // anyone joined) must persist `duration: 0`, not its ring time.
+        const duration = activeCall.answeredAt
+          ? Math.max(0, Math.floor((now.getTime() - activeCall.answeredAt.getTime()) / 1000))
+          : 0;
 
         // Scoped to status still in ACTIVE_STATUSES (mirrors the
         // initiatorStaleParticipations cleanup above): if the last

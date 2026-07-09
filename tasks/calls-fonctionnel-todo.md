@@ -2304,3 +2304,76 @@ avant de rapporter.
   findings iOS structurels restants de la Vague 28 (switchCamera/toggleSpeaker rollback optimiste, tests
   source-reflection CallManagerTests, landscape/Dynamic-Type IncomingCallView/CallWaitingBannerView) +
   les 3 nouvelles pistes iOS de cette vague (nécessitent toutes Xcode).
+
+## Vague 31 — 2 siblings supplémentaires du bug `duration` ancré sur `startedAt` : les propres sweeps phantom/zombie de `CallService.initiateCall` (2026-07-09)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). `git fetch
+origin main` confirme `HEAD` (`0c41fc6f`) à jour ; un seul PR calls ouvert (`#1764`, web,
+`use-video-call.ts` ack-échec de `call:initiate`) — cible retenue strictement disjointe. Un agent
+d'exploration dédié (lecture seule, scopé iOS/gateway/web) a été lancé en premier ; ses pistes exploitables
+(flag `isUsingFrontCamera` non réverté sur échec de switch caméra, tests source-reflection
+`CallManagerTests`) nécessitent toutes un compilateur Swift — absent de ce sandbox Linux, cohérent avec
+30 vagues précédentes. Reprise en lecture directe de `CallService.ts`/`CallCleanupService.ts` pour
+chercher un sibling encore non couvert du bug family `duration = now - startedAt` déjà corrigé 3 fois
+(Vagues 25/27/30, toujours dans `CallCleanupService`/`endCall`/`leaveCall`).
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] `CallService.initiateCall` a DEUX writers terminaux —
+  son propre phantom-cleanup et son propre zombie-cleanup — jamais touchés par les 3 fixes précédents
+  car ils vivent dans `CallService.ts`, pas `CallCleanupService.ts`.** Grep de tous les sites `duration`/
+  `answeredAt`/`startedAt` de `CallService.ts` : deux writers restaient sur le pattern pré-Vague-25
+  `Math.floor((now - startedAt) / 1000)` inconditionnel :
+  1. Le sweep phantom cross-conversation de l'INITIATEUR (l.779-810, force-end tout appel non-terminé
+     dont l'initiateur est resté participant `leftAt:null` ailleurs) — un appel encore `ringing`/
+     `initiated`/`connecting`, jamais répondu, mais dont `isPhantomCallStale` le juge assez vieux (>60s de
+     ring), se voit persister `duration = temps de sonnerie` au lieu de 0.
+  2. Le nettoyage zombie scopé à la conversation cible (l.844-863, tous les participants sont `leftAt`
+     mais le call reste dans `ACTIVE_STATUSES`) — même pattern, même bug, si le zombie n'a jamais été
+     répondu (`answeredAt: null`).
+  **Scénario concret** : A appelle B dans la conversation X (ring), personne ne répond avant qu'un
+  crash/reconnect côté A laisse le participant `leftAt:null`. 90 secondes plus tard A initie un NOUVEL
+  appel (même conversation ou une autre) — le sweep phantom ou zombie force-termine l'ancien appel
+  `ringing` avec `endReason: garbageCollected` et un `duration` égal au temps de sonnerie écoulé (ex.
+  90s) au lieu de 0. Le journal d'appels affichera cet appel comme "Manqué · 1:30" — même famille exacte
+  que la Vague 27 (`APICallRecord.durationLabel` gardé sur `durationSec > 0`, pas sur `isMissed`), mais
+  atteint par un chemin de code que ce fix n'avait pas couvert. Root cause : la sélection Prisma
+  (`callSession: { select: { …, answeredAt: true } }`, l.762) chargeait déjà `answeredAt` — il était
+  disponible, juste jamais lu pour le calcul de `duration`.
+  **Fix** (mirroring exact du pattern déjà établi, `answeredAt ? … : 0`) :
+  - Site 1 (phantom sweep, l.789) : `const startedAt = …` → `const answeredAt = staleSession?.answeredAt
+    ? new Date(staleSession.answeredAt) : null`, `duration: answeredAt ? Math.max(0, Math.floor((now -
+    answeredAt)/1000)) : 0`.
+  - Site 2 (zombie sweep, l.845) : `Math.floor((now - activeCall.startedAt)/1000)` →
+    `activeCall.answeredAt ? Math.max(0, Math.floor((now - activeCall.answeredAt)/1000)) : 0`
+    (`activeCall` est le `CallSession` complet, `answeredAt` déjà dessus sans `select`).
+  **Tests TDD** (`CallService.test.ts`) : 2 nouveaux cas — `should anchor zombie call cleanup duration on
+  answeredAt…` (zombie `ringing`, `startedAt` -5min, `answeredAt: null` → `duration: 0` attendu) ;
+  `phantom cleanup: anchors duration on answeredAt…` (participation stale `ringing`, `startedAt` -5min,
+  `answeredAt: null` → `duration: 0` attendu). RED confirmé sur les deux (`duration: 300` reçu au lieu de
+  `0`, `git diff` du seul fichier source annulé le temps du run). GREEN après fix. Suite
+  `CallService.test.ts` : 185/185 verts (+2). Suite gateway filtrée `[Cc]all` : 32 suites/890 tests verts
+  (+2 vs Vague 30). `tsc --noEmit` gateway : 324 erreurs identiques avant/après (`git stash` du seul
+  fichier source + test → même compte exact, même 9 erreurs pré-existantes sur `CallService.ts`, toutes
+  `Cannot find module '@meeshy/shared/prisma/client'`-dérivées, sandbox réseau-restreint cf. `lessons.md`
+  2026-07-02 ; aucune nouvelle erreur).
+  **Bonus** : la "Note en passant" de la Vague 30 sur `CallService.updateCallStatus()` (même pattern,
+  mais code mort en prod — jamais appelée qu'avec `active`/`reconnecting`) reste non corrigée cette
+  session, toujours par prudence (branche non atteignable, pas de test de régression falsifiable sans la
+  rendre atteignable d'abord — hors scope d'un fix mécanique borné).
+- **iOS/web (lecture seule, aucun changement)** : audit dédié (agent d'exploration) n'a trouvé aucun
+  nouveau retain cycle, timer non invalidé, race ICE, ou gap de rate-limit — toutes catégories déjà
+  balayées par les vagues précédentes. Deux pistes iOS actionnables identifiées mais NON corrigées
+  (nécessitent Xcode, absent de ce sandbox Linux) : (1) `CallManager.switchCamera()`/`selectCamera(id:)`
+  (`CallManager.swift:2021-2049`) flippent `isUsingFrontCamera` de façon optimiste AVANT que
+  `WebRTCService.switchCamera()` (fire-and-forget via `Task` détachée, `WebRTCService.swift:262-272`) ne
+  confirme le succès — un échec réel (thermal throttling, format caméra indisponible) laisse le flag de
+  mirroring UI durablement faux pour le reste de l'appel, jamais reverté ; (2) confirmation que
+  `CallManagerTests.swift`/`CallManagerAudioSessionTests.swift` (~800 assertions) restent des tests de
+  réflexion sur le texte source (`callManagerSource()` + regex/substring), sans instancier `CallManager`
+  ni exercer `CXProviderDelegate` réellement — aucune couverture comportementale sur
+  `providerDidReset`/`didActivate`/`didDeactivate` (déjà noté 2026-07-06, toujours vrai, nécessite un
+  protocole `CXProviding` injectable pour corriger — hors portée sans Xcode).
+- **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, threading TTL, `call:force-leave`
+  server-emit ambiguïté, 3 findings iOS structurels Vague 28, landscape/Dynamic-Type Vague 28/29,
+  `updateCallStatus()` dead-code duration anchor (note Vague 30) + les 2 pistes iOS actionnables de cette
+  vague (camera-flag rollback, protocole `CXProviding` pour tests comportementaux) — toutes nécessitent
+  Xcode/macOS.
