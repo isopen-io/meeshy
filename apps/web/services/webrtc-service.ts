@@ -1155,9 +1155,19 @@ export class WebRTCService {
   }
 
   /**
-   * Close connection and cleanup
+   * Close connection and cleanup.
+   *
+   * `stopLocalTracks` defaults to `true` (full-teardown behavior). Pass
+   * `false` when closing ONE peer connection among several that share the
+   * same local `MediaStream` reference (group calls: use-webrtc-p2p.ts keeps
+   * one WebRTCService per remote participant, all fed the same stream via
+   * addLocalMedia) — stopping the hardware tracks here would kill local
+   * audio/video for every OTHER still-connected participant, not just this
+   * one. The shared stream's real lifecycle (camera/mic release) belongs to
+   * whoever owns it (call-store's reset()), not to a single peer's cleanup.
    */
-  close(): void {
+  close(options: { stopLocalTracks?: boolean } = {}): void {
+    const { stopLocalTracks = true } = options;
     logger.debug('[WebRTCService] Closing connection', {
       participantId: this.participantId,
     });
@@ -1166,14 +1176,17 @@ export class WebRTCService {
     this.stopQualityMonitor();
     this.clearDisconnectGraceTimer();
 
-    // Stop all local tracks
+    // Release this instance's own reference; only stop the tracks themselves
+    // when this service owns the full teardown (see doc comment above).
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        track.stop();
-        logger.debug('[WebRTCService] Stopped local track', {
-          trackKind: track.kind,
+      if (stopLocalTracks) {
+        this.localStream.getTracks().forEach((track) => {
+          track.stop();
+          logger.debug('[WebRTCService] Stopped local track', {
+            trackKind: track.kind,
+          });
         });
-      });
+      }
       this.localStream = null;
     }
 

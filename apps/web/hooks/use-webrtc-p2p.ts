@@ -323,7 +323,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     (participantId: string) => {
       const service = webrtcServicesRef.current.get(participantId);
       if (service) {
-        service.close();
+        // Never stop the shared local stream here — it's the same
+        // MediaStream reference every other still-connected participant's
+        // service is sending. Only the full-call teardown (cleanup() below,
+        // or call-store's reset()) may release the hardware tracks.
+        service.close({ stopLocalTracks: false });
         webrtcServicesRef.current.delete(participantId);
       }
       iceCandidateQueueRef.current.delete(participantId);
