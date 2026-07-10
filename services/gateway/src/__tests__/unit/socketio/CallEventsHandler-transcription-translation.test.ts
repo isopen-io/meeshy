@@ -196,4 +196,40 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     // The scoped listener must be removed once resolved — no leak.
     expect(emitter.listenerCount(`translationCompleted:${MESSAGE_ID}`)).toBe(0);
   });
+
+  it('attempts translation even when callSession.metadata has no translationEnabled flag', async () => {
+    const prisma = makePrisma();
+    // Override the default mock to prove the gate is gone: no
+    // translationEnabled anywhere on metadata (not even `false`).
+    (prisma.callSession.findUnique as jest.Mock).mockResolvedValue({
+      status: 'active',
+      metadata: {},
+    });
+    const { socket, handlers, roomEmit } = makeSocket();
+    const taskId = 'task-no-gate';
+    const zmqClient = makeFakeZmqClient(taskId);
+    const emitter = zmqClient as unknown as EventEmitter;
+
+    const handler = new CallEventsHandler(prisma, makeCallService());
+    handler.setZmqClient(zmqClient);
+    handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+    const segmentPromise = handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve();
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+
+    emitter.emit(`translationCompleted:${MESSAGE_ID}`, {
+      taskId,
+      result: { translatedText: 'Hello world', messageId: MESSAGE_ID },
+      targetLanguage: 'en',
+    });
+    await segmentPromise;
+
+    expect(roomEmit).toHaveBeenCalledTimes(1);
+    const [eventName, payload] = roomEmit.mock.calls[0];
+    expect(eventName).toBe(CALL_EVENTS.TRANSLATED_SEGMENT);
+    expect(payload.segment.translatedText).toBe('Hello world');
+  });
 });

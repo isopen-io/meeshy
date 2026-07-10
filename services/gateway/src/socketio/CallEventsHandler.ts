@@ -3093,15 +3093,16 @@ export class CallEventsHandler {
 
         const callSession = await this.prisma.callSession.findUnique({
           where: { id: data.callId },
-          select: { status: true, metadata: true }
+          select: { status: true }
         });
 
         if (!callSession || callSession.status === 'ended') return;
 
-        const metadata = callSession.metadata as CallTranscriptionSegmentEvent['segment'] extends unknown ? Record<string, unknown> | null : never;
-        const translationEnabled = metadata && typeof metadata === 'object' && 'translationEnabled' in metadata && metadata.translationEnabled === true;
-
-        if (translationEnabled && this.zmqClient && data.segment.isFinal) {
+        // No callSession.metadata.translationEnabled gate — the real product
+        // control is client-side (the speaker's own captions toggle; no
+        // client ever emits a segment unless the user turned captions on).
+        // See docs/superpowers/specs/2026-07-10-live-call-transcription-design.md.
+        if (this.zmqClient && data.segment.isFinal) {
           await this.translateAndEmitSegment(socket, data, userId);
         } else {
           socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
