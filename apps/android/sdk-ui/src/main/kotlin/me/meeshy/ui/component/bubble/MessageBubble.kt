@@ -64,6 +64,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -248,6 +249,14 @@ public fun MessageBubble(
                 }
             }
 
+            if (!content.isDeleted && content.languageStrip.isNotEmpty()) {
+                LanguageStrip(
+                    chips = content.languageStrip,
+                    onColor = onColor,
+                    modifier = Modifier.padding(top = MeeshySpacing.xs),
+                )
+            }
+
             if (content.reactions.isNotEmpty()) {
                 ReactionStrip(
                     reactions = content.reactions,
@@ -297,6 +306,56 @@ public fun MessageBubble(
                     DeliveryStatusIcon(
                         status = content.deliveryStatus,
                         onColor = onColor,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Discrete Prisme flag strip under a translated bubble — the original language
+ * plus each configured content language that has content, projected by
+ * [MessageLanguageStrip]. The active language reads its native name in its own
+ * accent colour; the others show flag-only. Read-only display for now (the
+ * language explorer / tap-to-switch is a follow-on slice).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LanguageStrip(
+    chips: List<LanguageChip>,
+    onColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        chips.forEach { chip ->
+            val accent = chip.info?.colorHex
+                ?.let(::hexColor)
+                ?.takeIf { it != Color.Unspecified }
+                ?: onColor
+            val flag = chip.info?.flag ?: chip.code.uppercase()
+            val label = chip.info?.name ?: chip.code
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(
+                        if (chip.isActive) accent.copy(alpha = 0.16f) else Color.Transparent,
+                    )
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = label },
+            ) {
+                Text(text = flag, style = MaterialTheme.typography.labelSmall)
+                if (chip.isActive && chip.info != null) {
+                    Text(
+                        text = chip.info.nativeName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accent,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 3.dp),
                     )
                 }
             }

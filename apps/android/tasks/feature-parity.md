@@ -698,8 +698,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## D. Translation — Prisme Linguistique
 - [ ] Automatic per-user translation display (resolution: system → regional → custom → original)
 - [~] Original exploration: long-press → « Voir l'original / la traduction »
-      (toggle par message, builder Prisme-aware) ; flag strip / panel secondaire pending
-- [ ] Message detail: per-language translation explorer + on-demand translate / retranslate
+      (toggle par message, builder Prisme-aware) ; **flag strip shipped read-only**
+      (slice `chat-translation-language-strip`, 2026-07-10) ; tap-to-switch / panel secondaire pending
+- [~] Message detail: per-language translation explorer + on-demand translate / retranslate —
+      **strip projection done** (slice `chat-translation-language-strip`, 2026-07-10): pure `:sdk-ui`
+      `MessageLanguageStrip.build(originalLanguage, translations, preferences, showingOriginal) →
+      List<LanguageChip>` (port of iOS `BubbleContentBuilder.buildAvailableFlags`, enriched — each entry
+      is a full `LanguageChip` carrying `LanguageData.info` metadata + `isOriginal`/`isActive`, and the
+      active language is kept in the strip so the UI highlights it rather than hiding it as iOS does).
+      Surfaces only the viewer's own languages (original + system/regional/custom that have content),
+      never every language the message carries; returns **empty** when the message is not translated for
+      the viewer (nothing to explore → no strip), when a preferred language has blank content, and on a
+      deleted tombstone. Wired into `BubbleContent.languageStrip` via `BubbleContentBuilder.build`, and
+      rendered as a discrete read-only flag strip under the bubble in `MessageBubble` (active chip shows
+      its native name in the language accent colour via `LanguageData.colorHex` → `hexColor`). +16 tests
+      (13 `MessageLanguageStripTest`, 4 `BubbleContentBuilderTest`). Full `assembleDebug` + all-module
+      `testDebugUnitTest` → BUILD SUCCESSFUL. **Pending:** tap-to-switch active language, on-demand
+      translate / retranslate of a missing language, the full detail explorer sheet.
 - [ ] Per-post and per-story translation (flag strip, inline secondary, request missing languages)
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
