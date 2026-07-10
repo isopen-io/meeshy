@@ -1,8 +1,17 @@
 import Speech
+import AVFoundation
 import Combine
+import MeeshySDK
 import os
 
-private let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+// nonisolated: os.Logger is a thread-safe value type (Apple docs) with no
+// reason to inherit this file's default MainActor isolation — needed so the
+// AVAudioEngine tap closure (which runs off-MainActor, see
+// startLocalCapture/reinstallTap below) can log without an isolation error.
+// Discovered via the Task 1 spike (2026-07-10): a bare `private let` here
+// made the tap closure's log call fail to compile once the closure was
+// correctly typed `@Sendable` (see below) — same fix applied there.
+private nonisolated let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
 
 // MARK: - Transcription Segment
 
@@ -18,7 +27,7 @@ struct TranscriptionSegment: Identifiable, Equatable {
     let translatedText: String?
     let translatedLanguage: String?
 
-    nonisolated init(
+    init(
         id: UUID,
         text: String,
         speakerId: String,
@@ -59,6 +68,7 @@ enum TranscriptionError: LocalizedError, Equatable {
     case recognizerUnavailable(language: String)
     case onDeviceNotSupported(language: String)
     case recognitionFailed(underlying: Error)
+    case audioEngineFailed(underlying: Error)
 
     var errorDescription: String? {
         switch self {
@@ -70,6 +80,8 @@ enum TranscriptionError: LocalizedError, Equatable {
             return "On-device recognition not supported for language: \(language)"
         case .recognitionFailed(let error):
             return "Recognition failed: \(error.localizedDescription)"
+        case .audioEngineFailed(let error):
+            return "Local audio capture failed: \(error.localizedDescription)"
         }
     }
 
@@ -86,112 +98,59 @@ protocol CallTranscriptionServiceProviding {
     var isTranscribing: Bool { get }
     var permission: TranscriptionPermission { get }
     var lastError: TranscriptionError? { get }
-    func startTranscribing(localLanguage: String, remoteLanguage: String, localUserId: String, remoteUserId: String)
+    func startTranscribing(callId: String, localLanguage: String, localUserId: String)
     func stopTranscribing()
     func requestPermission() async -> TranscriptionPermission
-    func appendLocalAudioBuffer(_ buffer: AVAudioPCMBuffer)
-    func appendRemoteAudioBuffer(_ buffer: AVAudioPCMBuffer)
-}
-
-// MARK: - Stream Recognizer
-
-private final class StreamRecognizer {
-    let recognizer: SFSpeechRecognizer
-    var request: SFSpeechAudioBufferRecognitionRequest?
-    var task: SFSpeechRecognitionTask?
-    let speakerId: String
-    let language: String
-    var rotationCount: Int = 0
-
-    init(recognizer: SFSpeechRecognizer, speakerId: String, language: String) {
-        self.recognizer = recognizer
-        self.speakerId = speakerId
-        self.language = language
-    }
-
-    func tearDown() {
-        task?.cancel()
-        task = nil
-        request?.endAudio()
-        request = nil
-    }
-}
-
-// MARK: - Transcription Role
-
-enum TranscriptionRole: Equatable {
-    case undecided
-    case leader    // This device transcribes both streams and shares to peer
-    case follower  // This device receives segments from leader
-}
-
-enum TranscriptionCapabilityLevel: String, Comparable, Sendable {
-    case none = "none"
-    case basic = "basic"
-    case standard = "standard"
-    case advanced = "advanced"
-
-    private var rank: Int {
-        switch self {
-        case .none: return 0
-        case .basic: return 1
-        case .standard: return 2
-        case .advanced: return 3
-        }
-    }
-
-    static func < (lhs: TranscriptionCapabilityLevel, rhs: TranscriptionCapabilityLevel) -> Bool {
-        lhs.rank < rhs.rank
-    }
+    func receiveTranslatedSegment(_ segment: TranscriptionSegment)
 }
 
 // MARK: - Call Transcription Service
 
+/// Live-call captions: transcribes ONLY the local device's own microphone
+/// (never the remote/decoded WebRTC audio — see
+/// docs/superpowers/specs/2026-07-10-live-call-transcription-design.md for
+/// why that sidesteps the "no ADM in the public WebRTC SDK build" blocker
+/// that made the previous leader/follower design unreachable). Final
+/// segments are sent to the gateway over the existing call socket
+/// (`call:transcription-segment`), which relays them translated per
+/// listener (`call:translated-segment`) — this class never translates
+/// anything itself.
 @MainActor
 final class CallTranscriptionService: ObservableObject, CallTranscriptionServiceProviding {
-
-    // MARK: - Constants
 
     private enum Constants {
         static let maxDisplayedSegments = 5
         static let segmentRetentionLimit = 50
-        /// Segments received before role negotiation completes are buffered up to
-        /// this cap and replayed if we resolve to `.follower`. Prevents silent data
-        /// loss when the leader pushes segments via DataChannel before the
-        /// capability exchange message arrives on the signalling channel.
-        static let pendingSegmentsBufferCap = 10
     }
-
-    // MARK: - Published State
 
     @Published private(set) var segments: [TranscriptionSegment] = []
     @Published private(set) var isTranscribing = false
     @Published private(set) var permission: TranscriptionPermission = .notDetermined
     @Published private(set) var lastError: TranscriptionError?
-    @Published private(set) var role: TranscriptionRole = .undecided
-    @Published private(set) var localCapability: TranscriptionCapabilityLevel = .none
 
-    /// PERF-005: when the live transcription panel is hidden, we still consume
-    /// audio for finals (so recordings remain accurate) but skip all partial
-    /// result work. Toggled by CallView when the transcription overlay is
-    /// shown/dismissed. Defaults to false → cold start = no partial render
-    /// cost until the user opens the overlay.
+    /// PERF-005: while the live-captions panel is hidden, non-final results
+    /// are skipped (no per-frame UI churn); finals are always processed and
+    /// emitted regardless, since they also feed the other participant's view.
     @Published var isShowingOverlay: Bool = false
 
     var displayedSegments: [TranscriptionSegment] {
         Array(segments.suffix(Constants.maxDisplayedSegments))
     }
 
-    // MARK: - Private State
-
-    private var localStream: StreamRecognizer?
-    private var remoteStream: StreamRecognizer?
+    private let socket: any MessageSocketProviding
+    private var callId: String?
     private var localUserId = ""
-    private var remoteUserId = ""
     private var allSegments: [TranscriptionSegment] = []
-    /// Segments buffered while `role == .undecided`. Replayed when role resolves
-    /// to `.follower`; discarded when role resolves to `.leader` or on call end.
-    private var pendingRemoteSegments: [TranscriptionSegment] = []
+
+    private let audioEngine = AVAudioEngine()
+    private var recognizer: SFSpeechRecognizer?
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var rotationCount = 0
+
+    init(socket: any MessageSocketProviding = MessageSocketManager.shared) {
+        self.socket = socket
+    }
 
     // MARK: - Permission
 
@@ -208,126 +167,148 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     // MARK: - Lifecycle
 
-    func startTranscribing(localLanguage: String, remoteLanguage: String, localUserId: String, remoteUserId: String) {
+    func startTranscribing(callId: String, localLanguage: String, localUserId: String) {
         guard !isTranscribing else {
             callsLogger.warning("startTranscribing called while already transcribing")
             return
         }
-
         guard permission == .authorized else {
             lastError = .permissionDenied
-            callsLogger.warning("startTranscribing: speech recognition not authorized — permission=\(String(describing: self.permission))")
+            callsLogger.warning("startTranscribing: not authorized — permission=\(String(describing: self.permission))")
             return
         }
 
+        let locale = Locale(identifier: localLanguage)
+        guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+            lastError = .recognizerUnavailable(language: localLanguage)
+            callsLogger.warning("startTranscribing: no recognizer available for \(localLanguage)")
+            return
+        }
+        // Confidentialité — jamais de repli sur la reconnaissance vocale
+        // serveur d'Apple pendant un appel privé (décision produit du spec).
+        guard recognizer.supportsOnDeviceRecognition else {
+            lastError = .onDeviceNotSupported(language: localLanguage)
+            callsLogger.warning("startTranscribing: on-device unsupported for \(localLanguage)")
+            return
+        }
+
+        self.callId = callId
         self.localUserId = localUserId
-        self.remoteUserId = remoteUserId
+        self.recognizer = recognizer
         lastError = nil
 
         do {
-            let local = try makeStreamRecognizer(languageCode: localLanguage, speakerId: localUserId)
-            let remote = try makeStreamRecognizer(languageCode: remoteLanguage, speakerId: remoteUserId)
-
-            startRecognitionTask(for: local)
-            startRecognitionTask(for: remote)
-
-            localStream = local
-            remoteStream = remote
-            isTranscribing = true
-
-            callsLogger.info("Call transcription started — local: \(localLanguage), remote: \(remoteLanguage)")
-        } catch let error as TranscriptionError {
-            lastError = error
-            callsLogger.error("Failed to start transcription: \(error.localizedDescription)")
+            try startLocalCapture()
         } catch {
-            lastError = .recognitionFailed(underlying: error)
-            callsLogger.error("Unexpected transcription error: \(error.localizedDescription)")
+            lastError = .audioEngineFailed(underlying: error)
+            callsLogger.error("startTranscribing: AVAudioEngine failed: \(error.localizedDescription)")
+            self.recognizer = nil
+            return
         }
+
+        startRecognitionTask(language: localLanguage)
+        isTranscribing = true
+        callsLogger.info("Call transcription started — local language: \(localLanguage)")
     }
 
     func stopTranscribing() {
-        localStream?.tearDown()
-        remoteStream?.tearDown()
-        localStream = nil
-        remoteStream = nil
+        stopLocalCapture()
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        request?.endAudio()
+        request = nil
+        recognizer = nil
 
         allSegments.removeAll()
         segments.removeAll()
-        pendingRemoteSegments.removeAll()
         isTranscribing = false
         lastError = nil
+        callId = nil
 
         callsLogger.info("Call transcription stopped")
     }
 
-    /// Teardown de fin d'appel — purge INCONDITIONNELLE. Un device FOLLOWER
-    /// accumule des segments via `receiveRemoteSegment` avec
-    /// `isTranscribing == false` : le guard `if isTranscribing` de
-    /// l'appelant laissait sinon le transcript (et le rôle négocié) de
-    /// l'appel précédent visibles dans l'appel suivant.
+    /// Teardown de fin d'appel — purge INCONDITIONNELLE, y compris si ce
+    /// device n'a jamais transcrit lui-même (isTranscribing == false) mais a
+    /// reçu des segments traduits de l'autre participant via
+    /// `receiveTranslatedSegment`. Sans ce garde, le transcript de l'appel
+    /// précédent resterait visible au suivant.
     func resetForCallEnd() {
         stopTranscribing()
-        role = .undecided
         isShowingOverlay = false
     }
 
-    // MARK: - Audio Buffer Input
+    // MARK: - Local audio capture (jamais l'audio distant)
 
-    func appendLocalAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        localStream?.request?.append(buffer)
-    }
+    /// Tap indépendant du pipeline audio WebRTC, installé APRÈS l'activation
+    /// CallKit (voir CallManager.toggleTranscription — jamais avant, même
+    /// contrainte documentée dans P2PWebRTCClient.swift pour WebRTC
+    /// lui-même). Validé par le spike Phase 0 — voir Task 1 de
+    /// docs/superpowers/plans/2026-07-10-live-call-transcription.md.
+    ///
+    /// The tap block MUST be an explicit `@Sendable`-typed local, not a bare
+    /// trailing closure — under this project's
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor`, a closure literal written
+    /// inline inside this `@MainActor` method is implicitly inferred as
+    /// MainActor-isolated regardless of what it captures. AVAudioEngine
+    /// invokes tap blocks off-MainActor (its own real-time queue); an
+    /// inferred-MainActor closure traps at runtime (SIGTRAP,
+    /// `swift_task_isCurrentExecutorImpl`) the first time it's called.
+    /// Discovered via the Task 1 spike (2026-07-10, crash report
+    /// `Meeshy-2026-07-10-173828.ips`) — do not revert this pattern.
+    private func startLocalCapture() throws {
+        let newRequest = SFSpeechAudioBufferRecognitionRequest()
+        newRequest.shouldReportPartialResults = true
+        newRequest.addsPunctuation = true
+        newRequest.requiresOnDeviceRecognition = true
+        request = newRequest
 
-    func appendRemoteAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        remoteStream?.request?.append(buffer)
-    }
-
-    // MARK: - Private — Recognizer Setup
-
-    private func makeStreamRecognizer(languageCode: String, speakerId: String) throws -> StreamRecognizer {
-        let locale = Locale(identifier: languageCode)
-        guard let recognizer = SFSpeechRecognizer(locale: locale) else {
-            throw TranscriptionError.recognizerUnavailable(language: languageCode)
+        let input = audioEngine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        // nonisolated(unsafe): SFSpeechAudioBufferRecognitionRequest isn't
+        // audited Sendable by Apple, but `append(_:)` is Apple's documented
+        // call pattern for exactly this real-time tap callback — the type
+        // is safe here, the compiler just can't see it.
+        nonisolated(unsafe) let capturedRequest = newRequest
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+            capturedRequest.append(buffer)
         }
-
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        request.addsPunctuation = true
-
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        } else {
-            callsLogger.info("On-device model unavailable for \(languageCode), using server-assisted recognition")
-            request.requiresOnDeviceRecognition = false
-        }
-
-        let stream = StreamRecognizer(recognizer: recognizer, speakerId: speakerId, language: languageCode)
-        stream.request = request
-        return stream
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
+        audioEngine.prepare()
+        try audioEngine.start()
     }
 
-    private func startRecognitionTask(for stream: StreamRecognizer) {
-        guard let request = stream.request else { return }
+    private func stopLocalCapture() {
+        guard audioEngine.isRunning else { return }
+        audioEngine.inputNode.removeTap(onBus: 0)
+        audioEngine.stop()
+    }
 
-        let speakerId = stream.speakerId
-        let language = stream.language
+    /// See `startLocalCapture`'s doc comment — same `@Sendable`-typed-local
+    /// requirement applies here.
+    private func reinstallTap(for newRequest: SFSpeechAudioBufferRecognitionRequest) {
+        audioEngine.inputNode.removeTap(onBus: 0)
+        let format = audioEngine.inputNode.outputFormat(forBus: 0)
+        // nonisolated(unsafe): see startLocalCapture's identical comment.
+        nonisolated(unsafe) let capturedRequest = newRequest
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+            capturedRequest.append(buffer)
+        }
+        audioEngine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
+    }
 
-        // PERF-005: SFSpeechRecognizer with on-device recognition runs CPU-
-        // intensive work in its callback (audio decoding + acoustic model
-        // forward pass for partials). The callback already runs off the
-        // MainActor on the recognizer's private queue, so we extract the
-        // Sendable scalars (segment strings, timestamps, isFinal,
-        // confidence) right in the closure and only hop to MainActor with
-        // the small Sendable payload. This keeps SFSpeechRecognitionResult
-        // (non-Sendable) inside the recognizer's domain.
-        stream.task = stream.recognizer.recognitionTask(with: request) { [weak self] result, error in
+    // MARK: - Recognition
+
+    private func startRecognitionTask(language: String) {
+        guard let recognizer, let request else { return }
+        let speakerId = localUserId
+        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language)
         }
     }
 
-    /// PERF-005: runs synchronously on the recognizer's queue (off-Main).
-    /// Pulls sendable data out of the result, then hands it to MainActor for
-    /// state mutation. Partials are gated on isShowingOverlay so we skip the
-    /// per-frame UI churn while the panel is hidden.
+    /// PERF-005: runs on the recognizer's own queue (off-Main). Extracts
+    /// Sendable scalars, then hands off to MainActor for state mutation.
     nonisolated private func handleRecognizerCallback(
         result: SFSpeechRecognitionResult?,
         error: Error?,
@@ -344,7 +325,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
                         code: -2,
                         userInfo: [NSLocalizedDescriptionKey: errorDescription]
                     ))
-                    callsLogger.error("Recognition error for speaker \(speakerId, privacy: .public): \(errorDescription, privacy: .public)")
+                    callsLogger.error("Recognition error: \(errorDescription, privacy: .public)")
                 }
             }
             return
@@ -352,109 +333,82 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         guard let result else { return }
         let isFinal = result.isFinal
-
-        // Extract sendable scalars from the non-Sendable result inside the
-        // recognizer's queue — this is a pure read, no further callbacks.
-        let newSegments: [TranscriptionSegment] = result.bestTranscription.segments.map { segment in
-            TranscriptionSegment(
-                id: UUID(),
-                text: segment.substring,
-                speakerId: speakerId,
-                startTime: segment.timestamp,
-                endTime: segment.timestamp + segment.duration,
-                isFinal: isFinal,
-                confidence: Double(segment.confidence),
-                language: language
-            )
-        }
-        let boundaryText: String? = isFinal ? result.bestTranscription.formattedString : nil
+        let text = result.bestTranscription.formattedString
+        let asrSegments = result.bestTranscription.segments
+        let startMs = Int((asrSegments.first?.timestamp ?? 0) * 1000)
+        let lastAsrSegment = asrSegments.last
+        let endMs = Int(((lastAsrSegment?.timestamp ?? 0) + (lastAsrSegment?.duration ?? 0)) * 1000)
+        let confidence = Double(lastAsrSegment?.confidence ?? 0)
 
         Task.detached(priority: .utility) { [weak self] in
             await self?.applyRecognitionResult(
-                segments: newSegments,
-                speakerId: speakerId,
-                isFinal: isFinal,
-                boundaryText: boundaryText
+                text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
+                isFinal: isFinal, confidence: confidence, language: language
             )
         }
     }
 
-    /// PERF-005: MainActor-isolated apply step. Skips partial work while the
-    /// overlay is hidden so the cost of partial recognition becomes nearly
-    /// zero when the user has dismissed the transcription panel.
-    /// Internal (not `private`) so `CallTranscriptionServiceTests` can drive the
-    /// stale-callback-after-teardown guard directly.
+    /// Internal (not `private`) so `CallTranscriptionServiceTests` can drive
+    /// it directly, matching the stale-callback-after-teardown guard test.
     func applyRecognitionResult(
-        segments newSegments: [TranscriptionSegment],
-        speakerId: String,
-        isFinal: Bool,
-        boundaryText: String?
+        text: String, speakerId: String, startMs: Int, endMs: Int,
+        isFinal: Bool, confidence: Double, language: String
     ) {
-        // Guards against the same hazard `resetForCallEnd` documents: the
-        // recognizer callback runs on its own queue and hops to MainActor via
-        // `Task.detached`, so a result can still be in flight when
-        // `stopTranscribing()`/`resetForCallEnd()` clears `allSegments`/`segments`
-        // for a call that just ended. Without this check, a stale callback would
-        // repopulate the transcript with the *previous* call's data right after
-        // the reset — the error-handling branch above already guards on
-        // `isTranscribing` for this exact reason.
         guard isTranscribing else { return }
         guard isFinal || isShowingOverlay else { return }
-        replaceSegments(for: speakerId, with: newSegments, isFinal: isFinal)
-        if isFinal, let boundaryText {
-            rotateRecognitionRequest(for: speakerId, boundaryText: boundaryText)
-        }
+
+        let segment = TranscriptionSegment(
+            id: UUID(), text: text, speakerId: speakerId,
+            startTime: Double(startMs) / 1000, endTime: Double(endMs) / 1000,
+            isFinal: isFinal, confidence: confidence, language: language
+        )
+        appendSegment(segment)
+
+        guard isFinal else { return }
+        emitFinalSegment(text: text, speakerId: speakerId, startMs: startMs, endMs: endMs, confidence: confidence, language: language)
+        rotateRecognitionRequest(language: language)
+    }
+
+    private func emitFinalSegment(text: String, speakerId: String, startMs: Int, endMs: Int, confidence: Double, language: String) {
+        guard let callId else { return }
+        let payload = CallTranscriptionSegmentPayload(
+            text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
+            isFinal: true, confidence: confidence, language: language
+        )
+        socket.emitCallTranscriptionSegment(callId: callId, segment: payload)
+    }
+
+    private func rotateRecognitionRequest(language: String) {
+        recognitionTask?.cancel()
+        request?.endAudio()
+
+        let newRequest = SFSpeechAudioBufferRecognitionRequest()
+        newRequest.shouldReportPartialResults = true
+        newRequest.addsPunctuation = true
+        newRequest.requiresOnDeviceRecognition = true
+        request = newRequest
+        reinstallTap(for: newRequest)
+
+        startRecognitionTask(language: language)
+        rotationCount += 1
+    }
+
+    // MARK: - Remote segments (déjà traduits côté gateway)
+
+    func receiveTranslatedSegment(_ segment: TranscriptionSegment) {
+        appendSegment(segment)
     }
 
     // MARK: - Private — Result Handling
 
-    private func rotateRecognitionRequest(for speakerId: String, boundaryText: String) {
-        let stream: StreamRecognizer?
-        if speakerId == localUserId {
-            stream = localStream
-        } else {
-            stream = remoteStream
-        }
-
-        guard let stream else { return }
-
-        stream.request?.endAudio()
-        stream.task?.cancel()
-        stream.rotationCount += 1
-
-        let newRequest = SFSpeechAudioBufferRecognitionRequest()
-        newRequest.requiresOnDeviceRecognition = stream.recognizer.supportsOnDeviceRecognition
-        newRequest.shouldReportPartialResults = true
-        newRequest.addsPunctuation = true
-        stream.request = newRequest
-
-        let language = stream.language
-
-        // PERF-005: same nonisolated-callback hop as startRecognitionTask.
-        // `recognitionTask(with:)` returns a non-optional SFSpeechRecognitionTask —
-        // it never fails synchronously, failures surface later via the `error`
-        // param of the completion handler, which handleRecognizerCallback already
-        // routes into `lastError` on every occurrence (not just after N rotations).
-        stream.task = stream.recognizer.recognitionTask(with: newRequest) { [weak self] result, error in
-            self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language)
-        }
-
-        // Never log transcript content: it's the verbatim spoken words of the call.
-        callsLogger.info("Rotated recognition request for speaker \(speakerId) (rotation #\(stream.rotationCount)), boundary: \(boundaryText.count) chars")
-    }
-
-    private func replaceSegments(for speakerId: String, with newSegments: [TranscriptionSegment], isFinal: Bool) {
-        allSegments.removeAll { $0.speakerId == speakerId && !$0.isFinal }
-        allSegments.append(contentsOf: newSegments)
-
+    private func appendSegment(_ segment: TranscriptionSegment) {
+        allSegments.removeAll { $0.speakerId == segment.speakerId && !$0.isFinal }
+        allSegments.append(segment)
         if allSegments.count > Constants.segmentRetentionLimit {
             allSegments = Array(allSegments.suffix(Constants.segmentRetentionLimit))
         }
-
         segments = allSegments.sorted { $0.startTime < $1.startTime }
     }
-
-    // MARK: - Private — Helpers
 
     private func mapAuthorizationStatus(_ status: SFSpeechRecognizerAuthorizationStatus) -> TranscriptionPermission {
         switch status {
@@ -463,120 +417,6 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         case .restricted: return .restricted
         case .notDetermined: return .notDetermined
         @unknown default: return .denied
-        }
-    }
-
-    // MARK: - Capability Detection
-
-    func detectLocalCapability(for language: String) -> TranscriptionCapabilityLevel {
-        let locale = Locale(identifier: language)
-        guard let recognizer = SFSpeechRecognizer(locale: locale) else {
-            localCapability = .none
-            return .none
-        }
-
-        guard recognizer.isAvailable else {
-            localCapability = .none
-            return .none
-        }
-
-        if recognizer.supportsOnDeviceRecognition {
-            localCapability = .standard
-            return .standard
-        }
-
-        localCapability = .basic
-        return .basic
-    }
-
-    func supportedOnDeviceLanguages() -> [String] {
-        let commonLanguages = ["en", "fr", "es", "de", "it", "pt", "ja", "ko", "zh", "ru", "ar", "hi"]
-        return commonLanguages.filter { lang in
-            guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: lang)) else { return false }
-            return recognizer.supportsOnDeviceRecognition
-        }
-    }
-
-    // MARK: - Role Negotiation
-
-    func resolveRole(
-        localCapability: TranscriptionCapabilityLevel,
-        remoteCapability: TranscriptionCapabilityLevel,
-        isInitiator: Bool
-    ) {
-        if localCapability == .none && remoteCapability == .none {
-            role = .undecided
-            pendingRemoteSegments.removeAll()
-            callsLogger.info("Neither peer can transcribe")
-            return
-        }
-
-        if remoteCapability == .none {
-            role = .leader
-            pendingRemoteSegments.removeAll()
-            callsLogger.info("Local is only capable peer → leader")
-            return
-        }
-
-        if localCapability == .none {
-            role = .follower
-            callsLogger.info("Remote is only capable peer → follower")
-            flushPendingSegments()
-            return
-        }
-
-        if localCapability > remoteCapability {
-            role = .leader
-            pendingRemoteSegments.removeAll()
-            callsLogger.info("Local has higher capability → leader")
-        } else if remoteCapability > localCapability {
-            role = .follower
-            callsLogger.info("Remote has higher capability → follower")
-            flushPendingSegments()
-        } else {
-            let becomeLeader = isInitiator
-            role = becomeLeader ? .leader : .follower
-            callsLogger.info("Tie broken by initiator role → \(becomeLeader ? "leader" : "follower")")
-            if becomeLeader {
-                pendingRemoteSegments.removeAll()
-            } else {
-                flushPendingSegments()
-            }
-        }
-    }
-
-    private func flushPendingSegments() {
-        guard !pendingRemoteSegments.isEmpty else { return }
-        let buffered = pendingRemoteSegments
-        pendingRemoteSegments.removeAll()
-        callsLogger.info("Replaying \(buffered.count) buffered segment(s) after role resolved to follower")
-        for segment in buffered {
-            appendSegmentAsFollower(segment)
-        }
-    }
-
-    private func appendSegmentAsFollower(_ segment: TranscriptionSegment) {
-        allSegments.append(segment)
-        if allSegments.count > Constants.segmentRetentionLimit {
-            allSegments = Array(allSegments.suffix(Constants.segmentRetentionLimit))
-        }
-        segments = allSegments.sorted { $0.startTime < $1.startTime }
-    }
-
-    // MARK: - Follower Mode: Receive segments from leader
-
-    func receiveRemoteSegment(_ segment: TranscriptionSegment) {
-        switch role {
-        case .follower:
-            appendSegmentAsFollower(segment)
-        case .undecided:
-            if pendingRemoteSegments.count < Constants.pendingSegmentsBufferCap {
-                pendingRemoteSegments.append(segment)
-            } else {
-                callsLogger.warning("Transcription pending buffer full (\(Constants.pendingSegmentsBufferCap)) — dropping segment id=\(segment.id) speaker=\(segment.speakerId)")
-            }
-        case .leader:
-            break
         }
     }
 }
