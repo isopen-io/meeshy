@@ -3,6 +3,16 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-10 (`chat-live-transcription-merge`): when the read-side renderer already resolves a field, a "live X"
+  feature is *pure cache-merge only* — no UI touch at all.** `BubbleContentBuilder.resolveTranscription` already
+  reads `attachment.transcription` under the Prisme, so wiring `transcription:ready` was just a pure `:core:model`
+  merge onto the attachment + a `:sdk-core` cache write + a `:feature:chat` collector — the bubble re-renders via
+  the existing `messagesStream` re-emission. Grep the builder for the field *before* scoping any UI work; the
+  cheapest, most-testable slice is often "the flow is dead AND the renderer is already ready".
+- **2026-07-10 (`chat-live-transcription-merge`): a socket event's attachment id is optional — decide the
+  fallback deterministically.** `TranscriptionReadyEvent.attachmentId` is nullable (single-voice-note path sends
+  none). The merge targets by exact id when present, else the **first audio attachment** (mimeType `audio/`), and
+  is a no-op when neither resolves. Filter to audio only on the fallback path — trust an explicit id as-is.
 - **2026-07-10 (`chat-live-translation-merge`): before building a "receive X live" feature, grep the socket
   manager for the flow name — it may already be emitted with zero consumers.** `MessageSocketManager` already
   decoded `message:translated`/`message:translation` into `translationCompleted`/`translationInProgress`
