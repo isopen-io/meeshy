@@ -2080,6 +2080,23 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Public wrapper: invalide l'identité de frappe mise en cache d'un user
+   * (`username` / `displayName`) après un changement de profil pertinent, afin
+   * que l'indicateur « en train d'écrire » affiche le nouveau nom immédiatement
+   * au lieu d'attendre l'expiration du TTL du cache d'identité du StatusHandler.
+   *
+   * Sans cet appel, un utilisateur qui renomme son displayName (ou change de
+   * username) puis se remet à taper apparaîtrait sous son ANCIEN nom à ses
+   * pairs pendant toute la fenêtre TTL — alors que sa vue de profil, elle, est
+   * déjà mise à jour en temps réel via `emitUserUpdated`. Miroir de la même
+   * invalidation faite au `disconnect` et jumeau REST de
+   * `refreshUserResolvedLanguages` ci-dessus. Best-effort.
+   */
+  public refreshUserTypingIdentity(userId: string): void {
+    this.statusHandler.invalidateIdentityCache(userId);
+  }
+
+  /**
    * Public wrapper pour broadcaster un nouveau message depuis une route REST.
    * Permet aux routes HTTP de déclencher le broadcast socket sans accéder aux méthodes privées.
    */

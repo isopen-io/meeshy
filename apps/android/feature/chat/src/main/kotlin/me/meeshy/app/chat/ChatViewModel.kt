@@ -25,6 +25,7 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.app.chat.translation.LanguageFlagTapResolver
+import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
@@ -577,7 +578,10 @@ class ChatViewModel @Inject constructor(
                 messageRepository.sendOptimistic(
                     conversationId = conversationId,
                     content = text,
-                    originalLanguage = user.systemLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
+                    originalLanguage = ComposeLanguageDetector.detect(
+                        text,
+                        fallback = LanguageResolver.resolveUserLanguage(user),
+                    ),
                     sender = user,
                     replyToId = replyToId,
                 )

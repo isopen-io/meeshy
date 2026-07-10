@@ -3,6 +3,30 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-10 (`chat-compose-language-detection`): a "stamp the user's language" line is often TWO bugs — a
+  lossy fallback AND a missing detection — and the fix converges on the SSOT for the first, ports the shared
+  web heuristic for the second.** `ChatViewModel.send()` did `originalLanguage = user.systemLanguage ?: "fr"`:
+  (1) it bypassed `LanguageResolver.resolveUserLanguage` so a regional/custom-only user's outgoing text was
+  mis-stamped `fr`, and (2) it never looked at the composed text at all. iOS uses `NLLanguageRecognizer` and
+  web uses `tinyld` — neither is a pure JVM dependency — but the web source ALSO ships a hand-rolled
+  script/stopword heuristic (`detectLanguage`, the documented "fallback basique") plus compose-time guards
+  (`detectComposeLanguage`: strip URLs, require ≥4 letters, best-score-or-fallback). Porting THAT to a pure
+  `:core:model` `ComposeLanguageDetector` gives a branch-rich, emulator-free core AND real SOTA parity. Grep
+  iOS **and** web for the same behaviour before porting — the platform API (NL/tinyld) is unportable, but the
+  shared heuristic underneath it usually is.
+- **2026-07-10 (`chat-compose-language-detection`): a content-detection change can leave existing send tests
+  green *by construction* — verify why before assuming a regression.** The pre-existing
+  `send_dispatches...` test sends `"hello"` and asserts the stamp is `"fr"`. English is NOT a scored pattern
+  in the web heuristic, so `"hello"` scores 0 for every language → the detector returns the fallback, which
+  for a `systemLanguage="fr"` user resolves to `"fr"`. The test stays green unchanged — not luck, but the
+  faithful behaviour (unmatched Latin text → sender's resolved language). The two NEW behavioural tests
+  (Spanish text → `es`; regional-only user + undetectable text → `de`) are the ones that fail on `main`
+  (compile aside: `main` stamps `fr` for both), proving the change is real and non-tautological.
+- **2026-07-10 (`chat-compose-language-detection`): port the web regex table verbatim, incl. the ASCII `\b`
+  semantics.** JS `\b` is ASCII-only; Kotlin/Java `\b` (without `UNICODE_CHARACTER_CLASS`) is too. For the
+  CJK/Cyrillic/Arabic languages the SCRIPT char-class (`[а-яё]`, `[一-鿿]`, …) carries detection — the
+  stopword alternation is secondary — so the shared `\b`-limitation is a faithful match, not a bug. `\p{L}`
+  matches Unicode letters by default in Java regex (no flag needed), equivalent to JS `/\p{L}/u`.
 - **2026-07-10 (`chat-on-demand-translate`): to make a deferred pure arm live without a dead end, extend the
   projection that surfaces its trigger — via an opt-in param, not a rewrite.** `LanguageFlagTapResolver.RequestTranslation`
   was already tested but inert because `MessageLanguageStrip` never surfaced content-less languages. Rather than change

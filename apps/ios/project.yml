@@ -49,11 +49,13 @@ settings:
   DEVELOPMENT_TEAM: D72UK7R5RE
 
 # Swift package graph. Only two packages are referenced directly by the
-# Xcode project: Firebase (remote) and the local MeeshySDK. GRDB, Socket.IO,
-# WebRTC and WhisperKit are transitive dependencies of MeeshySDK
+# Xcode project: Firebase (remote) and the local MeeshySDK. GRDB, Socket.IO
+# and WebRTC are transitive dependencies of MeeshySDK
 # (declared in packages/MeeshySDK/Package.swift) and are imported through it,
 # so they must NOT be listed here. Mirrors the package refs that were in the
 # committed pbxproj before XcodeGen owned generation.
+# On-device speech recognition uses Apple's Speech framework (no third-party
+# dep) — WhisperKit was linked but never imported, removed 2026-07-10.
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk.git

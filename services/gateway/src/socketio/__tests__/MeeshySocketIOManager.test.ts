@@ -840,6 +840,17 @@ describe('MeeshySocketIOManager', () => {
   });
 
   // -------------------------------------------------------------------------
+  // 8b. refreshUserTypingIdentity
+  // -------------------------------------------------------------------------
+
+  describe('refreshUserTypingIdentity', () => {
+    it('delegates to statusHandler.invalidateIdentityCache', () => {
+      manager.refreshUserTypingIdentity('user-77');
+      expect(mockStatusHandlerInstance.invalidateIdentityCache).toHaveBeenCalledWith('user-77');
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // 9. Getters
   // -------------------------------------------------------------------------
 
