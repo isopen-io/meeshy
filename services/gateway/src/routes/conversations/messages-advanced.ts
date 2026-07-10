@@ -450,7 +450,7 @@ export function registerMessagesAdvancedRoutes(
       );
 
       conversationMessageStatsService.onMessageEdited(
-        prisma, conversationId, userId, existingMessage.content ?? '', processedContent
+        prisma, conversationId, existingMessage.sender?.userId ?? existingMessage.senderId, existingMessage.content ?? '', processedContent
       ).catch(err => logger.error('[MESSAGES] Stats edit update error:', err));
 
       // Construire la réponse avec mentions validées (PAS de traductions - elles arriveront via socket).
@@ -624,7 +624,7 @@ export function registerMessagesAdvancedRoutes(
       });
 
       conversationMessageStatsService.onMessageDeleted(
-        prisma, conversationId, existingMessage.sender?.userId ?? '', existingMessage.content ?? '',
+        prisma, conversationId, existingMessage.sender?.userId ?? existingMessage.senderId, existingMessage.content ?? '',
         (existingMessage.attachments ?? []).map(a => {
           const mime = a.mimeType ?? '';
           if (mime.startsWith('image/')) return 'image';
