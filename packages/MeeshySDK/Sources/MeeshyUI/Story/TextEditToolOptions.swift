@@ -12,10 +12,10 @@ struct TextEditToolOptions: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        // Rangée nue : pas de conteneur de panneau (fond arrondi, contour). Les
-        // options s'affichent directement au-dessus de la barre de bulles, sur
-        // le `.ultraThinMaterial` partagé de `StoryTextEditToolbar` — évite le
-        // panneau-dans-panneau et la troncature verticale des pastilles.
+        // Rangée nue : pas de conteneur de panneau propre (fond arrondi,
+        // contour). C'est `StoryTextEditToolbar` qui pose l'îlot de verre
+        // autour de cette rangée — évite le panneau-dans-panneau et la
+        // troncature verticale des pastilles.
         Group {
             switch tool {
             case .style:      styleOptions

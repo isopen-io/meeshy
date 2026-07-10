@@ -3,8 +3,12 @@ import MeeshySDK
 
 /// Rangée de bulles flottantes du mode dessin : 5 bulles d'outils (pinceau / couleur /
 /// épaisseur / lissage / calques) + une bulle X de sortie. Mirror exact de
-/// `TextEditFloatingBubbles` (taille 36×36, `.ultraThinMaterial`, halo brandGradient
-/// sur l'outil actif).
+/// `TextEditFloatingBubbles`.
+///
+/// Icônes flottantes SANS arrière-plan explicite (directive user 2026-07-10) :
+/// même langage que les actions du header — `glassControlForeground` +
+/// `adaptiveGlass` (Liquid Glass iOS 26 / material en fallback), l'outil actif
+/// et le X passant en verre proéminent teinté.
 struct DrawingEditFloatingBubbles: View {
     let expandedTool: DrawingEditTool?
     let onSelectTool: (DrawingEditTool) -> Void
@@ -14,8 +18,6 @@ struct DrawingEditFloatingBubbles: View {
     var canRedo: Bool = false
     var onUndo: () -> Void = {}
     var onRedo: () -> Void = {}
-
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 8) {
@@ -37,13 +39,10 @@ struct DrawingEditFloatingBubbles: View {
     private func actionBubble(symbol: String, enabled: Bool, label: String, action: @escaping () -> Void) -> some View {
         Image(systemName: symbol)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(enabled ? (colorScheme == .dark ? Color.white : MeeshyColors.indigo950)
-                                     : (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.3))
+            .glassControlForeground()
             .frame(width: 36, height: 36)
-            .background(Circle().fill(Material.ultraThinMaterial))
-            .overlay(Circle().stroke(MeeshyColors.indigo400.opacity(enabled ? 0.5 : 0.2), lineWidth: 0.8))
-            .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
-            .opacity(enabled ? 1 : 0.55)
+            .adaptiveGlass(in: Circle())
+            .opacity(enabled ? 1 : 0.4)
             .contentShape(Circle())
             .onTapGesture { if enabled { HapticFeedback.light(); action() } }
             .accessibilityLabel(label)
@@ -51,21 +50,26 @@ struct DrawingEditFloatingBubbles: View {
             .accessibilityHint(enabled ? "" : "Indisponible")
     }
 
+    @ViewBuilder
     private func bubble(tool: DrawingEditTool, isActive: Bool) -> some View {
-        Image(systemName: tool.sfSymbol)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(isActive ? Color.white : (colorScheme == .dark ? .white : MeeshyColors.indigo950))
-            .frame(width: 36, height: 36)
-            .background(
-                Circle()
-                    .fill(isActive ? AnyShapeStyle(MeeshyColors.brandGradient) : AnyShapeStyle(Material.ultraThinMaterial))
-            )
-            .overlay(
-                Circle().stroke(MeeshyColors.indigo400.opacity(0.5), lineWidth: 0.8)
-            )
-            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
-            .accessibilityLabel(tool.accessibilityLabel)
-            .accessibilityAddTraits(.isButton)
+        Group {
+            if isActive {
+                Image(systemName: tool.sfSymbol)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: 36, height: 36)
+                    .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.brandPrimary)
+            } else {
+                Image(systemName: tool.sfSymbol)
+                    .font(.system(size: 14, weight: .semibold))
+                    .glassControlForeground()
+                    .frame(width: 36, height: 36)
+                    .adaptiveGlass(in: Circle())
+            }
+        }
+        .contentShape(Circle())
+        .accessibilityLabel(tool.accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
     }
 
     private func dismissBubble() -> some View {
@@ -73,8 +77,8 @@ struct DrawingEditFloatingBubbles: View {
             .font(.system(size: 12, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: 36, height: 36)
-            .background(Circle().fill(MeeshyColors.error.opacity(0.9)))
-            .shadow(color: MeeshyColors.error.opacity(0.4), radius: 5, y: 2)
+            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
+            .contentShape(Circle())
             .onTapGesture {
                 HapticFeedback.medium()
                 onDismiss()

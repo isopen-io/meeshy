@@ -81,6 +81,27 @@ extension StoryComposerView {
                 .opacity(isFloatingEditorActive ? 0 : 1)
                 .allowsHitTesting(!isFloatingEditorActive)
 
+            // Annuler/rétablir — colonne verticale flottante en bas à droite
+            // sur le flanc droit (directive user 2026-07-10), levée au-dessus
+            // de la barre horizontale de FABs. Suit la même règle de chrome
+            // que le header (`showTopBar`) : visible uniquement canvas plein
+            // écran au repos.
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    if showTopBar {
+                        historyColumn
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+            }
+            .padding(.trailing, 16)
+            .padding(.bottom, 88)
+            .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                       value: showTopBar)
+            .allowsHitTesting(showTopBar)
+
             // Floating text edit overlay — sits above every composer control.
             // Empty view when `textEditingMode == .inactive`.
             StoryTextEditToolbar(viewModel: viewModel)

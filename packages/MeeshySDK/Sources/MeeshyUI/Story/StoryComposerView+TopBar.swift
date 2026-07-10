@@ -30,62 +30,41 @@ extension StoryComposerView {
     /// pleine largeur ni de hauteur réservée — chaque commande est une icône
     /// de verre individuelle qui FLOTTE au-dessus du canvas plein écran
     /// (parité IMG_0944 : X à gauche, actions à droite). La bande de slides
-    /// devient un élément flottant AUTONOME sous les icônes, présent
-    /// uniquement quand il est utile (« les éléments apparaissent et quittent
-    /// selon le besoin »).
+    /// vit SUR la même rangée, ENTRE le X et le sélecteur d'audience
+    /// (directive user 2026-07-10), présente uniquement quand elle est utile
+    /// (« les éléments apparaissent et quittent selon le besoin »). Les
+    /// commandes d'annulation ont quitté le header pour la colonne verticale
+    /// du flanc droit (`historyColumn`).
     var topBar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 0) {
-                dismissButton
+        HStack(alignment: .center, spacing: 0) {
+            dismissButton
 
-                Spacer(minLength: 12)
-
-                // Unified Liquid Glass action group (iOS 26 GlassEffectContainer →
-                // adjacent glass morphs into one continuous surface; iOS 16–25 falls
-                // back to material/solid via the adaptiveGlass wrappers). Publish keeps
-                // the primary brand tint via prominent glass; overflow (⋯) sits last,
-                // right of Publish.
-                AdaptiveGlassContainer(spacing: 6) {
-                    HStack(spacing: 6) {
-                        // C9 Inc.4 — n'afficher que l'utile : les commandes
-                        // d'annulation n'existent à l'écran QUE quand la
-                        // trajectoire le permet (canUndo/canRedo).
-                        if viewModel.canUndoGlobal {
-                            historyButton(
-                                icon: "arrow.uturn.backward",
-                                label: String(localized: "story.composer.undo",
-                                              defaultValue: "Annuler", bundle: .module),
-                                action: performUndo
-                            )
-                        }
-                        if viewModel.canRedoGlobal {
-                            historyButton(
-                                icon: "arrow.uturn.forward",
-                                label: String(localized: "story.composer.redo",
-                                              defaultValue: "Rétablir", bundle: .module),
-                                action: performRedo
-                            )
-                        }
-                        visibilityMenu
-                        previewButton
-                        publishButton
-                        overflowMenu
-                    }
-                    .animation(.spring(response: 0.3, dampingFraction: 0.85),
-                               value: viewModel.canUndoGlobal)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.85),
-                               value: viewModel.canRedoGlobal)
-                }
-            }
-
-            // Bande de slides flottante — visible seulement quand elle sert :
-            // plusieurs slides à naviguer, ou du contenu à dupliquer/étendre.
-            // Sur un composer vierge (empty-state picker), elle disparaît.
+            // Bande de slides — entre le bouton de fermeture et le choix de la
+            // cible d'audience. Le rail scrolle horizontalement et occupe tout
+            // l'interstice ; sur un composer vierge (empty-state picker), il
+            // disparaît et laisse l'espace vide.
             if shouldShowFloatingSlideStrip {
                 slideStrip
                     .padding(.vertical, 5)
                     .adaptiveGlass(in: Capsule())
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.horizontal, 8)
+                    .transition(.opacity)
+            } else {
+                Spacer(minLength: 12)
+            }
+
+            // Unified Liquid Glass action group (iOS 26 GlassEffectContainer →
+            // adjacent glass morphs into one continuous surface; iOS 16–25 falls
+            // back to material/solid via the adaptiveGlass wrappers). Publish keeps
+            // the primary brand tint via prominent glass; overflow (⋯) sits last,
+            // right of Publish.
+            AdaptiveGlassContainer(spacing: 6) {
+                HStack(spacing: 6) {
+                    visibilityMenu
+                    previewButton
+                    publishButton
+                    overflowMenu
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -185,6 +164,38 @@ extension StoryComposerView {
     }
 
     // MARK: - Undo/redo global (C9 Inc.4)
+
+    /// Colonne verticale annuler/rétablir, ancrée en bas à droite sur le flanc
+    /// droit du canvas (directive user 2026-07-10 — libère le header pour la
+    /// bande de slides). Même règle d'apparition que le header (chrome plein
+    /// écran au repos) ; chaque commande n'existe à l'écran QUE quand la
+    /// trajectoire le permet (canUndo/canRedo — C9 Inc.4).
+    var historyColumn: some View {
+        AdaptiveGlassContainer(spacing: 10) {
+            VStack(spacing: 10) {
+                if viewModel.canUndoGlobal {
+                    historyButton(
+                        icon: "arrow.uturn.backward",
+                        label: String(localized: "story.composer.undo",
+                                      defaultValue: "Annuler", bundle: .module),
+                        action: performUndo
+                    )
+                }
+                if viewModel.canRedoGlobal {
+                    historyButton(
+                        icon: "arrow.uturn.forward",
+                        label: String(localized: "story.composer.redo",
+                                      defaultValue: "Rétablir", bundle: .module),
+                        action: performRedo
+                    )
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                       value: viewModel.canUndoGlobal)
+            .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                       value: viewModel.canRedoGlobal)
+        }
+    }
 
     func historyButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
