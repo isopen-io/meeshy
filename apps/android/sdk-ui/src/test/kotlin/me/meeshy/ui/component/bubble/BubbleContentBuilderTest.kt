@@ -137,6 +137,73 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a translated message carries the language strip original then active`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.languageStrip.map { it.code }).containsExactly("en", "fr").inOrder()
+        assertThat(content.languageStrip.single { it.code == "fr" }.isActive).isTrue()
+    }
+
+    @Test
+    fun `showing the original moves the active chip to the original in the strip`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            showOriginal = true,
+        )
+
+        assertThat(content.languageStrip.single { it.code == "en" }.isActive).isTrue()
+    }
+
+    @Test
+    fun `an untranslated message carries an empty language strip`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "es", translatedContent = "Hola"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.languageStrip).isEmpty()
+    }
+
+    @Test
+    fun `a deleted message carries an empty language strip even with translations`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "secret",
+                deletedAt = "2026-05-18T10:00:00Z",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "secret"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.languageStrip).isEmpty()
+    }
+
+    @Test
     fun `a deleted message carries the deleted flag and no text`() {
         val content = BubbleContentBuilder.build(
             message(content = "secret", deletedAt = "2026-05-18T10:00:00Z"),
