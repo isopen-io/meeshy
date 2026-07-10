@@ -580,13 +580,13 @@ internal struct _FullscreenRenderer: View {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 6) {
-                if let avatarUrl = author.avatarUrl,
-                   let url = MeeshyConfig.resolveMediaURL(avatarUrl) {
-                    AsyncImage(url: url) { img in
-                        img.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
+                if let avatarUrl = author.avatarUrl, !avatarUrl.isEmpty {
+                    // CachedAsyncImage : l'avatar auteur est déjà dans le
+                    // DiskCacheStore (MeeshyAvatar l'y a mis) — zéro re-download.
+                    CachedAsyncImage(url: avatarUrl) {
                         Circle().fill(Color.white.opacity(0.3))
                     }
+                    .aspectRatio(contentMode: .fill)
                     .frame(width: 24, height: 24)
                     .clipShape(Circle())
                 }
@@ -785,12 +785,19 @@ internal struct _FullscreenRenderer: View {
         HapticFeedback.light()
         Task {
             do {
-                // Pull from URLSession.download (streams to disk) — avoids
-                // double-loading a 200MB file into memory like .data(from:) would.
-                let (tempURL, _) = try await URLSession.shared.download(from: url)
                 let tempFile = FileManager.default.temporaryDirectory
                     .appendingPathComponent("save_\(UUID().uuidString).mp4")
-                try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                if let cached = CacheCoordinator.videoLocalFileURL(for: url.absoluteString) {
+                    // Cache-first : l'état .ready qui a permis la lecture implique
+                    // que le fichier est déjà dans le DiskCacheStore vidéo — le
+                    // copier évite de re-télécharger un média déjà sur disque.
+                    try FileManager.default.copyItem(at: cached, to: tempFile)
+                } else {
+                    // Pull from URLSession.download (streams to disk) — avoids
+                    // double-loading a 200MB file into memory like .data(from:) would.
+                    let (tempURL, _) = try await URLSession.shared.download(from: url)
+                    try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                }
                 let ok = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
                 try? FileManager.default.removeItem(at: tempFile)
                 await MainActor.run {

@@ -45,34 +45,27 @@ extension UserProfileSheet {
 
     var bannerSection: some View {
         ZStack(alignment: .bottom) {
-            if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty, let url = URL(string: bannerURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        defaultBannerGradient
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: ProfileHeaderMetrics.expandedBanner)
-                            .clipped()
-                            .onTapGesture {
-                                openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
-                            }
-                            // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
-                            .accessibilityElement()
-                            .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityAction {
-                                openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
-                            }
-                    case .failure:
-                        defaultBannerGradient
-                    @unknown default:
-                        defaultBannerGradient
-                    }
+            if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty {
+                // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
+                // la bannière n'est téléchargée qu'une fois par installation, et le
+                // resolver interne accepte aussi les chemins relatifs du gateway.
+                CachedAsyncImage(url: bannerURL) {
+                    defaultBannerGradient
                 }
+                .scaledToFill()
                 .frame(height: ProfileHeaderMetrics.expandedBanner)
+                .clipped()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
+                }
+                // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
+                .accessibilityElement()
+                .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction {
+                    openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
+                }
             } else {
                 defaultBannerGradient
             }
