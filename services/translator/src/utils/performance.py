@@ -477,8 +477,17 @@ class PerformanceOptimizer:
 
 @dataclass(order=True)
 class PriorityItem:
-    """Item wrapper for priority queue with custom ordering."""
+    """Item wrapper for priority queue with custom ordering.
+
+    Ordering key is ``(priority, sequence)``: lower priority value first and,
+    within the same priority, lower sequence (earlier insertion) first. The
+    monotonic ``sequence`` guarantees stable FIFO ordering — without it, equal
+    priorities compare equal and ``heapq`` does not preserve insertion order
+    (ordering breaks as soon as five or more equal-priority items are queued).
+    ``timestamp``/``data``/``task_id`` are excluded from comparison.
+    """
     priority: int
+    sequence: int
     timestamp: float = field(compare=False)
     data: Any = field(compare=False)
     task_id: str = field(compare=False)
@@ -514,13 +523,15 @@ class TranslationPriorityQueue:
         """
         with self._lock:
             self._counter += 1
-            task_id = f"task_{self._counter}_{int(time.time() * 1000)}"
+            sequence = self._counter
+            task_id = f"task_{sequence}_{int(time.time() * 1000)}"
 
             if priority is None:
                 priority = self.get_priority(text)
 
             item = PriorityItem(
                 priority=priority.value,
+                sequence=sequence,
                 timestamp=time.time(),
                 data=data,
                 task_id=task_id
