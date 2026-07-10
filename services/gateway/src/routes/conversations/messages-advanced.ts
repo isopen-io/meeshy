@@ -27,8 +27,12 @@ import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalE
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 
+// Editing allows empty content (unlike sending): the message may carry
+// attachments whose caption is being cleared. The attachment-aware emptiness
+// check below is the single source of truth, in parity with the socket edit
+// path (SocketMessageEditSchema + MessageHandler.handleMessageEdit).
 const EditMessageBodySchema = z.object({
-  content: CommonSchemas.messageContent,
+  content: z.string().max(10000, 'Message trop long'),
   originalLanguage: CommonSchemas.language.optional(),
 });
 // Logger dédié pour messages-advanced
@@ -123,7 +127,8 @@ export function registerMessagesAdvancedRoutes(
         include: {
           sender: {
             select: { id: true, userId: true, role: true }
-          }
+          },
+          attachments: { select: { id: true } }
         }
       });
 
@@ -174,8 +179,11 @@ export function registerMessagesAdvancedRoutes(
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier ce message');
       }
 
-      // Validation du contenu
-      if (!content || content.trim().length === 0) {
+      // Validation du contenu : le contenu vide n'est autorisé que si le
+      // message porte des pièces jointes (suppression de légende). Parité avec
+      // le chemin socket (MessageHandler.handleMessageEdit).
+      const hasAttachments = existingMessage.attachments && existingMessage.attachments.length > 0;
+      if ((!content || content.trim().length === 0) && !hasAttachments) {
         return sendBadRequest(reply, 'Message content cannot be empty');
       }
 
