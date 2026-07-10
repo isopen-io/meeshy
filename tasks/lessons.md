@@ -1465,3 +1465,31 @@ explicitement "bails after cancel, but the cancel already ran" comme si c'était
 titre du test décrivait l'intention (rejoin réussi → annulation) mais le corps testait l'accident (rejoin
 échoué → annulation quand même) — un signe qu'un test a dérivé pour suivre l'implémentation plutôt que la
 spec. Toujours relire le TITRE du test contre son CORPS quand on modifie le comportement qu'il pin.
+
+---
+
+## Iter 160 — Vérifier `main`/PRs mergées AVANT d'implémenter un item de backlog (éviter la redécouverte)
+
+**Contexte** : l'iteration 160 a implémenté proprement (TDD, SSOT, tests verts) le fix
+« composer mention left-boundary » tracé dans le backlog « Suivis » de l'analyse iter 154. La
+PR #1791 a été **fermée comme doublon** : le fix identique (`MENTION_REGEX` dérivée de
+`NAME_BOUNDARY_LEFT` + `MENTION_HANDLE_CHARS`, flag `u`) était déjà mergé sur `main` via
+**#1798** (bug F121). Les iters 155/157/160 de la routine ont toutes redécouvert le même bug.
+
+**Cause racine** : les docs de la routine (`docs/routine/analyses|plans/`) **retardent** sur les
+commits mergés. Au démarrage de l'iter 160, la dernière analyse documentée était iter 154, alors
+que les commits `main` référençaient déjà iter 157/159 — et #1798 avait mergé le fix sans qu'une
+analyse correspondante existe dans `docs/routine/`.
+
+**Règle réutilisable** : avant d'implémenter un item de backlog documenté dans une analyse
+antérieure, NE PAS se fier uniquement à la dernière analyse écrite. Vérifier que le fix n'a pas
+déjà atterri :
+1. `git log --oneline -40 origin/main` + grep du domaine (ex. `mention`, `MENTION_REGEX`).
+2. Lire le code cible ACTUEL et confirmer que le défaut est réellement présent (l'iter 160 a bien
+   confirmé le défaut dans le fichier — mais il aurait fallu aussi vérifier que le MÊME fix n'était
+   pas en cours ailleurs : `git log -p --all -S 'NAME_BOUNDARY_LEFT' -- apps/web/hooks/composer/`).
+3. Chercher les PRs récentes (mergées ET ouvertes) touchant le domaine avant de coder — pas
+   seulement au moment d'ouvrir la sienne.
+Le signal d'alarme : un item de backlog « runner-up » qui traîne depuis plusieurs iters sur un
+domaine activement refactoré (mentions F60/153/155/157) est un candidat probable pour un fix déjà
+livré par une autre session/PR.
