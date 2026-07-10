@@ -23,7 +23,13 @@ import MeeshyUI
 /// (realtime), mais l'APPARTENANCE d'un bouton au rail ne change jamais en
 /// cours de slide — un compteur réconcilié après coup ne fait plus surgir
 /// un bouton au milieu de la lecture.
-struct StoryActionRailPlan: Equatable {
+///
+/// `nonisolated` : rule engine pur sans état partagé (parité
+/// StoryCanvasFraming / BandStateMachine) — le target app compile en
+/// defaultIsolation MainActor, sans ce modificateur le bundle de tests
+/// (nonisolated) ne peut ni appeler `resolve` ni lire les propriétés
+/// (échec CI ios-tests 2026-07-10, exit 65 = échec de COMPILE).
+nonisolated struct StoryActionRailPlan: Equatable {
     let showsReact: Bool
     let showsReply: Bool
     let showsForward: Bool
