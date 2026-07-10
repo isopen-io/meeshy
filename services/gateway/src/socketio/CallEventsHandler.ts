@@ -890,7 +890,7 @@ export class CallEventsHandler {
     if (match && knownCodes.has(match[1])) {
       return { code: match[1], message: match[2] } as CallError;
     }
-    return { code: message, message } as CallError;
+    return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
   }
 
   /**

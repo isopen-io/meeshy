@@ -1388,6 +1388,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       try {
         const socketManager = this.socketIOHandler?.getManager?.();
         socketManager?.getCallEventsHandler?.().prepareForShutdown();
+        socketManager?.getCallService?.()?.destroy();
         logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
       } catch (callShutdownError) {
         logger.warn('⚠️ Could not set call handler shutdown mode', callShutdownError);
