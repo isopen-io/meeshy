@@ -718,35 +718,6 @@ struct CallView: View {
             // Transcript overlay
             transcriptOverlay
 
-#if DEBUG
-            // SPIKE (Task 1) — fixed, always-visible debug affordance. NOT
-            // attached to transcriptOverlay: that panel collapses to a
-            // near-zero hit area when transcriptionService.displayedSegments
-            // is empty (which it always is during this spike — it never
-            // produces segments, only console buffer-count logs), so a
-            // gesture placed there is effectively untappable. Reverted in
-            // Step 6 along with the rest of the spike scaffolding.
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Circle()
-                        .fill(Color.red.opacity(0.85))
-                        .frame(width: 56, height: 56)
-                        .overlay(
-                            Image(systemName: "mic.badge.plus")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.white)
-                        )
-                        .onTapGesture {
-                            callManager.transcriptionService.debugSpikeToggleLocalCapture()
-                        }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 220)
-                }
-            }
-#endif
-
             // §7.2 — draggable, corner-snapping PiP showing the secondary
             // stream. Tap to swap it with the full-area primary (FaceTime).
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
