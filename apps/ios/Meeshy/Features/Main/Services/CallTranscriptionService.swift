@@ -156,8 +156,20 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     func requestPermission() async -> TranscriptionPermission {
         let status = await withCheckedContinuation { continuation in
+            // Same isolation trap as the AVAudioEngine tap block (see
+            // startLocalCapture): requestAuthorization's completion runs on
+            // an Apple-arbitrary background queue, but a closure literal
+            // written inline here is implicitly MainActor-isolated under
+            // this project's SWIFT_DEFAULT_ACTOR_ISOLATION — invoking it
+            // off-MainActor traps (SIGTRAP). Established fix elsewhere in
+            // this codebase for the same ObjC-permission-callback shape
+            // (PHPhotoLibrary.requestAuthorization in RecentMediaStrip.swift,
+            // AVCaptureDevice.requestAccess in CameraView.swift): re-enter
+            // via Task { @MainActor in } rather than resuming inline.
             SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status)
+                Task { @MainActor in
+                    continuation.resume(returning: status)
+                }
             }
         }
         let result = mapAuthorizationStatus(status)

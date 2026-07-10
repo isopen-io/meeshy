@@ -179,17 +179,20 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_controlButtonsRow_wiresTranscriptionToggle_toCallManager() throws {
+    func test_transcriptionToggleButton_wiresToCallManager() throws {
+        // Floats on the trailing edge (user feedback 2026-07-10) rather than
+        // living inside controlButtonsRow, to keep the main horizontal row
+        // uncrowded — see transcriptionToggleButton's own doc comment.
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "private var controlButtonsRow: some View {") else {
-            XCTFail("CallView must define controlButtonsRow")
+        guard let range = view.range(of: "private var transcriptionToggleButton: some View {") else {
+            XCTFail("CallView must define transcriptionToggleButton")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 6000, limitedBy: view.endIndex) ?? view.endIndex
+        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("callManager.toggleTranscription()"),
-            "controlButtonsRow must include a control that calls callManager.toggleTranscription() " +
+            "transcriptionToggleButton must call callManager.toggleTranscription() " +
             "— this is the UI entry point that was missing before this feature was rebuilt."
         )
     }

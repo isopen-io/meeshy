@@ -718,6 +718,26 @@ struct CallView: View {
             // Transcript overlay
             transcriptOverlay
 
+            // Live captions toggle — floating vertical control on the trailing
+            // edge, kept OUT of controlButtonsRow (user feedback 2026-07-10:
+            // the main horizontal row — mute/speaker/camera/video/PiP/end —
+            // must stay uncrowded). Mirrors controlBar's own auto-hide so it
+            // stays in sync with the rest of the chrome on video calls, but
+            // remains reachable on audio calls (shouldAutoHideControls is
+            // always false there, so showControls never flips off).
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    transcriptionToggleButton
+                }
+            }
+            .padding(.trailing, 16)
+            .padding(.bottom, 150)
+            .opacity(showControls ? 1 : 0)
+            .allowsHitTesting(showControls)
+            .animation(.easeInOut(duration: 0.25), value: showControls)
+
             // §7.2 — draggable, corner-snapping PiP showing the secondary
             // stream. Tap to swap it with the full-area primary (FaceTime).
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
@@ -1473,31 +1493,6 @@ struct CallView: View {
             // Mac/iPad (Continuity/USB), sans équivalent sur le cadre.
             cameraControl
 
-            // Live captions — toggle local transcription + translated
-            // captions of the other participant. Manual, per spec decision
-            // (never auto-activates): the speaker controls when their voice
-            // is transcribed and sent to the gateway.
-            callControlButton(
-                icon: transcriptionService.isTranscribing ? "captions.bubble.fill" : "captions.bubble",
-                color: transcriptionService.isTranscribing ? MeeshyColors.indigo400 : .white,
-                bgColor: transcriptionService.isTranscribing ? MeeshyColors.indigo400 : .white,
-                isActive: transcriptionService.isTranscribing,
-                caption: String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main),
-                label: transcriptionService.isTranscribing
-                    ? String(localized: "call.control.transcript.off", defaultValue: "Désactiver les sous-titres", bundle: .main)
-                    : String(localized: "call.control.transcript.on", defaultValue: "Activer les sous-titres", bundle: .main),
-                isToggle: true
-            ) {
-                // Read isTranscribing BEFORE calling toggleTranscription(): the
-                // start path is async (permission request awaited inside a
-                // Task), so isTranscribing is still false right after the call
-                // returns — reading it after would always compute willStart
-                // wrong. Reading it before, at tap time, is always accurate.
-                let willStart = !transcriptionService.isTranscribing
-                showTranscript = willStart
-                callManager.toggleTranscription()
-            }
-
             // §5.4 — always visible so an AUDIO call can be upgraded to video
             // (FaceTime-style), not just toggled off/on once already in video.
             // `video.badge.plus` when off reads as "turn on camera". When the
@@ -1758,6 +1753,34 @@ struct CallView: View {
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
         .callToggleAccessibility(isToggle: isToggle, isActive: isActive)
+    }
+
+    /// Live captions — toggle local transcription + translated captions of
+    /// the other participant. Manual, per spec decision (never auto-
+    /// activates): the speaker controls when their voice is transcribed and
+    /// sent to the gateway. Floats on the trailing edge, not in
+    /// controlButtonsRow — see the call site's comment.
+    private var transcriptionToggleButton: some View {
+        callControlButton(
+            icon: transcriptionService.isTranscribing ? "captions.bubble.fill" : "captions.bubble",
+            color: transcriptionService.isTranscribing ? MeeshyColors.indigo400 : .white,
+            bgColor: transcriptionService.isTranscribing ? MeeshyColors.indigo400 : .white,
+            isActive: transcriptionService.isTranscribing,
+            caption: String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main),
+            label: transcriptionService.isTranscribing
+                ? String(localized: "call.control.transcript.off", defaultValue: "Désactiver les sous-titres", bundle: .main)
+                : String(localized: "call.control.transcript.on", defaultValue: "Activer les sous-titres", bundle: .main),
+            isToggle: true
+        ) {
+            // Read isTranscribing BEFORE calling toggleTranscription(): the
+            // start path is async (permission request awaited inside a
+            // Task), so isTranscribing is still false right after the call
+            // returns — reading it after would always compute willStart
+            // wrong. Reading it before, at tap time, is always accurate.
+            let willStart = !transcriptionService.isTranscribing
+            showTranscript = willStart
+            callManager.toggleTranscription()
+        }
     }
 
     private var effectsToggleButton: some View {
