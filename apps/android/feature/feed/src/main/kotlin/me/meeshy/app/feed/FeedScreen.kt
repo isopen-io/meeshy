@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,6 +63,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
+import me.meeshy.ui.component.bubble.LanguageChip
+import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.component.MeeshyAvatar
@@ -223,22 +227,9 @@ private fun PostCard(
                 }
             }
 
-            if (post.isTranslated) {
+            if (post.languageStrip.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.xs))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Filled.Translate,
-                        contentDescription = null,
-                        tint = MeeshyTheme.tokens.textSecondary,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.feed_translated),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MeeshyTheme.tokens.textSecondary,
-                        modifier = Modifier.padding(start = MeeshySpacing.xs),
-                    )
-                }
+                PostLanguageStripRow(chips = post.languageStrip)
             }
 
             if (post.images.isNotEmpty()) {
@@ -275,6 +266,60 @@ private fun PostCard(
 
             Spacer(Modifier.height(MeeshySpacing.sm))
             PostStatsRow(post = post, onLike = onLike)
+        }
+    }
+}
+
+/**
+ * Discrete Prisme flag strip under a translated post — the post's original language
+ * plus each configured content language that has content, projected by
+ * [me.meeshy.ui.component.bubble.PostLanguageStrip]. A lead-in translate glyph keeps
+ * the row legible as a translation indicator; the active language reads its native
+ * name in its own accent colour, the others show flag-only. Read-only (feed cards
+ * do not switch language inline), mirroring the chat bubble's read-only strip.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PostLanguageStripRow(chips: List<LanguageChip>) {
+    FlowRow(
+        verticalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Translate,
+            contentDescription = stringResource(R.string.feed_translated),
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(14.dp),
+        )
+        chips.forEach { chip ->
+            val info = chip.info
+            val accent = info?.colorHex
+                ?.let(::hexColor)
+                ?.takeIf { it != Color.Unspecified }
+                ?: MeeshyTheme.tokens.textSecondary
+            val flag = info?.flag ?: chip.code.uppercase()
+            val label = info?.name ?: chip.code
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(
+                        if (chip.isActive) accent.copy(alpha = 0.16f) else Color.Transparent,
+                    )
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = label },
+            ) {
+                Text(text = flag, style = MaterialTheme.typography.labelSmall)
+                if (chip.isActive && info != null) {
+                    Text(
+                        text = info.nativeName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accent,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 3.dp),
+                    )
+                }
+            }
         }
     }
 }

@@ -57,6 +57,25 @@ class FeedPostBuilderTest {
     }
 
     @Test
+    fun build_translatedPostCarriesLanguageStripAnchoringOriginalAndPreferred() {
+        val p = post(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
+        val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "en"), mediaBaseUrl = null)
+        assertThat(result.isTranslated).isTrue()
+        assertThat(result.languageStrip.map { it.code }).containsExactly("fr", "en").inOrder()
+        assertThat(result.languageStrip.first { it.code == "fr" }.isOriginal).isTrue()
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isTrue()
+    }
+
+    @Test
+    fun build_untranslatedPostHasEmptyLanguageStrip() {
+        // No preferred-language translation → Prisme shows the original → no strip to explore.
+        val p = post(translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola")))
+        val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "de"), mediaBaseUrl = null)
+        assertThat(result.isTranslated).isFalse()
+        assertThat(result.languageStrip).isEmpty()
+    }
+
+    @Test
     fun build_likeStateComesFromIsLikedByMeNotCount() {
         // A post liked by others (count 3) but not by me must NOT show as liked.
         val p = post(likeCount = 3, isLikedByMe = false)

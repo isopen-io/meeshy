@@ -3,6 +3,24 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-10 (`feed-post-language-strip`): the Gradle *wrapper* distribution download is policy-blocked in
+  the web container — use the pre-installed system Gradle directly.** `./gradlew` (or `meeshy.sh check`) tries to
+  fetch `gradle-8.11.1-bin.zip`; `services.gradle.org` 307-redirects to `github.com/gradle/gradle-distributions/...`
+  which the egress proxy denies with **403** (only a `.part`/`.lck` lands in `~/.gradle/wrapper/dists/`). A newer
+  Gradle is already on the box: `/opt/gradle/bin/gradle` (**8.14.3**, Kotlin 2.0.21) builds this project fine. Run
+  `export ANDROID_HOME=$HOME/android-sdk; /opt/gradle/bin/gradle assembleDebug testDebugUnitTest` instead of the
+  wrapper. (Do **not** edit `gradle-wrapper.properties` — that would be a tracked-file change outside the slice.)
+  First invocation still compiles everything (~4–5 min); subsequent runs are incremental/cached.
+- **2026-07-10 (`feed-post-language-strip`): cross-module `@Immutable`/public-API property → no smart cast.** In
+  `:feature:feed`, `if (chip.isActive && chip.info != null) { … chip.info.nativeName … }` fails to compile
+  (*"Smart cast to 'LanguageInfo' is impossible, because 'info' is a public API property declared in different
+  module"*) — the same code compiles inside `:sdk-ui` (same module as `LanguageChip`). Fix: bind `val info =
+  chip.info` once and branch on the local. `MessageBubble`'s copy only works because it lives in `:sdk-ui`.
+- **2026-07-10 (`feed-post-language-strip`): posts store translations map-keyed, messages list-keyed — adapt,
+  don't fork the strip.** `ApiPost.translations: Map<code, ApiPostTranslationEntry>` vs. the message
+  `List<TranslationLike>`. Rather than duplicate `MessageLanguageStrip`, `PostLanguageStrip` maps the entries into
+  ad-hoc `TranslationLike` rows and delegates — SSOT preserved, and the strip↔`isTranslated` flag stay in lock-step
+  because both bottom out in `LanguageResolver.preferredTranslation`.
 - **2026-07-10 (`chat-live-audio-translation`): a "defined but unconsumed" socket flow can be doubly dead — no
   consumer AND a payload shape that never decodes. Check the wire contract against `packages/shared`, not just
   the consumer.** `MessageSocketManager.audioTranslationReady` was listed as a live `SharedFlow` and even

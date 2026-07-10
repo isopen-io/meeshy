@@ -741,7 +741,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `MessageDetailExplorerTest`, +10 `ChatViewModelTest`). Full `assembleDebug` + all-module
       `testDebugUnitTest` → BUILD SUCCESSFUL. **Follow-up:** audio-transcription banner (voice messages, needs
       attachment-transcription plumbing) and per-post/per-story explorer parity.
-- [ ] Per-post and per-story translation (flag strip, inline secondary, request missing languages)
+- [~] Per-post and per-story translation (flag strip, inline secondary, request missing languages) —
+      **read-only flag strip shipped** (slice `feed-post-language-strip`, 2026-07-10): pure `:sdk-ui`
+      `PostLanguageStrip.build(originalLanguage, translations, preferences, showingOriginal,
+      activeCodeOverride, includeTranslatable) → List<LanguageChip>`, the post sibling of
+      `MessageLanguageStrip`. Posts store translations as a language-keyed `Map<code, entry>` (vs. the
+      message list form), so this adapts the map into `LanguageResolver.TranslationLike` rows and
+      **delegates to `MessageLanguageStrip`** — one strip algorithm, no re-implementation (SSOT). The
+      read-only default surfaces the post's original + each configured content language that actually
+      has content; **empty** when the post is not translated for the viewer (Prisme rule 1: show the
+      original, nothing to explore) — the same predicate that drives `ApiPost.isTranslated`, so the
+      strip and the translated flag never disagree. Wired into `FeedPostBuilder`/`FeedPostPresentation`
+      (`languageStrip` field, pure/testable) and rendered in `FeedScreen` as an accent-coherent chip
+      strip (flag + active native name in the language accent colour) replacing the old binary
+      "Translated" label. +15 tests (13 `PostLanguageStripTest`, +2 `FeedPostBuilderTest`). Full
+      `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL. **Follow-up:** the interactive
+      `includeTranslatable` arm (tap a configured-but-absent language on a post to request it on demand),
+      inline secondary/original toggle, and the per-story timeline strip.
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`
