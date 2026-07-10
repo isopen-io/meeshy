@@ -268,31 +268,31 @@ const makePrisma = () => ({
 
 const createMockFastify = () => {
   const routes: Record<string, Record<string, Function>> = {};
+  const routeOpts: Record<string, Record<string, any>> = {};
   const mockEmit = jest.fn();
   const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
   const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
   const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO, enqueueOfflineMessageMutation: mockEnqueueOfflineMutation });
 
+  const register = (method: string) =>
+    jest.fn((path: string, opts: any, handler: Function) => {
+      (routes[method] = routes[method] || {})[path] = handler;
+      (routeOpts[method] = routeOpts[method] || {})[path] = opts;
+    });
+
   const fastify: any = {
-    get: jest.fn((path: string, _opts: any, handler: Function) => {
-      (routes['GET'] = routes['GET'] || {})[path] = handler;
-    }),
-    post: jest.fn((path: string, _opts: any, handler: Function) => {
-      (routes['POST'] = routes['POST'] || {})[path] = handler;
-    }),
-    put: jest.fn((path: string, _opts: any, handler: Function) => {
-      (routes['PUT'] = routes['PUT'] || {})[path] = handler;
-    }),
-    delete: jest.fn((path: string, _opts: any, handler: Function) => {
-      (routes['DELETE'] = routes['DELETE'] || {})[path] = handler;
-    }),
+    get: register('GET'),
+    post: register('POST'),
+    put: register('PUT'),
+    delete: register('DELETE'),
     socketIOHandler: {
       getManager: mockGetManager,
       broadcastMessage: jest.fn().mockResolvedValue(undefined),
     },
     notificationService: {},
     _routes: routes,
+    _routeOpts: routeOpts,
     _mockTo: mockTo,
     _mockEmit: mockEmit,
     _mockGetManager: mockGetManager,
@@ -589,6 +589,45 @@ describe('GET /conversations/:id/messages', () => {
     const body = reply._body;
     expect(body.success).toBe(true);
     expect(body.data).toEqual([]);
+  });
+
+  it('declares cursorPagination, hasNewer and meta.mentionedUsers in the 200 response schema', () => {
+    // fast-json-stringify strips every field absent from the response
+    // schema. The handler builds cursorPagination/hasNewer/mentionedUsers,
+    // so an undeclared schema silently breaks infinite scroll on clients
+    // (iOS reads cursorPagination.hasMore ?? false → pagination latches
+    // exhausted after the first page).
+    const opts = fastify._routeOpts['GET']['/conversations/:id/messages'];
+    const props = opts.schema.response['200'].properties;
+    expect(props.cursorPagination).toBeDefined();
+    expect(props.cursorPagination.properties.hasMore).toBeDefined();
+    expect(props.cursorPagination.properties.nextCursor).toBeDefined();
+    expect(props.cursorPagination.properties.limit).toBeDefined();
+    expect(props.hasNewer).toBeDefined();
+    expect(props.meta.properties.mentionedUsers).toBeDefined();
+  });
+
+  it('before-mode trims data to limit rows and reports cursor hasMore', async () => {
+    // Cursor mode fetches limit+1 rows to detect hasMore without a COUNT.
+    // The extra row must be trimmed from the returned data too — not only
+    // from the internal array used to build the cursor meta.
+    const msgs = [
+      makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa1' }),
+      makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa2' }),
+      makeMessage({ id: 'aaaaaaaaaaaaaaaaaaaaaaa3' }),
+    ];
+    prisma.message.findFirst.mockResolvedValue(makeMessage({ id: 'cccccccccccccccccccccccc', createdAt: new Date() }));
+    prisma.message.findMany.mockResolvedValue(msgs);
+    mockValidatePagination.mockReturnValue({ offset: 0, limit: 2 });
+    const reply = makeReply();
+    await getMessagesHandler()(
+      makeRequest({ query: { before: 'cccccccccccccccccccccccc', limit: '2' } }),
+      reply
+    );
+    const body = reply._body;
+    expect(body.data).toHaveLength(2);
+    expect(body.cursorPagination.hasMore).toBe(true);
+    expect(body.cursorPagination.nextCursor).toBe('aaaaaaaaaaaaaaaaaaaaaaa2');
   });
 
   it('returns messages with mapped fields for authenticated user', async () => {

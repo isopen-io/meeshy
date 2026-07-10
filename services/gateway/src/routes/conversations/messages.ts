@@ -439,11 +439,34 @@ export function registerMessagesRoutes(
                 hasMore: { type: 'boolean', description: 'Whether more messages are available' }
               }
             },
+            cursorPagination: {
+              type: 'object',
+              description: 'Cursor pagination metadata (always present; authoritative for before/around modes). Must stay declared: fast-json-stringify strips undeclared fields, which silently killed client infinite scroll.',
+              properties: {
+                limit: { type: 'integer', description: 'Page size limit' },
+                hasMore: { type: 'boolean', description: 'Whether older messages are available' },
+                nextCursor: { type: ['string', 'null'], description: 'Message id to pass as `before` for the next page (null when the page is empty)' }
+              }
+            },
+            hasNewer: { type: 'boolean', description: 'Around mode only: whether messages newer than the returned window exist' },
             meta: {
               type: 'object',
               description: 'Response metadata',
               properties: {
-                userLanguage: { type: 'string', description: 'User preferred language for translations' }
+                userLanguage: { type: 'string', description: 'User preferred language for translations' },
+                mentionedUsers: {
+                  type: 'array',
+                  description: 'Users @-mentioned in the returned messages',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      userId: { type: 'string' },
+                      username: { type: 'string' },
+                      displayName: { type: ['string', 'null'] },
+                      avatar: { type: ['string', 'null'] }
+                    }
+                  }
+                }
               }
             }
           }
@@ -1334,7 +1357,11 @@ export function registerMessagesRoutes(
       let cursorHasMore: boolean;
       if (before && messages.length > limit) {
         cursorHasMore = true;
-        messages.splice(limit); // trim to exactly `limit` rows
+        // Trim BOTH arrays: `messages` feeds the cursor meta below, but the
+        // client receives `mappedMessages` (built before this block) — only
+        // trimming `messages` shipped limit+1 rows to the client.
+        messages.splice(limit);
+        mappedMessages.splice(limit);
       } else {
         cursorHasMore = before ? false : messages.length === limit;
       }
