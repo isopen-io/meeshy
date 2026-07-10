@@ -2,7 +2,11 @@ import Speech
 import Combine
 import os
 
-private let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+// nonisolated: os.Logger is a thread-safe value type (Apple docs) with no
+// reason to inherit this file's default MainActor isolation — needed so the
+// AVAudioEngine tap closure (which runs off-MainActor, see
+// debugSpikeToggleLocalCapture below) can log without an isolation error.
+private nonisolated let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
 
 // MARK: - Transcription Segment
 
@@ -580,3 +584,62 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         }
     }
 }
+
+#if DEBUG
+extension CallTranscriptionService {
+    /// Phase-0 spike only — NOT part of the shipped feature. Installs a raw
+    /// AVAudioEngine tap on the mic input, independent of WebRTC's own audio
+    /// pipeline, and logs buffer counts. Validates that a second audio
+    /// consumer can coexist with RTCAudioSession.useManualAudio + CallKit's
+    /// didActivate/didDeactivate lifecycle without degrading call audio.
+    /// Deleted (or absorbed into startLocalCapture) once Task 3 lands.
+    /// See docs/superpowers/plans/2026-07-10-live-call-transcription.md Task 1.
+    func debugSpikeToggleLocalCapture() {
+        if Self.spikeEngine != nil {
+            Self.spikeEngine?.inputNode.removeTap(onBus: 0)
+            Self.spikeEngine?.stop()
+            Self.spikeEngine = nil
+            callsLogger.info("[SPIKE] stopped — received \(Self.spikeBufferCount) buffers")
+            Self.spikeBufferCount = 0
+            return
+        }
+        let engine = AVAudioEngine()
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        // Explicit @Sendable-typed local breaks the implicit MainActor
+        // isolation this project's SWIFT_DEFAULT_ACTOR_ISOLATION infers onto
+        // closure literals written inline inside a @MainActor method.
+        // AVAudioEngine invokes tap blocks off-MainActor (its own real-time
+        // queue) — an inferred-MainActor closure traps at runtime (SIGTRAP,
+        // swift_task_isCurrentExecutorImpl) the first time AVAudioEngine
+        // calls it. Discovered via this exact spike (2026-07-10, crash
+        // Meeshy-2026-07-10-173828.ips) — same class of bug documented
+        // elsewhere in this codebase (Combine .map needing nonisolated).
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+            Self.spikeBufferCount += 1
+            if Self.spikeBufferCount % 50 == 0 {
+                callsLogger.info("[SPIKE] buffers=\(Self.spikeBufferCount) frameLength=\(buffer.frameLength) sampleRate=\(format.sampleRate)")
+            }
+        }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
+        do {
+            engine.prepare()
+            try engine.start()
+            Self.spikeEngine = engine
+            callsLogger.info("[SPIKE] AVAudioEngine tap started — format=\(format)")
+        } catch {
+            callsLogger.error("[SPIKE] AVAudioEngine.start() failed: \(error.localizedDescription)")
+        }
+    }
+
+    // nonisolated(unsafe): mutated from the tap's real-time audio-thread
+    // closure, which cannot hop to MainActor (CallTranscriptionService's
+    // default isolation) without cost. Acceptable ONLY because this is
+    // throwaway spike code reverted in Step 6 — a plain counter race is
+    // harmless for a qualitative "are buffers arriving" check. The real
+    // Task 3 implementation avoids this entirely by never touching
+    // actor-isolated state from the tap closure (see startLocalCapture).
+    private nonisolated(unsafe) static var spikeEngine: AVAudioEngine?
+    private nonisolated(unsafe) static var spikeBufferCount = 0
+}
+#endif

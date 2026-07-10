@@ -60,12 +60,22 @@ extension CallTranscriptionService {
         let engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+        // Explicit @Sendable-typed local breaks the implicit MainActor
+        // isolation this project's SWIFT_DEFAULT_ACTOR_ISOLATION infers onto
+        // closure literals written inline inside a @MainActor method.
+        // AVAudioEngine invokes tap blocks off-MainActor (its own real-time
+        // queue) — an inferred-MainActor closure traps at runtime (SIGTRAP,
+        // swift_task_isCurrentExecutorImpl) the first time AVAudioEngine
+        // calls it. DO NOT pass a bare trailing closure to installTap here —
+        // it crashed on first execution during this exact spike (found
+        // 2026-07-10, crash report Meeshy-2026-07-10-173828.ips).
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
             Self.spikeBufferCount += 1
             if Self.spikeBufferCount % 50 == 0 {
                 callsLogger.info("[SPIKE] buffers=\(Self.spikeBufferCount) frameLength=\(buffer.frameLength) sampleRate=\(format.sampleRate)")
             }
         }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         do {
             engine.prepare()
             try engine.start()
@@ -91,21 +101,42 @@ extension CallTranscriptionService {
 
 `callsLogger` is the file-private `Logger` already declared at the top of `CallTranscriptionService.swift` — no import changes needed (`AVFoundation` is already imported for `AVAudioPCMBuffer`).
 
-- [ ] **Step 2: Add a temporary trigger gesture in `CallView`**
+- [ ] **Step 2: Add a temporary, always-visible trigger button in `CallView`**
 
-In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, locate the `transcriptOverlay` computed property (starts at line 1306, `private var transcriptOverlay: some View {`). Add a debug-only long-press gesture on the returned `VStack`, immediately before the existing `.padding(12)` modifier (currently line 1328):
+Do NOT attach the gesture to `transcriptOverlay` — that panel's `VStack` is built by `ForEach(transcriptionService.displayedSegments)`, which is always empty during this spike (it never produces segments, only console logs), so the panel collapses to a near-zero hit area and a gesture placed on it is effectively untappable (confirmed during execution: "aucun bouton ne s'affiche" — the panel really was invisible, not a device issue). Add a fixed, unconditionally-visible debug button instead. In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, inside `body`'s outer `ZStack`, locate `transcriptOverlay` (currently around line 718-719) and add right after it:
 
 ```swift
-        .padding(12)
+            // Transcript overlay
+            transcriptOverlay
+
 #if DEBUG
-        .onLongPressGesture(minimumDuration: 1.5) {
-            callManager.transcriptionService.debugSpikeToggleLocalCapture()
-        }
+            // SPIKE (Task 1) — fixed, always-visible debug affordance.
+            // Reverted in Step 6 along with the rest of the spike scaffolding.
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Circle()
+                        .fill(Color.red.opacity(0.85))
+                        .frame(width: 56, height: 56)
+                        .overlay(
+                            Image(systemName: "mic.badge.plus")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.white)
+                        )
+                        .onTapGesture {
+                            callManager.transcriptionService.debugSpikeToggleLocalCapture()
+                        }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 220)
+                }
+            }
 #endif
-        // iOS 26 Liquid Glass — floating live-transcript panel over the video
+
+            // §7.2 — draggable, corner-snapping PiP showing the secondary
 ```
 
-Since `showTranscript` already defaults to `false` and the overlay only renders visibly when `showTranscript == true`, temporarily flip the default to `true` for the spike so the panel (and its long-press target) is reachable without the real toggle button (which doesn't exist yet — that's Task 5). In the same file, locate `@State private var showTranscript = false` (line 38) and change it to `@State private var showTranscript = true` for the duration of this spike only. Revert this line back to `false` in Step 6 below.
+No `showTranscript` default change needed — this button doesn't depend on it. Use a plain tap, not a long-press: automated long-press gestures (`idb`/simulator HID synthesis) are unreliable — SwiftUI's `.onLongPressGesture` cancels on the slightest synthetic-touch jitter during the hold, which reads as "nothing happens" and is easy to misdiagnose as an app bug (confirmed during execution — repeated long-press attempts produced no `[SPIKE]` log and no crash, i.e. silently missed, until switched to `.onTapGesture`). A plain tap is just as good for this throwaway diagnostic.
 
 - [ ] **Step 3: Build and install on a real device**
 
@@ -121,12 +152,12 @@ A real device is required (not the simulator) — CallKit's `provider:didActivat
 Perform an actual 1:1 audio call between two real devices (or one real device + one other participant), and on the device under test:
 
 1. Let the call connect and reach the `connected` state (CallKit `didActivate` has fired).
-2. Long-press anywhere in the (now-visible) transcript overlay area for 1.5s to start the spike tap.
+2. Tap the fixed red debug button (bottom-right) to start the spike tap.
 3. Speak continuously for at least 30 seconds.
 4. On the OTHER participant's device, listen: is the outgoing audio they hear from you unchanged (no dropouts, no volume change, no artifacts)?
 5. On the device under test, listen to the incoming remote audio: unchanged?
 6. Open Console.app (connected to the device) or `xcrun devicectl device console` and confirm `[SPIKE]` log lines appear at a steady rate (roughly one every ~1-2s at 1024-sample buffers / typical 48kHz-or-44.1kHz mic rate) with a non-zero `frameLength`.
-7. Long-press again to stop the tap. Confirm the call audio is unaffected before and after stopping.
+7. Tap again to stop the tap. Confirm the call audio is unaffected before and after stopping.
 8. Trigger an audio interruption (e.g. a Siri request, or another app briefly grabbing the mic) while the tap is running — confirm the call does not drop and does not crash.
 9. Toggle speaker/earpiece route while the tap is running — confirm no crash, and re-run step 4-5.
 
@@ -483,7 +514,14 @@ import Combine
 import MeeshySDK
 import os
 
-private let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+// nonisolated: os.Logger is a thread-safe value type (Apple docs) with no
+// reason to inherit this file's default MainActor isolation — needed so the
+// AVAudioEngine tap closure (which runs off-MainActor, see
+// startLocalCapture/reinstallTap below) can log without an isolation error.
+// Discovered via the Task 1 spike (2026-07-10): a bare `private let` here
+// made the tap closure's log call fail to compile once the closure was
+// correctly typed `@Sendable` (see below) — same fix applied there.
+private nonisolated let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
 
 // MARK: - Transcription Segment
 
@@ -718,11 +756,16 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// lui-même). Validé par le spike Phase 0 — voir Task 1 de
     /// docs/superpowers/plans/2026-07-10-live-call-transcription.md.
     ///
-    /// Le tap capture directement une référence non-isolée à `request`
-    /// (SFSpeechAudioBufferRecognitionRequest n'est pas @MainActor) — sa
-    /// closure tourne sur le thread audio temps-réel d'AVAudioEngine, jamais
-    /// sur MainActor, donc aucun hop d'acteur n'est nécessaire ni souhaitable
-    /// sur ce chemin chaud.
+    /// The tap block MUST be an explicit `@Sendable`-typed local, not a bare
+    /// trailing closure — under this project's
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor`, a closure literal written
+    /// inline inside this `@MainActor` method is implicitly inferred as
+    /// MainActor-isolated regardless of what it captures. AVAudioEngine
+    /// invokes tap blocks off-MainActor (its own real-time queue); an
+    /// inferred-MainActor closure traps at runtime (SIGTRAP,
+    /// `swift_task_isCurrentExecutorImpl`) the first time it's called.
+    /// Discovered via the Task 1 spike (2026-07-10, crash report
+    /// `Meeshy-2026-07-10-173828.ips`) — do not revert this pattern.
     private func startLocalCapture() throws {
         let newRequest = SFSpeechAudioBufferRecognitionRequest()
         newRequest.shouldReportPartialResults = true
@@ -732,9 +775,10 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [request = newRequest] buffer, _ in
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { [request = newRequest] buffer, _ in
             request.append(buffer)
         }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         audioEngine.prepare()
         try audioEngine.start()
     }
@@ -745,12 +789,15 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         audioEngine.stop()
     }
 
+    /// See `startLocalCapture`'s doc comment — same `@Sendable`-typed-local
+    /// requirement applies here.
     private func reinstallTap(for newRequest: SFSpeechAudioBufferRecognitionRequest) {
         audioEngine.inputNode.removeTap(onBus: 0)
         let format = audioEngine.inputNode.outputFormat(forBus: 0)
-        audioEngine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [request = newRequest] buffer, _ in
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { [request = newRequest] buffer, _ in
             request.append(buffer)
         }
+        audioEngine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
     }
 
     // MARK: - Recognition
