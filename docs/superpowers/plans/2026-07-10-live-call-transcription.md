@@ -26,6 +26,19 @@
 
 ### Task 1: Phase 0 — Local mic tap spike (device-gated go/no-go)
 
+**Spike result (2026-07-10, iPhone "Services CEO i16pm" — iPhone 16 Pro Max, plus iPhone 16 Pro Simulator):** PASS —
+no audible degradation on either end of a real 1:1 call across two physical devices (confirmed "nickel" both
+directions by the user), zero crashes on device or simulator after fixing a SIGTRAP caused by implicit
+MainActor isolation on the AVAudioEngine tap closure (root-caused and fixed with an explicit `@Sendable`-typed
+local + `nonisolated` logger — see `CallTranscriptionService.swift` history). Buffer-level confirmation (`[SPIKE]`
+log lines showing non-zero `frameLength`) was not captured — remote sysdiagnose collection failed (device
+needs to be unlocked to confirm on-device, not scriptable via `devicectl`) — and the user explicitly accepted
+PASS without it, given the `AVAudioEngine.start()` success log fires unconditionally before any buffer-delivery
+failure and two independent live-call tests already confirm zero audio-path impact. Interruption/route-change
+behavior (Step 4.8-4.9) was not explicitly exercised — deferred to the Task 7 final QA pass, not re-blocking here.
+
+**Only continue to Task 2 onward given this PASS.**
+
 **Files:**
 - Modify: `apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.swift` (temporary `#if DEBUG` addition, absorbed/removed by Task 3)
 - Modify: `apps/ios/Meeshy/Features/Main/Views/CallView.swift:1306-1348` (temporary long-press gesture on the existing transcript overlay area, removed by Task 5)
@@ -35,7 +48,7 @@
 
 This task has no automated test — it is a hardware experiment. Follow the steps exactly and record the outcome.
 
-- [ ] **Step 1: Add the debug-only tap toggle to `CallTranscriptionService`**
+- [x] **Step 1: Add the debug-only tap toggle to `CallTranscriptionService`**
 
 Open `apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.swift` and append at the end of the file (after the closing `}` of the `CallTranscriptionService` class):
 
@@ -101,7 +114,7 @@ extension CallTranscriptionService {
 
 `callsLogger` is the file-private `Logger` already declared at the top of `CallTranscriptionService.swift` — no import changes needed (`AVFoundation` is already imported for `AVAudioPCMBuffer`).
 
-- [ ] **Step 2: Add a temporary, always-visible trigger button in `CallView`**
+- [x] **Step 2: Add a temporary, always-visible trigger button in `CallView`**
 
 Do NOT attach the gesture to `transcriptOverlay` — that panel's `VStack` is built by `ForEach(transcriptionService.displayedSegments)`, which is always empty during this spike (it never produces segments, only console logs), so the panel collapses to a near-zero hit area and a gesture placed on it is effectively untappable (confirmed during execution: "aucun bouton ne s'affiche" — the panel really was invisible, not a device issue). Add a fixed, unconditionally-visible debug button instead. In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, inside `body`'s outer `ZStack`, locate `transcriptOverlay` (currently around line 718-719) and add right after it:
 
@@ -138,7 +151,7 @@ Do NOT attach the gesture to `transcriptOverlay` — that panel's `VStack` is bu
 
 No `showTranscript` default change needed — this button doesn't depend on it. Use a plain tap, not a long-press: automated long-press gestures (`idb`/simulator HID synthesis) are unreliable — SwiftUI's `.onLongPressGesture` cancels on the slightest synthetic-touch jitter during the hold, which reads as "nothing happens" and is easy to misdiagnose as an app bug (confirmed during execution — repeated long-press attempts produced no `[SPIKE]` log and no crash, i.e. silently missed, until switched to `.onTapGesture`). A plain tap is just as good for this throwaway diagnostic.
 
-- [ ] **Step 3: Build and install on a real device**
+- [x] **Step 3: Build and install on a real device**
 
 ```bash
 ./apps/ios/meeshy.sh build
@@ -147,7 +160,7 @@ No `showTranscript` default change needed — this button doesn't depend on it. 
 
 A real device is required (not the simulator) — CallKit's `provider:didActivate:audioSession` timing and the shared `AVAudioSession` have no reliable simulator parity, and this is exactly the interaction under test.
 
-- [ ] **Step 4: Run the manual verification protocol**
+- [x] **Step 4: Run the manual verification protocol**
 
 Perform an actual 1:1 audio call between two real devices (or one real device + one other participant), and on the device under test:
 
@@ -161,7 +174,7 @@ Perform an actual 1:1 audio call between two real devices (or one real device + 
 8. Trigger an audio interruption (e.g. a Siri request, or another app briefly grabbing the mic) while the tap is running — confirm the call does not drop and does not crash.
 9. Toggle speaker/earpiece route while the tap is running — confirm no crash, and re-run step 4-5.
 
-- [ ] **Step 5: Record the go/no-go decision**
+- [x] **Step 5: Record the go/no-go decision**
 
 Edit this plan file (`docs/superpowers/plans/2026-07-10-live-call-transcription.md`) and insert directly below the `### Task 1` heading a line:
 
@@ -177,7 +190,7 @@ or, if any check in Step 4 fails:
 
 **Only continue to Task 2 if the result is PASS.**
 
-- [ ] **Step 6: Revert the temporary spike scaffolding**
+- [x] **Step 6: Revert the temporary spike scaffolding**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -187,7 +200,7 @@ git checkout -- apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.
 
 This discards the `#if DEBUG` scaffolding and the `showTranscript` default flip — Task 3 and Task 5 rebuild the real (non-debug, correctly gated) versions from a clean base. Do not commit the spike scaffolding.
 
-- [ ] **Step 7: Commit the plan file's recorded decision only**
+- [x] **Step 7: Commit the plan file's recorded decision only**
 
 ```bash
 git add docs/superpowers/plans/2026-07-10-live-call-transcription.md
