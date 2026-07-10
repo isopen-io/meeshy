@@ -20,6 +20,7 @@ object LanguageData {
         LanguageInfo("it", "Italian", "Italiano", "🇮🇹", "22C55E"),
         LanguageInfo("pt", "Portuguese", "Portugues", "🇧🇷", "16A34A"),
         LanguageInfo("ro", "Romanian", "Romana", "🇷🇴", "2563EB"),
+        LanguageInfo("ca", "Catalan", "Catala", "🏴", "EAB308"),
         // Germanic
         LanguageInfo("en", "English", "English", "🇬🇧", "6366F1"),
         LanguageInfo("de", "German", "Deutsch", "🇩🇪", "F59E0B"),
@@ -109,13 +110,49 @@ object LanguageData {
         LanguageInfo("mg", "Malagasy", "Malagasy", "🇲🇬", "16A34A"),
     )
 
-    /** UI-only interface languages. */
-    val interfaceLanguages: List<LanguageInfo> = listOf(
-        LanguageInfo("fr", "French", "Francais", "🇫🇷", "3B82F6"),
-        LanguageInfo("en", "English", "English", "🇬🇧", "6366F1"),
-        LanguageInfo("es", "Spanish", "Espanol", "🇪🇸", "EF4444"),
-        LanguageInfo("ar", "Arabic", "al-arabiyyah", "🇸🇦", "15803D"),
+    /**
+     * The codes shipped as interface (UI-chrome) languages, in display order. Derived
+     * view over [allLanguages] so every language's metadata lives in exactly one place.
+     */
+    val interfaceLanguageCodes: List<String> = listOf("fr", "en", "es", "ar")
+
+    /** UI-only interface languages, derived from [allLanguages] (no hand-copied drift). */
+    val interfaceLanguages: List<LanguageInfo> =
+        interfaceLanguageCodes.mapNotNull { code -> allLanguages.firstOrNull { it.code == code } }
+
+    /**
+     * The most frequently picked content languages, in the order they should surface at
+     * the top of long pickers (onboarding / regional-language picker).
+     */
+    val commonLanguageCodes: List<String> = listOf(
+        "fr", "en", "es", "de", "it", "pt", "ar", "zh", "ja", "ko",
+        "ru", "tr", "nl", "pl", "sv", "hi", "th", "vi", "uk", "ro",
     )
 
-    fun info(code: String): LanguageInfo? = allLanguages.firstOrNull { it.code == code }
+    /**
+     * [allLanguages] reordered so [commonLanguageCodes] lead in their declared order and
+     * every other language follows in canonical order. A permutation — single base,
+     * single ordering, nothing dropped or duplicated.
+     */
+    val allLanguagesCommonFirst: List<LanguageInfo> = run {
+        val commonSet = commonLanguageCodes.toSet()
+        val common = commonLanguageCodes.mapNotNull { code -> allLanguages.firstOrNull { it.code == code } }
+        val rest = allLanguages.filterNot { it.code in commonSet }
+        common + rest
+    }
+
+    /** Canonical-code aliases so legacy/BCP-47 spellings resolve (e.g. "fil" → "tl"). */
+    private val aliases: Map<String, String> = mapOf("fil" to "tl")
+
+    /**
+     * Metadata for [code], or `null` when it is blank/absent or matches no known language.
+     * Trimmed and case-insensitive; legacy aliases (e.g. "fil" → "tl") are resolved so
+     * callers never need a local `lowercase()` / re-implemented matcher.
+     */
+    fun info(code: String?): LanguageInfo? {
+        val cleaned = code?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
+        allLanguages.firstOrNull { it.code == cleaned }?.let { return it }
+        val canonical = aliases[cleaned] ?: return null
+        return allLanguages.firstOrNull { it.code == canonical }
+    }
 }

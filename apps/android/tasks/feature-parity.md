@@ -731,7 +731,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       translation (`audio:translation-ready` → cloned-voice playback) remains pending (needs BubbleAudio UI).
 - [ ] Ad-hoc blocking text translation
 - [ ] Source-language stamping from in-app prefs (NEVER device locale)
-- [ ] Per-language flag / native name / colour metadata (~40 languages)
+- [x] Per-language flag / native name / colour metadata (~80 languages) — **done**
+      (slice `translation-language-catalog`, 2026-07-10): `LanguageData` (`:core:model`) is now the
+      full iOS-parity SSOT. Added the missing **Catalan** (`ca`) entry, derived `interfaceLanguages`
+      from `interfaceLanguageCodes` over the base table (no hand-copied flag/colour drift), added the
+      `commonLanguageCodes` + `allLanguagesCommonFirst` common-first ordering (a permutation — nothing
+      dropped/duplicated), and made `info(code)` **trim + case-insensitive + alias-aware** (`fil` → `tl`)
+      returning `null` on blank/unknown. Converged the consumers off their local workarounds:
+      `ProfileDetailRows` drops its `info(code.lowercase())` hack, `RegionalLanguageSelection` sources
+      options from `allLanguagesCommonFirst` and resolves the selected label via the robust `info` (its
+      re-implemented `equiv` label lookup removed), and the `ProfileScreen` content-language picker leads
+      with the common set. +14 pure `LanguageDataTest` cases (uniqueness/lowercase, non-blank metadata,
+      Catalan present, exact/case-insensitive/trimmed/alias/unknown/blank lookup, derived-interface-no-drift,
+      common-first permutation + leading order + membership) and +2 `RegionalLanguageSelectionTest`
+      (common-first order, alias label). RED verified by stubbing (identity ordering + empty aliases →
+      the two behavioural cases fail; restore → green). Diff = `apps/android` only.
 
 ## E. Stories
 - [~] Story tray carousel : carrousel d'anneaux + bouton « ma story » (badge +) +

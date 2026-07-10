@@ -3,6 +3,19 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-10 (`translation-language-catalog`): when several consumers each patch a table's weak lookup locally,
+  the slice is "make the table's own lookup robust and delete the patches" — not "add a new helper".** `LanguageData.info`
+  was exact/case-sensitive/alias-blind, so `ProfileDetailRows` called `info(code.lowercase())` and
+  `RegionalLanguageSelection` re-implemented case-insensitive matching (`equiv`) + its own `nativeName` lookup. Grep the
+  SSOT's public symbols across consumers *before* extending it — the highest-value, lowest-risk change is usually to
+  fold those workarounds back into the SSOT (here: `info` gained trim + lowercase + `fil→tl` alias, returns `null` on
+  blank/unknown), which converges three copies of the same matching rule onto one and leaves every caller simpler.
+- **2026-07-10 (`translation-language-catalog`): a "derived view" only earns its place if a real caller consumes it —
+  otherwise it is orphan code the routine forbids.** Added `allLanguagesCommonFirst` *and simultaneously* pointed
+  `RegionalLanguageSelection` + the `ProfileScreen` picker at it; derived `interfaceLanguages` because `AppLanguage`
+  already consumes it. Test a common-first ordering as a **permutation** (`containsExactlyElementsIn` the base +
+  `containsNoDuplicates`) plus a leading-slice equality — that catches both "dropped a language" and "reordered wrong"
+  without hard-coding the full 80-entry order.
 - **2026-07-10 (`chat-live-transcription-merge`): when the read-side renderer already resolves a field, a "live X"
   feature is *pure cache-merge only* — no UI touch at all.** `BubbleContentBuilder.resolveTranscription` already
   reads `attachment.transcription` under the Prisme, so wiring `transcription:ready` was just a pure `:core:model`

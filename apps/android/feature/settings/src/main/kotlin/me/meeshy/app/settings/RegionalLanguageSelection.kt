@@ -23,8 +23,8 @@ data class RegionalLanguagePresentation(
  *
  * The regional language is a Prisme *content* preference (resolved via
  * [me.meeshy.sdk.lang.LanguageResolver]) — distinct from the interface (UI-chrome)
- * language — so its options are the full content-language set ([LanguageData.allLanguages]),
- * not the four interface languages.
+ * language — so its options are the full content-language set, common languages first
+ * ([LanguageData.allLanguagesCommonFirst]), not the four interface languages.
  *
  * Coherence rules baked in here (surpassing iOS, whose picker offers the primary too):
  *  - The primary (`systemCode`) language is hidden — a user can never pick their primary
@@ -46,14 +46,12 @@ object RegionalLanguageSelection {
         val selected = regionalCode.cleaned()
         val primary = systemCode.cleaned()
         val needle = query.trim()
-        val options = LanguageData.allLanguages
+        val options = LanguageData.allLanguagesCommonFirst
             .filter { it.code.notEquiv(primary) || it.code.equiv(selected) }
             .filter { needle.isEmpty() || it.matches(needle) }
             .map { it.toOption(selected) }
         return RegionalLanguagePresentation(
-            selectedLabel = selected?.let { code ->
-                LanguageData.allLanguages.firstOrNull { it.code.equiv(code) }?.nativeName
-            },
+            selectedLabel = LanguageData.info(selected)?.nativeName,
             options = options,
         )
     }
