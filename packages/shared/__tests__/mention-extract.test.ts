@@ -1,5 +1,5 @@
 // packages/shared/__tests__/mention-extract.test.ts
-import { extractMentions, mentionsToLinks, isValidMentionUsername } from '../types/mention';
+import { extractMentions, mentionsToLinks, isValidMentionUsername, isValidMentionQuery } from '../types/mention';
 
 describe('extractMentions (types/mention)', () => {
   it('extrait un username classique', () => {
@@ -98,5 +98,35 @@ describe('isValidMentionUsername', () => {
 
   it('rejette un point', () => {
     expect(isValidMentionUsername('jane.smith')).toBe(false);
+  });
+});
+
+describe('isValidMentionQuery', () => {
+  it('accepte une query vide (autocomplete dès la frappe de `@`)', () => {
+    expect(isValidMentionQuery('')).toBe(true);
+  });
+
+  it('accepte lettres/chiffres/underscore', () => {
+    expect(isValidMentionQuery('user_42')).toBe(true);
+  });
+
+  it('accepte une query partielle avec tiret (username à tiret en cours de frappe)', () => {
+    // Régression : `@marie-cl…` doit garder l'autocomplete ouvert. Le charset SSOT
+    // MENTION_HANDLE_CHARS inclut le tiret — parité avec le composer (useMentions) et
+    // avec isValidMentionUsername.
+    expect(isValidMentionQuery('marie-cl')).toBe(true);
+    expect(isValidMentionQuery('marie-claire')).toBe(true);
+  });
+
+  it('rejette un espace (mention terminée)', () => {
+    expect(isValidMentionQuery('marie claire')).toBe(false);
+  });
+
+  it('rejette un point (caractère hors charset username)', () => {
+    expect(isValidMentionQuery('jane.smith')).toBe(false);
+  });
+
+  it('rejette au-delà de 30 caractères', () => {
+    expect(isValidMentionQuery('a'.repeat(31))).toBe(false);
   });
 });
