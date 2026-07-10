@@ -24,11 +24,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +75,8 @@ public fun MessageBubble(
     onReactionClick: ((String) -> Unit)? = null,
     onReactionLongPress: (() -> Unit)? = null,
     onImageClick: ((Int) -> Unit)? = null,
+    onLocationClick: ((BubbleLocation) -> Unit)? = null,
+    onAudioClick: ((BubbleAudio) -> Unit)? = null,
     onReplyPreviewClick: (() -> Unit)? = null,
     mentionDisplayNames: Map<String, String>? = null,
     highlightTerm: String? = null,
@@ -152,6 +161,14 @@ public fun MessageBubble(
                 )
             }
 
+            if (content.storyReply != null) {
+                StoryReplyPreview(
+                    story = content.storyReply,
+                    accentColor = onColor,
+                    modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                )
+            }
+
             if (!content.isDeleted && content.images.isNotEmpty()) {
                 BubbleImageGrid(
                     images = content.images,
@@ -170,7 +187,34 @@ public fun MessageBubble(
                 }
             }
 
-            val hasAttachments = content.images.isNotEmpty() || content.files.isNotEmpty()
+            if (!content.isDeleted && content.locations.isNotEmpty()) {
+                content.locations.forEach { location ->
+                    LocationPreview(
+                        location = location,
+                        onColor = onColor,
+                        onClick = onLocationClick?.takeIf { location.hasCoordinates }
+                            ?.let { { it(location) } },
+                        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                    )
+                }
+            }
+
+            if (!content.isDeleted && content.audios.isNotEmpty()) {
+                content.audios.forEach { audio ->
+                    AudioBubble(
+                        audio = audio,
+                        onColor = onColor,
+                        onClick = onAudioClick?.takeIf { audio.isPlayable }
+                            ?.let { { it(audio) } },
+                        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                    )
+                }
+            }
+
+            val hasAttachments = content.images.isNotEmpty() ||
+                content.files.isNotEmpty() ||
+                content.locations.isNotEmpty() ||
+                content.audios.isNotEmpty()
             if (content.isDeleted) {
                 Text(
                     text = stringResource(R.string.bubble_message_deleted),
@@ -391,6 +435,124 @@ private fun BubbleFileRow(
     }
 }
 
+/**
+ * Compact preview of a shared-location attachment — Android render of the iOS
+ * `LocationMessageView` / "Position partagée" placeholder. Shows a pin, the place
+ * name (or a generic label), and the coordinates when present; tapping hands the
+ * location's `geo:` URI to the host to open in an external maps app.
+ */
+@Composable
+private fun LocationPreview(
+    location: BubbleLocation,
+    onColor: Color,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val openLabel = stringResource(R.string.bubble_location_open)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(onColor.copy(alpha = 0.1f))
+            .let { base ->
+                if (onClick == null) base
+                else base.clickable(onClick = onClick).semantics {
+                    role = Role.Button
+                    contentDescription = openLabel
+                }
+            }
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.LocationOn,
+            contentDescription = null,
+            tint = onColor.copy(alpha = 0.8f),
+            modifier = Modifier.size(20.dp),
+        )
+        Column {
+            Text(
+                text = location.placeName ?: stringResource(R.string.bubble_location_shared),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = onColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (location.hasCoordinates) {
+                Text(
+                    text = "${location.latitude}, ${location.longitude}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = onColor.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Compact audio-message player row — Android render of the iOS `AudioPlayerView`
+ * message-bubble context. Shows a play affordance, the `m:ss` duration (or the
+ * download size when the clip isn't yet available), and the Prisme-resolved
+ * transcription line under it. Tapping a playable clip hands its URL to the host.
+ */
+@Composable
+private fun AudioBubble(
+    audio: BubbleAudio,
+    onColor: Color,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val playLabel = stringResource(R.string.bubble_audio_play)
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(onColor.copy(alpha = 0.1f))
+            .let { base ->
+                if (onClick == null) base
+                else base.clickable(onClick = onClick).semantics {
+                    role = Role.Button
+                    contentDescription = playLabel
+                }
+            }
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            Icon(
+                imageVector = if (audio.isPlayable) Icons.Filled.PlayArrow else Icons.Filled.Download,
+                contentDescription = null,
+                tint = onColor.copy(alpha = 0.9f),
+                modifier = Modifier.size(24.dp),
+            )
+            val meta = audio.formattedDuration
+                ?: audio.sizeBytes?.takeIf { it > 0 }?.let { formatFileSize(it) }
+            if (meta != null) {
+                Text(
+                    text = meta,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onColor,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+        if (audio.hasTranscription) {
+            Text(
+                text = audio.transcriptionText.orEmpty(),
+                style = MaterialTheme.typography.labelSmall,
+                color = onColor.copy(alpha = 0.75f),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = MeeshySpacing.xs),
+            )
+        }
+    }
+}
+
 @Composable
 @ReadOnlyComposable
 internal fun formatFileSize(bytes: Int): String = when {
@@ -476,6 +638,152 @@ private fun ReplyPreview(
                 )
             }
         }
+    }
+}
+
+/**
+ * Quoted preview of the story/mood a message replies to — Android render of the
+ * iOS `BubbleStoryReplyPreview` / `BubbleMoodReplyPreview`. A mood shows its
+ * emoji + preview text; a story shows a camera glyph, the "Story" label, its
+ * optional thumbnail, and its reaction/comment/share metrics.
+ */
+@Composable
+private fun StoryReplyPreview(
+    story: BubbleStoryReply,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(accentColor.copy(alpha = 0.12f))
+            .padding(vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(2.dp)
+                .fillMaxHeight()
+                .background(accentColor),
+        )
+        if (!story.isMood && story.thumbnailUrl != null) {
+            AsyncImage(
+                model = story.thumbnailUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .padding(start = MeeshySpacing.xs)
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(accentColor.copy(alpha = 0.15f)),
+            )
+        }
+        Column(
+            modifier = Modifier.padding(start = MeeshySpacing.xs, end = MeeshySpacing.sm),
+        ) {
+            if (story.isMood) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = story.moodEmoji.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (story.previewText.isNotBlank()) {
+                        Text(
+                            text = story.previewText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = accentColor.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = MeeshySpacing.xs),
+                        )
+                    }
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.PhotoCamera,
+                        contentDescription = null,
+                        tint = accentColor.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .padding(end = 2.dp)
+                            .size(14.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.bubble_reply_story),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accentColor.copy(alpha = 0.8f),
+                    )
+                }
+                if (story.hasMetrics) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                    ) {
+                        if (story.reactionCount > 0) {
+                            StoryMetric(
+                                icon = Icons.Filled.Favorite,
+                                value = story.reactionCount,
+                                label = stringResource(
+                                    R.string.bubble_story_reactions,
+                                    story.reactionCount,
+                                ),
+                                accentColor = accentColor,
+                            )
+                        }
+                        if (story.commentCount > 0) {
+                            StoryMetric(
+                                icon = Icons.Filled.ChatBubble,
+                                value = story.commentCount,
+                                label = stringResource(
+                                    R.string.bubble_story_comments,
+                                    story.commentCount,
+                                ),
+                                accentColor = accentColor,
+                            )
+                        }
+                        if (story.shareCount > 0) {
+                            StoryMetric(
+                                icon = Icons.Filled.Share,
+                                value = story.shareCount,
+                                label = stringResource(
+                                    R.string.bubble_story_shares,
+                                    story.shareCount,
+                                ),
+                                accentColor = accentColor,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoryMetric(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: Int,
+    label: String,
+    accentColor: Color,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.semantics { contentDescription = label },
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accentColor.copy(alpha = 0.7f),
+            modifier = Modifier
+                .padding(end = 2.dp)
+                .size(11.dp),
+        )
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = accentColor.copy(alpha = 0.7f),
+        )
     }
 }
 

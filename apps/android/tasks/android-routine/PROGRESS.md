@@ -2,7 +2,7 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
 > On 2026-07-09 the **reply-thread overlay** landed (slice `chat-reply-thread-overlay`, Chat parity §C —
 > feature-parity.md "Reply-count pills + **reply thread overlay**", now fully checked). The pills shipped
@@ -789,7 +789,73 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `conversations-purge-on-removed`** — real-time conversation removal + star
+**Just shipped (2026-07-09): `chat-bubble-audio`** — audio (voice-message) bubble attachment (§C line ~533,
+`carousel / audio / location / contact` list — **audio now done**; carousel + contact remain). Port of iOS
+`AudioPlayerView` message-bubble context, surpassing it on the Prisme Linguistique. An `audio/…`-mime
+attachment becomes a pure `BubbleAudio` (`:sdk-ui`) instead of being mis-bucketed as a generic file:
+`url` (resolved via `mediaBaseUrl`, null until downloadable → download affordance), `durationSeconds`
+(explicit `duration` → fallback `transcription.durationMs/1000`), `sizeBytes`, and a **Prisme-resolved
+transcription** (`transcriptionText`/`transcriptionLanguage`/`isTranscriptionTranslated`). The pure
+`BubbleContentBuilder.resolveTranscription` applies Prisme rule 1: for each preferred language in order,
+the original transcription wins when already in that language, else a non-blank `translations[lang]
+.transcription` (case-insensitive key match); with no preferred match it falls back to the **original**
+transcription (never an arbitrary one), and null when no non-blank transcription exists — so the viewer
+sees the transcription in their language by default (iOS defaults to `orig` + a manual selector).
+`BubbleAudio.formattedDuration` renders `m:ss` (iOS `%d:%02d`; null on unknown/negative). Rendered by the
+exempt `AudioBubble` composable (play/download glyph + duration-or-size + transcription line, accent-coherent
+`onColor`); tapping a playable clip hands its URL to the host (`ChatScreen` → `LocalUriHandler`, mirrors the
+location wiring). Strings `bubble_audio_play` in en/fr/es/pt. **+25 tests** (RED-verified — the audio
+projection returned an empty `audios` list before the builder change): `BubbleAudioTest` 12
+(duration 0/single-digit/over-a-minute/>59-min/unknown/negative; playable url/null/blank; transcription
+present/blank/null), `BubbleContentBuilderTest` +13 (audio-not-file bucketing; duration fallback;
+already-preferred→untranslated; translated-wins; case-insensitive key; no-match→original; blank-translation
+skipped; no-transcription→null; blank-original→null; transcribedText-preferred; deleted-hides; emoji-only
+disabled; no-file-url→null url). Reviewer: PASS. See run log. **Lesson:** a `` `audio/*` `` in a KDoc opens a
+nested block comment (`/*`) that swallows the rest of the file → "Unclosed comment" reported only in
+*referencing* files, not the broken one. Avoid `/*`/`*/` sequences inside KDoc backticks.
+**Recommended next (highest value):**
+- **Message bubble carousel / contact attachments** (feature-parity §C line ~533, now "carousel / contact
+  pending"). **Carousel** extends the image grid into a swipeable pager (pure page-model + exempt pager).
+  **Contact** (share a contact card) is smaller but the wire has no dedicated fields yet.
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-09): `chat-bubble-location`** — location message-bubble attachment (§C line ~533,
+`carousel / audio / location / contact` list — **location now done**). Port of iOS
+`BubbleAttachmentView.location`: a mime `application/x-location` attachment becomes a pure `BubbleLocation`
+(`:sdk-ui`, nullable lat/lon, `placeName ← originalName`, locale-safe `geoUri`) rendered as a tappable pin
+card → `geo:` URI opened in the OS maps app via `LocalUriHandler` (`:feature:chat` `ChatScreen`), no longer
+mis-bucketed as a generic file. +16 tests (RED-verified). See run log.
+**Recommended next (highest value):**
+- **Message bubble audio / carousel / contact attachments** (feature-parity §C line ~533, still `[~]`,
+  now "carousel / audio / contact pending"). **Audio** is the highest-value port (voice messages are core to
+  Meeshy; the pipeline already lands transcription + translated audio on the wire — `ApiMessageAttachment`
+  carries `duration`/`transcription`/`translations`): a pure `BubbleAudio` projection (duration formatting,
+  transcription-preferred-language resolution via `LanguageResolver`) + an exempt player composable. **Contact**
+  (share a contact card) is smaller but the wire has no dedicated fields yet. **Carousel** extends the existing
+  image grid to a swipeable pager.
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`) — a
+  horizontal community rail + category chips over the conversation list (a larger §B slice: pure section/
+  filter model + a rail composable).
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-09): `chat-story-reply-preview`** — the last pending half of §C "Quoted-reply
+previews incl. story-reply previews (counts, thumbnails)", **§C quoted-reply previews now complete**. New
+`ApiPostReplyTarget` DTO (`:core:model`) decoded from `postReplyTo`/legacy `storyReplyTo` + bare
+`storyReplyToId` on `ApiMessage`. `BubbleContentBuilder` projects a pure `BubbleStoryReply` (`:sdk-ui`) —
+mood (emoji + text) vs story (reaction/comment/share counts + resolved thumbnail) vs bare metadata-less
+story; message-reply precedence + deleted-suppress. `MessageBubble`'s new `StoryReplyPreview` renders it.
++11 tests (RED-verified). See run log.
+**Recommended next (highest value):**
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`) — a
+  horizontal community rail + category chips over the conversation list (a larger §B slice: pure section/
+  filter model + a rail composable).
+- **Message bubble carousel / audio / location / contact attachments** (feature-parity §C line ~533, `[~]`,
+  "carousel / audio / location / contact pending") — pick one attachment kind (e.g. a location preview
+  projection + map-thumbnail render) as a thin vertical slice.
+- Or move into **Profile/Settings §K/§L** follow-ups (the current build-order tail).
+
+**Earlier (2026-07-09): `conversations-purge-on-removed`** — real-time conversation removal + star
 hygiene (§B). The orphan `MessageSocketManager.conversationDeleted` / `participantLeft` streams (declared +
 listened, **zero consumers**) are now wired through the pure `:feature:conversations` `ConversationPurge` SSOT
 (`onConversationDeleted` → id / blank-inert; `onParticipantLeft(event, currentUserId)` → id **only when the
@@ -1604,6 +1670,155 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-09 — slice `chat-bubble-audio` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/chat-bubble-audio` (off latest `main`, `#1776` gateway realtime merged).
+- **What:** audio (voice-message) message-bubble attachment (`feature-parity.md` §C line ~533, the
+  `carousel / audio / location / contact pending` list — **audio now done**). Port of iOS `AudioPlayerView`
+  message-bubble context, surpassing it on the Prisme Linguistique (iOS defaults the transcription to `orig`
+  and requires a manual language pick; Android resolves the preferred-language transcription at build time).
+- **Added (production):**
+  - `BubbleAudio` (`:sdk-ui` `BubbleContent.kt`) — `attachmentId`, nullable `url`, `durationSeconds`,
+    `sizeBytes`, `transcriptionText`/`transcriptionLanguage`/`isTranscriptionTranslated`; pure getters
+    `isPlayable` (non-blank url), `hasTranscription` (non-blank text), `formattedDuration` (`m:ss`, iOS
+    `%d:%02d`; null on unknown/negative). `BubbleContent.audios: List<BubbleAudio>`.
+  - `BubbleContentBuilder` — `isAudio` (mime `audio/…`), an `audios` bucket, and `files` now excludes audio
+    so a voice message is no longer mis-bucketed as a generic file. `buildAudio` resolves the URL via
+    `mediaBaseUrl`, the duration (`attachment.duration` → fallback `transcription.durationMs/1000`), and the
+    transcription via the pure `resolveTranscription`: Prisme rule 1 — per preferred language in order the
+    original wins if already in that language, else a non-blank `translations[lang].transcription`
+    (case-insensitive key); no match → the **original** transcription (never an arbitrary one); null when no
+    non-blank transcription exists. `transcribedText` is preferred over the raw `text` field.
+  - `MessageBubble` — exempt `AudioBubble` composable (play/download glyph + `formattedDuration`-or-size +
+    transcription line, all on accent-coherent `onColor`), rendered from `content.audios`; taps a playable
+    clip via `onAudioClick`. `hasAttachments` includes audios (emoji-only treatment correctly suppressed).
+  - `ChatScreen` — `onAudioClick` hands `audio.url` to `LocalUriHandler` (mirrors the location wiring).
+  - Strings `bubble_audio_play` in en/fr/es/pt.
+- **Tests (+25, RED-verified):** the audio-projection builder tests fail before the `buildAudio` change
+  (empty `audios`); `formattedDuration` tests are pure-getter behaviour.
+  - `BubbleAudioTest` 12 — duration 0→`0:00` / 5→`0:05` / 65→`1:05` / 3661→`61:01` / null / negative;
+    `isPlayable` url/null/blank; `hasTranscription` present/blank/null.
+  - `BubbleContentBuilderTest` +13 — audio→bubble-audio-not-file; duration fallback to transcription;
+    already-preferred→untranslated; preferred translation wins over original; case-insensitive key match;
+    no preferred match→original untranslated; blank translation skipped→original; no transcription→null;
+    blank original + no usable translation→null; `transcribedText` preferred; deleted hides audio;
+    audio disables emoji-only; no file url→null url still surfaced.
+- **Edge cases covered:** empty/single audio; unknown & negative duration; blank/null/missing url;
+  blank/null/missing transcription; case-insensitive translation keys; deleted tombstone; original-language
+  passthrough vs preferred-language translation; duration source fallback.
+- **Verify:** `:sdk-ui:testDebugUnitTest --tests me.meeshy.ui.component.bubble.*` → BUILD SUCCESSFUL
+  (`BubbleAudioTest` 12/0/0, `BubbleContentBuilderTest` 77/0/0); full `assembleDebug` + all-module
+  `testDebugUnitTest` → BUILD SUCCESSFUL (system Gradle 8.14.3 at `/opt/gradle`; the wrapper is 403-blocked
+  in this container).
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API (`BubbleContentBuilder.build`
+  with `preferences` + the `BubbleAudio` getters), no tautologies, boundary coverage on
+  unknown/negative/blank/deleted/case-insensitive/fallback; SDK-purity — the projection + Prisme resolution
+  is a stateless `:sdk-ui` building block (same layer as location/image), the player is exempt Compose glue,
+  the "when to open the URL" wiring is the app-side `ChatScreen`; SSOT — language order via `LanguageResolver
+  .preferredContentLanguages`; accent-coherent `onColor`; natural tap gesture, no dead end (tap plays the
+  clip; the transcription reads inline).
+- **Lesson:** a `` `audio/*` `` inside a KDoc opens a nested block comment (`/*`) that swallows the file to
+  EOF → "Unclosed comment" is reported **only in files that reference the broken symbols**, never in the
+  broken file itself. Cost ~4 build cycles chasing a phantom cascade. Avoid `/*`/`*/` in KDoc backticks.
+
+### 2026-07-09 — slice `chat-bubble-location` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/chat-bubble-location` (off latest `main`, `#1769` story-reply-preview merged).
+- **What:** location message-bubble attachment at iOS parity (`feature-parity.md` §C line ~533, the
+  `carousel / audio / location / contact pending` list — **location now done**). Port of iOS
+  `BubbleAttachmentView.location` / `LocationMessageView`. A message attachment with mime
+  `application/x-location` was previously dropped into the generic **file** bucket (an "attachment" row with
+  no name); now it becomes a first-class location preview.
+- **Added (production, all `:sdk-ui`):**
+  - `BubbleLocation` value type (`BubbleContent.kt`) — pure: `attachmentId`, nullable `latitude`/`longitude`,
+    `placeName`; computed `hasCoordinates` and a **locale-safe** `geoUri` (`geo:lat,lon?q=lat,lon(label)`;
+    `Double.toString()` is always dot-decimal so the URI is correct even under a comma-decimal locale; a
+    blank `placeName` drops the `(label)` suffix). `BubbleContent.locations: List<BubbleLocation>`.
+  - `BubbleContentBuilder`: new `isLocation` (mime `== application/x-location`) — location attachments are
+    projected into `locations` and **excluded** from the file bucket (`filterNot { isImage || isLocation }`);
+    `placeName ← originalName` (blank→null), coords passed through (nullable), suppressed on a deleted message
+    (mirrors images/files). Emoji-only treatment already off when any attachment is present.
+  - `MessageBubble`: `LocationPreview` composable (pin glyph + place name / "Shared location" fallback +
+    coordinate line when present) + `onLocationClick` callback (gated on `hasCoordinates`); `hasAttachments`
+    now includes locations so a caption-less location bubble doesn't render an empty text slot. EN/FR/ES/PT
+    strings (`bubble_location_shared`, `bubble_location_open`).
+  - `:feature:chat` `ChatScreen` wires `onLocationClick` → `LocalUriHandler.openUri(geoUri)` (wrapped in
+    `runCatching` — no crash if no maps app handles `geo:`), so the tap opens the point in the device maps app
+    (no dead end). This is the app-side product-orchestration half; the projection/render stays in `:sdk-ui`.
+- **Tests (+16, RED→GREEN):**
+  - `BubbleLocationTest` (9): `hasCoordinates` both-present / missing-lat / missing-lon; `geoUri` with
+    label / without label / blank-label→no-suffix / trimmed-label / no-coords→null / **FRANCE-locale still
+    dot-decimal**.
+  - `BubbleContentBuilderTest` (+7 → 64): location→`BubbleLocation` not a file; blank `originalName`→null
+    `placeName`; location without coords still surfaced (not a file); image+file+location each in its own
+    bucket; deleted message hides its location; location disables emoji-only; no-location→empty list.
+- **Edge cases covered:** missing one/both coordinates (placeholder path), blank/whitespace place name,
+  deleted-suppress, mixed attachment kinds partitioned, locale-dependent decimal formatting, no-maps-app tap
+  (graceful `runCatching`).
+- **Verify:** `:sdk-ui:testDebugUnitTest` → 9/9 + 64/64 (BUILD SUCCESSFUL 4m38s). Full
+  `assembleDebug + testDebugUnitTest` (all modules) → BUILD SUCCESSFUL (5m16s). `:app:assembleDebug +
+  :feature:chat:testDebugUnitTest` (covers the `ChatScreen` wiring) → BUILD SUCCESSFUL, chat 133/133.
+  (system Gradle 8.14.3 at `/opt/gradle`; wrapper download 403-blocked in this container.)
+- **Reviewer:** PASS — diff `apps/android` only; behaviour-through-public-API (`BubbleContentBuilder.build`
+  producing `locations`, `BubbleLocation.geoUri`/`hasCoordinates`), no tautologies, boundary coverage on
+  missing coords / blank name / deleted / locale / mixed buckets; SDK-purity — the "detect + project a
+  location" derivation is a pure `:sdk-ui` building block (same layer as image/file projection), the "when
+  tapped, open the OS maps app" decision is the `:feature:chat` `ChatScreen` (app-side orchestration), the
+  preview composable is exempt Compose glue; SSOT — reuses the existing attachment-partition pattern; UDF
+  immutable content; accent-coherent (`onColor`-tinted card); natural tap→maps gesture; no dead end.
+
+### 2026-07-09 — slice `chat-story-reply-preview` ✅ impl + reviewer PASS · ✅ merged (PR #1769)
+- **⚠ Merge status:** PR #1769 open. CI is red **only** because the monorepo's Python jobs (`TTS/STT Integration`,
+  `Audio Pipeline Tests`, `Test Python (translator)`) hit repeated `503 Service Unavailable` from
+  `download.pytorch.org` while `uv` fetches torch-family wheels (`matplotlib-inline`, `lazy-loader`) — a
+  pytorch.org package-mirror outage, entirely external and unrelated to this **apps/android-only** Kotlin diff.
+  All JS/TS checks are green (`Quality (bun)`, `Security`, `Test web/gateway/shared/agent`, `Prisma`), and the
+  **real Android gate is green locally** (`assembleDebug` + all `testDebugUnitTest`). `rerun_failed_jobs` is 403
+  for this integration; an empty re-trigger commit hit the same mirror outage. Do NOT merge past red — merge once
+  pytorch.org recovers (re-trigger with an empty commit or a rebase on `main`), CI is green, and the diff is still
+  apps/android-only.
+- **Rule #0 first:** the open PRs (#1768 web/gateway realtime, #1767 ios-calls, #1765 gateway-delivery,
+  #1764 web-calls) are all **other sessions'** branches touching production logic — not Android, not mine to
+  merge. No open Android PR. Branched clean off latest `origin/main` (`4c7f071`, "fix(gateway/calls)… #1766").
+- **Parity:** §C "Quoted-reply previews incl. story-reply previews (counts, thumbnails)" — the last pending
+  half (feature-parity.md was `[~]` "Pending: story-reply previews (counts/thumbnails via `APIPostReplyTarget`)").
+  Investigated iOS first: `APIMessage` decodes `postReplyTo` (legacy `storyReplyTo`) into `APIPostReplyTarget`
+  (id/type/reaction·comment·shareCount/createdAt/thumbnailUrl/previewText/moodEmoji) and, in `toMessage`,
+  projects it to a `ReplyReference` — a **mood** branch (`moodEmoji` set → emoji + previewText) and a **story**
+  branch (title "Story" + counts + thumbnail), plus a bare `storyReplyToId` → metadata-less story. Android's
+  `ApiMessage` dropped all of it, so a reply to a story/status rendered nothing.
+- **Core (`:core:model`):** new `ApiPostReplyTarget` DTO (all counts default 0 for wire-robustness; `previewText`
+  defaults ""). Wired `postReplyTo: ApiPostReplyTarget?` (with `@JsonNames("storyReplyTo")` for the legacy key —
+  first `@JsonNames` use in the module, `@OptIn(ExperimentalSerializationApi::class)`) + `storyReplyToId: String?`
+  onto `ApiMessage`.
+- **Projection (`:sdk-ui`, same stateless-building-block layer as `isForwarded`/`ReplyMediaKind`):** new
+  `BubbleStoryReply` value (previewText, reaction/comment/shareCount, thumbnailUrl, moodEmoji; derived `isMood`
+  = moodEmoji != null, `hasMetrics` = any count > 0). `BubbleContentBuilder` derives `storyReply` via
+  `buildStoryReply`: **precedence** — a message `replyTo` wins (→ null), a **deleted** tombstone → null (mirrors
+  the `pinnedAtIso`/`isForwarded` suppress rule); else a non-blank trimmed `moodEmoji` → mood preview (no metrics/
+  thumbnail), else a story preview (counts + `thumbnailUrl` run through the shared `resolveMediaUrl`, a blank
+  thumbnail dropped), else a bare non-blank `storyReplyToId` → empty `BubbleStoryReply()`, else null.
+- **Render (`:sdk-ui`, exempt Compose glue):** new `StoryReplyPreview` composable — mood shows emoji + preview
+  text; story shows a `PhotoCamera` glyph + "Story" label + 32dp accent-clipped `AsyncImage` thumbnail + a
+  metric row (`Favorite`/`ChatBubble`/`Share` icon + count, each rendered only when > 0, with an accessibility
+  `contentDescription`). Wired into `MessageBubble` right after the message reply-preview slot (mutually
+  exclusive by the builder's precedence). EN/FR/ES/PT strings (`bubble_reply_story` + 3 metric plurals).
+- **Tests (TDD red→green, `:sdk-ui` via public `BubbleContentBuilder.build`):** +11 in `BubbleContentBuilderTest`
+  (57 total, was 46) — no-post-reply→null, story-snapshot projects metrics+resolved-thumbnail, story-no-engagement→
+  !hasMetrics+null-thumb, absolute-thumb-unchanged, blank-thumb-dropped, mood projects emoji+text+!hasMetrics+null-thumb,
+  blank-mood-emoji→falls-back-to-story, bare-storyReplyToId→metadata-less, blank-storyReplyToId→null,
+  message-reply-precedence-over-post-reply, deleted-message→null.
+- **RED verified:** forcing `storyReply = null` in the builder fails exactly the 6 positive-projection tests
+  (the 5 null-expecting ones stay green) — the tests exercise the real branch, not a tautology.
+- **Verify:** `:core:model:testDebugUnitTest` + `:sdk-ui:testDebugUnitTest` green; full `assembleDebug`
+  + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (system Gradle 8.14.3 at `/opt/gradle`; wrapper download
+  403-blocked in this container, so `meeshy.sh check` — which uses the wrapper — can't run here).
+- **Reviewer:** PASS — diff `apps/android` only (no web/ios/gateway/shared/translator); behaviour-through-public-API
+  `BubbleContentBuilder.build`, no tautologies (RED-verified), boundary coverage (mood vs story, blank/absolute
+  thumbnail, blank-emoji fallback, bare/blank story id, message-reply precedence, deleted-suppress); **SDK-purity** —
+  the "is this a mood or a story, which metrics/thumbnail" derivation is a pure `:sdk-ui` building block, the DTO
+  is `:core:model`, the preview strip is exempt Compose glue; **SSOT** — reuses `resolveMediaUrl`, one story-reply
+  model; **UDF** immutable fields; **accent-coherent** thumbnail clip + icon/label tint; natural read-only preview,
+  no dead end (the story reply now reads with its counts + thumbnail).
 
 ### 2026-07-09 — slice `conversations-purge-on-removed` ✅ impl + reviewer PASS
 - **Rule #0 first:** the only open PR (#1758) is an **iOS** camera/composer PR by another author — not Android,

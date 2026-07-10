@@ -5,6 +5,7 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { SERVER_EVENTS, ROOMS, type SocketIOMessage } from '@meeshy/shared/types/socketio-events';
+import { emitConversationPreviewUpdate } from '../socketio/emitConversationPreviewUpdate';
 import { validateParams, validateBody, validateQuery } from '../validation/helpers.js';
 import {
   MessageParamsSchema,
@@ -329,6 +330,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             ...transformedMessage,
             conversationId: message.conversationId
           } as unknown as SocketIOMessage);
+          // Refresh the last-message preview for participants on the list
+          // screen (in user:<id> but not conversation:<id>) — parity with the
+          // WS edit path and broadcastNewMessage.
+          await emitConversationPreviewUpdate(
+            prisma, socketIOManager.getIO(), message.conversationId,
+            (err) => logger.warn('conversation preview fanout (REST edit) failed', err as Error)
+          );
         }
       } catch (socketError) {
         logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
@@ -469,6 +477,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             messageId,
             conversationId: message.conversationId
           });
+          // Refresh the last-message preview for participants on the list
+          // screen: deleting the latest message changes their row, which
+          // MESSAGE_DELETED (conversation room only) never tells them.
+          await emitConversationPreviewUpdate(
+            prisma, socketIOManager.getIO(), message.conversationId,
+            (err) => logger.warn('conversation preview fanout (REST delete) failed', err as Error)
+          );
         }
       } catch (socketError) {
         logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);

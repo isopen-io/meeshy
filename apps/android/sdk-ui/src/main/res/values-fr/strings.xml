@@ -13,8 +13,15 @@
     <string name="avatar_fallback">Avatar</string>
     <string name="bubble_reply_photo">Photo</string>
     <string name="bubble_reply_attachment">Pièce jointe</string>
+    <string name="bubble_reply_story">Story</string>
+    <string name="bubble_story_reactions">%1$d réactions</string>
+    <string name="bubble_story_comments">%1$d commentaires</string>
+    <string name="bubble_story_shares">%1$d partages</string>
     <string name="bubble_image_description">Image</string>
     <string name="bubble_attachment_file_fallback">Fichier</string>
+    <string name="bubble_location_shared">Position partagée</string>
+    <string name="bubble_location_open">Ouvrir dans Plans</string>
+    <string name="bubble_audio_play">Lire le message vocal</string>
     <string name="bubble_file_size_bytes">%1$s o</string>
     <string name="bubble_file_size_kb">%1$s Ko</string>
     <string name="bubble_file_size_mb">%1$s Mo</string>

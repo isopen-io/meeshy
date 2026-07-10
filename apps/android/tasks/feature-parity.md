@@ -530,7 +530,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       via le payload Room) + repli fichier générique (nom + taille) done ;
       emoji-only oversized done (`EmojiDetector` port iOS 90/60/45, free-floating
       sans bulle, dans la bulle centré si reply) ;
-      carousel / audio / location / contact pending
+      location done (`chat-bubble-location` 2026-07-09 : port iOS `BubbleAttachmentView.location` —
+      un attachment mime `application/x-location` devient un `BubbleLocation` pur (lat/lon nullable,
+      `placeName` ← `originalName`, `geoUri` locale-safe) rendu en carte pin tappable → `geo:` URI
+      ouvert dans Plans/Maps via `LocalUriHandler`, jamais fondu dans le bucket fichier générique) ;
+      audio done (`chat-bubble-audio` 2026-07-09 : port iOS `AudioPlayerView` message-bubble, SURPASSE le
+      Prisme — un attachment mime `audio/…` devient un `BubbleAudio` pur (url résolue, `durationSeconds`
+      explicite → repli `transcription.durationMs/1000`, `sizeBytes`, transcription résolue Prisme rule 1 :
+      langue préférée traduite sinon transcription originale, `formattedDuration` `m:ss`) rendu en player
+      compact (glyphe play/download + durée-ou-taille + ligne de transcription) tappable → URL au host ;
+      iOS affiche `orig` par défaut + sélecteur manuel, Android affiche la langue préférée d'emblée) ;
+      carousel / contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
@@ -544,7 +554,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `mentionDisplayNames` now wired** (`chat-mention-autocomplete` 2026-07-06): `ChatViewModel` builds the
       roster from the conversation participants via `MentionRoster` and threads `mentionDisplayNames` into every
       `MessageBubble`, so `@username` resolves to the display name in-bubble. **Pending:** in-app browser / OG cards.
-- [~] Quoted-reply previews incl. story-reply previews (counts, thumbnails) —
+- [x] Quoted-reply previews incl. story-reply previews (counts, thumbnails) —
       **media quoted-reply preview done** (slice `chat-reply-preview-media`, 2026-07-09): the wire now
       carries `attachments` on `ApiMessageReplyPreview` (matching iOS `APIMessageReplyTo.attachments`;
       the dead duplicate `ApiMessageReplyTo` was removed), and `BubbleContentBuilder` derives a
@@ -553,8 +563,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `resolveMediaUrl`; a deleted reply target suppresses both). `MessageBubble`'s reply-preview strip
       now shows a 32dp accent-clipped thumbnail when available, else a media icon + a localized
       "Photo"/"Attachment" placeholder when the quoted message is media-only (blank content). So a reply
-      to a photo/file no longer renders a blank quote. EN/FR/ES/PT strings. +9 tests. **Pending:**
-      story-reply previews (counts/thumbnails via `APIPostReplyTarget`).
+      to a photo/file no longer renders a blank quote. EN/FR/ES/PT strings. +9 tests. **Story-reply
+      previews done** (slice `chat-story-reply-preview`, 2026-07-09): the wire now carries the frozen
+      post snapshot on `ApiMessage` — new `ApiPostReplyTarget` DTO (`:core:model`, port of
+      `APIPostReplyTarget`: id/type/reaction·comment·shareCount/createdAt/thumbnailUrl/previewText/
+      moodEmoji) decoded from `postReplyTo` (legacy `storyReplyTo` via `@JsonNames`), plus a bare
+      `storyReplyToId`. `BubbleContentBuilder` projects a `BubbleStoryReply` (`:sdk-ui`): a non-blank
+      `moodEmoji` → mood preview (emoji + previewText, no metrics/thumbnail); otherwise a story preview
+      (reaction/comment/share counts + resolved `thumbnailUrl` via the shared `resolveMediaUrl`, blank
+      thumbnail dropped); a bare `storyReplyToId` → metadata-less story preview. A message reply
+      (`replyTo`) takes precedence and a deleted tombstone carries no story metadata (mirrors the
+      `pinnedAtIso`/`isForwarded` suppress rules). `MessageBubble`'s new `StoryReplyPreview` renders the
+      mood (emoji + text) or story (camera glyph + "Story" label + 32dp accent-clipped thumbnail +
+      ❤/💬/↗ metric chips shown only when > 0). EN/FR/ES/PT strings. +11 tests. **§C quoted-reply
+      previews complete.**
 - [~] Delivery status checkmarks + offline-pending hourglass + failed-message retry —
       ✓/✓✓/✓✓-read tier + Pending/Failed done ; **group all-or-nothing semantics done**
       (`chat-delivery-status-group-semantics` 2026-07-06): pure `:core:model` `DeliveryStatusResolver`

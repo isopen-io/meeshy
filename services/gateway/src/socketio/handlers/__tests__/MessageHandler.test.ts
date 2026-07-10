@@ -681,6 +681,29 @@ describe('MessageHandler', () => {
       expect(deps.io.to).toHaveBeenCalledWith(`user:${USER_ID}`);
     });
 
+    it('exposes the sender User.id (not Participant.id) in the message:new senderId — matches the REST/ZMQ writer contract (regression)', async () => {
+      // Clients compare `message:new.senderId` against their own User.id
+      // (apps/web use-socket-cache-sync.ts) to detect own messages and
+      // reconcile the optimistic bubble across devices. The REST/ZMQ writer
+      // (MeeshySocketIOManager.broadcastMessage) already resolves this to
+      // `sender.userId`; the WS `message:send` path must emit the same
+      // id-space, otherwise the sender's other devices never match and the
+      // message renders twice / as an incoming bubble.
+      const msg = makeMessage();
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const messageNewPayloads = (toResult.emit.mock.calls as [string, { senderId?: string }][])
+        .filter((c) => c[0] === 'message:new')
+        .map((c) => c[1]);
+
+      expect(messageNewPayloads.length).toBeGreaterThan(0);
+      for (const payload of messageNewPayloads) {
+        expect(payload.senderId).toBe(USER_ID);
+        expect(payload.senderId).not.toBe(PARTICIPANT_ID);
+      }
+    });
+
     it('uses senderSocket.broadcast.to for anonymous user (no userId)', async () => {
       const msg = makeMessage({ sender: { id: PARTICIPANT_ID, userId: null, displayName: 'Anon', type: 'anonymous' } });
       await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);

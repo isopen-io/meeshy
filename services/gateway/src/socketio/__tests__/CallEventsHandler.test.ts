@@ -185,6 +185,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
 }));
 
 import { CallEventsHandler } from '../CallEventsHandler';
+import { logger } from '../../utils/logger';
 
 // ─── Factories ───────────────────────────────────────────────────────────────
 
@@ -411,6 +412,19 @@ describe('CallEventsHandler', () => {
       const { socket } = setupWithSocket();
       mockCheckSocketRateLimit.mockResolvedValue(false);
       await socket._trigger('presence:app-state', { foreground: true });
+      expect(socket.data.appForeground).toBeUndefined();
+    });
+
+    // Was the one handler in this file with no try/catch. `emit()` doesn't
+    // await rejected promises, so a thrown rate-limiter failure here used to
+    // become an unhandled rejection instead of a contained, logged failure
+    // like every sibling handler.
+    it('catches and logs instead of throwing when the rate limiter check rejects', async () => {
+      const { socket } = setupWithSocket();
+      mockCheckSocketRateLimit.mockRejectedValue(new Error('redis down'));
+
+      await expect(socket._trigger('presence:app-state', { foreground: true })).resolves.not.toThrow();
+      expect(logger.error).toHaveBeenCalledWith('presence:app-state failed', { error: 'redis down' });
       expect(socket.data.appForeground).toBeUndefined();
     });
   });
@@ -843,6 +857,27 @@ describe('CallEventsHandler', () => {
 
       expect(mockCallServiceForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
     });
+
+    // Room-membership leak fix (mirrors call:end's "removes all sockets"
+    // behaviour, line ~2789): call:leave only ever called `socket.leave()` on
+    // the LEAVING user's own socket. When a direct call ends via a decline/
+    // leave (not call:end), the other participant's still-connected socket
+    // stayed a member of `call:${CALL_ID}` forever — a per-session Socket.IO
+    // room-membership leak that only call:end's terminal path cleared.
+    it('evicts every socket from the call room (not just the leaving one) when the leave ends the call', async () => {
+      const participant = makeParticipant();
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [participant] }));
+      const leftSession = makeCallSession({ status: 'ended', duration: 60 });
+      mockCallServiceLeaveCall.mockResolvedValue(leftSession);
+
+      const otherParticipantSocket = { leave: jest.fn() };
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([otherParticipantSocket]) });
+
+      await socket._trigger('call:leave', validData);
+
+      expect(otherParticipantSocket.leave).toHaveBeenCalledWith(`call:${CALL_ID}`);
+    });
   });
 
   // ── call:force-leave ─────────────────────────────────────────────────────
@@ -940,6 +975,40 @@ describe('CallEventsHandler', () => {
 
       const toEmitArgs = (io.to as jest.Mock<any>).mock.calls.map((c: any[]) => c[0]).flat();
       expect(toEmitArgs).toContain(`conversation:${CONV_ID}`);
+    });
+
+    // Room-membership leak fix — mirrors the same fix in call:leave above:
+    // force-leave only ever left the FORCING user's own socket via
+    // `socket.leave()`, never evicting the other participant's socket from
+    // `call:${CALL_ID}` when the force-leave ends the call.
+    it('evicts every socket from the call room when force-leave ends the call', async () => {
+      const callParticipant = {
+        id: PARTICIPANT_ID,
+        participantId: PARTICIPANT_ID,
+        leftAt: null,
+        participant: { userId: USER_ID },
+      };
+      const activeCall = { id: CALL_ID, participants: [callParticipant] };
+      const leftSession = makeCallSession({ status: 'ended', duration: 30 });
+      mockCallServiceLeaveCall.mockResolvedValue(leftSession);
+
+      const otherParticipantSocket = { leave: jest.fn() };
+      const { socket, io } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([]),
+        },
+        callSession: {
+          findMany: jest.fn<any>().mockResolvedValue([activeCall]),
+          findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }),
+          updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([otherParticipantSocket]) });
+
+      await socket._trigger('call:force-leave', validData);
+
+      expect(otherParticipantSocket.leave).toHaveBeenCalledWith(`call:${CALL_ID}`);
     });
 
     // Audit Vague 27 (sibling-drift, mirrors call:end/call:leave's catch) —

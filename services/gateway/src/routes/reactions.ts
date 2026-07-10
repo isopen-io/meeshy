@@ -466,7 +466,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       const { messageId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
-      const anonymousUserId = authRequest.authContext.sessionToken;
+      const anonymousParticipantId = authRequest.authContext.participantId;
       const isAnonymous = authRequest.authContext.isAnonymous;
 
       // Vérifier que l'utilisateur a accès au message
@@ -492,8 +492,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Access denied to this conversation');
         }
       } else {
+        // Anonymous auth resolves `participantId` to the Participant.id (an
+        // ObjectId) via createAnonymousUserContext — NOT the raw sessionToken.
+        // Comparing against sessionToken here always failed, so every anonymous
+        // read was denied 403 even for legitimate participants.
         const isParticipant = message.conversation.participants.some(
-          p => p.id === anonymousUserId
+          p => p.id === anonymousParticipantId
         );
         if (!isParticipant) {
           return sendForbidden(reply, 'Access denied to this conversation');

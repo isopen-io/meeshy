@@ -1215,20 +1215,28 @@ export class CallEventsHandler {
     // DB write, no broadcast) but a flooding client should still be bounded
     // like every other handler here, not left as the one exception.
     socket.on('presence:app-state', async (data: { foreground?: boolean }) => {
-      const userId = getUserId(socket.id);
-      if (!userId) return;
-      rememberAuth(userId);
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
 
-      const rateLimitPassed = await checkSocketRateLimit(
-        socket,
-        userId,
-        SOCKET_RATE_LIMITS.PRESENCE_APP_STATE,
-        this.rateLimiter,
-        CALL_EVENTS.ERROR
-      );
-      if (!rateLimitPassed) return;
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket,
+          userId,
+          SOCKET_RATE_LIMITS.PRESENCE_APP_STATE,
+          this.rateLimiter,
+          CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
 
-      socket.data.appForeground = data?.foreground === true;
+        socket.data.appForeground = data?.foreground === true;
+      } catch (err: any) {
+        // Was the one handler in this file with no try/catch — every async
+        // Socket.IO listener here must have one (emit() doesn't await
+        // rejected promises, so an uncaught throw here becomes an unhandled
+        // rejection instead of a logged, contained failure).
+        logger.error('presence:app-state failed', { error: err?.message });
+      }
     });
 
     // CALL-FIX 2026-06-06 — replay any IN-PROGRESS (ringing) call to a socket that
@@ -1997,6 +2005,15 @@ export class CallEventsHandler {
             });
           }
 
+          // Room-membership leak fix — mirrors call:end (line ~2789): the
+          // leave above only evicted the LEAVING user's own socket. Every
+          // OTHER socket still in the room (e.g. the other 1:1 participant
+          // who declined/left via this same handler) never left it, so it
+          // stayed a member of a now-permanently-dead room until its own
+          // disconnect — a per-session Socket.IO room membership leak.
+          const socketsInCallRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
+          await Promise.all(socketsInCallRoom.map(s => s.leave(ROOMS.call(data.callId))));
+
           logger.info('Call closed - last participant left', {
             callId: data.callId,
             duration: callSession.duration,
@@ -2204,6 +2221,13 @@ export class CallEventsHandler {
                     logger.error('❌ handleMissedCall failed after force-leave', { callId: call.id, err });
                   });
                 }
+
+                // Room-membership leak fix — mirrors the same fix in
+                // call:leave above: this only evicted the FORCING user's own
+                // socket, leaving every other participant's socket a member
+                // of the now-dead room until its own disconnect.
+                const socketsInCallRoom = await io.in(ROOMS.call(call.id)).fetchSockets();
+                await Promise.all(socketsInCallRoom.map(s => s.leave(ROOMS.call(call.id))));
               }
             } catch (leaveError) {
               logger.error('❌ Error force leaving call', { callId: call.id, error: leaveError });

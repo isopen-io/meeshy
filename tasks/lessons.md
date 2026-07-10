@@ -1407,3 +1407,66 @@ entière, mutant un champ qui s'avère être le MÊME objet dans tous les élém
 qu'UNE instance à la fois ne peut jamais détecter ce genre de fuite inter-instance (c'est exactement
 pourquoi aucun des tests `close()` existants ne l'avait attrapé : chacun testait une seule instance avec
 son propre stream mocké, jamais deux instances partageant la même référence).
+
+---
+
+## Leçon 80 — le MÊME event socket peut être émis en deux id-spaces selon le transport ; vérifier que tous les writers d'un champ comparé côté client résolvent pareil (routine messaging, iter 157, 2026-07-09)
+
+`message:new.senderId` était résolu vers le `User.id` par le writer REST/ZMQ
+(`MeeshySocketIOManager.broadcastMessage`, avec un commentaire explicite « les clients comparent
+senderId avec leur userId ») mais émis en `Participant.id` **brut** par le writer du chemin WS
+`message:send` (`MessageHandler._buildMessagePayload`). `Message.senderId` est un `Participant.id`
+(relation Prisma `MessageSender` → `Participant`), donc les deux writers d'un même wire event
+mettaient des id-spaces différents. Côté client web, `use-socket-cache-sync.ts` compare
+`message.senderId === currentUser.id` (un `User.id`) pour détecter ses propres messages et promouvoir
+l'optimistic bubble multi-device — sur le chemin WS le test échouait toujours (Participant.id ≠
+User.id), donc l'auteur voyait son propre message en double / rendu comme entrant. Le bug était
+**invisible sur le chemin REST** (qui résolvait correctement) : seul le transport WS était atteint.
+
+**Signature du bug** : un champ de payload socket comparé côté client à un id utilisateur, construit
+par ≥2 writers (un par transport : WS vs REST vs ZMQ), dont un seul applique la résolution
+`participant.userId ?? participant.user?.id ?? message.senderId`. Le writer « correct » porte souvent
+un commentaire justifiant la résolution — mais ce commentaire ne protège PAS les writers siblings qui
+n'ont jamais reçu le même traitement.
+
+**Règle réutilisable** : quand un writer d'un event socket résout un id (Participant→User) avec une
+justification « les clients comparent à leur userId », grep IMMÉDIATEMENT le nom de l'event
+(`MESSAGE_NEW`/`message:new`) ET le champ (`senderId: message.senderId`) sur TOUT le service pour
+trouver les autres writers du même event qui n'ont pas la résolution — un par transport. Ne jamais
+supposer qu'un seul chemin construit un event : le send a au moins WS + REST, souvent + un
+re-broadcast ZMQ (traduction). Le champ `sender.id` (Participant.id) reste disponible séparément pour
+les rares consommateurs qui en ont besoin ; ne PAS toucher les events où les deux writers sont
+cohérents entre eux (`CONVERSATION_UPDATED` garde le Participant.id brut des deux côtés — consommateur
+distinct, pas de divergence).
+
+---
+
+## Leçon 81 — un fanout « écran liste » ajouté sur le chemin d'envoi doit l'être AUSSI sur edit/delete/recall — chercher les mutations siblings du même agrégat de liste (routine messaging, iter 158, 2026-07-09)
+
+Le chemin d'envoi (`broadcastNewMessage`) fanne `CONVERSATION_UPDATED` (aperçu `lastMessageId`/
+`lastMessagePreview`) vers **chaque salle `user:<id>`** des participants, avec un commentaire explicite :
+sinon un membre posé sur la **liste de conversations** (qui a quitté `conversation:<id>` mais reste dans
+`user:<id>`) ne reçoit jamais le signal et sa ligne reste figée. Mais **édition et suppression** — qui
+changent aussi l'aperçu de la liste quand elles touchent le dernier message — n'émettaient que
+`MESSAGE_EDITED`/`MESSAGE_DELETED` vers `conversation:<id>`, jamais `CONVERSATION_UPDATED` vers les salles
+user. Le handler delete recalculait pourtant déjà `lastMessageAt` : le serveur *savait* que l'aperçu avait
+changé, mais ne le disait qu'aux sockets dans la salle conversation. Faille auto-réparée par SWR à la
+réouverture → fenêtre invisible = « rester sur la liste sans rouvrir la conversation », donc facile à rater
+en test manuel.
+
+**Signature du bug** : un agrégat affiché sur un écran de LISTE (aperçu de dernier message, compteur non-lus,
+badge, ordre de tri) est rafraîchi en temps réel par UN chemin de mutation (create) via un fanout vers les
+salles `user:` — mais les AUTRES mutations du même agrégat (edit, delete, recall, réaction qui change le
+preview, pin/unpin) n'émettent que vers la salle `conversation:`, que l'observateur liste-seule ne rejoint
+pas.
+
+**Règle réutilisable** : quand un fanout vers les salles `user:` est ajouté sur une mutation « parce que
+l'écran liste doit se rafraîchir même sans la conversation ouverte », énumérer IMMÉDIATEMENT **toutes** les
+mutations qui touchent le même agrégat de liste et vérifier qu'elles fannent pareil. Extraire un **helper
+partagé** (ici `emitConversationPreviewUpdate`) plutôt que dupliquer l'emit inline sur N sites (ici 7 : WS +
+2 routes REST) — la duplication inline est exactement ce qui laisse un transport dériver (cf. Leçon 80). Le
+helper recalcule l'agrégat depuis la source de vérité (dernier message non supprimé) pour rester
+auto-cohérent : appliqué à une mutation d'un élément **non-dernier**, il ré-émet l'aperçu inchangé (no-op
+idempotent client) plutôt que d'exiger une détection « est-ce le dernier ? » fragile. Best-effort strict :
+un fanout side-channel ne doit JAMAIS faire échouer la mutation primaire déjà réussie (try/catch interne,
+`onError` optionnel pour la traçabilité).

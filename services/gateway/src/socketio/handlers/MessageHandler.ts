@@ -23,6 +23,7 @@ import { NotificationService } from '../../services/notifications/NotificationSe
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
+import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -670,6 +671,15 @@ export class MessageHandler {
       const room = ROOMS.conversation(message.conversationId);
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
 
+      // Fan a conversation:updated preview refresh to participants sitting on
+      // the conversation list (in user:<id> but not conversation:<id>) so an
+      // edit of the latest message updates their row — MESSAGE_EDITED alone
+      // only reaches the conversation room. Mirrors broadcastNewMessage.
+      await emitConversationPreviewUpdate(
+        this.prisma, this.io, message.conversationId,
+        (err) => handlerLogger.warn('conversation preview fanout (edit) failed', { error: err })
+      );
+
       this._enqueueOfflineEventForParticipants(
         message.conversationId, message.senderId, 'edited', validated.messageId, editedPayload
       ).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
@@ -803,6 +813,16 @@ export class MessageHandler {
         conversationId: message.conversationId,
       };
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+
+      // Fan a conversation:updated preview refresh to list-screen participants
+      // (in user:<id> but not conversation:<id>): deleting the latest message
+      // changes their row's preview, which MESSAGE_DELETED (conversation room
+      // only) never tells them. The latest non-deleted message is recomputed
+      // inside the helper, consistent with the lastMessageAt recompute above.
+      await emitConversationPreviewUpdate(
+        this.prisma, this.io, message.conversationId,
+        (err) => handlerLogger.warn('conversation preview fanout (delete) failed', { error: err })
+      );
 
       // Skip the DELETER, not the author. A moderator/admin may delete another
       // user's message (`message.senderId` is the author's participant id, not
@@ -1357,7 +1377,14 @@ export class MessageHandler {
     return {
       id: message.id,
       conversationId,
-      senderId: message.senderId,
+      // `message.senderId` is a Participant.id, but clients compare the wire
+      // `senderId` against their own User.id (apps/web use-socket-cache-sync.ts)
+      // to detect own messages and reconcile the optimistic bubble across
+      // devices. Resolve to the sender's User.id — mirroring the REST/ZMQ
+      // writer (MeeshySocketIOManager.broadcastMessage) — so both transports
+      // emit the same id-space. Falls back to Participant.id for anonymous
+      // senders (no userId), matching the anonymous room convention.
+      senderId: senderParticipant?.userId ?? senderUser?.id ?? message.senderId,
       content: message.content,
       originalLanguage: message.originalLanguage || 'fr',
       messageType: message.messageType || 'text',

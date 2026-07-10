@@ -93,10 +93,22 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       };
 
       socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, (ack: CallInitiateAck) => {
+        // The gateway can reject call:initiate (callee busy/blocked/offline,
+        // rate-limited, validation error). Without handling this branch the
+        // pre-authorized camera/mic stream stays hot forever — the only
+        // consumer that releases it is VideoCallInterface, which never
+        // mounts because currentCall is never set — and the user is left
+        // staring at a "Starting call..." toast with no further feedback.
+        if (!ack?.success) {
+          stopPreauthorizedStream(stream);
+          toast.error(ack?.error?.message ?? 'Failed to start call. Please try again.');
+          return;
+        }
+
         // Persist the server-provided ICE servers (STUN + time-limited TURN)
         // so the initiator's RTCPeerConnection is built with TURN credentials
         // before the SDP offer is created.
-        if (ack?.success && ack.data?.iceServers?.length) {
+        if (ack.data?.iceServers?.length) {
           useCallStore.getState().setIceServers(ack.data.iceServers);
         }
 
@@ -111,7 +123,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         // participants list is populated as callees join via the existing
         // `call:participant-joined` handler (a no-op until `currentCall`
         // exists, so this is the step that unblocks it).
-        if (ack?.success && ack.data?.callId && user) {
+        if (ack.data?.callId && user) {
           useCallStore.getState().setCurrentCall({
             id: ack.data.callId,
             conversationId: conversation.id,
@@ -122,8 +134,9 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
             participants: [],
           });
         }
+
+        toast.success('Starting call...');
       });
-      toast.success('Starting call...');
     } catch (error: unknown) {
       stopPreauthorizedStream(stream);
       handleMediaError(error);

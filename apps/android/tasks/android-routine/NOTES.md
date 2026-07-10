@@ -3,6 +3,30 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-09 (`chat-bubble-audio`): a `/*` or `*/` sequence inside a KDoc comment (even inside `` `backticks` ``)
+  opens/closes a nested block comment and silently swallows the rest of the file.** I wrote ``` `audio/*` ``` in a
+  `BubbleAudio` KDoc; the `/*` started a nested comment that ran to EOF → `BubbleContent.kt:EOF Syntax error:
+  Unclosed comment`. The killer: Kotlin K2 reports the *cascade* ("Unresolved reference 'text'/'images'/…") in
+  every file that references the now-invisible symbols — **not** in the broken file — so `MessageBubble.kt` lit up
+  with 24 phantom errors while the real one-line cause was elsewhere. Cost ~4 build cycles. When a whole class's
+  members go "unresolved" in *other* files but that class looks fine, grep the class's own file for `/*`·`*/` in
+  comments first. Write mimes as `audio/…` or `audio/x-*`-free prose in KDoc.
+- **2026-07-09 (`chat-bubble-audio`): don't edit a source file while a Gradle compile of it is running.** The
+  mid-edit read produced a half-written file → a confusing incremental-cache failure that persisted across a plain
+  re-run. `rm -rf <module>/build` (or at least `build/kotlin`) clears it. Kick the build only after all edits land.
+- **2026-07-09 (`chat-story-reply-preview`): a legacy JSON key alias → `@JsonNames`, not a second field.**
+  iOS decodes `postReplyTo ?? storyReplyTo`. In kotlinx-serialization the faithful equivalent is a single
+  field annotated `@JsonNames("storyReplyTo")` (in `kotlinx.serialization.json`, needs
+  `@OptIn(ExperimentalSerializationApi::class)` on the class — `core/model` already `api(...)`s
+  serialization-json). Don't add a duplicate field. Decode-only alias; encoding still uses the primary name.
+- **2026-07-09: `sed -i 's/.../label = .../'` on a Compose file is a footgun — it renamed an *existing*
+  `AsyncImage(contentDescription = ...)` arg that happened to share the 32-space indent, breaking compile.**
+  When renaming a just-introduced parameter's call-sites, target them precisely (unique surrounding text via
+  `Edit`) instead of a whitespace-anchored global `sed`. Caught by the first `:sdk-ui:compileDebugKotlin`.
+- **2026-07-09 (`chat-story-reply-preview`): mirror the bubble-metadata suppress convention on every new
+  read-side field.** A deleted tombstone shows no `pinnedAtIso`/`isForwarded`; the new `storyReply` follows
+  suit (deleted → null) and a message `replyTo` takes precedence over a `postReplyTo` snapshot (iOS ordering).
+  Encoding both as explicit `when` arms gives clean branch coverage and a deleted-suppress test for free.
 - **2026-07-09 (`chat-reply-thread-overlay`): a read-side "detail sheet" for a thing that already has a pure
   grouping SSOT is a thin slice — reuse the predicate, don't re-derive it.** The reply-count pill already had
   `ReplyThreads.of` (group by trimmed/non-self/non-deleted `replyToId`). The overlay just needed the *same*
