@@ -49,6 +49,11 @@ public object MessageLanguageStrip {
      * @param showingOriginal true when the viewer has toggled the bubble back to
      *   its original text (the original chip becomes active instead of the
      *   preferred translation).
+     * @param activeCodeOverride when non-blank, the exact language the viewer has
+     *   switched to via a flag tap — it wins over the [showingOriginal] default so
+     *   the strip highlights the currently displayed language (including a third
+     *   configured language, not just original/preferred). Null falls back to the
+     *   [showingOriginal] computation, preserving the read-only default behaviour.
      * @return an ordered, de-duplicated list of chips, or empty when the message
      *   is not translated for this viewer (no preferred-language translation
      *   exists) — in which case there is nothing to explore and no strip shows.
@@ -58,12 +63,14 @@ public object MessageLanguageStrip {
         translations: List<LanguageResolver.TranslationLike>,
         preferences: LanguageResolver.ContentLanguagePreferences,
         showingOriginal: Boolean,
+        activeCodeOverride: String? = null,
     ): List<LanguageChip> {
         val preferred = LanguageResolver.preferredTranslation(translations, preferences)
             ?: return emptyList()
         val original = originalLanguage.normalized()
         val preferredCode = preferred.targetLanguage.normalized()
-        val activeCode = if (showingOriginal) original else preferredCode
+        val activeCode = activeCodeOverride.normalized()
+            ?: if (showingOriginal) original else preferredCode
 
         val codes = LinkedHashSet<String>()
         original?.let(codes::add)
