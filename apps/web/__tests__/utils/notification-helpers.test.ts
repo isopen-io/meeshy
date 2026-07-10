@@ -622,6 +622,34 @@ describe('notification-helpers - Structure Groupée V2', () => {
       const old = new Date('2020-01-15T09:05:00Z').toISOString();
       expect(formatContentPublishedAt(old, t, 'fr')).toMatch(/\d{2}\/\d{2}\/\d{4}/);
     });
+
+    // La classification aujourd'hui / hier / au-delà s'appuie désormais sur
+    // `calendarDayDiff` (SSOT DST-safe), et non plus sur une soustraction de
+    // 86 400 000 ms ancrée au minuit du jour. Ces bornes déterministes verrouillent
+    // le découpage par jour calendaire (indépendant de l'heure de la journée) ; la
+    // robustesse aux jours de 23 h / 25 h est couverte au niveau de la SSOT
+    // (`packages/shared/__tests__/utils/calendar-date.test.ts`).
+    it('classe par jour calendaire, pas par fenêtre glissante de 24 h', () => {
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(new Date(2026, 2, 15, 10, 0));
+
+        // Publié la veille à 22:30 (≈11 h 30 avant « maintenant », donc < 24 h) :
+        // une fenêtre glissante de 24 h dirait « aujourd'hui », le jour calendaire dit « hier ».
+        const lastNight = new Date(2026, 2, 14, 22, 30).toISOString();
+        expect(formatContentPublishedAt(lastNight, t, 'fr').startsWith('hier ')).toBe(true);
+
+        // Le même jour, quelques heures plus tôt → compteur d'heures relatif.
+        const earlierToday = new Date(2026, 2, 15, 8, 0).toISOString();
+        expect(formatContentPublishedAt(earlierToday, t, 'fr')).toBe('il y a 2h');
+
+        // L'avant-veille bascule en date absolue, pas « hier ».
+        const dayBeforeYesterday = new Date(2026, 2, 13, 20, 0).toISOString();
+        expect(formatContentPublishedAt(dayBeforeYesterday, t, 'fr')).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe('buildNotificationContextLine', () => {

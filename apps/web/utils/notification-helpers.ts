@@ -12,7 +12,7 @@ import {
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
-import { startOfLocalDayMs, calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
+import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
@@ -265,15 +265,14 @@ export function formatContentPublishedAt(
   if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
 
   const diffHours = Math.floor(diffMinutes / 60);
-  const startOfToday = startOfLocalDayMs(now.getTime());
-  const startOfYesterday = startOfToday - 86400000;
+  const dayDiff = calendarDayDiff(date.getTime(), now.getTime());
   const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
-  if (date.getTime() >= startOfToday) {
+  if (dayDiff === 0) {
     return t('timeAgo.hour').replace('{count}', String(diffHours));
   }
 
-  if (date.getTime() >= startOfYesterday) {
+  if (dayDiff === 1) {
     return t('timeAgo.yesterdayAt').replace('{time}', time);
   }
 
