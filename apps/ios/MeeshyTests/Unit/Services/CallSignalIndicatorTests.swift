@@ -178,6 +178,21 @@ final class CallHangupFastPathTests: XCTestCase {
             "video escalation) must not stack a second channel on the same peer connection."
         )
     }
+
+    func test_controlButtonsRow_wiresTranscriptionToggle_toCallManager() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "private var controlButtonsRow: some View {") else {
+            XCTFail("CallView must define controlButtonsRow")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 6000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("callManager.toggleTranscription()"),
+            "controlButtonsRow must include a control that calls callManager.toggleTranscription() " +
+            "— this is the UI entry point that was missing before this feature was rebuilt."
+        )
+    }
 }
 
 // MARK: - CallSignalGlyph Reduce Motion (source inspection)
