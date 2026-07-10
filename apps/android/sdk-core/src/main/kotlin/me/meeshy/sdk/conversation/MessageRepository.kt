@@ -15,6 +15,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.AttachmentAudioTranslationMerge
 import me.meeshy.sdk.model.AttachmentTranscriptionMerge
 import me.meeshy.sdk.model.MessageTranslationMerge
 import me.meeshy.sdk.model.SendMessageRequest
@@ -271,6 +272,43 @@ class MessageRepository @Inject constructor(
                 language,
                 confidence,
                 durationMs,
+            ) ?: message
+        }
+    }
+
+    /**
+     * Applies an `audio:translation-ready` socket update to the cache — the cloned-voice
+     * translation is upserted onto the matching audio attachment so the open bubble can
+     * play the viewer's-language voice live (progressive voice translation). No outbox:
+     * this is inbound server truth, never a local mutation. A no-op merge (blank url,
+     * blank language, duplicate, no target, or deleted) leaves the cached row untouched.
+     */
+    suspend fun applyAudioTranslation(
+        messageId: String,
+        attachmentId: String?,
+        language: String,
+        url: String,
+        transcription: String,
+        durationMs: Long?,
+        format: String?,
+        cloned: Boolean,
+        quality: Double?,
+        voiceModelId: String?,
+        ttsModel: String?,
+    ) {
+        updateCachedMessage(messageId, requireSynced = false) { message ->
+            AttachmentAudioTranslationMerge.mergeAudioTranslation(
+                message,
+                attachmentId,
+                language,
+                url,
+                transcription,
+                durationMs,
+                format,
+                cloned,
+                quality,
+                voiceModelId,
+                ttsModel,
             ) ?: message
         }
     }

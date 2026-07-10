@@ -108,6 +108,8 @@ public data class BubbleAudio(
     val transcriptionText: String? = null,
     val transcriptionLanguage: String? = null,
     val isTranscriptionTranslated: Boolean = false,
+    val isAudioTranslated: Boolean = false,
+    val audioLanguage: String? = null,
 ) {
     /** True when the audio has a playable URL (already downloaded / remote-ready). */
     val isPlayable: Boolean get() = !url.isNullOrBlank()

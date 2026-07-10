@@ -395,6 +395,26 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
+                messageSocketManager.audioTranslationReady.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        val audio = event.translatedAudio
+                        messageRepository.applyAudioTranslation(
+                            event.messageId,
+                            event.attachmentId,
+                            event.language,
+                            audio.url,
+                            audio.transcription,
+                            audio.durationMs,
+                            audio.format,
+                            audio.cloned,
+                            audio.quality,
+                            audio.voiceModelId,
+                            audio.ttsModel,
+                        )
+                    }
+                }
+            }
+            launch {
                 messageSocketManager.reactionAdded.collect { event ->
                     applyPeerReactionEvent(event, delta = 1)
                 }

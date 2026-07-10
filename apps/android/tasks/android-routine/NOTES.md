@@ -3,6 +3,24 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-10 (`chat-live-audio-translation`): a "defined but unconsumed" socket flow can be doubly dead — no
+  consumer AND a payload shape that never decodes. Check the wire contract against `packages/shared`, not just
+  the consumer.** `MessageSocketManager.audioTranslationReady` was listed as a live `SharedFlow` and even
+  `listen(...)`-registered, but the Android `AudioTranslationEvent` was **flat**
+  (`targetLanguage`/`audioUrl`) while the gateway emits the shared `AudioTranslationEventData` — the translated
+  audio **nests** under `translatedAudio` with the target language at the top-level `language`. Every frame threw
+  `MissingFieldException` at `decodeFromString` (caught + logged + dropped), so the flow looked wired but never
+  delivered a single event. When reviving a dead flow, diff the Kotlin model against the actual
+  `socketio-events.ts` payload type, add a **decode-contract test** that feeds the real gateway JSON, and give the
+  required fields lenient defaults so a future shape drift degrades to a merge no-op instead of a silent drop.
+- **2026-07-10 (`chat-live-audio-translation`): mirror the sibling merge/projection, don't reinvent — the
+  transcription slice already laid the exact rails.** `AttachmentAudioTranslationMerge` is a line-for-line sibling
+  of `AttachmentTranscriptionMerge` (same target selection: explicit id → first audio attachment; same no-op set:
+  deleted/blank/no-target/idempotent), and `resolveTranslatedAudio` mirrors `resolveTranscription` (same preferred
+  order, original-wins-when-top-preference) so the played voice and the surfaced transcription line can never
+  disagree. Existing audio tests stayed green **for free** because none set a translation `url` — the new URL
+  resolution only activates on a non-blank translated url, so the read-only projection was byte-identical for
+  every prior case.
 - **2026-07-10 (`chat-compose-language-detection`): a "stamp the user's language" line is often TWO bugs — a
   lossy fallback AND a missing detection — and the fix converges on the SSOT for the first, ports the shared
   web heuristic for the second.** `ChatViewModel.send()` did `originalLanguage = user.systemLanguage ?: "fr"`:

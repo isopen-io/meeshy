@@ -1519,6 +1519,221 @@ class BubbleContentBuilderTest {
         assertThat(content.audios.single().transcriptionText).isEqualTo("cleaned up")
     }
 
+    // --- Cloned-voice audio translation (Prisme) ---------------------------
+
+    @Test
+    fun `an audio bubble plays the preferred-language cloned voice when one exists`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello everyone", language = "en"),
+                        translations = mapOf(
+                            "fr" to ApiAttachmentTranslation(
+                                url = "/media/fr.mp3",
+                                transcription = "bonjour tout le monde",
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/fr.mp3")
+        assertThat(audio.isAudioTranslated).isTrue()
+        assertThat(audio.audioLanguage).isEqualTo("fr")
+        assertThat(audio.transcriptionText).isEqualTo("bonjour tout le monde")
+    }
+
+    @Test
+    fun `an audio bubble keeps the original voice when the preferred language is the original`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "bonjour", language = "fr"),
+                        translations = mapOf(
+                            "de" to ApiAttachmentTranslation(url = "/media/de.mp3", transcription = "hallo"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/original.m4a")
+        assertThat(audio.isAudioTranslated).isFalse()
+        assertThat(audio.audioLanguage).isEqualTo("fr")
+    }
+
+    @Test
+    fun `a preferred translation with a transcription but no audio url keeps the original voice`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "fr" to ApiAttachmentTranslation(transcription = "bonjour"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/original.m4a")
+        assertThat(audio.isAudioTranslated).isFalse()
+        assertThat(audio.transcriptionText).isEqualTo("bonjour")
+    }
+
+    @Test
+    fun `a blank cloned-voice url falls back to the original voice`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "fr" to ApiAttachmentTranslation(url = "   ", transcription = "bonjour"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/original.m4a")
+        assertThat(audio.isAudioTranslated).isFalse()
+    }
+
+    @Test
+    fun `the cloned-voice duration overrides the original when a translation is played`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        duration = 12,
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "fr" to ApiAttachmentTranslation(
+                                url = "/media/fr.mp3",
+                                transcription = "bonjour",
+                                durationMs = 5000,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.audios.single().durationSeconds).isEqualTo(5)
+    }
+
+    @Test
+    fun `the cloned-voice language key matches case-insensitively`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "FR" to ApiAttachmentTranslation(url = "/media/fr.mp3", transcription = "bonjour"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.audios.single().url).isEqualTo("https://cdn.meeshy.me/media/fr.mp3")
+        assertThat(content.audios.single().isAudioTranslated).isTrue()
+    }
+
+    @Test
+    fun `the highest-priority preferred language wins the cloned voice`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                        translations = mapOf(
+                            "es" to ApiAttachmentTranslation(url = "/media/es.mp3", transcription = "hola"),
+                            "fr" to ApiAttachmentTranslation(url = "/media/fr.mp3", transcription = "bonjour"),
+                        ),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = Prefs(systemLanguage = "fr", regionalLanguage = "es"),
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        assertThat(content.audios.single().url).isEqualTo("https://cdn.meeshy.me/media/fr.mp3")
+        assertThat(content.audios.single().audioLanguage).isEqualTo("fr")
+    }
+
+    @Test
+    fun `an audio with no translations keeps the original voice and is not marked translated`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "aud1",
+                        mimeType = "audio/mp4",
+                        fileUrl = "/media/original.m4a",
+                        transcription = ApiAttachmentTranscription(text = "hello", language = "en"),
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://cdn.meeshy.me",
+        )
+
+        val audio = content.audios.single()
+        assertThat(audio.url).isEqualTo("https://cdn.meeshy.me/media/original.m4a")
+        assertThat(audio.isAudioTranslated).isFalse()
+    }
+
     @Test
     fun `a deleted message hides its audio`() {
         val content = BubbleContentBuilder.build(

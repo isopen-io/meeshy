@@ -231,17 +231,22 @@ public object BubbleContentBuilder {
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
     ): BubbleAudio {
-        val durationSeconds = attachment.duration
-            ?: attachment.transcription?.durationMs?.let { it / 1000 }
         val resolved = resolveTranscription(attachment, preferences)
+        val translatedAudio = resolveTranslatedAudio(attachment, preferences)
+        val playableUrl = translatedAudio?.url ?: attachment.fileUrl
+        val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
+            ?: attachment.duration
+            ?: attachment.transcription?.durationMs?.let { it / 1000 }
         return BubbleAudio(
             attachmentId = attachment.id,
-            url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+            url = playableUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
             durationSeconds = durationSeconds,
             sizeBytes = attachment.fileSize,
             transcriptionText = resolved?.text,
             transcriptionLanguage = resolved?.language,
             isTranscriptionTranslated = resolved?.isTranslated == true,
+            isAudioTranslated = translatedAudio != null,
+            audioLanguage = translatedAudio?.language ?: resolved?.language,
         )
     }
 
@@ -250,6 +255,41 @@ public object BubbleContentBuilder {
         val language: String?,
         val isTranslated: Boolean,
     )
+
+    private data class ResolvedAudio(
+        val url: String,
+        val language: String,
+        val durationMs: Int?,
+    )
+
+    /**
+     * Prisme rule 1 for the audio source: prefer a cloned-voice translation targeting one
+     * of the viewer's preferred languages (in priority order). When the highest-priority
+     * preferred language is the attachment's original transcription language the original
+     * voice wins (returns null) — never an arbitrary translation. Returns null when no
+     * preferred-language translation carries a playable audio url, in which case the
+     * caller falls back to the original voice note. Mirrors [resolveTranscription] so the
+     * played voice and the surfaced transcription line resolve to the same language.
+     */
+    private fun resolveTranslatedAudio(
+        attachment: ApiMessageAttachment,
+        preferences: LanguageResolver.ContentLanguagePreferences,
+    ): ResolvedAudio? {
+        val originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null }
+        val translations = attachment.translations.orEmpty()
+
+        for (language in LanguageResolver.preferredContentLanguages(preferences)) {
+            if (originalLanguage != null && originalLanguage.equals(language, ignoreCase = true)) {
+                return null
+            }
+            val translated = translations.entries
+                .firstOrNull { it.key.equals(language, ignoreCase = true) }
+                ?.value
+            val url = translated?.url?.trim()?.ifBlank { null }
+            if (url != null) return ResolvedAudio(url, language, translated.durationMs)
+        }
+        return null
+    }
 
     /**
      * Prisme rule 1: prefer a translation targeting one of the viewer's preferred

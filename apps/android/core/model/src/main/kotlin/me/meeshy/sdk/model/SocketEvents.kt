@@ -78,15 +78,39 @@ data class TranscriptionReadyEvent(
     val durationMs: Long? = null,
 )
 
+/**
+ * A progressive cloned-voice audio translation — the payload of `audio:translation-ready`
+ * / `audio:translations-progressive` / `audio:translations-completed` (all share the
+ * shared `AudioTranslationEventData` shape). The translated audio nests under
+ * [translatedAudio] with the top-level target language in [language]; the gateway keys
+ * a voice-cloned rendering of the original voice note into the viewer's language.
+ *
+ * Faithful to `packages/shared/types/socketio-events.ts` `AudioTranslationEventData`.
+ * Deserialization is lenient ([url]/[language] default to blank) so a malformed frame
+ * is dropped by the merge no-op rather than throwing at decode time.
+ */
 @Serializable
 data class AudioTranslationEvent(
     val messageId: String,
     val conversationId: String,
     val attachmentId: String? = null,
-    val targetLanguage: String,
-    val audioUrl: String,
+    val language: String = "",
+    val translatedAudio: TranslatedAudioPayload = TranslatedAudioPayload(),
+    val processingTimeMs: Long? = null,
+)
+
+@Serializable
+data class TranslatedAudioPayload(
+    val id: String? = null,
+    val targetLanguage: String? = null,
+    val url: String = "",
+    val transcription: String = "",
     val durationMs: Long? = null,
+    val format: String? = null,
     val cloned: Boolean = false,
+    val quality: Double? = null,
+    val voiceModelId: String? = null,
+    val ttsModel: String? = null,
 )
 
 @Serializable

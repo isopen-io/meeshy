@@ -4,6 +4,57 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-10 **live cloned-voice audio translation** landed (slice `chat-live-audio-translation`,
+> Translation §D — feature-parity.md "Real-time progressive translation/transcription socket updates" audio-voice
+> arm now shipped; the last dead `MessageSocketManager` flow is now wired). A voice note reaches the client in its
+> original language; when the translator finishes a **voice-cloned** rendering in a requested language, the gateway
+> pushes `audio:translation-ready` and the open audio bubble now plays the viewer's-language cloned voice the
+> instant it lands. **Root cause it was dead:** the Android `AudioTranslationEvent` was **flat**
+> (`targetLanguage`/`audioUrl`) but the gateway nests the payload under `translatedAudio` with the target language
+> at the top-level `language` (shared `AudioTranslationEventData`), so every frame threw `MissingFieldException` at
+> decode and was silently dropped — the flow existed but never delivered. **(1) Model** — reshaped
+> `AudioTranslationEvent` to the real nested shape (`translatedAudio: TranslatedAudioPayload`, top-level
+> `language`), all fields lenient-defaulted so a malformed frame decodes to blanks and is dropped by the merge
+> no-op instead of throwing. **(2) Pure core** — new `:core:model`
+> `AttachmentAudioTranslationMerge.mergeAudioTranslation(...) → ApiMessage?`, the audio sibling of
+> `AttachmentTranscriptionMerge`: upserts the cloned-voice `ApiAttachmentTranslation` (`type="audio"`, url,
+> transcription, cloned, quality, ttsModel…) into the target audio attachment's `translations` map (case-
+> insensitive key, order preserved). **No-op (→ null)** on a deleted tombstone, blank language, **blank url**
+> (never store an unplayable translation), no matching/audio target, or an identical entry already present
+> (idempotent — same url + transcription). Target selection mirrors the transcription merge (explicit id → first
+> audio attachment). **(3) Projection** — `:sdk-ui` `BubbleContentBuilder.resolveTranslatedAudio` +
+> `BubbleAudio.isAudioTranslated`/`audioLanguage`: the played `url` resolves to the preferred-language cloned
+> voice (the **original** voice wins when it is the top preference), the cloned-voice `durationMs` overrides the
+> original when a translation plays, and it iterates the same preferred order as `resolveTranscription` so the
+> played voice and the surfaced transcription line always agree. Android plays the viewer's-language voice by
+> default — iOS defaults to the original and requires a manual language pick, so this **surpasses** it. **(4)
+> Repo/VM** — `:sdk-core` `MessageRepository.applyAudioTranslation` applies it via `updateCachedMessage` (no
+> outbox — inbound server truth); `ChatViewModel` collects `audioTranslationReady` conversation-scoped, next to
+> the translation/transcription collectors. **+37 tests**: `AttachmentAudioTranslationMergeTest` 18 (single-audio
+> fallback / by-id / unknown-id→no-op / blank-id+no-audio→no-op / blank-language→no-op / blank-url→no-op /
+> whitespace-url→no-op / deleted→no-op / identical→no-op / case-insensitive-key idempotent / new-url replaces in
+> place under existing key / differing-transcription replaces / new-language appends preserving existing / stamps
+> format+cloned+quality+voiceModelId+ttsModel+duration / language-key-trimmed / other-attachments preserved /
+> unrelated-fields preserved), `AudioTranslationEventTest` 2 (nested gateway JSON decodes to the flat-consumable
+> event / missing-translatedAudio → blank defaults not a throw — locks the wire contract that was broken),
+> `BubbleContentBuilderTest` +8 (plays preferred cloned voice / original-is-top-pref keeps original / translation
+> with transcription-but-no-url keeps original voice yet shows translated text / blank-url falls back / cloned-
+> voice duration overrides / case-insensitive key / highest-priority pref wins / no-translations keeps original),
+> `MessageRepositoryTest` +4 (upserts without outbox / single-audio fallback / unknown-message inert / blank-url
+> inert), `ChatViewModelTest` +2 (applies in open conversation / ignores elsewhere) + 3 mock-wiring. **RED
+> verified**: the new tests reference symbols absent on `main` (`AttachmentAudioTranslationMerge`,
+> `applyAudioTranslation`, `isAudioTranslated`, `audioLanguage`, the reshaped `AudioTranslationEvent`) — compile-
+> RED; the projection tests fail behaviourally against the old `buildAudio` (which always used `fileUrl` and never
+> resolved a translated source). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL. Reviewer:
+> PASS (diff `apps/android` only; **SDK purity** — the merge is a stateless rule engine with opaque params in
+> `:core:model`, the projection an opaque-param builder in `:sdk-ui`, the *when-to-apply* orchestration in the VM;
+> **SSOT** — reuses `LanguageResolver.preferredContentLanguages` + `updateCachedMessage`, no re-implementation;
+> **UDF/instant-app** — live cache-stream re-render, no blocking spinner; **UX coherence** — one natural bubble,
+> played voice ↔ transcription line agree; **no coverage floor lowered, no existing test weakened**). **Next:** the
+> per-post / per-story translation flag strip (§D "Per-post and per-story translation"), or the audio-translation
+> **failed** arm (`audio:translation-failed` → clear the processing spinner + retry affordance), or persisted
+> translations/transcriptions/audio across cold start (§D "offline Prisme").
+
 > On 2026-07-10 **the per-message language explorer sheet** landed (slice `chat-message-detail-explorer`,
 > Translation §D — feature-parity.md "Message detail: per-language translation explorer + on-demand translate
 > / retranslate" now fully shipped). The prior slices left the flag strip tappable and on-demand translation
