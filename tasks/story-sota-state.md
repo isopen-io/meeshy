@@ -1010,11 +1010,83 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   connu qu'après le push, un `git commit tasks/story-sota-state.md` immédiat suit le push
   (ne pas accumuler).
 
+### MISSION D — chrome « au bon moment, à portée de doigts » (directive user 2026-07-10, IMG_0944/0976/0984)
+
+> Session distante Linux (branche `claude/story-system-redesign-r972q7`) — gateway testé
+> sous bun ici ; Swift relu ligne à ligne, builds/tests iOS à exécuter en CI/simulateur.
+
+- [x] **D1 (P1) Présence auteur ABSENTE du payload stories** → interstitiel « Hors ligne »
+  à tort ou résolu en retard. ✅ it.94 : `storyAuthorSelect` (= authorSelect + isOnline +
+  lastActiveAt, dérivé par spread) appliqué au chemin stories UNIQUEMENT (full
+  `storyPostInclude` + tray `trayStorySelect`) — l'audience est déjà gatée par la
+  visibilité story ; le feed posts garde l'author lean. Types partagés
+  `PostAuthor.isOnline?/lastActiveAt?`. SDK : `APIAuthor.isOnline/lastActiveAt`
+  (optionnels rétro-compat), `StoryGroup.authorPresence: UserPresence?` propagé par
+  `toStoryGroups` (+3 tests SDK). 3 tests gateway RED→GREEN
+  (`PostFeedService.stories-presence.test.ts`).
+- [x] **D2 (P0) Interstitiel de groupe affiché EN OVERLAY translucide du slide déjà rendu**
+  (IMG_0976 : chrome + FABs visibles derrière « Windie Nh — Hors ligne »). ✅ it.94 :
+  (a) base `Color.black` OPAQUE sous la bannière (pendant le chargement de la bannière,
+  CachedAsyncImage rend un placeholder translucide — le slide transparaissait) ;
+  (b) présentation INSTANTANÉE (plus de fade-in 0,22 s) dans la même transaction que le
+  swap de groupe — le slide n'est jamais visible avant l'intro, seule la SORTIE est
+  animée (c'est elle qui révèle le slide) ; (c) présence résolue AU switch :
+  `presenceMap[userId] ?? group.authorPresence` (realtime prioritaire, snapshot serveur
+  en fallback) ; (d) pré-résolution des identités des groupes ADJACENTS
+  (`prefetchNeighborGroupIntros`, cache session `groupIntroCache`) — l'intro s'affiche
+  COMPLÈTE (nom, bannière, mood) dès la première frame, plus d'enrichissement visible.
+- [x] **D3 (P1) Rail d'actions du viewer : trop d'espace + apparitions en second temps**
+  (IMG_0984). ✅ it.94 : `StoryActionRailPlan` (rule engine pur, 5 tests
+  `StoryActionRailPlanTests`) — le SET de boutons est résolu d'un bloc à l'ENTRÉE du
+  slide depuis le payload (compteurs inclus) et FIGÉ pendant la lecture ; la
+  réconciliation commentaires met à jour le COMPTEUR mais ne fait plus surgir le bouton
+  mid-slide. Densité : spacing 20/14 → 8/6, padding vertical bouton 8 → 3, gap
+  glyph→label 4 → 2 ; rail ancré en BAS de sa bande (`.bottomTrailing`) — à portée de
+  pouce, plus de vide central.
+- [x] **D4 (P1) Composer : outils en barre HORIZONTALE bas + header en icônes flottantes**
+  (IMG_0944 transposé). ✅ it.94 : `ComposerFABColumn` = HStack centré bas (48 pt,
+  6 outils = 338 pt ≤ SE 375 pt), badges/swipe-up/swipe-down/a11y/Equatable conservés ;
+  poignée fantôme C3 re-centrée. Header : barre 60 pt `.ultraThinMaterial` SUPPRIMÉE —
+  X flottant à gauche, cluster verre (undo/redo/visibilité/preview/publier/⋯) à droite,
+  AUCUN fond de barre ; slide strip = pill flottante autonome sous les icônes, visible
+  seulement si utile (`slides.count > 1 || composerHasContent`). `ComposerChromePolicy`
+  et la grammaire gestuelle existante inchangées.
+- [ ] **D5 (vérif) Passe simulateur/device** : composer (barre bas + header flottant +
+  strip conditionnel), viewer (rail compact ancré bas, membership figée), switch de
+  groupe (intro opaque instantanée, présence correcte pour un auteur en ligne).
+  + Déploiement gateway prod requis pour D1 (présence dans le payload).
+
 ## 7. Journal d'itérations (l'agent APPEND ici)
 
 > Format : `## it.N — <titre> (<commit>)` + preuves (RED reproduit, tests verts, vérif visuelle)
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
+
+## it.94 — MISSION D (directive 2026-07-10) : présence au switch + rail figé/dense + composer barre bas/header flottant (27d3fac→83e7bfe)
+
+- Session Claude Code distante (Linux, branche `claude/story-system-redesign-r972q7`) —
+  cartographie par 3 agents parallèles (composer / viewer / backend) avant toute ligne.
+- D1 gateway+shared `27d3fac` : `storyAuthorSelect` scoped stories (full+tray), test de
+  scoping (feed posts SANS présence). Vérifs LOCALES sous bun : suite nouvelle 3/3,
+  suites feed 127/127, suites stories/includes 26/26, `tsc --noEmit` gateway exit 0,
+  build shared vert. ⚠️ Le payload prod ne portera la présence qu'après déploiement
+  gateway (comme G1a).
+- D1 SDK `0fb6bfb` : APIAuthor.isOnline/lastActiveAt + StoryGroup.authorPresence
+  (+3 tests StoryModelsTests). Init explicite APIAuthor avec défauts nil (les call
+  sites memberwise des tests compilent inchangés).
+- D3 `2ᵉ commit viewer` : StoryActionRailPlan figé par slide (@State + adaptiveOnChange
+  story.id, fallback liveRailPlan au premier rendu — les compteurs sont seedés SYNC par
+  startTimer avant le rendu, donc frozen == live à l'entrée) ; densité 8/6/3/2 ;
+  ancrage `.bottomTrailing` du Layer 8.
+- D2 `abd0346` : intro opaque instantanée + presenceMap ?? authorPresence +
+  prefetchNeighborGroupIntros/groupIntroCache.
+- D4 `83e7bfe` : ComposerFABColumn horizontal (l'ordre gauche→droite = media, text,
+  drawing, son, texture, timeline — fréquence d'usage décroissante) ; header barre
+  supprimé ; strip pill conditionnelle (`slides.count > 1 || composerHasContent`).
+- ⚠️ Swift NON compilé dans cette session (pas de toolchain) — relu ligne à ligne ;
+  CI iOS (xcodegen + build-for-testing) est le gate réel. D5 (passe simulateur) reste.
+- Piège évité : postinstall `turbo run generate` suspendu ~30 min dans ce conteneur
+  (cache distant inaccessible ?) — kill + `prisma generate` + `bun run build` manuels.
 
 ## it.1 — R1 : gel de progression étendu à l'audio (86c2c27de)
 
