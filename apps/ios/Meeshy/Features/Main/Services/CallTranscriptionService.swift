@@ -1,3 +1,4 @@
+import Foundation
 import Speech
 import AVFoundation
 import Combine
@@ -147,10 +148,21 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var rotationCount = 0
+    private var configurationChangeObserver: NSObjectProtocol?
 
     init(socket: any MessageSocketProviding = MessageSocketManager.shared) {
         self.socket = socket
     }
+
+    #if DEBUG
+    /// Test-only seam: `isTranscribing` is otherwise only flippable via
+    /// `startTranscribing`, which requires a real `SFSpeechRecognizer` +
+    /// `AVAudioEngine` unavailable in the unit test host (see
+    /// `applyRecognitionResult`'s doc comment for the same constraint).
+    func setTranscribingForTesting(_ value: Bool) {
+        isTranscribing = value
+    }
+    #endif
 
     // MARK: - Permission
 
@@ -224,6 +236,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     }
 
     func stopTranscribing() {
+        removeConfigurationObserver()
         stopLocalCapture()
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -288,12 +301,55 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         audioEngine.prepare()
         try audioEngine.start()
+        observeConfigurationChanges()
     }
 
     private func stopLocalCapture() {
         guard audioEngine.isRunning else { return }
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
+    }
+
+    /// A route change mid-capture (Bluetooth connect/disconnect, headphones,
+    /// hardware reconfiguration) posts this notification with a new
+    /// `inputNode` format — Apple's documented pattern for any long-lived tap
+    /// is to reinstall it with the fresh format, otherwise the tap's stale
+    /// format mismatches CoreAudio's new hardware format (crash) or the
+    /// recognizer silently stops receiving audio. This engine is independent
+    /// of the WebRTC/`RTCAudioSession` route-change handling in CallManager
+    /// (see its `AVAudioSession.routeChangeNotification` observer), which
+    /// only fixes up the call's own audio path, not this one.
+    private func observeConfigurationChanges() {
+        removeConfigurationObserver()
+        configurationChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: audioEngine,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleAudioEngineConfigurationChange()
+            }
+        }
+    }
+
+    private func handleAudioEngineConfigurationChange() {
+        guard isTranscribing, let request else { return }
+        reinstallTap(for: request)
+        if !audioEngine.isRunning {
+            do {
+                try audioEngine.start()
+            } catch {
+                callsLogger.error("Failed to restart AVAudioEngine after configuration change: \(error.localizedDescription)")
+            }
+        }
+        callsLogger.info("Reinstalled transcription tap after AVAudioEngine configuration change")
+    }
+
+    private func removeConfigurationObserver() {
+        if let configurationChangeObserver {
+            NotificationCenter.default.removeObserver(configurationChangeObserver)
+        }
+        configurationChangeObserver = nil
     }
 
     /// See `startLocalCapture`'s doc comment — same `@Sendable`-typed-local
@@ -331,12 +387,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             let errorDescription = error.localizedDescription
             Task.detached(priority: .utility) { [weak self] in
                 await MainActor.run { [weak self] in
-                    guard let self, self.isTranscribing else { return }
-                    self.lastError = .recognitionFailed(underlying: NSError(
+                    self?.applyRecognitionError(.recognitionFailed(underlying: NSError(
                         domain: "CallTranscriptionService",
                         code: -2,
                         userInfo: [NSLocalizedDescriptionKey: errorDescription]
-                    ))
+                    )))
                     callsLogger.error("Recognition error: \(errorDescription, privacy: .public)")
                 }
             }
@@ -379,6 +434,19 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         guard isFinal else { return }
         emitFinalSegment(text: text, speakerId: speakerId, startMs: startMs, endMs: endMs, confidence: confidence, language: language)
         rotateRecognitionRequest(language: language)
+    }
+
+    /// Internal (not `private`) so `CallTranscriptionServiceTests` can drive
+    /// it directly, matching `applyRecognitionResult`'s pattern. A recognizer
+    /// error means captions have genuinely stopped producing results — stop
+    /// transcribing so `isTranscribing` (which the captions toggle is driven
+    /// off, see `CallView`) reflects reality instead of staying lit while
+    /// nothing updates, then restore `lastError` since `stopTranscribing()`
+    /// clears it.
+    func applyRecognitionError(_ error: TranscriptionError) {
+        guard isTranscribing else { return }
+        stopTranscribing()
+        lastError = error
     }
 
     private func emitFinalSegment(text: String, speakerId: String, startMs: Int, endMs: Int, confidence: Double, language: String) {
