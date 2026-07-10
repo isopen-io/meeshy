@@ -74,6 +74,8 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
   if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
   if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
   if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
+  if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
+  if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
   if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
   if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
   return SERVER_EVENTS.MESSAGE_NEW;
@@ -400,6 +402,10 @@ export class MeeshySocketIOManager {
     // ReactionHandler enqueues reaction add/remove for offline peers on the
     // same instance, so their reaction state converges on reconnect.
     this.reactionHandler.setDeliveryQueue(queue);
+    // Same for per-attachment reactions — without this an attachment reaction
+    // toggled while a peer is offline was only broadcast to the live room and
+    // was lost forever (their cached reactionSummary stayed stale).
+    this.attachmentReactionHandler.setDeliveryQueue(queue);
   }
 
   private async _drainPendingMessages(userId: string, isAnonymous: boolean): Promise<void> {

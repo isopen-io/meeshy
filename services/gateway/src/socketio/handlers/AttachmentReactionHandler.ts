@@ -10,6 +10,7 @@ import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import { resolveParticipantFromMessage } from '../utils/participant-resolver';
 import type { SocketUser } from '../utils/socket-helpers';
 import { AttachmentReactionService } from '../../services/AttachmentReactionService';
+import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
@@ -22,11 +23,23 @@ export interface AttachmentReactionHandlerDependencies {
   service: AttachmentReactionService;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
+  deliveryQueue?: RedisDeliveryQueue | null;
 }
 
 export class AttachmentReactionHandler {
   private rateLimiter = getSocketRateLimiter();
-  constructor(private deps: AttachmentReactionHandlerDependencies) {}
+  private deliveryQueue: RedisDeliveryQueue | null;
+  constructor(private deps: AttachmentReactionHandlerDependencies) {
+    this.deliveryQueue = deps.deliveryQueue ?? null;
+  }
+
+  /**
+   * Injected after construction by `MeeshySocketIOManager.setDeliveryQueue`
+   * (the queue is created after the handlers), mirroring ReactionHandler.
+   */
+  setDeliveryQueue(queue: RedisDeliveryQueue): void {
+    this.deliveryQueue = queue;
+  }
 
   async handleAdd(
     socket: Socket,
@@ -140,7 +153,7 @@ export class AttachmentReactionHandler {
       const event = action === 'add'
         ? SERVER_EVENTS.ATTACHMENT_REACTION_ADDED
         : SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
-      this.deps.io.to(ROOMS.conversation(conversationId)).emit(event, {
+      const payload = {
         attachmentId: data.attachmentId,
         messageId: data.messageId,
         conversationId,
@@ -149,12 +162,70 @@ export class AttachmentReactionHandler {
         action,
         reactionSummary,
         timestamp: new Date().toISOString(),
-      });
+      };
+      this.deps.io.to(ROOMS.conversation(conversationId)).emit(event, payload);
+
+      void this._enqueueOfflineAttachmentReactionEvent(
+        conversationId,
+        resolved.participantId,
+        action === 'add' ? 'attachment-reaction-added' : 'attachment-reaction-removed',
+        data,
+        payload,
+      );
 
       callback?.({ success: true });
     } catch (error: unknown) {
       logger.error('attachment reaction failed', { action, error });
       callback?.({ success: false, error: error instanceof Error ? error.message : 'Failed' });
+    }
+  }
+
+  /**
+   * Offline delivery queue for attachment reaction add/remove — the exact
+   * mirror of `ReactionHandler._enqueueOfflineReactionEvent`. Without it an
+   * attachment reaction toggled while a participant is offline is only
+   * broadcast to the live conversation room, so the offline peer's cached
+   * per-attachment `reactionSummary` stays stale until an unrelated full
+   * refetch. On reconnect `MeeshySocketIOManager._drainedEventName` replays the
+   * queued entry as ATTACHMENT_REACTION_ADDED / ATTACHMENT_REACTION_REMOVED
+   * with the same payload as the live emit.
+   *
+   * The actor is excluded by participant id (never on message content) and
+   * every online peer is skipped since they already received the live
+   * broadcast. `dedupKey` is scoped to (attachmentId, reactor, emoji) — finer
+   * than a message reaction's (messageId, reactor, emoji) because one message
+   * can carry several attachments each with their own reactions; the default
+   * (messageId, eventType) dedup would otherwise collapse reactions on
+   * different attachments of the same message into one.
+   */
+  private async _enqueueOfflineAttachmentReactionEvent(
+    conversationId: string,
+    actorParticipantId: string | null | undefined,
+    eventType: 'attachment-reaction-added' | 'attachment-reaction-removed',
+    data: { attachmentId: string; messageId: string; emoji: string },
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.deliveryQueue) return;
+    try {
+      const participants = await this.deps.prisma.participant.findMany({
+        where: { conversationId, isActive: true },
+        select: { id: true, userId: true },
+      });
+      const dedupKey = `${data.attachmentId}:${actorParticipantId ?? 'unknown'}:${data.emoji}`;
+      for (const p of participants) {
+        const queueKey = p.userId ?? p.id;
+        if (p.id === actorParticipantId || this.deps.connectedUsers.has(queueKey)) continue;
+        this.deliveryQueue.enqueue(queueKey, {
+          messageId: data.messageId,
+          conversationId,
+          payload,
+          enqueuedAt: new Date().toISOString(),
+          eventType,
+          dedupKey,
+        }).catch((err) => logger.warn('Failed to enqueue offline attachment reaction event', { userId: queueKey, eventType, error: err }));
+      }
+    } catch (err) {
+      logger.warn('Failed to fetch participants for offline attachment reaction enqueue', { conversationId, eventType, error: err });
     }
   }
 }
