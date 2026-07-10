@@ -229,6 +229,32 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertTrue(sut.hasOlderMessages)
     }
 
+    func test_loadOlderMessages_missingCursorPagination_keepsPaginationOpenOnFullPage() async {
+        // Gateway antérieur au fix de schéma Fastify : `cursorPagination` est
+        // strippé de la réponse. L'ancien `?? false` verrouillait la pagination
+        // après une seule page ; une page pleine doit la laisser ouverte.
+        let initial: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"msg-1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello","createdAt":"2026-01-02T00:00:00.000Z"}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":null,"limit":50},"hasNewer":null}
+        """)
+        mockMessageService.listResult = .success(initial)
+        let olderData = (0..<50).map { i in
+            "{\"id\":\"older-\(i)\",\"conversationId\":\"\(testConversationId)\",\"senderId\":\"\(testUserId)\",\"content\":\"m\(i)\",\"createdAt\":\"2026-01-01T00:00:\(String(format: "%02d", i)).000Z\"}"
+        }.joined(separator: ",")
+        let older: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[\(olderData)],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+        mockMessageService.listBeforeResult = .success(older)
+        let sut = makeSUT()
+        await sut.loadMessages()
+
+        await sut.loadOlderMessages()
+
+        XCTAssertTrue(sut.hasOlderMessages,
+                      "A gateway stripping cursorPagination must not latch pagination closed after a full page")
+    }
+
     func test_loadMessages_failure_keepsEmptyMessagesAndFinishesLoading() async {
         mockMessageService.listResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Server error"]))
         let sut = makeSUT()

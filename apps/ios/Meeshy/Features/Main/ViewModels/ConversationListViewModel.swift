@@ -1189,10 +1189,19 @@ class ConversationListViewModel: ObservableObject {
 
         do {
             let userId = currentUserId
+            // Curseur de secours quand aucun `nextCursor` n'est connu (full
+            // sync partiel, curseur jamais persisté) : la conversation
+            // chargée la plus ancienne par `lastMessageAt` — même sémantique
+            // que le curseur gateway (`before` pagine par lastMessageAt
+            // strictement plus ancien). Sans lui, on refetcherait la page 1
+            // déjà affichée et le zero-progress guard ci-dessous forcerait
+            // `.exhausted`, bloquant l'infinite scroll sur les comptes dont
+            // le full sync s'est arrêté en cours de route.
             let previousCursor = nextCursor
+                ?? conversations.min(by: { $0.lastMessageAt < $1.lastMessageAt })?.id
             let knownIds = Set(conversations.map(\.id))
             let page = try await conversationService.listPage(
-                before: nextCursor,
+                before: previousCursor,
                 limit: pageLimit,
                 currentUserId: userId
             )
@@ -1317,14 +1326,13 @@ class ConversationListViewModel: ObservableObject {
     /// (forceRefresh), pour que les tests unitaires puissent vérifier
     /// la liste exacte des stores touchés.
     ///
-    /// Couvre 11 caches pertinents pour la home :
+    /// Couvre 9 caches de métadonnées pertinents pour la home :
     /// - Listing + pagination (re-fetché immédiatement par forceRefresh)
     /// - Stories (re-fetché actif par StoryViewModel.loadStories forceNetwork)
     /// - Messages cached par conversation (l'ouverture d'une conv après
     ///   refresh re-fetchera depuis le serveur)
     /// - Préférences user/conversation, catégories, tags
     /// - Profils (mood, presence, last seen)
-    /// - Assets visuels (avatars, bannières, thumbs)
     /// - Caches mémoire de traduction/transcription : re-traduction
     ///   garantie après refresh (utile si modèle NLLB côté serveur a
     ///   été mis à jour ou si l'utilisateur a changé sa langue préférée)
@@ -1332,8 +1340,15 @@ class ConversationListViewModel: ObservableObject {
     /// Stores intentionnellement laissés intacts (autres écrans ou
     /// coût bande passante prohibitif) : feed, comments, stats,
     /// notifications, friends, friendRequests, blockedUsers, userSearch,
-    /// timeline, audio, video, affiliateTokens, shareLinks,
-    /// trackingLinks, communityLinks.
+    /// timeline, affiliateTokens, shareLinks, trackingLinks, communityLinks.
+    ///
+    /// Les stores MÉDIA (images, thumbnails, audio, video) ne sont JAMAIS
+    /// invalidés ici : exigence local-first « téléchargé une fois = jamais
+    /// re-téléchargé tant que l'app est installée ». Les URLs médias sont
+    /// immuables côté gateway (max-age=1 an) — si un avatar change, son URL
+    /// change, donc invalider les octets ne rafraîchit rien de plus que le
+    /// refetch des métadonnées ci-dessus. (Audit 2026-07-10 : chaque pull
+    /// re-téléchargeait l'intégralité des avatars/covers, ~3 Mo minimum.)
     private func invalidatePullRefreshScope() async {
         // Listing + pagination (re-fetché immédiatement par forceRefresh)
         await CacheCoordinator.shared.conversations.invalidateAll()
@@ -1355,11 +1370,6 @@ class ConversationListViewModel: ObservableObject {
         await CacheCoordinator.shared.userTags.invalidateAll()
         // Profils (mood, presence cachée, dernière vue)
         await CacheCoordinator.shared.profiles.invalidateAll()
-        // Assets visuels (avatars + bannières partagent le store images,
-        // les thumbs de message ont leur propre store). Re-download au
-        // prochain rendu des AsyncImage.
-        await CacheCoordinator.shared.images.invalidateAll()
-        await CacheCoordinator.shared.thumbnails.invalidateAll()
         // Caches in-memory de traduction/transcription/audio + DB. Force
         // une retraduction si le serveur a publié de nouvelles versions
         // ou si l'utilisateur a changé sa langue préférée entre temps.

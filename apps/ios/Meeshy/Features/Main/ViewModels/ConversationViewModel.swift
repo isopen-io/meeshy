@@ -1779,10 +1779,11 @@ class ConversationViewModel: ObservableObject {
             // rows from GRDB, so going through the sync engine would leave the
             // GRDB window stuck on the initial load and latch
             // hasOlderMessages to false on the very first scroll trigger.
+            let olderPageLimit = 50
             let response = try await messageService.listBefore(
                 conversationId: conversationId,
                 before: beforeValue,
-                limit: 50,
+                limit: olderPageLimit,
                 includeReplies: true,
                 includeTranslations: true
             )
@@ -1810,9 +1811,14 @@ class ConversationViewModel: ObservableObject {
             let didLoad = await messageStore.loadOlder(before: oldestCreatedAt)
             if didLoad { prefetchRecentMedia() }
 
-            // Server is the source of truth for pagination state.
+            // Server is the source of truth for pagination state. Fallback :
+            // les gateways antérieurs au fix de schéma Fastify strippaient
+            // `cursorPagination` de la réponse — `?? false` verrouillait alors
+            // la pagination après une seule page. Une page pleine (>= limit,
+            // le mode cursor pouvait renvoyer limit+1) implique une suite.
             nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? false
+            hasOlderMessages = response.cursorPagination?.hasMore
+                ?? (response.data.count >= olderPageLimit)
         } catch {
             // Transient failure — keep hasOlderMessages so the next scroll
             // retries. Debounce prevents tight retry loops.
@@ -3569,7 +3575,11 @@ class ConversationViewModel: ObservableObject {
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? false
+            // Fallback optimiste pour les gateways qui strippaient
+            // `cursorPagination`/`hasNewer` (schéma Fastify) : une fenêtre non
+            // vide laisse la pagination ouverte ; le prochain loadOlderMessages
+            // la refermera proprement sur une page vide.
+            hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
             hasNewerMessages = response.hasNewer ?? false
             isInJumpedState = true
         } catch {
@@ -3633,7 +3643,11 @@ class ConversationViewModel: ObservableObject {
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? false
+            // Fallback optimiste pour les gateways qui strippaient
+            // `cursorPagination`/`hasNewer` (schéma Fastify) : une fenêtre non
+            // vide laisse la pagination ouverte ; le prochain loadOlderMessages
+            // la refermera proprement sur une page vide.
+            hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
             hasNewerMessages = response.hasNewer ?? false
             isInJumpedState = true
 
