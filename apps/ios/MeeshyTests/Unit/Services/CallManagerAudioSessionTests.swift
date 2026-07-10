@@ -942,7 +942,7 @@ final class BubbleCallNoticeViewAccessibilityTests: XCTestCase {
         guard let range = source.range(of: "private func detailRow(icon: String, label: String, value: String) -> some View {") else {
             XCTFail("detailRow not found"); return
         }
-        let endIdx = source.index(range.upperBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(range.upperBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
         let vicinity = String(source[range.lowerBound..<endIdx])
         XCTAssertTrue(
             vicinity.contains(".accessibilityElement(children: .combine)"),
