@@ -565,7 +565,7 @@ struct CallView: View {
                 if sdpOfferSlow {
                     Text(String(localized: "call.outgoing.waiting.hint", defaultValue: "Le correspondant n'a pas encore répondu.", bundle: .main))
                         .font(.caption2)
-                        .foregroundColor(.white.opacity(0.45))
+                        .foregroundColor(.white.opacity(0.6))
                         .multilineTextAlignment(.center)
                         .transition(.opacity)
                 }
@@ -1043,7 +1043,7 @@ struct CallView: View {
                     if videoConnectSlow {
                         Text(String(localized: "call.video.connecting.slow.hint", defaultValue: "L'audio est peut-être déjà actif.", bundle: .main))
                             .font(.caption2)
-                            .foregroundColor(.white.opacity(0.45))
+                            .foregroundColor(.white.opacity(0.6))
                             .multilineTextAlignment(.center)
                     }
                 }
