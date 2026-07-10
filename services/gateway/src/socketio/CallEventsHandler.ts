@@ -1664,12 +1664,6 @@ export class CallEventsHandler {
           return;
         }
 
-        // CALL-RESILIENCE — a (re)join cancels any pending disconnect grace timer
-        // for this user on this call: the participant's signaling socket is back
-        // (reconnected after a network blip or a gateway restart), so the call
-        // that was armed for grace-ending when their socket dropped must ride on.
-        this.cancelDisconnectGrace(data.callId, userId);
-
         logger.info('📞 Socket: call:join', {
           socketId: socket.id,
           userId,
@@ -1708,6 +1702,17 @@ export class CallEventsHandler {
           participantId: joinParticipantId,
           settings: data.settings
         });
+
+        // CALL-RESILIENCE — a (re)join cancels any pending disconnect grace
+        // timer for this user on this call: the participant's signaling
+        // socket is back (reconnected after a network blip or a gateway
+        // restart), so the call that was armed for grace-ending when their
+        // socket dropped must ride on. Deliberately placed AFTER joinCall
+        // succeeds (not before, where it previously lived) — a join that
+        // itself fails transiently (DB hiccup, race) must not silently
+        // disarm the grace timer protecting a call that is still genuinely
+        // active; the timer is the only thing left standing in that case.
+        this.cancelDisconnectGrace(data.callId, userId);
 
         const { callSession, iceServers } = joinResult;
 

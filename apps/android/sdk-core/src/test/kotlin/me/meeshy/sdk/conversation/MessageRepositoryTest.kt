@@ -9,6 +9,7 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
@@ -739,5 +740,114 @@ class MessageRepositoryTest {
 
         assertThat(cachedMessage("m1").readCount).isEqualTo(0)
         assertThat(cachedMessage("m1").deliveredCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `applyTranslation upserts a translation into the cached message without an outbox row`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyTranslation("m1", "fr", "Bonjour")
+
+        val message = cachedMessage("m1")
+        assertThat(message.translations.map { it.targetLanguage }).containsExactly("fr")
+        assertThat(message.translations.single().translatedContent).isEqualTo("Bonjour")
+        assertThat(outbox.deliverable("message:c1")).isEmpty()
+    }
+
+    @Test
+    fun `applyTranslation replaces the existing translation for the same language`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            translations = listOf(ApiTextTranslation(targetLanguage = "fr", translatedContent = "Salut")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranslation("m1", "fr", "Bonjour")
+
+        val message = cachedMessage("m1")
+        assertThat(message.translations).hasSize(1)
+        assertThat(message.translations.single().translatedContent).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `applyTranslation is inert on an unknown message id`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyTranslation("ghost", "fr", "Bonjour")
+
+        assertThat(cachedMessage("m1").translations).isEmpty()
+    }
+
+    @Test
+    fun `applyTranslation ignores a blank translation`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyTranslation("m1", "fr", "   ")
+
+        assertThat(cachedMessage("m1").translations).isEmpty()
+    }
+
+    @Test
+    fun `applyTranscription upserts a transcription onto the audio attachment without an outbox row`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranscription("m1", "a1", "Hello there", "en", 0.9, 4200L)
+
+        val attachment = cachedMessage("m1").attachments.single()
+        assertThat(attachment.transcription?.text).isEqualTo("Hello there")
+        assertThat(attachment.transcription?.language).isEqualTo("en")
+        assertThat(outbox.deliverable("message:c1")).isEmpty()
+    }
+
+    @Test
+    fun `applyTranscription falls back to the single audio attachment when no id is given`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranscription("m1", null, "Voice note", null, null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().transcription?.text).isEqualTo("Voice note")
+    }
+
+    @Test
+    fun `applyTranscription is inert on an unknown message id`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranscription("ghost", "a1", "Hello", "en", null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().transcription).isNull()
+    }
+
+    @Test
+    fun `applyTranscription ignores a blank transcription`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranscription("m1", "a1", "   ", "en", null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().transcription).isNull()
     }
 }
