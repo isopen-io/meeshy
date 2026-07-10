@@ -2476,3 +2476,48 @@ intégralement pour confirmer l'absence de recouvrement avant d'implémenter quo
   fast-path `duration:0` (non atteignable, documenté ci-dessus), speaker toggle no-op web (nécessite design
   dédié), group-call `enableVideo`/`disableVideo` rollback (non atteignable tant que groupe pas livré),
   `useWebRTC.switchCamera` dead-code sans `replaceTrack` (à nettoyer ou corriger).
+
+## Vague 34 — `useWebRTC.switchCamera` (web) : dead code buggy supprimé (2026-07-10)
+
+Point d'entrée : routine calling-feature. Reprise directe des 4 candidats déjà documentés dans les notes
+de PR #1780 / Vague 33 plutôt qu'un audit neuf. Candidat #1 (`handleSpeakerToggle` no-op) confirmé toujours
+hors grain "un bug + fix minimal" (nécessite un vrai design de registre de refs `<video>` + énumération de
+devices). Candidat #2 (`enableVideo`/`disableVideo` `Promise.all` sans rollback) confirmé toujours non
+atteignable : `use-active-peer-connection.ts` documente toujours l'invariant P2P 1:1 strict, aucun appel de
+groupe livré. Candidat #4 (iOS `CallManager.swift`) : `which xcodebuild`/`which swift` → aucun toolchain
+Swift dans ce sandbox (confirmé, cohérent avec 33 vagues précédentes) — non touché, noté tel quel.
+
+- **[CLEANUP web, CONFIRMÉ + APPLIQUÉ, TDD]** Candidat #3 : `components/video-calls/hooks/useWebRTC.ts`
+  reconfirmé mort. Grep exhaustif de `useWebRTC(` (pas seulement `switchCamera`) sur tout `apps/web` :
+  seuls hits restants avant fix = sa propre déclaration, l'export barrel `index.ts`, et sa propre section
+  README — **aucun test ne l'importait plus** (la note de la Vague 33 « seul son propre test l'importe »
+  est devenue stale : ce test avait déjà disparu, `find -iname "*useWebRTC*"` ne retournait que le fichier
+  source lui-même). Aucun import du barrel `components/video-calls` nulle part dans `apps/web` non plus
+  (`from '@/components/video-calls'` : 0 hit) — le composant réellement monté, `VideoCallInterface.tsx`,
+  utilise `useWebRTCP2P` (`@/hooks/use-webrtc-p2p.ts`) et porte sa propre `handleSwitchCamera` (l.361-393)
+  qui, elle, appelle correctement `RTCRtpSender.replaceTrack` sur chaque sender vidéo AVANT de stopper
+  l'ancienne piste — exactement l'implémentation que le hook mort aurait dû avoir mais n'a jamais eue
+  (son `switchCamera` mute juste le `MediaStream` local via `removeTrack`/`addTrack`, sans jamais toucher
+  aux `RTCRtpSender`, donc n'aurait jamais propagé le changement de caméra à un pair distant si jamais
+  câblé). Précédent direct dans ce même fichier : Vague 11 avait déjà traité un cas identique
+  (`useCallSignaling.ts`, mort, supprimé sans TDD comportemental car aucun comportement n'était atteignable
+  à caractériser). **Fix** : suppression du fichier `hooks/useWebRTC.ts` (179 lignes), de son export dans
+  `index.ts` (3 lignes), et de sa section obsolète dans `README.md` (remplacée par une note pointant vers
+  `useWebRTCP2P`/`VideoCallInterface.handleSwitchCamera`, même pattern que la note laissée pour
+  `useCallSignaling` en Vague 11). `hooks/useVideoFilters.ts` (seul autre fichier du dossier `hooks/`)
+  intact, non concerné. **Test TDD** (nouveau `__tests__/components/video-calls/index.test.ts`, évite
+  d'importer le barrel complet — trop de dépendances lourdes côté `VideoCallInterface` à mocker pour une
+  simple assertion de surface d'export) : 2 cas — le barrel `index.ts` n'exporte plus `useWebRTC` (source
+  lue via `fs`, pas d'import runtime) ; le fichier `hooks/useWebRTC.ts` n'existe plus sur disque
+  (`fs.existsSync`). RED confirmé sur les deux avant suppression (le barrel exportait bien `useWebRTC`,
+  le fichier existait bien). GREEN après suppression. Suite filtrée `call|webrtc` : 25 suites/461 tests
+  verts (dont le nouveau). `tsc --noEmit` web : 0 erreur avant et après (sandbox avec `bun install
+  --ignore-scripts` cette fois — `bun install` seul échoue sur le postinstall privé de `grpc-tools`,
+  dépendance du gateway sans rapport avec ce fix ; contourné avec `--ignore-scripts`, suffisant pour
+  jest/tsc qui n'ont pas besoin du binaire natif compilé).
+- **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, threading TTL, `call:force-leave`
+  server-emit ambiguïté, 3 findings iOS structurels Vague 28, landscape/Dynamic-Type Vague 28/29,
+  `updateCallStatus()` dead-code duration anchor (Vague 30), camera-flag rollback + `CXProviding` iOS
+  (Vague 31/32), `call:end` fast-path `duration:0` (non atteignable), speaker toggle no-op web (nécessite
+  design dédié), group-call `enableVideo`/`disableVideo` rollback (non atteignable tant que groupe pas
+  livré). `useWebRTC.switchCamera` dead-code (Vague 33) → **SUPPRIMÉ cette vague**, retiré de la liste.
