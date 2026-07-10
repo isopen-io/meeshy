@@ -48,6 +48,14 @@ export function CallManager() {
 
   const [incomingCall, setIncomingCall] = useState<CallInitiatedEvent | null>(null);
   const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Re-entrancy guard: `incomingCall` (and the Accept button it renders)
+  // isn't cleared until the getUserMedia + call:join ack round-trip settles,
+  // so a double-click/double-tap on Accept before then reaches
+  // handleAcceptCall twice concurrently — each acquiring its own
+  // MediaStream. Both overwrite `window.__preauthorizedMediaStream`; the
+  // loser's stream is never referenced again and its tracks are never
+  // stopped, leaving a mic/camera hot with nothing consuming it.
+  const acceptingCallIdRef = useRef<string | null>(null);
   // CALL-RESILIENCE — tracks whether we've already observed this effect's
   // first `connect`. Any subsequent `connect` is a genuine reconnect
   // (network blip or gateway restart) that must re-enter the call room —
@@ -387,6 +395,8 @@ export function CallManager() {
    */
   const handleAcceptCall = useCallback(async () => {
     if (!incomingCall) return;
+    if (acceptingCallIdRef.current === incomingCall.callId) return;
+    acceptingCallIdRef.current = incomingCall.callId;
 
     logger.debug('[CallManager]', 'Accepting call - callId: ' + incomingCall.callId);
 
@@ -400,6 +410,8 @@ export function CallManager() {
       // Stop ringtone immediately
       import('@/utils/ringtone').then(({ stopRingtone }) => {
         stopRingtone();
+      }).catch((error) => {
+        logger.error('[CallManager]', 'Failed to load ringtone module: ' + error?.message);
       });
 
       // Privacy fix (audit 2026-07-07): acquire local media BEFORE joining,
@@ -484,6 +496,8 @@ export function CallManager() {
       logger.error('[CallManager]', 'Failed to accept call: ' + (error?.message || 'Unknown error'));
       toast.error(t('calls.toasts.joinFailed'));
       setIncomingCall(null);
+    } finally {
+      acceptingCallIdRef.current = null;
     }
   }, [incomingCall, setCurrentCall, setInCall, setIceServers, clearCallTimeout]);
 
@@ -501,6 +515,8 @@ export function CallManager() {
     // Stop ringtone immediately
     import('@/utils/ringtone').then(({ stopRingtone }) => {
       stopRingtone();
+    }).catch((error) => {
+      logger.error('[CallManager]', 'Failed to load ringtone module: ' + error?.message);
     });
 
     // Emit leave event

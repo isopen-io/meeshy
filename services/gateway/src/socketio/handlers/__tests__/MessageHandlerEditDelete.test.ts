@@ -383,6 +383,28 @@ describe('MessageHandler — handleMessageEdit', () => {
     }));
   });
 
+  it('fans conversation:updated to participant user rooms so list-screen viewers refresh the preview on edit', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    // The preview-fanout helper reads the active participants + latest message.
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { userId: USER_ID },
+      { userId: 'user-B' },
+    ]);
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    const ioToMock = (deps.io.to as jest.Mock<any>);
+    const targetedRooms = ioToMock.mock.calls.map((c: any[]) => c[0]);
+    expect(targetedRooms).toContain(`user:${USER_ID}`);
+    expect(targetedRooms).toContain('user:user-B');
+    const mockToResult = ioToMock.mock.results[0]?.value as any;
+    expect(mockToResult.emit).toHaveBeenCalledWith(
+      'conversation:updated',
+      expect.objectContaining({ conversationId: VALID_CONV_ID, lastMessageId: VALID_MSG_ID }),
+    );
+  });
+
   it('calls callback with success and messageId on success', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });

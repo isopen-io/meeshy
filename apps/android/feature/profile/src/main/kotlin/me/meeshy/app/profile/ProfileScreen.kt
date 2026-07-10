@@ -620,7 +620,7 @@ private fun ContentLanguageField(
                 .clickable { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LanguageData.allLanguages.forEach { lang ->
+            LanguageData.allLanguagesCommonFirst.forEach { lang ->
                 DropdownMenuItem(
                     text = { Text("${lang.flag} ${lang.name}") },
                     onClick = {

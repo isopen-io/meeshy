@@ -4192,8 +4192,8 @@ describe('MeeshySocketIOManager', () => {
       (manager as any).readStatusService = readStatusSvc;
 
       prisma.participant.findMany.mockResolvedValue([
-        { id: 'part-1', conversationId: convId1 },
-        { id: 'part-2', conversationId: convId2 },
+        { id: 'part-1', conversationId: convId1, userId },
+        { id: 'part-2', conversationId: convId2, userId },
       ]);
 
       const pending = [
@@ -4225,6 +4225,43 @@ describe('MeeshySocketIOManager', () => {
       );
     });
 
+    it('fans the receipt out to every participant user room, not just the conversation room, so a sender who left the conversation view still gets it', async () => {
+      const userId = 'user-drain-reconnect';
+      const senderId = 'user-sender-away';
+      const convId = '507f1f77bcf86cd799439221';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      // Both the reconnecting recipient and the original sender are active
+      // participants; the sender's socket is no longer in the conversation room.
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-recipient', conversationId: convId, userId },
+        { id: 'part-sender', conversationId: convId, userId: senderId },
+      ]);
+
+      const pending = [
+        { messageId: 'msg-away', conversationId: convId, payload: {}, enqueuedAt: 1 },
+      ];
+
+      ioState.to.mockClear();
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+
+      // Receipt marked on the reconnecting recipient's participant row.
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-recipient', convId, 'msg-away');
+      // The emit must target the conversation room AND both participants' user
+      // rooms — otherwise the away sender never sees "delivered".
+      expect(ioState.to).toHaveBeenCalledWith(`conversation:${convId}`);
+      expect(ioState.to).toHaveBeenCalledWith(`user:${senderId}`);
+      expect(ioState.to).toHaveBeenCalledWith(`user:${userId}`);
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.READ_STATUS_UPDATED,
+        expect.objectContaining({ conversationId: convId, userId, type: 'received' })
+      );
+    });
+
     it('keeps only the latest messageId when same conversationId appears multiple times', async () => {
       const userId = 'user-drain-dedup';
       const convId = '507f1f77bcf86cd799439213';
@@ -4234,7 +4271,7 @@ describe('MeeshySocketIOManager', () => {
       (manager as any).readStatusService = readStatusSvc;
 
       prisma.participant.findMany.mockResolvedValue([
-        { id: 'part-dedup', conversationId: convId },
+        { id: 'part-dedup', conversationId: convId, userId },
       ]);
 
       const pending = [
@@ -4259,7 +4296,7 @@ describe('MeeshySocketIOManager', () => {
       (manager as any).readStatusService = readStatusSvc;
 
       prisma.participant.findMany.mockResolvedValue([
-        { id: 'part-throws', conversationId: convId },
+        { id: 'part-throws', conversationId: convId, userId },
       ]);
 
       const pending = [

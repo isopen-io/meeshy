@@ -681,6 +681,29 @@ describe('MessageHandler', () => {
       expect(deps.io.to).toHaveBeenCalledWith(`user:${USER_ID}`);
     });
 
+    it('exposes the sender User.id (not Participant.id) in the message:new senderId — matches the REST/ZMQ writer contract (regression)', async () => {
+      // Clients compare `message:new.senderId` against their own User.id
+      // (apps/web use-socket-cache-sync.ts) to detect own messages and
+      // reconcile the optimistic bubble across devices. The REST/ZMQ writer
+      // (MeeshySocketIOManager.broadcastMessage) already resolves this to
+      // `sender.userId`; the WS `message:send` path must emit the same
+      // id-space, otherwise the sender's other devices never match and the
+      // message renders twice / as an incoming bubble.
+      const msg = makeMessage();
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const messageNewPayloads = (toResult.emit.mock.calls as [string, { senderId?: string }][])
+        .filter((c) => c[0] === 'message:new')
+        .map((c) => c[1]);
+
+      expect(messageNewPayloads.length).toBeGreaterThan(0);
+      for (const payload of messageNewPayloads) {
+        expect(payload.senderId).toBe(USER_ID);
+        expect(payload.senderId).not.toBe(PARTICIPANT_ID);
+      }
+    });
+
     it('uses senderSocket.broadcast.to for anonymous user (no userId)', async () => {
       const msg = makeMessage({ sender: { id: PARTICIPANT_ID, userId: null, displayName: 'Anon', type: 'anonymous' } });
       await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
@@ -738,6 +761,43 @@ describe('MessageHandler', () => {
       await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
 
       expect(mockResolveMentionedUsers).toHaveBeenCalledWith(deps.prisma, ['@bob hello']);
+    });
+
+    it('emits mention:created to each mentioned user\'s personal room (WS path parity with REST)', async () => {
+      // @mentions sent over the PRIMARY WebSocket message:send path must reach a
+      // recipient who is online but not inside the conversation room — exactly
+      // what mention:created (fanned to ROOMS.user) is for. Regression guard:
+      // this event was previously only emitted on the REST/ZMQ path.
+      const BOB = 'bobUserId000000000000001';
+      mockResolveUsernamesToIds.mockResolvedValue([BOB]);
+      const msg = makeMessage({ validatedMentions: ['bob'], content: '@bob hi' });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      expect(deps.io.to).toHaveBeenCalledWith(`user:${BOB}`);
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const mentionPayloads = (toResult.emit.mock.calls as [string, Record<string, unknown>][])
+        .filter((c) => c[0] === 'mention:created')
+        .map((c) => c[1]);
+      expect(mentionPayloads.length).toBe(1);
+      expect(mentionPayloads[0]).toMatchObject({
+        messageId: 'msg-broadcast-1',
+        conversationId: VALID_CONV_ID,
+        senderId: USER_ID,
+        mentionedUserId: BOB,
+      });
+    });
+
+    it('does not emit mention:created back to the sender on a self-mention', async () => {
+      mockResolveUsernamesToIds.mockResolvedValue([USER_ID]);
+      const msg = makeMessage({ validatedMentions: ['alice'], content: '@alice note-to-self' });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const mentionCalls = (toResult.emit.mock.calls as [string, unknown][])
+        .filter((c) => c[0] === 'mention:created');
+      expect(mentionCalls.length).toBe(0);
     });
 
     it('uses language filter when SOCKET_LANG_FILTER=true', async () => {

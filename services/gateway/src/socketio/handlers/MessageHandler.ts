@@ -12,6 +12,7 @@ import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
+import { blockCacheKey, BLOCK_CACHE_TTL_SECONDS } from '../../utils/block-cache';
 import { MessagingService } from '../../services/MessagingService';
 import {
   buildPostReplyTo,
@@ -23,6 +24,7 @@ import { NotificationService } from '../../services/notifications/NotificationSe
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
+import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -670,6 +672,15 @@ export class MessageHandler {
       const room = ROOMS.conversation(message.conversationId);
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
 
+      // Fan a conversation:updated preview refresh to participants sitting on
+      // the conversation list (in user:<id> but not conversation:<id>) so an
+      // edit of the latest message updates their row — MESSAGE_EDITED alone
+      // only reaches the conversation room. Mirrors broadcastNewMessage.
+      await emitConversationPreviewUpdate(
+        this.prisma, this.io, message.conversationId,
+        (err) => handlerLogger.warn('conversation preview fanout (edit) failed', { error: err })
+      );
+
       this._enqueueOfflineEventForParticipants(
         message.conversationId, message.senderId, 'edited', validated.messageId, editedPayload
       ).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
@@ -803,6 +814,16 @@ export class MessageHandler {
         conversationId: message.conversationId,
       };
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+
+      // Fan a conversation:updated preview refresh to list-screen participants
+      // (in user:<id> but not conversation:<id>): deleting the latest message
+      // changes their row's preview, which MESSAGE_DELETED (conversation room
+      // only) never tells them. The latest non-deleted message is recomputed
+      // inside the helper, consistent with the lastMessageAt recompute above.
+      await emitConversationPreviewUpdate(
+        this.prisma, this.io, message.conversationId,
+        (err) => handlerLogger.warn('conversation preview fanout (delete) failed', { error: err })
+      );
 
       // Skip the DELETER, not the author. A moderator/admin may delete another
       // user's message (`message.senderId` is the author's participant id, not
@@ -987,6 +1008,35 @@ export class MessageHandler {
         }
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
+
+      // Emit `mention:created` to each mentioned user's PERSONAL room so an
+      // @mention reaches a recipient who is online but not currently inside
+      // ROOMS.conversation(id) — `message:new` only fans to the conversation
+      // room. Parity with the REST/ZMQ broadcast path
+      // (`MeeshySocketIOManager._broadcastNewMessage`); without it, @mentions
+      // sent over the PRIMARY WebSocket `message:send` transport were silently
+      // dropped for anyone not viewing the conversation. `validatedMentions` is
+      // persisted as String[] of usernames, so resolve to User.ids first. The
+      // self-mention guard compares against `senderUserId` (the sender's
+      // User.id; null for anonymous senders, which can't self-mention a
+      // registered user). `_resolveMentionUserIds` swallows lookup failures so a
+      // mention miss never blocks the message broadcast.
+      const mentionUsernames = (message.validatedMentions as string[] | undefined) ?? [];
+      if (mentionUsernames.length > 0) {
+        const mentionedUserIds = await this._resolveMentionUserIds(mentionUsernames);
+        for (const targetUserId of mentionedUserIds) {
+          if (targetUserId && targetUserId !== senderUserId) {
+            this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+              messageId: message.id,
+              conversationId: normalizedId,
+              senderId: senderUserId ?? message.senderId,
+              mentionedUserId: targetUserId,
+              content: message.content,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
 
       // Single participant query shared between CONVERSATION_UPDATED and
       // CONVERSATION_UNREAD_UPDATED to avoid a duplicate DB round-trip.
@@ -1357,7 +1407,14 @@ export class MessageHandler {
     return {
       id: message.id,
       conversationId,
-      senderId: message.senderId,
+      // `message.senderId` is a Participant.id, but clients compare the wire
+      // `senderId` against their own User.id (apps/web use-socket-cache-sync.ts)
+      // to detect own messages and reconcile the optimistic bubble across
+      // devices. Resolve to the sender's User.id — mirroring the REST/ZMQ
+      // writer (MeeshySocketIOManager.broadcastMessage) — so both transports
+      // emit the same id-space. Falls back to Participant.id for anonymous
+      // senders (no userId), matching the anonymous room convention.
+      senderId: senderParticipant?.userId ?? senderUser?.id ?? message.senderId,
       content: message.content,
       originalLanguage: message.originalLanguage || 'fr',
       messageType: message.messageType || 'text',
@@ -1575,15 +1632,14 @@ export class MessageHandler {
     }
     const cacheStore = getCacheStore();
     for (const otherId of otherMemberIds) {
-      const [a, b] = [userId, otherId].sort();
-      const cacheKey = `blocks:${a}:${b}`;
+      const cacheKey = blockCacheKey(userId, otherId);
       const cached = await cacheStore.get(cacheKey);
       let blocked: boolean;
       if (cached !== null) {
         blocked = cached === '1';
       } else {
         blocked = await isBlockedBetween(this.prisma, userId, otherId);
-        await cacheStore.set(cacheKey, blocked ? '1' : '0', 300);
+        await cacheStore.set(cacheKey, blocked ? '1' : '0', BLOCK_CACHE_TTL_SECONDS);
       }
       if (blocked) {
         return true;

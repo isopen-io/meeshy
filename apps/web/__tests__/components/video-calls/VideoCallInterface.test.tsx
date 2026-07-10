@@ -9,6 +9,7 @@ const webrtc = {
   enableVideo: jest.fn().mockResolvedValue(undefined),
   disableVideo: jest.fn().mockResolvedValue(undefined),
   applyQualityTier: jest.fn().mockResolvedValue(undefined),
+  removeParticipant: jest.fn(),
 };
 
 const storeState: Record<string, unknown> = {
@@ -185,7 +186,7 @@ describe('VideoCallInterface (container)', () => {
         handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
         jest.advanceTimersByTime(2000);
         expect(storeState.removeRemoteStream).toHaveBeenCalledWith('peer1');
-        expect(storeState.removePeerConnection).toHaveBeenCalledWith('peer1');
+        expect(webrtc.removeParticipant).toHaveBeenCalledWith('peer1');
 
         // Force the offer-creation effect to re-evaluate by round-tripping
         // `participants.length` (its dependency) through 0 and back to 1 —
@@ -243,7 +244,7 @@ describe('VideoCallInterface (container)', () => {
         jest.advanceTimersByTime(2000);
 
         expect(storeState.removeRemoteStream).not.toHaveBeenCalledWith('peer1');
-        expect(storeState.removePeerConnection).not.toHaveBeenCalledWith('peer1');
+        expect(webrtc.removeParticipant).not.toHaveBeenCalledWith('peer1');
         expect((storeState.peerConnections as Map<string, RTCPeerConnection>).get('peer1')).toBe(freshConnection);
       } finally {
         jest.useRealTimers();
@@ -267,7 +268,55 @@ describe('VideoCallInterface (container)', () => {
         jest.advanceTimersByTime(2000);
 
         expect(storeState.removeRemoteStream).toHaveBeenCalledWith('peer1');
-        expect(storeState.removePeerConnection).toHaveBeenCalledWith('peer1');
+        expect(webrtc.removeParticipant).toHaveBeenCalledWith('peer1');
+      } finally {
+        jest.useRealTimers();
+        storeState.peerConnections = new Map();
+      }
+    });
+  });
+
+  // Reconnect bug: `removeParticipant()` (in use-webrtc-p2p.ts) tears down the
+  // WebRTCService/remoteDescriptionSetRef/iceCandidateQueueRef/offerInFlightRef
+  // entries a rejoin needs cleared — without it, a same-session leave→rejoin
+  // gets its fresh initial offer misrouted as a renegotiation against a
+  // WebRTCService the leave never closed.
+  describe('participant-left cleanup releases WebRTC signaling state, not just the store', () => {
+    it('calls removeParticipant (not just the store peer-connection map) when a participant leaves for good', () => {
+      jest.useFakeTimers();
+      try {
+        const fakeSocket = { on: jest.fn(), off: jest.fn() };
+        (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+        storeState.peerConnections = new Map([['peer1', {} as RTCPeerConnection]]);
+
+        render(<VideoCallInterface callId="call1" />);
+
+        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
+        jest.advanceTimersByTime(2000);
+
+        expect(webrtc.removeParticipant).toHaveBeenCalledWith('peer1');
+      } finally {
+        jest.useRealTimers();
+        storeState.peerConnections = new Map();
+      }
+    });
+
+    it('does not call removeParticipant when the participant rejoined before the grace window elapses', () => {
+      jest.useFakeTimers();
+      try {
+        const fakeSocket = { on: jest.fn(), off: jest.fn() };
+        (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+        storeState.peerConnections = new Map();
+
+        render(<VideoCallInterface callId="call1" />);
+
+        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
+        storeState.peerConnections = new Map([['peer1', {} as RTCPeerConnection]]);
+        jest.advanceTimersByTime(2000);
+
+        expect(webrtc.removeParticipant).not.toHaveBeenCalledWith('peer1');
       } finally {
         jest.useRealTimers();
         storeState.peerConnections = new Map();

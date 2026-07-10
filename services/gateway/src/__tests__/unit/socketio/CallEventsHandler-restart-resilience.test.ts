@@ -439,16 +439,56 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
     });
 
     it('re-join (call:join) within the window cancels the pending end', async () => {
-      const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
+      const prisma = makePrisma({
+        activeParticipations: [makeParticipation('active')],
+        callSessionForJoin: { id: CALL_ID, conversationId: CONV_ID },
+      });
       const { handlers } = setup({ prisma });
 
+      // A GENUINELY successful join — cancelDisconnectGrace only fires once
+      // joinCall has actually resolved (see the "does not cancel grace when
+      // the join itself fails" test below for the other half of this).
+      mockJoinCall.mockResolvedValue({
+        callSession: {
+          id: CALL_ID,
+          mode: 'p2p',
+          participants: [{
+            id: PARTICIPANT_DBID,
+            participantId: PARTICIPANT_ID,
+            callSessionId: CALL_ID,
+            leftAt: null,
+            participant: { userId: USER_ID },
+          }],
+        },
+        iceServers: [],
+      });
+      mockGenerateIceServers.mockReturnValue([]);
+
       await handlers['disconnect']();                 // arm grace
-      // call:join bails after cancel (callSession.findUnique → null makes
-      // resolveParticipantIdFromCall return null), but the cancel already ran.
       await handlers[CALL_EVENTS.JOIN]({ callId: CALL_ID, settings: {} }, jest.fn());
       await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
 
       expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    // CALL-RESILIENCE follow-up (Vague 32) — cancelDisconnectGrace moved to
+    // AFTER joinCall succeeds. A join that fails for a transient reason (DB
+    // hiccup, race) unrelated to the call's real state must not disarm the
+    // grace timer that's the only thing left protecting a still-active call.
+    it('does not cancel the pending grace when the join itself fails', async () => {
+      const prisma = makePrisma({
+        activeParticipations: [makeParticipation('active')],
+        callSessionForJoin: { id: CALL_ID, conversationId: CONV_ID },
+      });
+      const { handlers } = setup({ prisma });
+
+      mockJoinCall.mockRejectedValue(new Error('DB error'));
+
+      await handlers['disconnect']();                 // arm grace
+      await handlers[CALL_EVENTS.JOIN]({ callId: CALL_ID, settings: {} }, jest.fn());
+      await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
+
+      expect(mockLeaveCall).toHaveBeenCalled();
     });
   });
 

@@ -220,6 +220,36 @@ describe('CallManager — handleAcceptCall gates UI on CALL_JOIN ack', () => {
     );
   });
 
+  it('re-entrancy: a second Accept click while the join ack is still pending does not acquire a second stream', async () => {
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    render(<CallManager />);
+
+    act(() => {
+      socket.fire(SERVER_EVENTS.CALL_INITIATED, incomingCallEvent('audio'));
+    });
+
+    // Two rapid clicks (double-tap / double-click) before the CALL_JOIN ack
+    // resolves — the Accept button stays mounted for the whole async
+    // getUserMedia + call:join round-trip, so both clicks reach the handler.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('accept-call-btn'));
+      fireEvent.click(screen.getByTestId('accept-call-btn'));
+    });
+
+    expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
+    expect(
+      socket.emit.mock.calls.filter(([event]: [string]) => event === CLIENT_EVENTS.CALL_JOIN)
+    ).toHaveLength(1);
+
+    await act(async () => {
+      socket.resolveJoin({ success: true, data: { iceServers: [] } });
+    });
+
+    expect(useCallStore.getState().isInCall).toBe(true);
+  });
+
   it('never emits call:join when getUserMedia is denied, and stops any partially-acquired tracks', async () => {
     const socket = makeFakeSocket();
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);

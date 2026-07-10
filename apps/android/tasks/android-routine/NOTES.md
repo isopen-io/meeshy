@@ -3,6 +3,71 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-10 (`translation-language-catalog`): when several consumers each patch a table's weak lookup locally,
+  the slice is "make the table's own lookup robust and delete the patches" — not "add a new helper".** `LanguageData.info`
+  was exact/case-sensitive/alias-blind, so `ProfileDetailRows` called `info(code.lowercase())` and
+  `RegionalLanguageSelection` re-implemented case-insensitive matching (`equiv`) + its own `nativeName` lookup. Grep the
+  SSOT's public symbols across consumers *before* extending it — the highest-value, lowest-risk change is usually to
+  fold those workarounds back into the SSOT (here: `info` gained trim + lowercase + `fil→tl` alias, returns `null` on
+  blank/unknown), which converges three copies of the same matching rule onto one and leaves every caller simpler.
+- **2026-07-10 (`translation-language-catalog`): a "derived view" only earns its place if a real caller consumes it —
+  otherwise it is orphan code the routine forbids.** Added `allLanguagesCommonFirst` *and simultaneously* pointed
+  `RegionalLanguageSelection` + the `ProfileScreen` picker at it; derived `interfaceLanguages` because `AppLanguage`
+  already consumes it. Test a common-first ordering as a **permutation** (`containsExactlyElementsIn` the base +
+  `containsNoDuplicates`) plus a leading-slice equality — that catches both "dropped a language" and "reordered wrong"
+  without hard-coding the full 80-entry order.
+- **2026-07-10 (`chat-live-transcription-merge`): when the read-side renderer already resolves a field, a "live X"
+  feature is *pure cache-merge only* — no UI touch at all.** `BubbleContentBuilder.resolveTranscription` already
+  reads `attachment.transcription` under the Prisme, so wiring `transcription:ready` was just a pure `:core:model`
+  merge onto the attachment + a `:sdk-core` cache write + a `:feature:chat` collector — the bubble re-renders via
+  the existing `messagesStream` re-emission. Grep the builder for the field *before* scoping any UI work; the
+  cheapest, most-testable slice is often "the flow is dead AND the renderer is already ready".
+- **2026-07-10 (`chat-live-transcription-merge`): a socket event's attachment id is optional — decide the
+  fallback deterministically.** `TranscriptionReadyEvent.attachmentId` is nullable (single-voice-note path sends
+  none). The merge targets by exact id when present, else the **first audio attachment** (mimeType `audio/`), and
+  is a no-op when neither resolves. Filter to audio only on the fallback path — trust an explicit id as-is.
+- **2026-07-10 (`chat-live-translation-merge`): before building a "receive X live" feature, grep the socket
+  manager for the flow name — it may already be emitted with zero consumers.** `MessageSocketManager` already
+  decoded `message:translated`/`message:translation` into `translationCompleted`/`translationInProgress`
+  SharedFlows, but nothing collected them (`grep -rn translationCompleted feature/ sdk-core/ | grep -v
+  MessageSocketManager` → empty). The whole slice was just *wiring* an existing brick, not building new
+  transport. Cheapest high-value slices are dead-flow → cache-merge → VM-collector.
+- **2026-07-10 (`chat-live-translation-merge`): to skip a redundant Room write on an inert socket update, make
+  the pure merge return its *input reference* on a no-op and gate the DB write on `updated !== current`.** All
+  other `updateCachedMessage` callers `.copy(...)` (always a new instance → guard never fires), so the
+  `===`-identity guard is behaviour-preserving for them and only elides the write for a duplicate/blank/deleted
+  translation. A nullable "no-op" merge (`mergeTranslation(...) : ApiMessage?`) composes cleanly:
+  `merge(msg, ...) ?: msg` inside the transform.
+- **2026-07-10 (`chat-live-translation-merge`): the full-suite `meeshy.sh check` intermittently fails on a
+  DataStore store test (`NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow`, and
+  historically `InterfaceLanguageStoreTest`) — a real DataStore-under-parallel-load timeout flake, NOT your
+  diff.** Confirm by re-running that one test in isolation (`--tests "*NotificationPreferencesStoreTest"` →
+  BUILD SUCCESSFUL in ~5s). Tracked follow-up: give the DataStore store tests a unique temp file per test /
+  serialise them so they stop contending under the parallel test executor.
+- **2026-07-09 (`chat-bubble-audio`): a `/*` or `*/` sequence inside a KDoc comment (even inside `` `backticks` ``)
+  opens/closes a nested block comment and silently swallows the rest of the file.** I wrote ``` `audio/*` ``` in a
+  `BubbleAudio` KDoc; the `/*` started a nested comment that ran to EOF → `BubbleContent.kt:EOF Syntax error:
+  Unclosed comment`. The killer: Kotlin K2 reports the *cascade* ("Unresolved reference 'text'/'images'/…") in
+  every file that references the now-invisible symbols — **not** in the broken file — so `MessageBubble.kt` lit up
+  with 24 phantom errors while the real one-line cause was elsewhere. Cost ~4 build cycles. When a whole class's
+  members go "unresolved" in *other* files but that class looks fine, grep the class's own file for `/*`·`*/` in
+  comments first. Write mimes as `audio/…` or `audio/x-*`-free prose in KDoc.
+- **2026-07-09 (`chat-bubble-audio`): don't edit a source file while a Gradle compile of it is running.** The
+  mid-edit read produced a half-written file → a confusing incremental-cache failure that persisted across a plain
+  re-run. `rm -rf <module>/build` (or at least `build/kotlin`) clears it. Kick the build only after all edits land.
+- **2026-07-09 (`chat-story-reply-preview`): a legacy JSON key alias → `@JsonNames`, not a second field.**
+  iOS decodes `postReplyTo ?? storyReplyTo`. In kotlinx-serialization the faithful equivalent is a single
+  field annotated `@JsonNames("storyReplyTo")` (in `kotlinx.serialization.json`, needs
+  `@OptIn(ExperimentalSerializationApi::class)` on the class — `core/model` already `api(...)`s
+  serialization-json). Don't add a duplicate field. Decode-only alias; encoding still uses the primary name.
+- **2026-07-09: `sed -i 's/.../label = .../'` on a Compose file is a footgun — it renamed an *existing*
+  `AsyncImage(contentDescription = ...)` arg that happened to share the 32-space indent, breaking compile.**
+  When renaming a just-introduced parameter's call-sites, target them precisely (unique surrounding text via
+  `Edit`) instead of a whitespace-anchored global `sed`. Caught by the first `:sdk-ui:compileDebugKotlin`.
+- **2026-07-09 (`chat-story-reply-preview`): mirror the bubble-metadata suppress convention on every new
+  read-side field.** A deleted tombstone shows no `pinnedAtIso`/`isForwarded`; the new `storyReply` follows
+  suit (deleted → null) and a message `replyTo` takes precedence over a `postReplyTo` snapshot (iOS ordering).
+  Encoding both as explicit `when` arms gives clean branch coverage and a deleted-suppress test for free.
 - **2026-07-09 (`chat-reply-thread-overlay`): a read-side "detail sheet" for a thing that already has a pure
   grouping SSOT is a thin slice — reuse the predicate, don't re-derive it.** The reply-count pill already had
   `ReplyThreads.of` (group by trimmed/non-self/non-deleted `replyToId`). The overlay just needed the *same*

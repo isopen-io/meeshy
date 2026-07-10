@@ -473,14 +473,32 @@ export class MeeshySocketIOManager {
       convLatest.set(entry.conversationId, entry.messageId);
     }
 
-    // Batch-resolve participant rows for all affected conversations.
+    // Batch-resolve ALL active participants for the affected conversations in a
+    // single query. We need two things from it: (a) the reconnecting user's own
+    // participantId per conversation (to mark received), and (b) every
+    // participant's userId, so the receipt fans out to each sender's user room —
+    // a sender who left the conversation view (socket dropped `conversation:<id>`
+    // but stays in `user:<id>`) must still see their checkmark advance.
     const participantRows = await this.prisma.participant.findMany({
-      where: { userId, conversationId: { in: [...convLatest.keys()] }, isActive: true },
-      select: { id: true, conversationId: true },
+      where: { conversationId: { in: [...convLatest.keys()] }, isActive: true },
+      select: { id: true, userId: true, conversationId: true },
     });
 
+    // conversationId → the reconnecting user's participantId (drives markReceived)
+    const ownParticipant = new Map<string, string>();
+    // conversationId → every participant's userId (drives the user-room fanout)
+    const convUserIds = new Map<string, string[]>();
+    for (const row of participantRows) {
+      if (row.userId === userId) ownParticipant.set(row.conversationId, row.id);
+      if (row.userId) {
+        const list = convUserIds.get(row.conversationId) ?? [];
+        list.push(row.userId);
+        convUserIds.set(row.conversationId, list);
+      }
+    }
+
     await Promise.allSettled(
-      participantRows.map(async ({ id: participantId, conversationId }) => {
+      [...ownParticipant].map(async ([conversationId, participantId]) => {
         const latestMessageId = convLatest.get(conversationId);
         if (!latestMessageId) return;
 
@@ -495,10 +513,23 @@ export class MeeshySocketIOManager {
           updatedAt: new Date(),
           summary,
         };
-        const drainRoom = this.io.to(ROOMS.conversation(conversationId));
-        drainRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, drainPayload);
-        drainRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, drainPayload);
-        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId });
+        // Chain the conversation room + each participant's user room, deduped so
+        // Socket.IO delivers the event at most once per socket. Mirrors the two
+        // sibling emitters of this same event — `_autoDeliverToOnlineRecipients`
+        // and `broadcastReadStatusUpdate` — which fan out identically so authors
+        // never get stuck on a single "sent" tick after navigating away.
+        const convRoom = ROOMS.conversation(conversationId);
+        let emitter = this.io.to(convRoom);
+        const seenRooms = new Set<string>([convRoom]);
+        for (const pUserId of convUserIds.get(conversationId) ?? []) {
+          const userRoom = ROOMS.user(pUserId);
+          if (seenRooms.has(userRoom)) continue;
+          seenRooms.add(userRoom);
+          emitter = emitter.to(userRoom);
+        }
+        emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, drainPayload);
+        emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, drainPayload);
+        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId, rooms: [...seenRooms] });
       })
     );
   }

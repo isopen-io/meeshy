@@ -231,6 +231,10 @@ describe('useVideoCall', () => {
     });
 
     it('should show success toast after initiating call', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-111', mode: 'p2p', iceServers: [] } });
+      });
+
       const { result } = renderHook(() =>
         useVideoCall({ conversation: mockDirectConversation })
       );
@@ -240,6 +244,62 @@ describe('useVideoCall', () => {
       });
 
       expect(mockToastSuccess).toHaveBeenCalledWith('Starting call...');
+    });
+
+    it('should not show success toast when the ack is unsuccessful', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockToastSuccess).not.toHaveBeenCalled();
+    });
+
+    it('should stop the pre-authorized stream and show an error toast when the ack is unsuccessful', async () => {
+      const stopMock1 = jest.fn();
+      const stopMock2 = jest.fn();
+      mockGetUserMedia.mockResolvedValue({
+        getTracks: () => [{ stop: stopMock1 }, { stop: stopMock2 }],
+      });
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false, error: { code: 'CALLEE_BUSY', message: 'User is busy' } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(stopMock1).toHaveBeenCalled();
+      expect(stopMock2).toHaveBeenCalled();
+      expect((window as any).__preauthorizedMediaStream).toBeUndefined();
+      expect(mockToastError).toHaveBeenCalledWith('User is busy');
+    });
+
+    it('should show a generic error toast when the ack fails without an error message', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockToastError).toHaveBeenCalledWith('Failed to start call. Please try again.');
     });
 
     it('should handle disconnected socket', async () => {

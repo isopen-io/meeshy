@@ -23,9 +23,19 @@ jest.mock('../../../../utils/logger', () => ({
   logError: jest.fn(),
 }));
 
+const mockCacheDel = jest.fn<any>().mockResolvedValue(undefined);
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    del: (...a: any[]) => mockCacheDel(...a),
+    get: jest.fn(),
+    set: jest.fn(),
+  }),
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { blockUser, unblockUser, getBlockedUsers } from '../../../../routes/users/blocking';
+import { blockCacheKey } from '../../../../utils/block-cache';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -138,6 +148,21 @@ describe('POST /users/:userId/block — success', () => {
     );
     await app.close();
   });
+
+  it('invalidates the symmetric DM block cache so the block applies immediately', async () => {
+    // The message send-gate caches the bidirectional block result under a
+    // symmetric `blocks:` key for 300s. Without invalidation, a just-blocked
+    // user's DMs keep reaching the blocker for up to 5 minutes.
+    const prisma = makePrisma();
+    prisma.user.findUnique = jest.fn<any>()
+      .mockResolvedValueOnce({ id: TARGET_USER_ID })
+      .mockResolvedValueOnce({ blockedUserIds: [] });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: `/users/${TARGET_USER_ID}/block` });
+    expect(res.statusCode).toBe(200);
+    expect(mockCacheDel).toHaveBeenCalledWith(blockCacheKey(CURRENT_USER_ID, TARGET_USER_ID));
+    await app.close();
+  });
 });
 
 describe('POST /users/:userId/block — DB error', () => {
@@ -198,6 +223,20 @@ describe('DELETE /users/:userId/block — success', () => {
         data: { blockedUserIds: { set: ['507f1f77bcf86cd799439033'] } },
       })
     );
+    await app.close();
+  });
+
+  it('invalidates the symmetric DM block cache so the unblock applies immediately', async () => {
+    // Without invalidation, the stale `blocks:` entry keeps rejecting the
+    // just-unblocked user's DMs with USER_BLOCKED for up to 5 minutes.
+    const prisma = makePrisma();
+    prisma.user.findUnique = jest.fn<any>().mockResolvedValue({
+      blockedUserIds: [TARGET_USER_ID, '507f1f77bcf86cd799439033'],
+    });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'DELETE', url: `/users/${TARGET_USER_ID}/block` });
+    expect(res.statusCode).toBe(200);
+    expect(mockCacheDel).toHaveBeenCalledWith(blockCacheKey(CURRENT_USER_ID, TARGET_USER_ID));
     await app.close();
   });
 });
