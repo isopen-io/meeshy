@@ -135,6 +135,10 @@ struct ConversationListView: View {
     // UI states
     @State var blockTargetConversation: Conversation? = nil
     @State var showBlockConfirmation = false
+    /// Cible de la demande de suppression (menu custom ou swipe « hide »).
+    /// Tout callback destructif passe par le confirmationDialog système —
+    /// jamais d'appel direct à `deleteConversation` depuis un menu.
+    @State var deleteTargetConversation: Conversation? = nil
     @State var lockSheetMode: ConversationLockSheet.Mode = .lockConversation
     @State var lockSheetConversation: Conversation? = nil
     @State var showNoMasterPinAlert = false
@@ -599,7 +603,7 @@ struct ConversationListView: View {
             label: SwipeLabels.hide,
             color: MeeshyColors.error
         ) {
-            Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+            deleteTargetConversation = conversation
         })
 
         return actions
@@ -789,6 +793,30 @@ struct ConversationListView: View {
                 Button(String(localized: "action.cancel"), role: .cancel) {}
             } message: {
                 Text(String(localized: "block.confirm.message"))
+            }
+            // Suppression = callback destructif → TOUJOURS confirmée par le
+            // dialog système (rendu natif de l'OS courant, Liquid Glass sur
+            // iOS 26), déclenchée depuis le menu custom ET le swipe « hide ».
+            .confirmationDialog(
+                String(localized: "conversation.delete.confirm.title", defaultValue: "Supprimer la conversation ?", bundle: .main),
+                isPresented: Binding(
+                    get: { deleteTargetConversation != nil },
+                    set: { if !$0 { deleteTargetConversation = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: deleteTargetConversation
+            ) { conversation in
+                Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
+                    HapticFeedback.heavy()
+                    Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+                }
+                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) {}
+            } message: { conversation in
+                Text(String(
+                    localized: "conversation.delete.confirm.message",
+                    defaultValue: "« \(conversation.name) » sera masquée pour vous. Les autres participants la conservent.",
+                    bundle: .main
+                ))
             }
     }
 
@@ -997,7 +1025,7 @@ struct ConversationListView: View {
         StatusBubbleController.shared.show(entry: status, anchor: anchor)
     }
 
-    // See ConversationListView+Overlays.swift for conversationContextMenu
+    // See ConversationListView+Overlays.swift for conversationContextMenuOverlay
 
     // MARK: - Handle Drop
     private func handleDrop(to sectionId: String, providers: [NSItemProvider]) -> Bool {
