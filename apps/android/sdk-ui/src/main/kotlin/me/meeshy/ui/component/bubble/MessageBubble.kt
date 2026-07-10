@@ -79,6 +79,7 @@ public fun MessageBubble(
     onLocationClick: ((BubbleLocation) -> Unit)? = null,
     onAudioClick: ((BubbleAudio) -> Unit)? = null,
     onReplyPreviewClick: (() -> Unit)? = null,
+    onFlagTap: ((String) -> Unit)? = null,
     mentionDisplayNames: Map<String, String>? = null,
     highlightTerm: String? = null,
     trackedLinks: Map<String, String>? = null,
@@ -253,6 +254,7 @@ public fun MessageBubble(
                 LanguageStrip(
                     chips = content.languageStrip,
                     onColor = onColor,
+                    onFlagTap = onFlagTap,
                     modifier = Modifier.padding(top = MeeshySpacing.xs),
                 )
             }
@@ -317,8 +319,9 @@ public fun MessageBubble(
  * Discrete Prisme flag strip under a translated bubble — the original language
  * plus each configured content language that has content, projected by
  * [MessageLanguageStrip]. The active language reads its native name in its own
- * accent colour; the others show flag-only. Read-only display for now (the
- * language explorer / tap-to-switch is a follow-on slice).
+ * accent colour; the others show flag-only. When [onFlagTap] is present each chip
+ * is tappable to switch the bubble's displayed language (the active flag reverts
+ * to the default resolution); without it the strip stays a read-only indicator.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -326,6 +329,7 @@ private fun LanguageStrip(
     chips: List<LanguageChip>,
     onColor: Color,
     modifier: Modifier = Modifier,
+    onFlagTap: ((String) -> Unit)? = null,
 ) {
     FlowRow(
         modifier = modifier,
@@ -345,6 +349,12 @@ private fun LanguageStrip(
                     .background(
                         if (chip.isActive) accent.copy(alpha = 0.16f) else Color.Transparent,
                     )
+                    .let { base ->
+                        if (onFlagTap == null) base
+                        else base
+                            .clickable { onFlagTap(chip.code) }
+                            .semantics { role = Role.Button }
+                    }
                     .padding(horizontal = 6.dp, vertical = 2.dp)
                     .semantics(mergeDescendants = true) { contentDescription = label },
             ) {

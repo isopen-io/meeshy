@@ -4,6 +4,53 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-10 **tap-to-switch active language** landed (slice `chat-language-flag-tap-switch`,
+> Translation parity §D — feature-parity.md "Original exploration", tap-to-switch now shipped). The prior
+> slice rendered the per-message flag strip **read-only**; this one makes it interactive. New pure
+> `:feature:chat` `LanguageFlagTapResolver.resolve(tappedCode, activeCode, originalLanguage, translations)
+> → Result` — the port of iOS `BubbleLanguageFlagController.handleTap`, adapted to Android's single-primary
+> bubble model: where iOS opens a stacked inline **secondary** panel, Android switches the bubble's
+> **primary** displayed language (one coherent view, the deliberate "better choice"). It returns
+> `Activate(code)` (tap a non-active language that has content), `Revert` (tap the already-active flag → back
+> to the default Prisme resolution), `RequestTranslation(code)` (tap a content-less language — inert today,
+> consumed by the follow-on on-demand-translate slice), or `None` (blank code). `ChatViewModel.onFlagTap`
+> computes the current active code (`activeLanguageOverride[id]` → showingOriginal → preferred → original)
+> and applies the outcome to a per-message `activeLanguageOverride: Map<messageId, String>` (a 6th combine
+> input threaded through `applyResult`/`toBubbles`). `BubbleContentBuilder.build` gained an optional
+> `activeLanguageCode` and `MessageLanguageStrip.build` an `activeCodeOverride`: when set (and the language
+> has content) the override wins over the binary `showOriginal`, projecting that language's text + the active
+> chip; when unset both fall back to the exact prior read-only behaviour (every existing strip/builder test
+> stays green unchanged). Tappable chips wired read-through `MessageBubble.onFlagTap` → `ChatScreen` →
+> `viewModel.onFlagTap` (Compose glue, coverage-exempt). +23 tests: `LanguageFlagTapResolverTest` 10
+> (activate-non-active / activate-original / revert-active-translation / revert-active-original /
+> no-content→request / blank-translation→request / case+trim-normalized / revert-under-case / blank→None /
+> null-active-activates), `MessageLanguageStripTest` +3 (override→third-language active / override normalized /
+> null override falls back to showingOriginal), `BubbleContentBuilderTest` +4 (override→translation text +
+> active chip / override→original text + isShowingOriginal / content-less override ignored / blank override →
+> preferred), `ChatViewModelTest` +6 (tap switches text / tap-active reverts / tap-original shows original /
+> tap-active-preferred inert / content-less tap unchanged / unknown-message inert). Full `assembleDebug` +
+> all-module `testDebugUnitTest` → BUILD SUCCESSFUL (system Gradle 8.14.3; wrapper 403-blocked in this
+> container — `/opt/gradle`). RED: the new tests reference symbols absent on `main`
+> (`LanguageFlagTapResolver`, `activeLanguageCode`, `activeCodeOverride`, `onFlagTap`, `Result.Revert`…), so
+> the pre-implementation tree fails to compile — the canonical first RED for a new API; each behavioural case
+> then discriminates a distinct resolver arm (a stub that always `Activate`s fails the Revert/None/Request
+> cases), so none is tautological. Reviewer: PASS (diff `apps/android` only, no production logic outside;
+> behaviour-through-public-API `LanguageFlagTapResolver.resolve` / `BubbleContentBuilder.build` /
+> `MessageLanguageStrip.build` / `ChatViewModel.onFlagTap`, boundary coverage on blank/case/no-content/active-
+> revert/unknown-message/null-active; **SDK-purity** — the tap→transition **rule** ("when to switch vs revert
+> vs request") is a pure `:feature:chat` atom, colocated with the VM exactly as iOS keeps
+> `BubbleLanguageFlagController` app-side, while the language→text/chip **projection** stays in `:sdk-ui`
+> (opaque `activeLanguageCode`/`activeCodeOverride` params, no product rule) — the correct split; **SSOT** —
+> reuses `LanguageResolver.preferredTranslation` for the default active code and the same has-content rule in
+> resolver + builder (no re-implemented matcher); **UDF** immutable `StateFlow` override map, transitions
+> pure; **colour/UX coherence** — active chip keeps its `LanguageData.colorHex` accent, tap-again-to-revert is
+> a natural gesture, no dead end; **no coverage floor lowered**, no existing test weakened). **Next:** the
+> `RequestTranslation` outcome — on-demand translate of a language absent from the strip (§D "on-demand
+> translate / retranslate"): a `:feature:chat` VM effect that calls a translate endpoint, upserts the returned
+> `ApiTextTranslation` via `MessageTranslationMerge`, then activates it — this makes the resolver's
+> already-tested `RequestTranslation` arm live. Then the full detail explorer sheet, or progressive
+> **audio-voice translation** (`audio:translation-ready` → cloned-voice playback, needs BubbleAudio UI).
+
 > On 2026-07-10 the per-message **translation flag strip** landed (slice `chat-translation-language-strip`,
 > Translation parity §D — feature-parity.md "Original exploration" flag-strip and "Message detail:
 > per-language translation explorer" strip-projection, both now `[~]`). Now that the `LanguageData`

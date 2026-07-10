@@ -19,13 +19,26 @@ public object BubbleContentBuilder {
         isFailed: Boolean = false,
         ownReactions: Set<String> = emptySet(),
         showOriginal: Boolean = false,
+        activeLanguageCode: String? = null,
         mediaBaseUrl: String? = null,
         recipientCount: Int = 0,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
         val isTranslated = !isDeleted && message.isTranslated(preferences)
-        val isShowingOriginal = isTranslated && showOriginal
+        // The active display language. A flag-tap `activeLanguageCode` override wins
+        // (when it names a language the message actually carries), otherwise fall
+        // back to the binary showOriginal toggle: original vs the preferred
+        // translation (or original when no translation is preferred).
+        val originalCode = message.originalLanguage.normalizedCode()
+        val preferredCode = LanguageResolver.preferredTranslation(message.translations, preferences)
+            ?.targetLanguage?.normalizedCode()
+        val requestedActive = activeLanguageCode.normalizedCode()
+            ?.takeIf { it.hasContentIn(message, originalCode) }
+        val activeCode = requestedActive
+            ?: if (showOriginal) originalCode else (preferredCode ?: originalCode)
+        val activeIsOriginal = activeCode == null || activeCode == originalCode
+        val isShowingOriginal = isTranslated && activeIsOriginal
         val deliveryStatus = when {
             !isOutgoing -> DeliveryStatus.Sent
             isFailed -> DeliveryStatus.Failed
@@ -107,8 +120,13 @@ public object BubbleContentBuilder {
             }
         val text = when {
             isDeleted -> ""
-            isShowingOriginal -> message.content
-            else -> message.displayContent(preferences)
+            activeIsOriginal -> message.content
+            else -> message.translations
+                .firstOrNull {
+                    it.targetLanguage.normalizedCode() == activeCode && it.translatedContent.isNotBlank()
+                }
+                ?.translatedContent
+                ?: message.displayContent(preferences)
         }
         val languageStrip = if (isDeleted) {
             emptyList()
@@ -118,6 +136,7 @@ public object BubbleContentBuilder {
                 translations = message.translations,
                 preferences = preferences,
                 showingOriginal = isShowingOriginal,
+                activeCodeOverride = activeCode,
             )
         }
         return BubbleContent(
@@ -261,6 +280,20 @@ public object BubbleContentBuilder {
         }
         return originalText?.let { ResolvedTranscription(it, originalLanguage, isTranslated = false) }
     }
+
+    private fun String?.normalizedCode(): String? =
+        this?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+
+    /**
+     * True when [this] normalized language code has renderable content in [message]
+     * — either it is the original language or a translation targets it with
+     * non-blank content. Mirrors `LanguageFlagTapResolver`'s has-content rule so a
+     * flag-tap override can never point the bubble at an empty language.
+     */
+    private fun String.hasContentIn(message: ApiMessage, originalCode: String?): Boolean =
+        this == originalCode || message.translations.any {
+            it.targetLanguage.normalizedCode() == this && it.translatedContent.isNotBlank()
+        }
 
     private const val LOCATION_MIME = "application/x-location"
 

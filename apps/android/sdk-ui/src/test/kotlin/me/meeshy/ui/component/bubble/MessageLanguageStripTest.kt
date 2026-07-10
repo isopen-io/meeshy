@@ -192,6 +192,52 @@ class MessageLanguageStripTest {
     }
 
     @Test
+    fun `an active-code override moves the active marker to a third language`() {
+        val chips = MessageLanguageStrip.build(
+            originalLanguage = "en",
+            translations = listOf(
+                Translation("fr", "Bonjour"),
+                Translation("es", "Hola"),
+            ),
+            preferences = StripPrefs(systemLanguage = "fr", regionalLanguage = "es"),
+            showingOriginal = false,
+            activeCodeOverride = "es",
+        )
+
+        assertThat(chips.single { it.code == "es" }.isActive).isTrue()
+        assertThat(chips.single { it.code == "fr" }.isActive).isFalse()
+        assertThat(chips.single { it.code == "en" }.isActive).isFalse()
+    }
+
+    @Test
+    fun `an active-code override is normalized before matching a chip`() {
+        val chips = MessageLanguageStrip.build(
+            originalLanguage = "en",
+            translations = listOf(Translation("fr", "Bonjour")),
+            preferences = french,
+            showingOriginal = false,
+            activeCodeOverride = " EN ",
+        )
+
+        assertThat(chips.single { it.code == "en" }.isActive).isTrue()
+        assertThat(chips.single { it.code == "fr" }.isActive).isFalse()
+    }
+
+    @Test
+    fun `a null active-code override falls back to the showing-original computation`() {
+        val chips = MessageLanguageStrip.build(
+            originalLanguage = "en",
+            translations = listOf(Translation("fr", "Bonjour")),
+            preferences = french,
+            showingOriginal = true,
+            activeCodeOverride = null,
+        )
+
+        assertThat(chips.single { it.code == "en" }.isActive).isTrue()
+        assertThat(chips.single { it.code == "fr" }.isActive).isFalse()
+    }
+
+    @Test
     fun `exactly one chip is active in the translated strip`() {
         val chips = MessageLanguageStrip.build(
             originalLanguage = "en",

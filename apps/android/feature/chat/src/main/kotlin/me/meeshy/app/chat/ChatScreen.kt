@@ -379,6 +379,9 @@ fun ChatScreen(
                                             onReplyPreviewClick = {
                                                 viewModel.onReplyPreviewTap(bubble.messageId)
                                             },
+                                            onFlagTap = { code ->
+                                                viewModel.onFlagTap(bubble.messageId, code)
+                                            },
                                         )
                                     }
                                     replyThreads.threadFor(bubble.messageId)?.let { thread ->

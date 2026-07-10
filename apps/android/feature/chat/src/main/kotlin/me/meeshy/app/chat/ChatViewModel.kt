@@ -24,8 +24,10 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.app.chat.translation.LanguageFlagTapResolver
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
@@ -165,6 +167,13 @@ class ChatViewModel @Inject constructor(
 
     private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     private val showingOriginal = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * messageId -> the language code the viewer switched that bubble to via a flag
+     * tap. Absent = default Prisme resolution (preferred translation, or the
+     * original toggled through [showingOriginal]).
+     */
+    private val activeLanguageOverride = MutableStateFlow<Map<String, String>>(emptyMap())
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
@@ -268,12 +277,14 @@ class ChatViewModel @Inject constructor(
                 .combine(starredStore.starred) { (inputs, hidden), starred ->
                     Triple(inputs, hidden, starred.ids)
                 }
-                .collect { (inputs, hidden, starredIds) ->
+                .combine(activeLanguageOverride) { triple, overrides -> triple to overrides }
+                .collect { (triple, overrides) ->
+                    val (inputs, hidden, starredIds) = triple
                     val (result, user, own, originals, recipients) = inputs
                     latestMessages = result.valueOrNull() ?: latestMessages
                     _state.update { current ->
                         val next = current.applyResult(
-                            result, user, own, originals, config.socketUrl, recipients, hidden, starredIds,
+                            result, user, own, originals, config.socketUrl, recipients, hidden, starredIds, overrides,
                         )
                         next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
@@ -856,6 +867,52 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(actionMessageId = null) }
     }
 
+    /**
+     * Tap on a Prisme language-flag chip: switch the bubble's displayed language,
+     * or revert to the default resolution when the tapped flag is already active.
+     * Delegates the decision to the pure [LanguageFlagTapResolver] so the transition
+     * stays behaviour-tested; here we only apply it to the per-message override map.
+     */
+    fun onFlagTap(messageId: String, code: String) {
+        val message = latestMessages.firstOrNull { it.message.id == messageId }?.message ?: return
+        val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
+        val result = LanguageFlagTapResolver.resolve(
+            tappedCode = code,
+            activeCode = resolvedActiveCode(messageId, message, prefs),
+            originalLanguage = message.originalLanguage,
+            translations = message.translations,
+        )
+        when (result) {
+            is LanguageFlagTapResolver.Result.Activate ->
+                activeLanguageOverride.update { it + (messageId to result.code) }
+            LanguageFlagTapResolver.Result.Revert ->
+                activeLanguageOverride.update { it - messageId }
+            // Requesting an on-demand translation for a content-less language is the
+            // next slice; today the strip never surfaces such a flag, so this is inert.
+            is LanguageFlagTapResolver.Result.RequestTranslation -> Unit
+            LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
+    /**
+     * The language code currently displayed for [messageId]: an explicit flag-tap
+     * override if any, else the default Prisme resolution — the original when the
+     * translate toggle is on, otherwise the preferred translation (or the original
+     * when none is preferred).
+     */
+    private fun resolvedActiveCode(
+        messageId: String,
+        message: ApiMessage,
+        prefs: LanguageResolver.ContentLanguagePreferences,
+    ): String? {
+        activeLanguageOverride.value[messageId]?.let { return it.normalizedCode() }
+        val original = message.originalLanguage.normalizedCode()
+        if (messageId in showingOriginal.value) return original
+        return LanguageResolver.preferredTranslation(message.translations, prefs)
+            ?.targetLanguage?.normalizedCode()
+            ?: original
+    }
+
     fun openEmojiPicker(messageId: String) {
         _state.update { it.copy(emojiPickerMessageId = messageId, actionMessageId = null) }
     }
@@ -1100,6 +1157,9 @@ private data class BubbleInputs(
     val recipientCount: Int,
 )
 
+private fun String?.normalizedCode(): String? =
+    this?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+
 private fun <T> CacheResult<List<T>>.valueOrNull(): List<T>? = when (this) {
     is CacheResult.Fresh -> value
     is CacheResult.Stale -> value
@@ -1116,23 +1176,24 @@ private fun ChatUiState.applyResult(
     recipientCount: Int,
     hidden: LocallyHiddenMessages,
     starredIds: Set<String>,
+    activeLanguageOverride: Map<String, String>,
 ): ChatUiState {
     val updated = when (result) {
         is CacheResult.Fresh -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride),
             ownReactions = ownReactions,
             isSyncing = false,
             showSkeleton = false,
             errorMessage = null,
         )
         is CacheResult.Stale -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride),
             ownReactions = ownReactions,
             isSyncing = true,
             showSkeleton = false,
         )
         is CacheResult.Syncing -> copy(
-            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds)
+            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride)
                 ?: messages,
             ownReactions = ownReactions,
             isSyncing = true,
@@ -1175,6 +1236,7 @@ private fun List<LocalMessage>.toBubbles(
     recipientCount: Int,
     hidden: LocallyHiddenMessages,
     starredIds: Set<String>,
+    activeLanguageOverride: Map<String, String>,
 ): List<BubbleContent> = filterNot { hidden.isHidden(it.message.id) }.map { local ->
     BubbleContentBuilder.build(
         message = local.message,
@@ -1186,6 +1248,7 @@ private fun List<LocalMessage>.toBubbles(
         ownReactions = ownReactions[local.message.id] ?: emptySet(),
         recipientCount = recipientCount,
         showOriginal = local.message.id in showingOriginal,
+        activeLanguageCode = activeLanguageOverride[local.message.id],
         mediaBaseUrl = mediaBaseUrl,
     ).copy(isStarred = local.message.id in starredIds)
 }

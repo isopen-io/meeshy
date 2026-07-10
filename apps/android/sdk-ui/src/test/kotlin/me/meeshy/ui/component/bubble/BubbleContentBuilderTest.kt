@@ -204,6 +204,84 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `an active-language override switches the bubble text to that translation`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                    ApiTextTranslation(targetLanguage = "es", translatedContent = "Hola"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = Prefs(systemLanguage = "fr", regionalLanguage = "es"),
+            activeLanguageCode = "es",
+        )
+
+        assertThat(content.text).isEqualTo("Hola")
+        assertThat(content.isShowingOriginal).isFalse()
+        assertThat(content.originalText).isEqualTo("Hello")
+        assertThat(content.languageStrip.single { it.code == "es" }.isActive).isTrue()
+    }
+
+    @Test
+    fun `an active-language override of the original shows the original text`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            activeLanguageCode = "en",
+        )
+
+        assertThat(content.text).isEqualTo("Hello")
+        assertThat(content.isShowingOriginal).isTrue()
+        assertThat(content.isTranslated).isTrue()
+        assertThat(content.originalText).isNull()
+        assertThat(content.languageStrip.single { it.code == "en" }.isActive).isTrue()
+    }
+
+    @Test
+    fun `an active-language override for a language without content is ignored`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            activeLanguageCode = "de",
+        )
+
+        assertThat(content.text).isEqualTo("Bonjour")
+        assertThat(content.languageStrip.single { it.code == "fr" }.isActive).isTrue()
+    }
+
+    @Test
+    fun `a blank active-language override falls back to the preferred translation`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            activeLanguageCode = "   ",
+        )
+
+        assertThat(content.text).isEqualTo("Bonjour")
+        assertThat(content.languageStrip.single { it.code == "fr" }.isActive).isTrue()
+    }
+
+    @Test
     fun `a deleted message carries the deleted flag and no text`() {
         val content = BubbleContentBuilder.build(
             message(content = "secret", deletedAt = "2026-05-18T10:00:00Z"),

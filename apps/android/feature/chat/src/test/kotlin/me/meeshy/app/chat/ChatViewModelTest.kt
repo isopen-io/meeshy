@@ -905,6 +905,82 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun tapping_a_language_flag_switches_the_bubble_to_that_translation() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+        assertThat(bubbleText(h, "m1")).isEqualTo("Bonjour")
+
+        h.vm.onFlagTap("m1", "es")
+        advanceUntilIdle()
+
+        assertThat(bubbleText(h, "m1")).isEqualTo("Hola")
+        assertThat(activeStripCode(h, "m1")).isEqualTo("es")
+    }
+
+    @Test
+    fun tapping_the_active_language_flag_reverts_to_the_preferred_translation() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+        h.vm.onFlagTap("m1", "es")
+        advanceUntilIdle()
+        assertThat(bubbleText(h, "m1")).isEqualTo("Hola")
+
+        h.vm.onFlagTap("m1", "es")
+        advanceUntilIdle()
+
+        assertThat(bubbleText(h, "m1")).isEqualTo("Bonjour")
+        assertThat(activeStripCode(h, "m1")).isEqualTo("fr")
+    }
+
+    @Test
+    fun tapping_the_original_language_flag_shows_the_original_text() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+
+        h.vm.onFlagTap("m1", "en")
+        advanceUntilIdle()
+
+        assertThat(bubbleText(h, "m1")).isEqualTo("Hello")
+        assertThat(h.vm.state.value.messages.single { it.messageId == "m1" }.isShowingOriginal).isTrue()
+        assertThat(activeStripCode(h, "m1")).isEqualTo("en")
+    }
+
+    @Test
+    fun tapping_the_preferred_flag_while_it_is_active_is_inert() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+
+        h.vm.onFlagTap("m1", "fr")
+        advanceUntilIdle()
+
+        assertThat(bubbleText(h, "m1")).isEqualTo("Bonjour")
+        assertThat(activeStripCode(h, "m1")).isEqualTo("fr")
+    }
+
+    @Test
+    fun tapping_a_language_without_content_leaves_the_bubble_unchanged() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+
+        h.vm.onFlagTap("m1", "de")
+        advanceUntilIdle()
+
+        assertThat(bubbleText(h, "m1")).isEqualTo("Bonjour")
+        assertThat(activeStripCode(h, "m1")).isEqualTo("fr")
+    }
+
+    @Test
+    fun tapping_a_flag_on_an_unknown_message_is_inert() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+
+        h.vm.onFlagTap("does-not-exist", "es")
+        advanceUntilIdle()
+
+        assertThat(bubbleText(h, "m1")).isEqualTo("Bonjour")
+    }
+
+    @Test
     fun an_unpinned_socket_event_refreshes_the_open_conversation() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
@@ -1166,6 +1242,41 @@ class ChatViewModelTest {
             ageMillis = 0,
         ),
     )
+
+    private val frEs = MeeshyUser(
+        id = "me",
+        username = "atabeth",
+        systemLanguage = "fr",
+        regionalLanguage = "es",
+    )
+
+    private fun flagStripStream() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(
+                    ApiMessage(
+                        id = "m1",
+                        conversationId = "c1",
+                        senderId = "other",
+                        content = "Hello",
+                        originalLanguage = "en",
+                        translations = listOf(
+                            ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                            ApiTextTranslation(targetLanguage = "es", translatedContent = "Hola"),
+                        ),
+                    ),
+                ),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
+    private fun bubbleText(h: Harness, messageId: String): String =
+        h.vm.state.value.messages.single { it.messageId == messageId }.text
+
+    private fun activeStripCode(h: Harness, messageId: String): String? =
+        h.vm.state.value.messages.single { it.messageId == messageId }
+            .languageStrip.singleOrNull { it.isActive }?.code
 
     @Test
     fun long_press_opens_the_action_sheet_and_hydrates_own_reactions() = runTest(dispatcher) {
