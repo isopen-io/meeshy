@@ -50,6 +50,10 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -122,7 +126,9 @@ import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
+import me.meeshy.ui.component.bubble.LanguageExplorerRow
 import me.meeshy.ui.component.bubble.MessageBubble
+import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
@@ -487,7 +493,20 @@ fun ChatScreen(
             onPin = { viewModel.togglePin(actionTarget.messageId) },
             onStar = { viewModel.toggleStar(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
+            onExploreLanguages = { viewModel.openLanguageExplorer(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
+        )
+    }
+
+    val explorerModel = state.languageExplorer
+    val explorerMessageId = state.explorerMessageId
+    if (explorerModel != null && explorerMessageId != null) {
+        MessageLanguageExplorerSheet(
+            explorer = explorerModel,
+            accentColor = accentColor,
+            onSelectLanguage = { code -> viewModel.onFlagTap(explorerMessageId, code) },
+            onRetranslate = { code -> viewModel.onExplorerRetranslate(explorerMessageId, code) },
+            onDismiss = viewModel::dismissLanguageExplorer,
         )
     }
 
@@ -1525,6 +1544,7 @@ private fun MessageActionsSheet(
     onPin: () -> Unit,
     onStar: () -> Unit,
     onToggleOriginal: () -> Unit,
+    onExploreLanguages: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -1571,6 +1591,11 @@ private fun MessageActionsSheet(
                         else R.string.chat_action_show_original,
                     ),
                     onClick = onToggleOriginal,
+                )
+                SheetAction(
+                    icon = Icons.Filled.Language,
+                    label = stringResource(R.string.chat_action_explore_languages),
+                    onClick = onExploreLanguages,
                 )
             }
             if (!bubble.isDeleted) {
@@ -1648,6 +1673,176 @@ private fun SheetAction(
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         Text(text = label, style = MaterialTheme.typography.bodyLarge, color = tint)
+    }
+}
+
+/**
+ * The per-message language explorer (Prisme Linguistique — exhaustive view). Lists
+ * the original-language banner plus every explorable target language projected by
+ * [MessageDetailExplorer]: tap a language to switch the bubble to it, tap the
+ * refresh icon to retranslate an existing one, or tap a content-less language to
+ * translate it on demand.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MessageLanguageExplorerSheet(
+    explorer: MessageLanguageExplorer,
+    accentColor: Color,
+    onSelectLanguage: (String) -> Unit,
+    onRetranslate: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+    ) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = MeeshySpacing.lg)
+                .padding(bottom = MeeshySpacing.xl),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            Text(
+                text = stringResource(R.string.chat_explorer_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MeeshyTheme.tokens.textPrimary,
+                modifier = Modifier.padding(vertical = MeeshySpacing.sm),
+            )
+
+            val originalColor = explorer.originalInfo?.colorHex
+                ?.let(::hexColor)
+                ?.takeIf { it != Color.Unspecified }
+                ?: accentColor
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(MeeshyRadius.md))
+                    .background(originalColor.copy(alpha = 0.08f))
+                    .padding(MeeshySpacing.md),
+                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                ) {
+                    Text(
+                        text = explorer.originalInfo?.flag ?: (explorer.originalCode ?: "").uppercase(),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        text = stringResource(R.string.chat_explorer_original),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = originalColor,
+                    )
+                    explorer.originalInfo?.let {
+                        Text(
+                            text = "· ${it.name}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MeeshyTheme.tokens.textSecondary,
+                        )
+                    }
+                }
+                if (explorer.originalPreview.isNotEmpty()) {
+                    Text(
+                        text = explorer.originalPreview,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MeeshyTheme.tokens.backgroundTertiary)
+
+            explorer.rows.forEach { row ->
+                LanguageExplorerRowView(
+                    row = row,
+                    accentColor = accentColor,
+                    onSelect = { onSelectLanguage(row.code) },
+                    onRetranslate = { onRetranslate(row.code) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguageExplorerRowView(
+    row: LanguageExplorerRow,
+    accentColor: Color,
+    onSelect: () -> Unit,
+    onRetranslate: () -> Unit,
+) {
+    val accent = row.info?.colorHex
+        ?.let(::hexColor)
+        ?.takeIf { it != Color.Unspecified }
+        ?: accentColor
+    val label = row.info?.name ?: row.code
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(if (row.isSelected) accent.copy(alpha = 0.12f) else Color.Transparent)
+            .clickable(onClick = onSelect)
+            .semantics { role = Role.Button }
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(text = row.info?.flag ?: row.code.uppercase(), style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (row.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (row.isSelected) accent else MeeshyTheme.tokens.textPrimary,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        when {
+            row.isTranslating -> CircularProgressIndicator(
+                color = accent,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(18.dp),
+            )
+            row.hasContent -> {
+                row.preview?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                        maxLines = 1,
+                        modifier = Modifier.widthIn(max = 160.dp),
+                    )
+                }
+                if (row.canRetranslate) {
+                    IconButton(onClick = onRetranslate, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = stringResource(R.string.chat_explorer_retranslate),
+                            tint = accent.copy(alpha = 0.7f),
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+                if (row.isSelected) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            else -> Text(
+                text = stringResource(R.string.chat_explorer_translate),
+                style = MaterialTheme.typography.labelMedium,
+                color = accent,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(accent.copy(alpha = 0.12f))
+                    .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+            )
+        }
     }
 }
 

@@ -1614,3 +1614,28 @@ Append-only log of gotchas and decisions that save time next run.
   as `.combine(activeLanguageOverride) { triple, overrides -> triple to overrides }` after the `hidden`/`starred`
   nesting, then unpacked in `collect` and threaded through `applyResult`/`toBubbles` — no restructuring of the
   first combine.
+
+## 2026-07-10 — slice `chat-message-detail-explorer`
+
+- **`BubbleContent` is lossy — build translation-rich UI models in the VM, not the Composable.** The bubble UI
+  model carries `languageStrip: List<LanguageChip>` + `text`/`originalText`, but NOT the raw
+  `translations`/`originalLanguage`. The language explorer needs per-language translated text (for previews of
+  languages beyond the strip), so `MessageDetailExplorer.build(...)` runs in `ChatViewModel` where
+  `latestMessages` holds the full `ApiMessage`, and the result is projected into `ChatUiState.languageExplorer`.
+  The Composable stays pure glue over the ready-made model.
+- **Reactive derived state that depends on `_state` fields: feed those fields back into a `combine`, guard with
+  `distinctUntilChanged`, and only write a NON-input field.** The explorer must rebuild when
+  `explorerMessageId` / `translatingLanguages` change (both live in `_state`) AND when messages/user/override
+  change. Solution: a dedicated `combine(_state.map { it.explorerMessageId }.distinctUntilChanged(),
+  latestMessagesFlow, currentUser, _state.map { it.translatingLanguages }.distinctUntilChanged(),
+  activeLanguageOverride) { ... }.distinctUntilChanged().collect { _state.update { copy(languageExplorer = it) } }`.
+  Writing only `languageExplorer` (not an input) means no feedback loop. Needed a `latestMessagesFlow`
+  `MutableStateFlow` mirror of the private `latestMessages` var so the raw messages are observable.
+- **Surface in-flight sets into `UiState` when a sheet renders spinners off them.** The on-demand-translate
+  in-flight guard was a private `mutableSetOf<String>`; the explorer's per-row spinner needs it, so it moved
+  into `ChatUiState.translatingLanguages` (keys `"$messageId|$code"`). Still main-dispatcher-confined, so the
+  check-then-add stays race-free; `_state.update` makes the add/remove atomic.
+- **Retranslate ≠ select.** `onFlagTap` on an already-translated language resolves to `Activate` (no network).
+  A real "retranslate" affordance must call `requestOnDemandTranslation` unconditionally — reuse the merge/no-op
+  path (`MessageRepository.requestTranslation` re-hits the API every call; identical result → inert merge).
+  No `force` flag on the repo was needed.

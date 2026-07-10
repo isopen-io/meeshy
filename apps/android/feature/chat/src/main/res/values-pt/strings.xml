@@ -22,6 +22,11 @@
     <string name="chat_cancel_reply">Cancelar resposta</string>
     <string name="chat_action_show_original">Ver original</string>
     <string name="chat_action_show_translation">Ver tradução</string>
+    <string name="chat_action_explore_languages">Explorar idiomas</string>
+    <string name="chat_explorer_title">Idiomas</string>
+    <string name="chat_explorer_original">Original</string>
+    <string name="chat_explorer_translate">Traduzir</string>
+    <string name="chat_explorer_retranslate">Retraduzir</string>
     <string name="chat_action_edit">Editar</string>
     <string name="chat_action_pin">Fixar</string>
     <string name="chat_action_unpin">Desafixar</string>

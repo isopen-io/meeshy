@@ -4,7 +4,22 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Translation §D) — slice `chat-compose-language-detection` ✅
+## This loop (Phase: Translation §D) — slice `chat-message-detail-explorer` ✅
+**Per-message language explorer sheet** — the exhaustive Prisme view (iOS `MessageLanguageDetailView`). New
+pure `:sdk-ui` `MessageDetailExplorer.build(...) → MessageLanguageExplorer` projects the original-language
+banner + one row per explorable language: viewer's **configured** languages first (system → regional →
+custom), then the remaining candidates (default `LanguageData.allLanguagesCommonFirst`) — preference-led, not
+iOS's fixed 18-entry list. Each `LanguageExplorerRow` has a truncated preview, `hasContent`/`isTranslating`/
+`isSelected` + `canRetranslate`. `ChatViewModel` surfaces the in-flight `translatingLanguages` set into state,
+projects the model reactively into `ChatUiState.languageExplorer` (off a `latestMessagesFlow` mirror), reuses
+`onFlagTap` for select/translate, and adds `onExplorerRetranslate` (force refetch even with content). Entry:
+message-actions sheet → "Explore languages" → `MessageLanguageExplorerSheet` (accent-coherent, single-sheet
+gesture). +31 tests (21 `MessageDetailExplorerTest`, +10 `ChatViewModelTest`); full `assembleDebug` +
+all-module `testDebugUnitTest` green, diff = `apps/android` only.
+Next: progressive **audio-voice translation** (`audio:translation-ready` → cloned-voice playback, needs
+BubbleAudio UI), or the per-post translation strip.
+
+## Prior loop (Phase: Translation §D) — slice `chat-compose-language-detection` ✅
 **Source-language stamping from the composed text (Prisme §D).** `ChatViewModel.send()` stamped
 `originalLanguage = user.systemLanguage ?: "fr"` — it ignored the resolution chain (regional/custom-only
 users mis-stamped `fr`) and never inspected what was typed. New pure `:core:model`
