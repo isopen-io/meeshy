@@ -60,6 +60,62 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertNil(event.pinnedAt)
     }
 
+    // MARK: - CallTranslatedSegmentData
+
+    func testCallTranslatedSegmentEventDecoding() throws {
+        let json = """
+        {
+            "callId": "507f1f77bcf86cd799439011",
+            "segment": {
+                "text": "Bonjour",
+                "translatedText": "Hello",
+                "speakerId": "user-abc",
+                "startMs": 0,
+                "endMs": 1500,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "en",
+                "confidence": 0.95
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(CallTranslatedSegmentData.self, from: json)
+        XCTAssertEqual(event.callId, "507f1f77bcf86cd799439011")
+        XCTAssertEqual(event.segment.text, "Bonjour")
+        XCTAssertEqual(event.segment.translatedText, "Hello")
+        XCTAssertEqual(event.segment.speakerId, "user-abc")
+        XCTAssertEqual(event.segment.startMs, 0)
+        XCTAssertEqual(event.segment.endMs, 1500)
+        XCTAssertTrue(event.segment.isFinal)
+        XCTAssertEqual(event.segment.sourceLanguage, "fr")
+        XCTAssertEqual(event.segment.targetLanguage, "en")
+        XCTAssertEqual(event.segment.confidence, 0.95, accuracy: 0.001)
+    }
+
+    func testCallTranslatedSegmentEventDecoding_withoutTranslatedText_fallsBackToNil() throws {
+        // `translatedText` is omitted when ZMQ translation is disabled/unavailable —
+        // consumers must fall back to displaying `text`.
+        let json = """
+        {
+            "callId": "507f1f77bcf86cd799439011",
+            "segment": {
+                "text": "Bonjour",
+                "speakerId": "user-abc",
+                "startMs": 0,
+                "endMs": 1500,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "fr",
+                "confidence": 0.95
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(CallTranslatedSegmentData.self, from: json)
+        XCTAssertNil(event.segment.translatedText)
+    }
+
     func testMessageUnpinnedEventDecoding() throws {
         let json = """
         {"messageId": "m3", "conversationId": "c3"}

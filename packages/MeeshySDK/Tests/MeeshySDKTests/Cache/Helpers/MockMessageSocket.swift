@@ -67,6 +67,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
     let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
     let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
+    let callTranslatedSegmentReceived = PassthroughSubject<CallTranslatedSegmentData, Never>()
     let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
     let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
@@ -111,5 +112,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
+    func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
     func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck? { nil }
 }

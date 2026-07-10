@@ -800,6 +800,50 @@ public struct CallForcedLeaveData: Decodable, Sendable {
     public let reason: String?
 }
 
+public struct CallTranscriptionSegmentPayload: Sendable {
+    public let text: String
+    public let speakerId: String
+    public let startMs: Int
+    public let endMs: Int
+    public let isFinal: Bool
+    public let confidence: Double
+    public let language: String
+
+    public init(
+        text: String, speakerId: String, startMs: Int, endMs: Int,
+        isFinal: Bool, confidence: Double, language: String
+    ) {
+        self.text = text
+        self.speakerId = speakerId
+        self.startMs = startMs
+        self.endMs = endMs
+        self.isFinal = isFinal
+        self.confidence = confidence
+        self.language = language
+    }
+}
+
+/// Event: call:translated-segment (Server → Client). Mirrors
+/// `CallTranslatedSegmentEvent` in `packages/shared/types/video-call.ts`.
+/// `translatedText` is omitted when ZMQ translation is disabled/unavailable —
+/// consumers fall back to displaying `text`.
+public struct CallTranslatedSegmentData: Decodable, Sendable {
+    public let callId: String
+    public let segment: Segment
+
+    public struct Segment: Decodable, Sendable {
+        public let text: String
+        public let translatedText: String?
+        public let speakerId: String
+        public let startMs: Int
+        public let endMs: Int
+        public let isFinal: Bool
+        public let sourceLanguage: String
+        public let targetLanguage: String
+        public let confidence: Double
+    }
+}
+
 // MARK: - Reaction Sync Event Data
 
 public struct ReactionSyncEvent: Decodable, Sendable {
@@ -1021,6 +1065,7 @@ public protocol MessageSocketProviding: Sendable {
     /// Fired when the gateway force-removes the current user from the call.
     /// The client must tear down the call immediately (no user confirmation needed).
     var callForcedLeave: PassthroughSubject<CallForcedLeaveData, Never> { get }
+    var callTranslatedSegmentReceived: PassthroughSubject<CallTranslatedSegmentData, Never> { get }
     var messageReceived: PassthroughSubject<APIMessage, Never> { get }
     var messageEdited: PassthroughSubject<APIMessage, Never> { get }
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
@@ -1148,6 +1193,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallForegrounded(callId: String, participantId: String)
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool)
     func emitCallAnalytics(callId: String, payload: [String: Any])
+    func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload)
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -1193,6 +1239,7 @@ public extension MessageSocketProviding {
     func emitCallForegrounded(callId: String, participantId: String) {}
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
     func emitCallAnalytics(callId: String, payload: [String: Any]) {}
+    func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
 
     func sendWithAttachments(
         conversationId: String,
@@ -1339,6 +1386,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
     public let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
     public let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
+    public let callTranslatedSegmentReceived = PassthroughSubject<CallTranslatedSegmentData, Never>()
 
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
@@ -2294,6 +2342,24 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:heartbeat", ["callId": callId])
     }
 
+    /// Emits a final (isFinal=true only — callers must not send partials)
+    /// local transcription segment. The gateway relays it, translated per
+    /// listener's `systemLanguage`, as `call:translated-segment`.
+    public func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {
+        socket?.emit("call:transcription-segment", [
+            "callId": callId,
+            "segment": [
+                "text": segment.text,
+                "speakerId": segment.speakerId,
+                "startMs": segment.startMs,
+                "endMs": segment.endMs,
+                "isFinal": segment.isFinal,
+                "confidence": segment.confidence,
+                "language": segment.language
+            ]
+        ])
+    }
+
     /// Report periodic call quality + cumulative data usage to the gateway. The
     /// last report before teardown carries the call totals, which the gateway
     /// persists on the CallSession so the call-summary message can surface
@@ -3053,6 +3119,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallForcedLeaveData.self, from: data) { [weak self] event in
                 self?.callForcedLeave.send(event)
+            }
+        }
+
+        socket.on("call:translated-segment") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallTranslatedSegmentData.self, from: data) { [weak self] event in
+                self?.callTranslatedSegmentReceived.send(event)
             }
         }
 
