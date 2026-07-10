@@ -95,14 +95,14 @@ struct BubbleCallNoticeView: View, Equatable {
                 leadingGlyph
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(ThemeManager.shared.textPrimary)
                         .lineLimit(1)
                     metricsRow
                 }
             }
             Text(notice.timeString)
-                .font(.caption2.weight(.medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize - 1, weight: .medium))
                 .foregroundColor(ThemeManager.shared.textMuted)
                 .accessibilityHidden(true)
         }
@@ -128,7 +128,7 @@ struct BubbleCallNoticeView: View, Equatable {
                 if let duration { metric(icon: "clock", text: duration) }
                 if duration != nil, data != nil {
                     Text("·")
-                        .font(.caption.weight(.medium))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(ThemeManager.shared.textMuted)
                 }
                 if let data { metric(icon: "arrow.up.arrow.down", text: data) }
@@ -139,9 +139,9 @@ struct BubbleCallNoticeView: View, Equatable {
     private func metric(icon: String, text: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
             Text(text)
-                .font(.caption.weight(.medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .lineLimit(1)
         }
         .foregroundColor(ThemeManager.shared.textMuted)
@@ -159,7 +159,7 @@ struct BubbleCallNoticeView: View, Equatable {
                 .fill(tint.opacity(isDark ? 0.14 : 0.09))
                 .frame(width: 36, height: 36)
             Image(systemName: mediaGlyph)
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(tint)
         }
         .overlay(alignment: .bottomTrailing) { directionChip }
@@ -172,7 +172,7 @@ struct BubbleCallNoticeView: View, Equatable {
                 .fill(ThemeManager.shared.backgroundPrimary)
                 .frame(width: 16, height: 16)
             Image(systemName: directionGlyph)
-                .font(.system(size: 8, weight: .black))
+                .font(MeeshyFont.relative(8, weight: .black))
                 .foregroundColor(tint)
         }
         .offset(x: 3, y: 3)
@@ -334,14 +334,14 @@ struct CallSummaryDetailSheet: View {
                     .fill(tint.opacity(0.12))
                     .frame(width: 64, height: 64)
                 Image(systemName: mediaGlyph)
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(MeeshyFont.relative(26, weight: .semibold))
                     .foregroundColor(tint)
             }
             .overlay(alignment: .bottomTrailing) {
                 ZStack {
                     Circle().fill(theme.backgroundPrimary).frame(width: 26, height: 26)
                     Image(systemName: directionGlyph)
-                        .font(.system(size: 12, weight: .black))
+                        .font(MeeshyFont.relative(12, weight: .black))
                         .foregroundColor(tint)
                 }
                 .offset(x: 4, y: 4)
@@ -351,7 +351,7 @@ struct CallSummaryDetailSheet: View {
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
             Text(timestamp.formatted(date: .abbreviated, time: .shortened))
-                .font(.subheadline.weight(.medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .padding(.top, 8)
@@ -367,7 +367,7 @@ struct CallSummaryDetailSheet: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: mediaGlyph)
-                Text(callBackTitle).font(.subheadline.weight(.semibold))
+                Text(callBackTitle).font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
@@ -429,12 +429,12 @@ struct CallSummaryDetailSheet: View {
     private func qualityRow(_ quality: CallSummaryMetadata.NetworkQuality) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "waveform")
-                .font(.subheadline)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(Color(hex: accentHex))
                 .frame(width: 24)
                 .accessibilityHidden(true)
             Text(String(localized: "calls.detail.quality", defaultValue: "Qualité", bundle: .main))
-                .font(.subheadline)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(theme.textMuted)
             Spacer()
             Circle()
@@ -442,7 +442,7 @@ struct CallSummaryDetailSheet: View {
                 .frame(width: 8, height: 8)
                 .accessibilityHidden(true)
             Text(qualityWord(quality))
-                .font(.subheadline.weight(.medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -453,16 +453,16 @@ struct CallSummaryDetailSheet: View {
     private func detailRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.subheadline)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(Color(hex: accentHex))
                 .frame(width: 24)
                 .accessibilityHidden(true)
             Text(label)
-                .font(.subheadline)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(theme.textMuted)
             Spacer()
             Text(value)
-                .font(.subheadline.weight(.medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
