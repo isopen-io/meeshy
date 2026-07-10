@@ -71,7 +71,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, []);
 
   // Initialize WebRTC
-  const { initializeLocalStream, createOffer, connectionState, enableVideo, disableVideo, applyQualityTier } = useWebRTCP2P({
+  const { initializeLocalStream, createOffer, connectionState, enableVideo, disableVideo, applyQualityTier, removeParticipant } = useWebRTCP2P({
     callId,
     userId: user?.id,
     onError: handleWebRTCError,
@@ -440,7 +440,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
       // Remove their stream and peer connection after 2 seconds
       setTimeout(() => {
-        const { peerConnections, removeRemoteStream, removePeerConnection } = useCallStore.getState();
+        const { peerConnections, removeRemoteStream } = useCallStore.getState();
 
         if (peerConnections.get(participantId) !== connectionAtLeave) {
           // Participant already rejoined and got a fresh RTCPeerConnection
@@ -455,7 +455,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         }
 
         removeRemoteStream(participantId);
-        removePeerConnection(participantId);
+        // removeParticipant (not just the store's removePeerConnection) so the
+        // WebRTCService/remoteDescriptionSetRef/iceCandidateQueueRef/offerInFlightRef
+        // entries are cleared too — otherwise a same-session rejoin's initial
+        // offer gets misrouted as a renegotiation against a closed connection.
+        removeParticipant(participantId);
 
         // Sibling-drift fix: `offersCreatedFor` is only ever populated (or
         // cleared on createOffer failure) by the offer-creation effect above —
@@ -480,7 +484,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     return () => {
       socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
     };
-  }, [callId]);
+  }, [callId, removeParticipant]);
 
   // Get remote participant info
   const remoteParticipant = currentCall?.participants?.find(
