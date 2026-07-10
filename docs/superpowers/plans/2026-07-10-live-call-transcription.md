@@ -1303,7 +1303,7 @@ git commit -m "refactor(ios/calls): rewire toggleTranscription to the socket rel
 
 `showTranscript` and `transcriptOverlay` are already correctly implemented and wired (fixed 2026-07-10 in PR #1800 — verify this is still true at execution time; if `transcriptionService` in `CallView.init` is no longer derived from `callManager.transcriptionService`, treat that as a blocking regression to fix first, not part of this task's scope). This task only adds the missing UI entry point: a toggle button.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 There is no existing SwiftUI-body unit-test convention for control-bar buttons in this codebase (verified: no test asserts on `controlButtonsRow`'s contents). Follow the source-inspection pattern already used elsewhere in this file's test suite (e.g. `CallHangupFastPathTests`) instead. Add to `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, inside `CallHangupFastPathTests`:
 
@@ -1324,7 +1324,7 @@ There is no existing SwiftUI-body unit-test convention for control-bar buttons i
     }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -1338,7 +1338,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: FAIL.
 
-- [ ] **Step 3: Add the toggle button**
+- [x] **Step 3: Add the toggle button**
 
 In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, inside `controlButtonsRow` (starts at line 1420), add a new button after the `cameraControl` line and before the video-upgrade `callControlButton` block (i.e. right after the `// §5.4 — always visible so an AUDIO call...` comment's preceding line, or more simply: right after the `cameraControl` reference line):
 
@@ -1373,7 +1373,7 @@ In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, inside `controlButtonsR
 
 This both starts/stops capture AND opens/closes the existing `transcriptOverlay` panel in the same tap — no separate discovery step needed for the user.
 
-- [ ] **Step 4: Add the two new string keys**
+- [x] **Step 4: Add the two new string keys**
 
 Open `apps/ios/Meeshy/Localizable.xcstrings` and add two entries to the top-level `"strings"` object (JSON), following the exact structure of the existing `"call.control.mute.caption"` / `"call.control.mute"` entries (5 languages: `de`, `en`, `es`, `fr`, `pt-BR`; `sourceLanguage` for this catalog is `fr`):
 
@@ -1491,7 +1491,7 @@ Insert these alphabetically among the other `"call.control.*"` keys (JSON key or
 python3 -c "import json; json.load(open('apps/ios/Meeshy/Localizable.xcstrings'))" && echo OK
 ```
 
-- [ ] **Step 5: Run to verify the test passes, then run the localization consistency suite**
+- [x] **Step 5: Run to verify the test passes, then run the localization consistency suite**
 
 ```bash
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
@@ -1508,7 +1508,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: both PASS (the localization suite catches malformed/missing-language xcstrings entries — do not skip it, per project history of xcstrings edit mistakes).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
