@@ -1461,6 +1461,30 @@ describe('CallEventsHandler', () => {
       expect(ack).toHaveBeenCalledWith({ success: false });
     });
 
+    // The fast-path optimistic broadcast (below) trusts call-room membership
+    // as authorization, reasoning it was proven true at call:join time — but
+    // nothing evicts a socket from the call room if the underlying
+    // authorization is later revoked (e.g. removed from the conversation
+    // mid-call). An unauthorized caller whose socket is still in the room
+    // must not be able to fire a false call:ended at the real participant
+    // before the authorization check below rejects them.
+    it('does NOT fire the fast-path optimistic call:ended broadcast when the ender cannot be resolved to a participant, even if their socket is still in the call room', async () => {
+      const { handler, io } = buildHandler({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      const ack = jest.fn();
+      await socket._trigger('call:end', validData, ack);
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
+      expect(ack).toHaveBeenCalledWith({ success: false });
+    });
+
     // Companion to the above: the wide call:ended fanout, chat summary, and
     // missed-call handling that used to follow the (now-removed) force-end
     // call for this branch must not fire either — there is nothing to

@@ -19,7 +19,7 @@ interface CallStatusIndicatorProps {
 
 export function CallStatusIndicator({
   connectionState,
-  _callDuration = 0,
+  callDuration: _callDuration = 0,
   participantName,
   connectionQuality,
 }: CallStatusIndicatorProps) {
