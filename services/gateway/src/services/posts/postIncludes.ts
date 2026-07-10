@@ -40,6 +40,25 @@ export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
 });
 
 /**
+ * Story-scoped author shape — `authorSelect` + presence.
+ *
+ * The story viewer presents an identity interstitial (avatar, name, presence
+ * badge) at every author switch; presence must ship WITH the feed payload so
+ * the interstitial is complete the instant the switch happens (no lazy
+ * resolution after the slide is already on screen). Presence stays scoped to
+ * the stories path: story visibility already gates the audience (friends /
+ * DM contacts / community co-members), whereas the general post feed keeps
+ * the lean `authorSelect`.
+ *
+ * Derived by spread so any future `authorSelect` field flows through.
+ */
+export const storyAuthorSelect = Prisma.validator<Prisma.UserSelect>()({
+  ...authorSelect,
+  isOnline: true,
+  lastActiveAt: true,
+});
+
+/**
  * Canonical media select.
  *
  * Includes the Prisme Linguistique foundation fields:
@@ -174,7 +193,7 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
   expiresAt: true,
   originalRepostOfId: true,
   viewCount: true,
-  author: { select: authorSelect },
+  author: { select: storyAuthorSelect },
   media: mediaInclude,
   repostOf: {
     select: {
@@ -198,6 +217,17 @@ export const postInclude = Prisma.validator<Prisma.PostInclude>()({
   media: mediaInclude,
   comments: commentsPreviewInclude,
   repostOf: repostOfInclude,
+});
+
+/**
+ * Story-scoped post include — `postInclude` with the presence-carrying
+ * author shape (see `storyAuthorSelect`). Derived by spread: adding a
+ * relation to `postInclude` flows through here automatically, so the two
+ * shapes cannot drift apart.
+ */
+export const storyPostInclude = Prisma.validator<Prisma.PostInclude>()({
+  ...postInclude,
+  author: { select: storyAuthorSelect },
 });
 
 // ============================================================================
