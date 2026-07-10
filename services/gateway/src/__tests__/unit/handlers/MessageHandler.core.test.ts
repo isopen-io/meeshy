@@ -1553,8 +1553,11 @@ describe('MessageHandler._emitMessageNewByLanguage', () => {
     await handler.broadcastNewMessage(msg, 'conv-abc');
 
     expect(mockFilterMessagePayloadForLanguages).toHaveBeenCalledTimes(2);
-    // 2 emits from lang filter + conversation:updated (but CONVERSATION_UPDATED may not be emitted without userId participants)
-    expect(io._emit).toHaveBeenCalledTimes(2);
+    // 2 trimmed per-language emits to the LOCAL sockets + 1 cross-node broadcast
+    // of the full payload to the room (adapter-propagated, excepting the local
+    // sockets) so recipients on other gateway nodes still receive message:new.
+    // No CONVERSATION_UPDATED here (no userId participants).
+    expect(io._emit).toHaveBeenCalledTimes(3);
   });
 
   it('skips groups with empty socketIds', async () => {

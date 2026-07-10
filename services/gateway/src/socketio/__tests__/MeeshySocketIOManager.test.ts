@@ -3832,6 +3832,41 @@ describe('MeeshySocketIOManager', () => {
       expect(() => (manager as any)._emitMessageNewByLanguage(room, payload)).not.toThrow();
     });
 
+    it('broadcasts the full payload to the room excepting local sockets so remote-node recipients still receive message:new', () => {
+      const room = 'conversation:cross-node-room';
+      ioState.sockets.adapter.rooms.set(room, new Set(['sock-local-1']));
+      (manager as any).socketToUser.set('sock-local-1', 'user-local-1');
+      (manager as any).connectedUsers.set('user-local-1', {
+        id: 'user-local-1', socketId: 'sock-local-1', isAnonymous: false,
+        language: 'fr', resolvedLanguages: ['fr'],
+      });
+      ioState.except.mockClear();
+      ioState.toEmit.mockClear();
+
+      const payload = { id: 'msg-xn', originalLanguage: 'fr', translations: [] };
+      (manager as any)._emitMessageNewByLanguage(room, payload);
+
+      // Cross-node fan-out: full payload to the room, excepting the LOCAL socket
+      // already served a trimmed copy. Remote-node sockets (not in adapter.rooms)
+      // are thus reached via the adapter-propagated room broadcast.
+      expect(ioState.to).toHaveBeenCalledWith(room);
+      expect(ioState.except).toHaveBeenCalledWith(['sock-local-1']);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, payload);
+    });
+
+    it('still broadcasts to the room when THIS node has zero local room sockets (sender-only node)', () => {
+      const room = 'conversation:no-local-room';
+      ioState.sockets.adapter.rooms.clear();
+      ioState.except.mockClear();
+      ioState.toEmit.mockClear();
+
+      const payload = { id: 'msg-nolocal', originalLanguage: 'fr', translations: [] };
+      (manager as any)._emitMessageNewByLanguage(room, payload);
+
+      expect(ioState.except).toHaveBeenCalledWith([]);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, payload);
+    });
+
     it('accumulates multiple sockets with same language key into same bucket (line 1319)', () => {
       const room = 'conversation:multi-socket-room';
       ioState.sockets.adapter.rooms.set(room, new Set(['sock-multi-1', 'sock-multi-2']));

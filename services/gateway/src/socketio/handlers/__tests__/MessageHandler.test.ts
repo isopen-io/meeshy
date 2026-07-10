@@ -1963,8 +1963,52 @@ describe('MessageHandler', () => {
 
       await new MessageHandler(localDeps).broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
 
+      // No LOCAL room sockets → per-language grouping is skipped …
       expect(mockGroupSocketsByLanguage).not.toHaveBeenCalled();
+      // … but the message must STILL fan out across the cluster: a node with
+      // zero local room members can be the sender's node while every recipient
+      // sits on other nodes. The full payload is broadcast to the room.
+      const toResult = (io.to as jest.Mock).mock.results[0]?.value as { except: jest.Mock; emit: jest.Mock };
+      expect(io.to).toHaveBeenCalledWith('conversation:' + VALID_CONV_ID);
+      expect(toResult.emit).toHaveBeenCalledWith('message:new', expect.objectContaining({ id: 'msg-empty' }));
       delete process.env.SOCKET_LANG_FILTER;
+    });
+  });
+
+  // ── Multi-node (Redis adapter) delivery: remote-node recipients ────────────
+
+  describe('_emitMessageNewByLanguage — cross-node delivery', () => {
+    afterEach(() => { delete process.env.SOCKET_LANG_FILTER; });
+
+    it('broadcasts the full payload to the room excepting local + sender sockets so remote-node recipients still receive message:new', async () => {
+      process.env.SOCKET_LANG_FILTER = 'true';
+      mockGroupSocketsByLanguage.mockReturnValue([{ socketIds: ['s1'], languages: ['fr'] }]);
+      const localRoomSockets = new Set(['s1']);
+      const io = makeIO({
+        sockets: { adapter: { rooms: new Map([['conversation:' + VALID_CONV_ID, localRoomSockets]]) } }
+      });
+      const localDeps = makeDeps({ io });
+      localDeps.socketToUser.set('s1', 'other-local-user');
+      localDeps.connectedUsers.set(USER_ID, makeSocketUser());
+      (localDeps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+      (localDeps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+      const h = new MessageHandler(localDeps);
+
+      const msg = {
+        id: 'msg-crossnode', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
+        content: 'hi', originalLanguage: 'fr', messageType: 'text',
+        createdAt: new Date(), sender: { id: PARTICIPANT_ID, userId: USER_ID }, attachments: [], translations: []
+      };
+      await h.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      // The cross-node fan-out targets the conversation room (adapter-propagated)
+      // and excepts every LOCAL room socket (already served a trimmed copy) plus
+      // the sender's user room (served the cid-aware senderPayload separately).
+      const toResult = (io.to as jest.Mock).mock.results[0].value as { except: jest.Mock; emit: jest.Mock };
+      expect(io.to).toHaveBeenCalledWith('conversation:' + VALID_CONV_ID);
+      expect(toResult.except).toHaveBeenCalledWith(
+        expect.arrayContaining(['s1', 'user:' + USER_ID])
+      );
     });
   });
 
