@@ -1,6 +1,9 @@
 import Foundation
 import Photos
 import UIKit
+import os
+
+private let photoLog = Logger(subsystem: "com.meeshy.sdk", category: "photo-library")
 
 /// Saves images and videos to a custom "Meeshy" album in the user's photo library.
 public final class PhotoLibraryManager: @unchecked Sendable {
@@ -21,7 +24,10 @@ public final class PhotoLibraryManager: @unchecked Sendable {
     /// Save a UIImage to the Meeshy album.
     @discardableResult
     public func saveImage(_ image: UIImage) async -> Bool {
-        guard await requestAuthorization() else { return false }
+        guard await requestAuthorization() else {
+            photoLog.error("saveImage denied: photo library authorization refused")
+            return false
+        }
 
         // Resolve the album OUTSIDE the `performChanges` block. `fetchOrCreateAlbum`
         // calls `performChangesAndWait`, which dispatch_syncs onto the same
@@ -39,7 +45,10 @@ public final class PhotoLibraryManager: @unchecked Sendable {
                     let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
                     albumChangeRequest?.addAssets([placeholder] as NSFastEnumeration)
                 }
-            } completionHandler: { success, _ in
+            } completionHandler: { success, error in
+                if !success {
+                    photoLog.error("saveImage performChanges failed: \(error?.localizedDescription ?? "unknown", privacy: .public)")
+                }
                 continuation.resume(returning: success)
             }
         }
@@ -48,7 +57,10 @@ public final class PhotoLibraryManager: @unchecked Sendable {
     /// Save a video from a local file URL to the Meeshy album.
     @discardableResult
     public func saveVideo(at fileURL: URL) async -> Bool {
-        guard await requestAuthorization() else { return false }
+        guard await requestAuthorization() else {
+            photoLog.error("saveVideo denied: photo library authorization refused")
+            return false
+        }
 
         // Same dispatch deadlock fix as `saveImage`: resolve the album before
         // entering `performChanges` so we never dispatch_sync onto our own
@@ -63,7 +75,13 @@ public final class PhotoLibraryManager: @unchecked Sendable {
                     let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
                     albumChangeRequest?.addAssets([placeholder] as NSFastEnumeration)
                 }
-            } completionHandler: { success, _ in
+            } completionHandler: { success, error in
+                // Observabilité : ce chemin était totalement silencieux — un
+                // échec d'écriture (format refusé, disque plein) ne laissait
+                // aucune trace, rendant les régressions invisibles.
+                if !success {
+                    photoLog.error("saveVideo performChanges failed: \(error?.localizedDescription ?? "unknown", privacy: .public)")
+                }
                 continuation.resume(returning: success)
             }
         }

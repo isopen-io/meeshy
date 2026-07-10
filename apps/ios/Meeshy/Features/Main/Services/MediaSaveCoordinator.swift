@@ -1,6 +1,9 @@
 import Foundation
 import MeeshySDK
 import MeeshyUI
+import os
+
+private let mediaSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-save")
 
 // MARK: - Request
 
@@ -122,8 +125,15 @@ final class MediaSaveCoordinator: ObservableObject {
         pendingRequest = nil
     }
 
-    func pick(_ destination: MediaSaveDestination) async {
-        guard let request = pendingRequest else { return }
+    /// - Parameter explicitRequest: requête capturée SYNCHRONIQUEMENT au tap
+    ///   du bouton de destination. Indispensable : le `confirmationDialog`
+    ///   vide `pendingRequest` (via `cancel()`) à sa fermeture, qui survient
+    ///   AVANT que ce `Task` async ne s'exécute. Sans capture explicite,
+    ///   `pendingRequest` serait déjà nil ici et la sauvegarde ne se ferait
+    ///   jamais (aucun appel système). `pendingRequest` reste le fallback pour
+    ///   les tests / appels programmatiques hors dialog.
+    func pick(_ destination: MediaSaveDestination, request explicitRequest: MediaSaveRequest? = nil) async {
+        guard let request = explicitRequest ?? pendingRequest else { return }
         pendingRequest = nil
         guard destination.accepts(request.kind) else {
             lastOutcome = .failed(MediaSaveError.destinationUnsupported.localizedDescription)
@@ -152,6 +162,7 @@ final class MediaSaveCoordinator: ObservableObject {
                 shareURL = try Self.stageForExport(localFile, request: request)
             }
         } catch {
+            mediaSaveLog.error("pick FAILED: \(error.localizedDescription, privacy: .public)")
             lastOutcome = .failed(error.localizedDescription)
             activeRequest = nil
         }
