@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 const mockNormalizeConversationId = jest.fn() as jest.Mock<any>;
 const mockValidateSocketEvent = jest.fn() as jest.Mock<any>;
 const mockUpdateOnNewMessage = jest.fn() as jest.Mock<any>;
+const mockGetOrCompute = jest.fn() as jest.Mock<any>;
 const mockCheckLimit = jest.fn() as jest.Mock<any>;
 
 jest.mock('../../utils/socket-helpers', () => ({
@@ -37,6 +38,7 @@ jest.mock('../../../validation/socket-event-schemas.js', () => ({
 jest.mock('../../../services/ConversationStatsService', () => ({
   conversationStatsService: {
     updateOnNewMessage: (...args: unknown[]) => mockUpdateOnNewMessage(...args),
+    getOrCompute: (...args: unknown[]) => mockGetOrCompute(...args),
   },
 }));
 
@@ -109,6 +111,7 @@ describe('ConversationHandler', () => {
     mockNormalizeConversationId.mockResolvedValue(CONV_ID);
     mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: CONV_ID } });
     mockUpdateOnNewMessage.mockResolvedValue(null);
+    mockGetOrCompute.mockResolvedValue(null);
     mockCheckLimit.mockResolvedValue(true); // allow by default
   });
 
@@ -413,7 +416,7 @@ describe('ConversationHandler', () => {
   describe('sendConversationStatsToSocket', () => {
     it('emits CONVERSATION_STATS when stats are returned', async () => {
       const stats = { participantCount: 5, messageCount: 100 };
-      mockUpdateOnNewMessage.mockResolvedValue(stats);
+      mockGetOrCompute.mockResolvedValue(stats);
       const socket = makeSocket();
       const handler = makeHandler();
 
@@ -426,7 +429,7 @@ describe('ConversationHandler', () => {
     });
 
     it('does not emit when stats are null', async () => {
-      mockUpdateOnNewMessage.mockResolvedValue(null);
+      mockGetOrCompute.mockResolvedValue(null);
       const socket = makeSocket();
       const handler = makeHandler();
 
@@ -436,20 +439,46 @@ describe('ConversationHandler', () => {
     });
 
     it('passes the connectedUsers ids to the getOnlineUsers callback', async () => {
-      mockUpdateOnNewMessage.mockResolvedValue(null);
+      mockGetOrCompute.mockResolvedValue(null);
       const connectedUsers = makeConnectedUsers();
       const socket = makeSocket();
       const handler = makeHandler({ connectedUsers });
 
       await handler.sendConversationStatsToSocket(socket, CONV_ID);
 
-      const [, , , getOnlineUsers] = mockUpdateOnNewMessage.mock.calls[0] as any[];
+      const [, , getOnlineUsers] = mockGetOrCompute.mock.calls[0] as any[];
       const ids = getOnlineUsers();
       expect(ids).toContain(USER_ID);
     });
 
+    it('refreshes stats through the read-only getOrCompute, never the mutating updateOnNewMessage', async () => {
+      // Regression: a stats refresh on conversation:join must NOT run the
+      // per-new-message increment path. `updateOnNewMessage` bumps
+      // messagesPerLanguage on every warm-cache call, so using it as a
+      // read-only "refresh" inflated a conversation's message counts by one on
+      // every join and persisted the corruption in the shared singleton cache.
+      const stats = { participantCount: 5, messagesPerLanguage: { en: 10 } };
+      mockGetOrCompute.mockResolvedValue(stats);
+      const socket = makeSocket();
+      const handler = makeHandler();
+
+      await handler.sendConversationStatsToSocket(socket, CONV_ID);
+
+      expect(mockGetOrCompute).toHaveBeenCalledTimes(1);
+      expect(mockGetOrCompute).toHaveBeenCalledWith(
+        expect.anything(),
+        CONV_ID,
+        expect.any(Function)
+      );
+      expect(mockUpdateOnNewMessage).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_STATS,
+        { conversationId: CONV_ID, stats }
+      );
+    });
+
     it('catches and logs errors without propagating', async () => {
-      mockUpdateOnNewMessage.mockRejectedValue(new Error('stats fail'));
+      mockGetOrCompute.mockRejectedValue(new Error('stats fail'));
       const socket = makeSocket();
       const handler = makeHandler();
 
