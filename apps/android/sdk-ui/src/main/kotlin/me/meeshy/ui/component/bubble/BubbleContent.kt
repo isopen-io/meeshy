@@ -137,6 +137,7 @@ public data class BubbleContent(
     val isTranslated: Boolean,
     val isShowingOriginal: Boolean = false,
     val originalText: String?,
+    val languageStrip: List<LanguageChip> = emptyList(),
     val senderName: String?,
     val showSenderName: Boolean,
     val isEdited: Boolean,

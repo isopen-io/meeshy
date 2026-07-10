@@ -110,6 +110,16 @@ public object BubbleContentBuilder {
             isShowingOriginal -> message.content
             else -> message.displayContent(preferences)
         }
+        val languageStrip = if (isDeleted) {
+            emptyList()
+        } else {
+            MessageLanguageStrip.build(
+                originalLanguage = message.originalLanguage,
+                translations = message.translations,
+                preferences = preferences,
+                showingOriginal = isShowingOriginal,
+            )
+        }
         return BubbleContent(
             messageId = message.id,
             text = text,
@@ -117,6 +127,7 @@ public object BubbleContentBuilder {
             isTranslated = isTranslated,
             isShowingOriginal = isShowingOriginal,
             originalText = if (isTranslated && !isShowingOriginal) message.content else null,
+            languageStrip = languageStrip,
             senderName = (message.sender?.displayName ?: message.sender?.username)
                 ?.takeIf { it.isNotBlank() },
             showSenderName = showSenderName && !isOutgoing,

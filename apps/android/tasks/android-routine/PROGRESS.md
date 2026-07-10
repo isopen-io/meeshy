@@ -4,6 +4,52 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-10 the per-message **translation flag strip** landed (slice `chat-translation-language-strip`,
+> Translation parity §D — feature-parity.md "Original exploration" flag-strip and "Message detail:
+> per-language translation explorer" strip-projection, both now `[~]`). Now that the `LanguageData`
+> metadata SSOT is complete (prior slice), a message's translation state can be projected into a chip
+> strip. New pure `:sdk-ui` `MessageLanguageStrip.build(originalLanguage, translations, preferences,
+> showingOriginal) → List<LanguageChip>` — the port of iOS `BubbleContentBuilder.buildAvailableFlags`,
+> enriched: each entry is a full `LanguageChip` (normalized code + `LanguageData.info` metadata, or null
+> metadata for an exotic code that still renders + `isOriginal`/`isActive`), and the **active language is
+> kept** in the strip so the UI highlights the current selection rather than hiding it as iOS does. It
+> surfaces only the viewer's own languages (original + each configured system/regional/custom that has
+> content), never every language the message carries — mirroring iOS's "max 4, deduplicated, user-config
+> only" rule so the strip stays a discrete Prisme indicator, not a language dump. Returns **empty** when
+> the message is not translated for the viewer (`preferredTranslation` null → nothing to explore, no
+> strip), when the matched language's content is blank (Prisme never renders an empty translation —
+> reuses `LanguageResolver`), and on a deleted tombstone (guarded in the builder). Codes are trim +
+> lowercase normalized for comparison; the original chip is de-duplicated when it is also a configured
+> language; a configured language without a translation is not added. Wired into
+> `BubbleContent.languageStrip` (new field, default empty) via `BubbleContentBuilder.build`, and rendered
+> read-only in `MessageBubble` as a `FlowRow` of flag chips under the bubble text (active chip: language
+> native name in its `LanguageData.colorHex` accent via the existing `hexColor` bridge; others flag-only;
+> each chip carries a merged `contentDescription` of the language name for VoiceOver parity). +16 tests
+> (`MessageLanguageStripTest` 13 — no-translations→empty / none-preferred→empty / original-then-active /
+> showing-original-moves-active / metadata-carried / unknown-code-null-meta / normalized-lowercase /
+> regional+custom-order / configured-without-translation-excluded / original-not-duplicated /
+> blank-content→empty / blank-original-still-shows-active / exactly-one-active; `BubbleContentBuilderTest`
+> +4 — translated-strip / showing-original-moves-active / untranslated→empty / deleted→empty). Full
+> `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (system Gradle 8.14.3; wrapper
+> 403-blocked in this container — `/opt/gradle`). RED verified by stubbing `build` to `emptyList()` → 12
+> behavioural cases fail (the 4 legit "→empty" cases correctly stay green — not tautological), restore →
+> all pass. Reviewer: PASS (diff `apps/android` only, no production logic outside; behaviour-through-
+> public-API `MessageLanguageStrip.build` + `BubbleContentBuilder.build`, no tautologies, boundary
+> coverage on empty/single/unknown/blank/dedup/order/case/active-count; **SDK-purity** — the flag-strip
+> projection is a pure `:sdk-ui` atom, the exact analog of iOS `buildAvailableFlags` in `BubbleContentBuilder`;
+> it takes opaque params, holds no Meeshy singleton and encodes no "when to do X" product rule, and is
+> consumed by `BubbleContentBuilder`, so placing it in `:feature:chat` would invert the module dependency
+> — `:sdk-ui` is the correct home despite the earlier "Next" note; **SSOT** — reuses
+> `LanguageResolver.preferredTranslation`/`preferredContentLanguages` + `LanguageData.info`, no
+> re-implemented matcher; colour/UX coherence — active chip accent from `LanguageData.colorHex`, discrete
+> strip, no dead end — the strip renders real available-language info under every translated bubble). The
+> read-only display is an honest thin slice: tap-to-switch active language, on-demand translate of a
+> missing language, and the full detail explorer sheet are the tracked follow-ons. **Next:** wire
+> tap-to-switch (a `:feature:chat` VM `activeLanguageOverride` map keyed by messageId + `onFlagTap`
+> handler mirroring iOS `BubbleLanguageFlagController.handleTap`), then on-demand translate-request for a
+> language absent from the strip, then progressive **audio-voice translation** (`audio:translation-ready`
+> → cloned-voice playback, needs BubbleAudio UI).
+
 > On 2026-07-10 the **language metadata catalog** reached iOS parity (slice `translation-language-catalog`,
 > Translation parity §D — feature-parity.md "Per-language flag / native name / colour metadata", now checked).
 > `LanguageData` (`:core:model`) was a partial port: it dropped **Catalan** (`ca`), hand-copied the four
