@@ -8,6 +8,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { NAME_BOUNDARY_LEFT, MENTION_HANDLE_CHARS } from '@meeshy/shared/utils/mention-parser';
 
 interface MentionPosition {
   top?: number;
@@ -53,7 +54,14 @@ interface UseMentionsReturn {
 
 // Regex pour détecter une mention en cours de frappe. Inclut le tiret (charset username
 // /^[a-zA-Z0-9_-]+$/) pour que l'autocomplete continue après un tiret (`@marie-cl…`).
-const MENTION_REGEX = /@([\w-]{0,30})$/;
+// La frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `mention-parser.ts`) est partagée avec TOUS
+// les chemins de mention : un `@` précédé d'un caractère de nom appartient à une adresse
+// e-mail (`contact@ali`) et ne doit PAS ouvrir l'autocomplete ni réécrire l'e-mail à la
+// sélection. Le flag `u` est requis par les classes Unicode `\p{...}` de la frontière.
+const MENTION_REGEX = new RegExp(
+  `${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]{0,30})$`,
+  'u'
+);
 
 // Regex pour valider un ObjectId MongoDB
 const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;

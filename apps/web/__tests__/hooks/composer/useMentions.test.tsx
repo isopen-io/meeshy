@@ -191,6 +191,97 @@ describe('useMentions', () => {
     });
   });
 
+  describe('Email Left-Boundary (SSOT NAME_BOUNDARY_LEFT)', () => {
+    it('should not show autocomplete when @ is part of an email address', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('Write to contact@ali', 20);
+
+      act(() => {
+        result.current.handleTextChange('Write to contact@ali', 20, textarea);
+      });
+
+      // `@` preceded by a name character belongs to an email, not a mention
+      expect(result.current.showMentionAutocomplete).toBe(false);
+      expect(result.current.mentionQuery).toBe('');
+    });
+
+    it('should not show autocomplete when @ follows a name char with no query yet', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('contact@', 8);
+
+      act(() => {
+        result.current.handleTextChange('contact@', 8, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(false);
+    });
+
+    it('should still show autocomplete for a real mention after a space', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('email contact@x then @ali', 25);
+
+      act(() => {
+        result.current.handleTextChange('email contact@x then @ali', 25, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(true);
+      expect(result.current.mentionQuery).toBe('ali');
+    });
+
+    it('should show autocomplete for a mention at the very start of the text', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('@john', 5);
+
+      act(() => {
+        result.current.handleTextChange('@john', 5, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(true);
+      expect(result.current.mentionQuery).toBe('john');
+    });
+
+    it('should not rewrite an email when a mention is selected elsewhere', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      // Typing a mention after an email: only the trailing @ali is the active mention
+      const textarea = createMockTextarea('contact@example.com @ali', 24);
+
+      act(() => {
+        result.current.handleTextChange('contact@example.com @ali', 24, textarea);
+      });
+
+      let captured = '';
+      act(() => {
+        result.current.handleMentionSelect(
+          'alice',
+          'user-alice',
+          textarea,
+          'contact@example.com @ali',
+          (v) => {
+            captured = v;
+          }
+        );
+      });
+
+      // The email is preserved; only the @ali token is replaced
+      expect(captured).toBe('contact@example.com @alice ');
+    });
+  });
+
   describe('Mention Query Limits', () => {
     it('should accept queries up to 30 characters', () => {
       const { result } = renderHook(() =>
