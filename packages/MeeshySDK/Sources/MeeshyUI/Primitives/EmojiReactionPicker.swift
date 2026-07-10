@@ -214,8 +214,13 @@ public struct EmojiReactionPicker: View {
 private struct QuickReactionStripChrome: ViewModifier {
     let style: EmojiReactionPicker.Style
 
+    // Choix de STYLE runtime (glass vs chrome legacy piloté par `style`), pas
+    // un déblocage d'API : le vrai `if #available` vit dans `adaptiveGlass`
+    // (Compatibility/) — ici le flag `Platform` suffit et garde le gate
+    // version unique au layer Compatibility, conformément à sa doc.
+    @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
+        if Platform.isIOS26OrLater {
             content
                 .adaptiveGlass(in: Capsule())
                 .shadow(

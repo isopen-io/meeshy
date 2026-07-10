@@ -61,7 +61,6 @@ struct MessageOverlayMenu: View {
     private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
     @State private var dragOffset: CGFloat = 0
-    @State private var forceTab: DetailTab? = nil
     @State private var isEmojiPickerOpen = false
 
     private let previewCharLimit = 500
@@ -856,205 +855,11 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    // MARK: - Detail Panel (scrollable grid, 2.5 rows visible)
-
-    private func detailPanel(safeBottom: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            panelDragHandle
-
-            // Scrollable grid showing ~2.5 rows
-            ScrollView(.vertical, showsIndicators: false) {
-                MessageDetailSheet(
-                    message: message,
-                    contactColor: contactColor,
-                    conversationId: conversationId,
-                    initialTab: .language,
-                    canDelete: canDelete,
-                    actions: overlayActions,
-                    textTranslations: textTranslations,
-                    transcription: transcription,
-                    translatedAudios: translatedAudios,
-                    onSelectTranslation: onSelectTranslation,
-                    onSelectAudioLanguage: onSelectAudioLanguage,
-                    onRequestTranslation: onRequestTranslation,
-                    onDismissAction: { dismiss() },
-                    onReact: { emoji in onReact?(emoji) },
-                    onReport: { type, reason in onReport?(type, reason) },
-                    onDelete: { onDelete?() },
-                    externalTabSelection: $forceTab
-                )
-            }
-
-            Spacer(minLength: safeBottom)
-        }
-        .background(panelBackground)
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 26,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 26,
-                style: .continuous
-            )
-        )
-        .gesture(panelDragGesture)
-    }
-
-    private var panelDragHandle: some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(overlayAccent.opacity(0.45))
-                .frame(width: 40, height: 5)
-                .padding(.top, 10)
-                .padding(.bottom, 5)
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-    }
-
-    private var panelDragGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                withAnimation(.interactiveSpring()) {
-                    dragOffset = value.translation.height
-                }
-            }
-            .onEnded { value in
-                let velocity = value.predictedEndTranslation.height - value.translation.height
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    if value.translation.height < -80 || velocity < -200 {
-                        // Expanded: pull up to max
-                        dragOffset = -400
-                    } else if value.translation.height > 80 || velocity > 200 {
-                        // Collapsed: push down to normal
-                        dragOffset = 0
-                    } else {
-                        // Snap back
-                        dragOffset = dragOffset < -100 ? -400 : 0
-                    }
-                }
-            }
-    }
-
-    private var panelBackground: some View {
-        // Chrome verre du panneau : `.ultraThinMaterial` + voile de
-        // tonalite, liseré accent en haut et lueur de marque douce. Les
-        // coins continus (26pt) et l'ombre montante donnent l'illusion
-        // d'une feuille qui monte depuis le bas de l'ecran.
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 26,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: 26,
-            style: .continuous
-        )
-        return shape
-            .fill(.ultraThinMaterial)
-            .overlay(
-                shape.fill(isDark ? Color.black.opacity(0.30) : Color.white.opacity(0.72))
-            )
-            .overlay(
-                shape.fill(
-                    LinearGradient(
-                        colors: [
-                            overlayAccent.opacity(isDark ? 0.16 : 0.10),
-                            Color.clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .center
-                    )
-                )
-            )
-            .overlay(
-                shape.stroke(
-                    LinearGradient(
-                        colors: [
-                            overlayAccent.opacity(isDark ? 0.40 : 0.26),
-                            (isDark ? Color.white : Color.black).opacity(isDark ? 0.10 : 0.05)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 0.75
-                )
-            )
-            .shadow(color: overlayAccent.opacity(0.20), radius: 26, y: -6)
-            .shadow(color: .black.opacity(0.22), radius: 20, y: -4)
-    }
-
-    // MARK: - Quick Actions for Grid
-
-    private var overlayActions: [MessageAction] {
-        var actions: [MessageAction] = []
-        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-        actions.append(MessageAction(
-            id: "reply", icon: "arrowshape.turn.up.left.fill",
-            label: String(localized: "action.reply", defaultValue: "Répondre", bundle: .main),
-            color: MeeshyColors.indigo400,
-            handler: { dismissThen { onReply?() } }
-        ))
-
-        actions.append(MessageAction(
-            id: "thread", icon: "bubble.left.and.bubble.right.fill",
-            label: String(localized: "action.thread", defaultValue: "Discussion", bundle: .main),
-            color: MeeshyColors.warning,
-            handler: { dismissThen { onShowThread?() } }
-        ))
-
-        if hasText {
-            actions.append(MessageAction(
-                id: "copy", icon: "doc.on.doc.fill",
-                label: String(localized: "action.copy", defaultValue: "Copier", bundle: .main),
-                color: MeeshyColors.indigo500,
-                handler: { dismissThen { onCopy?() } }
-            ))
-        }
-
-        actions.append(MessageAction(
-            id: "pin",
-            icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
-            label: message.pinnedAt != nil
-                ? String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
-                : String(localized: "action.pin", defaultValue: "Épingler", bundle: .main),
-            color: MeeshyColors.info,
-            handler: { dismissThen { onPin?() } }
-        ))
-
-        // Star / bookmark — local-only favourite list (see StarredMessagesView).
-        actions.append(MessageAction(
-            id: "star",
-            icon: isStarred ? "star.slash.fill" : "star.fill",
-            label: isStarred
-                ? String(localized: "action.unstar", defaultValue: "Retirer des favoris", bundle: .main)
-                : String(localized: "action.star", defaultValue: "Ajouter aux favoris", bundle: .main),
-            color: MeeshyColors.warning,
-            handler: { dismissThen { onToggleStar?() } }
-        ))
-
-        if canEdit && hasText {
-            actions.append(MessageAction(
-                id: "edit", icon: "pencil",
-                label: String(localized: "action.edit", defaultValue: "Modifier", bundle: .main),
-                color: MeeshyColors.warning,
-                handler: { dismissThen { onEdit?() } }
-            ))
-        }
-
-        if canDelete && !message.attachments.isEmpty, let onDeleteAttachment {
-            if message.attachments.count == 1 {
-                let attId = message.attachments[0].id
-                actions.append(MessageAction(
-                    id: "deleteAttachment", icon: "paperclip.badge.ellipsis",
-                    label: String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main),
-                    color: MeeshyColors.error,
-                    handler: { dismissThen { onDeleteAttachment(attId) } }
-                ))
-            }
-        }
-
-        return actions
-    }
+    // Le "detail panel" historique (grille scrollable en .ultraThinMaterial
+    // brut + voiles Color.black/white hardcodés) a été supprimé : jamais
+    // monté depuis le passage au layout natif-lean (MessageActionsMenu +
+    // EmojiReactionPicker, tous deux en adaptiveGlass). Le garder invitait à
+    // réintroduire un menu hors du design système Liquid Glass / Compatibility.
 
     // MARK: - Helpers
 
@@ -1081,18 +886,6 @@ struct MessageOverlayMenu: View {
         }
     }
 
-    private func dismissThen(_ action: @escaping () -> Void) {
-        HapticFeedback.light()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-            isVisible = false
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
-            isPresented = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                action()
-            }
-        }
-    }
 }
 
 // MARK: - Preview Audio Player (interactive)

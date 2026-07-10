@@ -190,6 +190,14 @@ struct CallBubbleView: View {
         }
     }
 
+    // Les boutons du mini-menu sont des cercles LIBRES autour de la bulle
+    // (pas des contrôles posés sur une surface glass comme dans la pill) :
+    // chacun porte donc son propre Liquid Glass via le wrapper Compatibility
+    // du SDK — vrai `glassEffect` sur iOS 26, material adaptatif avant.
+    // L'ancien fond `Color.black.opacity(0.55)` ne devenait jamais glass et
+    // imposait des icônes blanches, illisibles sur fond clair en mode light ;
+    // `.primary` suit le `preferredColorScheme` racine dans les deux modes.
+
     private var muteButton: some View {
         Button {
             callManager.toggleMute()
@@ -198,9 +206,13 @@ struct CallBubbleView: View {
         } label: {
             Image(systemName: callManager.isMuted ? "mic.slash.fill" : "mic.fill")
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(callManager.isMuted ? MeeshyColors.error : .white)
+                .foregroundColor(callManager.isMuted ? MeeshyColors.error : .primary)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
-                .background(Circle().fill(callManager.isMuted ? MeeshyColors.error.opacity(0.2) : Color.black.opacity(0.55)))
+                .adaptiveGlass(
+                    in: Circle(),
+                    tint: callManager.isMuted ? MeeshyColors.error.opacity(0.25) : nil,
+                    interactive: true
+                )
         }
         .pressable()
         .accessibilityLabel(callManager.isMuted
@@ -217,9 +229,13 @@ struct CallBubbleView: View {
         } label: {
             Image(systemName: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill")
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(callManager.isSpeaker ? MeeshyColors.indigo400 : .white)
+                .foregroundColor(callManager.isSpeaker ? MeeshyColors.indigo400 : .primary)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
-                .background(Circle().fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(0.2) : Color.black.opacity(0.55)))
+                .adaptiveGlass(
+                    in: Circle(),
+                    tint: callManager.isSpeaker ? MeeshyColors.indigo400.opacity(0.25) : nil,
+                    interactive: true
+                )
         }
         .pressable()
         .accessibilityLabel(callManager.isSpeaker
@@ -238,15 +254,9 @@ struct CallBubbleView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
-                .background(
-                    Circle().fill(
-                        LinearGradient(
-                            colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                )
+                // Cas canonique du glass proéminent (bouton raccrocher rouge) :
+                // glass teinté error sur iOS 26, dégradé plein + ombre avant.
+                .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.bubble.hangup", defaultValue: "Raccrocher l'appel"))
