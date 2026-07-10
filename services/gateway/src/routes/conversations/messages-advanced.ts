@@ -35,6 +35,22 @@ const EditMessageBodySchema = z.object({
   content: z.string().max(10000, 'Message trop long'),
   originalLanguage: CommonSchemas.language.optional(),
 });
+
+// Fastify AJV body schema for the edit route. It MUST mirror `EditMessageBodySchema`:
+// empty content is allowed (attachment caption removal) and only the max length is
+// enforced at the boundary. A `minLength: 1` here would reject empty content during
+// AJV validation — which runs BEFORE the handler — making the handler's
+// attachment-aware `hasAttachments` gate unreachable and silently killing caption
+// removal over REST (the exact defect fixed on the socket path via
+// SocketMessageEditSchema). `required: ['content']` keeps the key mandatory.
+export const editMessageBodyJsonSchema = {
+  type: 'object',
+  required: ['content'],
+  properties: {
+    content: { type: 'string', description: 'Updated message content', maxLength: 10000 },
+    originalLanguage: { type: 'string', description: 'Language code', default: 'fr' }
+  }
+} as const;
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
 
@@ -69,14 +85,7 @@ export function registerMessagesAdvancedRoutes(
           messageId: { type: 'string', description: 'Message ID to edit' }
         }
       },
-      body: {
-        type: 'object',
-        required: ['content'],
-        properties: {
-          content: { type: 'string', description: 'Updated message content', minLength: 1 },
-          originalLanguage: { type: 'string', description: 'Language code', default: 'fr' }
-        }
-      },
+      body: editMessageBodyJsonSchema,
       response: {
         200: {
           type: 'object',
