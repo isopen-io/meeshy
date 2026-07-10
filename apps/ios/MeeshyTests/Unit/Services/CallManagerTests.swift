@@ -1062,9 +1062,14 @@ final class CallPillStatusMinimisedTests: XCTestCase {
                        "a ringing call must NOT show a running 00:00 timer")
     }
 
-    func test_offeringAndConnecting_mapToConnecting_notConnected() {
-        XCTAssertEqual(CallPillStatus.from(.offering), .connecting)
+    func test_offering_mapsToRinging_connecting_mapsToConnecting_bothNotConnected() {
+        // Audit 2026-07-10 — `.offering` (SDP offer sent, awaiting answer) is
+        // still the callee's phone physically ringing; CallView already shows
+        // outgoingRingingView ("Sonnerie…") for this state. The pill must
+        // agree — see FloatingCallPillView.CallPillStatus.from.
+        XCTAssertEqual(CallPillStatus.from(.offering), .ringing)
         XCTAssertEqual(CallPillStatus.from(.connecting), .connecting)
+        XCTAssertFalse(CallPillStatus.from(.offering).isConnected)
         XCTAssertFalse(CallPillStatus.from(.connecting).isConnected)
     }
 
