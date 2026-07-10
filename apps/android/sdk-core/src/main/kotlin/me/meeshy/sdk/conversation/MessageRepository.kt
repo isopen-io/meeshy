@@ -15,6 +15,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageTranslationMerge
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
@@ -230,6 +231,19 @@ class MessageRepository @Inject constructor(
     }
 
     /**
+     * Applies a `message:translated` / `message:translation` socket update to the
+     * cache — the translated content is upserted into the message's translations so
+     * the Prisme renders it live (progressive translation). No outbox: this is
+     * inbound server truth, never a local mutation. A no-op merge (blank, duplicate,
+     * or deleted target) leaves the cached row untouched.
+     */
+    suspend fun applyTranslation(messageId: String, targetLanguage: String, translatedContent: String) {
+        updateCachedMessage(messageId, requireSynced = false) { message ->
+            MessageTranslationMerge.mergeTranslation(message, targetLanguage, translatedContent) ?: message
+        }
+    }
+
+    /**
      * Optimistic edit of a server-acked message: the cached content flips
      * instantly, stale translations are purged (the Prisme must never show a
      * translation of the old text — the retranslation arrives over the socket),
@@ -346,8 +360,13 @@ class MessageRepository @Inject constructor(
     ): ApiMessage? = database.withTransaction {
         val row = messageDao.find(messageId) ?: return@withTransaction null
         if (requireSynced && row.sendState != null) return@withTransaction null
-        val updated = transform(MeeshyApi.json.decodeFromString<ApiMessage>(row.payload))
-        messageDao.upsertAll(listOf(row.copy(payload = MeeshyApi.json.encodeToString(updated))))
+        val current = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
+        val updated = transform(current)
+        // A transform that returns its input unchanged (an inert socket update, e.g.
+        // a duplicate translation) skips the redundant Room write + re-encode.
+        if (updated !== current) {
+            messageDao.upsertAll(listOf(row.copy(payload = MeeshyApi.json.encodeToString(updated))))
+        }
         updated
     }
 

@@ -4,6 +4,44 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-10 **progressive live translation** landed (slice `chat-live-translation-merge`, Translation
+> parity §D — feature-parity.md "Real-time progressive translation/transcription socket updates", text side
+> now checked). The `MessageSocketManager.translationCompleted`/`translationInProgress` flows
+> (`message:translated`/`message:translation`) were emitted but had **zero consumers** — a message arrived in
+> its original language and stayed there until a manual reload, defeating the Prisme's "translations arrive
+> elegantly, no friction" promise. Now they are wired end-to-end: the translator finishes, the gateway pushes
+> the translation, and Android upserts it **in place** into the cached message so the open bubble re-renders in
+> the viewer's preferred language **instantly** — the same Room-backed `messagesStream` re-emission that makes
+> peer reactions live, no refetch. New pure `:core:model` `MessageTranslationMerge.mergeTranslation(message,
+> targetLanguage, translatedContent) → ApiMessage?` SSOT: upsert by language (case-insensitive match, list
+> order preserved on replace), append when the language is absent; returns **null (no-op, nothing to persist)**
+> when the language or content is blank (the Prisme never stores an empty translation — mirrors
+> `LanguageResolver.preferredTranslation`'s blank skip), when the message is a **deleted tombstone** (never
+> resurrect a wiped translation — mirrors `deleteOptimistic`/`editOptimistic`), or when an **identical**
+> translation is already present (idempotent — a re-emitted event costs nothing). `:sdk-core`
+> `MessageRepository.applyTranslation` applies it through `updateCachedMessage` with **no outbox** (inbound
+> server truth, never a local mutation), and `updateCachedMessage` gained a `===`-identity guard that **skips
+> the redundant Room write + JSON re-encode** when a transform returns its input unchanged (behaviour-preserving
+> for every other caller — they all `.copy(...)`, so the guard only ever fires on an inert translation).
+> `ChatViewModel` collects **both** flows, conversation-scoped (an event for another conversation is inert);
+> in-progress and completed events funnel through the same merge, so partial translations stream in
+> progressively and the final one converges without flicker. +23 tests (`MessageTranslationMergeTest` 15 —
+> append-empty / stamp-msgid+source / null-source→blank / append-keeps-existing / replace-in-place-order /
+> case-insensitive-replace / identical→null / identical-case-insensitive→null / blank-lang→null /
+> whitespace-lang→null / blank-content→null / whitespace-content→null / deleted→null / lang-trimmed /
+> fields-preserved; `MessageRepositoryTest` +4 — upsert-no-outbox / replace-same-language / unknown-id-inert /
+> blank-ignored; `ChatViewModelTest` +3 — completed-applies / completed-elsewhere-ignored /
+> in-progress-applies). `:core:model` + `:sdk-core` + `:feature:chat` `testDebugUnitTest` green; RED verified
+> by stubbing the merge → 8 behavioural `MessageTranslationMergeTest` cases fail, restore → all pass. Reviewer:
+> PASS (diff `apps/android` only; behaviour-through-public-API `mergeTranslation`/`applyTranslation`/VM
+> collectors, no tautologies, boundary coverage on blank/deleted/duplicate/case/order; SDK-purity — the "how
+> to merge a translation" decision is a pure `:core:model` atom (same layer as `MessagePinToggle`), the cache
+> write is `:sdk-core`, the "which conversation is open / when to apply" product wiring is the `:feature:chat`
+> VM; SSOT — the blank/deleted rules mirror `LanguageResolver`/`deleteOptimistic`; instant-app live re-render;
+> UDF immutable state; no dead end — the translation lands and the bubble reads it). **Next:** progressive
+> **transcription**/audio socket updates (`transcription:ready`/`audio:translation-ready`, same merge shape on
+> `BubbleAudio`'s transcription), or the per-message translation flag-strip / language explorer (§D).
+
 > On 2026-07-09 the **reply-thread overlay** landed (slice `chat-reply-thread-overlay`, Chat parity §C —
 > feature-parity.md "Reply-count pills + **reply thread overlay**", now fully checked). The pills shipped
 > earlier (tap → scroll to earliest reply); the overlay is the focused sheet. **Long-pressing** the

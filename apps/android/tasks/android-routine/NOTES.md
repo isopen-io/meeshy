@@ -3,6 +3,24 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-10 (`chat-live-translation-merge`): before building a "receive X live" feature, grep the socket
+  manager for the flow name — it may already be emitted with zero consumers.** `MessageSocketManager` already
+  decoded `message:translated`/`message:translation` into `translationCompleted`/`translationInProgress`
+  SharedFlows, but nothing collected them (`grep -rn translationCompleted feature/ sdk-core/ | grep -v
+  MessageSocketManager` → empty). The whole slice was just *wiring* an existing brick, not building new
+  transport. Cheapest high-value slices are dead-flow → cache-merge → VM-collector.
+- **2026-07-10 (`chat-live-translation-merge`): to skip a redundant Room write on an inert socket update, make
+  the pure merge return its *input reference* on a no-op and gate the DB write on `updated !== current`.** All
+  other `updateCachedMessage` callers `.copy(...)` (always a new instance → guard never fires), so the
+  `===`-identity guard is behaviour-preserving for them and only elides the write for a duplicate/blank/deleted
+  translation. A nullable "no-op" merge (`mergeTranslation(...) : ApiMessage?`) composes cleanly:
+  `merge(msg, ...) ?: msg` inside the transform.
+- **2026-07-10 (`chat-live-translation-merge`): the full-suite `meeshy.sh check` intermittently fails on a
+  DataStore store test (`NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow`, and
+  historically `InterfaceLanguageStoreTest`) — a real DataStore-under-parallel-load timeout flake, NOT your
+  diff.** Confirm by re-running that one test in isolation (`--tests "*NotificationPreferencesStoreTest"` →
+  BUILD SUCCESSFUL in ~5s). Tracked follow-up: give the DataStore store tests a unique temp file per test /
+  serialise them so they stop contending under the parallel test executor.
 - **2026-07-09 (`chat-bubble-audio`): a `/*` or `*/` sequence inside a KDoc comment (even inside `` `backticks` ``)
   opens/closes a nested block comment and silently swallows the rest of the file.** I wrote ``` `audio/*` ``` in a
   `BubbleAudio` KDoc; the `/*` started a nested comment that ran to EOF → `BubbleContent.kt:EOF Syntax error:

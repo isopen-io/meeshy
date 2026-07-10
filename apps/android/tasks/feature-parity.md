@@ -702,7 +702,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Message detail: per-language translation explorer + on-demand translate / retranslate
 - [ ] Per-post and per-story translation (flag strip, inline secondary, request missing languages)
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
-- [ ] Real-time progressive translation/transcription socket updates
+- [~] Real-time progressive translation/transcription socket updates — **text translations done**
+      (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`
+      /`translationInProgress` flows (`message:translated`/`message:translation`) are now wired end-to-end.
+      A message reaches the client in its original language; when the translator finishes, the gateway pushes
+      the translation and Android upserts it **in place** into the cached message so the open bubble re-renders
+      in the viewer's preferred language instantly — no refetch, no reload. Pure `:core:model`
+      `MessageTranslationMerge.mergeTranslation(message, targetLanguage, translatedContent) → ApiMessage?` SSOT:
+      upsert by language (case-insensitive, order preserved), append when absent; **no-op (→ null)** on a blank
+      language/content (Prisme never stores an empty translation — mirrors `LanguageResolver`), a deleted
+      tombstone (never resurrect a wiped translation), or an identical translation already present (idempotent).
+      `:sdk-core` `MessageRepository.applyTranslation` applies it via `updateCachedMessage` (no outbox — inbound
+      server truth) with a new `===`-guard that skips the redundant Room write on a no-op. `ChatViewModel`
+      collects both flows, conversation-scoped. Both in-progress and completed events funnel through the same
+      merge, so partial translations stream in progressively and the final one converges. Progressive
+      **transcription/audio** socket updates (`transcription:ready`/`audio:translation-ready`) remain pending.
+      +23 tests (15 `MessageTranslationMergeTest`, 4 repo, 3 VM, 1 elsewhere-ignored). Diff = `apps/android` only.
 - [ ] Ad-hoc blocking text translation
 - [ ] Source-language stamping from in-app prefs (NEVER device locale)
 - [ ] Per-language flag / native name / colour metadata (~40 languages)
