@@ -740,4 +740,58 @@ class MessageRepositoryTest {
         assertThat(cachedMessage("m1").readCount).isEqualTo(0)
         assertThat(cachedMessage("m1").deliveredCount).isEqualTo(0)
     }
+
+    @Test
+    fun `applyTranslation upserts a translation into the cached message without an outbox row`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyTranslation("m1", "fr", "Bonjour")
+
+        val message = cachedMessage("m1")
+        assertThat(message.translations.map { it.targetLanguage }).containsExactly("fr")
+        assertThat(message.translations.single().translatedContent).isEqualTo("Bonjour")
+        assertThat(outbox.deliverable("message:c1")).isEmpty()
+    }
+
+    @Test
+    fun `applyTranslation replaces the existing translation for the same language`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            translations = listOf(ApiTextTranslation(targetLanguage = "fr", translatedContent = "Salut")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranslation("m1", "fr", "Bonjour")
+
+        val message = cachedMessage("m1")
+        assertThat(message.translations).hasSize(1)
+        assertThat(message.translations.single().translatedContent).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `applyTranslation is inert on an unknown message id`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyTranslation("ghost", "fr", "Bonjour")
+
+        assertThat(cachedMessage("m1").translations).isEmpty()
+    }
+
+    @Test
+    fun `applyTranslation ignores a blank translation`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyTranslation("m1", "fr", "   ")
+
+        assertThat(cachedMessage("m1").translations).isEmpty()
+    }
 }

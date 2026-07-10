@@ -318,6 +318,28 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
+                messageSocketManager.translationCompleted.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        messageRepository.applyTranslation(
+                            event.messageId,
+                            event.targetLanguage,
+                            event.translatedContent,
+                        )
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.translationInProgress.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        messageRepository.applyTranslation(
+                            event.messageId,
+                            event.targetLanguage,
+                            event.translatedContent,
+                        )
+                    }
+                }
+            }
+            launch {
                 messageSocketManager.reactionAdded.collect { event ->
                     applyPeerReactionEvent(event, delta = 1)
                 }
