@@ -2073,7 +2073,11 @@ struct StoryActionButton: View {
         Button {
             action()
         } label: {
-            VStack(spacing: 4) {
+            // Densité resserrée 2026-07-10 : spacing glyph→label 4→2 et padding
+            // vertical 8→3 — le rail complet gagne ~30 % de compacité (parité
+            // TikTok/IG) tout en gardant ≥ 44pt de hauteur tappable par bouton
+            // (glyph 46 + label ~12 + 2×3 de padding).
+            VStack(spacing: 2) {
                 ZStack {
                     // Plus de cartouche circulaire : style « glyph flottant »
                     // TikTok/Instagram (spec user 2026-06-25 « supprimer les
@@ -2129,7 +2133,9 @@ struct StoryActionButton: View {
             // passe à la story suivante »). Le `padding` agrandit le rectangle et
             // comble les gaps entre FABs ; `contentShape(Rectangle())` rend TOUT
             // ce rectangle (padding inclus) sensible, transparent compris.
-            .padding(.vertical, 8)
+            // (3pt vertical + spacing 8/6 du rail : ≤ 2pt de jour entre deux
+            // zones tappables — la protection anti-tap-traversant reste réelle.)
+            .padding(.vertical, 3)
             .padding(.horizontal, 6)
             .contentShape(Rectangle())
         }

@@ -1312,7 +1312,11 @@ struct StoryCardView: View {
             // tout débordement (bug 2026-05-27). Le Spacer + l'alignement
             // .trailing dans le HStack interne suffisent pour pousser le
             // sidebar VStack au bord droit visible.
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
+            // `.bottomTrailing` (2026-07-10) : le rail s'ancre au BAS de sa
+            // bande utile (juste au-dessus du composer) au lieu d'être centré
+            // verticalement — les actions restent « à portée de pouce » et le
+            // vide perçu au-dessus du composer disparaît (IMG_0984).
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottomTrailing)
             .clipped()
             // Glissement vers la DROITE à la disparition + fondu. L'offset
             // de 110pt couvre largement la largeur du chip (max 48pt) + son
