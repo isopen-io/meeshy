@@ -4,6 +4,42 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-10 the **language metadata catalog** reached iOS parity (slice `translation-language-catalog`,
+> Translation parity §D — feature-parity.md "Per-language flag / native name / colour metadata", now checked).
+> `LanguageData` (`:core:model`) was a partial port: it dropped **Catalan** (`ca`), hand-copied the four
+> `interfaceLanguages` (a second metadata copy that could silently drift from `allLanguages`), had no
+> common-first ordering, and `info(code)` was an exact, case-sensitive, alias-blind `firstOrNull { it.code
+> == code }` — so consumers papered over it locally (`ProfileDetailRows` called `info(code.lowercase())`;
+> `RegionalLanguageSelection` re-implemented case-insensitive matching via a private `equiv` and did its own
+> `allLanguages.firstOrNull { it.code.equiv(code) }?.nativeName` label lookup). This slice makes `LanguageData`
+> the single robust SSOT: **+Catalan**; `interfaceLanguages` is now **derived** from `interfaceLanguageCodes`
+> (fr/en/es/ar — the shipped UI bundles, unchanged set) over the base table so there is no drift copy;
+> `commonLanguageCodes` + `allLanguagesCommonFirst` add a common-first ordering (a **permutation** — nothing
+> dropped or duplicated, verified by test); and `info(code: String?)` is **trim + case-insensitive +
+> alias-aware** (`fil` → `tl`, iOS's one alias) returning `null` on blank/unknown. Consumers converge onto it:
+> `ProfileDetailRows` → `info(code)` (hack removed), `RegionalLanguageSelection` sources options from
+> `allLanguagesCommonFirst` and labels via `info(selected)` (its re-implemented lookup deleted), and the
+> `ProfileScreen` content-language dropdown leads with the common set. +16 tests (14 `LanguageDataTest`
+> covering table uniqueness/lowercase, non-blank metadata, Catalan presence, exact/case/trim/alias/unknown/blank
+> lookup, derived-interface-no-drift, and common-first permutation+leading-order+membership; +2
+> `RegionalLanguageSelectionTest` for common-first order and alias label). Existing `RegionalLanguageSelectionTest`
+> (17) + `ProfileDetailRowsTest` (incl. its uppercase-code case) + `AppLanguageTest` stay green unchanged.
+> Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (system Gradle 8.14.3; wrapper
+> 403-blocked in this container — `/opt/gradle`). RED verified by stubbing the ordering to identity and the
+> aliases to empty → `commonFirstSurfacesTheCommonCodesFirstInTheirDeclaredOrder` +
+> `infoResolvesLegacyBcp47AliasFilToFilipino` fail; restore → all pass. Reviewer: PASS (diff `apps/android`
+> only, no production logic outside; behaviour-through-public-API `LanguageData.info`/`allLanguagesCommonFirst`
+> + the two pure picker projections, no tautologies, boundary coverage on blank/unknown/alias/case/order/
+> permutation; SDK-purity — `LanguageData` is a pure `:core:model` metadata table + lookup, the Compose picker
+> edits are exempt glue; SSOT — collapses three local re-implementations of case-insensitive language matching
+> onto one `info`, and derives `interfaceLanguages` instead of hand-copying it; colour/UX coherence — flags &
+> `colorHex` unchanged, common-first ordering is the natural picker UX; no dead end — every new symbol is
+> consumed by a real caller). **Next:** the per-message translation **flag-strip / language explorer** (§D
+> "Message detail: per-language translation explorer") — a pure `:feature:chat` core that, given a message's
+> translations + the viewer's preferred languages, projects the chip strip (each chip = `LanguageData.info`
+> metadata + isActive/isOriginal) now that the metadata SSOT is complete; or progressive **audio-voice
+> translation** (`audio:translation-ready` → cloned-voice playback, needs BubbleAudio UI).
+
 > On 2026-07-10 **progressive live transcription** landed (slice `chat-live-transcription-merge`, Translation
 > parity §D — feature-parity.md "Real-time progressive translation/transcription socket updates", transcription
 > side now checked). The immediate follow-on to the translation merge landed the same day: the
