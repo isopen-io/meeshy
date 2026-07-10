@@ -314,6 +314,16 @@ extension FeedPostCard {
                 context: .feedPost,
                 accentColor: media.thumbnailColor,
                 transcription: media.transcription,
+                translatedAudios: media.translatedAudios,
+                onFullscreen: {
+                    audioFullscreen = .fromFeed(
+                        media: media,
+                        author: ProfileSheetUser.from(feedPost: post),
+                        originalLanguage: post.originalLanguage,
+                        caption: post.content,
+                        createdAt: post.timestamp
+                    )
+                },
                 availability: availability,
                 onDownload: onDownload
             )

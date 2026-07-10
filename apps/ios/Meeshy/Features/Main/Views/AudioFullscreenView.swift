@@ -3,17 +3,84 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Audio Fullscreen Source (surface-agnostic)
+
+/// Ce dont la vue plein écran audio a besoin, DÉCOUPLÉ de `Message` : les
+/// conversations, commentaires, posts et réels fournissent tous un audio avec
+/// une transcription, des versions traduites (Prisme) et un auteur. Chaque
+/// surface construit une `AudioFullscreenSource` depuis son propre modèle
+/// (message ou média de feed) — l'expérience plein écran (transcription +
+/// bandeau de langues + sauvegarde) est ainsi la même partout.
+struct AudioFullscreenSource: Identifiable {
+    let id: String                       // attachment.id
+    let attachment: MessageAttachment
+    let transcription: MessageTranscription?
+    let translatedAudios: [MessageTranslatedAudio]
+    let originalLanguage: String
+    let caption: String
+    let author: ProfileSheetUser
+    let createdAt: Date
+    /// Renseigné uniquement en conversation — permet de scroller vers le
+    /// message d'origine à la fermeture. `nil` pour feed/commentaire/réel/post.
+    let messageId: String?
+
+    var authorName: String { author.displayName ?? author.username }
+    var authorAvatarURL: String? { author.avatarURL }
+    var authorUserId: String { author.userId ?? "" }
+
+    init(id: String,
+         attachment: MessageAttachment,
+         transcription: MessageTranscription?,
+         translatedAudios: [MessageTranslatedAudio],
+         originalLanguage: String,
+         caption: String,
+         author: ProfileSheetUser,
+         createdAt: Date,
+         messageId: String? = nil) {
+        self.id = id
+        self.attachment = attachment
+        self.transcription = transcription
+        self.translatedAudios = translatedAudios
+        self.originalLanguage = originalLanguage
+        self.caption = caption
+        self.author = author
+        self.createdAt = createdAt
+        self.messageId = messageId
+    }
+
+    /// Chemin conversation : dérive l'auteur et les métadonnées du `Message`.
+    init(from item: ConversationViewModel.AudioItem) {
+        self.init(
+            id: item.id,
+            attachment: item.attachment,
+            transcription: item.transcription,
+            translatedAudios: item.translatedAudios,
+            originalLanguage: item.message.originalLanguage,
+            caption: item.message.content,
+            author: ProfileSheetUser.from(message: item.message),
+            createdAt: item.message.createdAt,
+            messageId: item.message.id
+        )
+    }
+}
+
 // MARK: - Audio Fullscreen Container (swipe navigation + dismiss)
 
 struct AudioFullscreenView: View {
-    let allAudioItems: [ConversationViewModel.AudioItem]
+    let allAudioItems: [AudioFullscreenSource]
     let startAttachmentId: String
     let contactColor: String
     var mentionDisplayNames: [String: String] = [:]
     var onDismissToMessage: ((String) -> Void)?
+    /// Fournit l'emoji d'humeur d'un userId (décoration avatar). Optionnel :
+    /// la conversation le branche sur son `StatusViewModel` ; le feed passe
+    /// `nil`. Permet de présenter cette vue depuis N'IMPORTE quelle surface
+    /// sans dépendre d'un `@EnvironmentObject StatusViewModel` (qui crashe à
+    /// travers une barrière `fullScreenCover`, cf. lessons).
+    var moodEmojiProvider: ((String) -> String?)?
+    var moodTapProvider: ((String) -> ((CGPoint) -> Void)?)?
 
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var currentPageID: String?
     @State private var currentIndex: Int = 0
     @State private var dragOffset: CGFloat = 0
@@ -36,6 +103,8 @@ struct AudioFullscreenView: View {
                         isActive: index == currentIndex,
                         pageIndex: index,
                         totalPages: allAudioItems.count,
+                        moodEmojiProvider: moodEmojiProvider,
+                        moodTapProvider: moodTapProvider,
                         onDismiss: { dismissView() },
                         onDismissToMessage: { messageId in
                             onDismissToMessage?(messageId)
@@ -95,8 +164,8 @@ struct AudioFullscreenView: View {
             isDismissing = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            if let item = currentItem {
-                onDismissToMessage?(item.message.id)
+            if let messageId = currentItem?.messageId {
+                onDismissToMessage?(messageId)
             }
             dismiss()
         }
@@ -111,16 +180,17 @@ struct AudioFullscreenView: View {
 // MARK: - Audio Fullscreen Page (single audio item)
 
 private struct AudioFullscreenPage: View {
-    let item: ConversationViewModel.AudioItem
+    let item: AudioFullscreenSource
     let contactColor: String
     var mentionDisplayNames: [String: String] = [:]
     let isActive: Bool
     let pageIndex: Int
     let totalPages: Int
+    var moodEmojiProvider: ((String) -> String?)?
+    var moodTapProvider: ((String) -> ((CGPoint) -> Void)?)?
     var onDismiss: () -> Void
     var onDismissToMessage: ((String) -> Void)?
 
-    @EnvironmentObject private var statusViewModel: StatusViewModel
     @StateObject private var player = AudioPlaybackManager()
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
 
@@ -133,7 +203,6 @@ private struct AudioFullscreenPage: View {
     @State private var isRequestingTranscription = false
 
     private var attachment: MessageAttachment { item.attachment }
-    private var message: Message { item.message }
     private var transcription: MessageTranscription? { item.transcription }
     private var translatedAudios: [MessageTranslatedAudio] { item.translatedAudios }
 
@@ -147,7 +216,7 @@ private struct AudioFullscreenPage: View {
 
     private var currentLangColorHex: String {
         if selectedLanguage == "orig" {
-            return LanguageDisplay.colorHex(for: message.originalLanguage)
+            return LanguageDisplay.colorHex(for: item.originalLanguage)
         }
         return LanguageDisplay.colorHex(for: selectedLanguage)
     }
@@ -157,7 +226,7 @@ private struct AudioFullscreenPage: View {
     }
 
     private var originalFlag: String {
-        LanguageDisplay.from(code: message.originalLanguage)?.flag ?? "\u{1F3B5}"
+        LanguageDisplay.from(code: item.originalLanguage)?.flag ?? "\u{1F3B5}"
     }
 
     private var displaySegments: [TranscriptionDisplaySegment] {
@@ -215,7 +284,7 @@ private struct AudioFullscreenPage: View {
                 .padding(.top, 14)
 
             // Caption (texte du message contenant cet audio)
-            let captionText = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let captionText = item.caption.trimmingCharacters(in: .whitespacesAndNewlines)
             if !captionText.isEmpty {
                 MessageTextRenderer.render(
                     captionText,
@@ -271,8 +340,8 @@ private struct AudioFullscreenPage: View {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
-                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                moodEmoji: moodEmojiProvider?(user.userId ?? ""),
+                onMoodTap: moodTapProvider.flatMap { $0(user.userId ?? "") },
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in AnyView(ProfileUserPostsList(
                     userId: uid,
@@ -344,32 +413,33 @@ private struct AudioFullscreenPage: View {
     // MARK: - Author Info
 
     private var authorInfoRow: some View {
-        HStack(spacing: 10) {
+        let authorColor = item.author.accentColor.isEmpty ? contactColor : item.author.accentColor
+        return HStack(spacing: 10) {
             Button {
-                selectedProfileUser = ProfileSheetUser.from(message: message)
+                selectedProfileUser = item.author
                 HapticFeedback.light()
             } label: {
                 MeeshyAvatar(
-                    name: message.senderName ?? "?",
+                    name: item.authorName,
                     context: .messageBubble,
-                    accentColor: message.senderColor ?? contactColor,
-                    avatarURL: message.senderAvatarURL,
-                    moodEmoji: message.senderId.isEmpty ? nil : statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
-                    onMoodTap: message.senderId.isEmpty ? nil : statusViewModel.moodTapHandler(for: message.senderId)
+                    accentColor: authorColor,
+                    avatarURL: item.authorAvatarURL,
+                    moodEmoji: item.authorUserId.isEmpty ? nil : moodEmojiProvider?(item.authorUserId),
+                    onMoodTap: item.authorUserId.isEmpty ? nil : moodTapProvider.flatMap { $0(item.authorUserId) }
                 )
             }
 
             Button {
-                selectedProfileUser = ProfileSheetUser.from(message: message)
+                selectedProfileUser = item.author
                 HapticFeedback.light()
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(message.senderName ?? "?")
+                    Text(item.authorName)
                         .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
 
-                    Text(message.createdAt, format: .dateTime.day().month(.abbreviated).hour().minute())
+                    Text(item.createdAt, format: .dateTime.day().month(.abbreviated).hour().minute())
                         .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(.white.opacity(0.4))
                 }
@@ -718,7 +788,7 @@ private struct AudioFullscreenPage: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     languagePill(flag: originalFlag, code: "orig",
-                                 label: LanguageDisplay.from(code: message.originalLanguage)?.name ?? String(localized: "audio.fullscreen.language.original", defaultValue: "Original", bundle: .main),
+                                 label: LanguageDisplay.from(code: item.originalLanguage)?.name ?? String(localized: "audio.fullscreen.language.original", defaultValue: "Original", bundle: .main),
                                  isSelected: selectedLanguage == "orig")
 
                     ForEach(translatedAudios, id: \.id) { audio in
@@ -752,7 +822,7 @@ private struct AudioFullscreenPage: View {
 
     private func languagePill(flag: String, code: String, label: String, isSelected: Bool) -> some View {
         let langColor = code == "orig"
-            ? Color(hex: LanguageDisplay.colorHex(for: message.originalLanguage))
+            ? Color(hex: LanguageDisplay.colorHex(for: item.originalLanguage))
             : Color(hex: LanguageDisplay.colorHex(for: code))
 
         return Button {
@@ -876,4 +946,47 @@ private struct AudioFullscreenPage: View {
         }
     }
 
+}
+
+// MARK: - Feed / Comment / Reel / Post wiring
+
+extension AudioFullscreenSource {
+    /// Construit une source plein écran depuis un média audio de feed
+    /// (commentaire, post, réel). La transcription et les versions traduites
+    /// (Prisme) proviennent du `FeedMedia` ; l'auteur et les métadonnées du
+    /// post/commentaire porteur.
+    static func fromFeed(media: FeedMedia,
+                         author: ProfileSheetUser,
+                         originalLanguage: String?,
+                         caption: String,
+                         createdAt: Date) -> AudioFullscreenSource {
+        AudioFullscreenSource(
+            id: media.id,
+            attachment: media.toMessageAttachment(),
+            transcription: media.transcription,
+            translatedAudios: media.translatedAudios,
+            originalLanguage: originalLanguage ?? "",
+            caption: caption,
+            author: author,
+            createdAt: createdAt,
+            messageId: nil
+        )
+    }
+}
+
+extension View {
+    /// Présente la vue plein écran audio (transcription + langues Prisme +
+    /// sauvegarde) pour une source unique. À attacher sur la surface porteuse
+    /// (commentaire, post, réel, feed) ; déclencher en assignant la source via
+    /// le callback `onFullscreen` de `AudioPlayerView`.
+    func audioFullscreenCover(_ source: Binding<AudioFullscreenSource?>,
+                              accentColor: String) -> some View {
+        fullScreenCover(item: source) { src in
+            AudioFullscreenView(
+                allAudioItems: [src],
+                startAttachmentId: src.attachment.id,
+                contactColor: accentColor
+            )
+        }
+    }
 }

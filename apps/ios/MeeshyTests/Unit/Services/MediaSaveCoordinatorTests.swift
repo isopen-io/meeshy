@@ -216,6 +216,28 @@ final class MediaSaveCoordinatorTests: XCTestCase {
         XCTAssertNil(sut.lastOutcome, "l'issue Fichiers n'est acquise qu'au retour du picker")
     }
 
+    /// Régression du bug confirmationDialog appliquée à AUDIO → Fichiers :
+    /// le chemin `.files` passe par la même garde `pick` que `.photoLibrary`,
+    /// donc il était tout aussi cassé (le dialog vidait `pendingRequest` avant
+    /// que le Task async ne stage le fichier). Vérifie que la capture explicite
+    /// stage bien l'audio pour le document picker.
+    func test_pick_files_audio_afterDialogClearsPendingRequest_stillStages() async throws {
+        let (sut, resolver, _, _) = makeSUT()
+        let payload = Data("m4a-bytes".utf8)
+        resolver.result = .success(try makeTempSourceFile(named: "cachehash", contents: payload))
+        sut.requestSave(makeRequest(kind: .audio, url: "https://x/voice.m4a", suggestedName: "Message vocal.m4a"))
+        let captured = sut.pendingRequest
+        sut.cancel() // le confirmationDialog vide pendingRequest à sa fermeture
+        XCTAssertNil(sut.pendingRequest)
+
+        await sut.pick(.files, request: captured)
+
+        let staged = try XCTUnwrap(sut.exportURL,
+                                   "Audio → Fichiers doit stager le fichier même après que le dialog a vidé pendingRequest")
+        XCTAssertEqual(staged.lastPathComponent, "Message vocal.m4a")
+        XCTAssertEqual(try Data(contentsOf: staged), payload)
+    }
+
     func test_pick_share_stagesCopyForShareSheet() async throws {
         let (sut, resolver, _, _) = makeSUT()
         let payload = Data("audio-bytes".utf8)
