@@ -324,7 +324,12 @@ final class CallManager: ObservableObject {
     private var pendingAnswerAction: CXAnswerCallAction?
     private var pendingAnswerSafetyTask: Task<Void, Never>?
 
-    /// Called synchronously (main queue) from the CXProvider delegate.
+    /// Called on the MainActor from `provider(_:perform: CXAnswerCallAction)`,
+    /// which hops there via `Task { @MainActor ... }` — never synchronously,
+    /// since `CXProvider.setDelegate(_:queue: nil)` delivers on CallKit's own
+    /// private serial queue, not main (see the `[Fix 2026-07-03]` comment at
+    /// that call site for why assuming synchronous main-queue delivery was
+    /// itself the bug).
     func holdPendingAnswerAction(_ action: CXAnswerCallAction) {
         // CallKit's contract requires every CX*Action to eventually be
         // completed — settle any still-pending action instead of silently
@@ -1043,7 +1048,12 @@ final class CallManager: ObservableObject {
             guard let error else { return }
             Logger.calls.error("CallKit VoIP report failed: \(error.localizedDescription)")
             Task { @MainActor [weak self] in
-                self?.endCallInternal(reason: .failed("CallKit error"))
+                // Audit 2026-07-10 — route through failCall so this teardown
+                // also reports `.failed` to CallKit (via reportCall). Calling
+                // endCallInternal directly left a partially-registered system
+                // Recents entry never explicitly ended, unlike every other
+                // failure path in this file (see failCall's doc comment).
+                self?.failCall("CallKit error")
                 // The dedup ring already recorded this callId when the push
                 // arrived; since CallKit refused to report it, evict it so a
                 // legitimate APNs retry isn't dropped as a duplicate.
@@ -1315,7 +1325,11 @@ final class CallManager: ObservableObject {
             callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
                 if let error {
                     Logger.calls.error("CallKit report incoming failed: \(error.localizedDescription)")
-                    Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
+                    // Audit 2026-07-10 — failCall (not endCallInternal directly)
+                    // also reports `.failed` back to CallKit, matching every
+                    // other failure path in this file (see failCall's doc
+                    // comment) instead of leaving Recents with a stranded entry.
+                    Task { @MainActor in self?.failCall("CallKit error") }
                 }
             }
         }

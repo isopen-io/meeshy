@@ -890,7 +890,7 @@ export class CallEventsHandler {
     if (match && knownCodes.has(match[1])) {
       return { code: match[1], message: match[2] } as CallError;
     }
-    return { code: message, message } as CallError;
+    return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
   }
 
   /**
@@ -1274,7 +1274,9 @@ export class CallEventsHandler {
             conversationId: { in: convIds },
             endedAt: null,
             initiatorId: { not: userId },
-            status: { in: [CallStatus.initiated, CallStatus.ringing, CallStatus.connecting] },
+            // No `connecting` here — the FSM (CallService Item F) never
+            // persists that status, so it can never match.
+            status: { in: [CallStatus.initiated, CallStatus.ringing] },
             startedAt: { gte: ringingWindowStart }
           },
           select: { id: true }
@@ -2732,32 +2734,24 @@ export class CallEventsHandler {
         const userInfo = getUserInfo?.(socket.id);
         const isAnonymous = userInfo?.isAnonymous || false;
 
-        // [Perf raccroché 2026-07-04] Fast-path : le pair doit couper
-        // INSTANTANÉMENT quand l'autre raccroche — or le chemin terminal
-        // ci-dessous enchaîne plusieurs allers-retours MongoDB
-        // (resolveParticipantIdFromCall → endCall → resolveCallEndedRooms)
-        // avant le premier broadcast. L'appartenance du socket émetteur à la
-        // call room EST l'autorisation (rejoindre la room a exigé un
-        // call:join vérifié en DB) : on notifie la room immédiatement,
-        // en mémoire pure. Le broadcast autoritatif (durée réelle, raison
-        // normalisée, audience élargie conversation + user rooms) suit —
-        // les clients dédupliquent sur leur état terminal.
-        if (socket.rooms.has(ROOMS.call(data.callId))) {
-          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, {
-            callId: data.callId,
-            duration: 0,
-            endedBy: userId,
-            reason: (data.reason || 'completed') as CallEndReason
-          } as CallEndedEvent);
-        }
-
+        // Security fix 2026-07-10 (gateway): the fast-path broadcast below
+        // MUST run after this authorization check, not before. It used to
+        // trust call-room membership alone, reasoning "joining the room
+        // already required a verified call:join" — true at join time, but
+        // nothing evicts a socket from the call room if the underlying
+        // authorization is later revoked (e.g. removed from the conversation
+        // mid-call). A since-unauthorized caller whose socket lingers in the
+        // room could otherwise fire a false call:ended at the real
+        // participant before this rejection ever ran, desyncing client state
+        // (call torn down client-side) from server state (session still
+        // `active`) until the 120s zombie-GC tier self-heals it.
         const endParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!endParticipantId) {
-          // Security fix 2026-07-10: `resolveParticipantIdFromCall` failing
-          // here means `userId` has no active conversation membership at
-          // all — a genuine authorization rejection, not a transient/data
-          // race a real participant could hit. Previously this branch force-
-          // ended the call regardless (`forceEndOrphanedCallAfterOptimisticBroadcast`
+          // `resolveParticipantIdFromCall` failing here means `userId` has
+          // no active conversation membership at all — a genuine
+          // authorization rejection, not a transient/data race a real
+          // participant could hit. Previously this branch force-ended the
+          // call regardless (`forceEndOrphanedCallAfterOptimisticBroadcast`
           // has no authorization check of its own), which let ANY caller —
           // including a total stranger who merely guessed/observed a callId —
           // terminate a call they had no relationship to. Just reject; do not
@@ -2768,6 +2762,23 @@ export class CallEventsHandler {
           } as CallError);
           ack?.({ success: false });
           return;
+        }
+
+        // [Perf raccroché 2026-07-04] Fast-path : le pair doit couper
+        // INSTANTANÉMENT quand l'autre raccroche — or le chemin terminal
+        // ci-dessous enchaîne plusieurs allers-retours MongoDB (endCall →
+        // resolveCallEndedRooms) avant le premier broadcast. L'autorisation
+        // est maintenant vérifiée (ci-dessus) avant ce broadcast en mémoire
+        // pure. Le broadcast autoritatif (durée réelle, raison normalisée,
+        // audience élargie conversation + user rooms) suit — les clients
+        // dédupliquent sur leur état terminal.
+        if (socket.rooms.has(ROOMS.call(data.callId))) {
+          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, {
+            callId: data.callId,
+            duration: 0,
+            endedBy: userId,
+            reason: (data.reason || 'completed') as CallEndReason
+          } as CallEndedEvent);
         }
 
         const callSession = await this.callService.endCall(

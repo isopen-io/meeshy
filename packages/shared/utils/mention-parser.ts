@@ -11,7 +11,9 @@ export interface MentionParticipant {
 export const MENTION_HANDLE_CHARS = '\\w-';
 
 // Classe de caractères d'un nom : lettre/chiffre/underscore/tiret Unicode. Source de vérité unique
-// pour les frontières de mention ET pour `hasMentions` — un seul jeu de caractères, zéro drift.
+// pour les frontières de mention, pour `hasMentions`, ET pour la capture du handle brut de
+// `parseMentions` (mode sans participants) — un seul jeu de caractères, zéro drift : ce que
+// `hasMentions` signale, le fallback brut l'extrait.
 // Le tiret en fait partie : usernames ET displayNames l'autorisent (`Ann-Marie`), donc `@marie`
 // ne doit PAS matcher dans `@marie-claire` (frontière droite), et `@marie-claire` est un seul token.
 const NAME_CHAR = '[\\p{L}\\p{N}_-]';
@@ -33,13 +35,31 @@ const NAME_BOUNDARY_RIGHT = `(?!${NAME_CHAR})`;
  *    gauche Unicode `NAME_BOUNDARY_LEFT` que le path @DisplayName pour ignorer les `@` internes
  *    d'adresses e-mail, y compris après une lettre accentuée/non-latine ; le tiret est capturé pour
  *    résoudre les usernames à tiret type `@marie-claire`).
- * 3. Sans participants → retourne les handles bruts ("@alice")
+ * 3. Sans participants → retourne les handles bruts ("@alice"), mode participant-agnostique.
+ *    Le handle brut est capturé avec `NAME_CHAR` (Unicode) — la MÊME classe que {@link hasMentions} —
+ *    et NON `MENTION_HANDLE_CHARS` (ASCII, aligné sur la validation username). C'est l'invariant
+ *    « zéro drift » : sans participants, un `@Владимир` / `@Éric` signalé par `hasMentions` DOIT
+ *    être extrait ici. La résolution par username (cas 2) reste en ASCII car un username est
+ *    toujours ASCII — un handle non-latin ne matche donc jamais un username et n'est pertinent
+ *    que comme handle brut.
  */
 export function parseMentions(
   content: string,
   participants: readonly MentionParticipant[]
 ): string[] {
   if (!content) return [];
+
+  // Cas 3 — mode participant-agnostique : extraction de handles bruts alignée
+  // sur `hasMentions` (NAME_CHAR Unicode) pour ne jamais signaler une mention
+  // qu'on n'extrait pas.
+  if (participants.length === 0) {
+    const rawRegex = new RegExp(`${NAME_BOUNDARY_LEFT}@(${NAME_CHAR}{1,30})`, 'gu');
+    const raw = new Set<string>();
+    for (const match of content.matchAll(rawRegex)) {
+      raw.add(match[0]);
+    }
+    return [...raw];
+  }
 
   const resolved = new Set<string>();
 
@@ -49,15 +69,13 @@ export function parseMentions(
 
   let remaining = content;
 
-  if (sorted.length > 0) {
-    for (const p of sorted) {
-      if (!p.displayName) continue;
-      const pattern = `${NAME_BOUNDARY_LEFT}@${escapeRegex(p.displayName)}${NAME_BOUNDARY_RIGHT}`;
-      const regex = new RegExp(pattern, 'giu');
-      if (regex.test(remaining)) {
-        resolved.add(p.userId);
-        remaining = remaining.replace(new RegExp(pattern, 'giu'), '');
-      }
+  for (const p of sorted) {
+    if (!p.displayName) continue;
+    const pattern = `${NAME_BOUNDARY_LEFT}@${escapeRegex(p.displayName)}${NAME_BOUNDARY_RIGHT}`;
+    const regex = new RegExp(pattern, 'giu');
+    if (regex.test(remaining)) {
+      resolved.add(p.userId);
+      remaining = remaining.replace(new RegExp(pattern, 'giu'), '');
     }
   }
 
@@ -69,8 +87,6 @@ export function parseMentions(
     const found = sorted.find((p) => p.username.toLowerCase() === handle);
     if (found) {
       resolved.add(found.userId);
-    } else if (participants.length === 0) {
-      resolved.add(match[0]);
     }
   }
 

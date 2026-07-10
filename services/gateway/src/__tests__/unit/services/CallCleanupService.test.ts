@@ -3,7 +3,6 @@
  *
  * Verifies the GC logic that runs every 60 s to force-end zombie calls:
  * - initiated/ringing  > 120 s → MISSED
- * - connecting         > 90 s (since answeredAt) → FAILED
  * - active/reconnecting > 2 h  → ENDED (garbageCollected)
  * - heartbeat timeout (when callService present + stale ≥ total) → ENDED (heartbeatTimeout)
  * - forceEndCall: transaction + Socket.IO broadcast variants
@@ -230,7 +229,6 @@ describe('CallCleanupService', () => {
       prisma.callSession.findMany
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
         .mockRejectedValue(new Error('scheduled cleanup DB error'));
 
       service.start();
@@ -307,7 +305,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
 
@@ -346,7 +343,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
 
@@ -374,7 +370,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall]) // tier 1: initiated/ringing
-        .mockResolvedValueOnce([])          // tier 2: connecting
         .mockResolvedValueOnce([]);          // tier 3: active/reconnecting
 
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
@@ -398,7 +393,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
 
@@ -436,7 +430,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([staleCall]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
 
@@ -456,30 +449,11 @@ describe('CallCleanupService', () => {
       );
     });
 
-    it('force-FAILED a stale connecting call (>30s) → cleaned:1', async () => {
-      const service = new CallCleanupService(prisma as any);
-      const staleCall = makeStaleCall(CallStatus.connecting, 45_000, 'call-connecting');
-
-      prisma.callSession.findMany
-        .mockResolvedValueOnce([])          // tier 1
-        .mockResolvedValueOnce([staleCall]) // tier 2: connecting
-        .mockResolvedValueOnce([]);          // tier 3
-
-      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
-      setupTransactionPassthrough(prisma);
-
-      const result = await service.runCleanup();
-
-      expect(result.cleaned).toBe(1);
-      expect(result.errors).toBe(0);
-    });
-
     it('tier 1 (initiated/ringing) cutoff is 120s from startedAt', async () => {
       const service = new CallCleanupService(prisma as any);
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([]) // tier 1
-        .mockResolvedValueOnce([]) // tier 2
         .mockResolvedValueOnce([]); // tier 3
 
       const before = Date.now();
@@ -496,39 +470,12 @@ describe('CallCleanupService', () => {
       expect(after - cutoff).toBeLessThanOrEqual(120_000 + 1_000);
     });
 
-    it('tier 2 (connecting) is anchored on answeredAt with a 90s budget, not startedAt', async () => {
-      const service = new CallCleanupService(prisma as any);
-
-      prisma.callSession.findMany
-        .mockResolvedValueOnce([]) // tier 1
-        .mockResolvedValueOnce([]) // tier 2: connecting
-        .mockResolvedValueOnce([]); // tier 3
-
-      const before = Date.now();
-      await service.runCleanup();
-      const after = Date.now();
-
-      // The connecting tier is the 2nd findMany call.
-      const tier2Where = prisma.callSession.findMany.mock.calls[1][0].where;
-      expect(tier2Where.status).toBe(CallStatus.connecting);
-      // Must filter on answeredAt (entry into connecting), never startedAt —
-      // otherwise a late-answered call gets force-FAILED mid-handshake.
-      expect(tier2Where.answeredAt).toBeDefined();
-      expect(tier2Where.startedAt).toBeUndefined();
-
-      // Cutoff must be ~90s in the past (the cellular/TURN-tolerant budget).
-      const cutoff = tier2Where.answeredAt.lt.getTime();
-      expect(before - cutoff).toBeGreaterThanOrEqual(90_000);
-      expect(after - cutoff).toBeLessThanOrEqual(90_000 + 1_000);
-    });
-
     it('force-GC-ENDED a stale active call (>2h) → cleaned:1', async () => {
       const service = new CallCleanupService(prisma as any);
       const staleCall = makeStaleCall(CallStatus.active, 3 * 60 * 60 * 1000, 'call-active');
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([])          // tier 1
-        .mockResolvedValueOnce([])          // tier 2
         .mockResolvedValueOnce([staleCall]); // tier 3: active/reconnecting
 
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
@@ -556,7 +503,6 @@ describe('CallCleanupService', () => {
 
         prisma.callSession.findMany
           .mockResolvedValueOnce([])          // tier 1
-          .mockResolvedValueOnce([])          // tier 2
           .mockResolvedValueOnce([longCall])  // tier 3
           .mockResolvedValueOnce([]);         // heartbeat tier
         callService.hasHeartbeatData.mockReturnValue(true);
@@ -574,7 +520,6 @@ describe('CallCleanupService', () => {
         const longCall = makeLongCall([{ id: 'p-1', leftAt: null }], 'call-long-stale');
 
         prisma.callSession.findMany
-          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([longCall])
           .mockResolvedValueOnce([]);
@@ -595,7 +540,6 @@ describe('CallCleanupService', () => {
         const orphan = makeLongCall([], 'call-long-orphan');
 
         prisma.callSession.findMany
-          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([orphan])
           .mockResolvedValueOnce([]);
@@ -621,7 +565,6 @@ describe('CallCleanupService', () => {
 
         prisma.callSession.findMany
           .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([longCall])
           .mockResolvedValueOnce([]);
         callService.hasHeartbeatData.mockReturnValue(false); // post-restart
@@ -643,7 +586,6 @@ describe('CallCleanupService', () => {
 
         prisma.callSession.findMany
           .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([longCall])
           .mockResolvedValueOnce([]);
         callService.hasHeartbeatData.mockReturnValue(false);
@@ -664,7 +606,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
 
       // findUnique succeeds but $transaction throws
@@ -677,30 +618,11 @@ describe('CallCleanupService', () => {
       expect(result.errors).toBe(1);
     });
 
-    it('counts errors when forceEndCall throws on tier 2 (connecting) → errors:1', async () => {
-      const service = new CallCleanupService(prisma as any);
-      const staleCall = makeStaleCall(CallStatus.connecting, 45_000, 'call-conn-err');
-
-      prisma.callSession.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([]);
-
-      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
-      prisma.$transaction.mockRejectedValue(new Error('tier2 fail'));
-
-      const result = await service.runCleanup();
-
-      expect(result.cleaned).toBe(0);
-      expect(result.errors).toBe(1);
-    });
-
     it('counts errors when forceEndCall throws on tier 3 (active GC) → errors:1', async () => {
       const service = new CallCleanupService(prisma as any);
       const staleCall = makeStaleCall(CallStatus.active, 3 * 60 * 60 * 1000, 'call-gc-err');
 
       prisma.callSession.findMany
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([staleCall]);
 
@@ -725,7 +647,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([]) // tier 1
-        .mockResolvedValueOnce([]) // tier 2
         .mockResolvedValueOnce([]) // tier 3
         .mockResolvedValueOnce([activeCall]); // heartbeat tier
 
@@ -751,7 +672,6 @@ describe('CallCleanupService', () => {
       };
 
       prisma.callSession.findMany
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([activeCall]);
@@ -780,7 +700,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([]) // tier 1
-        .mockResolvedValueOnce([]) // tier 2
         .mockResolvedValueOnce([]) // tier 3
         .mockResolvedValueOnce([activeCall]); // heartbeat tier
 
@@ -800,14 +719,13 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
 
       const result = await service.runCleanup();
 
       expect(result.cleaned).toBe(0);
-      // findMany should have been called exactly 3 times (tiers 1-3), not 4
-      expect(prisma.callSession.findMany).toHaveBeenCalledTimes(3);
+      // findMany should have been called exactly 2 times (tier 1 + tier 3), not 3
+      expect(prisma.callSession.findMany).toHaveBeenCalledTimes(2);
     });
 
     it('heartbeat errors counted in errors when forceEndCall throws', async () => {
@@ -821,7 +739,6 @@ describe('CallCleanupService', () => {
       };
 
       prisma.callSession.findMany
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([activeCall]);
@@ -854,7 +771,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([]) // tier 1
-        .mockResolvedValueOnce([]) // tier 2
         .mockResolvedValueOnce([]) // tier 3
         .mockResolvedValueOnce([activeCall]); // heartbeat tier
 
@@ -881,7 +797,6 @@ describe('CallCleanupService', () => {
       };
 
       prisma.callSession.findMany
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([activeCall]);
@@ -915,7 +830,6 @@ describe('CallCleanupService', () => {
       prisma.callSession.findMany
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([activeCall]);
 
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-db-null' });
@@ -945,7 +859,6 @@ describe('CallCleanupService', () => {
       };
 
       prisma.callSession.findMany
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([activeCall]);
@@ -978,7 +891,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([]) // tier 1
-        .mockResolvedValueOnce([]) // tier 2
         .mockResolvedValueOnce([]) // tier 3
         .mockResolvedValueOnce([activeCall]); // heartbeat tier
 
@@ -1010,7 +922,6 @@ describe('CallCleanupService', () => {
       prisma.callSession.findMany
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([activeCall]);
 
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-boot-grace-expired' });
@@ -1026,7 +937,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000);
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall]) // tier 1 reaps it
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
@@ -1051,7 +961,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-race' });
       setupTransactionPassthrough(prisma, 0); // 0 rows matched — already transitioned
@@ -1066,10 +975,9 @@ describe('CallCleanupService', () => {
       const io = createMockIo();
       const service = new CallCleanupService(prisma as any);
       service.attachSocketServer(io);
-      const staleCall = makeStaleCall(CallStatus.connecting, 100_000, 'call-race-2');
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-race-2');
 
       prisma.callSession.findMany
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([staleCall])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-race-2' });
@@ -1103,7 +1011,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-summary-1');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-summary-1' });
       setupTransactionPassthrough(prisma);
@@ -1121,7 +1028,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-summary-race');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-summary-race' });
       setupTransactionPassthrough(prisma, 0); // already transitioned — no write
@@ -1139,7 +1045,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-summary-fail');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-summary-fail' });
       setupTransactionPassthrough(prisma);
@@ -1156,7 +1061,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-summary-none');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-summary-none' });
       setupTransactionPassthrough(prisma);
@@ -1182,7 +1086,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-streak-1');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-streak-1' });
       setupTransactionPassthrough(prisma);
@@ -1200,7 +1103,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-streak-race');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-streak-race' });
       setupTransactionPassthrough(prisma, 0); // already transitioned — no write
@@ -1216,7 +1118,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-streak-none');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-streak-none' });
       setupTransactionPassthrough(prisma);
@@ -1243,7 +1144,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cancel-1');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-1' });
       setupTransactionPassthrough(prisma);
@@ -1253,24 +1153,6 @@ describe('CallCleanupService', () => {
       expect(cancelPush).toHaveBeenCalledWith('call-cancel-1', 'conv-cancel-1', expect.any(Number));
     });
 
-    it('does not invoke the callback for a tier-2 (failed) force-end', async () => {
-      const service = new CallCleanupService(prisma as any);
-      const cancelPush = jest.fn().mockResolvedValue(undefined) as MockFn;
-      service.setMissedCallCancelPushCallback(cancelPush);
-
-      const staleConnecting = makeStaleCall(CallStatus.connecting, 100_000, 'call-cancel-2');
-      prisma.callSession.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([staleConnecting])
-        .mockResolvedValueOnce([]);
-      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-2' });
-      setupTransactionPassthrough(prisma);
-
-      await service.runCleanup();
-
-      expect(cancelPush).not.toHaveBeenCalled();
-    });
-
     it('does not invoke the callback for a tier-3 (garbageCollected) force-end', async () => {
       const service = new CallCleanupService(prisma as any);
       const cancelPush = jest.fn().mockResolvedValue(undefined) as MockFn;
@@ -1278,7 +1160,6 @@ describe('CallCleanupService', () => {
 
       const staleCall = makeStaleCall(CallStatus.active, 3 * 60 * 60 * 1000, 'call-cancel-3');
       prisma.callSession.findMany
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([staleCall]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-3' });
@@ -1297,7 +1178,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cancel-race');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-race' });
       setupTransactionPassthrough(prisma, 0); // already transitioned — no write
@@ -1315,7 +1195,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cancel-fail');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-fail' });
       setupTransactionPassthrough(prisma);
@@ -1332,7 +1211,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cancel-none');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cancel-none' });
       setupTransactionPassthrough(prisma);
@@ -1362,7 +1240,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-notify-1');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-1' });
       setupTransactionPassthrough(prisma);
@@ -1372,24 +1249,6 @@ describe('CallCleanupService', () => {
       expect(notify).toHaveBeenCalledWith('call-notify-1');
     });
 
-    it('does not invoke the callback for a tier-2 (failed) force-end', async () => {
-      const service = new CallCleanupService(prisma as any);
-      const notify = jest.fn().mockResolvedValue(undefined) as MockFn;
-      service.setMissedCallNotificationCallback(notify);
-
-      const staleConnecting = makeStaleCall(CallStatus.connecting, 100_000, 'call-notify-2');
-      prisma.callSession.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([staleConnecting])
-        .mockResolvedValueOnce([]);
-      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-2' });
-      setupTransactionPassthrough(prisma);
-
-      await service.runCleanup();
-
-      expect(notify).not.toHaveBeenCalled();
-    });
-
     it('does not invoke the callback for a tier-3 (garbageCollected) force-end', async () => {
       const service = new CallCleanupService(prisma as any);
       const notify = jest.fn().mockResolvedValue(undefined) as MockFn;
@@ -1397,7 +1256,6 @@ describe('CallCleanupService', () => {
 
       const staleCall = makeStaleCall(CallStatus.active, 3 * 60 * 60 * 1000, 'call-notify-3');
       prisma.callSession.findMany
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([staleCall]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-3' });
@@ -1416,7 +1274,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-notify-race');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-race' });
       setupTransactionPassthrough(prisma, 0); // already transitioned — no write
@@ -1434,7 +1291,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-notify-fail');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-fail' });
       setupTransactionPassthrough(prisma);
@@ -1451,7 +1307,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-notify-none');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-notify-none' });
       setupTransactionPassthrough(prisma);
@@ -1474,7 +1329,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 90_000, 'call-bc1');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-bc1' });
       setupTransactionPassthrough(prisma);
@@ -1494,7 +1348,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-fanout');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-fanout' });
       prisma.participant.findMany.mockResolvedValue([{ userId: 'caller-1' }, { userId: 'callee-1' }]);
@@ -1522,7 +1375,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 90_000, 'call-bc2');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: null });
       setupTransactionPassthrough(prisma);
@@ -1541,7 +1393,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 90_000, 'call-bc3');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       // findUnique returns null → session is null → session?.conversationId is undefined
       prisma.callSession.findUnique.mockResolvedValue(null);
@@ -1561,7 +1412,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 90_000, 'call-bc4');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-bc4' });
       prisma.participant.findMany.mockRejectedValue(new Error('member lookup DB error'));
@@ -1582,7 +1432,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 90_000, 'call-noio');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-noio' });
       setupTransactionPassthrough(prisma);
@@ -1609,7 +1458,6 @@ describe('CallCleanupService', () => {
         const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-room-cleanup');
         prisma.callSession.findMany
           .mockResolvedValueOnce([staleCall])
-          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([]);
         prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-room-cleanup' });
         setupTransactionPassthrough(prisma);
@@ -1634,7 +1482,6 @@ describe('CallCleanupService', () => {
         const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-room-empty');
         prisma.callSession.findMany
           .mockResolvedValueOnce([staleCall])
-          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([]);
         prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-room-empty' });
         setupTransactionPassthrough(prisma);
@@ -1652,7 +1499,6 @@ describe('CallCleanupService', () => {
         const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-room-noio');
         prisma.callSession.findMany
           .mockResolvedValueOnce([staleCall])
-          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([]);
         prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-room-noio' });
         setupTransactionPassthrough(prisma);
@@ -1669,7 +1515,6 @@ describe('CallCleanupService', () => {
       const staleCall = makeStaleCall(CallStatus.initiated, 90_000, 'call-hb-clear');
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall]) // tier 1
-        .mockResolvedValueOnce([])           // tier 2
         .mockResolvedValueOnce([])           // tier 3
         .mockResolvedValueOnce([]);          // tier 4 (heartbeat active calls)
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-hb-clear' });
@@ -1703,7 +1548,6 @@ describe('CallCleanupService', () => {
 
       prisma.callSession.findMany
         .mockResolvedValueOnce([staleCall])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
       prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
       setupTransactionPassthrough(prisma);

@@ -2611,3 +2611,73 @@ Swift dans ce sandbox (confirmé, cohérent avec 33 vagues précédentes) — no
   (Vague 31/32), `call:end` fast-path `duration:0` (non atteignable), speaker toggle no-op web (nécessite
   design dédié), group-call `enableVideo`/`disableVideo` rollback (non atteignable tant que groupe pas
   livré). `useWebRTC.switchCamera` dead-code (Vague 33) → **SUPPRIMÉ cette vague**, retiré de la liste.
+
+
+## Vague 35 — `call:end` fast-path broadcast fired before authorization (gateway) + 3 broken prop destructures (web) (2026-07-10)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). `git fetch
+origin main` : HEAD (`8f2a9ba`) à jour, PR #1809 (calling-stack hardening, 5 bugs) et #1810 (dead GC tier)
+ouverts/mergés avant démarrage — diffs lus intégralement pour confirmer l'absence de recouvrement. Deux
+agents d'exploration dédiés (gateway `CallEventsHandler`/`CallService`/`CallCleanupService`/
+`TURNCredentialService` ; web `use-webrtc-p2p`/`use-video-call`/`components/video-call{,s}/`), lecture
+seule, briefés avec la liste exhaustive des bugs déjà fixés (waves 25-34 + PR #1809) pour falsifier tout
+candidat contre ce fichier + `lessons.md` avant de rapporter.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD, SÉCURITÉ] Le broadcast optimiste `call:ended` du fast-path
+  de `call:end` s'exécutait AVANT la vérification d'autorisation, pas après.** `CallEventsHandler.ts`
+  (handler `CALL_EVENTS.END`) émettait `call:ended` vers la room dès que `socket.rooms.has(ROOMS.call(...))`
+  était vrai — raisonnement : "l'appartenance à la room EST l'autorisation" (vrai au moment du `call:join`
+  vérifié). Mais rien n'évince un socket de la call room si l'autorisation sous-jacente est révoquée
+  ENSUITE (ex. un admin retire l'appelant de la conversation en cours d'appel) — ce n'est pas un invariant,
+  juste une preuve ponctuelle. Le fix sécurité du 2026-07-10 (déjà en prod) traite exactement ce cas côté
+  écriture DB (`resolveParticipantIdFromCall` échoue → refuse de force-end la session) mais ne faisait rien
+  côté broadcast, déjà parti avant que ce rejet ne s'exécute. **Scénario** : A et B en appel actif
+  (rooms rejointes via `call:join` vérifié) ; A perd son appartenance à la conversation en cours d'appel
+  (aucun code n'évince son socket de la call room) ; A déclenche `call:end` ; le fast-path notifie
+  IMMÉDIATEMENT B (`call:ended`) ; B démonte l'appel sans re-validation côté client ; `resolveParticipantIdFromCall`
+  échoue ensuite pour A (à raison) et le handler rejette `NOT_A_PARTICIPANT` sans toucher au `CallSession`
+  (reste `active`) — état divergent (B pense l'appel fini, le serveur le croit toujours actif) jusqu'au
+  self-heal par le tier GC 120s. **Fix** : réordonnancement — `resolveParticipantIdFromCall` s'exécute
+  maintenant AVANT le broadcast fast-path (le chemin autoritatif faisait déjà cet appel juste après ;
+  aucun aller-retour DB supplémentaire, juste un déplacement de bloc). **Tests TDD**
+  (`CallEventsHandler.test.ts`, nouveau cas dans `describe('call:end')`) : socket toujours dans la call
+  room + `resolveParticipantIdFromCall` échoue → `socket.to(...)` ne doit JAMAIS être appelé, seul
+  `call:error NOT_A_PARTICIPANT` + `ack(false)`. RED confirmé (`socket.to` appelé 1 fois avant le fix).
+  GREEN après. Suite `CallEventsHandler.test.ts` : 233/233. Suite filtrée `Call` (32 fichiers) : 896/896.
+  `tsc --noEmit` gateway : 325 erreurs identiques avant/après (`git stash` du seul fichier source + test →
+  même compte exact, toutes `Cannot find module '@meeshy/shared/prisma/client'`-dérivées, sandbox
+  réseau-restreint cf. lessons.md 2026-07-02 ; aucune nouvelle erreur).
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ, mécanique] 3 composants d'appel destructuraient une prop typée avec
+  un nom préfixé `_` qui ne correspondait PAS à la clé de l'interface, cassant la liaison shorthand.**
+  `VideoStream.tsx` (`isLocal?: boolean` déclaré, déstructuré `_isLocal = false`), `OngoingCallBanner.tsx`
+  (`callId: string` déclaré, déstructuré `_callId`), `CallStatusIndicator.tsx` (`callDuration?: number`
+  déclaré, déstructuré `_callDuration = 0`) — la déstructuration shorthand cherche une propriété
+  littéralement nommée `_isLocal`/etc. sur l'objet props, ne la trouve jamais, retombe silencieusement sur
+  le défaut local. Confirmé 3 erreurs `tsc --noEmit` réelles (`TS2339: Property '_X' does not exist on type
+  '...Props'`), disparues après fix, présentes avant (vérifié par `git stash` du diff web seul). Signature
+  du bug : cohérente avec une passe automatisée "préfixer les vars inutilisées par `_`" appliquée
+  aveuglément à une déstructuration d'objet-props (qui casse le lien nom↔clé), pas une simple faute de
+  frappe manuelle. Les 3 sites sont réellement montés (pas de composants morts) avec de vrais appelants
+  passant de vraies valeurs (`LocalVideoTile.tsx` → `isLocal={true}`, `ConversationHeader.tsx` →
+  `callId={currentCall.id}`, `VideoCallInterface.tsx` → `callDuration={callDuration}` depuis
+  `useCallDuration()`). Vérification manuelle (lecture complète des 3 corps de composant) : aucune des 3
+  props n'est actuellement lue dans le corps du composant (donc zéro régression comportementale visible
+  aujourd'hui — `isLocal` : le mirroring est géré par le `className` de l'appelant, pas par `VideoStream`
+  lui-même ; `callId`/`callDuration` : jamais référencés). **Fix** : syntaxe de renommage explicite
+  (`isLocal: _isLocal = false`, etc.) — lie correctement chaque prop à son nom d'interface déclaré tout en
+  gardant le préfixe `_` sur la variable locale (`varsIgnorePattern: "^_"` dans `eslint.config.mjs`),
+  puisqu'aucune des 3 n'est lue ailleurs dans le rendu aujourd'hui — zéro changement de comportement, pur
+  fix de type. Suite `__tests__/components/video-calls/` : 8/8 suites, 35/35 tests verts. `eslint` non
+  exécutable dans ce sandbox (`TypeError: Converting circular structure to JSON` sur `next/core-web-vitals`
+  — problème d'environnement pré-existant, indépendant de ce fix ; le raisonnement `varsIgnorePattern`
+  reste vérifiable par lecture directe de `eslint.config.mjs`).
+- **iOS (lecture seule, aucun changement — pas de toolchain Swift dans ce sandbox)** : non ré-audité cette
+  vague, aucun candidat neuf recherché (périmètre volontairement limité à gateway + web, cf. constat répété
+  30+ vagues consécutives).
+- **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, threading TTL, `call:force-leave`
+  server-emit ambiguïté (le sous-cas broadcast-avant-autorisation traité cette vague était un bug DISTINCT
+  de cette ambiguïté documentée, toujours ouverte pour le reste), 3 findings iOS structurels Vague 28,
+  landscape/Dynamic-Type Vague 28/29, `updateCallStatus()` dead-code duration anchor (Vague 30),
+  camera-flag rollback + `CXProviding` iOS (Vague 31/32), `call:end` fast-path `duration:0` (non
+  atteignable, valeur cosmétique seulement — distinct du bug d'autorisation corrigé cette vague), speaker
+  toggle no-op web (nécessite design dédié).

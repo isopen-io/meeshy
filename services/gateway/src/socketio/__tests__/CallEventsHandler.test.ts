@@ -1345,14 +1345,14 @@ describe('CallEventsHandler', () => {
       });
     });
 
-    it('falls back to the raw message as both code and message for uncoded errors', async () => {
+    it('falls back to the generic MEDIA_TOGGLE_FAILED code for uncoded errors, never the raw message', async () => {
       mockCallServiceUpdateParticipantMedia.mockRejectedValue(new Error('update failed'));
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket();
       await socket._trigger('call:toggle-audio', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', {
-        code: 'update failed',
-        message: 'update failed'
+        code: 'MEDIA_TOGGLE_FAILED',
+        message: 'Failed to toggle audio'
       });
     });
   });
@@ -1398,14 +1398,14 @@ describe('CallEventsHandler', () => {
       });
     });
 
-    it('falls back to the raw message as both code and message for uncoded errors', async () => {
+    it('falls back to the generic MEDIA_TOGGLE_FAILED code for uncoded errors, never the raw message', async () => {
       mockCallServiceUpdateParticipantMedia.mockRejectedValue(new Error('video fail'));
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket();
       await socket._trigger('call:toggle-video', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', {
-        code: 'video fail',
-        message: 'video fail'
+        code: 'MEDIA_TOGGLE_FAILED',
+        message: 'Failed to toggle video'
       });
     });
   });
@@ -1457,6 +1457,30 @@ describe('CallEventsHandler', () => {
       const ack = jest.fn();
       await socket._trigger('call:end', validData, ack);
       expect(mockCallServiceForceEndOrphanedCallSession).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
+      expect(ack).toHaveBeenCalledWith({ success: false });
+    });
+
+    // The fast-path optimistic broadcast (below) trusts call-room membership
+    // as authorization, reasoning it was proven true at call:join time — but
+    // nothing evicts a socket from the call room if the underlying
+    // authorization is later revoked (e.g. removed from the conversation
+    // mid-call). An unauthorized caller whose socket is still in the room
+    // must not be able to fire a false call:ended at the real participant
+    // before the authorization check below rejects them.
+    it('does NOT fire the fast-path optimistic call:ended broadcast when the ender cannot be resolved to a participant, even if their socket is still in the call room', async () => {
+      const { handler, io } = buildHandler({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      const ack = jest.fn();
+      await socket._trigger('call:end', validData, ack);
+
+      expect(socket.to).not.toHaveBeenCalled();
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
       expect(ack).toHaveBeenCalledWith({ success: false });
     });

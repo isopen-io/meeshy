@@ -3,9 +3,16 @@
  *
  * Spec Section 2.6: Server cron every 60s with tiered cleanup:
  * - initiated/ringing > 120s → MISSED
- * - connecting > 30s → FAILED
  * - active/reconnecting > 2h → ENDED (garbageCollected)
  * - active with stale heartbeat > 120s → ENDED (heartbeatTimeout)
+ *
+ * There is deliberately no `connecting`-status tier: the FSM (CallService
+ * Item F) never persists `CallStatus.connecting` — `joinCall` goes straight
+ * initiated/ringing → ringing, and the answer signal takes a call straight
+ * to `active` (CallEventsHandler, on the SDP answer). A stuck ICE/DTLS
+ * negotiation therefore surfaces as an `active` call with no heartbeat, and
+ * is caught by the heartbeat tier below (DB fallback anchored on
+ * `joinedAt` when no in-memory heartbeat exists yet).
  */
 
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
@@ -30,12 +37,6 @@ export class CallCleanupService {
   // swipe/tap answer. 60s was routinely too short on slow networks, causing
   // valid incoming calls to be force-MISSed before the user could answer.
   private readonly MAX_INITIATED_RINGING_MS = 120 * 1000;
-  // CALL-FIX 2026-06-25 — 30s→90s and anchored on `answeredAt` (entry into
-  // `connecting`) instead of `startedAt`. ICE/DTLS over a TURN relay on a weak
-  // cellular link routinely needs 5–15s; anchoring on `startedAt` left a callee
-  // who answered late only the remainder of 30s to negotiate, force-FAILing
-  // healthy calls mid-handshake ("it rings, I answer, it drops").
-  private readonly MAX_CONNECTING_MS = 90 * 1000;
   // CALL-FIX 2026-06-25 — 60s→120s: heartbeat interval is 10s on the iOS
   // client; a device with moderate network latency may miss 5-6 beats before
   // the connection recovers, and the 60s window was too tight for cellular
@@ -164,7 +165,6 @@ export class CallCleanupService {
     logger.info('[CallCleanupService] Starting GC', {
       intervalMs: this.CLEANUP_INTERVAL_MS,
       maxInitiatedMs: this.MAX_INITIATED_RINGING_MS,
-      maxConnectingMs: this.MAX_CONNECTING_MS,
       maxActiveMs: CallCleanupService.MAX_ACTIVE_MS,
       heartbeatTimeoutMs: this.HEARTBEAT_TIMEOUT_MS
     });
@@ -219,37 +219,7 @@ export class CallCleanupService {
       }
     }
 
-    // 2. connecting > 90s (since answeredAt) → FAILED.
-    // Anchor on `answeredAt` — the moment the call entered `connecting` — not
-    // `startedAt`, so a callee who answered late still gets the full negotiation
-    // budget. A `connecting` row always has `answeredAt` set (joinCall stamps it
-    // at the initiated→connecting transition); a null `answeredAt` is skipped
-    // here, which fails safe (never force-FAILs a call we can't time).
-    const connectingCutoff = new Date(now.getTime() - this.MAX_CONNECTING_MS);
-    const staleConnecting = await this.prisma.callSession.findMany({
-      where: {
-        status: CallStatus.connecting,
-        answeredAt: { lt: connectingCutoff }
-      }
-    });
-
-    for (const call of staleConnecting) {
-      try {
-        const ended = await this.forceEndCall(
-          call.id, now, call.answeredAt,
-          [CallStatus.connecting], CallStatus.failed, CallEndReason.failed
-        );
-        if (ended) {
-          logger.warn('[CallCleanupService] Force FAILED', { callId: call.id });
-          cleaned++;
-        }
-      } catch (error) {
-        logger.error('[CallCleanupService] Failed to force FAILED', { callId: call.id, error });
-        errors++;
-      }
-    }
-
-    // 3. active/reconnecting > 2h with NO fresh liveness → ENDED (garbageCollected).
+    // 2. active/reconnecting > 2h with NO fresh liveness → ENDED (garbageCollected).
     // The wall-clock cap is a safety net for rows the heartbeat tier cannot
     // judge (orphans with zero live participants, or no CallService attached) —
     // never a duration limit: a multi-hour call whose participants still beat

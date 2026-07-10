@@ -181,4 +181,40 @@ describe('parseMentions', () => {
       expect(hasMentions('reply to jean.dupont@example.org please')).toBe(false);
     });
   });
+
+  describe('invariant sans drift hasMentions ⟷ raw parseMentions (participant-agnostique)', () => {
+    // Le docstring des deux fonctions interdit tout drift : sur le chemin
+    // participant-agnostique (aucun participant), un `@handle` détecté par
+    // `hasMentions` DOIT être extrait comme handle brut par `parseMentions`.
+    // Le fallback brut utilisait MENTION_HANDLE_CHARS (ASCII, aligné username),
+    // là où hasMentions utilise NAME_CHAR (Unicode) — d'où un handle non-latin
+    // signalé mais jamais extrait.
+
+    it('extrait un handle brut non-latin (cyrillique) — parité hasMentions', () => {
+      expect(parseMentions('@Владимир', [])).toEqual(['@Владимир']);
+    });
+
+    it('extrait un handle brut à initiale accentuée — parité hasMentions', () => {
+      expect(parseMentions('Salut @Éric', [])).toEqual(['@Éric']);
+      expect(parseMentions('Coucou @André', [])).toEqual(['@André']);
+    });
+
+    it('hasMentions(x) est vrai SSI parseMentions(x, []) est non vide', () => {
+      const samples = [
+        'Salut @alice',
+        '@marie-claire on y va',
+        'Привет @Владимир',
+        'Salut @Éric ça va ?',
+        '@André Tabeth bonjour',
+        'écris à contact@marie.com',
+        'reply to jean.dupont@example.org please',
+        'test@ domain.com',
+        'Bonjour tout le monde',
+        '',
+      ];
+      for (const s of samples) {
+        expect(hasMentions(s)).toBe(parseMentions(s, []).length > 0);
+      }
+    });
+  });
 });

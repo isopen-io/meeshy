@@ -56,13 +56,19 @@ enum CallPillStatus: Equatable {
 
     static func from(_ state: CallState) -> CallPillStatus {
         switch state {
-        case .connected:             return .connected
-        case .ringing:               return .ringing
-        case .offering, .connecting: return .connecting
-        case .reconnecting:          return .reconnecting
+        case .connected:  return .connected
+        case .ringing:    return .ringing
+        // Audit 2026-07-10 — `.offering` means the SDP offer is out and ICE is
+        // negotiating, but the callee's phone is still physically ringing;
+        // CallView already treats it as "still ringing" (outgoingRingingView),
+        // not "establishing a connection". Minimizing an outgoing call before
+        // it's answered must show the same "Sonnerie…" status, not "Connexion…".
+        case .offering:     return .ringing
+        case .connecting:   return .connecting
+        case .reconnecting: return .reconnecting
         // The pill is hidden in `.idle`/`.ended` (callState.isActive == false);
         // map to a safe non-connected status so a stray render never shows green.
-        case .idle, .ended:          return .connecting
+        case .idle, .ended: return .connecting
         }
     }
 }

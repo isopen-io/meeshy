@@ -658,6 +658,52 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         )
     }
 
+    /// Audit 2026-07-10 — when `reportNewIncomingCall` itself fails (two call
+    /// groups already used, restricted mode, a transient CallKit error), the
+    /// non-busy failure closure used to call `endCallInternal` directly, which
+    /// never reports back to CallKit. Every OTHER failure path in this file
+    /// routes through `failCall`, which reports `.failed` to CallKit before
+    /// tearing down — omitting it here left a partially-registered system
+    /// Recents entry that nothing ever explicitly ends.
+    func test_reportIncomingVoIPCall_reportsFailureToCallKit_onCallKitReportFailure() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found")
+            return
+        }
+        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak self] error in") else {
+            XCTFail("Expected the non-busy reportNewIncomingCall failure closure in reportIncomingVoIPCall")
+            return
+        }
+        let closureBody = String(body[reportRange.upperBound...])
+        XCTAssertTrue(
+            closureBody.contains("failCall("),
+            "reportIncomingVoIPCall's CallKit-report-failure closure must route through failCall so the " +
+            "failed report is also reflected back to CallKit (reportCall(...reason: .failed)), not just torn " +
+            "down locally via endCallInternal."
+        )
+    }
+
+    /// Mirrors `test_reportIncomingVoIPCall_reportsFailureToCallKit_onCallKitReportFailure`
+    /// for the socket-originated incoming-call path — same bug, same fix.
+    func test_handleIncomingCallNotification_reportsFailureToCallKit_onCallKitReportFailure() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func handleIncomingCallNotification", in: source) else {
+            XCTFail("handleIncomingCallNotification not found")
+            return
+        }
+        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak self] error in") else {
+            XCTFail("Expected the reportNewIncomingCall failure closure in handleIncomingCallNotification")
+            return
+        }
+        let closureBody = String(body[reportRange.upperBound...])
+        XCTAssertTrue(
+            closureBody.contains("failCall("),
+            "handleIncomingCallNotification's CallKit-report-failure closure must route through failCall so " +
+            "the failed report is also reflected back to CallKit, not just torn down locally via endCallInternal."
+        )
+    }
+
     func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
         let source = try sourceText()
         guard let body = body(of: "func answerCall()", in: source) else {
@@ -1016,9 +1062,14 @@ final class CallPillStatusMinimisedTests: XCTestCase {
                        "a ringing call must NOT show a running 00:00 timer")
     }
 
-    func test_offeringAndConnecting_mapToConnecting_notConnected() {
-        XCTAssertEqual(CallPillStatus.from(.offering), .connecting)
+    func test_offering_mapsToRinging_connecting_mapsToConnecting_bothNotConnected() {
+        // Audit 2026-07-10 — `.offering` (SDP offer sent, awaiting answer) is
+        // still the callee's phone physically ringing; CallView already shows
+        // outgoingRingingView ("Sonnerie…") for this state. The pill must
+        // agree — see FloatingCallPillView.CallPillStatus.from.
+        XCTAssertEqual(CallPillStatus.from(.offering), .ringing)
         XCTAssertEqual(CallPillStatus.from(.connecting), .connecting)
+        XCTAssertFalse(CallPillStatus.from(.offering).isConnected)
         XCTAssertFalse(CallPillStatus.from(.connecting).isConnected)
     }
 
