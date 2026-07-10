@@ -1021,10 +1021,17 @@ export class PostService {
 
       if (existing) {
         if (safeDuration !== undefined) {
-          await this.prisma.postView.update({
-            where: { id: existing.id },
-            data: { duration: safeDuration },
-          });
+          // Le PostView est un singleton (postId,userId) : `duration` est le
+          // signal watch-time du moteur reco/monétisation (cf. PostFeedService).
+          // Une ré-ouverture plus courte (retap + swipe immédiat) ne doit JAMAIS
+          // rétrograder la plus longue durée déjà observée — on conserve le max.
+          const nextDuration = Math.max(existing.duration ?? 0, safeDuration);
+          if (nextDuration !== existing.duration) {
+            await this.prisma.postView.update({
+              where: { id: existing.id },
+              data: { duration: nextDuration },
+            });
+          }
         }
         return false;
       }
