@@ -663,7 +663,7 @@ struct AudioMediaView: View, Equatable {
         }
         .fullScreenCover(isPresented: $showAudioFullscreen) {
             AudioFullscreenView(
-                allAudioItems: allAudioItems,
+                allAudioItems: allAudioItems.map(AudioFullscreenSource.init(from:)),
                 startAttachmentId: attachment.id,
                 contactColor: contactColor,
                 mentionDisplayNames: mentionDisplayNames,

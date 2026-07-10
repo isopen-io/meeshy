@@ -400,6 +400,7 @@ struct ReelPageView: View {
     var onTapAvatar: () -> Void
 
     @State private var descriptionExpanded = false
+    @State private var audioFullscreen: AudioFullscreenSource?
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
     @State private var selectedLanguage: String?
@@ -497,9 +498,22 @@ struct ReelPageView: View {
                 // is tappable and fades in immersive mode. Driven by
                 // `selectedLanguage` so a flag tap plays that language's TTS.
                 if let audioMedia, isActive {
-                    ReelAudioControl(media: audioMedia, selectedLanguage: $selectedLanguage, player: audioPlayer)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
+                    ReelAudioControl(
+                        media: audioMedia,
+                        selectedLanguage: $selectedLanguage,
+                        player: audioPlayer,
+                        onFullscreen: {
+                            audioFullscreen = .fromFeed(
+                                media: audioMedia,
+                                author: ProfileSheetUser.from(feedPost: reel),
+                                originalLanguage: reel.originalLanguage,
+                                caption: reel.content,
+                                createdAt: reel.timestamp
+                            )
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
                 }
 
                 HStack(alignment: .bottom, spacing: 12) {
@@ -560,6 +574,7 @@ struct ReelPageView: View {
         ) { callActive in
             if !callActive { startActiveAudioIfNeeded() }
         }
+        .audioFullscreenCover($audioFullscreen, accentColor: reel.authorColor)
     }
 
     // MARK: Audio open-autostart (WS3.1)
@@ -1600,6 +1615,7 @@ private struct ReelAudioControl: View {
     /// Shared engine (owned by `ReelPageView`) so the hero transcript
     /// (`ReelAudioView` → `MediaTranscriptionView`) tracks the SAME playback.
     let player: AudioPlaybackManager
+    var onFullscreen: () -> Void = {}
 
     private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
 
@@ -1610,6 +1626,7 @@ private struct ReelAudioControl: View {
                 context: .messageBubble,
                 accentColor: media.thumbnailColor,
                 translatedAudios: media.translatedAudios,
+                onFullscreen: onFullscreen,
                 externalLanguage: $selectedLanguage,
                 availability: availability,
                 onDownload: onDownload,

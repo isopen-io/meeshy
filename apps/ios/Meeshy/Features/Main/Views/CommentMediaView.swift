@@ -85,8 +85,14 @@ struct CommentMediaView: View {
     let sentAt: Date
 
     @State private var showFullscreen = false
+    @State private var audioFullscreen: AudioFullscreenSource?
 
     private var theme: ThemeManager { ThemeManager.shared }
+
+    private var author: ProfileSheetUser {
+        ProfileSheetUser(username: authorName, displayName: authorName,
+                         avatarURL: authorAvatarURL, accentColor: authorColor)
+    }
 
     var body: some View {
         content
@@ -94,6 +100,7 @@ struct CommentMediaView: View {
             .fullScreenCover(isPresented: $showFullscreen) {
                 fullscreenViewer
             }
+            .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
     }
 
     @ViewBuilder
@@ -175,6 +182,12 @@ struct CommentMediaView: View {
                 accentColor: accentColor,
                 transcription: media.transcription,
                 translatedAudios: media.translatedAudios,
+                onFullscreen: {
+                    audioFullscreen = .fromFeed(
+                        media: media, author: author,
+                        originalLanguage: nil, caption: "", createdAt: sentAt
+                    )
+                },
                 availability: availability,
                 onDownload: onDownload
             )

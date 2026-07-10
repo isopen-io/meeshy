@@ -73,6 +73,7 @@ struct FeedPostCard: View {
     @State private var showTranslationSheet = false
     @State private var showRepostOptions = false
     @State private var selectedProfileUser: ProfileSheetUser?
+    @State var audioFullscreen: AudioFullscreenSource?
     @State private var secondaryLangCode: String? = nil
     @State private var activeDisplayLangCode: String? = nil
     @State var fullscreenMediaId: String? = nil
@@ -503,6 +504,7 @@ struct FeedPostCard: View {
                 senderInfoMap: senderMap
             )
         }
+        .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .withStatusBubble()
     }
 

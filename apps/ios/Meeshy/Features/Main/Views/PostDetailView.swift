@@ -48,6 +48,7 @@ struct PostDetailView: View {
     @State private var activeDisplayLangCode: String? = nil
     @State private var fullscreenMediaId: String? = nil
     @State private var showFullscreenGallery = false
+    @State private var audioFullscreen: AudioFullscreenSource?
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
@@ -800,6 +801,7 @@ struct PostDetailView: View {
                 )
             }
         }
+        .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
     }
 
     // MARK: - Floating Header (CollapsibleHeader)
@@ -1654,6 +1656,17 @@ struct PostDetailView: View {
                     context: .feedPost,
                     accentColor: media.thumbnailColor,
                     transcription: media.transcription,
+                    translatedAudios: media.translatedAudios,
+                    onFullscreen: {
+                        guard let post = displayPost else { return }
+                        audioFullscreen = .fromFeed(
+                            media: media,
+                            author: ProfileSheetUser.from(feedPost: post),
+                            originalLanguage: post.originalLanguage,
+                            caption: post.content,
+                            createdAt: post.timestamp
+                        )
+                    },
                     availability: availability,
                     onDownload: onDownload
                 )
