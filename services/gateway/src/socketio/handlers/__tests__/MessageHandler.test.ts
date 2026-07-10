@@ -763,6 +763,43 @@ describe('MessageHandler', () => {
       expect(mockResolveMentionedUsers).toHaveBeenCalledWith(deps.prisma, ['@bob hello']);
     });
 
+    it('emits mention:created to each mentioned user\'s personal room (WS path parity with REST)', async () => {
+      // @mentions sent over the PRIMARY WebSocket message:send path must reach a
+      // recipient who is online but not inside the conversation room — exactly
+      // what mention:created (fanned to ROOMS.user) is for. Regression guard:
+      // this event was previously only emitted on the REST/ZMQ path.
+      const BOB = 'bobUserId000000000000001';
+      mockResolveUsernamesToIds.mockResolvedValue([BOB]);
+      const msg = makeMessage({ validatedMentions: ['bob'], content: '@bob hi' });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      expect(deps.io.to).toHaveBeenCalledWith(`user:${BOB}`);
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const mentionPayloads = (toResult.emit.mock.calls as [string, Record<string, unknown>][])
+        .filter((c) => c[0] === 'mention:created')
+        .map((c) => c[1]);
+      expect(mentionPayloads.length).toBe(1);
+      expect(mentionPayloads[0]).toMatchObject({
+        messageId: 'msg-broadcast-1',
+        conversationId: VALID_CONV_ID,
+        senderId: USER_ID,
+        mentionedUserId: BOB,
+      });
+    });
+
+    it('does not emit mention:created back to the sender on a self-mention', async () => {
+      mockResolveUsernamesToIds.mockResolvedValue([USER_ID]);
+      const msg = makeMessage({ validatedMentions: ['alice'], content: '@alice note-to-self' });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const mentionCalls = (toResult.emit.mock.calls as [string, unknown][])
+        .filter((c) => c[0] === 'mention:created');
+      expect(mentionCalls.length).toBe(0);
+    });
+
     it('uses language filter when SOCKET_LANG_FILTER=true', async () => {
       process.env.SOCKET_LANG_FILTER = 'true';
       mockGroupSocketsByLanguage.mockReturnValue([{ socketIds: ['s1'], languages: ['fr'] }]);

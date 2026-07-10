@@ -5,6 +5,8 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import type { AuthenticatedRequest } from './types';
 import { withMutationLog } from '../../utils/withMutationLog';
+import { getCacheStore } from '../../services/CacheStore';
+import { blockCacheKey } from '../../utils/block-cache';
 
 export async function blockUser(fastify: FastifyInstance) {
   fastify.post<{ Params: { userId: string } }>('/users/:userId/block', {
@@ -97,6 +99,11 @@ export async function blockUser(fastify: FastifyInstance) {
         onDuplicate: async () => ({ id: targetUserId }),
       });
 
+      // Invalidate the symmetric DM send-gate cache so the block takes effect
+      // immediately. Without this, the up-to-300s `blocks:` entry warmed by an
+      // earlier send keeps letting the just-blocked user's messages through.
+      try { await getCacheStore().del(blockCacheKey(currentUserId!, targetUserId)); } catch { /* best-effort */ }
+
       return sendSuccess(reply, { message: 'User blocked' });
     } catch (error) {
       logError(fastify.log, '[BLOCKING] Error blocking user', error);
@@ -181,6 +188,11 @@ export async function unblockUser(fastify: FastifyInstance) {
         },
         onDuplicate: async () => ({ id: targetUserId }),
       });
+
+      // Invalidate the symmetric DM send-gate cache so the unblock takes effect
+      // immediately. Without this, the up-to-300s `blocks:` entry keeps
+      // rejecting the just-unblocked user's messages with USER_BLOCKED.
+      try { await getCacheStore().del(blockCacheKey(currentUserId!, targetUserId)); } catch { /* best-effort */ }
 
       return sendSuccess(reply, { message: 'User unblocked' });
     } catch (error) {
