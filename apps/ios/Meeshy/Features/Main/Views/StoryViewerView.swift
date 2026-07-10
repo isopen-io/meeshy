@@ -108,6 +108,11 @@ struct StoryViewerView: View {
     @State var showGroupIntro = false
     @State var groupIntroData: StoryViewModel.StoryGroupIntro?
     @State var groupIntroTask: Task<Void, Never>?
+    /// Identités PRÉ-RÉSOLUES par groupe (directive 2026-07-10) : les groupes
+    /// voisins sont résolus PENDANT la lecture du groupe courant, si bien que
+    /// l'interstitiel du switch s'affiche COMPLET (nom, bannière, mood) dès la
+    /// première frame — plus d'enrichissement visible en second temps.
+    @State var groupIntroCache: [String: StoryViewModel.StoryGroupIntro] = [:]
     static let groupIntroDuration: TimeInterval = 2.2
     /// True once the visible slide's background media is fully usable (real
     /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
@@ -432,6 +437,9 @@ struct StoryViewerView: View {
             startTimer()
             markCurrentViewed()
             prefetchCurrentGroup()
+            // Pré-résolution des identités voisines dès l'ouverture : le
+            // premier switch de groupe présente un interstitiel déjà complet.
+            prefetchNeighborGroupIntros()
             withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                 appearScale = 1.0
                 appearCornerRadius = 0
@@ -539,7 +547,14 @@ struct StoryViewerView: View {
                     intro: intro,
                     avatarURL: currentGroup?.avatarURL,
                     avatarColor: currentGroup?.avatarColor ?? "6366F1",
-                    presence: PresenceManager.shared.presenceMap[intro.userId],
+                    // Présence résolue AU switch (directive 2026-07-10) :
+                    // entrée realtime du PresenceManager si elle existe (socket,
+                    // la plus fraîche), sinon le snapshot serveur embarqué par
+                    // le payload stories (`StoryGroup.authorPresence`) — plus
+                    // de « Hors ligne » par défaut faute de donnée pour un
+                    // auteur hors contacts.
+                    presence: PresenceManager.shared.presenceMap[intro.userId]
+                        ?? currentGroup?.authorPresence,
                     onSkip: { skipGroupIntro() }
                 )
                 .transition(.opacity)
@@ -1461,12 +1476,23 @@ extension StoryViewerView {
               let group = currentGroup,
               group.id != AuthManager.shared.currentUser?.id else { return }
         groupIntroTask?.cancel()
-        groupIntroData = StoryViewModel.StoryGroupIntro(userId: group.id, username: group.username)
-        withAnimation(.easeIn(duration: 0.22)) { showGroupIntro = true }
+        // Identité COMPLÈTE dès la première frame quand le groupe a été
+        // pré-résolu (`prefetchNeighborGroupIntros`) ; sinon placeholder
+        // immédiat (username/avatar du payload) enrichi pendant l'affichage.
+        groupIntroData = groupIntroCache[group.id]
+            ?? StoryViewModel.StoryGroupIntro(userId: group.id, username: group.username)
+        // Présentation INSTANTANÉE (pas de fade-in) : l'interstitiel OPAQUE
+        // prend l'écran dans la MÊME transaction que le swap de groupe — le
+        // slide du nouveau groupe n'est JAMAIS visible sous/derrière l'intro
+        // (directive user 2026-07-10, IMG_0976 « Windie Nh ne devait pas
+        // avoir son switcher s'afficher en overlay de ce slide »). Seule la
+        // sortie est animée : c'est elle qui révèle le slide.
+        showGroupIntro = true
         let userId = group.id
         groupIntroTask = Task { @MainActor in
             let enrich = Task { @MainActor in
                 let intro = await viewModel.resolveGroupIntro(for: group)
+                groupIntroCache[userId] = intro
                 guard !Task.isCancelled, showGroupIntro, groupIntroData?.userId == userId else { return }
                 groupIntroData = intro
             }
@@ -1474,6 +1500,26 @@ extension StoryViewerView {
             enrich.cancel()
             guard !Task.isCancelled else { return }
             dismissGroupIntro()
+        }
+        prefetchNeighborGroupIntros()
+    }
+
+    /// Pré-résout l'identité (nom, bannière, mood) des groupes ADJACENTS
+    /// pendant la lecture du groupe courant — même philosophie que le
+    /// prefetch média inter-groupes : au switch, l'interstitiel est complet
+    /// dès la première frame, présence comprise (payload feed + realtime).
+    func prefetchNeighborGroupIntros() {
+        guard !isPreviewMode else { return }
+        let myId = AuthManager.shared.currentUser?.id
+        for offset in [-1, 1] {
+            let index = currentGroupIndex + offset
+            guard index >= 0, index < groups.count else { continue }
+            let neighbor = groups[index]
+            guard neighbor.id != myId, groupIntroCache[neighbor.id] == nil else { continue }
+            Task { @MainActor in
+                let intro = await viewModel.resolveGroupIntro(for: neighbor)
+                groupIntroCache[neighbor.id] = intro
+            }
         }
     }
 
@@ -1501,6 +1547,12 @@ private struct StoryGroupIntroOverlay: View {
 
     var body: some View {
         ZStack {
+            // Base OPAQUE obligatoire (directive 2026-07-10) : pendant que la
+            // bannière charge, CachedAsyncImage peut rendre un placeholder
+            // translucide — sans cette base, le slide et son chrome restaient
+            // visibles SOUS l'interstitiel (IMG_0976). L'intro est un ÉCRAN,
+            // pas un voile.
+            Color.black
             bannerBackground
             LinearGradient(
                 colors: [.black.opacity(0.62), .black.opacity(0.28), .black.opacity(0.72)],
