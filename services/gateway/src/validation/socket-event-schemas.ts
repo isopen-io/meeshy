@@ -142,9 +142,16 @@ export const SocketPostReactionRequestSyncSchema = z.object({
 
 export type SocketPostReactionRequestSyncData = z.infer<typeof SocketPostReactionRequestSyncSchema>;
 
+// Empty content is intentionally permitted: the message may carry attachments
+// (photo/audio/file) whose caption is being cleared. The attachment-aware
+// emptiness check lives in MessageHandler.handleMessageEdit (and the REST
+// PUT /messages/:messageId path), which rejects empty content only when the
+// message has no attachments. Enforcing `.min(1)` here would make that branch
+// unreachable and silently break caption removal. Mirrors
+// SocketMessageSendWithAttachmentsSchema, which also allows empty content.
 export const SocketMessageEditSchema = z.object({
   messageId: mongoId,
-  content: z.string().min(1).max(MAX_CONTENT_BYTES),
+  content: z.string().max(MAX_CONTENT_BYTES),
 });
 
 export type SocketMessageEditData = z.infer<typeof SocketMessageEditSchema>;
