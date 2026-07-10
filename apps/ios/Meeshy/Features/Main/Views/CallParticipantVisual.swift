@@ -11,7 +11,14 @@ import MeeshyUI
 struct CallParticipantVisual: View {
     let diameter: CGFloat
 
-    @ObservedObject private var callManager = CallManager.shared
+    // Audit P1-16 parity (see CallView.swift / FloatingCallPillView.swift /
+    // CallBubbleView.swift) — injected by the caller instead of a
+    // `= CallManager.shared` default. Both mount sites (FloatingCallPillView,
+    // CallBubbleView) already hold their own @ObservedObject callManager and
+    // re-evaluate their body on every call tick (duration/quality/mute), which
+    // reconstructs this struct; a defaulted @ObservedObject would tear down
+    // and rebuild its objectWillChange subscription on every such tick.
+    @ObservedObject var callManager: CallManager
     @State private var remoteProfile: MeeshyUser?
 
     var body: some View {

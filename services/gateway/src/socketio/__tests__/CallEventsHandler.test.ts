@@ -1442,30 +1442,30 @@ describe('CallEventsHandler', () => {
       expect(ack).toHaveBeenCalledWith({ success: false });
     });
 
-    it('force-ends the orphaned session when the ender cannot be resolved to a participant (the fast-path optimistic broadcast already told the room the call ended)', async () => {
+    // Security fix 2026-07-10: this branch previously force-ended the call
+    // session unconditionally whenever the caller couldn't be resolved to a
+    // conversation participant — i.e. ANY caller, including a total stranger
+    // who merely learned/guessed a callId, could terminate a real, live call
+    // they had no relationship to. `resolveParticipantIdFromCall` failing
+    // here is a genuine authorization rejection (no conversation membership
+    // at all), not a transient state a real participant could hit, so this
+    // must just reject — never force-end on the unauthorized caller's behalf.
+    it('does NOT force-end the orphaned session when the ender cannot be resolved to a participant', async () => {
       const { socket } = setupWithSocket({
         callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
       });
-      await socket._trigger('call:end', validData, jest.fn());
-      expect(mockCallServiceForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
+      const ack = jest.fn();
+      await socket._trigger('call:end', validData, ack);
+      expect(mockCallServiceForceEndOrphanedCallSession).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
+      expect(ack).toHaveBeenCalledWith({ success: false });
     });
 
-    // Audit Vague 26 (sibling-drift): the force-end-orphaned-session recovery
-    // path used to only resolve the DB row + conditionally call
-    // handleMissedCall — SKIPPING the wide call:ended fanout, the chat
-    // summary, and the quality-streak cleanup that its exact sibling (the
-    // disconnect force-cleanup path) already performs. This left a
-    // still-ringing callee (in neither the call room nor the conversation
-    // room) with no way to learn the call ended.
-    it('on force-end-orphaned recovery (not-a-participant), fans out call:ended to every member USER room + posts the chat summary + triggers handleMissedCall — not just the call-room fast-path', async () => {
-      mockCallServiceForceEndOrphanedCallSession.mockResolvedValue({
-        duration: 12,
-        conversationId: CONV_ID,
-        status: 'missed',
-        endReason: 'missed',
-      });
-      const summaryMessage = { id: 'msg-1', conversationId: CONV_ID };
-      mockCallServiceCreateCallSummaryMessage.mockResolvedValue(summaryMessage);
+    // Companion to the above: the wide call:ended fanout, chat summary, and
+    // missed-call handling that used to follow the (now-removed) force-end
+    // call for this branch must not fire either — there is nothing to
+    // recover, the request was simply unauthorized.
+    it('does not fan out call:ended, post a chat summary, or mark the call missed when the ender cannot be resolved to a participant', async () => {
       const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
 
       const { handler, socket, io } = setupWithSocket({
@@ -1484,16 +1484,8 @@ describe('CallEventsHandler', () => {
       await socket._trigger('call:end', validData, jest.fn());
       await new Promise(r => setImmediate(r));
 
-      expect(io.to).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          `call:${CALL_ID}`,
-          `conversation:${CONV_ID}`,
-          `user:${USER_ID}`,
-          'user:ringing-callee-id',
-        ])
-      );
-      expect(broadcaster).toHaveBeenCalledWith(summaryMessage, CONV_ID);
-      expect(mockCallServiceMarkCallAsMissed).toHaveBeenCalledWith(CALL_ID);
+      expect(broadcaster).not.toHaveBeenCalled();
+      expect(mockCallServiceMarkCallAsMissed).not.toHaveBeenCalled();
     });
 
     it('ends call, broadcasts ended to call+conversation rooms in ONE deduplicated emit, removes all sockets, ack(true)', async () => {

@@ -721,22 +721,32 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       logger.info('📞 REST: Leaving call', { callId, participantId, userId });
 
-      let call: Awaited<ReturnType<typeof callService.getCallSession>> | undefined;
+      const call = await callService.getCallSession(callId);
+
+      // Resolve the caller's own conversation membership FIRST, unconditionally
+      // — this is the only authorization check on this route, so it must run
+      // whether the caller is leaving their own slot or removing someone else.
+      // Previously this query only ran when `participantId !== userId`, so a
+      // request targeting the caller's own userId (trivial for any client to
+      // construct) skipped authorization entirely and reached
+      // `callService.leaveCall()` unchecked — which unconditionally ends a
+      // direct (1:1) call it doesn't recognize the participant of.
+      const callerMembership = await prisma.participant.findFirst({
+        where: {
+          conversationId: call.conversationId,
+          userId,
+          isActive: true
+        }
+      });
+
+      if (!callerMembership) {
+        return sendForbidden(reply, 'NOT_A_PARTICIPANT');
+      }
 
       // Verify user is leaving their own participation or has moderator rights
       if (participantId !== userId) {
-        // Check if user is moderator
-        call = await callService.getCallSession(callId);
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId: call.conversationId,
-            userId,
-            isActive: true
-          }
-        });
-
         const isModerator =
-          membership?.role === 'admin' || membership?.role === 'moderator';
+          callerMembership.role === 'admin' || callerMembership.role === 'moderator';
 
         if (!isModerator) {
           return sendForbidden(reply, 'PERMISSION_DENIED');
@@ -755,13 +765,23 @@ export default async function callRoutes(fastify: FastifyInstance) {
       let leaveParticipantId: string;
       if (participantId === userId && authRequest.authContext.participantId) {
         leaveParticipantId = authRequest.authContext.participantId;
+      } else if (participantId === userId) {
+        leaveParticipantId = callerMembership.id;
       } else {
-        call = call ?? await callService.getCallSession(callId);
         const targetParticipant = await prisma.participant.findFirst({
           where: { conversationId: call.conversationId, userId: participantId, isActive: true },
           select: { id: true }
         });
-        leaveParticipantId = targetParticipant?.id ?? participantId;
+        // Do NOT fall back to the raw, unresolved `participantId` string here
+        // — that fallback is what previously let a caller with no real
+        // relationship to this call's conversation reach
+        // `callService.leaveCall()`'s idempotent-leave path, which
+        // unconditionally ends a direct call it doesn't recognize the
+        // participant of.
+        if (!targetParticipant) {
+          return sendForbidden(reply, 'NOT_A_PARTICIPANT');
+        }
+        leaveParticipantId = targetParticipant.id;
       }
 
       const callSession = await callService.leaveCall({

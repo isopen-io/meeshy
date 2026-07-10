@@ -119,7 +119,7 @@ struct FloatingCallPillView: View {
 
     private var pillContent: some View {
         HStack(spacing: 12) {
-            CallParticipantVisual(diameter: 44)
+            CallParticipantVisual(diameter: 44, callManager: callManager)
             userInfoSection
             Spacer(minLength: 8)
             controlButtons

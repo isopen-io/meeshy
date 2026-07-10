@@ -1092,6 +1092,7 @@ export class CallEventsHandler {
               });
               resolve();
             }, TIMEOUT_MS);
+            timer.unref?.();
 
             const onResult = (event: { taskId: string; result: { translatedText: string; targetLanguage: string } }) => {
               if (event.taskId !== taskId) return;
@@ -2752,13 +2753,15 @@ export class CallEventsHandler {
 
         const endParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!endParticipantId) {
-          // The fast-path broadcast above already told the room the call
-          // ended. Since we can't resolve authorization to run the
-          // authoritative endCall() below, force the session to a terminal
-          // state ourselves so it isn't left stuck ACTIVE — otherwise it
-          // blocks every future call:initiate in this conversation until
-          // CallCleanupService's GC tier reaps it (~120s).
-          await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, userId, data.reason);
+          // Security fix 2026-07-10: `resolveParticipantIdFromCall` failing
+          // here means `userId` has no active conversation membership at
+          // all — a genuine authorization rejection, not a transient/data
+          // race a real participant could hit. Previously this branch force-
+          // ended the call regardless (`forceEndOrphanedCallAfterOptimisticBroadcast`
+          // has no authorization check of its own), which let ANY caller —
+          // including a total stranger who merely guessed/observed a callId —
+          // terminate a call they had no relationship to. Just reject; do not
+          // force-end a call on an unauthorized caller's behalf.
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'
@@ -2828,21 +2831,33 @@ export class CallEventsHandler {
         });
       } catch (error: any) {
         logger.error('Error ending call', error);
+        const errorMessage = error.message || 'Failed to end call';
+        const errorCode = errorMessage.split(':')[0];
+        const message = errorMessage.includes(':')
+          ? errorMessage.split(':').slice(1).join(':').trim()
+          : errorMessage;
+
         // The fast-path broadcast may already have told the room the call
         // ended before this failure (e.g. endCall() itself threw). Force the
         // session to a terminal state so it matches what clients were told —
         // a no-op if endCall() actually succeeded before a later step failed
         // (broadcastCallEnded/postCallSummary), since the session is already
         // terminal by then.
-        // `userId` was declared inside the try block above and is out of
-        // scope here — re-resolve it the same way the try block did.
-        const endedByUserId = getUserId(socket.id) ?? 'unknown';
-        await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, endedByUserId, data.reason);
-        const errorMessage = error.message || 'Failed to end call';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
+        //
+        // Security fix 2026-07-10: skip this force-end when `endCall()`
+        // itself rejected the caller's authorization (NOT_A_PARTICIPANT /
+        // PERMISSION_DENIED) — that means the caller was never a genuine
+        // participant of THIS call, and force-ending on their behalf let any
+        // conversation member (or, via the branch above, any caller at all)
+        // terminate a call they weren't part of. Only auto-recover for other
+        // failure classes (e.g. a transient DB error after endCall() had
+        // already validated the caller as an active participant).
+        if (errorCode !== CALL_ERROR_CODES.NOT_A_PARTICIPANT && errorCode !== CALL_ERROR_CODES.PERMISSION_DENIED) {
+          // `userId` was declared inside the try block above and is out of
+          // scope here — re-resolve it the same way the try block did.
+          const endedByUserId = getUserId(socket.id) ?? 'unknown';
+          await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, endedByUserId, data.reason);
+        }
         ack?.({ success: false });
         socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
       }
