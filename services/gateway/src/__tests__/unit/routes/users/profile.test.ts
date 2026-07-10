@@ -217,10 +217,15 @@ async function buildApp(opts: {
   }
 
   if (withSocketIOHandler) {
+    // Stable manager mock so tests can assert on its methods across calls
+    // (a fresh object per getManager() call would lose the jest.fn identity).
+    const managerMock = {
+      refreshUserResolvedLanguages: jest.fn(),
+      refreshUserTypingIdentity: jest.fn(),
+    };
+    (app as any)._socketManagerMock = managerMock;
     app.decorate('socketIOHandler', {
-      getManager: jest.fn(() => ({
-        refreshUserResolvedLanguages: jest.fn(),
-      })),
+      getManager: jest.fn(() => managerMock),
     });
   } else {
     app.decorate('socketIOHandler', null as any);
@@ -386,6 +391,32 @@ describe('PATCH /users/me — realtime propagation to conversation partners', ()
     });
     expect(res.statusCode).toBe(200);
     expect((app as any).notificationService.emitUserUpdated).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('invalidates the cached typing identity when displayName/name changes', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withSocketIOHandler: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { displayName: 'Bob Jones' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any)._socketManagerMock.refreshUserTypingIdentity).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
+  it('does not invalidate the typing identity when only private fields (bio, language) change', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withSocketIOHandler: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { bio: 'New bio', systemLanguage: 'en' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any)._socketManagerMock.refreshUserTypingIdentity).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -774,6 +805,25 @@ describe('PATCH /users/me/username — realtime propagation to conversation part
       userId: USER_ID,
       changes: { username: 'bob' },
     });
+    await app.close();
+  });
+
+  it('invalidates the cached typing identity on username change', async () => {
+    mockBcryptCompare.mockResolvedValueOnce(true);
+    const prisma = makePrisma({
+      user: {
+        findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: [] }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update: jest.fn<any>().mockResolvedValue({ id: USER_ID, username: 'bob' }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUsername], prisma, withSocketIOHandler: true });
+    const res = await app.inject({
+      method: 'PATCH', url: '/users/me/username',
+      payload: { newUsername: 'bob', currentPassword: 'correctpass' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any)._socketManagerMock.refreshUserTypingIdentity).toHaveBeenCalledWith(USER_ID);
     await app.close();
   });
 });
