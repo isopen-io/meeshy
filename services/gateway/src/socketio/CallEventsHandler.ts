@@ -1274,7 +1274,9 @@ export class CallEventsHandler {
             conversationId: { in: convIds },
             endedAt: null,
             initiatorId: { not: userId },
-            status: { in: [CallStatus.initiated, CallStatus.ringing, CallStatus.connecting] },
+            // No `connecting` here — the FSM (CallService Item F) never
+            // persists that status, so it can never match.
+            status: { in: [CallStatus.initiated, CallStatus.ringing] },
             startedAt: { gte: ringingWindowStart }
           },
           select: { id: true }
