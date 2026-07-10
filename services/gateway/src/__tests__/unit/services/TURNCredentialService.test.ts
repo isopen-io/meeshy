@@ -49,7 +49,7 @@ const DEFAULT_INSECURE_SECRET = 'meeshy-turn-secret-CHANGE-IN-PRODUCTION';
 const STRONG_SECRET = 'a9f2c3e4b5d6a7f8c9e0b1d2a3f4c5e6';
 const TEST_USER_ID = 'user-abc-123';
 
-const ENV_KEYS = ['TURN_CREDENTIAL_TTL', 'TURN_SERVERS', 'TURN_SECRET', 'NODE_ENV'] as const;
+const ENV_KEYS = ['TURN_CREDENTIAL_TTL', 'TURN_SERVERS', 'TURN_SECRET', 'TURN_TLS_PORT', 'NODE_ENV'] as const;
 
 const withEnv = <T>(overrides: Record<string, string | undefined>, run: () => T): T => {
   const saved: Record<string, string | undefined> = {};
@@ -326,6 +326,92 @@ describe('TURNCredentialService — parseTURNServers', () => {
     });
     const creds = svc.generateCredentials('user-1');
     expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('No TURN servers configured'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TURN over TLS (turns:) — coturn TLS infra is live (5349, see
+// docs/superpowers/specs/2026-05-11-coturn-tls-via-traefik-design.md §9.3);
+// this covers the previously-outstanding follow-up of emitting `turns:` URLs
+// so clients behind restrictive firewalls (corporate/mobile networks that
+// block plain UDP/TCP) can still reach the relay over 443-like TLS.
+// ---------------------------------------------------------------------------
+
+describe('TURNCredentialService — TURN over TLS (turns:)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('emits a turns: entry alongside each turn: entry using the default TLS port 5349', () => {
+    const svc = buildService({
+      TURN_SECRET: 'test-secret',
+      TURN_SERVERS: 'turn.example.com:3478',
+      TURN_TLS_PORT: undefined,
+      NODE_ENV: 'development',
+    });
+    const creds = svc.generateCredentials('user-1');
+    const tlsEntry = creds.find(s => (s.urls as string).startsWith('turns:'));
+    expect(tlsEntry).toBeDefined();
+    expect(tlsEntry!.urls).toBe('turns:turn.example.com:5349?transport=tcp');
+  });
+
+  it('reuses the same username/credential for the turns: entry as the turn: entry', () => {
+    const svc = buildService({
+      TURN_SECRET: STRONG_SECRET,
+      TURN_SERVERS: 'turn.example.com:3478',
+      NODE_ENV: 'development',
+    });
+    const creds = svc.generateCredentials(TEST_USER_ID);
+    const turnEntry = creds.find(s => (s.urls as string).startsWith('turn:'));
+    const tlsEntry = creds.find(s => (s.urls as string).startsWith('turns:'));
+    expect(tlsEntry!.username).toBe(turnEntry!.username);
+    expect(tlsEntry!.credential).toBe(turnEntry!.credential);
+  });
+
+  it('emits one turns: entry per configured TURN host', () => {
+    const svc = buildService({
+      TURN_SECRET: 'test-secret',
+      TURN_SERVERS: 'turn1.example.com:3478,turn2.example.com:3478',
+      NODE_ENV: 'development',
+    });
+    const creds = svc.generateCredentials('user-1');
+    const tlsEntries = creds.filter(s => (s.urls as string).startsWith('turns:'));
+    expect(tlsEntries).toHaveLength(2);
+    expect(tlsEntries.map(e => e.urls)).toContain('turns:turn1.example.com:5349?transport=tcp');
+    expect(tlsEntries.map(e => e.urls)).toContain('turns:turn2.example.com:5349?transport=tcp');
+  });
+
+  it('honours a TURN_TLS_PORT override', () => {
+    const svc = buildService({
+      TURN_SECRET: 'test-secret',
+      TURN_SERVERS: 'turn.example.com:3478',
+      TURN_TLS_PORT: '5350',
+      NODE_ENV: 'development',
+    });
+    const creds = svc.generateCredentials('user-1');
+    const tlsEntry = creds.find(s => (s.urls as string).startsWith('turns:'));
+    expect(tlsEntry!.urls).toBe('turns:turn.example.com:5350?transport=tcp');
+  });
+
+  it('emits no turns: entries when TURN_TLS_PORT is explicitly disabled (0)', () => {
+    const svc = buildService({
+      TURN_SECRET: 'test-secret',
+      TURN_SERVERS: 'turn.example.com:3478',
+      TURN_TLS_PORT: '0',
+      NODE_ENV: 'development',
+    });
+    const creds = svc.generateCredentials('user-1');
+    const tlsEntries = creds.filter(s => (s.urls as string).startsWith('turns:'));
+    expect(tlsEntries).toHaveLength(0);
+  });
+
+  it('emits no turns: entries when there are no configured TURN hosts', () => {
+    const svc = buildService({
+      TURN_SECRET: 'test-secret',
+      TURN_SERVERS: '',
+      NODE_ENV: 'development',
+    });
+    const creds = svc.generateCredentials('user-1');
+    const tlsEntries = creds.filter(s => (s.urls as string).startsWith('turns:'));
+    expect(tlsEntries).toHaveLength(0);
   });
 });
 
