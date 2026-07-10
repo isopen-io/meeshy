@@ -606,6 +606,53 @@ describe('useMentions', () => {
       expect(result.current.mentionQuery).toBe('john');
     });
 
+    it('should not show autocomplete when @ is inside an email address', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      // Left boundary (SSOT NAME_BOUNDARY_LEFT): the `@` is glued to a word char,
+      // so it belongs to an email being typed, not a mention.
+      const textarea = createMockTextarea('contact@ali', 11);
+
+      act(() => {
+        result.current.handleTextChange('contact@ali', 11, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(false);
+    });
+
+    it('should not show autocomplete when @ follows an accented letter', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      // Unicode boundary: `é` is a name char, so `café@ali` is an address, not a mention.
+      const textarea = createMockTextarea('café@ali', 8);
+
+      act(() => {
+        result.current.handleTextChange('café@ali', 8, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(false);
+    });
+
+    it('should show autocomplete when @ follows punctuation', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      // `(` is not a name char, so `(@john` is a legitimate mention start.
+      const textarea = createMockTextarea('(@john', 6);
+
+      act(() => {
+        result.current.handleTextChange('(@john', 6, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(true);
+      expect(result.current.mentionQuery).toBe('john');
+    });
+
     it('should handle @ at beginning of text', () => {
       const { result } = renderHook(() =>
         useMentions({ conversationId: VALID_CONVERSATION_ID })
