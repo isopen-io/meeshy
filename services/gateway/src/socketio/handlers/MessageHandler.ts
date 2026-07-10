@@ -12,6 +12,7 @@ import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
+import { blockCacheKey, BLOCK_CACHE_TTL_SECONDS } from '../../utils/block-cache';
 import { MessagingService } from '../../services/MessagingService';
 import {
   buildPostReplyTo,
@@ -1008,6 +1009,35 @@ export class MessageHandler {
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
+      // Emit `mention:created` to each mentioned user's PERSONAL room so an
+      // @mention reaches a recipient who is online but not currently inside
+      // ROOMS.conversation(id) — `message:new` only fans to the conversation
+      // room. Parity with the REST/ZMQ broadcast path
+      // (`MeeshySocketIOManager._broadcastNewMessage`); without it, @mentions
+      // sent over the PRIMARY WebSocket `message:send` transport were silently
+      // dropped for anyone not viewing the conversation. `validatedMentions` is
+      // persisted as String[] of usernames, so resolve to User.ids first. The
+      // self-mention guard compares against `senderUserId` (the sender's
+      // User.id; null for anonymous senders, which can't self-mention a
+      // registered user). `_resolveMentionUserIds` swallows lookup failures so a
+      // mention miss never blocks the message broadcast.
+      const mentionUsernames = (message.validatedMentions as string[] | undefined) ?? [];
+      if (mentionUsernames.length > 0) {
+        const mentionedUserIds = await this._resolveMentionUserIds(mentionUsernames);
+        for (const targetUserId of mentionedUserIds) {
+          if (targetUserId && targetUserId !== senderUserId) {
+            this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+              messageId: message.id,
+              conversationId: normalizedId,
+              senderId: senderUserId ?? message.senderId,
+              mentionedUserId: targetUserId,
+              content: message.content,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
       // Single participant query shared between CONVERSATION_UPDATED and
       // CONVERSATION_UNREAD_UPDATED to avoid a duplicate DB round-trip.
       // The superset select (id + userId + joinedAt) satisfies both callers.
@@ -1602,15 +1632,14 @@ export class MessageHandler {
     }
     const cacheStore = getCacheStore();
     for (const otherId of otherMemberIds) {
-      const [a, b] = [userId, otherId].sort();
-      const cacheKey = `blocks:${a}:${b}`;
+      const cacheKey = blockCacheKey(userId, otherId);
       const cached = await cacheStore.get(cacheKey);
       let blocked: boolean;
       if (cached !== null) {
         blocked = cached === '1';
       } else {
         blocked = await isBlockedBetween(this.prisma, userId, otherId);
-        await cacheStore.set(cacheKey, blocked ? '1' : '0', 300);
+        await cacheStore.set(cacheKey, blocked ? '1' : '0', BLOCK_CACHE_TTL_SECONDS);
       }
       if (blocked) {
         return true;
