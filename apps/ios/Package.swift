@@ -47,13 +47,11 @@ let package = Package(
         .package(
             url: "https://github.com/stasel/WebRTC.git",
             exact: "146.0.0"
-        ),
-
-        // WhisperKit for on-device speech recognition (OpenAI Whisper)
-        .package(
-            url: "https://github.com/argmaxinc/WhisperKit.git",
-            from: "0.9.0"
         )
+
+        // On-device speech recognition uses Apple's Speech framework
+        // (SFSpeechRecognizer) via MeeshySDK's EdgeTranscriptionService.
+        // WhisperKit was declared but never imported — removed 2026-07-10.
 
         // Note: ONNX Runtime for voice cloning requires manual integration
         // Install via CocoaPods: pod 'onnxruntime-objc' or download XCFramework
@@ -78,8 +76,9 @@ let package = Package(
                 // (CachedAsyncImage in MeeshyUI). Kingfisher was previously
                 // declared but never imported — removed 2026-05-06.
 
-                // On-device Speech Recognition
-                .product(name: "WhisperKit", package: "WhisperKit")
+                // On-device speech recognition = Apple Speech framework via
+                // MeeshySDK.EdgeTranscriptionService (no third-party dep).
+                // WhisperKit was linked but never imported — removed 2026-07-10.
             ],
             swiftSettings: appSwiftSettings,
             plugins: [
