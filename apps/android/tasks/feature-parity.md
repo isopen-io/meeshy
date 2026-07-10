@@ -757,7 +757,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       matched case-insensitively). +23 tests (17 `AttachmentTranscriptionMergeTest`, 4 repo, 2 VM). Audio-voice
       translation (`audio:translation-ready` → cloned-voice playback) remains pending (needs BubbleAudio UI).
 - [ ] Ad-hoc blocking text translation
-- [ ] Source-language stamping from in-app prefs (NEVER device locale)
+- [x] Source-language stamping from in-app prefs (NEVER device locale) — **done**
+      (slice `chat-compose-language-detection`, 2026-07-10): `ChatViewModel.send()` stamped
+      `originalLanguage = user.systemLanguage ?: "fr"` — doubly wrong: it ignored the Prisme
+      resolution chain (a regional/custom-only user's outgoing text was mis-stamped `fr`) and never
+      looked at what the user actually typed. New pure `:core:model`
+      `ComposeLanguageDetector.detect(text, fallback) → String` — a faithful port of the shared web
+      heuristic (`apps/web/utils/language-detection.ts` `detectLanguage` script/stopword scoring,
+      wrapped by `detectComposeLanguage`'s guards: strip URLs, require ≥4 Unicode letters, pick the
+      highest-scoring language, else fall back). `send()` now stamps
+      `detect(text, fallback = LanguageResolver.resolveUserLanguage(user))`, so the language is
+      **detected from the composed text** with the sender's resolved content language
+      (system → regional → custom → `fr`, NEVER device locale) as the fallback. The result is always
+      a `LanguageData`-supported code or the fallback. iOS uses `NLLanguageRecognizer` and web uses
+      `tinyld`; neither is a pure JVM dependency, so Android ports the documented hand-rolled
+      heuristic. The forward path (preserving the *source* message's language) is untouched. +19 tests
+      (17 `ComposeLanguageDetectorTest` covering fr/es/de/it/pt/ru/ar/zh/ja/ko detection + blank /
+      below-min-alpha / URL-only / unrecognized-Latin / case-insensitive / higher-score-wins /
+      supported-invariant, +2 `ChatViewModelTest` for detected-stamp and regional-fallback). Full
+      `assembleDebug` + all-module `testDebugUnitTest` green. Diff = `apps/android` only.
 - [x] Per-language flag / native name / colour metadata (~80 languages) — **done**
       (slice `translation-language-catalog`, 2026-07-10): `LanguageData` (`:core:model`) is now the
       full iOS-parity SSOT. Added the missing **Catalan** (`ca`) entry, derived `interfaceLanguages`
