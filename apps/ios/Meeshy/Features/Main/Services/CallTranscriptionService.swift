@@ -146,7 +146,6 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
-    private var rotationCount = 0
 
     init(socket: any MessageSocketProviding = MessageSocketManager.shared) {
         self.socket = socket
@@ -402,7 +401,6 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         reinstallTap(for: newRequest)
 
         startRecognitionTask(language: language)
-        rotationCount += 1
     }
 
     // MARK: - Remote segments (déjà traduits côté gateway)

@@ -17,6 +17,7 @@ import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals
 const mockEndCall = jest.fn<any>();
 const mockClearRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
+const mockGetCallSession = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -25,7 +26,7 @@ jest.mock('../../../services/CallService', () => ({
     createCallSummaryMessage: mockCreateCallSummaryMessage,
     initiateCall: jest.fn<any>(),
     joinCall: jest.fn<any>(),
-    getCallSession: jest.fn<any>(),
+    getCallSession: mockGetCallSession,
     generateIceServers: jest.fn<any>().mockReturnValue([]),
     scheduleRingingTimeout: jest.fn<any>(),
     listHistory: jest.fn<any>(),
@@ -158,6 +159,9 @@ describe('CallEventsHandler — postCallSummary retry', () => {
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
     mockEndCall.mockResolvedValue(makeCallSession());
     mockClearRingingTimeout.mockReturnValue(undefined);
+    mockGetCallSession.mockResolvedValue({
+      participants: [{ participantId: PARTICIPANT_ID, leftAt: null, participant: { userId: CALLER_ID } }],
+    });
   });
 
   afterEach(() => {

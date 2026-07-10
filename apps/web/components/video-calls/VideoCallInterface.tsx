@@ -417,6 +417,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, [callId, reset]);
 
   // Listen for participant left events to show disconnected state
+  // Regression: the 2s delayed cleanup below used to hand setTimeout() to
+  // nobody — unmounting (or this effect re-running for a new callId)
+  // mid-window left it armed, so it fired against whatever call was current
+  // by then, tearing down a brand-new call's participant. Tracked per
+  // participant so cleanup can cancel every pending timeout on teardown.
+  const leaveCleanupTimeouts = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
   useEffect(() => {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
@@ -438,8 +445,12 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       // replaced this one in the store.
       const connectionAtLeave = useCallStore.getState().peerConnections.get(participantId);
 
+      const existingTimeout = leaveCleanupTimeouts.current.get(participantId);
+      if (existingTimeout) clearTimeout(existingTimeout);
+
       // Remove their stream and peer connection after 2 seconds
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
+        leaveCleanupTimeouts.current.delete(participantId);
         const { peerConnections, removeRemoteStream } = useCallStore.getState();
 
         if (peerConnections.get(participantId) !== connectionAtLeave) {
@@ -477,12 +488,18 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
           return newSet;
         });
       }, 2000);
+
+      leaveCleanupTimeouts.current.set(participantId, timeoutId);
     };
 
     socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
 
     return () => {
       socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
+      for (const timeoutId of leaveCleanupTimeouts.current.values()) {
+        clearTimeout(timeoutId);
+      }
+      leaveCleanupTimeouts.current.clear();
     };
   }, [callId, removeParticipant]);
 

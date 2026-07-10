@@ -599,17 +599,27 @@ export function CallManager() {
 
     let isSubscribed = true;
     let debugListenerRef: ((eventName: string, ...args: unknown[]) => void) | null = null;
+    // Regression: `socket.off(EVENT)` with no handler argument removes EVERY
+    // listener registered for that event name — not just this component's
+    // own. `attachListeners` re-runs on every reconnect while a call is
+    // active, so this used to silently delete a sibling component's listener
+    // for the same event (VideoCallInterface also listens for
+    // CALL_PARTICIPANT_LEFT). Track our own bound functions so cleanup only
+    // ever removes exactly those.
+    let attachedListeners: Record<string, (...args: unknown[]) => void> | null = null;
 
     const attachListeners = (socket: unknown) => {
       if (!isSubscribed || !socket?.connected) return;
 
-      // Cleanup existing listeners to avoid duplicates
-      socket.off(SERVER_EVENTS.CALL_INITIATED);
-      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED);
-      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT);
-      socket.off(SERVER_EVENTS.CALL_ENDED);
-      socket.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED);
-      socket.off(SERVER_EVENTS.CALL_ERROR);
+      // Cleanup this component's OWN previously-attached listeners only.
+      if (attachedListeners) {
+        socket.off(SERVER_EVENTS.CALL_INITIATED, attachedListeners[SERVER_EVENTS.CALL_INITIATED]);
+        socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
+        socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
+        socket.off(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
+        socket.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
+        socket.off(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
+      }
       if (debugListenerRef) socket.offAny(debugListenerRef);
 
       // Debug listener for call events
@@ -621,13 +631,21 @@ export function CallManager() {
       socket.onAny(debugListenerRef);
 
       // Attach via refs (stable references that don't cause re-fires)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Socket.IO listener args are typed by the handler ref
-      socket.on(SERVER_EVENTS.CALL_INITIATED, (data: any) => handleIncomingCallRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, (data: unknown) => handleParticipantJoinedRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, (data: unknown) => handleParticipantLeftRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_ENDED, (data: unknown) => handleCallEndedRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, (data: unknown) => handleMediaToggleRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_ERROR, (data: unknown) => handleCallErrorRef.current(data));
+      attachedListeners = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Socket.IO listener args are typed by the handler ref
+        [SERVER_EVENTS.CALL_INITIATED]: (data: any) => handleIncomingCallRef.current(data),
+        [SERVER_EVENTS.CALL_PARTICIPANT_JOINED]: (data: unknown) => handleParticipantJoinedRef.current(data),
+        [SERVER_EVENTS.CALL_PARTICIPANT_LEFT]: (data: unknown) => handleParticipantLeftRef.current(data),
+        [SERVER_EVENTS.CALL_ENDED]: (data: unknown) => handleCallEndedRef.current(data),
+        [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: unknown) => handleMediaToggleRef.current(data),
+        [SERVER_EVENTS.CALL_ERROR]: (data: unknown) => handleCallErrorRef.current(data),
+      };
+      socket.on(SERVER_EVENTS.CALL_INITIATED, attachedListeners[SERVER_EVENTS.CALL_INITIATED]);
+      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
+      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
+      socket.on(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
+      socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
+      socket.on(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
 
       console.log('✅ [CallManager] All call listeners registered', {
         socketId: socket.id,
@@ -710,12 +728,14 @@ export function CallManager() {
       if (s) {
         s.off('connect', onConnect);
         if (debugListenerRef) s.offAny(debugListenerRef);
-        s.off(SERVER_EVENTS.CALL_INITIATED);
-        s.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED);
-        s.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT);
-        s.off(SERVER_EVENTS.CALL_ENDED);
-        s.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED);
-        s.off(SERVER_EVENTS.CALL_ERROR);
+        if (attachedListeners) {
+          s.off(SERVER_EVENTS.CALL_INITIATED, attachedListeners[SERVER_EVENTS.CALL_INITIATED]);
+          s.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
+          s.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
+          s.off(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
+          s.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
+          s.off(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
+        }
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
