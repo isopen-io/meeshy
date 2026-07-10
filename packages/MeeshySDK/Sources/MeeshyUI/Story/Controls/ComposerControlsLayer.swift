@@ -97,9 +97,11 @@ public struct ComposerControlsLayer: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // FABs — visible only when the band is hidden
+            // Barre d'outils horizontale — visible only when the band is hidden
+            // (directive 2026-07-10 : outils en bas, centrés, à portée de pouce).
             if shouldShowFABs {
                 HStack {
+                    Spacer()
                     ComposerFABColumn(
                         mediaBadge: mediaBadge,
                         sonBadge: sonBadge,
@@ -140,15 +142,17 @@ public struct ComposerControlsLayer: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // C3 — état « chrome caché » (FABs masqués par swipe-down du
-            // FAB column, band fermé) : l'écran était NU, sans aucune
+            // C3 — état « chrome caché » (barre d'outils masquée par
+            // swipe-down, band fermé) : l'écran était NU, sans aucune
             // affordance de récupération — seul un tap « au hasard » sur le
             // canvas ramenait les outils. Une poignée fantôme discrète (même
             // grammaire que le grabber du band replié) marque le point de
-            // retour : tap ou swipe-up = réafficher les FABs. Le tap sur le
-            // fond du canvas reste actif en parallèle.
+            // retour : tap ou swipe-up = réafficher les outils. Le tap sur le
+            // fond du canvas reste actif en parallèle. CENTRÉE, alignée sur la
+            // barre horizontale (2026-07-10).
             if !areFabsVisible && effectiveBandState == .hidden {
                 HStack {
+                    Spacer()
                     fabRestoreHandle
                     Spacer()
                 }
@@ -264,7 +268,7 @@ public struct ComposerControlsLayer: View {
         Capsule()
             .fill(Color.white.opacity(0.28))
             .frame(width: 34, height: 5)
-            .padding(.horizontal, 26)   // aligné sur la colonne de FABs
+            .padding(.horizontal, 26)   // zone tappable large, centrée sur la barre
             .padding(.vertical, 16)     // zone tappable ≥ 44 pt
             .contentShape(Rectangle())
             .onTapGesture {
