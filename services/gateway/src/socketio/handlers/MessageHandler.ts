@@ -1111,7 +1111,7 @@ export class MessageHandler {
       // Without this, MESSAGE_NEW only reaches sockets in the conversation
       // room, so an online recipient outside the conversation never triggers
       // mark-as-received and the sender stays stuck at a single checkmark.
-      this._autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
+      this.autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
         handlerLogger.warn('auto-deliver background failure', { error: err });
       });
     } catch (error) {
@@ -1215,8 +1215,14 @@ export class MessageHandler {
    * vers la conversation room et chaque user room afin que l'expéditeur
    * voie passer son indicateur à "delivered" sans devoir attendre une
    * action manuelle du destinataire.
+   *
+   * Public: source unique partagée par les DEUX émetteurs de `message:new` —
+   * le chemin WS `message:send` (ci-dessus, `broadcastNewMessage`) ET le chemin
+   * REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`, qui délègue ici).
+   * Les deux instances partagent le même `io`/`connectedUsers`/services, donc
+   * le comportement est identique quel que soit le transport (parité receipt).
    */
-  private async _autoDeliverToOnlineRecipients(
+  async autoDeliverToOnlineRecipients(
     message: Message,
     conversationId: string
   ): Promise<void> {

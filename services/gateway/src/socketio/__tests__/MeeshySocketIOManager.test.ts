@@ -215,6 +215,7 @@ jest.mock('../handlers/MessageHandler', () => ({
       handleMessageSend: jest.fn().mockResolvedValue(undefined),
       handleMessageSendWithAttachments: jest.fn().mockResolvedValue(undefined),
       setDeliveryQueue: jest.fn(),
+      autoDeliverToOnlineRecipients: jest.fn().mockResolvedValue(undefined),
     };
     return mockMessageHandlerInstance;
   }),
@@ -1761,6 +1762,26 @@ describe('MeeshySocketIOManager', () => {
       await manager.broadcastMessage(msg, 'conv-123456789012');
 
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MENTION_CREATED, expect.anything());
+    });
+
+    it('delegates auto-deliver to the message handler so an online-but-away recipient gets a delivery receipt (REST/ZMQ parity with WS path)', async () => {
+      // The REST/ZMQ broadcast path must upgrade the sender's checkmark from "sent" to
+      // "delivered" for a recipient who is connected but viewing another conversation,
+      // exactly as the WS `message:send` path does. It shares the single implementation
+      // MessageHandler.autoDeliverToOnlineRecipients (whose behavior is covered in
+      // MessageHandler.test.ts); here we assert _broadcastNewMessage actually delegates.
+      // Regression guard: _broadcastNewMessage previously omitted the auto-deliver step.
+      const convId = 'conv-123456789012';
+      const msg = makeMessage({ conversationId: convId, senderId: 'sender-participantId' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      await manager.broadcastMessage(msg, convId);
+
+      expect(mockMessageHandlerInstance.autoDeliverToOnlineRecipients).toHaveBeenCalledWith(
+        expect.objectContaining({ id: msg.id, senderId: 'sender-participantId' }),
+        convId
+      );
     });
 
     it('emits CONVERSATION_UPDATED to every participant user room for real-time list re-sort', async () => {
