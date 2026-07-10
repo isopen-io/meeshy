@@ -702,7 +702,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (slice `chat-translation-language-strip`, 2026-07-10) ; **tap-to-switch active language shipped**
       (slice `chat-language-flag-tap-switch`, 2026-07-10 — tap a flag to switch the bubble's primary
       displayed language, tap the active flag to revert; Android switches the single primary rather than
-      iOS's stacked secondary panel) ; on-demand translate of an absent language pending
+      iOS's stacked secondary panel) ; **on-demand translate of an absent language shipped**
+      (slice `chat-on-demand-translate`, 2026-07-10 — a configured language with no content yet shows a
+      dimmed "＋ translate" chip; tapping it blocking-translates and switches the bubble to it)
 - [~] Message detail: per-language translation explorer + on-demand translate / retranslate —
       **strip projection done** (slice `chat-translation-language-strip`, 2026-07-10): pure `:sdk-ui`
       `MessageLanguageStrip.build(originalLanguage, translations, preferences, showingOriginal) →

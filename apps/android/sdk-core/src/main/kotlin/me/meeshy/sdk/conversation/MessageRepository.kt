@@ -22,6 +22,9 @@ import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
+import me.meeshy.sdk.net.api.TranslateRequest
+import me.meeshy.sdk.net.api.TranslationApi
+import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.rawApiCall
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
@@ -38,6 +41,7 @@ import javax.inject.Singleton
 @Singleton
 class MessageRepository @Inject constructor(
     private val messageApi: MessageApi,
+    private val translationApi: TranslationApi,
     private val database: MeeshyDatabase,
     private val messageDao: MessageDao,
     private val syncMetaDao: SyncMetaDao,
@@ -269,6 +273,61 @@ class MessageRepository @Inject constructor(
                 durationMs,
             ) ?: message
         }
+    }
+
+    /**
+     * On-demand translation (Prisme, pull side): the viewer tapped a configured
+     * language the message has no content for yet. Blocking-translates the
+     * message's original text into [targetLanguage] and upserts the result into
+     * the cache via [MessageTranslationMerge] so the open bubble can switch to it
+     * — the same live re-render path as an inbound `message:translated`. No outbox:
+     * a translation is derived server truth, never a local mutation to replay.
+     *
+     * Returns `true` only when a non-blank translation was actually stored. Inert
+     * (`false`, nothing stored) when the message is unknown, deleted, has no source
+     * text, the target is blank, the network call fails, the translator returns a
+     * blank string, or the translation already matches what is cached (idempotent).
+     */
+    suspend fun requestTranslation(messageId: String, targetLanguage: String): Boolean {
+        val target = targetLanguage.trim()
+        if (target.isEmpty()) return false
+        val message = cachedMessage(messageId) ?: return false
+        if (message.deletedAt != null) return false
+        val source = message.content
+        if (source.isBlank()) return false
+
+        val translated = when (
+            val result = apiCall {
+                translationApi.translate(
+                    TranslateRequest(
+                        text = source,
+                        sourceLanguage = message.originalLanguage?.trim().orEmpty(),
+                        targetLanguage = target,
+                    ),
+                )
+            }
+        ) {
+            is NetworkResult.Success -> result.data.translatedText
+            is NetworkResult.Failure -> return false
+        }
+        if (translated.isBlank()) return false
+
+        var stored = false
+        updateCachedMessage(messageId, requireSynced = false) { current ->
+            val merged = MessageTranslationMerge.mergeTranslation(current, target, translated)
+            if (merged != null) {
+                stored = true
+                merged
+            } else {
+                current
+            }
+        }
+        return stored
+    }
+
+    private suspend fun cachedMessage(messageId: String): ApiMessage? {
+        val row = messageDao.find(messageId) ?: return null
+        return MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
     }
 
     /**

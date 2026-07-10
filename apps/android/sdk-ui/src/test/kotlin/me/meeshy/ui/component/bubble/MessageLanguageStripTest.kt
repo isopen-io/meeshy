@@ -149,6 +149,124 @@ class MessageLanguageStripTest {
     }
 
     @Test
+    fun `includeTranslatable surfaces a configured language without content as a translatable chip`() {
+        val chips = MessageLanguageStrip.build(
+            originalLanguage = "en",
+            translations = listOf(Translation("fr", "Bonjour")),
+            preferences = StripPrefs(
+                systemLanguage = "fr",
+                customDestinationLanguage = "de",
+            ),
+            showingOriginal = false,
+            includeTranslatable = true,
+        )
+
+        assertThat(chips.map { it.code }).containsExactly("en", "fr", "de").inOrder()
+        val de = chips.single { it.code == "de" }
+        assertThat(de.isTranslatable).isTrue()
+    }
+
+    @Test
+    fun `a translatable chip is never active or original`() {
+        val chips = MessageLanguageStrip.build(
+            originalLanguage = "en",
+            translations = listOf(Translation("fr", "Bonjour")),
+            preferences = StripPrefs(
+                systemLanguage = "fr",
+                customDestinationLanguage = "de",
+            ),
+            showingOriginal = false,
+            includeTranslatable = true,
+        )
+
+        val de = chips.single { it.code == "de" }
+        assertThat(de.isActive).isFalse()
+        assertThat(de.isOriginal).isFalse()
+    }
+
+    @Test
+    fun `content configured languages are not marked translatable`() {
+        val chips = MessageLanguageStrip.build(
+            originalLanguage = "en",
+            translations = listOf(
+                Translation("fr", "Bonjour"),
+                Translation("es", "Hola"),
+            ),
+            preferences = StripPrefs(
+                systemLanguage = "fr",
+                regionalLanguage = "es",
+                customDestinationLanguage = "de",
+            ),
+            showingOriginal = false,
+            includeTranslatable = true,
+        )
+
+        assertThat(chips.single { it.code == "fr" }.isTranslatable).isFalse()
+        assertThat(chips.single { it.code == "es" }.isTranslatable).isFalse()
+        assertThat(chips.single { it.code == "de" }.isTranslatable).isTrue()
+    }
+
+    @Test
+    fun `content and translatable chips interleave in configured preference order`() {
+        val chips = MessageLanguageStrip.build(
+            originalLanguage = "en",
+            translations = listOf(Translation("es", "Hola")),
+            preferences = StripPrefs(
+                systemLanguage = "de",
+                regionalLanguage = "es",
+                customDestinationLanguage = "it",
+            ),
+            showingOriginal = false,
+            includeTranslatable = true,
+        )
+
+        assertThat(chips.map { it.code }).containsExactly("en", "de", "es", "it").inOrder()
+        assertThat(chips.single { it.code == "de" }.isTranslatable).isTrue()
+        assertThat(chips.single { it.code == "es" }.isTranslatable).isFalse()
+        assertThat(chips.single { it.code == "it" }.isTranslatable).isTrue()
+    }
+
+    @Test
+    fun `an active-code override never activates a translatable chip`() {
+        val chips = MessageLanguageStrip.build(
+            originalLanguage = "en",
+            translations = listOf(Translation("fr", "Bonjour")),
+            preferences = StripPrefs(
+                systemLanguage = "fr",
+                customDestinationLanguage = "de",
+            ),
+            showingOriginal = false,
+            activeCodeOverride = "de",
+            includeTranslatable = true,
+        )
+
+        // A translatable chip can never be the active display, even when the
+        // override names it directly — the strip marks nothing active rather than
+        // highlighting a content-less language (the builder drops such an override
+        // upstream, so production never reaches this state; the strip stays honest).
+        assertThat(chips.single { it.code == "de" }.isActive).isFalse()
+        assertThat(chips.none { it.isActive }).isTrue()
+    }
+
+    @Test
+    fun `the original chip is never marked translatable even without a translation to it`() {
+        val chips = MessageLanguageStrip.build(
+            originalLanguage = "de",
+            translations = listOf(Translation("fr", "Bonjour")),
+            preferences = StripPrefs(
+                systemLanguage = "fr",
+                customDestinationLanguage = "de",
+            ),
+            showingOriginal = false,
+            includeTranslatable = true,
+        )
+
+        val de = chips.single { it.code == "de" }
+        assertThat(de.isOriginal).isTrue()
+        assertThat(de.isTranslatable).isFalse()
+    }
+
+    @Test
     fun `the original chip is not duplicated when it is also a preferred language`() {
         val chips = MessageLanguageStrip.build(
             originalLanguage = "en",

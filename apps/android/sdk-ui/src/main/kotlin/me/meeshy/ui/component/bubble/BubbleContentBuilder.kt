@@ -137,6 +137,7 @@ public object BubbleContentBuilder {
                 preferences = preferences,
                 showingOriginal = isShowingOriginal,
                 activeCodeOverride = activeCode,
+                includeTranslatable = true,
             )
         }
         return BubbleContent(

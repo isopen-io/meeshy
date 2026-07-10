@@ -4,7 +4,22 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Chat §C) — slice `chat-typing-in-control` ✅
+## This loop (Phase: Translation §D) — slice `chat-on-demand-translate` ✅
+**On-demand translation of an absent language** — makes the resolver's `RequestTranslation` arm live. The
+inline strip now surfaces the viewer's configured content languages that lack content as **translatable
+chips** (`LanguageChip.isTranslatable`, dimmed flag + "＋"), opt-in via `MessageLanguageStrip.build(...,
+includeTranslatable)` (default false keeps the read-only projection byte-identical → every prior strip/builder
+test green unchanged); `BubbleContentBuilder` opts in. New `:sdk-core` `MessageRepository.requestTranslation(
+messageId, target)` blocking-translates the original text (`TranslationApi`), merges via
+`MessageTranslationMerge`, no outbox (derived server truth); returns false (inert) on unknown/deleted/blank-
+target/blank-result/network-fail/idempotent. `ChatViewModel` wires `RequestTranslation` → request → activate,
+with an in-flight guard (no duplicate translate on a second tap). +19 tests (7 `MessageLanguageStripTest`, 1
+`BubbleContentBuilderTest`, 7 `MessageRepositoryTest`, 4 `ChatViewModelTest`), `assembleDebug` +
+sdk-ui/sdk-core/feature:chat unit tests green, diff = `apps/android` only.
+Next: the full detail explorer sheet, or progressive **audio-voice translation** (`audio:translation-ready` →
+cloned-voice playback, needs BubbleAudio UI).
+
+## Prior loop (Phase: Chat §C) — slice `chat-typing-in-control` ✅
 **Typing folded into the scroll-to-bottom control** — pure `:feature:chat`
 `ScrollControlContent.of(affordance, typing)` SSOT (Hidden/Typing/Unread/Plain) with **typing taking priority
 over the unread count** (iOS `ConversationScrollControlsView` rule); rendered as an accent `TypingPill`. The
