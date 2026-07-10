@@ -232,6 +232,7 @@ export class CallService {
       this.ringingTimeouts.delete(callId);
       onTimeout();
     }, delayMs);
+    handle.unref?.();
     this.ringingTimeouts.set(callId, handle);
   }
 
@@ -286,8 +287,27 @@ export class CallService {
         this.heartbeatDbWriteTimers.delete(key);
         void this.persistHeartbeatToDb(callId, participantId);
       }, this.HEARTBEAT_DB_DEBOUNCE_MS);
+      timer.unref?.();
       this.heartbeatDbWriteTimers.set(key, timer);
     }
+  }
+
+  /**
+   * Clear every in-flight ringing/heartbeat-debounce timer. Called on
+   * gateway shutdown so no stray timer fires (and touches the DB) after the
+   * process has begun tearing down — mirrors CallEventsHandler's own
+   * prepareForShutdown()/destroy() timer discipline for its disconnect-grace
+   * and buffer-cleanup timers.
+   */
+  destroy(): void {
+    for (const handle of this.ringingTimeouts.values()) {
+      clearTimeout(handle);
+    }
+    this.ringingTimeouts.clear();
+    for (const timer of this.heartbeatDbWriteTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.heartbeatDbWriteTimers.clear();
   }
 
   private async persistHeartbeatToDb(callId: string, participantId: string): Promise<void> {

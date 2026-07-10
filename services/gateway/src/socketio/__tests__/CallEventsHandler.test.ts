@@ -1345,14 +1345,14 @@ describe('CallEventsHandler', () => {
       });
     });
 
-    it('falls back to the raw message as both code and message for uncoded errors', async () => {
+    it('falls back to the generic MEDIA_TOGGLE_FAILED code for uncoded errors, never the raw message', async () => {
       mockCallServiceUpdateParticipantMedia.mockRejectedValue(new Error('update failed'));
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket();
       await socket._trigger('call:toggle-audio', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', {
-        code: 'update failed',
-        message: 'update failed'
+        code: 'MEDIA_TOGGLE_FAILED',
+        message: 'Failed to toggle audio'
       });
     });
   });
@@ -1398,14 +1398,14 @@ describe('CallEventsHandler', () => {
       });
     });
 
-    it('falls back to the raw message as both code and message for uncoded errors', async () => {
+    it('falls back to the generic MEDIA_TOGGLE_FAILED code for uncoded errors, never the raw message', async () => {
       mockCallServiceUpdateParticipantMedia.mockRejectedValue(new Error('video fail'));
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket();
       await socket._trigger('call:toggle-video', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', {
-        code: 'video fail',
-        message: 'video fail'
+        code: 'MEDIA_TOGGLE_FAILED',
+        message: 'Failed to toggle video'
       });
     });
   });

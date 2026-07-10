@@ -20,8 +20,13 @@ final class CallPillStatusTests: XCTestCase {
         XCTAssertEqual(CallPillStatus.from(.ringing(isOutgoing: false)), .ringing)
     }
 
-    func test_from_offering_returnsConnecting() {
-        XCTAssertEqual(CallPillStatus.from(.offering), .connecting)
+    func test_from_offering_returnsRinging() {
+        // Audit 2026-07-10 — `.offering` (SDP offer sent, awaiting answer) is
+        // still the callee's phone physically ringing; CallView already shows
+        // outgoingRingingView ("Sonnerie…") for this state, not a connecting
+        // spinner. The pill must agree, or minimizing an outgoing call before
+        // it's answered shows a misleading "establishing connection" status.
+        XCTAssertEqual(CallPillStatus.from(.offering), .ringing)
     }
 
     func test_from_connecting_returnsConnecting() {
