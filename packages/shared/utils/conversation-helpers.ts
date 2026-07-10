@@ -171,8 +171,16 @@ type LanguageResolvable = {
 }
 
 export function resolveParticipantLanguage(participant: LanguageResolvable): string {
+  // Le fallback (langue déclarée par le call site) est lowercased comme les
+  // niveaux in-app de resolveUserLanguagesOrdered : le docstring promet la
+  // « même normalisation de casse que resolveUserLanguage » pour TOUS les
+  // chemins de retour. Un fallback en casse haute ('FR') manquerait les
+  // traductions indexées en minuscules exactement comme une préférence in-app
+  // non-lowercased (violation du Prisme). `.toLowerCase()` est un no-op sur un
+  // code déjà canonique — parité stricte, zéro régression.
+  const fallback = participant.language.toLowerCase()
   if (participant.type !== 'user' || !participant.user) {
-    return participant.language
+    return fallback
   }
   // Délègue à la source de vérité unique (SSOT) : mêmes 4 niveaux, même
   // normalisation de casse que resolveUserLanguage — ne PAS ré-implémenter
@@ -181,7 +189,7 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
   const [top] = resolveUserLanguagesOrdered(participant.user, {
     deviceLocale: participant.user.deviceLocale ?? undefined,
   })
-  return top ?? participant.language
+  return top ?? fallback
 }
 
 /**
