@@ -14,6 +14,11 @@ export type QueuedMessagePayload = {
    * 'reaction-added'/'reaction-removed' replay REACTION_ADDED/REACTION_REMOVED
    * so an offline peer's reaction state converges on reconnect (same as
    * edits/deletes) — they never carry a delivery receipt.
+   * 'attachment-reaction-added'/'attachment-reaction-removed' replay
+   * ATTACHMENT_REACTION_ADDED/ATTACHMENT_REACTION_REMOVED so an offline peer's
+   * per-attachment reaction summary converges on reconnect — like message
+   * reactions they need a finer dedupKey (attachmentId:reactor:emoji) and never
+   * carry a delivery receipt.
    * 'pinned'/'unpinned' replay MESSAGE_PINNED/MESSAGE_UNPINNED so an offline
    * peer's pin state converges on reconnect — like edits/deletes, at most one
    * relevant transition per message per event type, so messageId+eventType
@@ -25,6 +30,8 @@ export type QueuedMessagePayload = {
     | 'deleted'
     | 'reaction-added'
     | 'reaction-removed'
+    | 'attachment-reaction-added'
+    | 'attachment-reaction-removed'
     | 'pinned'
     | 'unpinned';
   /** Overrides the identity used for enqueue-time dedup (default: messageId).

@@ -248,11 +248,16 @@ jest.mock('../handlers/ReactionHandler', () => ({
   }),
 }));
 
+let mockAttachmentReactionHandlerInstance: any;
 jest.mock('../handlers/AttachmentReactionHandler', () => ({
-  AttachmentReactionHandler: jest.fn().mockImplementation(() => ({
-    handleAdd: jest.fn().mockResolvedValue(undefined),
-    handleRemove: jest.fn().mockResolvedValue(undefined),
-  })),
+  AttachmentReactionHandler: jest.fn().mockImplementation(() => {
+    mockAttachmentReactionHandlerInstance = {
+      handleAdd: jest.fn().mockResolvedValue(undefined),
+      handleRemove: jest.fn().mockResolvedValue(undefined),
+      setDeliveryQueue: jest.fn(),
+    };
+    return mockAttachmentReactionHandlerInstance;
+  }),
 }));
 
 jest.mock('../../services/AttachmentReactionService', () => ({
@@ -802,6 +807,12 @@ describe('MeeshySocketIOManager', () => {
       const fakeQueue = { drain: jest.fn(), enqueue: jest.fn() };
       manager.setDeliveryQueue(fakeQueue as any);
       expect(mockReactionHandlerInstance.setDeliveryQueue).toHaveBeenCalledWith(fakeQueue);
+    });
+
+    it('setDeliveryQueue forwards the same queue to AttachmentReactionHandler (offline attachment-reaction replay path)', () => {
+      const fakeQueue = { drain: jest.fn(), enqueue: jest.fn() };
+      manager.setDeliveryQueue(fakeQueue as any);
+      expect(mockAttachmentReactionHandlerInstance.setDeliveryQueue).toHaveBeenCalledWith(fakeQueue);
     });
 
     it('setAgentClient stores the client on the manager', () => {
@@ -2968,7 +2979,7 @@ describe('MeeshySocketIOManager', () => {
   describe('ATTACHMENT_REACTION event handlers', () => {
     it('ATTACHMENT_REACTION_ADD invokes attachmentReactionHandler.handleAdd', async () => {
       const { AttachmentReactionHandler } = jest.requireMock('../handlers/AttachmentReactionHandler') as any;
-      const mockHandler = { handleAdd: jest.fn().mockResolvedValue(undefined), handleRemove: jest.fn().mockResolvedValue(undefined) };
+      const mockHandler = { handleAdd: jest.fn().mockResolvedValue(undefined), handleRemove: jest.fn().mockResolvedValue(undefined), setDeliveryQueue: jest.fn() };
       AttachmentReactionHandler.mockImplementation(() => mockHandler);
       const socket = makeSocket('sock-ara1');
       triggerConnection(socket);
