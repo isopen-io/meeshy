@@ -117,6 +117,7 @@
     },
     "incoming": {
       "videoCall": "Videollamada",
+      "audioCall": "Llamada de audio",
       "subtitle": "Llamada entrante...",
       "accept": "Aceptar",
       "decline": "Rechazar",
