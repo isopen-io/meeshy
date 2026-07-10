@@ -254,6 +254,8 @@ export function registerCommentRoutes(
           postCreatedAt: post.createdAt ?? undefined,
           postExpiresAt: post.expiresAt ?? undefined,
           excludeUserIds: mentionedUserIds,
+          visibility: post.visibility ?? 'PUBLIC',
+          visibilityUserIds: post.visibilityUserIds ?? [],
         }).catch(err => fastify.log.error(`story comment notification fan-out failed: ${err}`));
       }
 

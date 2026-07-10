@@ -1568,6 +1568,16 @@ export class NotificationService {
      * The story author always gets STORY_NEW_COMMENT regardless of this list.
      */
     excludeUserIds?: string[];
+    /**
+     * Visibilité du post commenté. Filtre les buckets fan-out (thread + amis)
+     * exactement comme `SocialEventsHandler.getVisibilityFilteredRecipients` et
+     * `createFriendContentNotificationsBatch` : un post ONLY/EXCEPT/PRIVATE/
+     * COMMUNITY ne doit JAMAIS notifier (extrait de commentaire inclus) un
+     * utilisateur qui n'a pas le droit de le voir. Défaut PUBLIC (compat).
+     */
+    visibility?: string;
+    /** Liste d'IDs pour les modes ONLY (autorisés) / EXCEPT (exclus). */
+    visibilityUserIds?: string[];
   }): Promise<void> {
     const [actor, postAuthor] = await Promise.all([
       this.prisma.user.findUnique({
@@ -1589,6 +1599,37 @@ export class NotificationService {
         params.commenterId
       );
 
+    // Filtre de visibilité — miroir de SocialEventsHandler.getVisibilityFilteredRecipients
+    // et de createFriendContentNotificationsBatch : un post restreint ne doit jamais
+    // fanout un commentaire (extrait inclus) vers un utilisateur qui ne peut pas le voir.
+    // L'auteur (bucket STORY_NEW_COMMENT) est exempt — il possède le post.
+    const visibility = params.visibility ?? 'PUBLIC';
+    const visibilityUserIdSet = new Set(params.visibilityUserIds ?? []);
+    const coMemberIds = visibility === 'COMMUNITY'
+      ? new Set(await getCommunityCoMemberIds(this.prisma, params.storyAuthorId))
+      : null;
+    const canSeePost = (userId: string): boolean => {
+      switch (visibility) {
+        case 'PRIVATE': return false;
+        case 'ONLY': return visibilityUserIdSet.has(userId);
+        case 'EXCEPT': return !visibilityUserIdSet.has(userId);
+        case 'COMMUNITY': return coMemberIds!.has(userId);
+        default: return true; // PUBLIC / FRIENDS
+      }
+    };
+    // Un post COMMUNITY fanout aux co-membres (pas aux amis de l'auteur) — le graphe
+    // amis et le graphe communauté diffèrent ; on cible exactement le même set que le
+    // broadcast temps réel, buckets thread/auteur/commenter restant disjoints.
+    const friendAudience = (
+      visibility === 'COMMUNITY'
+        ? [...coMemberIds!].filter(id =>
+            id !== params.storyAuthorId &&
+            id !== params.commenterId &&
+            !previousCommenterIds.includes(id))
+        : friendIds.filter(canSeePost)
+    );
+    const engagedAudience = previousCommenterIds.filter(canSeePost);
+
     const excerpt = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
       : '';
@@ -1606,7 +1647,7 @@ export class NotificationService {
     const authorName = postAuthor?.displayName?.trim()
       || postAuthor?.username?.trim()
       || '';
-    const langs = await this.resolveRecipientLangs([authorId, ...previousCommenterIds, ...friendIds]);
+    const langs = await this.resolveRecipientLangs([authorId, ...engagedAudience, ...friendAudience]);
     const contextSubtitleFor = (lang: string): string => authorName
       ? notificationString(lang, 'comment.subtitleFrom', { postType: i18nPostType, author: authorName })
       : notificationString(lang, 'comment.subtitleBare', { postType: i18nPostType });
@@ -1656,7 +1697,7 @@ export class NotificationService {
     }
 
     // 2. Previous commenters (thread participants) — skip mentioned users
-    for (const recipientId of previousCommenterIds) {
+    for (const recipientId of engagedAudience) {
       if (excludeSet.has(recipientId)) continue;
       const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
@@ -1674,8 +1715,8 @@ export class NotificationService {
       );
     }
 
-    // 3. Friends of the story author — skip mentioned users
-    for (const recipientId of friendIds) {
+    // 3. Friends of the story author (or community co-members) — skip mentioned users
+    for (const recipientId of friendAudience) {
       if (excludeSet.has(recipientId)) continue;
       const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
