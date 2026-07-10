@@ -476,11 +476,11 @@ git commit -m "feat(sdk/calls): wire call:transcription-segment emit + call:tran
 
 This is a full rewrite, not an incremental diff — the class loses the leader/follower/role/capability/DataChannel model entirely and gains local-only AVAudioEngine capture + socket emission. Follow the steps in order; each step's test must be green before the next.
 
-- [ ] **Step 1: Delete the obsolete role-negotiation tests**
+- [x] **Step 1: Delete the obsolete role-negotiation tests**
 
 Open `apps/ios/MeeshyTests/Unit/Services/CallTranscriptionServiceTests.swift`. Delete every test in the `// MARK: - Role Negotiation` section (`test_resolveRole_*`), the `// MARK: - Capability Detection` section (`test_detectLocalCapability_*`, `test_supportedOnDeviceLanguages_*`), and any test referencing `remoteLanguage`, `remoteUserId`, `appendRemoteAudioBuffer`, `receiveRemoteSegment`, `role`, `localCapability`, or `pendingRemoteSegments` — these concepts no longer exist. Keep the `makeSegment(...)` factory function and any test that only exercises `segments`/`isTranscribing`/`permission`/`lastError`/`isShowingOverlay`/`displayedSegments` state that doesn't reference the removed concepts.
 
-- [ ] **Step 2: Update `makeSUT` to inject the mock socket, write the failing test**
+- [x] **Step 2: Update `makeSUT` to inject the mock socket, write the failing test**
 
 Replace the `makeSUT` factory:
 
@@ -506,7 +506,7 @@ Add this new test at the end of the `// MARK: - Initial State` section:
     }
 ```
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -516,7 +516,7 @@ xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
 
 Expected: FAIL — `CallTranscriptionService` has no initializer accepting a `socket:` argument, and no `startTranscribing(callId:localLanguage:localUserId:)`.
 
-- [ ] **Step 4: Rewrite `CallTranscriptionService.swift`**
+- [x] **Step 4: Rewrite `CallTranscriptionService.swift`**
 
 Replace the entire file content with:
 
@@ -938,7 +938,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 }
 ```
 
-- [ ] **Step 5: Run to verify the new test passes**
+- [x] **Step 5: Run to verify the new test passes**
 
 ```bash
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
@@ -951,7 +951,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: PASS.
 
-- [ ] **Step 6: Write the failing test for the purge invariant**
+- [x] **Step 6: Write the failing test for the purge invariant**
 
 Add to `CallTranscriptionServiceTests.swift`:
 
@@ -990,7 +990,7 @@ Add to `CallTranscriptionServiceTests.swift`:
     }
 ```
 
-- [ ] **Step 7: Run to verify it fails, then confirm it already passes**
+- [x] **Step 7: Run to verify it fails, then confirm it already passes**
 
 The `resetForCallEnd`/`receiveTranslatedSegment` tests should already PASS against the Step 4 implementation (no further production change needed) — this step is a verification, not a RED step, since Step 4 already implemented the purge-unconditionally behavior. Run:
 
@@ -1002,7 +1002,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: PASS, all tests including the three new ones from Step 6.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -1030,7 +1030,7 @@ git commit -m "feat(ios/calls): rebuild CallTranscriptionService as local-only c
 
 Under the new architecture, transcription segments travel over the call socket (`call:translated-segment`), never over the WebRTC DataChannel. The `"transcription"`-labeled DataChannel itself stays (it also carries the `bye` instant-hangup message and keep-alive ping — untouched), but the transcription-specific message type and its create/send functions become genuinely unreachable and must go, or this rebuild reintroduces the exact dead-code problem PR #1795 was (correctly, on this narrow point) trying to fix.
 
-- [ ] **Step 1: Rewrite `toggleTranscription()`**
+- [x] **Step 1: Rewrite `toggleTranscription()`**
 
 In `apps/ios/Meeshy/Features/Main/Services/CallManager.swift`, replace the `toggleTranscription()` function (currently lines 2053-2077) with:
 
@@ -1058,7 +1058,7 @@ In `apps/ios/Meeshy/Features/Main/Services/CallManager.swift`, replace the `togg
     }
 ```
 
-- [ ] **Step 2: Subscribe to translated segments in `setupSocketListeners()`**
+- [x] **Step 2: Subscribe to translated segments in `setupSocketListeners()`**
 
 In the same file, inside `private func setupSocketListeners()` (starts at line 3499), add a new subscription right after the `socket.callOfferReceived.receive(on: DispatchQueue.main).sink { ... }.store(in: &cancellables)` block:
 
@@ -1086,7 +1086,7 @@ In the same file, inside `private func setupSocketListeners()` (starts at line 3
             .store(in: &cancellables)
 ```
 
-- [ ] **Step 3: Remove the `.transcription` DataChannel case**
+- [x] **Step 3: Remove the `.transcription` DataChannel case**
 
 In the same file, in `webRTCService(_:didReceiveTranscriptionData:)` (currently lines 4346-4374), delete the `case .transcription(let message):` branch entirely (lines 4357-4370 in the pre-edit file):
 
@@ -1127,7 +1127,7 @@ leaving:
 
 (This will not compile until Step 4 removes the `.transcription` case from the `DataChannelInbound` enum itself — Swift would otherwise flag the switch as non-exhaustive in the other direction. Steps 3-4 are one atomic change; build only after both are done.)
 
-- [ ] **Step 4: Remove `DataChannelTranscriptionMessage` and the `.transcription` case**
+- [x] **Step 4: Remove `DataChannelTranscriptionMessage` and the `.transcription` case**
 
 In `apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift`, delete the `DataChannelTranscriptionMessage` struct (lines 764-774):
 
@@ -1164,7 +1164,7 @@ nonisolated enum DataChannelInbound: Equatable {
 
 (removing the `if let segment = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: data), segment.type == "transcription-segment" { return .transcription(segment) }` branch that used to precede the `bye` check.)
 
-- [ ] **Step 5: Remove `createTranscriptionChannel()`/`sendTranscription(_:)`**
+- [x] **Step 5: Remove `createTranscriptionChannel()`/`sendTranscription(_:)`**
 
 In `apps/ios/Meeshy/Features/Main/Services/WebRTCService.swift`, delete the `// MARK: - DataChannel Transcription (H7)` block (lines 463-472):
 
@@ -1184,7 +1184,7 @@ In `apps/ios/Meeshy/Features/Main/Services/WebRTCService.swift`, delete the `// 
 
 Do NOT touch `createOffer()`'s `_ = client.createDataChannel(label: "transcription")` call (around line 146) — that creates the shared channel used by `bye`/keep-alive, which stays. Do NOT touch `didReceiveTranscriptionData` in the `WebRTCServiceDelegate` protocol or its forwarding implementation (lines ~622-627) — it's the generic "a DataChannel message of any kind arrived" hook, still needed for `bye`.
 
-- [ ] **Step 6: Update `CallManagerAudioSessionTests` regression guard**
+- [x] **Step 6: Update `CallManagerAudioSessionTests` regression guard**
 
 In `apps/ios/MeeshyTests/Unit/Services/CallManagerAudioSessionTests.swift`, replace `test_callManager_toggleTranscription_doesNotHardcodeLanguage`:
 
@@ -1217,7 +1217,7 @@ In `apps/ios/MeeshyTests/Unit/Services/CallManagerAudioSessionTests.swift`, repl
 
 (dropped the now-meaningless `remoteLang` assertion — the new signature has no remote-language parameter at all, per the spec's local-only-capture architecture).
 
-- [ ] **Step 7: Remove the obsolete `WebRTCServiceTests` test**
+- [x] **Step 7: Remove the obsolete `WebRTCServiceTests` test**
 
 In `apps/ios/MeeshyTests/Unit/Services/WebRTCServiceTests.swift`, delete `test_createTranscriptionChannel_delegatesToClient` (lines 310-316) and the now-empty `// MARK: - Transcription Channel` heading above it (line 293):
 
@@ -1231,11 +1231,11 @@ In `apps/ios/MeeshyTests/Unit/Services/WebRTCServiceTests.swift`, delete `test_c
     }
 ```
 
-- [ ] **Step 8: Remove the obsolete `WebRTCTypesTests` tests**
+- [x] **Step 8: Remove the obsolete `WebRTCTypesTests` tests**
 
 In `apps/ios/MeeshyTests/Unit/Services/WebRTCTypesTests.swift`, delete everything from the `// MARK: - DataChannelTranscriptionMessage Decodable` comment (line 1711) to the end of the file (line 1810) — the entire `DataChannelTranscriptionMessageTests` class, which tests a type that no longer exists.
 
-- [ ] **Step 9: Remove the obsolete `CallSignalIndicatorTests` test**
+- [x] **Step 9: Remove the obsolete `CallSignalIndicatorTests` test**
 
 In `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, delete `test_decode_transcriptionSegment_routesToTranscription` (lines 108-121):
 
@@ -1258,7 +1258,7 @@ In `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, delete `
 
 Keep `test_decode_bye_withReason_returnsBye`, `test_decode_bye_withoutReason_returnsBye`, `test_decode_ping_isIgnored`, `test_decode_garbage_isIgnored`, and the entire `CallHangupFastPathTests` class (all still valid — `bye`/keep-alive infra is untouched).
 
-- [ ] **Step 10: Build and run the full affected test suite**
+- [x] **Step 10: Build and run the full affected test suite**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -1277,7 +1277,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: BUILD SUCCEEDED, all listed suites PASS.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Services/CallManager.swift \
