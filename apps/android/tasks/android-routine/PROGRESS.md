@@ -2,7 +2,46 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+
+> On 2026-07-10 **the per-post Prisme language flag strip** landed (slice `feed-post-language-strip`,
+> Translation §D — feature-parity.md "Per-post and per-story translation" read-only flag-strip arm now
+> shipped). The feed card showed a **binary** "Translated" label (icon + text) when a post resolved to a
+> translation; it never surfaced *which* languages the post carried or which one the viewer was reading —
+> the chat bubble already had the far richer `MessageLanguageStrip`. This slice brings the same Prisme
+> strip to posts. **(1) Pure core** — new `:sdk-ui` `PostLanguageStrip.build(originalLanguage,
+> translations, preferences, showingOriginal, activeCodeOverride, includeTranslatable) → List<LanguageChip>`,
+> the post sibling of `MessageLanguageStrip`. Posts store translations as a language-keyed
+> `Map<String, ApiPostTranslationEntry>` (vs. the message list form), so the builder adapts the map into
+> `LanguageResolver.TranslationLike` rows and **delegates to `MessageLanguageStrip.build`** — one strip
+> algorithm, zero re-implementation (SSOT). The read-only default surfaces the post's original + each
+> configured content language that actually has content, and returns **empty** when the post is not
+> translated for the viewer (Prisme rule 1 — show the original, nothing to explore), the *same* predicate
+> `ApiPost.isTranslated` already uses, so the strip and the translated flag can never disagree. **(2)
+> Wiring** — `FeedPostBuilder` computes `languageStrip` into the immutable `FeedPostPresentation` (pure,
+> unit-tested), keeping the Compose layer dumb. **(3) UI** (glue, coverage-exempt) — `FeedScreen` renders
+> the chips as an accent-coherent strip (a lead-in translate glyph + flag per chip; the active language
+> reads its native name in the language accent colour via `LanguageData.colorHex`), replacing the old
+> binary label; read-only, mirroring the chat bubble's read-only strip. **+15 tests**: `PostLanguageStripTest`
+> 13 (no-map → empty / empty-map → empty / no-preferred → empty [Prisme rule 1] / blank-entry → empty /
+> anchors original + marks preferred active / case-insensitive map key / showingOriginal flips active to
+> original / activeCodeOverride wins / read-only omits configured-but-absent / includeTranslatable appends
+> translatable / no original chip when originalLanguage null / carries LanguageData metadata),
+> `FeedPostBuilderTest` +2 (translated post carries strip anchoring original+preferred / untranslated post
+> → empty strip). **RED verified**: `PostLanguageStripTest` references a symbol absent on `main`
+> (compile-RED); the `FeedPostBuilder` strip assertions fail against the pre-slice presentation (no
+> `languageStrip` field). Full `assembleDebug` + all-module `testDebugUnitTest` → **BUILD SUCCESSFUL**
+> (the lone `:sdk-core:ThemeStoreTest` DataStore timeout is the known environmental flake — NOTES.md
+> 2026-07-06 — green in isolation; my diff never touches `:sdk-core`). Reviewer: **PASS** (diff
+> `apps/android` only — `:sdk-ui` builder+test, `:feature:feed` presentation/screen/test, no production
+> logic outside; **SDK-purity** — the builder is a stateless building block with opaque params in `:sdk-ui`
+> delegating to the `MessageLanguageStrip` SSOT, the *when-to-show* orchestration stays in `FeedPostBuilder`;
+> **SSOT** — reuses `LanguageResolver`/`MessageLanguageStrip`/`LanguageData`, no re-implementation; **UDF**
+> immutable presentation, pure projection; **instant-app** — computed synchronously in the presentation, no
+> spinner; **colour/UX coherence** — accent-coherent chips, coherent with the chat strip; **no coverage
+> floor lowered, no existing test weakened**). **Next:** the interactive `includeTranslatable` arm for
+> posts (tap a configured-but-absent language → on-demand request, needs a post-translation request path),
+> the per-story timeline language strip, or persisted translations across cold start (§D "offline Prisme").
 
 > On 2026-07-10 **live cloned-voice audio translation** landed (slice `chat-live-audio-translation`,
 > Translation §D — feature-parity.md "Real-time progressive translation/transcription socket updates" audio-voice
