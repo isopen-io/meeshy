@@ -1652,7 +1652,7 @@ git commit -m "fix(gateway/calls): drop the dead translationEnabled gate — cli
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Regenerate the Xcode project and run the full iOS suite**
+- [x] **Step 1: Regenerate the Xcode project and run the full iOS suite**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
@@ -1661,7 +1661,7 @@ cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
 
 Expected: all 3 phases green (per `apps/ios/CLAUDE.md`'s phased test run). Revert any `project.pbxproj`/`Package.resolved`/scheme churn this produces that isn't an intentional change (`git checkout --` on those specific files if they only reflect xcodegen/SPM regeneration noise, per that same doc's guidance) — but do NOT discard the actual source changes from Tasks 1-6.
 
-- [ ] **Step 2: Run the gateway suite**
+- [x] **Step 2: Run the gateway suite**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
