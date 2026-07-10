@@ -2745,14 +2745,24 @@ export class CallEventsHandler {
         // participant before this rejection ever ran, desyncing client state
         // (call torn down client-side) from server state (session still
         // `active`) until the 120s zombie-GC tier self-heals it.
-        const endParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        //
+        // Security fix 2026-07-10b (gateway): the check itself must be
+        // `resolveActiveCallParticipantId`, not `resolveParticipantIdFromCall`
+        // — the latter only verifies conversation membership, not that the
+        // caller is an active (`!leftAt`) participant of THIS call. A caller
+        // who already left this specific call (e.g. a stale/duplicate socket
+        // left behind in the call room by a reconnect race) is still a
+        // conversation member, so the weaker check kept authorizing exactly
+        // the fast-path broadcast this comment describes guarding against.
+        const endParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!endParticipantId) {
-          // `resolveParticipantIdFromCall` failing here means `userId` has
-          // no active conversation membership at all — a genuine
-          // authorization rejection, not a transient/data race a real
-          // participant could hit. Previously this branch force-ended the
-          // call regardless (`forceEndOrphanedCallAfterOptimisticBroadcast`
-          // has no authorization check of its own), which let ANY caller —
+          // Failing here means `userId` has no active CallParticipant row
+          // for THIS call — either no conversation membership at all, or a
+          // conversation member who already left this call. Neither is a
+          // transient/data race a real active participant could hit.
+          // Previously this branch force-ended the call regardless
+          // (`forceEndOrphanedCallAfterOptimisticBroadcast` has no
+          // authorization check of its own), which let ANY caller —
           // including a total stranger who merely guessed/observed a callId —
           // terminate a call they had no relationship to. Just reject; do not
           // force-end a call on an unauthorized caller's behalf.
@@ -3053,6 +3063,24 @@ export class CallEventsHandler {
         // Audit P1-21 — Authorization: see RECONNECTING handler above.
         const membership = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!membership) return;
+
+        // FSM guard (2026-07-10) — symmetric with the RECONNECTING handler's
+        // `!call.answeredAt` guard above: `reconnected` only makes sense once
+        // a reconnect was actually recorded as in flight (or the call is
+        // already active — a harmless idempotent re-send). Without this, a
+        // stray/out-of-order/replayed call:reconnected on a still-ringing,
+        // never-answered call would fabricate an `answeredAt` via
+        // updateCallStatus(active), corrupting duration accounting and
+        // bypassing ring-timeout semantics. `resolveActiveCallParticipantId`
+        // only proves the caller is an active participant of THIS call — it
+        // says nothing about whether a reconnect was ever actually underway.
+        const callSession = await this.callService.getCallSession(data.callId).catch(() => null);
+        if (callSession?.status !== CallStatus.reconnecting && callSession?.status !== CallStatus.active) {
+          logger.warn('⚠️ Ignoring reconnected transition — no reconnect was in flight', {
+            callId: data.callId, currentStatus: callSession?.status
+          });
+          return;
+        }
 
         await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on reconnect)', { callId: data.callId, err }));
 

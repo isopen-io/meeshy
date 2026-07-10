@@ -1433,9 +1433,8 @@ describe('CallEventsHandler', () => {
     });
 
     it('emits error when not a participant in call', async () => {
-      const { socket } = setupWithSocket({
-        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
-      });
+      mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({ participants: [] }));
+      const { socket } = setupWithSocket();
       const ack = jest.fn();
       await socket._trigger('call:end', validData, ack);
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
@@ -1451,9 +1450,8 @@ describe('CallEventsHandler', () => {
     // at all), not a transient state a real participant could hit, so this
     // must just reject — never force-end on the unauthorized caller's behalf.
     it('does NOT force-end the orphaned session when the ender cannot be resolved to a participant', async () => {
-      const { socket } = setupWithSocket({
-        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
-      });
+      mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({ participants: [] }));
+      const { socket } = setupWithSocket();
       const ack = jest.fn();
       await socket._trigger('call:end', validData, ack);
       expect(mockCallServiceForceEndOrphanedCallSession).not.toHaveBeenCalled();
@@ -1469,9 +1467,8 @@ describe('CallEventsHandler', () => {
     // must not be able to fire a false call:ended at the real participant
     // before the authorization check below rejects them.
     it('does NOT fire the fast-path optimistic call:ended broadcast when the ender cannot be resolved to a participant, even if their socket is still in the call room', async () => {
-      const { handler, io } = buildHandler({
-        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
-      });
+      mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({ participants: [] }));
+      const { handler, io } = buildHandler();
       const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
       const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
       const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
@@ -1934,6 +1931,32 @@ describe('CallEventsHandler', () => {
 
     it('updates call status to active', async () => {
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:reconnected', { callId: CALL_ID, participantId: PARTICIPANT_ID });
+      expect(mockCallServiceUpdateCallStatus).toHaveBeenCalledWith(CALL_ID, 'active');
+    });
+
+    // Regression: a stray/out-of-order/replayed call:reconnected must not be
+    // able to fabricate an `answeredAt` on a call that was never answered.
+    // `resolveActiveCallParticipantId` only proves the caller is an active
+    // participant of THIS call — it says nothing about whether a reconnect
+    // was ever actually in flight. Symmetric with the RECONNECTING guard
+    // above (`!call.answeredAt`), `reconnected` must require the call to
+    // already be `reconnecting` (or idempotently already `active`) before
+    // promoting it — never from a still-ringing/never-answered call.
+    it('ignores reconnected on a call that is still ringing (never answered, no reconnect in flight)', async () => {
+      mockCallServiceGetCallSession.mockResolvedValue(
+        makeCallSession({ status: 'ringing', participants: [makeParticipant()] })
+      );
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:reconnected', { callId: CALL_ID, participantId: PARTICIPANT_ID });
+      expect(mockCallServiceUpdateCallStatus).not.toHaveBeenCalled();
+    });
+
+    it('promotes a genuinely reconnecting call to active', async () => {
+      mockCallServiceGetCallSession.mockResolvedValue(
+        makeCallSession({ status: 'reconnecting', participants: [makeParticipant()] })
+      );
       const { socket } = setupWithSocket();
       await socket._trigger('call:reconnected', { callId: CALL_ID, participantId: PARTICIPANT_ID });
       expect(mockCallServiceUpdateCallStatus).toHaveBeenCalledWith(CALL_ID, 'active');

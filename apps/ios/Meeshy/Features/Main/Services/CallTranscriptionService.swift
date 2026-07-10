@@ -470,7 +470,6 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         reinstallTap(for: newRequest)
 
         startRecognitionTask(language: language)
-        rotationCount += 1
     }
 
     // MARK: - Remote segments (déjà traduits côté gateway)

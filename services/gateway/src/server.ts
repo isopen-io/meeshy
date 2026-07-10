@@ -1388,6 +1388,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       try {
         const socketManager = this.socketIOHandler?.getManager?.();
         socketManager?.getCallEventsHandler?.().prepareForShutdown();
+        // Release the handler's own periodic buffered-offer cleanup interval
+        // and any leftover disconnect-grace timers — `prepareForShutdown()`
+        // only flips shutdown mode and clears the grace timers; it does not
+        // stop the interval, which would otherwise keep querying a handler
+        // that's about to be torn down.
+        socketManager?.getCallEventsHandler?.().destroy();
         socketManager?.getCallService?.()?.destroy();
         logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
       } catch (callShutdownError) {

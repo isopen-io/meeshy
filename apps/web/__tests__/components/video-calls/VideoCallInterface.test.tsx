@@ -276,6 +276,35 @@ describe('VideoCallInterface (container)', () => {
     });
   });
 
+  // Regression: the 2s delayed cleanup's setTimeout id was never stored, so
+  // unmounting (or the effect re-running for a new callId) mid-window left it
+  // armed. It would still fire against whatever call is current by then —
+  // tearing down a brand-new call's participant the user just joined.
+  describe('unmount before the 2s cleanup fires', () => {
+    it('does not run the delayed cleanup against the (now-stale) global store after unmount', () => {
+      jest.useFakeTimers();
+      try {
+        const fakeSocket = { on: jest.fn(), off: jest.fn() };
+        (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+        storeState.peerConnections = new Map([['peer1', {} as RTCPeerConnection]]);
+
+        const { unmount } = render(<VideoCallInterface callId="call1" />);
+
+        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
+
+        unmount();
+        jest.advanceTimersByTime(2000);
+
+        expect(storeState.removeRemoteStream).not.toHaveBeenCalled();
+        expect(webrtc.removeParticipant).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+        storeState.peerConnections = new Map();
+      }
+    });
+  });
+
   // Reconnect bug: `removeParticipant()` (in use-webrtc-p2p.ts) tears down the
   // WebRTCService/remoteDescriptionSetRef/iceCandidateQueueRef/offerInFlightRef
   // entries a rejoin needs cleared — without it, a same-session leave→rejoin
