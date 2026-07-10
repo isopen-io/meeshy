@@ -2374,9 +2374,55 @@ describe('registerMessagesAdvancedRoutes', () => {
   describe('PUT edit message - safeParse validation failure', () => {
     const getEditHandler = (f: any) => getHandler(f, 'PUT', '/conversations/:id/messages/:messageId');
 
-    it('returns 400 when body content is empty string (safeParse fails)', async () => {
-      // EditMessageBodySchema uses z.string().min(1) for content
-      // Sending content: '' triggers safeParse failure → branch 0[0] covered
+    it('returns 400 when body content exceeds the max length (safeParse fails)', async () => {
+      // EditMessageBodySchema allows empty content (attachment caption removal)
+      // but still caps length at 10 000. An over-long content triggers a
+      // safeParse failure → the 'Validation error' branch is covered.
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'x'.repeat(10_001) },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(mockSendBadRequest).toHaveBeenCalledWith(
+        reply,
+        'Validation error',
+        expect.objectContaining({ message: expect.any(String) })
+      );
+    });
+
+    it('accepts empty content when the message has attachments (caption removal)', async () => {
+      // Parity with the socket edit path: clearing a caption on an attachment
+      // message is allowed. The attachment-aware check is the source of truth.
+      prisma.message.findFirst.mockResolvedValue(
+        makeExistingMessage({ attachments: [{ id: 'att-1' }] })
+      );
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: '',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: '' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(mockSendBadRequest).not.toHaveBeenCalled();
+      expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    it('still rejects empty content when the message has no attachments', async () => {
+      prisma.message.findFirst.mockResolvedValue(
+        makeExistingMessage({ attachments: [] })
+      );
+
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
         body: { content: '' },
@@ -2387,8 +2433,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockSendBadRequest).toHaveBeenCalledWith(
         reply,
-        'Validation error',
-        expect.objectContaining({ message: expect.any(String) })
+        expect.stringContaining('empty')
       );
     });
   });
