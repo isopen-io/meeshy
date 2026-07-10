@@ -290,16 +290,43 @@ export class PostCommentService {
     if (!comment) return null;
     if (comment.authorId !== userId) throw new Error('FORBIDDEN');
 
-    await this.prisma.postComment.update({
-      where: { id: commentId },
-      data: { deletedAt: new Date() },
+    // Soft-delete the WHOLE reply subtree, not just the target comment.
+    // `addComment` increments `post.commentCount` for EVERY comment — top-level
+    // AND reply (l.102) — so `commentCount` counts the full non-deleted thread.
+    // The relation is `onDelete: NoAction` (schema l.3102) and `PostComment`
+    // allows arbitrary-depth chains (any live comment can be a `parentId`), so a
+    // decrement of 1 would (a) leave surviving replies orphaned — `getComments`
+    // filters `parentId: null` and their now-deleted parent is never rendered, so
+    // `getReplies` is never called for them — and (b) permanently over-count
+    // `commentCount` by the number of surviving descendants. Collect the subtree
+    // breadth-first and remove it atomically-in-count.
+    const descendantIds: string[] = [];
+    let frontier = [commentId];
+    while (frontier.length > 0) {
+      const children = await this.prisma.postComment.findMany({
+        where: { parentId: { in: frontier }, deletedAt: NOT_DELETED },
+        select: { id: true },
+      });
+      if (children.length === 0) break;
+      const childIds = children.map((c) => c.id);
+      descendantIds.push(...childIds);
+      frontier = childIds;
+    }
+
+    const deletedAt = new Date();
+    await this.prisma.postComment.updateMany({
+      where: { id: { in: [commentId, ...descendantIds] } },
+      data: { deletedAt },
     });
 
     await this.prisma.post.update({
       where: { id: comment.postId },
-      data: { commentCount: { decrement: 1 } },
+      data: { commentCount: { decrement: 1 + descendantIds.length } },
     });
 
+    // Only the direct parent's `replyCount` moves: it counts direct children, and
+    // exactly one direct child (this comment) disappears. Descendant reply counts
+    // are irrelevant once their rows are soft-deleted.
     if (comment.parentId) {
       await this.prisma.postComment.update({
         where: { id: comment.parentId },
