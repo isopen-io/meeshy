@@ -115,4 +115,57 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
             "iPadRootView must pass its own `callManager` into CallBubbleView."
         )
     }
+
+    // 2026-07-10 — `CallParticipantVisual` (the shared avatar/remote-video
+    // visual mounted by both FloatingCallPillView and CallBubbleView, which
+    // themselves already carry the P1-16 fix above) reintroduced the exact
+    // same anti-pattern one layer down, and `CallView`'s separate
+    // `transcriptionService` ObservedObject reintroduced it alongside an
+    // already-fixed `callManager` in the same struct.
+
+    func test_callParticipantVisual_doesNotDefaultCallManagerToSharedInstance() throws {
+        let source = try source(of: "Views/CallParticipantVisual.swift")
+        XCTAssertFalse(
+            source.contains("@ObservedObject private var callManager = CallManager.shared"),
+            "CallParticipantVisual must not default `callManager` to `CallManager.shared` " +
+            "at declaration — that resubscribes on every parent re-render (every call tick)."
+        )
+        XCTAssertTrue(
+            source.contains("@ObservedObject var callManager: CallManager"),
+            "CallParticipantVisual must declare `callManager` as an injected " +
+            "(non-defaulted) ObservedObject so callers pass their own instance down."
+        )
+    }
+
+    func test_floatingCallPillView_injectsOwnCallManagerIntoCallParticipantVisual() throws {
+        let source = try source(of: "Views/FloatingCallPillView.swift")
+        XCTAssertTrue(
+            source.contains("CallParticipantVisual(diameter: 44, callManager: callManager)"),
+            "FloatingCallPillView must pass its own `callManager` into CallParticipantVisual."
+        )
+    }
+
+    func test_callBubbleView_injectsOwnCallManagerIntoCallParticipantVisual() throws {
+        let source = try source(of: "Views/CallBubbleView.swift")
+        XCTAssertTrue(
+            source.contains("CallParticipantVisual(diameter: diameter, callManager: callManager)"),
+            "CallBubbleView must pass its own `callManager` into CallParticipantVisual."
+        )
+    }
+
+    func test_callView_doesNotDefaultTranscriptionServiceToSharedInstance() throws {
+        let source = try source(of: "Views/CallView.swift")
+        XCTAssertFalse(
+            source.contains("@ObservedObject private var transcriptionService = CallManager.shared.transcriptionService"),
+            "CallView must not default `transcriptionService` to " +
+            "`CallManager.shared.transcriptionService` at declaration — same P1-16 " +
+            "hazard as `callManager`: reassigned (and resubscribed) on every parent " +
+            "reconstruction, including mid-call."
+        )
+        XCTAssertTrue(
+            source.contains("self.transcriptionService = callManager.transcriptionService"),
+            "CallView must derive `transcriptionService` from the injected `callManager` " +
+            "inside a custom init, not from a defaulted property declaration."
+        )
+    }
 }
