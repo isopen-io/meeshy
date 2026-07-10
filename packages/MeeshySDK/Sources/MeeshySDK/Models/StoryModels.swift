@@ -1820,6 +1820,13 @@ public struct StoryGroup: Identifiable, Codable, Sendable, CacheIdentifiable {
     public let avatarURL: String?
     public let stories: [StoryItem]
 
+    /// Snapshot serveur de la présence de l'auteur (payload feed stories,
+    /// `storyAuthorSelect` gateway). Sert de résolution IMMÉDIATE à
+    /// l'interstitiel d'identité au switch de groupe — l'app peut le
+    /// raffiner avec le PresenceManager temps réel quand une entrée existe.
+    /// Optionnel → migration douce des caches GRDB et payloads antérieurs.
+    public let authorPresence: UserPresence?
+
     public var hasUnviewed: Bool { stories.contains { !$0.isViewed } }
     public var latestStory: StoryItem? { stories.last }
 
@@ -1833,12 +1840,15 @@ public struct StoryGroup: Identifiable, Codable, Sendable, CacheIdentifiable {
         stories.allSatisfy { $0.isExpired(at: now) }
     }
 
-    public init(id: String, username: String, avatarColor: String, avatarURL: String? = nil, stories: [StoryItem]) {
-        self.id = id; self.username = username; self.avatarColor = avatarColor; self.avatarURL = avatarURL; self.stories = stories
+    public init(id: String, username: String, avatarColor: String, avatarURL: String? = nil,
+                stories: [StoryItem], authorPresence: UserPresence? = nil) {
+        self.id = id; self.username = username; self.avatarColor = avatarColor; self.avatarURL = avatarURL
+        self.stories = stories; self.authorPresence = authorPresence
     }
 
     public func with(stories: [StoryItem]) -> StoryGroup {
-        StoryGroup(id: id, username: username, avatarColor: avatarColor, avatarURL: avatarURL, stories: stories)
+        StoryGroup(id: id, username: username, avatarColor: avatarColor, avatarURL: avatarURL,
+                   stories: stories, authorPresence: authorPresence)
     }
 }
 
@@ -1951,7 +1961,12 @@ extension Array where Element == APIPost {
             StoryGroup(id: authorId, username: data.author.name,
                        avatarColor: DynamicColorGenerator.colorForName(data.author.name),
                        avatarURL: data.author.avatar,
-                       stories: data.stories.sorted { $0.createdAt < $1.createdAt })
+                       stories: data.stories.sorted { $0.createdAt < $1.createdAt },
+                       // Présence embarquée par le payload stories (nil sur les
+                       // payloads/caches antérieurs à l'enrichissement gateway).
+                       authorPresence: data.author.isOnline.map {
+                           UserPresence(isOnline: $0, lastActiveAt: data.author.lastActiveAt)
+                       })
         }
         groups.sort { a, b in
             if let uid = currentUserId {
