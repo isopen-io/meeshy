@@ -153,6 +153,35 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
         )
     }
 
+    // 2026-07-10 — `VideoFiltersPanel` (mounted by `CallEffectsOverlay`, which
+    // itself already carries the P1-16 fix above and is instantiated with a
+    // bare `VideoFiltersPanel()`) reintroduced the exact same anti-pattern:
+    // its `callManager` defaulted to `.shared` instead of being threaded down
+    // from the already-injected parent, resubscribing on every call tick
+    // while the user is mid-call adjusting filters.
+
+    func test_videoFiltersPanel_doesNotDefaultCallManagerToSharedInstance() throws {
+        let source = try source(of: "Views/VideoFiltersPanel.swift")
+        XCTAssertFalse(
+            source.contains("@ObservedObject private var callManager = CallManager.shared"),
+            "VideoFiltersPanel must not default `callManager` to `CallManager.shared` " +
+            "at declaration — that resubscribes on every parent re-render (every call tick)."
+        )
+        XCTAssertTrue(
+            source.contains("@ObservedObject var callManager: CallManager"),
+            "VideoFiltersPanel must declare `callManager` as an injected " +
+            "(non-defaulted) ObservedObject so callers pass their own instance down."
+        )
+    }
+
+    func test_callEffectsOverlay_injectsOwnCallManagerIntoVideoFiltersPanel() throws {
+        let source = try source(of: "Views/CallEffectsOverlay.swift")
+        XCTAssertTrue(
+            source.contains("VideoFiltersPanel(callManager: callManager)"),
+            "CallEffectsOverlay must pass its own `callManager` into VideoFiltersPanel."
+        )
+    }
+
     func test_callView_doesNotDefaultTranscriptionServiceToSharedInstance() throws {
         let source = try source(of: "Views/CallView.swift")
         XCTAssertFalse(

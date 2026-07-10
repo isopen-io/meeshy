@@ -236,6 +236,12 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       if (Object.keys(publicChanges).length > 0) {
         fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: publicChanges })
           .catch((err: unknown) => fastify.log.error({ err }, '[PROFILE_UPDATE] emitUserUpdated failed'));
+
+        // Le nom résolu pour l'indicateur de frappe (`displayName` > « Prénom Nom »
+        // > `username`) dérive de ces trois champs, mis en cache par StatusHandler.
+        // Invalider ce cache pour que « X écrit… » reflète le nouveau nom sans
+        // attendre l'expiration du TTL. Jumeau du refresh de langue ci-dessus.
+        fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
       const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
@@ -738,6 +744,12 @@ export async function updateUsername(fastify: FastifyInstance) {
 
       fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { username: updatedUser.username } })
         .catch((err: unknown) => fastify.log.error({ err }, '[USERNAME_CHANGE] emitUserUpdated failed'));
+
+      // `username` fait partie de l'identité de frappe mise en cache par
+      // StatusHandler (`{ username, displayName }`). L'invalider pour que
+      // l'indicateur « en train d'écrire » reflète le nouveau handle sans
+      // attendre l'expiration du TTL. Cf. refreshUserTypingIdentity.
+      fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
 
       fastify.log.info(`[USERNAME_CHANGE] User ${userId} changed username from "${user.username}" to "${body.newUsername}"`);
 

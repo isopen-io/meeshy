@@ -372,6 +372,118 @@ const buildPrismaForAdd = (postMedia: ReturnType<typeof makePostMediaMock>) => {
   } as unknown as PrismaClient;
 };
 
+// ---------------------------------------------------------------------------
+// deleteComment — cascade & commentCount invariant
+//
+// Regression: deleting a top-level comment decremented commentCount by exactly 1
+// and never touched its replies. Since addComment increments commentCount for
+// EVERY comment (top-level + reply), a parent with N surviving replies left
+// commentCount over-counted by N and orphaned those replies (invisible via
+// getComments, and getReplies is never called for a deleted parent).
+// ---------------------------------------------------------------------------
+
+const buildPrismaForDelete = (
+  target: { id: string; authorId: string; postId: string; parentId: string | null },
+  subtree: Record<string, Array<{ id: string }>> = {},
+) => {
+  const findFirst = jest.fn().mockResolvedValue(target);
+  const findMany = jest.fn().mockImplementation(async (args: any) => {
+    const parents: string[] = args.where.parentId.in;
+    return parents.flatMap((p) => subtree[p] ?? []);
+  });
+  const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+  const update = jest.fn().mockResolvedValue({});
+  const postUpdate = jest.fn().mockResolvedValue({});
+  const prisma = {
+    postComment: { findFirst, findMany, updateMany, update },
+    post: { update: postUpdate },
+  } as unknown as PrismaClient;
+  return { prisma, findMany, updateMany, update, postUpdate };
+};
+
+describe('PostCommentService.deleteComment', () => {
+  it('returns null when the comment does not exist', async () => {
+    const { prisma } = buildPrismaForDelete({ id: 'x', authorId: 'u1', postId: 'p1', parentId: null });
+    (prisma.postComment.findFirst as jest.Mock).mockResolvedValue(null);
+
+    const service = new PostCommentService(prisma);
+    expect(await service.deleteComment('x', 'u1')).toBeNull();
+  });
+
+  it('throws FORBIDDEN when a non-author deletes the comment', async () => {
+    const { prisma } = buildPrismaForDelete({ id: 'c1', authorId: 'owner', postId: 'p1', parentId: null });
+    const service = new PostCommentService(prisma);
+    await expect(service.deleteComment('c1', 'intruder')).rejects.toThrow('FORBIDDEN');
+  });
+
+  it('decrements commentCount by 1 for a leaf top-level comment', async () => {
+    const { prisma, updateMany, postUpdate } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('c1', 'u1');
+
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['c1'] } }, data: { deletedAt: expect.any(Date) } }),
+    );
+    expect(postUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p1' }, data: { commentCount: { decrement: 1 } } }),
+    );
+  });
+
+  it('cascades to surviving replies and decrements commentCount by 1 + reply count', async () => {
+    const { prisma, updateMany, postUpdate } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }, { id: 'r2' }] },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('c1', 'u1');
+
+    const softDeleted = updateMany.mock.calls[0][0].where.id.in;
+    expect(softDeleted.sort()).toEqual(['c1', 'r1', 'r2']);
+    expect(postUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { commentCount: { decrement: 3 } } }),
+    );
+  });
+
+  it('cascades through arbitrary-depth reply chains', async () => {
+    const { prisma, updateMany, postUpdate } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+      { c1: [{ id: 'r1' }], r1: [{ id: 'r1a' }], r1a: [{ id: 'r1a1' }] },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('c1', 'u1');
+
+    const softDeleted = updateMany.mock.calls[0][0].where.id.in;
+    expect(softDeleted.sort()).toEqual(['c1', 'r1', 'r1a', 'r1a1']);
+    expect(postUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { commentCount: { decrement: 4 } } }),
+    );
+  });
+
+  it("decrements the direct parent's replyCount by 1 when deleting a reply", async () => {
+    const { prisma, update } = buildPrismaForDelete(
+      { id: 'r1', authorId: 'u1', postId: 'p1', parentId: 'c1' },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('r1', 'u1');
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'c1' }, data: { replyCount: { decrement: 1 } } }),
+    );
+  });
+
+  it("does not touch replyCount when deleting a top-level comment", async () => {
+    const { prisma, update } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+    await service.deleteComment('c1', 'u1');
+
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
 describe('PostCommentService.addComment — media', () => {
   it('links the pending media to the new comment via commentId and returns it', async () => {
     const postMedia = makePostMediaMock();

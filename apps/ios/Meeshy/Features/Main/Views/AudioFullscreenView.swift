@@ -198,13 +198,54 @@ private struct AudioFullscreenPage: View {
     @State private var isSeeking = false
     @State private var seekValue: Double = 0
     @State private var selectedLanguage: String = "orig"
-    @State private var showLanguagePicker = false
+    @State private var showTranslationSheet = false
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var isRequestingTranscription = false
+    /// Transcription produite localement (on-device, Apple Speech) quand le
+    /// serveur n'en a pas fourni. Fusionnée dans `transcription`.
+    @State private var localTranscription: MessageTranscription?
+    /// Audios traduits arrivant en direct par socket (demandés depuis la
+    /// feuille de traduction). Fusionnés dans `translatedAudios`.
+    @State private var extraTranslatedAudios: [MessageTranslatedAudio] = []
 
     private var attachment: MessageAttachment { item.attachment }
-    private var transcription: MessageTranscription? { item.transcription }
-    private var translatedAudios: [MessageTranslatedAudio] { item.translatedAudios }
+
+    /// Transcription serveur (item) sinon transcription locale on-device.
+    private var transcription: MessageTranscription? { item.transcription ?? localTranscription }
+
+    /// Versions traduites du snapshot + celles arrivées en direct (dédupliquées
+    /// par langue cible, le snapshot ayant priorité).
+    private var translatedAudios: [MessageTranslatedAudio] {
+        guard !extraTranslatedAudios.isEmpty else { return item.translatedAudios }
+        var seen = Set(item.translatedAudios.map { $0.targetLanguage.lowercased() })
+        var result = item.translatedAudios
+        for audio in extraTranslatedAudios where !seen.contains(audio.targetLanguage.lowercased()) {
+            result.append(audio)
+            seen.insert(audio.targetLanguage.lowercased())
+        }
+        return result
+    }
+
+    /// Message synthétique (contenu vide → chemin audio de la feuille de
+    /// traduction) : la feuille de traduction des messages est couplée à
+    /// `Message`, mais pour l'audio elle n'a besoin que de l'attachment (id
+    /// pour `AttachmentService.translate`), de la langue d'origine et de
+    /// l'auteur. Fonctionne pour toutes les surfaces (conv/commentaire/post/réel).
+    private var translationMessage: Message {
+        Message(
+            id: item.messageId ?? item.attachment.id,
+            conversationId: "",
+            content: "",
+            originalLanguage: item.originalLanguage,
+            messageType: .audio,
+            createdAt: item.createdAt,
+            attachments: [item.attachment],
+            senderName: item.authorName,
+            senderColor: item.author.accentColor,
+            senderAvatarURL: item.authorAvatarURL,
+            senderUserId: item.authorUserId
+        )
+    }
 
     private var accent: Color { Color(hex: contactColor) }
     private let fullscreenSpeeds: [PlaybackSpeed] = [.x1_0, .x1_25, .x1_5, .x1_75, .x2_0]
@@ -278,11 +319,6 @@ private struct AudioFullscreenPage: View {
                 }
             }
 
-            // Author info right below controls
-            authorInfoRow
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
-
             // Caption (texte du message contenant cet audio)
             let captionText = item.caption.trimmingCharacters(in: .whitespacesAndNewlines)
             if !captionText.isEmpty {
@@ -298,7 +334,7 @@ private struct AudioFullscreenPage: View {
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 20)
-                .padding(.top, 8)
+                .padding(.top, 14)
                 .tint(accent)
             }
 
@@ -315,10 +351,17 @@ private struct AudioFullscreenPage: View {
                     .frame(maxHeight: 120)
             }
 
-            // Language strip right below transcription
+            // Language strip right below transcription — CHOISIR quelle version
+            // écouter (original + versions traduites, Prisme).
             inlineLanguageFlags
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
+
+            // Author info EN BAS, sous la ligne des langues (l'utilisateur choisit
+            // d'abord la version à écouter, l'auteur est une méta secondaire).
+            authorInfoRow
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
 
             Spacer(minLength: 0)
         }
@@ -334,9 +377,65 @@ private struct AudioFullscreenPage: View {
             player.stop()
             player.unregisterFromCoordinator()
         }
-        .sheet(isPresented: $showLanguagePicker) {
-            languagePickerSheet
+        .sheet(isPresented: $showTranslationSheet) {
+            // LA feuille de traduction des messages (couleurs par langue +
+            // boutons Traduire / retraduire), réutilisée pour l'audio :
+            // traduit la transcription et génère les voix (Prisme).
+            NavigationStack {
+                MessageLanguageDetailView(
+                    message: translationMessage,
+                    contactColor: contactColor,
+                    conversationId: "",
+                    transcription: transcription,
+                    translatedAudios: translatedAudios,
+                    onSelectAudioLanguage: { lang in
+                        selectLanguage(lang ?? "orig")
+                        showTranslationSheet = false
+                    }
+                )
+                .navigationTitle(String(localized: "audio.fullscreen.languages.title", defaultValue: "Langues", bundle: .main))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { showTranslationSheet = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
+        // Transcription serveur (long-press) : le résultat revient par socket.
+        .onReceive(
+            MessageSocketManager.shared.transcriptionReady
+                .filter { $0.attachmentId == attachment.id }
+                .receive(on: DispatchQueue.main)
+        ) { event in
+            let segments = (event.transcription.segments ?? []).map {
+                MessageTranscriptionSegment(text: $0.text, startTime: $0.startTime, endTime: $0.endTime, speakerId: $0.speakerId)
+            }
+            localTranscription = MessageTranscription(
+                attachmentId: event.attachmentId,
+                text: event.transcription.text,
+                language: event.transcription.language,
+                confidence: event.transcription.confidence,
+                durationMs: event.transcription.durationMs,
+                segments: segments,
+                speakerCount: event.transcription.speakerCount
+            )
+            isRequestingTranscription = false
+            HapticFeedback.success()
+        }
+        // Audios traduits demandés depuis la feuille : arrivent en direct.
+        .onReceive(
+            MessageSocketManager.shared.audioTranslationReady
+                .filter { $0.attachmentId == attachment.id }
+                .receive(on: DispatchQueue.main)
+        ) { event in appendTranslatedAudio(from: event) }
+        .onReceive(
+            MessageSocketManager.shared.audioTranslationCompleted
+                .filter { $0.attachmentId == attachment.id }
+                .receive(on: DispatchQueue.main)
+        ) { event in appendTranslatedAudio(from: event) }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -729,8 +828,11 @@ private struct AudioFullscreenPage: View {
                 .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
 
+            // Tap = transcription LOCALE (on-device, instantané, sans réseau).
+            // Long-press = menu natif pour transcrire via le SERVEUR (segments
+            // horodatés + diarisation + lecture synchronisée).
             Button {
-                requestTranscription()
+                runLocalTranscription()
             } label: {
                 HStack(spacing: 6) {
                     if isRequestingTranscription {
@@ -750,31 +852,129 @@ private struct AudioFullscreenPage: View {
                 .background(Capsule().fill(accent.opacity(0.7)))
             }
             .disabled(isRequestingTranscription)
+            .contextMenu {
+                Button {
+                    runLocalTranscription()
+                } label: {
+                    Label(String(localized: "audio.fullscreen.transcription.local", defaultValue: "Transcrire sur l'appareil", bundle: .main), systemImage: "iphone")
+                }
+                Button {
+                    requestServerTranscription()
+                } label: {
+                    Label(String(localized: "audio.fullscreen.transcription.server", defaultValue: "Transcrire via le serveur", bundle: .main), systemImage: "cloud")
+                }
+            }
 
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func requestTranscription() {
+    /// Transcription on-device (Apple Speech via `EdgeTranscriptionService`) —
+    /// quand aucune transcription serveur n'est disponible. Instantanée, hors
+    /// ligne. Produit des segments horodatés → lecture synchronisée.
+    private func runLocalTranscription() {
         guard !isRequestingTranscription else { return }
         isRequestingTranscription = true
         HapticFeedback.light()
+        Task {
+            do {
+                guard await EdgeTranscriptionService.shared.requestAuthorization() else {
+                    await MainActor.run { isRequestingTranscription = false; HapticFeedback.error() }
+                    return
+                }
+                let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
+                guard let localURL = try? await CacheCoordinator.shared.audio.localFileURLOrThrow(for: resolved) else {
+                    await MainActor.run { isRequestingTranscription = false; HapticFeedback.error() }
+                    return
+                }
+                let locale = EdgeTranscriptionService.normalizedLocale(for: Locale(identifier: item.originalLanguage))
+                let result = try await EdgeTranscriptionService.shared.transcribe(audioURL: localURL, locale: locale)
+                await MainActor.run {
+                    let segments = result.segments.map {
+                        MessageTranscriptionSegment(
+                            text: $0.text,
+                            startTime: $0.timestamp,
+                            endTime: $0.timestamp + $0.duration,
+                            speakerId: nil
+                        )
+                    }
+                    localTranscription = MessageTranscription(
+                        attachmentId: attachment.id,
+                        text: result.text,
+                        language: result.language,
+                        confidence: result.confidence,
+                        durationMs: Int(estimatedDuration * 1000),
+                        segments: segments,
+                        speakerCount: nil
+                    )
+                    isRequestingTranscription = false
+                    HapticFeedback.success()
+                }
+            } catch {
+                await MainActor.run { isRequestingTranscription = false; HapticFeedback.error() }
+            }
+        }
+    }
 
+    /// Transcription SERVEUR (Whisper + diarisation) : produit les segments
+    /// horodatés persistés. Le résultat revient par socket (`transcriptionReady`).
+    private func requestServerTranscription() {
+        guard !isRequestingTranscription else { return }
+        isRequestingTranscription = true
+        HapticFeedback.light()
         Task {
             do {
                 try await AttachmentService.shared.requestTranscription(attachmentId: attachment.id)
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                await MainActor.run {
-                    isRequestingTranscription = false
-                }
+                // Le résultat arrive via l'abonnement socket ; garde le spinner
+                // le temps du traitement serveur, avec un plafond de sécurité.
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                await MainActor.run { if localTranscription == nil { isRequestingTranscription = false } }
             } catch {
-                await MainActor.run {
-                    isRequestingTranscription = false
-                    HapticFeedback.error()
-                }
+                await MainActor.run { isRequestingTranscription = false; HapticFeedback.error() }
             }
         }
+    }
+
+    /// Convertit un événement socket de traduction audio en modèle domaine et
+    /// l'ajoute aux versions disponibles (nouveau pill de langue + jouable).
+    private func appendTranslatedAudio(from event: AudioTranslationEvent) {
+        let info = event.translatedAudio
+        let segments = (info.segments ?? []).map {
+            MessageTranscriptionSegment(text: $0.text, startTime: $0.startTime, endTime: $0.endTime, speakerId: $0.speakerId)
+        }
+        let audio = MessageTranslatedAudio(
+            id: info.id,
+            attachmentId: event.attachmentId,
+            targetLanguage: info.targetLanguage,
+            url: info.url,
+            transcription: info.transcription,
+            durationMs: info.durationMs,
+            format: info.format,
+            cloned: info.cloned,
+            quality: info.quality,
+            voiceModelId: info.voiceModelId,
+            ttsModel: info.ttsModel,
+            segments: segments
+        )
+        if !extraTranslatedAudios.contains(where: { $0.targetLanguage.lowercased() == audio.targetLanguage.lowercased() }) {
+            extraTranslatedAudios.append(audio)
+            HapticFeedback.light()
+        }
+    }
+
+    /// Bascule la langue écoutée et lance sa lecture (original ou version TTS).
+    private func selectLanguage(_ code: String) {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            selectedLanguage = code
+        }
+        if code == "orig" {
+            player.play(urlString: attachment.fileUrl)
+        } else if let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
+            player.play(urlString: audio.url)
+        }
+        loadWaveform()
+        HapticFeedback.light()
     }
 
     // MARK: - Inline Language Flags
@@ -805,7 +1005,7 @@ private struct AudioFullscreenPage: View {
             }
 
             Button {
-                showLanguagePicker = true
+                showTranslationSheet = true
                 HapticFeedback.light()
             } label: {
                 // Glyphe dans un cercle de dimension fixe 26×26 : figé (déborderait s'il scalait, doctrine 86i) ; le libellé porte le sens
@@ -815,7 +1015,7 @@ private struct AudioFullscreenPage: View {
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.white.opacity(0.08)))
             }
-            .accessibilityLabel(String(localized: "audio.fullscreen.language.choose", defaultValue: "Choisir une langue", bundle: .main))
+            .accessibilityLabel(String(localized: "audio.fullscreen.language.choose", defaultValue: "Traduire l'audio", bundle: .main))
         }
         .padding(.horizontal, 8)
     }
@@ -826,16 +1026,7 @@ private struct AudioFullscreenPage: View {
             : Color(hex: LanguageDisplay.colorHex(for: code))
 
         return Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                selectedLanguage = code
-            }
-            if code == "orig" {
-                player.play(urlString: attachment.fileUrl)
-            } else if let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
-                player.play(urlString: audio.url)
-            }
-            loadWaveform()
-            HapticFeedback.light()
+            selectLanguage(code)
         } label: {
             HStack(spacing: 3) {
                 Text(flag).font(MeeshyFont.relative(12))
@@ -848,81 +1039,6 @@ private struct AudioFullscreenPage: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(Capsule().fill(isSelected ? langColor.opacity(0.6) : Color.white.opacity(0.07)))
-        }
-    }
-
-    // MARK: - Language Picker Sheet
-
-    private var languagePickerSheet: some View {
-        NavigationStack {
-            List {
-                ForEach(sortedLanguages, id: \.code) { lang in
-                    let hasAudio = translatedAudios.contains(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() })
-                    let isSelected = selectedLanguage.lowercased() == lang.code.lowercased()
-
-                    Button {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            selectedLanguage = lang.code
-                        }
-                        if let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
-                            player.play(urlString: audio.url)
-                            loadWaveform()
-                        }
-                        showLanguagePicker = false
-                        HapticFeedback.light()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Text(lang.flag).font(MeeshyFont.relative(20))
-
-                            Text(lang.name)
-                                .font(MeeshyFont.relative(15, weight: isSelected ? .bold : .regular))
-                                .foregroundColor(.primary)
-
-                            Spacer()
-
-                            if hasAudio {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(MeeshyFont.relative(16))
-                                    .foregroundColor(MeeshyColors.success)
-                            }
-
-                            if isSelected {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .font(MeeshyFont.relative(14))
-                                    .foregroundColor(accent)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-            }
-            .navigationTitle(String(localized: "audio.fullscreen.languages.title", defaultValue: "Langues", bundle: .main))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { showLanguagePicker = false }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-
-    private var sortedLanguages: [LanguageDisplay] {
-        let availableCodes = Set(translatedAudios.map { $0.targetLanguage.lowercased() })
-        let allCodes = ["fr", "en", "es", "de", "it", "pt", "nl", "pl", "ro", "sv",
-                        "da", "fi", "no", "cs", "hu", "el", "bg", "hr", "sk", "sl",
-                        "et", "lv", "lt", "ga", "mt", "ru", "uk", "ar", "he", "tr",
-                        "ja", "ko", "zh", "hi", "bn", "th", "vi", "id", "ms", "sw", "am"]
-
-        return allCodes.compactMap { code in
-            guard let display = LanguageDisplay.from(code: code) else { return nil }
-            return display
-        }.sorted { a, b in
-            let aHas = availableCodes.contains(a.code.lowercased())
-            let bHas = availableCodes.contains(b.code.lowercased())
-            if aHas != bHas { return aHas }
-            return a.name < b.name
         }
     }
 

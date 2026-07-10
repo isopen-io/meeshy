@@ -8,7 +8,7 @@
 - Socket.IO Client 16.1
 - WebRTC 146.0.0 (calls)
 - Image caching: AsyncImage (SwiftUI native iOS 15+) + CachedAsyncImage + CacheCoordinator 3-tier (no Kingfisher — removed 2026-05)
-- WhisperKit 0.9 (on-device speech recognition)
+- Apple Speech framework (`SFSpeechRecognizer`) for on-device speech recognition, via `MeeshySDK.EdgeTranscriptionService` (WhisperKit removed 2026-07-10 — it was declared but never imported)
 
 ## Project Structure
 ```

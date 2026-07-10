@@ -56,7 +56,7 @@ struct CallEffectsOverlay: View {
                                 ScrollView(.vertical, showsIndicators: false) {
                                     switch panel {
                                     case .videoFilters:
-                                        VideoFiltersPanel()
+                                        VideoFiltersPanel(callManager: callManager)
                                     }
                                 }
                                 .frame(maxHeight: panelMaxHeight)

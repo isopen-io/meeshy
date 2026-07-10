@@ -41,8 +41,10 @@ function createMockPrisma() {
     },
     postComment: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     commentReaction: {
       upsert: jest.fn(),
@@ -1378,18 +1380,20 @@ describe('PostCommentService', () => {
       expect(prisma.postComment.update).not.toHaveBeenCalled();
     });
 
-    it('soft-deletes the comment and decrements commentCount', async () => {
+    it('soft-deletes the comment (subtree) and decrements commentCount', async () => {
       prisma.postComment.findFirst.mockResolvedValue(
         makeComment({ authorId: 'user-1', parentId: null }),
       );
-      prisma.postComment.update.mockResolvedValue({});
+      // No descendant replies → BFS returns empty on the first pass.
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.postComment.updateMany.mockResolvedValue({ count: 1 });
       prisma.post.update.mockResolvedValue({});
 
       const result = await service.deleteComment('comment-1', 'user-1');
 
-      expect(prisma.postComment.update).toHaveBeenCalledWith(
+      expect(prisma.postComment.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'comment-1' },
+          where: { id: { in: ['comment-1'] } },
           data: { deletedAt: expect.any(Date) },
         }),
       );
@@ -1402,23 +1406,45 @@ describe('PostCommentService', () => {
       expect(result).toEqual({ success: true });
     });
 
+    it('cascades to surviving replies and decrements commentCount by 1 + reply count', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(
+        makeComment({ authorId: 'user-1', parentId: null }),
+      );
+      // First BFS pass returns two direct replies; second pass (their ids) returns none.
+      prisma.postComment.findMany
+        .mockResolvedValueOnce([{ id: 'reply-1' }, { id: 'reply-2' }])
+        .mockResolvedValueOnce([]);
+      prisma.postComment.updateMany.mockResolvedValue({ count: 3 });
+      prisma.post.update.mockResolvedValue({});
+
+      await service.deleteComment('comment-1', 'user-1');
+
+      const softDeleted = prisma.postComment.updateMany.mock.calls[0][0].where.id.in;
+      expect([...softDeleted].sort()).toEqual(['comment-1', 'reply-1', 'reply-2']);
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { commentCount: { decrement: 3 } } }),
+      );
+    });
+
     it('decrements parent replyCount when deleting a reply', async () => {
       prisma.postComment.findFirst.mockResolvedValue(
         makeComment({ authorId: 'user-1', parentId: 'parent-1' }),
       );
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.postComment.updateMany.mockResolvedValue({ count: 1 });
       prisma.postComment.update.mockResolvedValue({});
       prisma.post.update.mockResolvedValue({});
 
       await service.deleteComment('comment-1', 'user-1');
 
-      // First update call: soft-delete the comment itself
-      expect(prisma.postComment.update).toHaveBeenCalledWith(
+      // The subtree soft-delete goes through updateMany …
+      expect(prisma.postComment.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'comment-1' },
+          where: { id: { in: ['comment-1'] } },
           data: { deletedAt: expect.any(Date) },
         }),
       );
-      // Second update call: decrement parent replyCount
+      // … and only the direct parent's replyCount is decremented.
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'parent-1' },
@@ -1431,13 +1457,14 @@ describe('PostCommentService', () => {
       prisma.postComment.findFirst.mockResolvedValue(
         makeComment({ authorId: 'user-1', parentId: null }),
       );
-      prisma.postComment.update.mockResolvedValue({});
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.postComment.updateMany.mockResolvedValue({ count: 1 });
       prisma.post.update.mockResolvedValue({});
 
       await service.deleteComment('comment-1', 'user-1');
 
-      // Only one postComment.update call (the soft-delete), no parent replyCount decrement
-      expect(prisma.postComment.update).toHaveBeenCalledTimes(1);
+      // Top-level delete: no parent replyCount update (the soft-delete uses updateMany).
+      expect(prisma.postComment.update).not.toHaveBeenCalled();
     });
   });
 

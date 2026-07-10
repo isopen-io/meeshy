@@ -4,6 +4,43 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-10 **compose-language detection for outbound stamping** landed (slice
+> `chat-compose-language-detection`, Translation §D — feature-parity.md "Source-language stamping from in-app
+> prefs" now shipped). `ChatViewModel.send()` stamped `originalLanguage = user.systemLanguage ?:
+> LanguageResolver.FALLBACK_LANGUAGE` — **two Prisme bugs in one line**: (1) it bypassed the resolution chain,
+> so a user with no `systemLanguage` but a `regionalLanguage`/`customDestinationLanguage` had every outgoing
+> message mis-stamped `fr`; (2) it never inspected the composed text, so a French-configured user typing
+> Spanish stamped `fr` and readers got a broken auto-translation. **(1) Pure core** — new `:core:model`
+> `ComposeLanguageDetector.detect(text, fallback): String`, a faithful port of the shared web heuristic
+> `apps/web/utils/language-detection.ts`: `detectLanguage`'s per-language script + stopword regex scoring
+> (fr/es/de/it/pt/ru/ar/zh/ja/ko — verbatim table, incl. ASCII `\b` semantics matching JS) wrapped by
+> `detectComposeLanguage`'s compose guards — strip `https?://\S+`, require ≥4 `\p{L}` letters else fallback,
+> pick the highest-scoring language (earliest-declared wins a tie, matching the web insertion order), and bound
+> the result through `LanguageData.info` so it is **always** a supported code or the fallback verbatim. iOS
+> uses `NLLanguageRecognizer` and web uses `tinyld`; neither is a pure JVM dependency, so Android ports the
+> hand-rolled heuristic that the web source itself ships as the "fallback basique". **(2) Wiring** — `send()`
+> now stamps `ComposeLanguageDetector.detect(text, fallback = LanguageResolver.resolveUserLanguage(user))`:
+> detection first, sender's **resolved** content language (system → regional → custom → `fr`, NEVER device
+> locale — Prisme rule 2) as the fallback. The forward path (line ~794, which preserves the *source* message's
+> `originalLanguage`) is deliberately untouched — a forward keeps the original author's language, not the
+> forwarder's. **+19 tests**: `ComposeLanguageDetectorTest` 17 (fr/es/de/it/pt/ru/ar/zh/ja/ko detection ×10 /
+> blank→fallback / below-min-alpha→fallback / URL-only-stripped→fallback / unrecognized-Latin→fallback /
+> case-insensitive / higher-score-wins / detected-code-always-supported invariant), `ChatViewModelTest` +2
+> (Spanish text by an `fr` user → stamped `es`; regional-only user + undetectable `"hello"` → stamped `de`, the
+> pre-fix `fr` bug). The pre-existing `send_dispatches...` test (`"hello"` → `"fr"`) stays **green unchanged**:
+> English is not a scored pattern → `"hello"` scores 0 → detector returns the fallback, which for the
+> `systemLanguage="fr"` user resolves to `"fr"` (faithful behaviour, not luck). **RED verified**: the new
+> `ComposeLanguageDetectorTest` references a symbol absent on `main` (compile-RED); the two new VM tests fail
+> against `main`'s `systemLanguage ?: "fr"` stamp (`fr` ≠ `es`, `fr` ≠ `de`) — behavioural, not tautological.
+> Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL. Reviewer: PASS (diff `apps/android`
+> only — `:core:model` detector + test, `:feature:chat` VM one-line wiring + 2 tests; **SDK purity** — the
+> detector is a stateless rule engine with opaque params `(text, fallback)`, no product decision → `:core:model`
+> building block; the *when/what-fallback* decision stays in the VM; **SSOT** — fallback via
+> `LanguageResolver.resolveUserLanguage`, supported-set via `LanguageData`, no re-implementation; **no coverage
+> floor lowered, no existing test weakened**). **Next:** the message detail explorer sheet (per-language
+> translate/retranslate), or progressive **audio-voice translation** (`audio:translation-ready` → cloned-voice
+> playback, needs BubbleAudio UI).
+
 > On 2026-07-10 **on-demand translation of an absent language** landed (slice `chat-on-demand-translate`,
 > Translation parity §D — feature-parity.md "Original exploration" on-demand-translate now shipped, "Message
 > detail explorer" on-demand arm now live). The prior slice left `LanguageFlagTapResolver.RequestTranslation`

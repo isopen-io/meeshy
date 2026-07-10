@@ -74,6 +74,8 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
   if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
   if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
   if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
+  if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
+  if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
   if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
   if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
   return SERVER_EVENTS.MESSAGE_NEW;
@@ -400,6 +402,10 @@ export class MeeshySocketIOManager {
     // ReactionHandler enqueues reaction add/remove for offline peers on the
     // same instance, so their reaction state converges on reconnect.
     this.reactionHandler.setDeliveryQueue(queue);
+    // Same for per-attachment reactions — without this an attachment reaction
+    // toggled while a peer is offline was only broadcast to the live room and
+    // was lost forever (their cached reactionSummary stayed stale).
+    this.attachmentReactionHandler.setDeliveryQueue(queue);
   }
 
   private async _drainPendingMessages(userId: string, isAnonymous: boolean): Promise<void> {
@@ -2071,6 +2077,23 @@ export class MeeshySocketIOManager {
     }
   ): void {
     applyResolvedLanguagesRefresh(this.connectedUsers, userId, prefs);
+  }
+
+  /**
+   * Public wrapper: invalide l'identité de frappe mise en cache d'un user
+   * (`username` / `displayName`) après un changement de profil pertinent, afin
+   * que l'indicateur « en train d'écrire » affiche le nouveau nom immédiatement
+   * au lieu d'attendre l'expiration du TTL du cache d'identité du StatusHandler.
+   *
+   * Sans cet appel, un utilisateur qui renomme son displayName (ou change de
+   * username) puis se remet à taper apparaîtrait sous son ANCIEN nom à ses
+   * pairs pendant toute la fenêtre TTL — alors que sa vue de profil, elle, est
+   * déjà mise à jour en temps réel via `emitUserUpdated`. Miroir de la même
+   * invalidation faite au `disconnect` et jumeau REST de
+   * `refreshUserResolvedLanguages` ci-dessus. Best-effort.
+   */
+  public refreshUserTypingIdentity(userId: string): void {
+    this.statusHandler.invalidateIdentityCache(userId);
   }
 
   /**

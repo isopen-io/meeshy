@@ -7,6 +7,7 @@
 import {
   SocketMessageSendSchema,
   SocketMessageSendWithAttachmentsSchema,
+  SocketMessageEditSchema,
   SocketConversationJoinSchema,
   SocketConversationLeaveSchema,
   SocketReactionAddSchema,
@@ -100,6 +101,41 @@ describe('SocketMessageSendWithAttachmentsSchema', () => {
       content: 'x'.repeat(100_001),
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('SocketMessageEditSchema', () => {
+  const base = {
+    messageId: VALID_MONGO_ID,
+    content: 'Edited content',
+  };
+
+  it('accepts a valid edit', () => {
+    expect(SocketMessageEditSchema.safeParse(base).success).toBe(true);
+  });
+
+  // Regression: the handler allows clearing a caption on an attachment message
+  // (MessageHandler.handleMessageEdit gates emptiness on hasAttachments). A
+  // `.min(1)` here would reject the empty string at the boundary and make that
+  // branch unreachable, silently killing caption removal over the socket path.
+  it('accepts empty content (caption removal on attachment messages)', () => {
+    const result = SocketMessageEditSchema.safeParse({ ...base, content: '' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an invalid messageId', () => {
+    const result = SocketMessageEditSchema.safeParse({ ...base, messageId: 'not-an-objectid' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects content exceeding 100 000 chars', () => {
+    const result = SocketMessageEditSchema.safeParse({ ...base, content: 'x'.repeat(100_001) });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts content at exactly 100 000 chars', () => {
+    const result = SocketMessageEditSchema.safeParse({ ...base, content: 'x'.repeat(100_000) });
+    expect(result.success).toBe(true);
   });
 });
 
