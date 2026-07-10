@@ -761,19 +761,6 @@ protocol WebRTCClientProviding: AnyObject {
     var videoFilterPipeline: VideoFilterPipeline { get }
 }
 
-// MARK: - DataChannel Transcription Message
-
-nonisolated struct DataChannelTranscriptionMessage: Codable, Sendable, Equatable {
-    let type: String  // "transcription-segment"
-    let text: String
-    let speakerId: String
-    let startTime: Double
-    let isFinal: Bool
-    let language: String
-    let translatedText: String?
-    let translatedLanguage: String?
-}
-
 // MARK: - DataChannel Control Messages
 
 /// Message de CONTRÔLE in-band sur le data channel — enveloppe minimale
@@ -789,20 +776,15 @@ nonisolated struct DataChannelControlMessage: Codable, Sendable, Equatable {
 }
 
 /// Routage typé des messages entrants du data channel. Pur et testable :
-/// une seule passe de décodage décide bye / segment de transcription / bruit
-/// (ping keep-alive, payload inconnu d'une version future).
+/// une seule passe de décodage décide bye / bruit (ping keep-alive, payload
+/// inconnu d'une version future).
 /// `nonisolated` : value type pur, décodable depuis n'importe quel contexte
 /// (le callback data channel WebRTC arrive hors main thread).
 nonisolated enum DataChannelInbound: Equatable {
     case bye(reason: String?)
-    case transcription(DataChannelTranscriptionMessage)
     case ignored
 
     static func decode(_ data: Data) -> DataChannelInbound {
-        if let segment = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: data),
-           segment.type == "transcription-segment" {
-            return .transcription(segment)
-        }
         if let control = try? JSONDecoder().decode(DataChannelControlMessage.self, from: data),
            control.type == "bye" {
             return .bye(reason: control.reason)

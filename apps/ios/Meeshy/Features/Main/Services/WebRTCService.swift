@@ -141,8 +141,8 @@ final class WebRTCService {
         // SDP (m=application). Côté offreur uniquement — l'answerer le reçoit
         // via `didOpen`. Idempotent : les offres de re-négociation (ICE
         // restart, escalade vidéo) ne créent pas de second channel. Il porte
-        // les segments de transcription ET les messages de contrôle in-band
-        // (`bye` = raccroché instantané sans aller-retour serveur).
+        // les messages de contrôle in-band (`bye` = raccroché instantané sans
+        // aller-retour serveur).
         _ = client.createDataChannel(label: "transcription")
         do {
             let offer = try await client.createOffer()
@@ -458,17 +458,6 @@ final class WebRTCService {
             maxFramerate: thermal.framerate,
             scaleResolutionDownBy: thermal.scaleDownBy
         )
-    }
-
-    // MARK: - DataChannel Transcription (H7)
-
-    func createTranscriptionChannel() -> Bool {
-        client.createDataChannel(label: "transcription")
-    }
-
-    func sendTranscription(_ message: DataChannelTranscriptionMessage) {
-        guard let data = try? JSONEncoder().encode(message) else { return }
-        client.sendDataChannelMessage(data)
     }
 
     /// Raccroché in-band : pousse `{type: "bye"}` au pair en P2P direct pour

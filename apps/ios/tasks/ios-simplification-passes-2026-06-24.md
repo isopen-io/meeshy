@@ -163,9 +163,19 @@ helpers + retry backoff), (5) monitoring (network/thermal/screen-capture/backgro
   non-nil (le guard `if let callId, let userId` ne servait qu'à justifier la
   référence morte à l'API legacy).
 - **Transcription unidirectionnelle** — `WebRTCService.createTranscriptionChannel()`
-  n'est jamais appelé côté offerer (seul le receiver câble via `didOpen`). Soit
-  l'appeler au setup offerer, soit supprimer le code si la transcription temps-réel
-  n'est pas livrée. **Décision produit requise.**
+  n'était jamais appelé côté offerer (seul le receiver câble via `didOpen`).
+  **Décision produit tranchée (2026-07-10)** : supprimée plutôt que réparée — au-delà
+  du canal jamais créé côté offerer, l'UI (`showTranscript`) n'avait aucun déclencheur
+  atteignable, `requestPermission()` n'était jamais appelé, et `appendLocalAudioBuffer`/
+  `appendRemoteAudioBuffer` n'avaient aucun appelant car `P2PWebRTCClient` n'expose pas
+  l'audio device module de la build WebRTC publique — même corrigé, le canal n'aurait
+  jamais reçu de segments réels. `CallTranscriptionService` (+ tests), le panneau
+  `CallView.transcriptOverlay`, `toggleTranscription()`, `DataChannelTranscriptionMessage`
+  et le cas `.transcription` de `DataChannelInbound` ont été retirés en bloc — même
+  traitement que la suppression des voice-effects (2026-07-05, cf.
+  `CallEffectsOverlay.swift:7-15`). Le data channel `"transcription"` lui-même est
+  conservé : il porte toujours le `bye` in-band (raccroché instantané P2P) et le ping
+  keep-alive, qui restent en usage.
 
 ### Vérification
 - Build vert + `CallManagerTests`/`CallManagerAudioSessionTests`/`CallEventQueueTests`/

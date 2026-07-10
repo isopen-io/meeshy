@@ -79,37 +79,6 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
-    func test_callManager_toggleTranscription_doesNotHardcodeLanguage() throws {
-        // Regression guard: toggleTranscription() must not hardcode language strings.
-        // Language resolution is delegated to CallManager.preferredCallLanguage(for:)
-        // (Prisme Linguistique), which reads systemLanguage > regionalLanguage > "fr".
-        let source = try callManagerSource()
-
-        // Extract the toggleTranscription function body.
-        guard let fnRange = source.range(of: "func toggleTranscription()"),
-              let endRange = source[fnRange.upperBound...].range(of: "\n    }") else {
-            XCTFail("toggleTranscription() function not found in CallManager.swift")
-            return
-        }
-        let fnBody = String(source[fnRange.lowerBound ..< endRange.upperBound])
-
-        XCTAssertFalse(
-            fnBody.contains("let localLang = \"fr\""),
-            "toggleTranscription() must not hardcode localLang = \"fr\". " +
-            "Delegate to CallManager.preferredCallLanguage(for:) (Prisme Linguistique)."
-        )
-        XCTAssertFalse(
-            fnBody.contains("let remoteLang = \"fr\""),
-            "toggleTranscription() must not hardcode remoteLang = \"fr\". " +
-            "Delegate to CallManager.preferredCallLanguage(for:) (Prisme Linguistique)."
-        )
-        XCTAssertTrue(
-            fnBody.contains("preferredCallLanguage"),
-            "toggleTranscription() must delegate language resolution to " +
-            "CallManager.preferredCallLanguage(for:) (Prisme Linguistique)."
-        )
-    }
-
     func test_callManager_preferredCallLanguage_isStaticAndPure() throws {
         // Guard that preferredCallLanguage stays a pure static function — no instance
         // state, no async, safe to call from any actor in tests.

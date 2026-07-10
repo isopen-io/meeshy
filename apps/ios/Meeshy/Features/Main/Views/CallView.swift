@@ -21,14 +21,8 @@ struct CallView: View {
     // this check, the continuous pulse/ring animations ran indefinitely
     // even for motion-sensitive users (and burned battery).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    // Instance du CallManager (et non un `@StateObject` local) : les segments
-    // distants (DataChannel) et `toggleTranscription` opèrent sur CELLE-CI —
-    // l'ancienne instance locale orpheline ne transcrivait jamais rien et
-    // était ré-allouée à chaque présentation du CallView.
-    @ObservedObject private var transcriptionService = CallManager.shared.transcriptionService
     @State private var pulseScale: CGFloat = 1.0
     @State private var showControls = true
-    @State private var showTranscript = false
     @State private var showEffectsToolbar = false
     // §7.2 — PiP placement is corner-anchored (snap-to-nearest-corner) and
     // computed from a GeometryReader, not a hardcoded point. `pipDragOffset`
@@ -703,9 +697,6 @@ struct CallView: View {
                     .animation(.easeInOut(duration: 0.25), value: showControls)
             }
 
-            // Transcript overlay
-            transcriptOverlay
-
             // §7.2 — draggable, corner-snapping PiP showing the secondary
             // stream. Tap to swap it with the full-area primary (FaceTime).
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
@@ -1286,52 +1277,6 @@ struct CallView: View {
                     .font(.caption2)
                     .foregroundColor(.white.opacity(0.7))
             }
-        }
-    }
-
-    // MARK: - Transcript Overlay
-
-    private var transcriptOverlay: some View {
-        let localUserId = AuthManager.shared.currentUser?.id ?? ""
-        let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
-        return VStack(alignment: .leading, spacing: 6) {
-            ForEach(transcriptionService.displayedSegments) { segment in
-                let isLocal = segment.speakerId == localUserId
-                HStack(alignment: .top, spacing: 8) {
-                    Circle()
-                        .fill(isLocal ? MeeshyColors.indigo400 : MeeshyColors.success)
-                        .frame(width: 8, height: 8)
-                        .padding(.top, 6)
-                        .accessibilityHidden(true)
-                    Text(segment.text)
-                        .font(.callout.weight(segment.isFinal ? .regular : .light))
-                        .foregroundColor(.white)
-                        .opacity(segment.isFinal ? 1.0 : 0.7)
-                        .accessibilityLabel("\(isLocal ? localName : remoteName) : \(segment.text)")
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .padding(12)
-        // iOS 26 Liquid Glass — floating live-transcript panel over the video
-        // stream (same chrome-over-content family as the duration badge / effects
-        // toolbar). SDK Compatibility wrapper gates native effect / fallback.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 100)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .opacity(showTranscript ? 1 : 0)
-        .accessibilityHidden(!showTranscript)
-        .animation(.easeInOut(duration: 0.2), value: showTranscript)
-        // PERF-005: tell the transcription service when the panel is visible
-        // so it can skip per-frame partial-result work while hidden.
-        .adaptiveOnChange(of: showTranscript) { _, newValue in
-            transcriptionService.isShowingOverlay = newValue
-        }
-        .onAppear {
-            transcriptionService.isShowingOverlay = showTranscript
         }
     }
 

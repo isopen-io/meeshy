@@ -114,7 +114,6 @@ final class CallManager: ObservableObject {
             updateProximityMonitoring()
         }
     }
-    @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published private(set) var remoteUserId: String?
     @Published private(set) var remoteUsername: String?
     /// Conversation (DM) qui héberge l'appel courant, quand elle est connue.
@@ -2049,33 +2048,6 @@ final class CallManager: ObservableObject {
         HapticFeedback.light()
     }
 
-    func toggleTranscription() {
-        if transcriptionService.isTranscribing {
-            transcriptionService.stopTranscribing()
-        } else {
-            let localUser = AuthManager.shared.currentUser
-            let localLang = CallManager.preferredCallLanguage(for: localUser)
-            let localUserId = localUser?.id ?? ""
-            let rUserId = remoteUserId ?? ""
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                var remoteLang = CallManager.preferredCallLanguage(for: nil)
-                if !rUserId.isEmpty {
-                    let cached = await CacheCoordinator.shared.profiles.load(for: rUserId)
-                    if let profile = cached.snapshot()?.first {
-                        remoteLang = CallManager.preferredCallLanguage(for: profile)
-                    }
-                }
-                self.transcriptionService.startTranscribing(
-                    localLanguage: localLang,
-                    remoteLanguage: remoteLang,
-                    localUserId: localUserId,
-                    remoteUserId: rUserId
-                )
-            }
-        }
-    }
-
     var videoFilters: VideoFilterPipeline { webRTCService.videoFilters }
     var localVideoTrack: Any? { webRTCService.localVideoTrack }
     var remoteVideoTrack: Any? { webRTCService.remoteVideoTrack }
@@ -3056,7 +3028,6 @@ final class CallManager: ObservableObject {
             "codec":               codec,
             "effectsUsed":         Array(analyticsEffectsUsed),
             "filtersUsed":         filtersUsed,
-            "transcriptionUsed":   transcriptionService.isTranscribing,
             "qualityDistribution": qualityDistribution,
             "platform":            "ios",
             "deviceModel":         UIDevice.current.model,
@@ -3145,7 +3116,6 @@ final class CallManager: ObservableObject {
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
-        transcriptionService.resetForCallEnd()
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
         sdpOfferTimeoutTask?.cancel()
@@ -4353,20 +4323,6 @@ extension CallManager: WebRTCServiceDelegate {
                 guard let callId = self.currentCallId else { return }
                 Logger.calls.info("DataChannel bye received — ending call instantly (callId=\(callId))")
                 self.handleRemoteEnd(callId: callId, rawReason: reason)
-            case .transcription(let message):
-                let segment = TranscriptionSegment(
-                    id: UUID(),
-                    text: message.text,
-                    speakerId: message.speakerId,
-                    startTime: message.startTime,
-                    endTime: message.startTime + 1.0,
-                    isFinal: message.isFinal,
-                    confidence: 1.0,
-                    language: message.language,
-                    translatedText: message.translatedText,
-                    translatedLanguage: message.translatedLanguage
-                )
-                self.transcriptionService.receiveRemoteSegment(segment)
             case .ignored:
                 break
             }

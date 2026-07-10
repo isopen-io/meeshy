@@ -290,8 +290,6 @@ final class WebRTCServiceTests: XCTestCase {
             "The newest candidate must always be retained by the FIFO ring.")
     }
 
-    // MARK: - Transcription Channel
-
     // MARK: - TestableWebRTCClient Stats Configuration
 
     func test_testableClient_statsToReturn_isNilByDefault() async {
@@ -305,14 +303,6 @@ final class WebRTCServiceTests: XCTestCase {
         client.statsToReturn = CallStats(availableOutgoingBitrateBps: 1_500_000)
         let result = await client.getStats()
         XCTAssertEqual(result?.availableOutgoingBitrateBps, 1_500_000)
-    }
-
-    func test_createTranscriptionChannel_delegatesToClient() {
-        let (sut, client) = makeSUT()
-        client.createDataChannelResult = true
-        let result = sut.createTranscriptionChannel()
-        XCTAssertTrue(result)
-        XCTAssertEqual(client.lastDataChannelLabel, "transcription")
     }
 
     // MARK: - Connection State Delegate
