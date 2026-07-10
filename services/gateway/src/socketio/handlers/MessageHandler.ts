@@ -1131,12 +1131,32 @@ export class MessageHandler {
     payload: Record<string, unknown>,
     opts: { excludeUserId?: string; excludeSocketId?: string }
   ): void {
-    const socketIds = this.io.sockets.adapter.rooms.get(room);
-    if (!socketIds || socketIds.size === 0) return;
+    // `adapter.rooms` and the `connectedUsers`/`socketToUser` maps only ever see
+    // THIS node's sockets. On a multi-node deployment (the documented 100k+
+    // msg/s horizontal-scale topology runs the Socket.IO Redis adapter) a
+    // recipient connected to another gateway node is never enumerated here — so
+    // the per-language loop below, which can only resolve locally-connected
+    // sockets, would silently never deliver `message:new` to them. Broadcast the
+    // FULL, untrimmed payload to the room across the cluster FIRST (the Redis
+    // adapter propagates `io.to(room)`), excepting every LOCAL room socket —
+    // each of which the loop below serves with a language-trimmed copy — plus
+    // the sender. Remote sockets thus receive exactly one (unfiltered)
+    // `message:new`; local sockets receive exactly one trimmed copy. On a single
+    // node every room socket is local, so the except-set covers the whole room
+    // and this cross-node broadcast reaches nobody — behavior is unchanged. The
+    // bandwidth trim still applies to every socket whose language IS resolvable
+    // locally (the common co-located case).
+    const localSocketIds = this.io.sockets.adapter.rooms.get(room);
+    const exceptForRemote: string[] = localSocketIds ? [...localSocketIds] : [];
+    if (opts.excludeUserId) exceptForRemote.push(ROOMS.user(opts.excludeUserId));
+    if (opts.excludeSocketId) exceptForRemote.push(opts.excludeSocketId);
+    this.io.to(room).except(exceptForRemote).emit(SERVER_EVENTS.MESSAGE_NEW, payload);
+
+    if (!localSocketIds || localSocketIds.size === 0) return;
 
     const originalLanguage = String((payload as { originalLanguage?: unknown }).originalLanguage || 'fr');
     const groups = groupSocketsByLanguage({
-      socketIds,
+      socketIds: localSocketIds,
       originalLanguage,
       excludeUserId: opts.excludeUserId,
       excludeSocketIds: opts.excludeSocketId ? new Set([opts.excludeSocketId]) : undefined,

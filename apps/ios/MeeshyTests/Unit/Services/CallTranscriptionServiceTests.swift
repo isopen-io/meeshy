@@ -97,6 +97,31 @@ final class CallTranscriptionServiceTests: XCTestCase {
         // the guard is load-bearing, not a bug in the test.
         XCTAssertEqual(socket.emitCallTranscriptionSegmentCallCount, 0)
     }
+
+    // MARK: - Recognizer Error Path
+
+    func test_applyRecognitionError_whileTranscribing_stopsTranscribingAndSurfacesError() {
+        let (sut, _) = makeSUT()
+        sut.setTranscribingForTesting(true)
+
+        sut.applyRecognitionError(.recognizerUnavailable(language: "fr"))
+
+        // The recognizer genuinely stopped producing results — isTranscribing
+        // must flip false so the captions toggle (driven off it) stops
+        // claiming captions are live when they aren't, and lastError must
+        // survive the stop so the UI can surface it.
+        XCTAssertFalse(sut.isTranscribing)
+        XCTAssertEqual(sut.lastError, .recognizerUnavailable(language: "fr"))
+    }
+
+    func test_applyRecognitionError_whenNotTranscribing_isNoOp() {
+        let (sut, _) = makeSUT()
+
+        sut.applyRecognitionError(.recognizerUnavailable(language: "fr"))
+
+        XCTAssertFalse(sut.isTranscribing)
+        XCTAssertNil(sut.lastError)
+    }
 }
 
 // MARK: - TranscriptionSegment Data Model Tests

@@ -1311,12 +1311,16 @@ export class PostService {
   async getPostInteractions(postId: string, userId: string, limit: number = 50, offset: number = 0) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      select: { id: true, authorId: true, reactions: true },
+      select: { id: true, authorId: true },
     });
     if (!post) return null;
     if (post.authorId !== userId) throw new Error('FORBIDDEN');
 
-    const [views, total] = await Promise.all([
+    // Réactions dérivées de la table `PostReaction` (SSOT) — PAS du JSON legacy
+    // `post.reactions`, jamais mis à jour par le chemin socket (voir
+    // PostFeedService.enrichWithLikeStatus). Une réaction posée via
+    // `post:reaction-add` s'affichait sinon `reaction: null` pour l'auteur.
+    const [views, total, reactionRows] = await Promise.all([
       this.prisma.postView.findMany({
         where: { postId },
         include: { user: { select: authorSelect } },
@@ -1325,11 +1329,14 @@ export class PostService {
         skip: offset,
       }),
       this.prisma.postView.count({ where: { postId } }),
+      this.prisma.postReaction.findMany({
+        where: { postId },
+        select: { userId: true, emoji: true },
+      }),
     ]);
 
-    const reactions = (post.reactions as any[] | null) ?? [];
     const reactionByUser = new Map<string, string>();
-    for (const r of reactions) {
+    for (const r of reactionRows) {
       reactionByUser.set(r.userId, r.emoji);
     }
 

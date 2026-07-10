@@ -1676,12 +1676,28 @@ export class MeeshySocketIOManager {
    * delegated to `filterMessagePayloadForLanguages` (unit-tested).
    */
   private _emitMessageNewByLanguage(room: string, payload: Record<string, any>): void {
-    const socketIds = this.io.sockets.adapter.rooms.get(room);
-    if (!socketIds || socketIds.size === 0) return;
+    // `adapter.rooms` + `connectedUsers`/`socketToUser` only see THIS node's
+    // sockets. On a multi-node deployment (the 100k+ msg/s topology runs the
+    // Socket.IO Redis adapter) a recipient on another gateway node is never
+    // enumerated here, so the per-language loop below — which can only resolve
+    // locally-connected sockets — would silently never deliver `message:new` to
+    // them. Broadcast the FULL payload to the room across the cluster first (the
+    // Redis adapter propagates `io.to(room)`), excepting every LOCAL room socket
+    // (each served a trimmed copy by the loop). Remote sockets get exactly one
+    // (unfiltered) message:new; local sockets get exactly one trimmed copy. On a
+    // single node every room socket is local, so the except-set covers the whole
+    // room and this broadcast reaches nobody — behavior unchanged.
+    const localSocketIds = this.io.sockets.adapter.rooms.get(room);
+    const remoteEmitter: ReturnType<SocketIOServer['to']> = this.io
+      .to(room)
+      .except(localSocketIds ? [...localSocketIds] : []);
+    remoteEmitter.emit(SERVER_EVENTS.MESSAGE_NEW, payload);
+
+    if (!localSocketIds || localSocketIds.size === 0) return;
 
     const originalLanguage = String(payload.originalLanguage || 'fr').toLowerCase();
     const socketsByLanguageKey = new Map<string, { socketIds: string[]; langs: string[] }>();
-    for (const socketId of socketIds) {
+    for (const socketId of localSocketIds) {
       const userId = this.socketToUser.get(socketId);
       const socketUser = userId ? this.connectedUsers.get(userId) : undefined;
       const langs: string[] =
