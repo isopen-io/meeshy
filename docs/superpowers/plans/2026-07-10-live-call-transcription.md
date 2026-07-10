@@ -220,7 +220,7 @@ git commit -m "docs(ios/calls): record Phase 0 spike result for live call captio
 **Interfaces:**
 - Produces: `CallTranscriptionSegmentPayload` (Sendable struct, outbound), `CallTranslatedSegmentData` (Decodable & Sendable, inbound), `MessageSocketProviding.emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload)`, `MessageSocketProviding.callTranslatedSegmentReceived: PassthroughSubject<CallTranslatedSegmentData, Never>`. Task 3 and Task 4 consume these exact names/types.
 
-- [ ] **Step 1: Write the failing decode test**
+- [x] **Step 1: Write the failing decode test**
 
 Open `packages/MeeshySDK/Tests/MeeshySDKTests/Sockets/MessageSocketEventTests.swift` and add, right after the `testMessagePinnedEventDecoding_tolerantWithoutOptionalFields` test (mirrors the existing plain-decode style used throughout this file):
 
@@ -282,7 +282,7 @@ Open `packages/MeeshySDK/Tests/MeeshySDKTests/Sockets/MessageSocketEventTests.sw
     }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -292,7 +292,7 @@ xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,n
 
 Expected: FAIL — `cannot find type 'CallTranslatedSegmentData' in scope`.
 
-- [ ] **Step 3: Add the wire models**
+- [x] **Step 3: Add the wire models**
 
 In `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`, locate the `CallForcedLeaveData` struct (the last struct in the "Call signaling" model block, ends with a closing `}` right before the `// MARK: - Connection State` — actually before the concrete class declaration; verify by searching for `public struct CallForcedLeaveData`). Insert immediately after it:
 
@@ -343,7 +343,7 @@ public struct CallTranslatedSegmentData: Decodable, Sendable {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
@@ -352,7 +352,7 @@ xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,n
 
 Expected: PASS.
 
-- [ ] **Step 5: Add the protocol requirements + default shim**
+- [x] **Step 5: Add the protocol requirements + default shim**
 
 In the same file, in `public protocol MessageSocketProviding: Sendable { ... }`, add next to the other `var callXxx: PassthroughSubject<...>` declarations (after `var callForcedLeave: PassthroughSubject<CallForcedLeaveData, Never> { get }`):
 
@@ -374,7 +374,7 @@ In `public extension MessageSocketProviding { ... }` (the default-shim block), a
 
 This default no-op keeps every existing conformer (both mocks, plus any other future conformer) compiling without modification — Task 2 Step 7 upgrades the two mocks to track calls, but they are not *required* to.
 
-- [ ] **Step 6: Implement the concrete class**
+- [x] **Step 6: Implement the concrete class**
 
 In `public final class MessageSocketManager`, add the publisher next to the other call publishers (after `public let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()`):
 
@@ -417,7 +417,7 @@ Add the concrete emit implementation next to `emitCallHeartbeat` (fire-and-forge
     }
 ```
 
-- [ ] **Step 7: Update both `MockMessageSocket` conformers**
+- [x] **Step 7: Update both `MockMessageSocket` conformers**
 
 In `apps/ios/MeeshyTests/Mocks/MockMessageSocket.swift`, add next to `let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()`:
 
@@ -443,7 +443,7 @@ And add the tracked implementation next to `func emitCallScreenCaptureDetected(.
 
 Repeat the identical three additions (publisher, call-count var, tracked func) in `packages/MeeshySDK/Tests/MeeshySDKTests/Cache/Helpers/MockMessageSocket.swift` — read that file first to match its exact local conventions (it may use a different `CallCount`/tracking naming scheme than the app-target mock; mirror whatever pattern it already uses for `emitCallScreenCaptureDetected`, keeping the property/method names identical to the app-target mock above so both compile against the same protocol).
 
-- [ ] **Step 8: Run the full SDK and app test suites**
+- [x] **Step 8: Run the full SDK and app test suites**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -452,7 +452,7 @@ xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,n
 
 Expected: PASS, no new failures. This also compiles both `MockMessageSocket` targets, which is the real regression check for Step 7 (a missing conformance is a compile error, not a test failure).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift \
