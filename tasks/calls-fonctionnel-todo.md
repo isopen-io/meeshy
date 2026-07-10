@@ -2378,6 +2378,96 @@ chercher un sibling encore non couvert du bug family `duration = now - startedAt
   vague (camera-flag rollback, protocole `CXProviding` pour tests comportementaux) — toutes nécessitent
   Xcode/macOS.
 
+## Vague 32 — group call mid-call cleanup was stopping the SHARED camera/mic stream for every other participant (web) (2026-07-09)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). `git fetch
+origin main` confirme `HEAD` (`4c7f0713`) à jour. Deux agents d'exploration dédiés (gateway
+CallService/CallCleanupService/CallEventsHandler/TURNCredentialService ; web webrtc-service/CallManager/
+use-webrtc-p2p/use-video-call), lecture seule, mandatés à falsifier tout candidat contre ce fichier +
+`lessons.md` avant de rapporter — répertoire des faux positifs et fixes déjà appliqués fourni en amont
+pour éviter tout re-flag (duration/answeredAt ×5, toggle-video gate intentionnel, force-leave server-emit
+ambiguïté, hardening d'autorisation, résilience restart, etc.).
+
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ, TDD, SÉVÉRITÉ HAUTE] `WebRTCService.close()` stoppait le
+  `MediaStream` local PARTAGÉ entre toutes les connexions d'un appel de groupe — le départ (ou l'échec de
+  négociation) d'UN SEUL participant coupait le micro/caméra pour TOUS les autres.**
+  `use-webrtc-p2p.ts` garde une instance `WebRTCService` par participant distant
+  (`webrtcServicesRef`, Map), mais `addLocalMedia(stream, …)` (`createOffer`/`handleOffer`) leur passe
+  toutes la MÊME référence `MediaStream` — celle du store (`ensureLocalStream()` → `useCallStore`
+  `localStream`), jamais un clone. `WebRTCService.close()` (`webrtc-service.ts:1160-1195`) faisait
+  inconditionnellement `this.localStream.getTracks().forEach(track => track.stop())`. `removeParticipant()`
+  (`use-webrtc-p2p.ts:322-335`) appelle `service.close()` pour UN SEUL participant, et est déclenché par :
+  (1) les catch blocks de `createOffer`/`handleOffer` sur échec de négociation d'un pair (cleanup de fuite
+  de peer connection orpheline, Vague antérieure) ; (2) `CallManager.tsx:300`
+  (`handleParticipantLeft`, un VRAI événement `participant-left` en cours d'appel de groupe).
+  **Scénario concret** : appel de groupe A/B/C, tous connectés. B raccroche (ou : l'échec transitoire de
+  négociation d'un nouveau D qui rejoint). `handleParticipantLeft`/le catch block appelle
+  `removeParticipant('B')` → `service.close()` sur l'instance de B → stoppe les tracks du `MediaStream`
+  PARTAGÉ → puisque ce sont les MÊMES tracks que celles attachées au sender de la connexion vers C (même
+  objet `MediaStream`, mêmes `MediaStreamTrack`), l'audio/vidéo sortant vers C meurt silencieusement aussi,
+  bien que la connexion A↔C reste `connected`. Pire : `ensureLocalStream()` retourne ensuite le stream du
+  store, maintenant mort (tracks `ended`), à toute tentative de rejoin ultérieure — l'appel reste cassé
+  jusqu'à un raccroché/rejoin complet. Le vrai propriétaire du cycle de vie du stream partagé est déjà
+  `call-store.ts` (`reset()` l.471, stoppe les tracks UNE SEULE FOIS au vrai teardown de fin d'appel ;
+  `setLocalStream()` stoppe l'ancien stream seulement s'il est REMPLACÉ par un objet différent) — le
+  double-stop de `WebRTCService.close()` était non seulement redondant avec ce chemin au vrai hangup, mais
+  actif et destructeur sur le chemin single-participant.
+  **Fix** : `close(options: { stopLocalTracks?: boolean } = {})`, défaut `true` (comportement de
+  full-teardown inchangé partout ailleurs — `cleanup()`, l'effet de reset sur changement de `userId`).
+  `removeParticipant()` passe désormais `{ stopLocalTracks: false }` : la connexion pair est bien fermée
+  (`peerConnection.close()`, flags de négociation reset) mais les tracks matérielles partagées survivent
+  pour les autres participants encore connectés.
+  **Tests TDD** (`webrtc-service.coverage.test.ts`) : 2 nouveaux cas — `close({ stopLocalTracks: false })`
+  avec DEUX instances `WebRTCService` partageant le même stream : fermer l'une n'arrête aucun track partagé
+  et laisse l'autre connexion/stream intacts (`pc.close` non appelé sur l'autre, `getCurrentStream()`
+  toujours le même stream) ; `close()` sans option stoppe toujours les tracks (non-régression du défaut).
+  RED confirmé (le premier test échouait avec `stop` appelé). GREEN après fix. Suite
+  `webrtc-service.coverage.test.ts` + `webrtc-service.test.ts` + `use-webrtc-p2p.test.tsx` : 204/204 verts.
+  Suite web filtrée `.*(call|webrtc|quality).*\.test\.` : 25 suites/457 tests verts (+1 suite/+6 tests vs
+  Vague 30/31, dont les 2 nouveaux tests `close()` + 2 nouveaux tests du fix cosmétique ci-dessous). `tsc
+  --noEmit` web : 1573 erreurs après fix vs 1574 avant (`git stash` du seul diff calling) — aucune nouvelle
+  erreur imputable à ce changement (le delta de -1 est du bruit préexistant sans rapport).
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ, TDD, cosmétique] La bannière d'appel entrant affichait toujours
+  « Video Call » / l'icône vidéo, même pour un appel purement audio.** `CallNotification.tsx:73-79`
+  hardcodait l'icône `Video` et la clé `calls.incoming.videoCall` sans lire `call.type` (`'audio' |
+  'video'`, `CallInitiatedEvent`, déjà consommé correctement ailleurs par le gate de contrainte média de
+  `CallManager.tsx`). Aucune clé `audioCall` n'existait dans aucune des 4 locales. **Scénario** : B appelle
+  A en audio seul ; la bannière d'A affiche une icône vidéo qui pulse et « Video Call », alors que
+  l'acquisition média elle-même (gate privacy déjà correct depuis les vagues antérieures) est bien
+  audio-only — juste le libellé/icône ment sur ce que l'utilisateur s'apprête à rejoindre. **Fix** :
+  icône + libellé branchés sur `call.type === 'video'` (icône `Mic` + nouvelle clé
+  `calls.incoming.audioCall` sinon). Clé ajoutée aux 4 locales (en: "Audio Call", fr: "Appel audio", es:
+  "Llamada de audio", pt: "Chamada de áudio"). **Tests TDD** (nouveau fichier
+  `CallNotification.test.tsx`, aucun test n'existait pour ce composant) : appel vidéo → libellé/icône
+  vidéo, pas de clé audio rendue ; appel audio → libellé audio, pas de clé vidéo rendue. RED confirmé sur
+  le 2e cas (le composant rendait `videoCall` sans condition). GREEN après fix.
+- **[Candidat gateway, NON corrigé — code mort aujourd'hui, noté pour hygiène]**
+  `CallService.markCallAsMissed()` (l.1925-1927) est un 5e sibling du bug family `duration = now -
+  startedAt` (déjà corrigé 4× : Vagues 25/27/30/31) — persiste le temps de sonnerie au lieu de `0` pour un
+  appel jamais répondu. **Actuellement injoignable** : les 6 sites d'appel de `handleMissedCall()` (seul
+  appelant) font TOUS déjà transitionner le statut hors de `initiated`/`ringing` avant d'appeler cette
+  fonction (via leur propre `updateMany` atomique, ou via `leaveCall`/`endCall`/
+  `forceEndOrphanedCallSession`, déjà `answeredAt`-ancrés) — donc le `findUnique` de `markCallAsMissed` ne
+  voit jamais un statut encore `initiated`/`ringing`. Même famille structurelle que le dead-code
+  `updateCallStatus()` déjà noté (Vague 30) et volontairement non corrigé par cohérence (branche non
+  atteignable, pas de scénario de régression falsifiable sans la rendre atteignable d'abord — hors scope
+  d'un fix mécanique borné). À corriger dans la même passe qu'`updateCallStatus()` si l'une des deux
+  devient un jour atteignable (nouveau endpoint admin/REST "force-missed", ou un appelant qui saute la
+  pré-transition).
+- **Web (lecture seule, non corrigé, plausibilité moindre)** : `CallManager.tsx:388-488`
+  (`handleAcceptCall`) n'a aucun garde de ré-entrance — un double-tap/double-clic avant que
+  `setIncomingCall(null)` ne retire le bouton Accepter pourrait déclencher deux `getUserMedia` +
+  `CALL_JOIN` qui se chevauchent, chacun écrasant `window.__preauthorizedMediaStream`. Non corrigé cette
+  session (fenêtre de timing, pas de scénario de repro déterministe en test unitaire sans horloge
+  factice sur les transitions React) — piste pour une session future.
+- **iOS (lecture seule, aucun changement — pas de toolchain Swift dans ce sandbox)** : aucun nouveau
+  candidat au-delà des 5 findings déjà documentés (Vagues 28/31, camera-flag rollback,
+  `CXProviding`/tests source-reflection, landscape/Dynamic-Type).
+- **Reste ouvert** : items J, C6, CALL-DIAG retagging, threading TTL, `call:force-leave` server-emit
+  ambiguïté, 3 findings iOS structurels Vague 28, landscape/Dynamic-Type Vague 28/29, `updateCallStatus()`
+  + `markCallAsMissed()` dead-code duration anchors (jumeaux, mêmes conditions de correction), camera-flag
+  rollback + `CXProviding` iOS, `handleAcceptCall` re-entrancy guard (web, cette vague).
+
 ## Vague 33 — re-entrancy sur `handleAcceptCall` (web) + grace de reconnexion perdue sur un `call:join` qui échoue (gateway) (2026-07-09)
 
 Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Deux agents

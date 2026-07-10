@@ -329,7 +329,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
    * Push-driven delivery acknowledgement. Called by the iOS Notification
    * Service Extension when an OFFLINE recipient receives a `new_message`
    * push: the extension holds no socket, so the gateway's online
-   * auto-delivery path (`MessageHandler._autoDeliverToOnlineRecipients`)
+   * auto-delivery path (`MessageHandler.autoDeliverToOnlineRecipients`)
    * never fires for that recipient and the author stays stuck on a single
    * checkmark. This endpoint marks the message delivered for the
    * authenticated recipient and broadcasts `read-status:updated` so the

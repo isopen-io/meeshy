@@ -21,12 +21,14 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 const mockEndCall = jest.fn<any>();
 const mockClearRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
+const mockForceEndOrphanedCallSession = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
     endCall: mockEndCall,
     clearRingingTimeout: mockClearRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
+    forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
   })),
 }));
 
@@ -384,6 +386,65 @@ describe('CallEventsHandler — call:end handler', () => {
       const [, payload] = directEmit.mock.calls[0];
       expect(payload.message).toBe('call does not exist');
     });
+
+    // This is a genuine infra-style failure (call vanished mid-request), not
+    // an authorization rejection — the orphaned-session recovery must still
+    // run so the call session isn't left stuck ACTIVE for other callers.
+    it('force-ends the orphaned call session (recovery preserved for non-authorization errors)', () => {
+      expect(mockForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, END_DATA.reason);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Security fix 2026-07-10: endCall() rejecting the caller's own
+  // authorization (NOT_A_PARTICIPANT / PERMISSION_DENIED) must NOT trigger
+  // the orphaned-call force-end recovery — that recovery previously let a
+  // conversation member who wasn't an active participant of THIS call (or
+  // an anonymous user) terminate it anyway by causing endCall() to reject.
+  // -------------------------------------------------------------------------
+
+  describe('security: endCall rejects caller authorization (NOT_A_PARTICIPANT)', () => {
+    it('does NOT force-end the call session', async () => {
+      mockEndCall.mockRejectedValue(new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not in this call`));
+
+      const prisma = makePrisma();
+      const { socket, handlers, directEmit } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect(mockForceEndOrphanedCallSession).not.toHaveBeenCalled();
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.NOT_A_PARTICIPANT })
+      );
+      expect(ack).toHaveBeenCalledWith({ success: false });
+    });
+  });
+
+  describe('security: endCall rejects caller authorization (PERMISSION_DENIED)', () => {
+    it('does NOT force-end the call session', async () => {
+      mockEndCall.mockRejectedValue(new Error(`${CALL_ERROR_CODES.PERMISSION_DENIED}: Anonymous users cannot end calls. Use leave instead.`));
+
+      const prisma = makePrisma();
+      const { socket, handlers, directEmit } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect(mockForceEndOrphanedCallSession).not.toHaveBeenCalled();
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.PERMISSION_DENIED })
+      );
+      expect(ack).toHaveBeenCalledWith({ success: false });
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -447,6 +508,15 @@ describe('CallEventsHandler — call:end handler', () => {
 
     it('does NOT call endCall', () => {
       expect(mockEndCall).not.toHaveBeenCalled();
+    });
+
+    // Security fix 2026-07-10: this branch previously force-ended the call
+    // session unconditionally via `forceEndOrphanedCallAfterOptimisticBroadcast`
+    // whenever the caller had no conversation membership at all — i.e. any
+    // caller (including a total stranger who merely learned/guessed a
+    // callId) could terminate a real, live call they had no relationship to.
+    it('does NOT force-end the call session (no destructive fallback for an unauthorized caller)', () => {
+      expect(mockForceEndOrphanedCallSession).not.toHaveBeenCalled();
     });
   });
 

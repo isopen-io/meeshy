@@ -125,6 +125,7 @@ struct VideoFiltersPanel: View {
                 Toggle("", isOn: $filterConfig.backgroundBlurEnabled)
                     .tint(MeeshyColors.indigo500)
                     .labelsHidden()
+                    .accessibilityLabel(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arriere-plan", bundle: .main))
             }
 
             if filterConfig.backgroundBlurEnabled {
@@ -135,6 +136,7 @@ struct VideoFiltersPanel: View {
                         .frame(width: 55, alignment: .leading)
                     Slider(value: $filterConfig.backgroundBlurRadius, in: 5...20)
                         .tint(MeeshyColors.indigo500)
+                        .accessibilityLabel(String(localized: "video.filter.radius", defaultValue: "Rayon", bundle: .main))
                         .accessibilityValue(String(format: "%.0f", filterConfig.backgroundBlurRadius))
                     Text(String(format: "%.0f", filterConfig.backgroundBlurRadius))
                         .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
@@ -156,6 +158,7 @@ struct VideoFiltersPanel: View {
                 Toggle("", isOn: $filterConfig.skinSmoothingEnabled)
                     .tint(MeeshyColors.indigo500)
                     .labelsHidden()
+                    .accessibilityLabel(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage peau", bundle: .main))
             }
 
             if filterConfig.skinSmoothingEnabled {
@@ -166,6 +169,7 @@ struct VideoFiltersPanel: View {
                         .frame(width: 55, alignment: .leading)
                     Slider(value: $filterConfig.skinSmoothingIntensity, in: 0...1)
                         .tint(MeeshyColors.indigo500)
+                        .accessibilityLabel(String(localized: "video.filter.intensity", defaultValue: "Intensite", bundle: .main))
                         .accessibilityValue(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
                     Text(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
                         .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))

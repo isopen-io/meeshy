@@ -1748,6 +1748,46 @@ describe('close', () => {
     pc2.onnegotiationneeded!();
     expect(onLocalDesc).not.toHaveBeenCalled();
   });
+
+  // In a group call, use-webrtc-p2p.ts keeps ONE WebRTCService per remote
+  // participant but they all share the SAME local MediaStream reference
+  // (addLocalMedia is called with the store's single localStream on every
+  // peer connection). close({ stopLocalTracks: false }) is what
+  // removeParticipant() must use when a single participant leaves (or their
+  // negotiation fails) — stopping the shared hardware tracks there would
+  // kill local audio/video for every OTHER still-connected participant.
+  it('close({ stopLocalTracks: false }) tears down the peer connection without stopping shared local tracks', () => {
+    const { service: serviceA, pc: pcA } = setup();
+    const serviceB = new WebRTCService();
+    const pcB = serviceB.createPeerConnection('peer-2') as unknown as FakeRTCPeerConnection;
+
+    const sharedStream = makeStream({ audio: true, video: true });
+    serviceA.addLocalMedia(sharedStream, { sendVideo: true });
+    serviceB.addLocalMedia(sharedStream, { sendVideo: true });
+
+    serviceA.close({ stopLocalTracks: false });
+
+    expect(sharedStream.getTracks()[0].stop).not.toHaveBeenCalled();
+    expect(sharedStream.getTracks()[1].stop).not.toHaveBeenCalled();
+    expect(pcA.close).toHaveBeenCalled();
+    expect(serviceA.getCurrentStream()).toBeNull();
+
+    // serviceB's connection (and the shared stream) is unaffected.
+    expect(pcB.close).not.toHaveBeenCalled();
+    expect(serviceB.getCurrentStream()).toBe(sharedStream);
+  });
+
+  it('close() with no options still stops local tracks (full-teardown default unchanged)', () => {
+    const { service, pc } = setup();
+    const stream = makeStream({ audio: true, video: true });
+    service.addLocalMedia(stream, { sendVideo: true });
+
+    service.close();
+
+    expect(stream.getTracks()[0].stop).toHaveBeenCalled();
+    expect(stream.getTracks()[1].stop).toHaveBeenCalled();
+    expect(pc.close).toHaveBeenCalled();
+  });
 });
 
 // ===========================================================================

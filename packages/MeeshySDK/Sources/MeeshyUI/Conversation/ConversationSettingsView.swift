@@ -231,15 +231,13 @@ public struct ConversationSettingsView: View {
 
     @ViewBuilder
     private var bannerView: some View {
-        if !viewModel.bannerUrl.isEmpty, let url = URL(string: viewModel.bannerUrl) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    bannerPlaceholder
-                }
+        if !viewModel.bannerUrl.isEmpty {
+            // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
+            // la bannière n'est téléchargée qu'une fois par installation.
+            CachedAsyncImage(url: viewModel.bannerUrl) {
+                bannerPlaceholder
             }
+            .scaledToFill()
         } else {
             bannerPlaceholder
         }

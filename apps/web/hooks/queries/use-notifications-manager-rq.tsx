@@ -163,11 +163,19 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     };
 
     const handleNotificationRead = (notificationId: string) => {
+      let wasUnread = false;
+
       queryClient.setQueriesData(
         { queryKey: queryKeys.notifications.lists(), exact: false },
         (old: unknown) => {
           if (!old || typeof old !== 'object' || !('pages' in old)) return old;
-          const data = old as { pages: Array<{ notifications?: Notification[] }>; pageParams: unknown[] };
+          const data = old as { pages: Array<{ notifications?: Notification[]; unreadCount?: number }>; pageParams: unknown[] };
+
+          const foundUnread = data.pages.some((page) =>
+            page.notifications?.some((n: Notification) => n.id === notificationId && !n.state.isRead)
+          );
+          if (foundUnread) wasUnread = true;
+
           return {
             ...data,
             pages: data.pages.map((page) => ({
@@ -177,15 +185,20 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
                   ? { ...n, state: { ...n.state, isRead: true, readAt: new Date() } }
                   : n
               ),
+              unreadCount: foundUnread
+                ? Math.max(0, (page.unreadCount ?? 0) - 1)
+                : page.unreadCount,
             })),
           };
         }
       );
 
-      queryClient.setQueryData(
-        queryKeys.notifications.unreadCount(),
-        (old: number | undefined) => Math.max(0, (old ?? 1) - 1)
-      );
+      if (wasUnread) {
+        queryClient.setQueryData(
+          queryKeys.notifications.unreadCount(),
+          (old: number | undefined) => Math.max(0, (old ?? 1) - 1)
+        );
+      }
     };
 
     const unsubscribeNotification = notificationSocketIO.onNotification(handleNewNotification);

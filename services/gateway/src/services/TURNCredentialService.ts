@@ -26,6 +26,7 @@ export class TURNCredentialService {
   private readonly turnServers: TURNServerConfig[];
   private readonly credentialTTL: number;
   private readonly stunServers: RTCIceServer[];
+  private readonly turnTlsPort: number;
 
   constructor() {
     // Load TURN secret from environment (CRITICAL: must be set in production)
@@ -98,6 +99,17 @@ export class TURNCredentialService {
     // relay-only credential is bandwidth use on our own TURN server, not data
     // exposure. Operators can still tighten/loosen via env (must stay ≥ 2h).
     this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '86400', 10);
+
+    // TURN-over-TLS port (coturn `tls-listening-port`, default 5349). Plain
+    // `turn:` (UDP/TCP) is blocked outright by some corporate/mobile-carrier
+    // firewalls that only allow 443-like outbound TLS — those users cannot
+    // place a call at all without a `turns:` option. The coturn TLS infra
+    // (Traefik cert-dumper sidecar, see
+    // docs/superpowers/specs/2026-05-11-coturn-tls-via-traefik-design.md) is
+    // deployed and serving a valid Let's Encrypt cert on this port, so we can
+    // now emit `turns:` alongside `turn:` for every configured host. Set to
+    // 0 to disable (e.g. an environment where 5349 isn't provisioned).
+    this.turnTlsPort = parseInt(process.env.TURN_TLS_PORT || '5349', 10);
 
     // STUN servers. Cloudflare is a second provider alongside Google so a
     // Google STUN outage doesn't strand every call on TURN alone — mirrors
@@ -206,6 +218,20 @@ export class TURNCredentialService {
         credential
       };
     });
+
+    // TURN-over-TLS (turns:) — same credentials, TCP-only transport (RFC
+    // 5766 §2.1: TURNS requires a reliable transport). Additive alongside
+    // the turn: entries above so most clients keep using plain UDP/TCP and
+    // only clients behind TLS-only firewalls fall back to this one.
+    if (this.turnTlsPort > 0) {
+      for (const server of this.turnServers) {
+        turnServerConfigs.push({
+          urls: `turns:${server.host}:${this.turnTlsPort}?transport=tcp`,
+          username,
+          credential
+        });
+      }
+    }
 
     // Combine STUN and TURN servers
     const iceServers = [...this.stunServers, ...turnServerConfigs];

@@ -2263,6 +2263,29 @@ final class ConversationListViewModelTests: XCTestCase {
                        "After pullToRefresh the cursor must reset so the next loadMore starts from the top")
     }
 
+    func test_pullToRefresh_preservesMediaCaches() async {
+        // Local-first : les octets média (avatars, bannières, thumbnails)
+        // téléchargés une fois ne doivent jamais être re-téléchargés tant que
+        // l'app est installée. Le pull-to-refresh rafraîchit les métadonnées,
+        // jamais les assets binaires.
+        let imageKey = "https://gate.meeshy.me/api/v1/attachments/file/avatars%2Ftest-pullrefresh.jpg"
+        let thumbKey = "https://gate.meeshy.me/api/v1/attachments/test-pullrefresh/thumbnail"
+        await CacheCoordinator.shared.images.store(Data("avatar-bytes".utf8), for: imageKey)
+        await CacheCoordinator.shared.thumbnails.store(Data("thumb-bytes".utf8), for: thumbKey)
+        let (sut, _, _, _, _, _, _) = makeSUT()
+
+        await sut.pullToRefresh()
+
+        let imageStillCached = await CacheCoordinator.shared.images.isCached(imageKey)
+        let thumbStillCached = await CacheCoordinator.shared.thumbnails.isCached(thumbKey)
+        await CacheCoordinator.shared.images.remove(for: imageKey)
+        await CacheCoordinator.shared.thumbnails.remove(for: thumbKey)
+        XCTAssertTrue(imageStillCached,
+                      "pullToRefresh must not wipe the persistent image cache (avatars/banners)")
+        XCTAssertTrue(thumbStillCached,
+                      "pullToRefresh must not wipe the thumbnail cache")
+    }
+
     func test_initialState_paginationStateIsIdleAndHasMoreIsTrue() {
         let (sut, _, _, _, _, _, _) = makeSUT()
 
@@ -2313,6 +2336,30 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(conversationService.lastListPageCursor, "deep-tail",
                        "Cold start must resume from the persisted cursor instead of refetching page 1")
+    }
+
+    func test_loadMore_withoutCursor_pagesFromLocalTail() async {
+        // Full sync partiel (ou curseur jamais persisté) : des conversations
+        // sont affichées mais `nextCursor` est nil. loadMore doit paginer
+        // depuis la queue locale réelle — la conversation au lastMessageAt
+        // le plus ancien, même sémantique que le curseur gateway `before` —
+        // au lieu de refetcher la page 1 (dont le zero-progress guard
+        // forcerait `.exhausted` et tuerait l'infinite scroll).
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [makeConversation(id: "older")], nextCursor: "older", hasMore: true)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+        sut.conversations = [
+            makeConversation(id: "newest", lastMessageAt: Date()),
+            makeConversation(id: "tail", lastMessageAt: Date(timeIntervalSinceNow: -3_600)),
+        ]
+
+        await sut.loadMore()
+
+        XCTAssertEqual(conversationService.lastListPageCursor, "tail",
+                       "Without a persisted cursor, loadMore must page from the oldest loaded conversation instead of refetching page 1")
     }
 
     // MARK: - ThemedConversationRow timestamp color

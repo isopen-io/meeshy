@@ -25,7 +25,14 @@ struct CallView: View {
     // distants (DataChannel) et `toggleTranscription` opèrent sur CELLE-CI —
     // l'ancienne instance locale orpheline ne transcrivait jamais rien et
     // était ré-allouée à chaque présentation du CallView.
-    @ObservedObject private var transcriptionService = CallManager.shared.transcriptionService
+    //
+    // 2026-07-10 — derived from the injected `callManager` in `init` (below)
+    // instead of defaulting to `CallManager.shared.transcriptionService` at
+    // declaration. Same P1-16 hazard as `callManager` above: a defaulted
+    // @ObservedObject is reassigned every time the parent reconstructs
+    // CallView (every call-duration/quality tick), tearing down and
+    // rebuilding this subscription mid-call.
+    @ObservedObject private var transcriptionService: CallTranscriptionService
     @State private var pulseScale: CGFloat = 1.0
     @State private var showControls = true
     @State private var showTranscript = false
@@ -61,6 +68,11 @@ struct CallView: View {
     // `remoteUserId` est connu, refresh API silencieux (Instant App). Sert
     // l'avatar des cercles d'appel et le fond pleine page.
     @State private var remoteProfile: MeeshyUser?
+
+    init(callManager: CallManager) {
+        self.callManager = callManager
+        self.transcriptionService = callManager.transcriptionService
+    }
 
     var body: some View {
         ZStack {
@@ -565,7 +577,7 @@ struct CallView: View {
                 if sdpOfferSlow {
                     Text(String(localized: "call.outgoing.waiting.hint", defaultValue: "Le correspondant n'a pas encore répondu.", bundle: .main))
                         .font(.caption2)
-                        .foregroundColor(.white.opacity(0.45))
+                        .foregroundColor(.white.opacity(0.6))
                         .multilineTextAlignment(.center)
                         .transition(.opacity)
                 }
@@ -1043,7 +1055,7 @@ struct CallView: View {
                     if videoConnectSlow {
                         Text(String(localized: "call.video.connecting.slow.hint", defaultValue: "L'audio est peut-être déjà actif.", bundle: .main))
                             .font(.caption2)
-                            .foregroundColor(.white.opacity(0.45))
+                            .foregroundColor(.white.opacity(0.6))
                             .multilineTextAlignment(.center)
                     }
                 }

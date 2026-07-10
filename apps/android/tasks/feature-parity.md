@@ -698,8 +698,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## D. Translation — Prisme Linguistique
 - [ ] Automatic per-user translation display (resolution: system → regional → custom → original)
 - [~] Original exploration: long-press → « Voir l'original / la traduction »
-      (toggle par message, builder Prisme-aware) ; **flag strip shipped read-only**
-      (slice `chat-translation-language-strip`, 2026-07-10) ; tap-to-switch / panel secondaire pending
+      (toggle par message, builder Prisme-aware) ; flag strip read-only shipped
+      (slice `chat-translation-language-strip`, 2026-07-10) ; **tap-to-switch active language shipped**
+      (slice `chat-language-flag-tap-switch`, 2026-07-10 — tap a flag to switch the bubble's primary
+      displayed language, tap the active flag to revert; Android switches the single primary rather than
+      iOS's stacked secondary panel) ; on-demand translate of an absent language pending
 - [~] Message detail: per-language translation explorer + on-demand translate / retranslate —
       **strip projection done** (slice `chat-translation-language-strip`, 2026-07-10): pure `:sdk-ui`
       `MessageLanguageStrip.build(originalLanguage, translations, preferences, showingOriginal) →
@@ -713,8 +716,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       rendered as a discrete read-only flag strip under the bubble in `MessageBubble` (active chip shows
       its native name in the language accent colour via `LanguageData.colorHex` → `hexColor`). +16 tests
       (13 `MessageLanguageStripTest`, 4 `BubbleContentBuilderTest`). Full `assembleDebug` + all-module
-      `testDebugUnitTest` → BUILD SUCCESSFUL. **Pending:** tap-to-switch active language, on-demand
-      translate / retranslate of a missing language, the full detail explorer sheet.
+      `testDebugUnitTest` → BUILD SUCCESSFUL. **tap-to-switch done** (slice `chat-language-flag-tap-switch`,
+      2026-07-10): pure `:feature:chat` `LanguageFlagTapResolver.resolve` (port of iOS
+      `BubbleLanguageFlagController.handleTap`) maps a tapped flag → Activate/Revert/RequestTranslation/None;
+      `ChatViewModel.onFlagTap` applies it to a per-message `activeLanguageOverride` map; `BubbleContentBuilder`
+      + `MessageLanguageStrip` gained an `activeLanguageCode`/`activeCodeOverride` param projecting the chosen
+      language's text + active chip (falls back to the read-only default when unset). Tappable chips wired in
+      `MessageBubble`/`ChatScreen`. +23 tests (10 `LanguageFlagTapResolverTest`, +3 `MessageLanguageStripTest`,
+      +4 `BubbleContentBuilderTest`, +6 `ChatViewModelTest`). **Pending:** on-demand translate / retranslate
+      of a missing language (the `RequestTranslation` outcome, inert today), the full detail explorer sheet.
 - [ ] Per-post and per-story translation (flag strip, inline secondary, request missing languages)
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**

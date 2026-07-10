@@ -206,10 +206,14 @@ export class ConversationHandler {
    */
   async sendConversationStatsToSocket(socket: Socket, conversationId: string): Promise<void> {
     try {
-      const stats = await conversationStatsService.updateOnNewMessage(
+      // Read-only refresh on join: getOrCompute returns cached-or-freshly-computed
+      // stats WITHOUT mutating them. Using updateOnNewMessage here (the per-new-message
+      // increment path) bumped messagesPerLanguage['fr'] by one on every warm-cache
+      // join, inflating a conversation's message counts and persisting the corruption
+      // in the shared singleton cache until its 1h TTL expired.
+      const stats = await conversationStatsService.getOrCompute(
         this.prisma,
         conversationId,
-        'fr', // Default language pour stats refresh
         () => Array.from(this.connectedUsers.values()).map((u) => u.id)
       );
 

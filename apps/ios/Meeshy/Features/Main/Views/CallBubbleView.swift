@@ -68,7 +68,7 @@ struct CallBubbleView: View {
                 hangupButton.offset(y: sideButtonOffset)
             }
 
-            CallParticipantVisual(diameter: diameter)
+            CallParticipantVisual(diameter: diameter, callManager: callManager)
                 .clipShape(Circle())
                 .shadow(color: Color.black.opacity(0.3), radius: 8, y: 4)
                 .overlay(alignment: .topTrailing) {

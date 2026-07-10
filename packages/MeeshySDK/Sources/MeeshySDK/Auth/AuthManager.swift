@@ -463,7 +463,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         let delays: [TimeInterval] = [0, 1, 5] // total ≈ 6s wall-clock
         for delay in delays {
             if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } catch {
+                    return // Task cancelled
+                }
             }
             do {
                 try await authService.logoutThrowing()
@@ -543,7 +547,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // can race in offline anyway, so deferring the refresh to the next
         // reconnect / 401 is safe. Online behaviour is unchanged.
         if isCurrentTokenExpired, sessionToken != nil, NetworkMonitor.shared.isOnline {
-            _ = try? await refreshSession(force: false)
+            do {
+                _ = try await refreshSession(force: false)
+            } catch {
+                Logger.auth.warning("Proactive session refresh failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
 
         // Background revalidation (stale-while-revalidate for the user
@@ -580,7 +588,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
         // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
         Task { [weak self] in
-            _ = try? await self?.refreshSession(force: true)
+            do {
+                _ = try await self?.refreshSession(force: true)
+            } catch {
+                Logger.auth.error("Background session refresh after 401 failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

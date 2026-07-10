@@ -273,11 +273,13 @@ struct EditPostSheet: View {
         ZStack(alignment: .topTrailing) {
             Group {
                 if let url = item.previewURL, item.kind == .image || item.kind == .video {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
+                    // CachedAsyncImage : la vignette d'un média distant existant
+                    // réutilise le DiskCacheStore déjà peuplé par le feed (et
+                    // gère aussi les URLs file:// des brouillons locaux).
+                    CachedAsyncImage(url: url.absoluteString) {
                         mediaIcon(item.kind)
                     }
+                    .scaledToFill()
                 } else {
                     mediaIcon(item.kind)
                 }

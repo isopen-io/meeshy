@@ -44,7 +44,8 @@ const buildPrisma = (overrides: Partial<Record<string, unknown>> = {}) => {
     update: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({}),
   };
   const postView = {
-    findUnique: jest.fn<(arg?: unknown) => Promise<{ id: string } | null>>().mockResolvedValue(null),
+    findUnique: jest.fn<(arg?: unknown) => Promise<{ id: string; duration?: number | null } | null>>()
+      .mockResolvedValue(null),
     create: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({ id: 'v1' }),
     update: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({}),
   };
@@ -100,6 +101,54 @@ describe('PostService.recordView — course P2002 + observabilité', () => {
     expect(counted).toBe(true);
     expect(post.update).toHaveBeenCalledWith(expect.objectContaining({
       data: { viewCount: { increment: 1 } },
+    }));
+  });
+});
+
+describe('PostService.recordView — watch-time (duration) monotone sur ré-ouverture', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('ré-ouverture plus courte : NE rétrograde PAS la durée (aucune écriture)', async () => {
+    // L'utilisateur a regardé la story 30s (durée réelle), puis y retape et
+    // swipe immédiatement (0.5s). Le PostView est un singleton (postId,userId)
+    // — signal watch-time du moteur reco/monétisation (PostFeedService). Une
+    // durée plus courte ne doit JAMAIS écraser la plus longue déjà observée ;
+    // la valeur restant au max, aucune écriture Room redondante n'est émise.
+    const { prisma, postView } = buildPrisma();
+    postView.findUnique.mockResolvedValue({ id: 'v1', duration: 30_000 });
+    const svc = makeService(prisma);
+
+    const counted = await svc.recordView(POST_A, 'viewer-1', 500);
+
+    expect(counted).toBe(false);
+    expect(postView.update).not.toHaveBeenCalled();
+  });
+
+  it('ré-ouverture plus longue : promeut la durée persistée', async () => {
+    const { prisma, postView } = buildPrisma();
+    postView.findUnique.mockResolvedValue({ id: 'v1', duration: 5_000 });
+    const svc = makeService(prisma);
+
+    await svc.recordView(POST_A, 'viewer-1', 42_000);
+
+    expect(postView.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'v1' },
+      data: { duration: 42_000 },
+    }));
+  });
+
+  it('durée existante null : traite comme 0 et enregistre la nouvelle', async () => {
+    const { prisma, postView } = buildPrisma();
+    postView.findUnique.mockResolvedValue({ id: 'v1', duration: null });
+    const svc = makeService(prisma);
+
+    await svc.recordView(POST_A, 'viewer-1', 1_200);
+
+    expect(postView.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'v1' },
+      data: { duration: 1_200 },
     }));
   });
 });

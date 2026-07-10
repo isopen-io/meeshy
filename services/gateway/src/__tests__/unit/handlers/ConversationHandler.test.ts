@@ -36,6 +36,7 @@ jest.mock('../../../validation/socket-event-schemas', () => ({
 jest.mock('../../../services/ConversationStatsService', () => ({
   conversationStatsService: {
     updateOnNewMessage: jest.fn().mockResolvedValue(null),
+    getOrCompute: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -45,7 +46,7 @@ import { conversationStatsService } from '../../../services/ConversationStatsSer
 import type { ConversationHandlerDependencies } from '../../../socketio/handlers/ConversationHandler';
 
 const mockedValidate = validateSocketEvent as jest.Mock;
-const mockedStats = conversationStatsService.updateOnNewMessage as jest.Mock;
+const mockedStats = conversationStatsService.getOrCompute as jest.Mock;
 
 const CONV_ID = 'cccccc000000000000000003';
 const USER_ID = 'user-xyz';

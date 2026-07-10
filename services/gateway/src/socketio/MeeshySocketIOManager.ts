@@ -515,7 +515,7 @@ export class MeeshySocketIOManager {
         };
         // Chain the conversation room + each participant's user room, deduped so
         // Socket.IO delivers the event at most once per socket. Mirrors the two
-        // sibling emitters of this same event — `_autoDeliverToOnlineRecipients`
+        // sibling emitters of this same event — `autoDeliverToOnlineRecipients`
         // and `broadcastReadStatusUpdate` — which fan out identically so authors
         // never get stuck on a single "sent" tick after navigating away.
         const convRoom = ROOMS.conversation(conversationId);
@@ -2031,6 +2031,20 @@ export class MeeshySocketIOManager {
       } catch (syncError) {
         logger.warn('⚠️ [CONV_SYNC] Erreur sync liste conversations (non-bloquant):', syncError);
       }
+
+      // Auto-mark delivered for online-but-away recipients on the REST/ZMQ broadcast
+      // path too — parity with the WS `message:send` path (which does this via
+      // MessageHandler.broadcastNewMessage → autoDeliverToOnlineRecipients). Without
+      // this, a message sent through the REST route (POST /conversations/:id/messages →
+      // broadcastMessage) never upgrades the sender's checkmark from "sent" to
+      // "delivered" for a recipient who is connected but viewing another conversation,
+      // because `message:new` only reaches sockets already in `conversation:<id>`.
+      // Delegates to the single shared implementation on the message handler (same
+      // io / connectedUsers / read-status + privacy services), so both transports
+      // produce identical receipt behavior. Fire-and-forget, like the WS path.
+      this.messageHandler.autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
+        logger.warn('auto-deliver (REST/ZMQ broadcast) background failure', { error: err });
+      });
 
       // Envoyer les notifications de message pour les utilisateurs non connectés à la conversation
       if (message.senderId) {

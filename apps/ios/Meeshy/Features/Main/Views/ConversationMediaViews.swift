@@ -95,25 +95,6 @@ struct DownloadBadgeView: View {
         .task {
             await downloader.checkCache(attachment)
         }
-        .task {
-            guard !attachment.fileUrl.hasPrefix("file://") else { return }
-            let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
-            while !Task.isCancelled && !downloader.isCached {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                guard !Task.isCancelled else { break }
-                let cached: Bool
-                switch attachment.type {
-                case .audio: cached = await CacheCoordinator.shared.audio.isCached(resolved)
-                case .video: cached = await CacheCoordinator.shared.video.isCached(resolved)
-                case .image: cached = await CacheCoordinator.shared.images.isCached(resolved)
-                case .file, .location: cached = false
-                }
-                if cached {
-                    downloader.isCached = true
-                    break
-                }
-            }
-        }
     }
 
     private var centredIdleBadge: some View {

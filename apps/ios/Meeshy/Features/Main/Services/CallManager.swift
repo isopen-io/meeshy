@@ -696,8 +696,9 @@ final class CallManager: ObservableObject {
         let reason = AVAudioSession.RouteChangeReason(rawValue: reasonRaw) ?? .unknown
         switch reason {
         case .newDeviceAvailable:
-            // Headset / Bluetooth connected — route left speaker automatically.
+            // Headset / Bluetooth connected — clear a stale speaker override.
             isSpeaker = false
+            applySpeakerRoute()
             Logger.calls.info("Audio route: new device available — isSpeaker = false")
         case .oldDeviceUnavailable:
             // Headset / Bluetooth disconnected — iOS routes back to built-in;

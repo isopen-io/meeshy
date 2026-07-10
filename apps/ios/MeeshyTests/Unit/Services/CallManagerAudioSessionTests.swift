@@ -167,10 +167,14 @@ final class CallManagerAudioSessionTests: XCTestCase {
     }
 
     func test_callManager_audioRouteChange_newDeviceAvailable_setsSpeakerFalse() throws {
-        // P0-8: when a Bluetooth/headset device connects (.newDeviceAvailable), iOS
-        // routes audio to it automatically. We only need to sync isSpeaker = false so
-        // the speaker-toggle UI reflects reality. Calling applySpeakerRoute() here
-        // would override back to speaker incorrectly.
+        // P0-8, revised: when a Bluetooth/headset device connects (.newDeviceAvailable),
+        // iOS routes audio to it automatically. We sync isSpeaker = false so the
+        // speaker-toggle UI reflects reality, AND re-apply via applySpeakerRoute() so any
+        // standing `.speaker` RTCAudioSession override from before the accessory connected
+        // is cleared — applySpeakerRoute() reads the just-updated `isSpeaker` (now false),
+        // so on a real device this resolves to `.none` (clears the override), not `.speaker`.
+        // Without the re-apply call, audio could keep routing to the built-in speaker even
+        // though the UI now shows the speaker button as off.
         let source = try callManagerSource()
 
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
@@ -183,8 +187,6 @@ final class CallManagerAudioSessionTests: XCTestCase {
             fnBody.contains("case .newDeviceAvailable:"),
             "handleAudioRouteChange must handle .newDeviceAvailable"
         )
-        // The .newDeviceAvailable branch must set isSpeaker = false, not call applySpeakerRoute,
-        // since iOS already routed audio to the new device.
         guard let newDevRange = fnBody.range(of: "case .newDeviceAvailable:") else {
             XCTFail(".newDeviceAvailable case not found"); return
         }
@@ -194,6 +196,11 @@ final class CallManagerAudioSessionTests: XCTestCase {
         XCTAssertTrue(
             newDevBody.contains("isSpeaker = false"),
             ".newDeviceAvailable must set isSpeaker = false — new device (BT/headset) displaces speaker."
+        )
+        XCTAssertTrue(
+            newDevBody.contains("applySpeakerRoute()"),
+            ".newDeviceAvailable must call applySpeakerRoute() after clearing isSpeaker, to clear any " +
+            "standing `.speaker` RTCAudioSession override left over from before the accessory connected."
         )
     }
 
@@ -906,6 +913,186 @@ final class CallViewPiPLandscapeSourceGuardTests: XCTestCase {
         XCTAssertTrue(
             source.contains("nearestCorner(to: dropped, in: geo.size, safeArea: geo.safeAreaInsets)"),
             "nearestCorner must receive geo.safeAreaInsets so snap targets match pipCenter positions in landscape"
+        )
+    }
+}
+
+// MARK: - BubbleCallNoticeView Accessibility Source Guards
+
+/// `detailRow`/`qualityRow` in `CallSummaryDetailSheet` lay out icon + label + value as
+/// separate sibling views. Without `.accessibilityElement(children: .combine)`, VoiceOver
+/// reads each row as 3+ separate stops (e.g. icon SF-Symbol name, then label, then value)
+/// instead of one coherent announcement — matches the already-correct pattern in
+/// `Contacts/CallDetailSheet.detailRow`.
+@MainActor
+final class BubbleCallNoticeViewAccessibilityTests: XCTestCase {
+
+    private func bubbleCallNoticeSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/Bubble/BubbleCallNoticeView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_detailRow_combinesAccessibilityChildren() throws {
+        let source = try bubbleCallNoticeSource()
+        guard let range = source.range(of: "private func detailRow(icon: String, label: String, value: String) -> some View {") else {
+            XCTFail("detailRow not found"); return
+        }
+        let endIdx = source.index(range.upperBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<endIdx])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityElement(children: .combine)"),
+            "detailRow must combine its icon/label/value into a single accessibility element, " +
+            "matching Contacts/CallDetailSheet.detailRow."
+        )
+    }
+
+    func test_qualityRow_combinesAccessibilityChildren() throws {
+        let source = try bubbleCallNoticeSource()
+        guard let range = source.range(of: "private func qualityRow(_ quality: CallSummaryMetadata.NetworkQuality) -> some View {") else {
+            XCTFail("qualityRow not found"); return
+        }
+        let endIdx = source.index(range.upperBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<endIdx])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityElement(children: .combine)"),
+            "qualityRow must combine its icon/label/quality-dot/value into a single accessibility " +
+            "element, matching Contacts/CallDetailSheet.detailRow."
+        )
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHidden(true)"),
+            "qualityRow's decorative quality-color Circle must be hidden from VoiceOver — the " +
+            "combined element already announces the quality word as text."
+        )
+    }
+}
+
+// MARK: - CallView Hint Text Contrast Source Guards
+
+/// The "waiting for peer" / "video taking longer than expected" hint captions render
+/// over the near-black call background. `.white.opacity(0.45)` computes to ~4.4:1
+/// contrast, just under WCAG AA's 4.5:1 threshold for small text — guards these stay
+/// at a passing opacity.
+@MainActor
+final class CallViewHintContrastTests: XCTestCase {
+
+    private func callViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_outgoingWaitingHint_meetsContrastThreshold() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "call.outgoing.waiting.hint") else {
+            XCTFail("call.outgoing.waiting.hint not found"); return
+        }
+        let endIdx = source.index(range.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<endIdx])
+        XCTAssertFalse(
+            vicinity.contains(".opacity(0.45)"),
+            "the outgoing-waiting hint at .white.opacity(0.45) computes to ~4.4:1 contrast on the " +
+            "near-black call background, just under WCAG AA's 4.5:1 threshold for small text."
+        )
+    }
+
+    func test_videoConnectingSlowHint_meetsContrastThreshold() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "call.video.connecting.slow.hint") else {
+            XCTFail("call.video.connecting.slow.hint not found"); return
+        }
+        let endIdx = source.index(range.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<endIdx])
+        XCTAssertFalse(
+            vicinity.contains(".opacity(0.45)"),
+            "the video-connecting-slow hint at .white.opacity(0.45) computes to ~4.4:1 contrast on the " +
+            "near-black call background, just under WCAG AA's 4.5:1 threshold for small text."
+        )
+    }
+}
+
+// MARK: - VideoFiltersPanel Accessibility Source Guards
+
+/// Source-level guards ensuring the background-blur and skin-smoothing toggles/sliders
+/// in the in-call filters panel are perceivable by VoiceOver. Both controls use
+/// `.labelsHidden()` (the adjacent Text is a separate sibling, not a form label), so
+/// without an explicit `.accessibilityLabel()` a VoiceOver user hears only
+/// "Off/On, switch" or a bare value with no indication of what it controls.
+@MainActor
+final class VideoFiltersPanelAccessibilityTests: XCTestCase {
+
+    private func filtersPanelSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/VideoFiltersPanel.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_backgroundBlurToggle_hasAccessibilityLabel() throws {
+        let source = try filtersPanelSource()
+        guard let toggleRange = source.range(of: "Toggle(\"\", isOn: $filterConfig.backgroundBlurEnabled)") else {
+            XCTFail("backgroundBlurEnabled Toggle not found"); return
+        }
+        let endIdx = source.index(toggleRange.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[toggleRange.lowerBound..<endIdx])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityLabel("),
+            "The background-blur Toggle uses .labelsHidden() so it needs an explicit " +
+            ".accessibilityLabel() — otherwise VoiceOver announces only \"Off/On, switch\"."
+        )
+    }
+
+    func test_skinSmoothingToggle_hasAccessibilityLabel() throws {
+        let source = try filtersPanelSource()
+        guard let toggleRange = source.range(of: "Toggle(\"\", isOn: $filterConfig.skinSmoothingEnabled)") else {
+            XCTFail("skinSmoothingEnabled Toggle not found"); return
+        }
+        let endIdx = source.index(toggleRange.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[toggleRange.lowerBound..<endIdx])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityLabel("),
+            "The skin-smoothing Toggle uses .labelsHidden() so it needs an explicit " +
+            ".accessibilityLabel() — otherwise VoiceOver announces only \"Off/On, switch\"."
+        )
+    }
+
+    func test_backgroundBlurRadiusSlider_hasAccessibilityLabel() throws {
+        let source = try filtersPanelSource()
+        guard let sliderRange = source.range(of: "Slider(value: $filterConfig.backgroundBlurRadius") else {
+            XCTFail("backgroundBlurRadius Slider not found"); return
+        }
+        let endIdx = source.index(sliderRange.upperBound, offsetBy: 250, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[sliderRange.lowerBound..<endIdx])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityLabel("),
+            "The blur-radius Slider sets .accessibilityValue() but not .accessibilityLabel() — " +
+            "VoiceOver would announce the value with no indication of what it controls."
+        )
+    }
+
+    func test_skinSmoothingIntensitySlider_hasAccessibilityLabel() throws {
+        let source = try filtersPanelSource()
+        guard let sliderRange = source.range(of: "Slider(value: $filterConfig.skinSmoothingIntensity") else {
+            XCTFail("skinSmoothingIntensity Slider not found"); return
+        }
+        let endIdx = source.index(sliderRange.upperBound, offsetBy: 250, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[sliderRange.lowerBound..<endIdx])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityLabel("),
+            "The skin-smoothing intensity Slider sets .accessibilityValue() but not " +
+            ".accessibilityLabel() — VoiceOver would announce the value with no indication " +
+            "of what it controls."
         )
     }
 }

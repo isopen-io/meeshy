@@ -209,10 +209,11 @@ final class FloatingCallPillViewTests: XCTestCase {
     func test_pillContent_delegatesAvatarToCallParticipantVisual() throws {
         let source = try pillSource()
         XCTAssertTrue(
-            source.contains("CallParticipantVisual(diameter: 44)"),
+            source.contains("CallParticipantVisual(diameter: 44, callManager: callManager)"),
             "FloatingCallPillView must delegate its video/avatar visual to the shared " +
             "CallParticipantVisual component (reused at 56pt by CallBubbleView) instead " +
-            "of reimplementing the cache-first avatar resolution locally."
+            "of reimplementing the cache-first avatar resolution locally, injecting its " +
+            "own `callManager` rather than letting the child default to `.shared`."
         )
         XCTAssertFalse(
             source.contains("UserService.shared.getProfileById"),
