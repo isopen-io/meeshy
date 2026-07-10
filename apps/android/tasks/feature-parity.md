@@ -702,7 +702,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Message detail: per-language translation explorer + on-demand translate / retranslate
 - [ ] Per-post and per-story translation (flag strip, inline secondary, request missing languages)
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
-- [~] Real-time progressive translation/transcription socket updates — **text translations done**
+- [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`
       /`translationInProgress` flows (`message:translated`/`message:translation`) are now wired end-to-end.
       A message reaches the client in its original language; when the translator finishes, the gateway pushes
@@ -715,9 +715,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `:sdk-core` `MessageRepository.applyTranslation` applies it via `updateCachedMessage` (no outbox — inbound
       server truth) with a new `===`-guard that skips the redundant Room write on a no-op. `ChatViewModel`
       collects both flows, conversation-scoped. Both in-progress and completed events funnel through the same
-      merge, so partial translations stream in progressively and the final one converges. Progressive
-      **transcription/audio** socket updates (`transcription:ready`/`audio:translation-ready`) remain pending.
+      merge, so partial translations stream in progressively and the final one converges.
       +23 tests (15 `MessageTranslationMergeTest`, 4 repo, 3 VM, 1 elsewhere-ignored). Diff = `apps/android` only.
+      **Transcription** done too (slice `chat-live-transcription-merge`, 2026-07-10): the dead
+      `MessageSocketManager.transcriptionReady` flow (`transcription:ready`) is now wired the same way. A voice
+      note reaches the client before Whisper finishes; when the transcription lands the gateway pushes it and
+      Android upserts it onto the matching cached audio attachment — the open audio bubble shows its transcription
+      instantly (`BubbleContentBuilder.resolveTranscription` already reads `attachment.transcription`, so no UI
+      change). Pure `:core:model` `AttachmentTranscriptionMerge.mergeTranscription(message, attachmentId?, text,
+      language?, confidence?, durationMs?) → ApiMessage?` SSOT: target = the attachment with `attachmentId`, or
+      (blank id) the first audio attachment (single-voice-note case); replace its `transcription` in place,
+      order preserved. **No-op (→ null)** on a blank text (Prisme never stores an empty transcription), a deleted
+      tombstone, no matching/audio target, or an identical transcription already present (idempotent, language
+      matched case-insensitively). +23 tests (17 `AttachmentTranscriptionMergeTest`, 4 repo, 2 VM). Audio-voice
+      translation (`audio:translation-ready` → cloned-voice playback) remains pending (needs BubbleAudio UI).
 - [ ] Ad-hoc blocking text translation
 - [ ] Source-language stamping from in-app prefs (NEVER device locale)
 - [ ] Per-language flag / native name / colour metadata (~40 languages)

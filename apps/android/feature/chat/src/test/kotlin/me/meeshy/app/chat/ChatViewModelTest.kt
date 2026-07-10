@@ -41,6 +41,7 @@ import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessagePinnedEvent
+import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.ReactionGroup
@@ -90,6 +91,7 @@ class ChatViewModelTest {
     private val messageUnpinned = MutableSharedFlow<MessageUnpinnedEvent>()
     private val translationCompleted = MutableSharedFlow<TranslationEvent>()
     private val translationInProgress = MutableSharedFlow<TranslationEvent>()
+    private val transcriptionReady = MutableSharedFlow<TranscriptionReadyEvent>()
 
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
@@ -100,6 +102,7 @@ class ChatViewModelTest {
             every { this@mockk.messageUnpinned } returns this@ChatViewModelTest.messageUnpinned
             every { this@mockk.translationCompleted } returns this@ChatViewModelTest.translationCompleted
             every { this@mockk.translationInProgress } returns this@ChatViewModelTest.translationInProgress
+            every { this@mockk.transcriptionReady } returns this@ChatViewModelTest.transcriptionReady
             every { this@mockk.typingStarted } returns this@ChatViewModelTest.typingStarted
             every { this@mockk.typingStopped } returns this@ChatViewModelTest.typingStopped
             every { this@mockk.reactionAdded } returns this@ChatViewModelTest.reactionAdded
@@ -860,6 +863,45 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { h.repo.applyTranslation("m2", "es", "Hola") }
+    }
+
+    @Test
+    fun a_transcription_ready_event_applies_the_transcription_to_the_open_conversation() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        transcriptionReady.emit(
+            TranscriptionReadyEvent(
+                messageId = "m2",
+                conversationId = "c1",
+                attachmentId = "a1",
+                text = "Hello there",
+                language = "en",
+                confidence = 0.9,
+                durationMs = 4200L,
+            ),
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.applyTranscription("m2", "a1", "Hello there", "en", 0.9, 4200L) }
+    }
+
+    @Test
+    fun a_transcription_ready_event_elsewhere_is_ignored() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        transcriptionReady.emit(
+            TranscriptionReadyEvent(
+                messageId = "m2",
+                conversationId = "other",
+                attachmentId = "a1",
+                text = "Hello there",
+            ),
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.applyTranscription(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test

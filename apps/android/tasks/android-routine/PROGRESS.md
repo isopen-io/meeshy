@@ -4,6 +4,48 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-10 **progressive live transcription** landed (slice `chat-live-transcription-merge`, Translation
+> parity §D — feature-parity.md "Real-time progressive translation/transcription socket updates", transcription
+> side now checked). The immediate follow-on to the translation merge landed the same day: the
+> `MessageSocketManager.transcriptionReady` flow (`transcription:ready`) was decoded but had **zero consumers**
+> (`grep -rn transcriptionReady feature/ sdk-core/ | grep -v MessageSocketManager` → empty) — a voice note stayed
+> untranscribed in the open bubble until a manual reload even after Whisper finished. Now it is wired end-to-end
+> the same way as the translation merge: when the transcription lands the gateway pushes it and Android upserts it
+> onto the matching cached audio attachment so the audio bubble shows its transcription **instantly** — the same
+> Room-backed `messagesStream` re-emission that makes peer reactions/translations live, no refetch. **Zero UI
+> change**: `BubbleContentBuilder.resolveTranscription` already reads `attachment.transcription` under the Prisme,
+> so wiring the cache is all a live transcription needed. New pure `:core:model`
+> `AttachmentTranscriptionMerge.mergeTranscription(message, attachmentId?, text, language?, confidence?,
+> durationMs?) → ApiMessage?` SSOT (sibling of `MessageTranslationMerge`): target = the attachment whose id is
+> `attachmentId`, or (blank/absent id) the message's **first audio attachment** (single-voice-note common case);
+> the target's `transcription` is replaced in place, list order + every other attachment preserved. Returns
+> **null (no-op)** on a blank text (the Prisme never stores an empty transcription — would make the bubble claim
+> one exists), a **deleted tombstone** (never re-transcribe a wiped message — mirrors the translation merge), **no
+> matching/audio target** (an explicit id that matches nothing, or no audio attachment at all → inert), or an
+> **identical** transcription already present (idempotent; language matched case-insensitively, effective text
+> read via the `transcribedText ?: text` fallback). `:sdk-core` `MessageRepository.applyTranscription` applies it
+> through `updateCachedMessage` with **no outbox** (inbound server truth) and the existing `===`-guard elides the
+> Room write on a no-op. `ChatViewModel` collects the flow conversation-scoped (an event for another conversation
+> is inert). +23 tests (`AttachmentTranscriptionMergeTest` 17 — single-audio-append / target-by-id / no-match→null
+> / blank-id-fallback-to-first-audio / no-audio→null / blank-text→null / whitespace-text→null / deleted→null /
+> identical→null / identical-case-insensitive-lang→null / same-text-diff-lang→replace / new-text→replace /
+> transcribedText-fallback-in-identical-check / stamps-lang+confidence+duration / blank-lang→null-stored /
+> other-attachments-preserved / msg-fields-preserved; `MessageRepositoryTest` +4 — upsert-no-outbox /
+> blank-id-fallback / unknown-id-inert / blank-text-ignored; `ChatViewModelTest` +2 — ready-applies /
+> ready-elsewhere-ignored). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (system
+> Gradle 8.14.3; wrapper 403-blocked in this container — `/opt/gradle`); RED verified by stubbing the merge to
+> no-op → 9 behavioural `AttachmentTranscriptionMergeTest` cases fail, restore → all pass. Reviewer: PASS (diff
+> `apps/android` only; behaviour-through-public-API `mergeTranscription`/`applyTranscription`/VM collector, no
+> tautologies, boundary coverage on blank/deleted/no-target/duplicate/case/multi-attachment/fallback; SDK-purity —
+> the "how to merge a transcription / which attachment" decision is a pure `:core:model` atom (same layer as
+> `MessageTranslationMerge`), the cache write is `:sdk-core`, the "which conversation is open" wiring is the
+> `:feature:chat` VM, no exempt Compose glue even touched; SSOT — the blank/deleted rules mirror
+> `MessageTranslationMerge`/`LanguageResolver`, the render reuses `BubbleContentBuilder.resolveTranscription`;
+> instant-app live re-render; UDF immutable state; no dead end — the transcription lands and the bubble reads it).
+> **Next:** progressive **audio-voice translation** (`audio:translation-ready` → upsert the cloned-voice
+> `ApiAttachmentTranslation` url onto `attachment.translations`, then a BubbleAudio surface to play the translated
+> track — needs UI, a bigger slice), or the per-message translation flag-strip / language explorer (§D).
+
 > On 2026-07-10 **progressive live translation** landed (slice `chat-live-translation-merge`, Translation
 > parity §D — feature-parity.md "Real-time progressive translation/transcription socket updates", text side
 > now checked). The `MessageSocketManager.translationCompleted`/`translationInProgress` flows

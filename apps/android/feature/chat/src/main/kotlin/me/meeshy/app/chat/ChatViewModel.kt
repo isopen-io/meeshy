@@ -340,6 +340,20 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
+                messageSocketManager.transcriptionReady.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        messageRepository.applyTranscription(
+                            event.messageId,
+                            event.attachmentId,
+                            event.text,
+                            event.language,
+                            event.confidence,
+                            event.durationMs,
+                        )
+                    }
+                }
+            }
+            launch {
                 messageSocketManager.reactionAdded.collect { event ->
                     applyPeerReactionEvent(event, delta = 1)
                 }
