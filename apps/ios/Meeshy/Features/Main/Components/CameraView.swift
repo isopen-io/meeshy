@@ -1,7 +1,7 @@
 import SwiftUI
 import Combine
 import AVFoundation
-import Photos
+import MeeshySDK
 import MeeshyUI
 
 enum CameraResult {
@@ -430,43 +430,17 @@ final class CameraModel: NSObject, ObservableObject {
             if let lastSegment = segments.last {
                 capturedVideoURL = lastSegment
                 capturedVideoId = UUID().uuidString
-                Self.saveToPhotoLibrary { PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: lastSegment) }
+                Task { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) }
             }
             return
         }
         capturedVideoURL = finalURL
         capturedVideoId = UUID().uuidString
-        Self.saveToPhotoLibrary { PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: finalURL) }
+        Task { await PhotoLibraryManager.shared.saveVideo(at: finalURL) }
         if segments.count > 1 {
             for segment in segments where segment != finalURL {
                 try? FileManager.default.removeItem(at: segment)
             }
-        }
-    }
-
-    /// Best-effort save of an in-app capture into the user's photo library.
-    /// This is what makes a freshly-taken photo/video appear at the front of
-    /// `RecentMediaStripModel`'s grid — its own `PHPhotoLibraryChangeObserver`
-    /// picks up the addition and re-fetches, so the new item lands there via
-    /// the SAME `creationDate`-sorted query as everything else. No index is
-    /// ever touched by this code, sidestepping the whole class of bug where a
-    /// manual `assets.insert(at: 0)` could race a concurrent PHFetchResult
-    /// refresh. Silently skipped (never blocks the capture flow, never
-    /// surfaces an error to the user) when the app lacks add permission.
-    private static func saveToPhotoLibrary(_ request: @escaping () -> Void) {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        switch status {
-        case .authorized, .limited:
-            PHPhotoLibrary.shared().performChanges({ request() }, completionHandler: nil)
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
-                guard newStatus == .authorized || newStatus == .limited else { return }
-                PHPhotoLibrary.shared().performChanges({ request() }, completionHandler: nil)
-            }
-        case .denied, .restricted:
-            break
-        @unknown default:
-            break
         }
     }
 
@@ -531,8 +505,12 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
             self.isTakingPhoto = false
             self.capturedPhoto = image
             self.capturedPhotoId = UUID().uuidString
-            Self.saveToPhotoLibrary { PHAssetChangeRequest.creationRequestForAsset(from: image) }
         }
+        // Persist the ORIGINAL encoded bytes (HEIC/JPEG as captured), not a
+        // re-encoded UIImage. `PhotoLibraryManager` is deliberately non-@MainActor
+        // so its `performChanges` block runs on Photos' own queue without the
+        // executor-isolation SIGTRAP the previous inline save hit.
+        Task { await PhotoLibraryManager.shared.saveImage(data) }
     }
 }
 
