@@ -41,7 +41,9 @@ import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessagePinnedEvent
+import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.TranscriptionReadyEvent
+import me.meeshy.sdk.model.TranslatedAudioPayload
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.ReactionGroup
@@ -92,6 +94,7 @@ class ChatViewModelTest {
     private val translationCompleted = MutableSharedFlow<TranslationEvent>()
     private val translationInProgress = MutableSharedFlow<TranslationEvent>()
     private val transcriptionReady = MutableSharedFlow<TranscriptionReadyEvent>()
+    private val audioTranslationReady = MutableSharedFlow<AudioTranslationEvent>()
 
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
@@ -103,6 +106,7 @@ class ChatViewModelTest {
             every { this@mockk.translationCompleted } returns this@ChatViewModelTest.translationCompleted
             every { this@mockk.translationInProgress } returns this@ChatViewModelTest.translationInProgress
             every { this@mockk.transcriptionReady } returns this@ChatViewModelTest.transcriptionReady
+            every { this@mockk.audioTranslationReady } returns this@ChatViewModelTest.audioTranslationReady
             every { this@mockk.typingStarted } returns this@ChatViewModelTest.typingStarted
             every { this@mockk.typingStopped } returns this@ChatViewModelTest.typingStopped
             every { this@mockk.reactionAdded } returns this@ChatViewModelTest.reactionAdded
@@ -937,6 +941,59 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.applyTranscription(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun an_audio_translation_ready_event_applies_the_cloned_voice_to_the_open_conversation() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        audioTranslationReady.emit(
+            AudioTranslationEvent(
+                messageId = "m2",
+                conversationId = "c1",
+                attachmentId = "a1",
+                language = "es",
+                translatedAudio = TranslatedAudioPayload(
+                    url = "https://cdn/es.mp3",
+                    transcription = "hola",
+                    durationMs = 5200L,
+                    format = "mp3",
+                    cloned = true,
+                    quality = 0.9,
+                    voiceModelId = "vm-1",
+                    ttsModel = "xtts",
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            h.repo.applyAudioTranslation(
+                "m2", "a1", "es", "https://cdn/es.mp3", "hola", 5200L, "mp3", true, 0.9, "vm-1", "xtts",
+            )
+        }
+    }
+
+    @Test
+    fun an_audio_translation_ready_event_elsewhere_is_ignored() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        audioTranslationReady.emit(
+            AudioTranslationEvent(
+                messageId = "m2",
+                conversationId = "other",
+                attachmentId = "a1",
+                language = "es",
+                translatedAudio = TranslatedAudioPayload(url = "https://cdn/es.mp3"),
+            ),
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) {
+            h.repo.applyAudioTranslation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        }
     }
 
     @Test

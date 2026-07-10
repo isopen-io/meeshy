@@ -996,4 +996,61 @@ class MessageRepositoryTest {
 
         assertThat(cachedMessage("m1").attachments.single().transcription).isNull()
     }
+
+    @Test
+    fun `applyAudioTranslation upserts a cloned-voice translation onto the audio attachment without an outbox row`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyAudioTranslation("m1", "a1", "es", "https://cdn/es.mp3", "hola", 5200L, "mp3", true, 0.9, "vm-1", "xtts")
+
+        val translation = cachedMessage("m1").attachments.single().translations!!.getValue("es")
+        assertThat(translation.url).isEqualTo("https://cdn/es.mp3")
+        assertThat(translation.transcription).isEqualTo("hola")
+        assertThat(translation.cloned).isTrue()
+        assertThat(outbox.deliverable("message:c1")).isEmpty()
+    }
+
+    @Test
+    fun `applyAudioTranslation falls back to the single audio attachment when no id is given`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyAudioTranslation("m1", null, "es", "https://cdn/es.mp3", "hola", null, null, false, null, null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().translations!!.getValue("es").url)
+            .isEqualTo("https://cdn/es.mp3")
+    }
+
+    @Test
+    fun `applyAudioTranslation is inert on an unknown message id`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyAudioTranslation("ghost", "a1", "es", "https://cdn/es.mp3", "hola", null, null, false, null, null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().translations).isNull()
+    }
+
+    @Test
+    fun `applyAudioTranslation ignores a blank url`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyAudioTranslation("m1", "a1", "es", "   ", "hola", null, null, false, null, null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().translations).isNull()
+    }
 }

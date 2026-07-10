@@ -768,8 +768,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (blank id) the first audio attachment (single-voice-note case); replace its `transcription` in place,
       order preserved. **No-op (→ null)** on a blank text (Prisme never stores an empty transcription), a deleted
       tombstone, no matching/audio target, or an identical transcription already present (idempotent, language
-      matched case-insensitively). +23 tests (17 `AttachmentTranscriptionMergeTest`, 4 repo, 2 VM). Audio-voice
-      translation (`audio:translation-ready` → cloned-voice playback) remains pending (needs BubbleAudio UI).
+      matched case-insensitively). +23 tests (17 `AttachmentTranscriptionMergeTest`, 4 repo, 2 VM).
+      **Audio-voice translation** done too (slice `chat-live-audio-translation`, 2026-07-10): the dead
+      `MessageSocketManager.audioTranslationReady` flow (`audio:translation-ready`) is now wired end-to-end —
+      it never even decoded before, because the Android `AudioTranslationEvent` was **flat**
+      (`targetLanguage`/`audioUrl`) while the gateway nests the payload under `translatedAudio` with the target
+      language at the top-level `language` (every frame threw `MissingFieldException` and was dropped). Reshaped
+      the event to the real `AudioTranslationEventData` shape (lenient blank defaults so a malformed frame is
+      dropped by the merge no-op, not a decode throw). Pure `:core:model`
+      `AttachmentAudioTranslationMerge.mergeAudioTranslation(message, attachmentId?, language, url, transcription,
+      durationMs?, format?, cloned, quality?, voiceModelId?, ttsModel?) → ApiMessage?` SSOT (sibling of
+      `AttachmentTranscriptionMerge`): upserts the cloned-voice `ApiAttachmentTranslation` into the target audio
+      attachment's `translations` map (case-insensitive key, order preserved). **No-op (→ null)** on a deleted
+      tombstone, a blank language, a **blank url** (never store an unplayable audio translation), no matching/audio
+      target, or an identical entry already present (idempotent). `:sdk-ui`
+      `BubbleContentBuilder.resolveTranslatedAudio` + `BubbleAudio.isAudioTranslated`/`audioLanguage` project the
+      preferred-language cloned voice as the played `url` (the original voice wins when it is the top preference),
+      mirroring `resolveTranscription` so the played voice and the surfaced transcription line resolve to the same
+      language — Android plays the viewer's-language voice by default (iOS defaults to the original + manual pick).
+      `:sdk-core` `MessageRepository.applyAudioTranslation` applies it via `updateCachedMessage` (no outbox —
+      inbound server truth); `ChatViewModel` collects the flow, conversation-scoped. +37 tests
+      (18 `AttachmentAudioTranslationMergeTest`, 2 `AudioTranslationEventTest` decode-contract, 8
+      `BubbleContentBuilderTest`, 4 repo, 2 VM, +3 wiring). Diff = `apps/android` only.
 - [ ] Ad-hoc blocking text translation
 - [x] Source-language stamping from in-app prefs (NEVER device locale) — **done**
       (slice `chat-compose-language-detection`, 2026-07-10): `ChatViewModel.send()` stamped
