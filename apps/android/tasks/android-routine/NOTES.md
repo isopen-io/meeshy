@@ -1549,3 +1549,21 @@ Append-only log of gotchas and decisions that save time next run.
   test.** The unit test passes its own store instance, but Hilt must also resolve it at the app graph — always
   run `assembleDebug` after changing a VM constructor to catch a missing `@Provides` (here the `@Singleton
   StarredMessagesStore` from `SdkModule` already existed, so it resolved).
+
+- **Pure UX-rule controllers go in `:feature:*`, not `:sdk-ui`, even though they're "pure".** `LanguageFlagTapResolver`
+  (slice `chat-language-flag-tap-switch`) is a stateless pure object, which tempts placing it in `:sdk-ui`. But
+  purity ≠ SDK: it encodes a *product UX rule* ("tap active flag → revert, tap new → switch, tap content-less →
+  request"), the exact analog of iOS keeping `BubbleLanguageFlagController` **app-side**. The grain test's real
+  discriminator is "encodes a when-to-do-X rule" → app/feature. In contrast the *language→text/chip projection*
+  (`activeLanguageCode`/`activeCodeOverride` on `BubbleContentBuilder`/`MessageLanguageStrip`) takes opaque params
+  and holds no rule → `:sdk-ui`. Splitting the tap into (rule in feature) + (projection in sdk-ui) also avoids
+  inverting the module dependency (`:sdk-ui` must not depend on `:feature:chat`).
+- **Generalize a binary display toggle by ADDING an optional param, not rewriting the old one.** The strip/builder
+  had a binary `showOriginal`. Adding `activeLanguageCode`/`activeCodeOverride` as `= null` defaults (override wins
+  when set, else the exact prior `showOriginal` computation) kept all 17 pre-existing strip/builder tests green
+  **unchanged** — no test weakened. Precedence (override > showOriginal) is documented on both signatures.
+- **The 5-flow `combine` cap: thread a 6th input through the existing nested-combine tail.** `ChatViewModel`'s
+  bubble pipeline already maxed Kotlin's typed `combine(a,b,c,d,e)`. The new `activeLanguageOverride` map went on
+  as `.combine(activeLanguageOverride) { triple, overrides -> triple to overrides }` after the `hidden`/`starred`
+  nesting, then unpacked in `collect` and threaded through `applyResult`/`toBubbles` — no restructuring of the
+  first combine.
