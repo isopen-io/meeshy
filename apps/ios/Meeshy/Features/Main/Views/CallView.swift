@@ -865,10 +865,20 @@ struct CallView: View {
     private var reconnectingBanner: some View {
         IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.92), reduceMotion: reduceMotion) {
             HStack(spacing: 8) {
+                // Explicit frame — ProgressView(.circular) has no bounded
+                // intrinsic size and expands to fill whatever it's proposed;
+                // under this banner's ancestor .frame(maxWidth: .infinity,
+                // maxHeight: .infinity) (line ~170), an unconstrained
+                // ProgressView (and its IslandEmergingBanner background
+                // Capsule with it) grew to cover the whole screen. .scaleEffect
+                // is a pure render transform (see IslandEmergingBanner's own
+                // doc comment) — it never constrains layout size, so it did
+                // not protect against this. Found 2026-07-10 on a real device
+                // during a reconnecting call.
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)
-                    .scaleEffect(0.8)
+                    .frame(width: 14, height: 14)
                 Text(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(.white)
