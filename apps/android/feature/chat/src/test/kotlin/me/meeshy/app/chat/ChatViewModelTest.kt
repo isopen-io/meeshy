@@ -1078,6 +1078,162 @@ class ChatViewModelTest {
         }
 
     @Test
+    fun opening_the_language_explorer_targets_the_message_and_closes_the_action_sheet() =
+        runTest(dispatcher) {
+            val h = harness(flagStripStream(), currentUser = frEs)
+            advanceUntilIdle()
+            h.vm.onMessageLongPress("m1")
+
+            h.vm.openLanguageExplorer("m1")
+            advanceUntilIdle()
+
+            assertThat(h.vm.state.value.explorerMessageId).isEqualTo("m1")
+            assertThat(h.vm.state.value.actionMessageId).isNull()
+        }
+
+    @Test
+    fun dismissing_the_language_explorer_clears_the_target() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+        h.vm.openLanguageExplorer("m1")
+        advanceUntilIdle()
+
+        h.vm.dismissLanguageExplorer()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.explorerMessageId).isNull()
+    }
+
+    @Test
+    fun retranslating_from_the_explorer_refetches_even_when_the_language_has_content() =
+        runTest(dispatcher) {
+            val stream = MutableStateFlow(CacheResult.Fresh(listOf(flagStripMessage()), ageMillis = 0))
+            val h = harness(stream, currentUser = frEs)
+            advanceUntilIdle()
+            assertThat(bubbleText(h, "m1")).isEqualTo("Bonjour")
+            coEvery { h.repo.requestTranslation("m1", "fr") } coAnswers {
+                stream.value = CacheResult.Fresh(listOf(flagStripMessage(frText = "Salut")), ageMillis = 0)
+                true
+            }
+
+            h.vm.onExplorerRetranslate("m1", "fr")
+            advanceUntilIdle()
+
+            // onFlagTap would NOT hit the network for an already-translated language —
+            // retranslate must force the refetch.
+            coVerify(exactly = 1) { h.repo.requestTranslation("m1", "fr") }
+            assertThat(bubbleText(h, "m1")).isEqualTo("Salut")
+            assertThat(activeStripCode(h, "m1")).isEqualTo("fr")
+        }
+
+    @Test
+    fun retranslating_an_unknown_message_makes_no_request() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+
+        h.vm.onExplorerRetranslate("does-not-exist", "fr")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.requestTranslation(any(), any()) }
+    }
+
+    @Test
+    fun retranslating_with_a_blank_code_makes_no_request() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+
+        h.vm.onExplorerRetranslate("m1", "   ")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.requestTranslation(any(), any()) }
+    }
+
+    @Test
+    fun a_second_retranslate_while_one_is_in_flight_does_not_duplicate_the_request() =
+        runTest(dispatcher) {
+            val h = harness(flagStripStream(), currentUser = frEs)
+            advanceUntilIdle()
+            val gate = CompletableDeferred<Boolean>()
+            coEvery { h.repo.requestTranslation("m1", "fr") } coAnswers { gate.await() }
+
+            h.vm.onExplorerRetranslate("m1", "fr")
+            h.vm.onExplorerRetranslate("m1", "fr")
+            runCurrent()
+            assertThat(h.vm.state.value.translatingLanguages).contains("m1|fr")
+            gate.complete(false)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { h.repo.requestTranslation("m1", "fr") }
+            assertThat(h.vm.state.value.translatingLanguages).doesNotContain("m1|fr")
+        }
+
+    @Test
+    fun a_failed_retranslation_surfaces_the_error_and_clears_the_in_flight_marker() =
+        runTest(dispatcher) {
+            val h = harness(flagStripStream(), currentUser = frEs)
+            advanceUntilIdle()
+            coEvery { h.repo.requestTranslation("m1", "fr") } throws RuntimeException("boom")
+
+            h.vm.onExplorerRetranslate("m1", "fr")
+            advanceUntilIdle()
+
+            assertThat(h.vm.state.value.errorMessage).isEqualTo("boom")
+            assertThat(h.vm.state.value.translatingLanguages).doesNotContain("m1|fr")
+        }
+
+    @Test
+    fun opening_the_explorer_projects_the_message_language_model() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.languageExplorer).isNull()
+
+        h.vm.openLanguageExplorer("m1")
+        advanceUntilIdle()
+
+        val explorer = h.vm.state.value.languageExplorer!!
+        assertThat(explorer.originalCode).isEqualTo("en")
+        assertThat(explorer.rows.single { it.code == "fr" }.hasContent).isTrue()
+        assertThat(explorer.rows.single { it.code == "es" }.hasContent).isTrue()
+        assertThat(explorer.rows.none { it.code == "en" }).isTrue()
+    }
+
+    @Test
+    fun the_explorer_clears_its_model_when_dismissed() = runTest(dispatcher) {
+        val h = harness(flagStripStream(), currentUser = frEs)
+        advanceUntilIdle()
+        h.vm.openLanguageExplorer("m1")
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.languageExplorer).isNotNull()
+
+        h.vm.dismissLanguageExplorer()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.languageExplorer).isNull()
+    }
+
+    @Test
+    fun the_explorer_marks_an_in_flight_language_as_translating() = runTest(dispatcher) {
+        val h = harness(onDemandStream(), currentUser = frEsDe)
+        advanceUntilIdle()
+        h.vm.openLanguageExplorer("m1")
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.languageExplorer!!.rows.single { it.code == "de" }.hasContent)
+            .isFalse()
+        val gate = CompletableDeferred<Boolean>()
+        coEvery { h.repo.requestTranslation("m1", "de") } coAnswers { gate.await() }
+
+        h.vm.onExplorerRetranslate("m1", "de")
+        runCurrent()
+
+        assertThat(h.vm.state.value.languageExplorer!!.rows.single { it.code == "de" }.isTranslating)
+            .isTrue()
+        gate.complete(false)
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.languageExplorer!!.rows.single { it.code == "de" }.isTranslating)
+            .isFalse()
+    }
+
+    @Test
     fun an_unpinned_socket_event_refreshes_the_open_conversation() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
@@ -1347,25 +1503,23 @@ class ChatViewModelTest {
         regionalLanguage = "es",
     )
 
-    private fun flagStripStream() = flowOf(
-        CacheResult.Fresh(
-            listOf(
-                synced(
-                    ApiMessage(
-                        id = "m1",
-                        conversationId = "c1",
-                        senderId = "other",
-                        content = "Hello",
-                        originalLanguage = "en",
-                        translations = listOf(
-                            ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
-                            ApiTextTranslation(targetLanguage = "es", translatedContent = "Hola"),
-                        ),
-                    ),
-                ),
+    /** m1 (original en) translated to fr+es; the fr text is parameterisable for retranslate tests. */
+    private fun flagStripMessage(frText: String = "Bonjour") = synced(
+        ApiMessage(
+            id = "m1",
+            conversationId = "c1",
+            senderId = "other",
+            content = "Hello",
+            originalLanguage = "en",
+            translations = listOf(
+                ApiTextTranslation(targetLanguage = "fr", translatedContent = frText),
+                ApiTextTranslation(targetLanguage = "es", translatedContent = "Hola"),
             ),
-            ageMillis = 0,
         ),
+    )
+
+    private fun flagStripStream() = flowOf(
+        CacheResult.Fresh(listOf(flagStripMessage()), ageMillis = 0),
     )
 
     private val frEsDe = MeeshyUser(

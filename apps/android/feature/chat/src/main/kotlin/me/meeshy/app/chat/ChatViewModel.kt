@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
@@ -51,6 +53,8 @@ import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleContentBuilder
+import me.meeshy.ui.component.bubble.MessageDetailExplorer
+import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import javax.inject.Inject
 
 data class ImageViewerTarget(
@@ -86,6 +90,9 @@ data class ChatUiState(
     val isPinnedSheetOpen: Boolean = false,
     val replyThreadParentId: String? = null,
     val forward: ForwardUiState? = null,
+    val explorerMessageId: String? = null,
+    val translatingLanguages: Set<String> = emptySet(),
+    val languageExplorer: MessageLanguageExplorer? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -176,16 +183,15 @@ class ChatViewModel @Inject constructor(
      */
     private val activeLanguageOverride = MutableStateFlow<Map<String, String>>(emptyMap())
 
-    /**
-     * "$messageId|$language" keys for on-demand translations currently in flight —
-     * a second tap on the same content-less flag while its request is running is
-     * ignored (no duplicate translate call). Confined to the main dispatcher, so a
-     * plain set is race-free.
-     */
-    private val translatingLanguages = mutableSetOf<String>()
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
+
+    /**
+     * Reactive mirror of [latestMessages] so the language-explorer projection can
+     * rebuild live off the same cache stream (a translation landing → new content).
+     */
+    private val latestMessagesFlow = MutableStateFlow<List<LocalMessage>>(emptyList())
     private var allConversations: List<ApiConversation> = emptyList()
     private var mentionRoster: List<MentionCandidate> = emptyList()
     private var avatarByUserId: Map<String, String?> = emptyMap()
@@ -291,6 +297,7 @@ class ChatViewModel @Inject constructor(
                     val (inputs, hidden, starredIds) = triple
                     val (result, user, own, originals, recipients) = inputs
                     latestMessages = result.valueOrNull() ?: latestMessages
+                    latestMessagesFlow.value = latestMessages
                     _state.update { current ->
                         val next = current.applyResult(
                             result, user, own, originals, config.socketUrl, recipients, hidden, starredIds, overrides,
@@ -298,6 +305,20 @@ class ChatViewModel @Inject constructor(
                         next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
                 }
+        }
+
+        viewModelScope.launch {
+            combine(
+                _state.map { it.explorerMessageId }.distinctUntilChanged(),
+                latestMessagesFlow,
+                sessionRepository.currentUser,
+                _state.map { it.translatingLanguages }.distinctUntilChanged(),
+                activeLanguageOverride,
+            ) { explorerId, messages, user, translating, overrides ->
+                buildLanguageExplorer(explorerId, messages, user, translating, overrides)
+            }
+                .distinctUntilChanged()
+                .collect { explorer -> _state.update { it.copy(languageExplorer = explorer) } }
         }
 
         viewModelScope.launch {
@@ -915,7 +936,8 @@ class ChatViewModel @Inject constructor(
      */
     private fun requestOnDemandTranslation(messageId: String, targetLanguage: String) {
         val key = "$messageId|$targetLanguage"
-        if (!translatingLanguages.add(key)) return
+        if (key in _state.value.translatingLanguages) return
+        _state.update { it.copy(translatingLanguages = it.translatingLanguages + key) }
         viewModelScope.launch {
             try {
                 val stored = messageRepository.requestTranslation(messageId, targetLanguage)
@@ -927,9 +949,67 @@ class ChatViewModel @Inject constructor(
             } catch (error: Exception) {
                 _state.update { it.copy(errorMessage = error.message) }
             } finally {
-                translatingLanguages.remove(key)
+                _state.update { it.copy(translatingLanguages = it.translatingLanguages - key) }
             }
         }
+    }
+
+    /**
+     * Open the per-message language explorer (long-press → "Explore languages"):
+     * the exhaustive Prisme view listing every explorable language with its
+     * translate / retranslate affordance. Closing the action sheet first keeps a
+     * single sheet on screen.
+     */
+    fun openLanguageExplorer(messageId: String) {
+        _state.update { it.copy(explorerMessageId = messageId, actionMessageId = null) }
+    }
+
+    fun dismissLanguageExplorer() {
+        _state.update { it.copy(explorerMessageId = null) }
+    }
+
+    /**
+     * Retranslate a language from the explorer — force a fresh translation even when
+     * that language already has content (unlike [onFlagTap], which would merely
+     * switch to the existing text). A refresh that returns identical text is an inert
+     * no-op at the repository; a differing result re-renders live off the cache
+     * stream. A request already in flight for the same language is not duplicated.
+     */
+    fun onExplorerRetranslate(messageId: String, code: String) {
+        val target = code.normalizedCode() ?: return
+        latestMessages.firstOrNull { it.message.id == messageId } ?: return
+        requestOnDemandTranslation(messageId, target)
+    }
+
+    /**
+     * Project the open explorer message into a [MessageLanguageExplorer], or null
+     * when no explorer is open / the target has paged out. The in-flight codes are
+     * the viewer's [ChatUiState.translatingLanguages] keys scoped to this message,
+     * and the selected language is the active flag-tap override — so the explorer
+     * highlights whatever the bubble is currently displaying.
+     */
+    private fun buildLanguageExplorer(
+        explorerMessageId: String?,
+        messages: List<LocalMessage>,
+        user: MeeshyUser?,
+        translating: Set<String>,
+        overrides: Map<String, String>,
+    ): MessageLanguageExplorer? {
+        val id = explorerMessageId ?: return null
+        val message = messages.firstOrNull { it.message.id == id }?.message ?: return null
+        val prefix = "$id|"
+        val translatingCodes = translating
+            .filter { it.startsWith(prefix) }
+            .map { it.removePrefix(prefix) }
+            .toSet()
+        return MessageDetailExplorer.build(
+            originalLanguage = message.originalLanguage,
+            content = message.content,
+            translations = message.translations,
+            preferences = user ?: EmptyContentPreferences,
+            translatingCodes = translatingCodes,
+            selectedCode = overrides[id],
+        )
     }
 
     /**

@@ -705,7 +705,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       iOS's stacked secondary panel) ; **on-demand translate of an absent language shipped**
       (slice `chat-on-demand-translate`, 2026-07-10 — a configured language with no content yet shows a
       dimmed "＋ translate" chip; tapping it blocking-translates and switches the bubble to it)
-- [~] Message detail: per-language translation explorer + on-demand translate / retranslate —
+- [x] Message detail: per-language translation explorer + on-demand translate / retranslate —
       **strip projection done** (slice `chat-translation-language-strip`, 2026-07-10): pure `:sdk-ui`
       `MessageLanguageStrip.build(originalLanguage, translations, preferences, showingOriginal) →
       List<LanguageChip>` (port of iOS `BubbleContentBuilder.buildAvailableFlags`, enriched — each entry
@@ -725,8 +725,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + `MessageLanguageStrip` gained an `activeLanguageCode`/`activeCodeOverride` param projecting the chosen
       language's text + active chip (falls back to the read-only default when unset). Tappable chips wired in
       `MessageBubble`/`ChatScreen`. +23 tests (10 `LanguageFlagTapResolverTest`, +3 `MessageLanguageStripTest`,
-      +4 `BubbleContentBuilderTest`, +6 `ChatViewModelTest`). **Pending:** on-demand translate / retranslate
-      of a missing language (the `RequestTranslation` outcome, inert today), the full detail explorer sheet.
+      +4 `BubbleContentBuilderTest`, +6 `ChatViewModelTest`). **on-demand translate done** (slice
+      `chat-on-demand-translate`, 2026-07-10): `MessageRepository.requestTranslation` translate-and-merge +
+      `ChatViewModel.requestOnDemandTranslation`. **detail explorer sheet done** (slice
+      `chat-message-detail-explorer`, 2026-07-10): pure `:sdk-ui` `MessageDetailExplorer.build(...) →
+      MessageLanguageExplorer` (Android's take on iOS `MessageLanguageDetailView` — surfaces the viewer's
+      **configured** languages first, then the remaining candidates, rather than iOS's fixed 18-entry list).
+      Each `LanguageExplorerRow` carries a truncated preview, `hasContent`/`isTranslating`/`isSelected` and a
+      `canRetranslate` flag (content ∧ not-in-flight). `ChatViewModel` projects it reactively into
+      `ChatUiState.languageExplorer` (rebuilds off the same cache stream + the in-flight `translatingLanguages`
+      set now surfaced in state), reuses `onFlagTap` for select/translate and adds `onExplorerRetranslate`
+      (forces a fresh translate even when content exists — a differing result re-renders live, an identical one
+      is an inert repo no-op). Entry point: message-actions sheet → "Explore languages" opens
+      `MessageLanguageExplorerSheet` (accent-coherent, natural single-sheet gesture). +31 tests (21
+      `MessageDetailExplorerTest`, +10 `ChatViewModelTest`). Full `assembleDebug` + all-module
+      `testDebugUnitTest` → BUILD SUCCESSFUL. **Follow-up:** audio-transcription banner (voice messages, needs
+      attachment-transcription plumbing) and per-post/per-story explorer parity.
 - [ ] Per-post and per-story translation (flag strip, inline secondary, request missing languages)
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
