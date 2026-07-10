@@ -758,9 +758,9 @@ final class QualityThresholdsPiPTests: XCTestCase {
 @MainActor
 final class QualityThresholdsPiPLayoutTests: XCTestCase {
 
-    func test_pipTopClearance_is20() {
-        XCTAssertEqual(QualityThresholds.pipTopClearance, 20,
-                       "Fixed clearance above safe area top — minimize chevron + badge room")
+    func test_pipTopClearance_is60() {
+        XCTAssertEqual(QualityThresholds.pipTopClearance, 60,
+                       "Fixed clearance above safe area top — full chrome row (8 pt top padding + 44 pt chevron/badge + 8 pt breathing room): the duration badge now lives top-trailing, exactly where the PiP rests by default")
     }
 
     func test_pipBottomClearance_is130() {

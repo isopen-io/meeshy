@@ -926,10 +926,12 @@ nonisolated enum QualityThresholds {
     static let pipFrameRateCritical: Int = 8
 
     /// Fixed clearance added on top of `safeAreaInsets.top` when computing the
-    /// PiP thumbnail resting position. Provides room for the minimize chevron
-    /// and the call-duration badge above the safe area edge.
+    /// PiP thumbnail resting position. Must clear the ENTIRE top chrome row —
+    /// 8 pt top padding + 44 pt chevron/conversation buttons (leading) and
+    /// call-duration badge (trailing) + 8 pt breathing room — because the PiP
+    /// rests top-trailing by default, right where the duration badge lives.
     /// Source of truth for `CallView.pipCenter(_:in:safeArea:)`.
-    static let pipTopClearance: CGFloat = 20
+    static let pipTopClearance: CGFloat = 60
 
     /// Fixed clearance added on top of `safeAreaInsets.bottom` when computing
     /// the PiP thumbnail resting position. Provides room for the call control
