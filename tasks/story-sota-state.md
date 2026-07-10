@@ -1087,6 +1087,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   CI iOS (xcodegen + build-for-testing) est le gate réel. D5 (passe simulateur) reste.
 - Piège évité : postinstall `turbo run generate` suspendu ~30 min dans ce conteneur
   (cache distant inaccessible ?) — kill + `prisma generate` + `bun run build` manuels.
+- **Boucle CI (PR #1806)** : run 1 = échec COMPILE du bundle de tests (exit 65) —
+  `StoryActionRailPlan` implicitement @MainActor (defaultIsolation du target APP,
+  pas seulement MeeshyUI) → fix `nonisolated struct` (parité StoryCanvasFraming) ;
+  run 2 = compile OK, 3606/3609 verts, l'unique échec
+  (`BubbleCallNoticeViewAccessibilityTests`) venait de MAIN (e3000c7 rouge sur son
+  propre ios-tests, fixé sur main 64142ab) → merge de main 54e3c8f poussé.
+  RÈGLE : le piège « tests non @MainActor » de MeeshyUI s'applique AUSSI au target
+  app — tout nouveau type app-side consommé par MeeshyTests hors MainActor doit être
+  déclaré `nonisolated` (rule engines) ou le test annoté @MainActor.
 
 ## it.1 — R1 : gel de progression étendu à l'audio (86c2c27de)
 
