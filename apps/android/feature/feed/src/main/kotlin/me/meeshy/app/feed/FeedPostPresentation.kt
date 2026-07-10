@@ -6,6 +6,8 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
+import me.meeshy.ui.component.bubble.LanguageChip
+import me.meeshy.ui.component.bubble.PostLanguageStrip
 
 /** An image attachment ready for display in a feed card. */
 @Immutable
@@ -32,6 +34,7 @@ data class FeedPostPresentation(
     val createdAtIso: String?,
     val content: String,
     val isTranslated: Boolean,
+    val languageStrip: List<LanguageChip>,
     val moodEmoji: String?,
     val images: List<FeedPostImage>,
     val likeCount: Int,
@@ -72,6 +75,11 @@ object FeedPostBuilder {
             createdAtIso = post.createdAt,
             content = post.displayContent(preferences),
             isTranslated = post.isTranslated(preferences),
+            languageStrip = PostLanguageStrip.build(
+                originalLanguage = post.originalLanguage,
+                translations = post.translations,
+                preferences = preferences,
+            ),
             moodEmoji = post.moodEmoji?.takeIf { it.isNotBlank() },
             images = images,
             likeCount = post.likeCount ?: 0,

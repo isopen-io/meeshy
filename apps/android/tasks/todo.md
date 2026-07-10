@@ -4,7 +4,20 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Translation §D) — slice `chat-message-detail-explorer` ✅
+## This loop (Phase: Translation §D) — slice `feed-post-language-strip` ✅
+**Per-post Prisme language flag strip** — the feed sibling of the chat `MessageLanguageStrip`. New pure
+`:sdk-ui` `PostLanguageStrip.build(...) → List<LanguageChip>` adapts a post's language-keyed
+`Map<code, ApiPostTranslationEntry>` into `LanguageResolver.TranslationLike` rows and **delegates to
+`MessageLanguageStrip`** (SSOT — one strip algorithm). Read-only default: original + configured languages that
+have content; **empty** when the post isn't translated for the viewer (Prisme rule 1), the same predicate
+driving `ApiPost.isTranslated`. Wired into `FeedPostBuilder`/`FeedPostPresentation` (`languageStrip`, pure/
+tested) and rendered in `FeedScreen` as an accent-coherent chip strip (flag + active native name in the
+language colour), replacing the old binary "Translated" label. +15 tests (13 `PostLanguageStripTest`, +2
+`FeedPostBuilderTest`); full `assembleDebug` + all-module `testDebugUnitTest` green, diff = `apps/android` only.
+Next: interactive `includeTranslatable` arm for posts (tap absent language → on-demand request), the per-story
+timeline strip, or persisted translations across cold start (§D "offline Prisme").
+
+## Prior loop (Phase: Translation §D) — slice `chat-message-detail-explorer` ✅
 **Per-message language explorer sheet** — the exhaustive Prisme view (iOS `MessageLanguageDetailView`). New
 pure `:sdk-ui` `MessageDetailExplorer.build(...) → MessageLanguageExplorer` projects the original-language
 banner + one row per explorable language: viewer's **configured** languages first (system → regional →
