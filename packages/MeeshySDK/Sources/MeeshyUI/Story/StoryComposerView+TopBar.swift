@@ -24,59 +24,81 @@ extension StoryComposerView {
         )
     }
 
-    // MARK: - Top Bar
+    // MARK: - Top Bar (icônes flottantes — directive user 2026-07-10)
 
+    /// Le header n'est PLUS une barre : plus de fond `.ultraThinMaterial`
+    /// pleine largeur ni de hauteur réservée — chaque commande est une icône
+    /// de verre individuelle qui FLOTTE au-dessus du canvas plein écran
+    /// (parité IMG_0944 : X à gauche, actions à droite). La bande de slides
+    /// devient un élément flottant AUTONOME sous les icônes, présent
+    /// uniquement quand il est utile (« les éléments apparaissent et quittent
+    /// selon le besoin »).
     var topBar: some View {
-        HStack(spacing: 0) {
-            dismissButton
-                .padding(.leading, 16)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 0) {
+                dismissButton
 
-            slideStrip
-                .frame(maxWidth: .infinity)
+                Spacer(minLength: 12)
 
-            // Unified Liquid Glass action group (iOS 26 GlassEffectContainer →
-            // adjacent glass morphs into one continuous surface; iOS 16–25 falls
-            // back to material/solid via the adaptiveGlass wrappers). Publish keeps
-            // the primary brand tint via prominent glass; overflow (⋯) sits last,
-            // right of Publish.
-            AdaptiveGlassContainer(spacing: 6) {
-                HStack(spacing: 6) {
-                    // C9 Inc.4 — n'afficher que l'utile : les commandes
-                    // d'annulation n'existent à l'écran QUE quand la
-                    // trajectoire le permet (canUndo/canRedo).
-                    if viewModel.canUndoGlobal {
-                        historyButton(
-                            icon: "arrow.uturn.backward",
-                            label: String(localized: "story.composer.undo",
-                                          defaultValue: "Annuler", bundle: .module),
-                            action: performUndo
-                        )
+                // Unified Liquid Glass action group (iOS 26 GlassEffectContainer →
+                // adjacent glass morphs into one continuous surface; iOS 16–25 falls
+                // back to material/solid via the adaptiveGlass wrappers). Publish keeps
+                // the primary brand tint via prominent glass; overflow (⋯) sits last,
+                // right of Publish.
+                AdaptiveGlassContainer(spacing: 6) {
+                    HStack(spacing: 6) {
+                        // C9 Inc.4 — n'afficher que l'utile : les commandes
+                        // d'annulation n'existent à l'écran QUE quand la
+                        // trajectoire le permet (canUndo/canRedo).
+                        if viewModel.canUndoGlobal {
+                            historyButton(
+                                icon: "arrow.uturn.backward",
+                                label: String(localized: "story.composer.undo",
+                                              defaultValue: "Annuler", bundle: .module),
+                                action: performUndo
+                            )
+                        }
+                        if viewModel.canRedoGlobal {
+                            historyButton(
+                                icon: "arrow.uturn.forward",
+                                label: String(localized: "story.composer.redo",
+                                              defaultValue: "Rétablir", bundle: .module),
+                                action: performRedo
+                            )
+                        }
+                        visibilityMenu
+                        previewButton
+                        publishButton
+                        overflowMenu
                     }
-                    if viewModel.canRedoGlobal {
-                        historyButton(
-                            icon: "arrow.uturn.forward",
-                            label: String(localized: "story.composer.redo",
-                                          defaultValue: "Rétablir", bundle: .module),
-                            action: performRedo
-                        )
-                    }
-                    visibilityMenu
-                    previewButton
-                    publishButton
-                    overflowMenu
+                    .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                               value: viewModel.canUndoGlobal)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                               value: viewModel.canRedoGlobal)
                 }
-                .animation(.spring(response: 0.3, dampingFraction: 0.85),
-                           value: viewModel.canUndoGlobal)
-                .animation(.spring(response: 0.3, dampingFraction: 0.85),
-                           value: viewModel.canRedoGlobal)
             }
-            .padding(.trailing, 16)
+
+            // Bande de slides flottante — visible seulement quand elle sert :
+            // plusieurs slides à naviguer, ou du contenu à dupliquer/étendre.
+            // Sur un composer vierge (empty-state picker), elle disparaît.
+            if shouldShowFloatingSlideStrip {
+                slideStrip
+                    .padding(.vertical, 5)
+                    .adaptiveGlass(in: Capsule())
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
-        .frame(height: 60)
-        .background(.ultraThinMaterial)
-        .clipShape(
-            RoundedRectangle(cornerRadius: 0)
-        )
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                   value: shouldShowFloatingSlideStrip)
+    }
+
+    /// La bande n'apparaît que quand elle est UTILE : navigation entre
+    /// plusieurs slides, ou slide courant avec du contenu (vignette d'état +
+    /// affordance « + » C6). Composer vierge = canvas nu, zéro chrome inutile.
+    var shouldShowFloatingSlideStrip: Bool {
+        viewModel.slides.count > 1 || composerHasContent
     }
 
     var dismissButton: some View {

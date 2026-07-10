@@ -8,7 +8,25 @@ public struct APIAuthor: Codable, Sendable {
     public let displayName: String?
     public let avatar: String?
 
+    /// Présence auteur — servie UNIQUEMENT par le chemin stories du gateway
+    /// (`storyAuthorSelect` : feed complet + projection tray) pour que
+    /// l'interstitiel d'identité du viewer résolve la présence AU moment du
+    /// switch de groupe. `nil` sur tous les autres payloads (posts, comments,
+    /// viewers) et sur les caches antérieurs — décodage rétro-compatible.
+    public let isOnline: Bool?
+    public let lastActiveAt: Date?
+
     public var name: String { displayName ?? username ?? "Anonymous" }
+
+    public init(id: String, username: String?, displayName: String?, avatar: String?,
+                isOnline: Bool? = nil, lastActiveAt: Date? = nil) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+        self.isOnline = isOnline
+        self.lastActiveAt = lastActiveAt
+    }
 }
 
 public struct APIPostMedia: Codable, Sendable {

@@ -447,9 +447,11 @@ final class StoryModelsTests: XCTestCase {
         audioUrl: String? = nil,
         repostOfId: String? = nil,
         originalRepostOfId: String? = nil,
-        repostMedia: [APIPostMedia]? = nil
+        repostMedia: [APIPostMedia]? = nil,
+        author overrideAuthor: APIAuthor? = nil
     ) -> APIPost {
-        let author = APIAuthor(id: "author-1", username: "alice", displayName: "Alice", avatar: nil)
+        let author = overrideAuthor
+            ?? APIAuthor(id: "author-1", username: "alice", displayName: "Alice", avatar: nil)
         let repostOf: APIRepostOf? = repostOfId.map { rid in
             APIRepostOf(
                 id: rid, type: "STORY", content: nil, originalLanguage: nil, translations: nil,
@@ -485,6 +487,39 @@ final class StoryModelsTests: XCTestCase {
             visibility: visibility,
             isViewed: false
         )
+    }
+
+    // MARK: - Présence auteur (interstitiel de switch de groupe, 2026-07-10)
+
+    func test_toStoryGroups_propagatesAuthorPresence_fromStoriesPayload() {
+        let lastActive = Date(timeIntervalSince1970: 1_750_000_000)
+        let author = APIAuthor(id: "author-p", username: "windie", displayName: "Windie Nh",
+                               avatar: nil, isOnline: true, lastActiveAt: lastActive)
+        let post = makeAPIPost(id: "story-p", author: author)
+
+        let groups = [post].toStoryGroups()
+
+        XCTAssertEqual(groups.first?.authorPresence?.isOnline, true)
+        XCTAssertEqual(groups.first?.authorPresence?.lastActiveAt, lastActive)
+    }
+
+    func test_toStoryGroups_leavesAuthorPresenceNil_onLegacyPayload() {
+        let post = makeAPIPost(id: "story-legacy")
+
+        let groups = [post].toStoryGroups()
+
+        XCTAssertNil(groups.first?.authorPresence)
+    }
+
+    func test_storyGroup_withStories_preservesAuthorPresence() {
+        let presence = UserPresence(isOnline: false, lastActiveAt: Date(timeIntervalSince1970: 500))
+        let group = StoryGroup(id: "g", username: "alice", avatarColor: "FF0000",
+                               stories: [makeStoryItem()], authorPresence: presence)
+
+        let rebuilt = group.with(stories: [])
+
+        XCTAssertEqual(rebuilt.authorPresence?.isOnline, false)
+        XCTAssertEqual(rebuilt.authorPresence?.lastActiveAt, Date(timeIntervalSince1970: 500))
     }
 
     func test_StoryItem_carries_originalRepostOfId_visibility_audioUrl() {

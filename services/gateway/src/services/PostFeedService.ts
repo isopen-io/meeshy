@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, postInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { authorSelect, postInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import {
   reelAffinityScore,
@@ -289,7 +289,10 @@ export class PostFeedService {
         })
       : await this.prisma.post.findMany({
           where,
-          include: feedPostInclude,
+          // Story-scoped include : l'auteur embarque isOnline/lastActiveAt pour
+          // que l'interstitiel d'identité du viewer résolve la présence AU
+          // moment du switch de groupe (jamais après affichage du slide).
+          include: storyPostInclude,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: limit + 1,
         });

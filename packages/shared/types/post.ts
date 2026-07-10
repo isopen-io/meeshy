@@ -45,6 +45,13 @@ export interface PostAuthor {
   readonly username: string;
   readonly displayName?: string | null;
   readonly avatar?: string | null;
+  /**
+   * Présence — servie UNIQUEMENT sur le chemin stories (`storyAuthorSelect`
+   * gateway) pour que l'interstitiel d'identité du viewer résolve l'état de
+   * présence au moment du switch de groupe. Absent des payloads posts/feed.
+   */
+  readonly isOnline?: boolean;
+  readonly lastActiveAt?: Date | string | null;
 }
 
 export interface PostMedia {

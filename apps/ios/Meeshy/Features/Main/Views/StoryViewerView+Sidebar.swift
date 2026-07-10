@@ -10,6 +10,58 @@ import MeeshyUI
 // type. Real structs (vs AnyView) break the type while preserving SwiftUI
 // structural identity.
 
+// MARK: - Story Action Rail Plan
+
+/// Plan du rail d'actions — CALCULÉ D'UN BLOC À L'ENTRÉE DU SLIDE puis FIGÉ
+/// pendant toute sa lecture (directive user 2026-07-10 : « le calcul des
+/// boutons à afficher doit se faire avant affichage, même contenant toutes
+/// les informations de compteur — pas des apparitions en second temps »).
+///
+/// Toutes les entrées proviennent du payload feed déjà en main (compteurs
+/// inclus) : aucune résolution réseau n'est nécessaire pour décider du set.
+/// Les VALEURS de compteurs affichées sur les boutons restent vivantes
+/// (realtime), mais l'APPARTENANCE d'un bouton au rail ne change jamais en
+/// cours de slide — un compteur réconcilié après coup ne fait plus surgir
+/// un bouton au milieu de la lecture.
+///
+/// `nonisolated` : rule engine pur sans état partagé (parité
+/// StoryCanvasFraming / BandStateMachine) — le target app compile en
+/// defaultIsolation MainActor, sans ce modificateur le bundle de tests
+/// (nonisolated) ne peut ni appeler `resolve` ni lire les propriétés
+/// (échec CI ios-tests 2026-07-10, exit 65 = échec de COMPILE).
+nonisolated struct StoryActionRailPlan: Equatable {
+    let showsReact: Bool
+    let showsReply: Bool
+    let showsForward: Bool
+    let showsRepost: Bool
+    let showsViews: Bool
+    let showsExport: Bool
+    let showsSound: Bool
+    let showsComments: Bool
+    let showsTranslations: Bool
+
+    static func resolve(
+        isOwnStory: Bool,
+        canReply: Bool,
+        isPublicStory: Bool,
+        hasAudibleSound: Bool,
+        commentCount: Int,
+        hasTranslatableContent: Bool
+    ) -> StoryActionRailPlan {
+        StoryActionRailPlan(
+            showsReact: !isOwnStory,
+            showsReply: !isOwnStory && canReply,
+            showsForward: true,
+            showsRepost: !isOwnStory && isPublicStory,
+            showsViews: isOwnStory,
+            showsExport: isOwnStory,
+            showsSound: hasAudibleSound,
+            showsComments: commentCount > 0,
+            showsTranslations: !isOwnStory && hasTranslatableContent
+        )
+    }
+}
+
 // MARK: - Story Action Sidebar
 
 /// Right-side action sidebar of the story viewer. Hosts the heart / reply /
@@ -65,6 +117,27 @@ struct StoryActionSidebarView: View {
     /// Transient scale of the heart button — driven only by `bounceHeart()`.
     @State private var heartScale: CGFloat = 1.0
 
+    /// Plan du rail FIGÉ à l'entrée du slide (voir `StoryActionRailPlan`).
+    /// Re-résolu UNIQUEMENT au changement de story — jamais sur une mise à
+    /// jour de compteur mid-slide, donc aucun bouton n'apparaît/disparaît
+    /// pendant la lecture.
+    @State private var frozenRailPlan: StoryActionRailPlan?
+
+    /// Résolution depuis les entrées courantes (payload déjà seedé de manière
+    /// synchrone par `startTimer()` avant le rendu du slide).
+    private var liveRailPlan: StoryActionRailPlan {
+        StoryActionRailPlan.resolve(
+            isOwnStory: isOwnStory,
+            canReply: onReplyToStory != nil,
+            isPublicStory: currentStory?.isPublic == true,
+            hasAudibleSound: storyHasAudibleSound,
+            commentCount: storyCommentCount,
+            hasTranslatableContent: storyHasTranslatableContent
+        )
+    }
+
+    private var railPlan: StoryActionRailPlan { frozenRailPlan ?? liveRailPlan }
+
     /// Quick pop on the heart button that confirms the user just sent a
     /// reaction. Phased spring, matching the style of `triggerStoryReaction`'s
     /// own multi-phase animation.
@@ -87,13 +160,27 @@ struct StoryActionSidebarView: View {
         // controller stays reachable. The parent (StoryCardView) bounds
         // `maxHeight` to the safe canvas-content slot so ViewThatFits has
         // a real constraint to evaluate against.
+        //
+        // Densité resserrée (directive user 2026-07-10 « rapprocher les FABs,
+        // on y voit trop d'espace ») : spacing 8/6 au lieu de 20/14 — le rail
+        // retrouve la compacité TikTok/IG, chaque action reste ≥ 44pt de zone
+        // tappable via le padding du bouton.
         ViewThatFits(in: .vertical) {
-            sidebarContent(spacing: 20)
-            sidebarContent(spacing: 14)
+            sidebarContent(spacing: 8)
+            sidebarContent(spacing: 6)
             ScrollView(.vertical, showsIndicators: false) {
-                sidebarContent(spacing: 14)
+                sidebarContent(spacing: 6)
                     .padding(.vertical, 4)
             }
+        }
+        // Plan figé posé à l'apparition puis re-résolu au CHANGEMENT de slide
+        // uniquement — les mises à jour de compteurs mid-slide ne re-déclenchent
+        // jamais la composition du rail (directive 2026-07-10).
+        .onAppear {
+            if frozenRailPlan == nil { frozenRailPlan = liveRailPlan }
+        }
+        .adaptiveOnChange(of: currentStory?.id) { _, _ in
+            frozenRailPlan = liveRailPlan
         }
     }
 
@@ -101,7 +188,7 @@ struct StoryActionSidebarView: View {
     private func sidebarContent(spacing: CGFloat) -> some View {
         VStack(spacing: spacing) {
             // 1. Reaction (heart) — primary action, brand-colored when active
-            if !isOwnStory {
+            if railPlan.showsReact {
                 StoryActionButton(
                     icon: "heart.fill",
                     label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
@@ -154,7 +241,7 @@ struct StoryActionSidebarView: View {
             }
 
             // 2. Reply privately (opens DM with story context)
-            if !isOwnStory, onReplyToStory != nil {
+            if railPlan.showsReply {
                 StoryActionButton(
                     icon: "arrowshape.turn.up.left.fill",
                     label: "Répondre"
@@ -200,7 +287,7 @@ struct StoryActionSidebarView: View {
             // dans une STORY fraîche, self-contenue, liée via repostOfId. Remplace
             // l'ancien chemin composer qui produisait une story VIDE (il forçait
             // repostOfId: nil et ne dupliquait jamais le média source).
-            if !isOwnStory, currentStory?.isPublic == true {
+            if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
                     label: storyRepostCount > 0 ? "\(storyRepostCount)" : "Partager"
@@ -234,7 +321,7 @@ struct StoryActionSidebarView: View {
                         }
                     }
                 }
-            } else if isOwnStory {
+            } else if railPlan.showsViews {
                 StoryActionButton(
                     icon: "eye.fill",
                     label: storyViewCount > 0 ? "\(storyViewCount)" : "Vues"
@@ -251,7 +338,7 @@ struct StoryActionSidebarView: View {
             // compositor synthétise un substrat pour les statiques).
             // NEVER uploads to the Meeshy backend (stories publish RAW,
             // see CLAUDE.md "Story Architecture").
-            if isOwnStory {
+            if railPlan.showsExport {
                 StoryActionButton(
                     icon: "square.and.arrow.up.fill",
                     label: "Exporter"
@@ -265,7 +352,7 @@ struct StoryActionSidebarView: View {
             // 4. Mute/Unmute — only shown when the story has genuinely audible
             // sound (voice note, background audio, or a video carrying a real
             // audio track). Silent videos keep the button hidden.
-            if storyHasAudibleSound {
+            if railPlan.showsSound {
                 StoryActionButton(
                     icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                     label: isGlobalMuted ? "Mute" : "Son",
@@ -293,11 +380,12 @@ struct StoryActionSidebarView: View {
             // premier commentaire, donc un bouton à 0 ne serait que du bruit
             // visuel (user spec 2026-05-28 + 2026-06-23 : ne pas afficher
             // l'icône commentaire si aucun commentaire n'est laissé).
-            // La fiabilité du compteur est garantie par `loadStoryCommentCount()`
-            // (côté +Content) qui réconcilie le payload feed avec un fetch réseau
-            // autoritatif quand le payload annonce 0 — sinon une story AVEC
-            // commentaires mais au compteur stale 0 masquait à tort ce bouton.
-            if storyCommentCount > 0 {
+            // MEMBERSHIP FIGÉE À L'ENTRÉE DU SLIDE (directive 2026-07-10) : la
+            // réconciliation `loadStoryCommentCount()` (+Content) met toujours
+            // le COMPTEUR à jour (label + prochains slides), mais ne fait plus
+            // APPARAÎTRE ce bouton en cours de lecture — le set est décidé
+            // avant affichage, depuis le payload feed.
+            if railPlan.showsComments {
                 StoryActionButton(
                     icon: "bubble.left.fill",
                     label: "\(storyCommentCount)",
@@ -316,7 +404,7 @@ struct StoryActionSidebarView: View {
             }
 
             // 6. Translate — brand cyan when active (only for stories with text/audio)
-            if !isOwnStory && storyHasTranslatableContent {
+            if railPlan.showsTranslations {
                 StoryActionButton(
                     icon: "textformat.abc",
                     label: "Traductions",
