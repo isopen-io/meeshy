@@ -13,7 +13,10 @@ import me.meeshy.sdk.model.LanguageInfo
  * code matches no known language — the chip still renders with its raw code so
  * an exotic original language is never silently dropped. [isOriginal] marks the
  * message's source language; [isActive] marks the language currently displayed
- * as the bubble's primary text.
+ * as the bubble's primary text. [isTranslatable] marks a language the viewer has
+ * configured but for which no translation exists yet — tapping it requests an
+ * on-demand translation. A translatable chip is never [isActive] nor [isOriginal]
+ * (it has no content to display).
  */
 @Immutable
 public data class LanguageChip(
@@ -21,6 +24,7 @@ public data class LanguageChip(
     val info: LanguageInfo?,
     val isOriginal: Boolean,
     val isActive: Boolean,
+    val isTranslatable: Boolean = false,
 )
 
 /**
@@ -54,6 +58,12 @@ public object MessageLanguageStrip {
      *   the strip highlights the currently displayed language (including a third
      *   configured language, not just original/preferred). Null falls back to the
      *   [showingOriginal] computation, preserving the read-only default behaviour.
+     * @param includeTranslatable when true, the viewer's configured content
+     *   languages that have no content yet are appended as translatable chips
+     *   (`isTranslatable = true`) so the interactive strip can offer an on-demand
+     *   translation into them. Default false keeps the read-only projection
+     *   (content languages only), so the discrete preview never dumps absent
+     *   languages.
      * @return an ordered, de-duplicated list of chips, or empty when the message
      *   is not translated for this viewer (no preferred-language translation
      *   exists) — in which case there is nothing to explore and no strip shows.
@@ -64,6 +74,7 @@ public object MessageLanguageStrip {
         preferences: LanguageResolver.ContentLanguagePreferences,
         showingOriginal: Boolean,
         activeCodeOverride: String? = null,
+        includeTranslatable: Boolean = false,
     ): List<LanguageChip> {
         val preferred = LanguageResolver.preferredTranslation(translations, preferences)
             ?: return emptyList()
@@ -72,19 +83,25 @@ public object MessageLanguageStrip {
         val activeCode = activeCodeOverride.normalized()
             ?: if (showingOriginal) original else preferredCode
 
-        val codes = LinkedHashSet<String>()
-        original?.let(codes::add)
+        // code -> isTranslatable (a configured language still missing content).
+        val codes = LinkedHashMap<String, Boolean>()
+        original?.let { codes[it] = false }
         for (language in LanguageResolver.preferredContentLanguages(preferences)) {
             val code = language.normalized() ?: continue
-            if (code == original || hasContent(code, translations)) codes.add(code)
+            when {
+                code == original -> Unit
+                hasContent(code, translations) -> codes[code] = false
+                includeTranslatable -> codes.putIfAbsent(code, true)
+            }
         }
 
-        return codes.map { code ->
+        return codes.map { (code, isTranslatable) ->
             LanguageChip(
                 code = code,
                 info = LanguageData.info(code),
                 isOriginal = code == original,
-                isActive = code == activeCode,
+                isActive = !isTranslatable && code == activeCode,
+                isTranslatable = isTranslatable,
             )
         }
     }

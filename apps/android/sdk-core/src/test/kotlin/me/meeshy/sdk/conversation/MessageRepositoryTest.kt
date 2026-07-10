@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.decodeFromString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
@@ -18,6 +19,9 @@ import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
+import me.meeshy.sdk.net.api.TranslateRequest
+import me.meeshy.sdk.net.api.TranslateResponse
+import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -60,6 +64,19 @@ private class FakeMessageApi(
         ApiResponse<Unit>(success = true)
     override suspend fun unpin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = true)
+}
+
+private class FakeTranslationApi(
+    var response: ApiResponse<TranslateResponse> = ApiResponse(success = false, error = "no translator"),
+) : TranslationApi {
+    var lastRequest: TranslateRequest? = null
+    var calls: Int = 0
+
+    override suspend fun translate(body: TranslateRequest): ApiResponse<TranslateResponse> {
+        calls += 1
+        lastRequest = body
+        return response
+    }
 }
 
 private fun apiMessage(
@@ -106,11 +123,140 @@ class MessageRepositoryTest {
         db.close()
     }
 
-    private fun repository(api: MessageApi, clock: me.meeshy.sdk.cache.CacheClock = SystemCacheClock) =
-        MessageRepository(api, db, db.messageDao(), db.syncMetaDao(), outbox, clock)
+    private fun repository(
+        api: MessageApi,
+        translationApi: TranslationApi = FakeTranslationApi(),
+        clock: me.meeshy.sdk.cache.CacheClock = SystemCacheClock,
+    ) = MessageRepository(api, translationApi, db, db.messageDao(), db.syncMetaDao(), outbox, clock)
 
     private suspend fun streamedMessages(repo: MessageRepository, conversationId: String = "c1") =
         db.messageDao().observeForConversation(conversationId).first()
+
+    private suspend fun cachedApiMessage(id: String): ApiMessage =
+        MeeshyApi.json.decodeFromString<ApiMessage>(db.messageDao().find(id)!!.payload)
+
+    @Test
+    fun `requestTranslation stores the returned translation and reports success`() = runTest {
+        val translation = FakeTranslationApi(
+            ApiResponse(success = true, data = TranslateResponse(translatedText = "Bonjour")),
+        )
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            translationApi = translation,
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isTrue()
+        assertThat(translation.lastRequest?.targetLanguage).isEqualTo("fr")
+        assertThat(
+            cachedApiMessage("m1").translations
+                .single { it.targetLanguage == "fr" }.translatedContent,
+        ).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `requestTranslation returns false and stores nothing when the translator fails`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            translationApi = FakeTranslationApi(ApiResponse(success = false, error = "translator down")),
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(cachedApiMessage("m1").translations).isEmpty()
+    }
+
+    @Test
+    fun `requestTranslation on an unknown message never calls the translator`() = runTest {
+        val translation = FakeTranslationApi()
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = false, error = "down")),
+            translationApi = translation,
+        )
+
+        val stored = repo.requestTranslation("ghost", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(translation.calls).isEqualTo(0)
+    }
+
+    @Test
+    fun `requestTranslation on a deleted message is inert`() = runTest {
+        val translation = FakeTranslationApi(
+            ApiResponse(success = true, data = TranslateResponse(translatedText = "Bonjour")),
+        )
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(apiMessage("m1").copy(deletedAt = "2026-06-01T10:00:00Z")),
+                ),
+            ),
+            translationApi = translation,
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(translation.calls).isEqualTo(0)
+    }
+
+    @Test
+    fun `requestTranslation with a blank target is inert`() = runTest {
+        val translation = FakeTranslationApi()
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            translationApi = translation,
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "   ")
+
+        assertThat(stored).isFalse()
+        assertThat(translation.calls).isEqualTo(0)
+    }
+
+    @Test
+    fun `requestTranslation ignores a blank translated result`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            translationApi = FakeTranslationApi(
+                ApiResponse(success = true, data = TranslateResponse(translatedText = "   ")),
+            ),
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(cachedApiMessage("m1").translations).isEmpty()
+    }
+
+    @Test
+    fun `requestTranslation is idempotent when the translation already matches the cache`() = runTest {
+        val existing = apiMessage("m1").copy(
+            translations = listOf(
+                ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+            ),
+        )
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(existing))),
+            translationApi = FakeTranslationApi(
+                ApiResponse(success = true, data = TranslateResponse(translatedText = "Bonjour")),
+            ),
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(cachedApiMessage("m1").translations).hasSize(1)
+    }
 
     @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {
@@ -511,7 +657,7 @@ class MessageRepositoryTest {
                 pagination = Pagination(hasMore = false),
             ),
         )
-        val repo = repository(api, clock)
+        val repo = repository(api, clock = clock)
         repo.refresh("c1")
         clock.now = 5_000
 

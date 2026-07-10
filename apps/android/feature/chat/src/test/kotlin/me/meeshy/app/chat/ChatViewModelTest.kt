@@ -981,6 +981,68 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun the_strip_offers_a_translatable_chip_for_a_configured_language_without_content() =
+        runTest(dispatcher) {
+            val h = harness(onDemandStream(), currentUser = frEsDe)
+            advanceUntilIdle()
+
+            val de = h.vm.state.value.messages.single { it.messageId == "m1" }
+                .languageStrip.single { it.code == "de" }
+            assertThat(de.isTranslatable).isTrue()
+            assertThat(de.isActive).isFalse()
+        }
+
+    @Test
+    fun tapping_a_translatable_flag_requests_a_translation_and_switches_to_it() = runTest(dispatcher) {
+        val stream = onDemandStream()
+        val h = harness(stream, currentUser = frEsDe)
+        advanceUntilIdle()
+        assertThat(bubbleText(h, "m1")).isEqualTo("Bonjour")
+        coEvery { h.repo.requestTranslation("m1", "de") } coAnswers {
+            stream.value = CacheResult.Fresh(listOf(onDemandMessage(withDe = true)), ageMillis = 0)
+            true
+        }
+
+        h.vm.onFlagTap("m1", "de")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.requestTranslation("m1", "de") }
+        assertThat(bubbleText(h, "m1")).isEqualTo("Guten Tag")
+        assertThat(activeStripCode(h, "m1")).isEqualTo("de")
+    }
+
+    @Test
+    fun a_failed_on_demand_translation_leaves_the_active_language_unchanged() = runTest(dispatcher) {
+        val h = harness(onDemandStream(), currentUser = frEsDe)
+        advanceUntilIdle()
+        coEvery { h.repo.requestTranslation("m1", "de") } returns false
+
+        h.vm.onFlagTap("m1", "de")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.requestTranslation("m1", "de") }
+        assertThat(bubbleText(h, "m1")).isEqualTo("Bonjour")
+        assertThat(activeStripCode(h, "m1")).isEqualTo("fr")
+    }
+
+    @Test
+    fun a_second_tap_while_a_translation_is_in_flight_does_not_fire_a_duplicate_request() =
+        runTest(dispatcher) {
+            val h = harness(onDemandStream(), currentUser = frEsDe)
+            advanceUntilIdle()
+            val gate = CompletableDeferred<Boolean>()
+            coEvery { h.repo.requestTranslation("m1", "de") } coAnswers { gate.await() }
+
+            h.vm.onFlagTap("m1", "de")
+            h.vm.onFlagTap("m1", "de")
+            runCurrent()
+            gate.complete(false)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { h.repo.requestTranslation("m1", "de") }
+        }
+
+    @Test
     fun an_unpinned_socket_event_refreshes_the_open_conversation() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
@@ -1270,6 +1332,33 @@ class ChatViewModelTest {
             ageMillis = 0,
         ),
     )
+
+    private val frEsDe = MeeshyUser(
+        id = "me",
+        username = "atabeth",
+        systemLanguage = "fr",
+        regionalLanguage = "es",
+        customDestinationLanguage = "de",
+    )
+
+    /** m1 translated to fr+es (viewer configures fr/es/de), optionally with de content merged in. */
+    private fun onDemandMessage(withDe: Boolean) = synced(
+        ApiMessage(
+            id = "m1",
+            conversationId = "c1",
+            senderId = "other",
+            content = "Hello",
+            originalLanguage = "en",
+            translations = buildList {
+                add(ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"))
+                add(ApiTextTranslation(targetLanguage = "es", translatedContent = "Hola"))
+                if (withDe) add(ApiTextTranslation(targetLanguage = "de", translatedContent = "Guten Tag"))
+            },
+        ),
+    )
+
+    private fun onDemandStream(withDe: Boolean = false): MutableStateFlow<CacheResult<List<LocalMessage>>> =
+        MutableStateFlow(CacheResult.Fresh(listOf(onDemandMessage(withDe)), ageMillis = 0))
 
     private fun bubbleText(h: Harness, messageId: String): String =
         h.vm.state.value.messages.single { it.messageId == messageId }.text
