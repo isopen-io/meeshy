@@ -432,6 +432,7 @@ struct CallSummaryDetailSheet: View {
                 .font(.subheadline)
                 .foregroundColor(Color(hex: accentHex))
                 .frame(width: 24)
+                .accessibilityHidden(true)
             Text(String(localized: "calls.detail.quality", defaultValue: "Qualité", bundle: .main))
                 .font(.subheadline)
                 .foregroundColor(theme.textMuted)
@@ -439,12 +440,14 @@ struct CallSummaryDetailSheet: View {
             Circle()
                 .fill(qualityColor(quality))
                 .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
             Text(qualityWord(quality))
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.md)
+        .accessibilityElement(children: .combine)
     }
 
     private func detailRow(icon: String, label: String, value: String) -> some View {
@@ -453,6 +456,7 @@ struct CallSummaryDetailSheet: View {
                 .font(.subheadline)
                 .foregroundColor(Color(hex: accentHex))
                 .frame(width: 24)
+                .accessibilityHidden(true)
             Text(label)
                 .font(.subheadline)
                 .foregroundColor(theme.textMuted)
@@ -463,6 +467,7 @@ struct CallSummaryDetailSheet: View {
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.md)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Derived visuals
