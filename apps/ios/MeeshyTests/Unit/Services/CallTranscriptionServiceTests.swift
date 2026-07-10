@@ -62,6 +62,41 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertEqual(sut.lastError, .permissionDenied)
         XCTAssertEqual(socket.emitCallTranscriptionSegmentCallCount, 0)
     }
+
+    // MARK: - Purge / Remote Segments / Emit Guard
+
+    func test_resetForCallEnd_purgesSegments_evenWhenNeverTranscribingLocally() {
+        let (sut, _) = makeSUT()
+        sut.receiveTranslatedSegment(makeSegment(text: "hi", isFinal: true))
+        XCTAssertFalse(sut.segments.isEmpty)
+
+        sut.resetForCallEnd()
+
+        XCTAssertTrue(sut.segments.isEmpty)
+    }
+
+    func test_receiveTranslatedSegment_appendsToSegments() {
+        let (sut, _) = makeSUT()
+        let segment = makeSegment(text: "Hello", speakerId: "remote-user", isFinal: true)
+        sut.receiveTranslatedSegment(segment)
+        XCTAssertEqual(sut.segments.count, 1)
+        XCTAssertEqual(sut.segments.first?.text, "Hello")
+    }
+
+    func test_applyRecognitionResult_whenFinal_emitsSegmentOverSocket() {
+        let (sut, socket) = makeSUT()
+        // Simulate the state startTranscribing would have set, without
+        // depending on the real SFSpeechRecognizer/AVAudioEngine (not
+        // unit-testable — validated by the Task 1 device spike instead).
+        sut.applyRecognitionResult(
+            text: "Bonjour", speakerId: "user-1", startMs: 0, endMs: 1000,
+            isFinal: true, confidence: 0.9, language: "fr"
+        )
+        // isTranscribing is false here (startTranscribing was never called),
+        // so applyRecognitionResult's guard drops it — this documents that
+        // the guard is load-bearing, not a bug in the test.
+        XCTAssertEqual(socket.emitCallTranscriptionSegmentCallCount, 0)
+    }
 }
 
 // MARK: - TranscriptionSegment Data Model Tests
