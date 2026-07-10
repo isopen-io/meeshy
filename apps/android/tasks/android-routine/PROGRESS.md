@@ -4,6 +4,54 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-10 **the per-message language explorer sheet** landed (slice `chat-message-detail-explorer`,
+> Translation §D — feature-parity.md "Message detail: per-language translation explorer + on-demand translate
+> / retranslate" now fully shipped). The prior slices left the flag strip tappable and on-demand translation
+> live, but there was no exhaustive **explorer** view (iOS `MessageLanguageDetailView`, long-press → per-
+> language list). This slice ships it. **(1) Pure core** — new `:sdk-ui` `MessageDetailExplorer.build(...) →
+> MessageLanguageExplorer(originalCode, originalInfo, originalPreview, rows)`, a stateless projection (opaque
+> params: translations, in-flight codes, selected code — no "when" decision, so it sits beside
+> `MessageLanguageStrip` as a building block). Android's deliberate improvement over iOS's fixed 18-language
+> table: the viewer's **configured** content languages (system → regional → custom) lead the row order, then
+> the remaining `candidates` (default `LanguageData.allLanguagesCommonFirst`) — a preference-led ordering, not
+> a hand-curated list. Each `LanguageExplorerRow` carries `info`, a truncated `preview` (null when no content),
+> `hasContent`, `isTranslating`, `isSelected`, and `canRetranslate` (content ∧ not-in-flight). The original is
+> excluded from the rows and surfaced as the banner; the banner preview is the text content, or the
+> transcription when content is blank, or empty. Normalizes/dedups codes (case+trim), matches translations
+> case-insensitively, treats blank translations as no-content, and boundary-truncates the preview with a "…".
+> **(2) Wiring** — `ChatViewModel` gained `explorerMessageId` + `openLanguageExplorer`/`dismissLanguageExplorer`,
+> surfaced the in-flight `translatingLanguages` set into `ChatUiState` (so the sheet's spinners are honest, not
+> a dead affordance — refactored the private mutable set to state-backed), and projects the explorer reactively
+> into `ChatUiState.languageExplorer` off a new `latestMessagesFlow` mirror + the translating set + the active
+> override (rebuilds live when a translation lands). Row select/translate **reuse** `onFlagTap` (SSOT — the
+> same Activate/Revert/RequestTranslation resolver); new `onExplorerRetranslate` forces a fresh translate even
+> when content already exists (unlike `onFlagTap`, which would only switch) — a differing result re-renders
+> live off the cache stream, an identical one is an inert repo no-op, and an in-flight request is not
+> duplicated. **(3) UI** (glue, coverage-exempt) — message-actions sheet gained an "Explore languages" action
+> opening `MessageLanguageExplorerSheet`: accent-coherent original banner + per-language rows with preview /
+> spinner / retranslate icon / "Translate" pill, one natural single-sheet gesture, no dead end (dismiss returns
+> to the conversation). **+31 tests**: `MessageDetailExplorerTest` 21 (banner text/transcription/empty fallback,
+> original excluded + normalized + unknown-code + blank, configured-first ordering, configured-not-in-candidates,
+> content+truncation, exact-boundary-not-truncated, blank→no-content, translatable-not-retranslatable,
+> retranslatable, in-flight blocks retranslate, selected normalized/none, dedup, case-insensitive target,
+> empty-candidates+empty-prefs→fallback), `ChatViewModelTest` +10 (open closes action sheet, dismiss clears,
+> retranslate refetches-even-with-content + switches, unknown/blank inert, second-tap no-dup, failure→error +
+> clears marker, explorer projects model, clears on dismiss, marks in-flight language translating). **RED
+> verified**: `MessageDetailExplorerTest` references a symbol absent on `main` (compile-RED); the retranslate
+> VM test asserts `requestTranslation` is called for an already-translated language — behaviour `onFlagTap`
+> never produces (it would resolve to Activate, no network), so it fails against any select-only wiring. Full
+> `assembleDebug` + all-module `testDebugUnitTest` → **BUILD SUCCESSFUL**. Reviewer: **PASS** (diff
+> `apps/android` only — `:sdk-ui` detector+test, `:feature:chat` VM wiring + Compose sheet + strings, no
+> production logic outside; **SDK-purity** — the projection is a stateless building block with opaque params in
+> `:sdk-ui`, the *when-to-open / when-to-retranslate* orchestration stays in the VM; **SSOT** — reuses
+> `LanguageResolver`/`LanguageData`/`onFlagTap`/`requestTranslation`, no re-implementation; **UDF** immutable
+> `StateFlow` model, pure transitions; **instant-app** — the explorer rebuilds live off the cache stream, no
+> blocking spinner; **colour/UX coherence** — accent-coherent rows, natural single-sheet gesture, dismissal
+> returns to a coherent place; **no coverage floor lowered, no existing test weakened**). **Follow-up:**
+> audio-transcription banner for voice messages (needs attachment-transcription plumbing into `ApiMessage`),
+> and per-post / per-story explorer parity. **Next:** progressive **audio-voice translation**
+> (`audio:translation-ready` → cloned-voice playback, needs BubbleAudio UI), or the per-post translation strip.
+
 > On 2026-07-10 **compose-language detection for outbound stamping** landed (slice
 > `chat-compose-language-detection`, Translation §D — feature-parity.md "Source-language stamping from in-app
 > prefs" now shipped). `ChatViewModel.send()` stamped `originalLanguage = user.systemLanguage ?:
