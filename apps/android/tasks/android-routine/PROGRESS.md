@@ -4,6 +4,60 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
 
+> On 2026-07-10 **on-demand translation of an absent language** landed (slice `chat-on-demand-translate`,
+> Translation parity §D — feature-parity.md "Original exploration" on-demand-translate now shipped, "Message
+> detail explorer" on-demand arm now live). The prior slice left `LanguageFlagTapResolver.RequestTranslation`
+> tested but **inert**: the strip only surfaced languages that already had content, so a content-less flag was
+> never tappable. This slice makes the arm live end-to-end. **(1) Strip projection** — `MessageLanguageStrip.build`
+> gained `includeTranslatable: Boolean = false`: when true, the viewer's configured content languages that have
+> **no content yet** are appended as **translatable chips** (`LanguageChip.isTranslatable = true`, never
+> `isActive`/`isOriginal`), interleaved in configured-preference order (original → system → regional → custom),
+> still bounded to the viewer's own ≤3 configured languages (discrete, not a dump). Default false keeps the
+> read-only projection **byte-identical** — every one of the 20 prior strip tests + all builder tests stay green
+> unchanged; `BubbleContentBuilder.build` opts in (`includeTranslatable = true`) as the sole interactive caller.
+> **(2) Repository** — new `:sdk-core` `MessageRepository.requestTranslation(messageId, targetLanguage): Boolean`:
+> reads the cached message (`cachedMessage` helper, outside any transaction), blocking-translates its original
+> text via the existing `TranslationApi` (`translate-blocking`), then upserts the result through
+> `MessageTranslationMerge` + `updateCachedMessage` — the **same** live re-render path as an inbound
+> `message:translated`, **no outbox** (a derived translation is server truth, never a local mutation to replay).
+> Returns `false` (inert, nothing stored) on unknown/deleted message, blank target, network failure, a blank
+> translator result, or an idempotent no-op (translation already matches cache). `TranslationApi` joins the
+> constructor (Hilt already provides it; only the one positional test helper needed updating). **(3) VM** —
+> `ChatViewModel.onFlagTap`'s `RequestTranslation` branch now calls `requestOnDemandTranslation`, a
+> `viewModelScope` effect that requests the translation then sets `activeLanguageOverride[id]=lang` on success so
+> the bubble switches to the freshly-merged language (arriving via the cache stream — the translatable chip
+> becomes a live content chip). An **in-flight guard** (`translatingLanguages` set, key `"$id|$lang"`, added
+> synchronously before `launch`) drops a duplicate request from a second tap; `CancellationException` rethrown,
+> failures caught to `errorMessage`. **(4) UI** — translatable chips render as a dimmed flag + "＋" affordance in
+> `MessageBubble.LanguageStrip` (Compose glue, coverage-exempt). +19 tests: `MessageLanguageStripTest` +7
+> (includeTranslatable-surfaces / never-active-or-original / content-not-marked-translatable / interleave-order /
+> override-never-activates-translatable / original-never-translatable / [existing default-false stays excluded]),
+> `BubbleContentBuilderTest` +1 (builder surfaces translatable chip), `MessageRepositoryTest` +7 (stores+success /
+> translator-fail→false+nothing-stored / unknown→no-call / deleted→inert+no-call / blank-target→inert+no-call /
+> blank-result→ignored / idempotent→false+no-dup), `ChatViewModelTest` +4 (strip offers translatable chip / tap
+> requests+switches / failed-request leaves active unchanged / second-tap-in-flight no duplicate). Full
+> `assembleDebug` green; the three changed test classes green in isolation (`MessageLanguageStripTest`,
+> `BubbleContentBuilderTest`, `MessageRepositoryTest`, `ChatViewModelTest`). The full-suite `testDebugUnitTest`
+> surfaces only the **known random DataStore-under-parallel-load timeout flake** (a different `*StoreTest` each run
+> — here `NotificationPreferencesStoreTest`, then `ThemeStoreTest`; documented in NOTES, pre-existing, untouched by
+> this diff). **RED verified**: stubbing the strip's `includeTranslatable` arm to a no-op + `requestTranslation` to
+> `return false` → 6 translatable-projection tests fail (`MessageLanguageStripTest` ×5, `BubbleContentBuilderTest`
+> ×1) while the default-false / non-translatable cases stay green (not tautological); restore → all pass. The
+> repo/VM tests reference the new `requestTranslation` symbol absent on `main` (compile-RED). Reviewer: PASS (diff
+> `apps/android` only, no production logic outside; behaviour-through-public-API `MessageLanguageStrip.build` /
+> `BubbleContentBuilder.build` / `MessageRepository.requestTranslation` / `ChatViewModel.onFlagTap`, boundary
+> coverage on unknown/deleted/blank-target/blank-result/idempotent/network-fail/in-flight-dup/override-on-
+> translatable; **SDK-purity** — the translate-and-merge **service** (opaque params, no product rule) lives in
+> `:sdk-core` `MessageRepository`, the *when-to-request* decision stays in the VM (`onFlagTap` → resolver →
+> effect); the projection stays in `:sdk-ui`; **SSOT** — reuses `MessageTranslationMerge` + `updateCachedMessage`
+> (same merge/no-op-elision as the socket path) and `LanguageResolver.preferredContentLanguages`, no
+> re-implementation; **UDF** immutable override map + pure transitions; **instant-app** — the merged translation
+> re-renders live off the cache stream, no blocking spinner; **colour/UX coherence** — translatable chip is a
+> discrete dimmed "＋" affordance, tap-to-translate-then-switch is one natural gesture, no dead end; **no coverage
+> floor lowered, no existing test weakened**). **Next:** the full **detail explorer sheet** (long-press → per-
+> language explorer listing every configured language with translate/retranslate), or progressive **audio-voice
+> translation** (`audio:translation-ready` → cloned-voice playback, needs BubbleAudio UI).
+
 > On 2026-07-10 **tap-to-switch active language** landed (slice `chat-language-flag-tap-switch`,
 > Translation parity §D — feature-parity.md "Original exploration", tap-to-switch now shipped). The prior
 > slice rendered the per-message flag strip **read-only**; this one makes it interactive. New pure

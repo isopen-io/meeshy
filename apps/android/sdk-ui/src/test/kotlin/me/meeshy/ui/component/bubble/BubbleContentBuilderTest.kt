@@ -154,6 +154,25 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `the builder surfaces a viewer-configured language without content as a translatable strip chip`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = Prefs(systemLanguage = "fr", customDestinationLanguage = "de"),
+        )
+
+        assertThat(content.languageStrip.map { it.code }).containsExactly("en", "fr", "de").inOrder()
+        val de = content.languageStrip.single { it.code == "de" }
+        assertThat(de.isTranslatable).isTrue()
+        assertThat(de.isActive).isFalse()
+    }
+
+    @Test
     fun `showing the original moves the active chip to the original in the strip`() {
         val content = BubbleContentBuilder.build(
             message(

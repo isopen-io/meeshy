@@ -3,6 +3,29 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-10 (`chat-on-demand-translate`): to make a deferred pure arm live without a dead end, extend the
+  projection that surfaces its trigger — via an opt-in param, not a rewrite.** `LanguageFlagTapResolver.RequestTranslation`
+  was already tested but inert because `MessageLanguageStrip` never surfaced content-less languages. Rather than change
+  the strip's existing behaviour (which would have forced editing passing tests), I added `includeTranslatable: Boolean =
+  false`: default keeps the read-only projection **byte-identical** (all 20 prior strip tests + all builder tests green
+  unchanged), and the interactive `BubbleContentBuilder` opts in. Same principle as the earlier `activeCodeOverride`
+  generalization — grow a projection by ADDING an optional param whose default is the old behaviour.
+- **A unit test that calls a projection directly can feed it an input the real caller filters out — assert the honest
+  literal contract, not the guarded one.** `MessageLanguageStrip` faithfully marks nothing active when
+  `activeCodeOverride` names a content-less (translatable) language; the `BubbleContentBuilder` drops such an override
+  upstream (`hasContentIn` guard), so production never hits that state. My first test asserted "exactly 1 active" — wrong
+  at the strip's own level (0 active). Fixed to assert the strip's real invariant (a translatable chip is never active;
+  when the override targets one, nothing is active) and documented why production never reaches it.
+- **In-flight guard for a fire-and-forget VM effect: add the key synchronously in the handler BEFORE `viewModelScope.launch`.**
+  `requestOnDemandTranslation` adds `"$id|$lang"` to a plain `MutableSet` synchronously in `onFlagTap` (which runs on the
+  main dispatcher), then launches; a second tap sees the key and returns before any coroutine runs. Test with
+  `StandardTestDispatcher`: two `onFlagTap` calls + `runCurrent()` + a gated `coAnswers` → `coVerify(exactly = 1)`. No
+  `StateFlow`/mutex needed because the handler and the guard read/write are both confined to the single main dispatcher.
+- **Reading a cached entity BEFORE a network call, then merging AFTER: don't hold the Room transaction across the wire.**
+  `MessageRepository.requestTranslation` reads the message via a `cachedMessage()` helper (`messageDao.find` + decode)
+  *outside* any transaction to build the `TranslateRequest`, does the blocking translate, then re-reads-and-merges inside
+  `updateCachedMessage` (which re-decodes under `withTransaction`). Reusing `updateCachedMessage` keeps the `===`-guard
+  no-op-write elision and the "requireSynced=false" inbound-truth semantics identical to the socket merge path.
 - **2026-07-10 (`translation-language-catalog`): when several consumers each patch a table's weak lookup locally,
   the slice is "make the table's own lookup robust and delete the patches" — not "add a new helper".** `LanguageData.info`
   was exact/case-sensitive/alias-blind, so `ProfileDetailRows` called `info(code.lowercase())` and

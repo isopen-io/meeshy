@@ -45,6 +45,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -342,6 +343,11 @@ private fun LanguageStrip(
                 ?: onColor
             val flag = chip.info?.flag ?: chip.code.uppercase()
             val label = chip.info?.name ?: chip.code
+            // A translatable chip (a configured language with no content yet) reads
+            // as a dimmed flag with a "+" affordance — tapping requests it. Content
+            // chips render at full strength; the active one shows its native name.
+            val flagAlpha = if (chip.isTranslatable) 0.55f else 1f
+            val chipLabel = if (chip.isTranslatable) "$label — translate" else label
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -356,10 +362,22 @@ private fun LanguageStrip(
                             .semantics { role = Role.Button }
                     }
                     .padding(horizontal = 6.dp, vertical = 2.dp)
-                    .semantics(mergeDescendants = true) { contentDescription = label },
+                    .semantics(mergeDescendants = true) { contentDescription = chipLabel },
             ) {
-                Text(text = flag, style = MaterialTheme.typography.labelSmall)
-                if (chip.isActive && chip.info != null) {
+                Text(
+                    text = flag,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.alpha(flagAlpha),
+                )
+                if (chip.isTranslatable) {
+                    Text(
+                        text = "+",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = onColor.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 2.dp),
+                    )
+                } else if (chip.isActive && chip.info != null) {
                     Text(
                         text = chip.info.nativeName,
                         style = MaterialTheme.typography.labelSmall,

@@ -31,7 +31,12 @@ struct MediaSaveFlowModifier: ViewModifier {
             ) {
                 ForEach(coordinator.pendingRequest?.destinations ?? [], id: \.self) { destination in
                     Button {
-                        Task { await coordinator.pick(destination) }
+                        // Capture SYNCHRONE au tap : la fermeture du dialog vide
+                        // `pendingRequest` (binding `cancel()`) avant que ce
+                        // `Task` async ne tourne. On fige donc la requête ici,
+                        // pendant que `pendingRequest` est encore renseignée.
+                        let request = coordinator.pendingRequest
+                        Task { await coordinator.pick(destination, request: request) }
                     } label: {
                         Label(destination.label, systemImage: destination.sfSymbolName)
                     }

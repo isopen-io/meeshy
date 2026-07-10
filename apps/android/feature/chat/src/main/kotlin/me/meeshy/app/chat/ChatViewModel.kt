@@ -174,6 +174,14 @@ class ChatViewModel @Inject constructor(
      * original toggled through [showingOriginal]).
      */
     private val activeLanguageOverride = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    /**
+     * "$messageId|$language" keys for on-demand translations currently in flight —
+     * a second tap on the same content-less flag while its request is running is
+     * ignored (no duplicate translate call). Confined to the main dispatcher, so a
+     * plain set is race-free.
+     */
+    private val translatingLanguages = mutableSetOf<String>()
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
@@ -887,10 +895,36 @@ class ChatViewModel @Inject constructor(
                 activeLanguageOverride.update { it + (messageId to result.code) }
             LanguageFlagTapResolver.Result.Revert ->
                 activeLanguageOverride.update { it - messageId }
-            // Requesting an on-demand translation for a content-less language is the
-            // next slice; today the strip never surfaces such a flag, so this is inert.
-            is LanguageFlagTapResolver.Result.RequestTranslation -> Unit
+            is LanguageFlagTapResolver.Result.RequestTranslation ->
+                requestOnDemandTranslation(messageId, result.targetLanguage)
             LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
+    /**
+     * The viewer tapped a configured language the message has no content for yet:
+     * translate it on demand, then switch the bubble to it. The merged translation
+     * arrives through the cache stream (so the strip's translatable chip becomes a
+     * live content chip), and the active override points the bubble at it. A failed
+     * or inert translation leaves the strip's translatable chip in place to retry;
+     * a second tap while the request is in flight is ignored.
+     */
+    private fun requestOnDemandTranslation(messageId: String, targetLanguage: String) {
+        val key = "$messageId|$targetLanguage"
+        if (!translatingLanguages.add(key)) return
+        viewModelScope.launch {
+            try {
+                val stored = messageRepository.requestTranslation(messageId, targetLanguage)
+                if (stored) {
+                    activeLanguageOverride.update { it + (messageId to targetLanguage) }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                _state.update { it.copy(errorMessage = error.message) }
+            } finally {
+                translatingLanguages.remove(key)
+            }
         }
     }
 
