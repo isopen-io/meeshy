@@ -3,7 +3,12 @@ import Combine
 import MeeshyUI
 
 struct VideoFiltersPanel: View {
-    @ObservedObject private var callManager = CallManager.shared
+    // Received from CallEffectsOverlay, NOT instantiated here (`= CallManager.shared`
+    // would re-create the @ObservedObject subscription on every parent body
+    // re-evaluation — CallEffectsOverlay/CallView re-evaluate often mid-call.
+    // Same P1-16 hazard already fixed on CallView, FloatingCallPillView,
+    // CallBubbleView and CallParticipantVisual; this panel was missed.
+    @ObservedObject var callManager: CallManager
     @State private var filterConfig = VideoFilterConfig()
     @State private var activePreset: VideoFilterPreset? = .natural
 
