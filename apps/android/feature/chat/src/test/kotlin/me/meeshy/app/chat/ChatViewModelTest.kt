@@ -330,6 +330,41 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun send_stamps_the_detected_language_of_the_composed_text() = runTest(dispatcher) {
+        // A French user typing Spanish: the outgoing message must be stamped with
+        // the DETECTED language (es), not the sender's configured systemLanguage (fr),
+        // so the Prisme translates it correctly for every reader.
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        coEvery { repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        val text = "Hola, ¿cómo estás? ¿Qué tal todo por allá?"
+        vm.onDraftChange(text)
+        vm.send()
+        advanceUntilIdle()
+
+        coVerify { repo.sendOptimistic("c1", text, "es", user, null) }
+    }
+
+    @Test
+    fun send_falls_back_to_the_resolved_user_language_for_undetectable_text() = runTest(dispatcher) {
+        // A user with NO systemLanguage but a regionalLanguage: undetectable text
+        // must fall back through the Prisme resolution chain (regionalLanguage = de),
+        // never to the hard-coded "fr" — the pre-fix bug for regional/custom-only users.
+        val user = MeeshyUser(id = "me", username = "atabeth", regionalLanguage = "de")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        coEvery { repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        vm.onDraftChange("hello")
+        vm.send()
+        advanceUntilIdle()
+
+        coVerify { repo.sendOptimistic("c1", "hello", "de", user, null) }
+    }
+
+    @Test
     fun retryMessage_delegates_to_the_repository_and_reschedules_the_flush() = runTest(dispatcher) {
         val (vm, repo, workManager) = viewModel(flowOf(CacheResult.Empty))
         advanceUntilIdle()

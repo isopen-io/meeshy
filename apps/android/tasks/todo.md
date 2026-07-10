@@ -4,7 +4,21 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Translation §D) — slice `chat-on-demand-translate` ✅
+## This loop (Phase: Translation §D) — slice `chat-compose-language-detection` ✅
+**Source-language stamping from the composed text (Prisme §D).** `ChatViewModel.send()` stamped
+`originalLanguage = user.systemLanguage ?: "fr"` — it ignored the resolution chain (regional/custom-only
+users mis-stamped `fr`) and never inspected what was typed. New pure `:core:model`
+`ComposeLanguageDetector.detect(text, fallback)` ports the shared web heuristic
+(`apps/web/utils/language-detection.ts`: `detectLanguage` script/stopword scoring + `detectComposeLanguage`
+guards — strip URLs, require ≥4 letters, best-score-or-fallback). `send()` now stamps
+`detect(text, fallback = LanguageResolver.resolveUserLanguage(user))` (system → regional → custom → `fr`,
+never device locale); result is always a `LanguageData`-supported code or the fallback. Forward path
+untouched. +19 tests (17 `ComposeLanguageDetectorTest`, +2 `ChatViewModelTest`); full `assembleDebug` +
+all-module `testDebugUnitTest` green, diff = `apps/android` only.
+Next: the message detail explorer sheet (per-language translate/retranslate), or progressive **audio-voice
+translation** (`audio:translation-ready` → cloned-voice playback, needs BubbleAudio UI).
+
+## Prior loop (Phase: Translation §D) — slice `chat-on-demand-translate` ✅
 **On-demand translation of an absent language** — makes the resolver's `RequestTranslation` arm live. The
 inline strip now surfaces the viewer's configured content languages that lack content as **translatable
 chips** (`LanguageChip.isTranslatable`, dimmed flag + "＋"), opt-in via `MessageLanguageStrip.build(...,
