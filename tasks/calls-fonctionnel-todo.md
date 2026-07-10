@@ -2467,3 +2467,147 @@ ambiguïté, hardening d'autorisation, résilience restart, etc.).
   ambiguïté, 3 findings iOS structurels Vague 28, landscape/Dynamic-Type Vague 28/29, `updateCallStatus()`
   + `markCallAsMissed()` dead-code duration anchors (jumeaux, mêmes conditions de correction), camera-flag
   rollback + `CXProviding` iOS, `handleAcceptCall` re-entrancy guard (web, cette vague).
+
+## Vague 33 — re-entrancy sur `handleAcceptCall` (web) + grace de reconnexion perdue sur un `call:join` qui échoue (gateway) (2026-07-09)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Deux agents
+d'exploration dédiés (gateway CallService/CallCleanupService/CallEventsHandler/AuthHandler ; web
+webrtc-service/CallManager/use-webrtc-p2p/use-video-call), lecture seule, mandatés à falsifier tout
+candidat contre `lessons.md`/ce fichier avant de rapporter. `git fetch origin main` : HEAD à jour
+(`0921b9d7`). Recherche de PRs calls ouverts AVANT de commencer (évite le doublon) : 4 trouvées
+(#1764 ack-échec web, #1767 PiP iOS, #1771 "Vague 32" shared-stream group-call + banner audio/vidéo,
+#1777 room-membership leak + reconnect web) — toutes disjointes du périmètre retenu ici, diffs lus
+intégralement pour confirmer l'absence de recouvrement avant d'implémenter quoi que ce soit.
+
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ, TDD] `CallManager.handleAcceptCall` (callee) n'avait aucun garde
+  de ré-entrance.** `incomingCall` (et le bouton Accepter qu'il affiche) n'est cleared qu'APRÈS
+  l'aller-retour complet `getUserMedia` + ack `call:join` — un double-tap/double-clic sur Accepter avant
+  que l'ack ne résolve atteint `handleAcceptCall` deux fois en concurrence, chacune acquérant son propre
+  `MediaStream` via `getUserMedia`. Les deux écrasent `window.__preauthorizedMediaStream` (dernier écrit
+  gagne) ; le stream du perdant n'est plus jamais référencé nulle part et ses pistes ne sont JAMAIS
+  stoppées — micro/caméra restent actifs sans consommateur (fuite ressource + vie privée). Déjà repéré
+  comme piste "confiance moindre" dans les notes de PR #1771 (Vague 32), non corrigé alors. **Fix** :
+  `acceptingCallIdRef` (`useRef<string | null>`) posé au début de `handleAcceptCall`, early-return si déjà
+  égal à `incomingCall.callId`, reset dans un nouveau bloc `finally` (couvre les deux issues, succès et
+  échec). **Bonus mécanique** : les deux `import('@/utils/ringtone').then(...)` de `handleAcceptCall`/
+  `handleRejectCall` n'avaient pas de `.catch()` — seul endroit du fichier sans, contrairement au pattern
+  déjà correct de `CallNotification.tsx` (chunk-load failure → rejection non gérée sur CHAQUE
+  accept/reject, pas un edge-case vu que ce chemin s'exécute à chaque appel entrant). Alignés sur le
+  pattern existant. **Tests TDD** (`CallManager.acceptCall.test.tsx`) : nouveau cas — double-clic Accepter
+  avant résolution de l'ack → `getUserMedia` et `CALL_JOIN` appelés une seule fois chacun ; l'ack finit par
+  résoudre normalement (`isInCall` devient `true`). RED confirmé (2 appels reçus au lieu d'1). GREEN après
+  fix. Suite `CallManager*.test.tsx` + `video-call*`/`use-video-call` : 15 suites/103 tests verts.
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD, MOYEN] `call:join` annulait le timer de grâce de
+  reconnexion AVANT de savoir si le join allait réussir.** `cancelDisconnectGrace(data.callId, userId)`
+  (`CallEventsHandler.ts`, handler `call:join`) s'exécutait juste après la validation Zod, mais AVANT
+  `resolveParticipantIdFromCall` et `callService.joinCall(...)`, qui peuvent tous deux encore throw (DB
+  transitoire, race). Le catch (`CallEventsHandler.ts` fin du handler) ne ré-arme JAMAIS la grâce. **Scénario
+  concret** : le socket de P tombe pendant un appel répondu → grâce de reconnexion armée (30s, cf. Vague
+  "3e vague" ci-dessus). P se reconnecte, émet `call:join` — la grâce est annulée immédiatement, PUIS le
+  join échoue pour une raison transitoire (hoquet DB dans `resolveParticipantIdFromCall`/`joinCall`, pas
+  "l'appel est vraiment terminé"). P se retrouve sans socket actif dans la room ET sans timer de grâce —
+  le seul filet restant est le tier heartbeat de `CallCleanupService` (60-120s), bien plus lent que le
+  filet rapide conçu pour ce cas précis. **Fix** : `cancelDisconnectGrace` déplacé après le `await
+  this.callService.joinCall(...)` réussi (juste avant `const { callSession, iceServers } = joinResult`) —
+  un join qui throw retourne dans le catch AVANT d'atteindre l'annulation, laissant la grâce d'origine
+  intacte. **Tests TDD** : nouveau cas dans `CallEventsHandler.test.ts` (disconnect arme la grâce → `call:
+  join` avec `joinCall` rejeté → avance 31s → `leaveCall` toujours appelé, prouvant que la grâce d'origine
+  a survécu). Un test PRÉEXISTANT de `CallEventsHandler-restart-resilience.test.ts` ("re-join... cancels
+  the pending end") testait en réalité l'ANCIEN comportement bugué par accident — son propre commentaire
+  documentait "call:join bails after cancel... but the cancel already ran" avec un mock join qui échoue
+  TOUJOURS (`callSessionForJoin` jamais fourni → `null` par défaut) alors que le titre du test prétendait
+  vérifier un rejoin RÉUSSI. Corrigé pour mocker un join réellement réussi (nouveau `callSessionForJoin`
+  + `mockJoinCall.mockResolvedValue(...)` complet avec `participants` incluant l'utilisateur) ; un second
+  test ajouté juste à côté couvre explicitement le cas join-échoue-grâce-survit. RED confirmé sur le
+  nouveau test (0 appels à `leaveCall` reçus). GREEN après fix, la suite restart-resilience et le test
+  préexistant corrigé passent tous les deux. Suite gateway filtrée `[Cc]all` : 32 suites/892 tests verts
+  (vs 890 avant, +2 nouveaux tests nets après le fix du test préexistant).
+- **[Candidat gateway, INVESTIGUÉ, PAS UN BUG ATTEIGNABLE — documenté pour hygiène]** `call:end`'s
+  fast-path émet un `call:ended` optimiste au pair AVEC `duration: 0` hardcodé (pour que l'UI du pair
+  réagisse instantanément), suivi secondes plus tard du broadcast authoritatif `broadcastCallEnded()` avec
+  la vraie `duration`. Piste initiale de l'agent d'exploration gateway : si les clients dédupliquent le
+  second `call:ended` une fois déjà en état terminal (ce qu'iOS fait bien, `CallManager.swift:2219`,
+  `if case .ended = callState { return }`), le pair resterait bloqué sur `duration: 0` pour toujours.
+  **Vérifié FAUX sur les deux clients actuels** : `handleRemoteEnd(callId:rawReason:)` (iOS) ne reçoit
+  MÊME PAS de paramètre `duration` — la durée affichée localement vient du timer `durationTask` du client,
+  jamais du payload socket. Côté web, `CallManager.tsx`'s `handleCallEnded` lit bien `event.duration` mais
+  seulement pour une ligne de `logger.info` (aucun affichage utilisateur — "Toast métier désactivé" est le
+  seul autre effet, un `reset()` idempotent). Aucun consommateur web (grep exhaustif de `CallEndedEvent`
+  dans `apps/web`) n'affiche cette valeur. La vraie durée persistée et affichée dans l'historique d'appels
+  vient du fetch REST/DB (`CallSession.duration`), jamais de ce payload socket éphémère. Incohérence
+  architecturale réelle (le fast-path ment sur `duration` et le contrat de dédup client la fige) mais SANS
+  impact UX observable aujourd'hui sur aucune plateforme — à corriger uniquement si un futur consommateur
+  du payload socket (analytics, notif, etc.) venait un jour lire ce champ.
+- **Web (lecture seule, non corrigé, findings de l'agent d'exploration web, à trier)** :
+  1. `CallControls.tsx`'s `handleSpeakerToggle` (HAUTE confiance) est un pur no-op UI — flippe seulement
+     l'icône/aria-label local, n'appelle jamais `HTMLMediaElement.setSinkId()` sur aucun élément
+     `<video>` distant (`VideoStream.tsx`, un `<video>` par participant, joue AUSSI l'audio distant). Le
+     bouton "haut-parleur" ne change RIEN au routage audio réel. Non corrigé cette session : nécessiterait
+     un vrai design (registre des refs `<video>` distants remontant à `CallControls`, énumération
+     `navigator.mediaDevices.enumerateDevices()` filtrée `audiooutput`, feature-detection Safari) — plus
+     une feature à construire qu'un bug mécanique à corriger, hors du grain "un bug + fix minimal" de
+     cette passe.
+  2. Groupe d'appel avec >1 pair : `enableVideo`/`disableVideo` (`use-webrtc-p2p.ts`) font un `Promise.all`
+     sans rollback par-pair — si un pair échoue après qu'un autre a déjà réussi sa renégociation, l'UI
+     affiche "caméra coupée" alors qu'un pair reçoit toujours la vidéo. Confidence MOYENNE, scope non
+     atteignable aujourd'hui : `use-active-peer-connection.ts` documente explicitement l'invariant P2P
+     "au plus un pair en 1:1", donc ce chemin `Promise.all` sur une Map à plusieurs entrées n'est pas
+     encore exercé en prod tant que les appels de groupe ne sont pas livrés — noté pour quand ce sera le
+     cas.
+  3. `useWebRTC.switchCamera` (`components/video-calls/hooks/useWebRTC.ts`) ne fait que muter le
+     `MediaStream` local (`removeTrack`/`addTrack`) sans jamais appeler `RTCRtpSender.replaceTrack` —
+     contrairement à l'implémentation correcte de `VideoCallInterface.handleSwitchCamera`. Code mort :
+     exporté depuis `components/video-calls/index.ts` mais aucun composant prod ne l'importe (seul son
+     propre test le fait) — à corriger ou supprimer avant qu'il soit accidentellement câblé tel quel.
+- **Reste ouvert (inchangé + additions)** : items J, C6, CALL-DIAG retagging, threading TTL,
+  `call:force-leave` server-emit ambiguïté, 3 findings iOS structurels Vague 28, landscape/Dynamic-Type
+  Vague 28/29, `updateCallStatus()` dead-code duration anchor (Vague 30), camera-flag rollback + `CXProviding`
+  iOS (Vague 31/32), `handleAcceptCall` re-entrancy web (Vague 32 note → CORRIGÉ cette vague), `call:end`
+  fast-path `duration:0` (non atteignable, documenté ci-dessus), speaker toggle no-op web (nécessite design
+  dédié), group-call `enableVideo`/`disableVideo` rollback (non atteignable tant que groupe pas livré),
+  `useWebRTC.switchCamera` dead-code sans `replaceTrack` (à nettoyer ou corriger).
+
+## Vague 34 — `useWebRTC.switchCamera` (web) : dead code buggy supprimé (2026-07-10)
+
+Point d'entrée : routine calling-feature. Reprise directe des 4 candidats déjà documentés dans les notes
+de PR #1780 / Vague 33 plutôt qu'un audit neuf. Candidat #1 (`handleSpeakerToggle` no-op) confirmé toujours
+hors grain "un bug + fix minimal" (nécessite un vrai design de registre de refs `<video>` + énumération de
+devices). Candidat #2 (`enableVideo`/`disableVideo` `Promise.all` sans rollback) confirmé toujours non
+atteignable : `use-active-peer-connection.ts` documente toujours l'invariant P2P 1:1 strict, aucun appel de
+groupe livré. Candidat #4 (iOS `CallManager.swift`) : `which xcodebuild`/`which swift` → aucun toolchain
+Swift dans ce sandbox (confirmé, cohérent avec 33 vagues précédentes) — non touché, noté tel quel.
+
+- **[CLEANUP web, CONFIRMÉ + APPLIQUÉ, TDD]** Candidat #3 : `components/video-calls/hooks/useWebRTC.ts`
+  reconfirmé mort. Grep exhaustif de `useWebRTC(` (pas seulement `switchCamera`) sur tout `apps/web` :
+  seuls hits restants avant fix = sa propre déclaration, l'export barrel `index.ts`, et sa propre section
+  README — **aucun test ne l'importait plus** (la note de la Vague 33 « seul son propre test l'importe »
+  est devenue stale : ce test avait déjà disparu, `find -iname "*useWebRTC*"` ne retournait que le fichier
+  source lui-même). Aucun import du barrel `components/video-calls` nulle part dans `apps/web` non plus
+  (`from '@/components/video-calls'` : 0 hit) — le composant réellement monté, `VideoCallInterface.tsx`,
+  utilise `useWebRTCP2P` (`@/hooks/use-webrtc-p2p.ts`) et porte sa propre `handleSwitchCamera` (l.361-393)
+  qui, elle, appelle correctement `RTCRtpSender.replaceTrack` sur chaque sender vidéo AVANT de stopper
+  l'ancienne piste — exactement l'implémentation que le hook mort aurait dû avoir mais n'a jamais eue
+  (son `switchCamera` mute juste le `MediaStream` local via `removeTrack`/`addTrack`, sans jamais toucher
+  aux `RTCRtpSender`, donc n'aurait jamais propagé le changement de caméra à un pair distant si jamais
+  câblé). Précédent direct dans ce même fichier : Vague 11 avait déjà traité un cas identique
+  (`useCallSignaling.ts`, mort, supprimé sans TDD comportemental car aucun comportement n'était atteignable
+  à caractériser). **Fix** : suppression du fichier `hooks/useWebRTC.ts` (179 lignes), de son export dans
+  `index.ts` (3 lignes), et de sa section obsolète dans `README.md` (remplacée par une note pointant vers
+  `useWebRTCP2P`/`VideoCallInterface.handleSwitchCamera`, même pattern que la note laissée pour
+  `useCallSignaling` en Vague 11). `hooks/useVideoFilters.ts` (seul autre fichier du dossier `hooks/`)
+  intact, non concerné. **Test TDD** (nouveau `__tests__/components/video-calls/index.test.ts`, évite
+  d'importer le barrel complet — trop de dépendances lourdes côté `VideoCallInterface` à mocker pour une
+  simple assertion de surface d'export) : 2 cas — le barrel `index.ts` n'exporte plus `useWebRTC` (source
+  lue via `fs`, pas d'import runtime) ; le fichier `hooks/useWebRTC.ts` n'existe plus sur disque
+  (`fs.existsSync`). RED confirmé sur les deux avant suppression (le barrel exportait bien `useWebRTC`,
+  le fichier existait bien). GREEN après suppression. Suite filtrée `call|webrtc` : 25 suites/461 tests
+  verts (dont le nouveau). `tsc --noEmit` web : 0 erreur avant et après (sandbox avec `bun install
+  --ignore-scripts` cette fois — `bun install` seul échoue sur le postinstall privé de `grpc-tools`,
+  dépendance du gateway sans rapport avec ce fix ; contourné avec `--ignore-scripts`, suffisant pour
+  jest/tsc qui n'ont pas besoin du binaire natif compilé).
+- **Reste ouvert (inchangé)** : items J, C6, CALL-DIAG retagging, threading TTL, `call:force-leave`
+  server-emit ambiguïté, 3 findings iOS structurels Vague 28, landscape/Dynamic-Type Vague 28/29,
+  `updateCallStatus()` dead-code duration anchor (Vague 30), camera-flag rollback + `CXProviding` iOS
+  (Vague 31/32), `call:end` fast-path `duration:0` (non atteignable), speaker toggle no-op web (nécessite
+  design dédié), group-call `enableVideo`/`disableVideo` rollback (non atteignable tant que groupe pas
+  livré). `useWebRTC.switchCamera` dead-code (Vague 33) → **SUPPRIMÉ cette vague**, retiré de la liste.
