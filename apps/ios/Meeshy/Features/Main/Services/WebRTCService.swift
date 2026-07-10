@@ -460,17 +460,6 @@ final class WebRTCService {
         )
     }
 
-    // MARK: - DataChannel Transcription (H7)
-
-    func createTranscriptionChannel() -> Bool {
-        client.createDataChannel(label: "transcription")
-    }
-
-    func sendTranscription(_ message: DataChannelTranscriptionMessage) {
-        guard let data = try? JSONEncoder().encode(message) else { return }
-        client.sendDataChannelMessage(data)
-    }
-
     /// Raccroché in-band : pousse `{type: "bye"}` au pair en P2P direct pour
     /// une coupure instantanée, AVANT que le fanout serveur `call:ended`
     /// n'arrive (multi-requêtes DB côté gateway). No-op si le channel n'est

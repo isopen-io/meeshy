@@ -105,21 +105,6 @@ final class DataChannelInboundTests: XCTestCase {
         XCTAssertEqual(DataChannelInbound.decode(data), .ignored)
     }
 
-    func test_decode_transcriptionSegment_routesToTranscription() {
-        let json = """
-        {"type":"transcription-segment","text":"Bonjour","speakerId":"user-1",
-         "startTime":1.5,"isFinal":true,"language":"fr",
-         "translatedText":null,"translatedLanguage":null}
-        """
-        let result = DataChannelInbound.decode(Data(json.utf8))
-        guard case .transcription(let segment) = result else {
-            XCTFail("Expected .transcription, got \(result)")
-            return
-        }
-        XCTAssertEqual(segment.text, "Bonjour")
-        XCTAssertEqual(segment.speakerId, "user-1")
-    }
-
     func test_decode_garbage_isIgnored() {
         XCTAssertEqual(DataChannelInbound.decode(Data("not json".utf8)), .ignored)
         XCTAssertEqual(DataChannelInbound.decode(Data(#"{"type":"unknown-future"}"#.utf8)), .ignored)

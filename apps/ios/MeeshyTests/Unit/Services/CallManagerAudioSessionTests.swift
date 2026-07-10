@@ -98,11 +98,6 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "toggleTranscription() must not hardcode localLang = \"fr\". " +
             "Delegate to CallManager.preferredCallLanguage(for:) (Prisme Linguistique)."
         )
-        XCTAssertFalse(
-            fnBody.contains("let remoteLang = \"fr\""),
-            "toggleTranscription() must not hardcode remoteLang = \"fr\". " +
-            "Delegate to CallManager.preferredCallLanguage(for:) (Prisme Linguistique)."
-        )
         XCTAssertTrue(
             fnBody.contains("preferredCallLanguage"),
             "toggleTranscription() must delegate language resolution to " +

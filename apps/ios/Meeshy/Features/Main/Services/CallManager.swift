@@ -2053,27 +2053,22 @@ final class CallManager: ObservableObject {
     func toggleTranscription() {
         if transcriptionService.isTranscribing {
             transcriptionService.stopTranscribing()
-        } else {
-            let localUser = AuthManager.shared.currentUser
-            let localLang = CallManager.preferredCallLanguage(for: localUser)
-            let localUserId = localUser?.id ?? ""
-            let rUserId = remoteUserId ?? ""
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                var remoteLang = CallManager.preferredCallLanguage(for: nil)
-                if !rUserId.isEmpty {
-                    let cached = await CacheCoordinator.shared.profiles.load(for: rUserId)
-                    if let profile = cached.snapshot()?.first {
-                        remoteLang = CallManager.preferredCallLanguage(for: profile)
-                    }
-                }
-                self.transcriptionService.startTranscribing(
-                    localLanguage: localLang,
-                    remoteLanguage: remoteLang,
-                    localUserId: localUserId,
-                    remoteUserId: rUserId
-                )
+            return
+        }
+        guard let callId = currentCallId else { return }
+        let localUser = AuthManager.shared.currentUser
+        let localLang = CallManager.preferredCallLanguage(for: localUser)
+        let localUserId = localUser?.id ?? ""
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if self.transcriptionService.permission != .authorized {
+                _ = await self.transcriptionService.requestPermission()
             }
+            self.transcriptionService.startTranscribing(
+                callId: callId,
+                localLanguage: localLang,
+                localUserId: localUserId
+            )
         }
     }
 
@@ -3556,6 +3551,27 @@ final class CallManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        socket.callTranslatedSegmentReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, self.currentCallId == event.callId else { return }
+                let seg = event.segment
+                let segment = TranscriptionSegment(
+                    id: UUID(),
+                    text: seg.translatedText ?? seg.text,
+                    speakerId: seg.speakerId,
+                    startTime: Double(seg.startMs) / 1000,
+                    endTime: Double(seg.endMs) / 1000,
+                    isFinal: seg.isFinal,
+                    confidence: seg.confidence,
+                    language: seg.targetLanguage,
+                    translatedText: seg.translatedText,
+                    translatedLanguage: seg.translatedText != nil ? seg.targetLanguage : nil
+                )
+                self.transcriptionService.receiveTranslatedSegment(segment)
+            }
+            .store(in: &cancellables)
+
         // ⚠️ Crash SIGTRAP (≤ build 1175) — ces `.sink` sont implicitement @MainActor
         // (CallManager est @MainActor + SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor).
         // Les livrer sur `DispatchQueue.global` faisait échouer l'assertion
@@ -4354,20 +4370,6 @@ extension CallManager: WebRTCServiceDelegate {
                 guard let callId = self.currentCallId else { return }
                 Logger.calls.info("DataChannel bye received — ending call instantly (callId=\(callId))")
                 self.handleRemoteEnd(callId: callId, rawReason: reason)
-            case .transcription(let message):
-                let segment = TranscriptionSegment(
-                    id: UUID(),
-                    text: message.text,
-                    speakerId: message.speakerId,
-                    startTime: message.startTime,
-                    endTime: message.startTime + 1.0,
-                    isFinal: message.isFinal,
-                    confidence: 1.0,
-                    language: message.language,
-                    translatedText: message.translatedText,
-                    translatedLanguage: message.translatedLanguage
-                )
-                self.transcriptionService.receiveRemoteSegment(segment)
             case .ignored:
                 break
             }
