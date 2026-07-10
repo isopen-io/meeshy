@@ -30,12 +30,6 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// overlay is visible. Frame publication continues so the overlay can
     /// keep the bubble pinned to its real position.
     var isHiddenForOverlay: Bool = false
-    /// Résistance du swipe latéral selon le type de contenu. `.resistant`
-    /// (audio/vidéo) relève le seuil pour ne pas gêner le scrubber de lecture.
-    var resistance: SwipeResistance = .normal
-    /// `true` pendant que l'utilisateur manipule le curseur de lecture d'un
-    /// média : le swipe s'efface pour laisser le scrubbing prioritaire.
-    var isScrubbing: Bool = false
     let onSwipeReply: () -> Void
     let onSwipeForward: () -> Void
     /// Long press triggers the message's contextual options (reply, forward,
@@ -161,20 +155,19 @@ struct BubbleSwipeContainer<Content: View>: View {
         // contention. 22pt reste largement en-dessous d'un swipe
         // horizontal réel (~60-100pt), donc reply/forward continuent
         // de répondre normalement.
-        DragGesture(minimumDistance: BubbleSwipeResistance.minimumDistance(resistance))
+        DragGesture(minimumDistance: 22)
             .onChanged { value in
                 let h = value.translation.width
-                // Décision d'engagement centralisée dans la logique pure
-                // `BubbleSwipeResistance` (testée) : dominance horizontale +
-                // seuil selon la résistance, et abandon total pendant un
-                // scrubbing média. En `.normal` : 3:1 / 22pt (comportement
-                // historique). En `.resistant` : 4:1 / 48pt + priorité scrubber.
-                guard BubbleSwipeResistance.shouldEngage(
-                    translationWidth: h,
-                    translationHeight: value.translation.height,
-                    isScrubbing: isScrubbing,
-                    resistance: resistance
-                ) else { return }
+                let v = abs(value.translation.height)
+                // Horizontal-dominant only (3:1 ratio) so un scroll vertical —
+                // notamment un scroll vers le haut pour charger les anciens
+                // messages — ne peut JAMAIS franchir le seuil de swipe et
+                // déclencher le retour haptique par erreur. Un vrai
+                // swipe-pour-répondre (~60-100pt horizontal, quasi pas de
+                // vertical) passe toujours le gate. Avant : 2:1, qui laissait
+                // fuiter le haptic sur les scrolls diagonaux.
+                guard abs(h) > v * 3 else { return }
+                guard abs(h) > 12 else { return }
                 let zone: CGFloat = 72
                 let absH = abs(h)
                 let sign: CGFloat = h > 0 ? 1 : -1

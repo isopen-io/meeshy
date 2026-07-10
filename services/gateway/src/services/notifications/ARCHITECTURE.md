@@ -1,11 +1,5 @@
 # Architecture du Système de Notifications
 
-> ⚠️ **Document historique — partiellement obsolète.** Les diagrammes ci-dessous montrent une
-> composition `FirebaseNotificationService` qui n'existe plus. Le push FCM/APNs réel est
-> `services/PushNotificationService.ts` (multicast + APNs), injecté dans `NotificationService` via
-> `setPushNotificationService()` — pas composé en constructeur. `FirebaseNotificationService` a été
-> supprimé (itération 92). Lire ces diagrammes comme contexte historique.
-
 ## Diagramme de Composition
 
 ```

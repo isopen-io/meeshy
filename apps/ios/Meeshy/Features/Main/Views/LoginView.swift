@@ -105,8 +105,8 @@ struct LoginView: View {
                             endPoint: .trailing
                         )
                     )
-                    .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: MeeshyShadow.strong.radius, x: 0, y: 4)
-                    .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.lg)
+                    .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
+                    .padding(.bottom, 48)
                     .accessibilityAddTraits(.isHeader)
 
                 if authManager.requires2FA {
@@ -205,7 +205,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
-        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
+        .offset(y: showFields ? 0 : 30)
     }
 
     private var savedAccountsList: some View {
@@ -297,8 +297,6 @@ struct LoginView: View {
                         accountPassword = ""
                     }
                 } label: {
-                    // Chrome de retour : glyphe centré dans un cadre de tap fixe 36×36
-                    // (doctrine 82i) — gardé figé pour ne pas déborder le cercle.
                     Image(systemName: "chevron.left")
                         .font(MeeshyFont.relative(16, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -308,7 +306,6 @@ struct LoginView: View {
                         )
                 }
                 .bounceOnTap(scale: 0.90)
-                .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
                 accountAvatar(account, size: 40)
 
@@ -485,7 +482,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
-        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
+        .offset(y: showFields ? 0 : 30)
     }
 
     // MARK: - Reusable subviews
@@ -514,7 +511,7 @@ struct LoginView: View {
                         )
                     )
                     .frame(height: 52)
-                    .shadow(color: MeeshyColors.error.opacity(isDark ? 0.4 : 0.2), radius: MeeshyShadow.strong.radius, y: 6)
+                    .shadow(color: MeeshyColors.error.opacity(isDark ? 0.4 : 0.2), radius: 12, y: 6)
 
                 if authManager.isLoading {
                     ProgressView().tint(.white)
@@ -559,7 +556,7 @@ struct LoginView: View {
                         }
                     } label: {
                         Text(env.label)
-                            .font(MeeshyFont.relative(11, weight: selectedEnv == env ? .bold : .medium))
+                            .font(MeeshyFont.relative(11))
                             .foregroundColor(selectedEnv == env ? .white : theme.textMuted)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
@@ -595,7 +592,6 @@ struct LoginView: View {
                     }
                     .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
                     .bounceOnTap(scale: 0.90)
-                    .accessibilityLabel(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
                 }
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.sm)
@@ -612,7 +608,7 @@ struct LoginView: View {
             }
 
             Text(String(format: String(localized: "auth.login.server_origin", defaultValue: "Connecté à : %@", bundle: .main), MeeshyConfig.shared.serverOrigin))
-                .font(MeeshyFont.relative(10, weight: .regular, design: .monospaced))
+                .font(MeeshyFont.relative(10, design: .monospaced))
                 .foregroundColor(theme.textMuted.opacity(0.5))
         }
     }
@@ -713,7 +709,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
-        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
+        .offset(y: showFields ? 0 : 30)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 focusedField = .twoFactorCode

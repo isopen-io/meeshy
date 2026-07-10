@@ -120,7 +120,6 @@ struct EditProfileView: View {
                     matching: .images,
                     photoLibrary: .shared()
                 ) {
-                    // Fixed glyph: decorative badge inside a fixed 30×30 circle overlay — scaling would overflow the badge.
                     Image(systemName: "camera.fill")
                         .font(MeeshyFont.relative(12, weight: .bold))
                         .foregroundColor(.white)
@@ -128,7 +127,6 @@ struct EditProfileView: View {
                         .background(Circle().fill(MeeshyColors.indigo400))
                         .overlay(Circle().stroke(bgPrimary, lineWidth: 2))
                 }
-                .accessibilityLabel(String(localized: "profile.edit.change_photo", defaultValue: "Change profile photo", bundle: .main))
             }
 
             if viewModel.isUploadingAvatar {
@@ -314,7 +312,6 @@ struct EditProfileView: View {
 
     private var successOverlay: some View {
         VStack(spacing: 12) {
-            // Fixed glyph: 48pt hero confirmation icon — kept fixed to preserve visual hierarchy of the success overlay.
             Image(systemName: "checkmark.circle.fill")
                 .font(MeeshyFont.relative(48))
                 .foregroundColor(MeeshyColors.success)

@@ -147,12 +147,6 @@ describe('sendSuccess', () => {
     sendSuccess(reply as any, [], { pagination });
     expect((reply.sentBody as any).pagination).toEqual(pagination);
   });
-
-  it('includes meta in response when meta option is provided', () => {
-    const reply = makeReply();
-    sendSuccess(reply as any, null, { meta: { requestId: 'abc' } });
-    expect((reply.sentBody as any).meta).toEqual({ requestId: 'abc' });
-  });
 });
 
 // ─── sendPaginatedSuccess ────────────────────────────────────────────────
@@ -165,19 +159,6 @@ describe('sendPaginatedSuccess', () => {
     expect(reply.status).toHaveBeenCalledWith(200);
     expect((reply.sentBody as any).pagination).toEqual(pagination);
     expect((reply.sentBody as any).data).toEqual([1, 2]);
-  });
-
-  it('includes meta when provided', () => {
-    const reply = makeReply();
-    const pagination = { total: 5, offset: 0, limit: 5, hasMore: false };
-    sendPaginatedSuccess(reply as any, [], pagination, { meta: { requestId: 'r2' } });
-    expect((reply.sentBody as any).meta).toEqual({ requestId: 'r2' });
-  });
-
-  it('omits meta when not provided', () => {
-    const reply = makeReply();
-    sendPaginatedSuccess(reply as any, [], { total: 0, offset: 0, limit: 10, hasMore: false });
-    expect((reply.sentBody as any).meta).toBeUndefined();
   });
 });
 

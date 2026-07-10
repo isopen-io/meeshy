@@ -19,7 +19,6 @@ const mockResolveConversationId = jest.fn<any>().mockResolvedValue('resolved-con
 const mockCanAccessConversation = jest.fn<any>().mockResolvedValue(true);
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, meta?: any) => {
   reply._body = { success: true, data, ...meta };
-  reply.send(reply._body);
   return reply;
 });
 const mockSendBadRequest = jest.fn<any>((reply: any, msg: any, extra?: any) => {
@@ -170,7 +169,6 @@ jest.mock('@meeshy/shared/utils/validation', () => {
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     READ_STATUS_UPDATED: 'read-status:updated',
-    MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
     CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
     MESSAGE_PINNED: 'message:pinned',
     MESSAGE_UNPINNED: 'message:unpinned',
@@ -245,7 +243,6 @@ const makePrisma = () => ({
   },
   conversationReadCursor: {
     findMany: jest.fn().mockResolvedValue([]),
-    findUnique: jest.fn().mockResolvedValue(null),
     upsert: jest.fn().mockResolvedValue({}),
   },
   attachmentStatusEntry: {
@@ -1846,10 +1843,6 @@ describe('POST /conversations/:id/mark-read — coverage extension', () => {
       'read-status:updated',
       expect.objectContaining({ conversationId: 'resolved-conv-id', type: 'read' }),
     );
-    expect(fastify._mockEmit).toHaveBeenCalledWith(
-      'message:read-status-updated',
-      expect.objectContaining({ conversationId: 'resolved-conv-id', type: 'read' }),
-    );
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 2 });
   });
 });
@@ -1961,38 +1954,6 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
         update: expect.objectContaining({ lastReadMessageId: null }),
       }),
     );
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 1 });
-  });
-
-  it('race guard: a newer message was read concurrently after latestMessage was captured → skips the stale rewind, never overwrites the fresher cursor', async () => {
-    // A message strictly newer (lexicographically greater ObjectId) than MSG_ID
-    // was read by another device between our `latestMessage` read and the
-    // cursor write — the cursor now points past what we captured.
-    const NEWER_MSG_ID = '507f1f77bcf86cd799439099';
-    prisma.participant.findFirst
-      .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
-      .mockResolvedValueOnce({ id: PART_ID }); // participantForCursor
-    prisma.message.findFirst
-      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage
-      .mockResolvedValueOnce({ id: 'prev-msg-id' }); // previousMessage
-    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: NEWER_MSG_ID });
-    const reply = makeReply();
-    await getHandler_()(makeRequest(), reply);
-    expect(prisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 0 });
-  });
-
-  it('cursor already exactly at latestMessage (not stale) → proceeds with the rewind as normal', async () => {
-    prisma.participant.findFirst
-      .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
-      .mockResolvedValueOnce({ id: PART_ID }); // participantForCursor
-    prisma.message.findFirst
-      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage
-      .mockResolvedValueOnce({ id: 'prev-msg-id' }); // previousMessage
-    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: MSG_ID });
-    const reply = makeReply();
-    await getHandler_()(makeRequest(), reply);
-    expect(prisma.conversationReadCursor.upsert).toHaveBeenCalled();
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 1 });
   });
 });
@@ -2850,9 +2811,7 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
       conversationId: 'resolved-conv-id',
       unreadCount: 0,
     });
-    // READ_STATUS_UPDATED (peer disclosure) must be suppressed — both the legacy and the
-    // dual-emitted `message:read-status-updated` name carry the same peer disclosure.
+    // READ_STATUS_UPDATED (peer disclosure) must be suppressed.
     expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
-    expect(fastify._mockEmit).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
   });
 });

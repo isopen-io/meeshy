@@ -1101,23 +1101,4 @@ Tranches antérieures mergées sur `main` (PR #314/#315, tags `p0.1`→`p1.9`). 
 
 ---
 
-### 2026-06-30 — Audit sécurité/dead-code backend (env web, sans toolchain Swift)
-
-Session sans Xcode/device (routine autonome). **Les 2 items P0 restants identifiés le 2026-06-07 (suppression `.offering`, réducteur `CallEventQueue` §3.1) sont TOUJOURS EN ATTENTE** — vérifié que `CallManager.swift` n'a pas changé depuis (`git log` dernier commit pertinent `2992b9d8`, un fix de garde call-waiting, pas la FSM). Ces deux items exigent build Xcode + 2 iPhones + Mac réels ; non tentés ici par prudence (mandat explicite « ne pas faire à l'aveugle »).
-
-À la place, audit ciblé du **signalling gateway** (`CallEventsHandler.ts`, `CallService.ts`, `call-schemas.ts`) — entièrement vérifiable en TS/jest sans device. Findings + fixes (tous testés, type-check + jest verts) :
-
-1. **Relai `call:signal` ne re-émettait pas le payload validé Zod** (`io.to(...).emit(CALL_EVENTS.SIGNAL, data)` utilisait la variable brute du client au lieu de `validation.data`) — un client pouvait glisser des champs arbitraires dans le payload relayé au pair. Fix : relai + buffer d'offre utilisent désormais `validation.data` (schema `socketSignalSchema` strip les champs non déclarés via `z.object().parse()`). Test ajouté : `relays only the schema-validated payload, stripping unknown client-supplied fields`.
-2. **`call:backgrounded`/`call:foregrounded` faisaient confiance au `participantId` fourni par le client** sans le valider contre l'appelant authentifié — un participant pouvait flag le `participantId` d'un pair comme backgrounded et fausser sa tolérance heartbeat / le routage ringing socket-vs-VoIP. Fix : résolution via `resolveParticipantIdFromCall(userId, callId)` (helper déjà utilisé par toggle-audio/video/heartbeat dans le même fichier) avant d'appeler le service ; ignore silencieusement (avec early-return) si le caller n'est pas un participant actif. Tests ajoutés (spoofing ignoré + early-return si non-participant).
-3. **`call:request-ice-servers` ne vérifiait que l'appartenance à la room socket**, pas le statut de participant actif en DB (défense en profondeur si jamais room state et DB divergent). Fix : check explicite via `resolveParticipantIdFromCall`. Test ajouté (« stale-room guard »).
-4. **`call-schemas.ts` : `call:analytics` acceptait des champs string/array non bornés** (`effectsUsed`, `codec`, `platform`, `deviceModel`, `endReason`) — un client malveillant pouvait envoyer des payloads disproportionnés (DoS mémoire/logs). Fix : bornes ajoutées (`.max(...)` sur chaque champ).
-5. **Dead code confirmé et supprimé** : `CallService.markCallAsRejected()` — zéro caller en prod (grep complet hors tests), le statut `rejected` est déjà couvert par le chemin `call:end {reason:'rejected'}`. Méthode + son test retirés (199→ tests gateway toujours verts).
-6. **Finding écarté après vérification** : le commentaire TTL de `TURNCredentialService.ts` signalé comme « obsolète » par l'audit initial est en réalité déjà à jour (fix `CALL-FIX 2026-06-25` documenté inline) — pas d'action.
-
-Vérifications : `tsc --noEmit` gateway 0 erreur, `jest` ciblé calls (CallEventsHandler + ice-servers-refresh + CallService + call-schemas) 411/411 verts, suite gateway complète lancée en fond pour confirmer absence de régression ailleurs.
-
-**Reste à faire (prochaine session avec device)** : suppression `.offering` (le plus simple, instructions détaillées ci-dessus « suite 9 »), puis réducteur `CallEventQueue` §3.1. Reste à faire (sans device, prochaine fois) : étendre la résolution serveur-autoritative à `call:screen-capture-detected` (même faille mineure que backgrounded/foregrounded, broadcast UX seulement donc reporté pour limiter le diff de cette session).
-
----
-
 **Fin de la spec. Implémente phase par phase, TDD strict, build vert à chaque commit, vérification finale sur device réel. La FSM WebRTC pilotée par `RTCPeerConnectionState` + perfect negotiation est le cœur ; tout le reste en découle.**

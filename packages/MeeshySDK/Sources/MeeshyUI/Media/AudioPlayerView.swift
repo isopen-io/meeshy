@@ -1389,17 +1389,6 @@ public struct AudioPlayerView: View {
         MediaConsumptionStore.shared.fraction(for: attachment.id) ?? 0
     }
 
-    /// Maps a touch / drag x-position within the waveform strip to a normalized
-    /// seek fraction (0...1), clamped at both edges. Single source of truth for
-    /// BOTH the tap-to-seek and the swipe-to-scrub gestures on `waveformProgress`
-    /// so the two paths can never compute the position differently. Guards a
-    /// zero / negative width (pre-layout `GeometryReader` tick) so it never
-    /// divides by zero. Pure; unit-tested.
-    nonisolated public static func scrubFraction(locationX: CGFloat, width: CGFloat) -> Double {
-        guard width > 0 else { return 0 }
-        return Double(max(0, min(width, locationX)) / width)
-    }
-
     private var waveformProgress: some View {
         GeometryReader { geo in
             let barCount = waveformBarCount
@@ -1435,26 +1424,11 @@ public struct AudioPlayerView: View {
             GeometryReader { geo in
                 Color.clear
                     .contentShape(Rectangle())
-                    // Swipe-to-scrub. `DragGesture(minimumDistance: 0)` claims the
-                    // touch the instant it lands on the strip, so dragging here
-                    // scrubs the playback position INSTEAD of scrolling the
-                    // enclosing conversation list / post detail or triggering the
-                    // bubble's own tap/long-press. `.highPriorityGesture` makes the
-                    // waveform win over those outer components — the user expects
-                    // the waveform to own the swipe. A plain tap is the
-                    // zero-distance case: it seeks to the tapped point on `.onEnded`.
-                    .highPriorityGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                player.seek(to: Self.scrubFraction(
-                                    locationX: value.location.x, width: geo.size.width))
-                            }
-                            .onEnded { value in
-                                player.seek(to: Self.scrubFraction(
-                                    locationX: value.location.x, width: geo.size.width))
-                                HapticFeedback.light()
-                            }
-                    )
+                    .onTapGesture { location in
+                        let fraction = max(0, min(1, location.x / geo.size.width))
+                        player.seek(to: fraction)
+                        HapticFeedback.light()
+                    }
             }
             .allowsHitTesting(availability == .ready)
         )
@@ -1568,7 +1542,7 @@ public struct AudioPlayerView: View {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundColor(Color(hex: "FF6B6B"))
                     }
                 }
             }

@@ -125,11 +125,13 @@ jest.mock('@/hooks/use-i18n', () => ({
   }),
 }));
 
-// Mock the canonical clipboard util (source unique lib/clipboard)
-jest.mock('@/lib/clipboard', () => ({
-  copyToClipboard: jest.fn().mockResolvedValue({ success: true, message: 'ok' }),
-}));
-const { copyToClipboard: mockCopyToClipboard } = jest.requireMock('@/lib/clipboard');
+// Mock clipboard API
+const mockWriteText = jest.fn();
+Object.assign(navigator, {
+  clipboard: {
+    writeText: mockWriteText,
+  },
+});
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -157,7 +159,7 @@ describe('TextLightbox', () => {
       ok: true,
       text: () => Promise.resolve('Hello, this is text content.\nLine 2\nLine 3'),
     });
-    mockCopyToClipboard.mockResolvedValue({ success: true, message: 'ok' });
+    mockWriteText.mockResolvedValue(undefined);
     document.body.style.overflow = '';
   });
 
@@ -482,7 +484,7 @@ describe('TextLightbox', () => {
         fireEvent.click(copyButton);
       });
 
-      expect(mockCopyToClipboard).toHaveBeenCalledWith('content to copy');
+      expect(mockWriteText).toHaveBeenCalledWith('content to copy');
     });
 
     it('should show success toast after copying', async () => {
@@ -533,7 +535,7 @@ describe('TextLightbox', () => {
     });
 
     it('should show error toast when copy fails', async () => {
-      mockCopyToClipboard.mockResolvedValue({ success: false, message: 'fail' });
+      mockWriteText.mockRejectedValue(new Error('Copy failed'));
       const attachment = createMockAttachment();
 
       await act(async () => {

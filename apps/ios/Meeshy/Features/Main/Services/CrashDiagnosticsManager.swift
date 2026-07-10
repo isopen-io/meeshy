@@ -70,26 +70,6 @@ nonisolated struct CrashDiagnostic: Codable, Identifiable, Sendable {
     }
 }
 
-extension CrashDiagnostic.Kind {
-    /// Localized, human-facing label. Single source of truth shared by the
-    /// one-shot crash toast (`MeeshyApp`) and the crash-report sheet badge
-    /// (`CrashReportSheet`) so the naming never drifts between the two.
-    var localizedLabel: String {
-        switch self {
-        case .nsException:
-            String(localized: "crash.kind.exception", defaultValue: "Exception", bundle: .main)
-        case .crash:
-            String(localized: "crash.kind.crash", defaultValue: "Crash", bundle: .main)
-        case .hang:
-            String(localized: "crash.kind.hang", defaultValue: "Blocage", bundle: .main)
-        case .cpuException:
-            String(localized: "crash.kind.cpu", defaultValue: "CPU", bundle: .main)
-        case .diskWriteException:
-            String(localized: "crash.kind.disk", defaultValue: "Disque", bundle: .main)
-        }
-    }
-}
-
 /// Reports are written as JSON to `Documents/crash_diagnostics/`. On the next
 /// foreground, `consumePending()` returns and clears them so the UI can show
 /// a single toast and log them via `Logger.crash` (visible in Console.app).
@@ -223,11 +203,12 @@ final class CrashDiagnosticsManager: NSObject {
     // MARK: - Persistence
 
     private func loadPersisted() {
+        let isoFormatter = ISO8601DateFormatter()
         var loaded: [CrashDiagnostic] = []
         for (url, diag) in decodeAllReports() {
             loaded.append(diag)
             loadedFileURLs.insert(url)
-            let when = diag.timestamp.formatted(.iso8601)
+            let when = isoFormatter.string(from: diag.timestamp)
             Logger.crash.error("Restored \(diag.kind.rawValue, privacy: .public) @ \(when, privacy: .public): \(diag.summary, privacy: .public)")
         }
         pending = loaded

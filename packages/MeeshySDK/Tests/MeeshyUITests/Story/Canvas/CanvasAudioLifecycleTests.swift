@@ -73,27 +73,4 @@ final class CanvasAudioLifecycleTests: XCTestCase {
         XCTAssertFalse(view._readerAudioMixerForTesting.isPlaying,
                        "stopAll() must reach the registered reader mixer")
     }
-
-    /// RF3 (off-screen audio-leak fix). Once the host pauses the canvas — slide
-    /// scrolled off-screen in PostDetail, or a call active — an async/context
-    /// re-entry into the audio start funnel (`startAudioPlayback()`) must NOT
-    /// resurrect the engine. Before the `!isPlaybackPaused` guard, a content-
-    /// ready / reader-context re-entry restarted audio under an off-screen slide;
-    /// the WS4 detail-repost path now runs `mute: false`, so this central gate —
-    /// not the former `mute: true` backstop — is the only thing keeping it silent.
-    func test_startAudioPlayback_whilePaused_reentryDoesNotRestartMixer() {
-        let view = makePlayingCanvas()
-        XCTAssertTrue(view._readerAudioMixerForTesting.isPlaying)
-
-        view.setPaused(true)
-        XCTAssertFalse(view._readerAudioMixerForTesting.isPlaying,
-                       "Pausing (off-screen) must stop the reader audio engine")
-
-        // A reader-context swap funnels back into startAudioPlayback() — exactly
-        // the async re-entry that lands once the audio resolver resolves. While
-        // paused it must stay a no-op: no sound under a frozen, off-screen slide.
-        view.setReaderContext(StoryReaderContext())
-        XCTAssertFalse(view._readerAudioMixerForTesting.isPlaying,
-                       "A funnel re-entry while paused must not resurrect audio (off-screen leak)")
-    }
 }

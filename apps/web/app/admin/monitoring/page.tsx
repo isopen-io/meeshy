@@ -31,7 +31,6 @@ import {
 import { monitoringService } from '@/services/monitoring.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { toast } from 'sonner';
-import { formatFileSize } from '@meeshy/shared/types/attachment';
 
 const TimeSeriesChart = dynamic(
   () => import('@/components/admin/ChartsImpl').then(mod => mod.TimeSeriesChart),
@@ -270,7 +269,13 @@ function HealthTab() {
   const heapTotal = (memoryUsage as Record<string, unknown>)?.heapTotal as number ?? 1;
   const heapPercent = heapTotal > 0 ? Math.round((heapUsed / heapTotal) * 100) : 0;
 
-  const formatBytes = (bytes: number) => formatFileSize(bytes, { decimals: 1 });
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  };
 
   const getLatencyColor = (ms: number) => {
     if (ms < 100) return 'text-green-600 dark:text-green-400';

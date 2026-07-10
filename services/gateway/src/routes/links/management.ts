@@ -1,11 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { SecuritySanitizer } from '../../utils/sanitize';
 import {
   sendSuccess,
   sendForbidden,
-  sendBadRequest,
   sendNotFound,
   sendInternalError
 } from '../../utils/response.js';
@@ -89,7 +87,9 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       const body = updateLinkSchema.parse(request.body);
 
       if (!isRegisteredUser(request.authContext)) {
-        return sendForbidden(reply, 'Utilisateur enregistré requis');
+        return reply.status(403).send({
+          error: 'Utilisateur enregistré requis'
+        });
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -125,8 +125,8 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       const updatedLink = await fastify.prisma.conversationShareLink.update({
         where: { id: conversationShareLinkId },
         data: {
-          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
-          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
+          name: body.name,
+          description: body.description,
           maxUses: body.maxUses,
           maxConcurrentUsers: body.maxConcurrentUsers,
           maxUniqueSessions: body.maxUniqueSessions,
@@ -150,7 +150,11 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return sendBadRequest(reply, 'Données invalides');
+        return reply.status(400).send({
+          success: false,
+          message: 'Données invalides',
+          errors: error.issues
+        });
       }
       logError(fastify.log, 'Update link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -214,7 +218,9 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       const body = updateLinkSchema.parse(request.body);
 
       if (!isRegisteredUser(request.authContext)) {
-        return sendForbidden(reply, 'Utilisateur enregistré requis');
+        return reply.status(403).send({
+          error: 'Utilisateur enregistré requis'
+        });
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -247,8 +253,8 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
       const updateData: any = {};
 
-      if (body.name !== undefined) updateData.name = SecuritySanitizer.sanitizeText(body.name);
-      if (body.description !== undefined) updateData.description = SecuritySanitizer.sanitizeText(body.description);
+      if (body.name !== undefined) updateData.name = body.name;
+      if (body.description !== undefined) updateData.description = body.description;
       if (body.maxUses !== undefined) updateData.maxUses = body.maxUses;
       if (body.maxConcurrentUsers !== undefined) updateData.maxConcurrentUsers = body.maxConcurrentUsers;
       if (body.maxUniqueSessions !== undefined) updateData.maxUniqueSessions = body.maxUniqueSessions;
@@ -298,7 +304,11 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return sendBadRequest(reply, 'Données invalides');
+        return reply.status(400).send({
+          success: false,
+          message: 'Données invalides',
+          errors: error.issues
+        });
       }
       logError(fastify.log, 'Update link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

@@ -1275,24 +1275,24 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `apps/web/services/conversations/transformers.service.ts`
 - [~] `apps/web/services/conversations/types.ts`
 
-## services/markdown  (16/16 have a test)
+## services/markdown  (2/16 have a test)
 
-- [x] `apps/web/services/markdown/cache.ts`
-- [x] `apps/web/services/markdown/index.ts`
-- [x] `apps/web/services/markdown/markdown-parser.ts`
-- [x] `apps/web/services/markdown/parsers/block-parser.ts`
-- [x] `apps/web/services/markdown/parsers/inline-parser.ts`
-- [x] `apps/web/services/markdown/parsers/table-parser.ts`
-- [x] `apps/web/services/markdown/renderers/block-renderer.ts`
-- [x] `apps/web/services/markdown/renderers/inline-renderer.ts`
-- [x] `apps/web/services/markdown/renderers/table-renderer.ts`
-- [x] `apps/web/services/markdown/rules/constants.ts`
-- [x] `apps/web/services/markdown/rules/emoji-map.ts`
-- [x] `apps/web/services/markdown/rules/patterns.ts`
-- [x] `apps/web/services/markdown/security/sanitizer.ts`
-- [x] `apps/web/services/markdown/security/validators.ts`
-- [x] `apps/web/services/markdown/types.ts`
-- [x] `apps/web/services/markdown/utils.ts`
+- [ ] `apps/web/services/markdown/cache.ts`
+- [ ] `apps/web/services/markdown/index.ts`
+- [ ] `apps/web/services/markdown/markdown-parser.ts`
+- [ ] `apps/web/services/markdown/parsers/block-parser.ts`
+- [ ] `apps/web/services/markdown/parsers/inline-parser.ts`
+- [ ] `apps/web/services/markdown/parsers/table-parser.ts`
+- [ ] `apps/web/services/markdown/renderers/block-renderer.ts`
+- [ ] `apps/web/services/markdown/renderers/inline-renderer.ts`
+- [ ] `apps/web/services/markdown/renderers/table-renderer.ts`
+- [ ] `apps/web/services/markdown/rules/constants.ts`
+- [ ] `apps/web/services/markdown/rules/emoji-map.ts`
+- [ ] `apps/web/services/markdown/rules/patterns.ts`
+- [ ] `apps/web/services/markdown/security/sanitizer.ts`
+- [ ] `apps/web/services/markdown/security/validators.ts`
+- [~] `apps/web/services/markdown/types.ts`
+- [~] `apps/web/services/markdown/utils.ts`
 
 ## services/socketio  (2/9 have a test)
 

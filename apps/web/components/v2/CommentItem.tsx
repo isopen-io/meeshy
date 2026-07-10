@@ -20,8 +20,6 @@ export interface CommentItemProps {
   onTranslate?: (commentId: string) => void;
   isLiked?: boolean;
   depth?: number;
-  /** Surligne ce commentaire (cible d'une navigation depuis une notification). */
-  isHighlighted?: boolean;
   className?: string;
 }
 
@@ -61,7 +59,6 @@ function CommentItem({
   onTranslate,
   isLiked = false,
   depth = 0,
-  isHighlighted = false,
   className,
 }: CommentItemProps) {
   const [showActions, setShowActions] = useState(false);
@@ -83,12 +80,7 @@ function CommentItem({
 
   return (
     <div
-      id={`comment-${comment.id}`}
-      className={cn(
-        'flex gap-3 py-3 scroll-mt-24 rounded-xl transition-colors duration-700',
-        isHighlighted && 'bg-[var(--gp-terracotta)]/10 ring-1 ring-[var(--gp-terracotta)]/40',
-        className,
-      )}
+      className={cn('flex gap-3 py-3', className)}
       style={{ paddingLeft: indentPx }}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}

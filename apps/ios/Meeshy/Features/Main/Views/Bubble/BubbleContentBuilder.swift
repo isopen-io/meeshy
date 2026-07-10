@@ -45,12 +45,6 @@ extension BubbleContent {
             self.kind = .standard
         }
 
-        // Resolved once — the compact call bubble and the standard bubble's meta
-        // row share the exact same clock label.
-        let resolvedTimeString = timeString
-            ?? message.cachedTimeString
-            ?? MessageRecord.computeTimeString(for: message.createdAt)
-
         // --- Call notice (rich call-summary system message) ---
         // When a system message carries structured call metadata, resolve the
         // per-viewer direction now (outgoing iff the current user initiated) so
@@ -60,9 +54,7 @@ extension BubbleContent {
             self.callNotice = CallNotice(
                 summary: summary,
                 isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
-                fallbackText: message.content,
-                timeString: resolvedTimeString,
-                timestamp: message.createdAt
+                fallbackText: message.content
             )
         } else {
             self.callNotice = nil
@@ -195,6 +187,9 @@ extension BubbleContent {
         self.reactions = Self.summarizeReactions(message.reactions, currentUserId: currentUserId)
 
         // --- Meta ---
+        let resolvedTimeString = timeString
+            ?? message.cachedTimeString
+            ?? MessageRecord.computeTimeString(for: message.createdAt)
         // The footer checkmark must EXACTLY represent the real state of every
         // other interlocutor. `message.deliveryStatus` is promoted to
         // delivered/read as soon as a SINGLE recipient does so — correct for a

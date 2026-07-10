@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -146,7 +146,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -223,7 +223,7 @@ jobs:
         run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@v5
         continue-on-error: true
         with:
           file: ./${{ matrix.package.path }}/coverage/lcov.info
@@ -242,7 +242,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       # Node.js and package manager setup for Prisma CLI
       - name: Setup bun
@@ -313,7 +313,7 @@ jobs:
             --cov=src --cov-report=xml --cov-report=term --cov-fail-under=37
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@v5
         continue-on-error: true
         with:
           file: services/translator/coverage.xml
@@ -321,7 +321,7 @@ jobs:
           name: translator-coverage
 
       - name: Upload test artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         continue-on-error: true
         with:
@@ -341,7 +341,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       # Node.js and package manager setup for Prisma CLI
       - name: Setup bun
@@ -433,7 +433,7 @@ jobs:
           echo "- **90% minimum word equivalence** validated" >> test_audio_output/README.md
 
       - name: Upload audio artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: audio-pipeline-output
@@ -452,7 +452,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       # Node.js and package manager setup for Prisma CLI
       - name: Setup bun
@@ -556,7 +556,7 @@ jobs:
           echo "3. STT transcription matches translation at 90%+ word overlap" >> e2e_report.md
 
       - name: Upload test results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: tts-stt-test-results
@@ -575,7 +575,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -670,7 +670,7 @@ jobs:
           uv run --python ${{ env.PYTHON_VERSION }} python -m pytest tests/test_12_voice_api_services.py tests/test_13_voice_api_handler.py -v --tb=short --no-cov
 
       - name: Upload Voice API test results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         continue-on-error: true
         with:
@@ -691,7 +691,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[e2e]')
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -733,7 +733,7 @@ jobs:
           npx playwright test tests/e2e/voice-translation-benchmark.e2e.test.ts --reporter=list
 
       - name: Upload E2E test results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         continue-on-error: true
         with:
@@ -751,7 +751,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Run Trivy
         uses: aquasecurity/trivy-action@master
@@ -778,7 +778,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -848,7 +848,7 @@ jobs:
     needs: [quality, test, prisma]
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'

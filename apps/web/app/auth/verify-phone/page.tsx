@@ -205,7 +205,7 @@ function VerifyPhoneContent() {
 
   const handleSendCode = async () => {
     if (!phoneNumber.trim()) {
-      setError(t('verifyPhone.errors.phoneRequired', 'Please enter your phone number.'));
+      setError(t('verifyPhone.errors.phoneRequired') || 'Veuillez entrer votre numéro de téléphone.');
       return;
     }
 
@@ -226,16 +226,16 @@ function VerifyPhoneContent() {
 
       if (response.ok && data.success) {
         console.log('[VERIFY_PHONE] ✅ Code envoyé');
-        toast.success(t('verifyPhone.codeSent', 'Code sent by SMS!'));
+        toast.success(t('verifyPhone.codeSent') || 'Code envoyé par SMS !');
         setStep('verify');
         setCountdown(60); // 60 secondes avant renvoi
       } else {
         console.error('[VERIFY_PHONE] ❌ Échec:', data.error);
-        setError(data.error || t('verifyPhone.errors.sendFailed', 'Could not send the code.'));
+        setError(data.error || t('verifyPhone.errors.sendFailed') || 'Impossible d\'envoyer le code.');
       }
     } catch (err) {
       console.error('[VERIFY_PHONE] Erreur réseau:', err);
-      setError(t('verifyPhone.errors.networkError', 'Connection error.'));
+      setError(t('verifyPhone.errors.networkError') || 'Erreur de connexion.');
     } finally {
       setIsSending(false);
     }
@@ -243,7 +243,7 @@ function VerifyPhoneContent() {
 
   const handleVerifyCode = async () => {
     if (code.length !== 6) {
-      setError(t('verifyPhone.errors.codeRequired', 'Please enter the 6-digit code.'));
+      setError(t('verifyPhone.errors.codeRequired') || 'Veuillez entrer le code à 6 chiffres.');
       return;
     }
 
@@ -264,16 +264,16 @@ function VerifyPhoneContent() {
 
       if (response.ok && data.success) {
         console.log('[VERIFY_PHONE] ✅ Téléphone vérifié');
-        toast.success(t('verifyPhone.success', 'Number verified successfully!'));
+        toast.success(t('verifyPhone.success') || 'Numéro vérifié avec succès !');
         setStep('success');
       } else {
         console.error('[VERIFY_PHONE] ❌ Code invalide:', data.error);
-        setError(data.error || t('verifyPhone.errors.invalidCode', 'Invalid or expired code.'));
+        setError(data.error || t('verifyPhone.errors.invalidCode') || 'Code invalide ou expiré.');
         setCode(''); // Reset le code
       }
     } catch (err) {
       console.error('[VERIFY_PHONE] Erreur réseau:', err);
-      setError(t('verifyPhone.errors.networkError', 'Connection error.'));
+      setError(t('verifyPhone.errors.networkError') || 'Erreur de connexion.');
     } finally {
       setIsVerifying(false);
     }
@@ -295,16 +295,16 @@ function VerifyPhoneContent() {
               </div>
               <div>
                 <h2 className="text-2xl font-semibold text-green-700 dark:text-green-400">
-                  {t('verifyPhone.successTitle', 'Number verified!')}
+                  {t('verifyPhone.successTitle') || 'Numéro vérifié !'}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {t('verifyPhone.successDescription', 'Your phone number has been verified successfully.')}
+                  {t('verifyPhone.successDescription') || 'Votre numéro de téléphone a été vérifié avec succès.'}
                 </p>
               </div>
 
               <div className="space-y-3 pt-2">
                 <SimpleButton onClick={() => router.push('/dashboard')}>
-                  {t('verifyPhone.continue', 'Continue')}
+                  {t('verifyPhone.continue') || 'Continuer'}
                 </SimpleButton>
               </div>
             </div>
@@ -330,10 +330,10 @@ function VerifyPhoneContent() {
                   <PhoneIcon />
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {t('verifyPhone.enterCode', 'Enter the code')}
+                  {t('verifyPhone.enterCode') || 'Entrez le code'}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {t('verifyPhone.codeSentTo', 'A 6-digit code was sent to')}
+                  {t('verifyPhone.codeSentTo') || 'Un code à 6 chiffres a été envoyé au'}
                 </p>
                 <p className="font-medium text-indigo-600 dark:text-indigo-400">{phoneNumber}</p>
               </div>
@@ -360,10 +360,10 @@ function VerifyPhoneContent() {
                 {isVerifying ? (
                   <span className="flex items-center justify-center space-x-2">
                     <LoadingSpinner size="sm" />
-                    <span>{t('verifyPhone.verifying', 'Verifying…')}</span>
+                    <span>{t('verifyPhone.verifying') || 'Vérification...'}</span>
                   </span>
                 ) : (
-                  t('verifyPhone.verifyButton', 'Verify code')
+                  t('verifyPhone.verifyButton') || 'Vérifier le code'
                 )}
               </SimpleButton>
 
@@ -371,7 +371,7 @@ function VerifyPhoneContent() {
               <div className="text-center">
                 {countdown > 0 ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('verifyPhone.resendIn', 'Resend in')} {countdown}s
+                    {t('verifyPhone.resendIn') || 'Renvoyer dans'} {countdown}s
                   </p>
                 ) : (
                   <button
@@ -379,7 +379,7 @@ function VerifyPhoneContent() {
                     disabled={isSending}
                     className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium"
                   >
-                    {isSending ? (t('verifyPhone.sending', 'Sending…')) : (t('verifyPhone.resendCode', 'Resend code'))}
+                    {isSending ? (t('verifyPhone.sending') || 'Envoi...') : (t('verifyPhone.resendCode') || 'Renvoyer le code')}
                   </button>
                 )}
               </div>
@@ -393,7 +393,7 @@ function VerifyPhoneContent() {
                   setError(null);
                 }}
               >
-                {t('verifyPhone.changeNumber', 'Change number')}
+                {t('verifyPhone.changeNumber') || 'Changer de numéro'}
               </SimpleButton>
             </div>
           </SimpleCard>
@@ -409,7 +409,7 @@ function VerifyPhoneContent() {
         <div className="text-center">
           <LargeLogo href="/" />
           <p className="text-gray-600 dark:text-gray-400 text-lg mt-2">
-            {t('verifyPhone.subtitle', 'Verify your phone number')}
+            {t('verifyPhone.subtitle') || 'Vérifiez votre numéro de téléphone'}
           </p>
         </div>
 
@@ -420,23 +420,23 @@ function VerifyPhoneContent() {
                 <PhoneIcon />
               </div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                {t('verifyPhone.title', 'Phone verification')}
+                {t('verifyPhone.title') || 'Vérification téléphone'}
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mt-2">
-                {t('verifyPhone.description', 'Enter your number to receive a verification code by SMS.')}
+                {t('verifyPhone.description') || 'Entrez votre numéro pour recevoir un code de vérification par SMS.'}
               </p>
             </div>
 
             {/* Input numéro */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('verifyPhone.phoneLabel', 'Phone number')}
+                {t('verifyPhone.phoneLabel') || 'Numéro de téléphone'}
               </label>
               <SimpleInput
                 type="tel"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder={t('verifyPhone.phonePlaceholder', '+33 6 12 34 56 78')}
+                placeholder={t('verifyPhone.phonePlaceholder') || '+33 6 12 34 56 78'}
                 disabled={isSending}
               />
             </div>
@@ -456,15 +456,15 @@ function VerifyPhoneContent() {
               {isSending ? (
                 <span className="flex items-center justify-center space-x-2">
                   <LoadingSpinner size="sm" />
-                  <span>{t('verifyPhone.sending', 'Sending…')}</span>
+                  <span>{t('verifyPhone.sending') || 'Envoi...'}</span>
                 </span>
               ) : (
-                t('verifyPhone.sendCode', 'Send code')
+                t('verifyPhone.sendCode') || 'Envoyer le code'
               )}
             </SimpleButton>
 
             <SimpleButton variant="ghost" onClick={() => router.push('/login')}>
-              {t('verifyPhone.backToLogin', 'Back to login')}
+              {t('verifyPhone.backToLogin') || 'Retour à la connexion'}
             </SimpleButton>
           </div>
         </SimpleCard>

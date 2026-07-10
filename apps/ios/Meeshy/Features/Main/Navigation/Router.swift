@@ -24,7 +24,7 @@ enum Route: Hashable {
     case shareLinks
     case communityLinks
     case dataExport
-    case postDetail(String, FeedPost? = nil, showComments: Bool = false, commentId: String? = nil, parentCommentId: String? = nil)
+    case postDetail(String, FeedPost? = nil, showComments: Bool = false)
     case bookmarks
     case starredMessages
     case friendRequests
@@ -57,53 +57,53 @@ extension Route {
         case .conversation(let conv):
             return conv.name
         case .settings:
-            return String(localized: "route.title.settings", defaultValue: "Settings", bundle: .main)
+            return "Parametres"
         case .profile:
-            return String(localized: "route.title.profile", defaultValue: "Profile", bundle: .main)
+            return "Profil"
         case .contacts:
-            return String(localized: "route.title.contacts", defaultValue: "Contacts", bundle: .main)
+            return "Contacts"
         case .peopleDiscovery:
-            return String(localized: "route.title.discover", defaultValue: "Discover", bundle: .main)
+            return "Decouvrir"
         case .communityList:
-            return String(localized: "route.title.communities", defaultValue: "Communities", bundle: .main)
+            return "Communautes"
         case .communityDetail:
-            return String(localized: "route.title.community", defaultValue: "Community", bundle: .main)
+            return "Communaute"
         case .communityCreate:
-            return String(localized: "route.title.community_create", defaultValue: "New community", bundle: .main)
+            return "Nouvelle communaute"
         case .communitySettings:
-            return String(localized: "route.title.community_settings", defaultValue: "Community settings", bundle: .main)
+            return "Parametres communaute"
         case .communityMembers:
-            return String(localized: "route.title.members", defaultValue: "Members", bundle: .main)
+            return "Membres"
         case .communityInvite:
-            return String(localized: "route.title.invite", defaultValue: "Invite", bundle: .main)
+            return "Inviter"
         case .notifications:
-            return String(localized: "route.title.notifications", defaultValue: "Notifications", bundle: .main)
+            return "Notifications"
         case .userStats:
-            return String(localized: "route.title.stats", defaultValue: "Statistics", bundle: .main)
+            return "Statistiques"
         case .links:
-            return String(localized: "route.title.links", defaultValue: "Links", bundle: .main)
+            return "Liens"
         case .affiliate:
-            return String(localized: "route.title.affiliate", defaultValue: "Affiliate", bundle: .main)
+            return "Affiliation"
         case .trackingLinks:
-            return String(localized: "route.title.tracking_links", defaultValue: "Tracking links", bundle: .main)
+            return "Liens de suivi"
         case .shareLinks:
-            return String(localized: "route.title.share_links", defaultValue: "Share links", bundle: .main)
+            return "Liens de partage"
         case .communityLinks:
-            return String(localized: "route.title.community_links", defaultValue: "Community links", bundle: .main)
+            return "Liens communaute"
         case .dataExport:
-            return String(localized: "route.title.data_export", defaultValue: "Data export", bundle: .main)
-        case .postDetail(_, let post, _, _, _):
-            return post?.author ?? String(localized: "route.title.post", defaultValue: "Post", bundle: .main)
+            return "Export de donnees"
+        case .postDetail(_, let post, _):
+            return post?.author ?? "Publication"
         case .bookmarks:
-            return String(localized: "route.title.bookmarks", defaultValue: "Bookmarks", bundle: .main)
+            return "Signets"
         case .starredMessages:
-            return String(localized: "route.title.starred", defaultValue: "Starred messages", bundle: .main)
+            return "Messages favoris"
         case .friendRequests:
-            return String(localized: "route.title.friend_requests", defaultValue: "Friend requests", bundle: .main)
+            return "Demandes d'amis"
         case .editProfile:
-            return String(localized: "route.title.edit_profile", defaultValue: "Edit profile", bundle: .main)
+            return "Modifier le profil"
         case .storyNotificationTarget:
-            return String(localized: "route.title.story", defaultValue: "Story", bundle: .main)
+            return "Story"
         }
     }
 }
@@ -160,7 +160,7 @@ final class Router: ObservableObject {
     }
 
     var sceneTitle: String {
-        currentRoute?.displayTitle ?? String(localized: "route.title.conversations", defaultValue: "Conversations", bundle: .main)
+        currentRoute?.displayTitle ?? "Conversations"
     }
 
     var isHubRoute: Bool {
@@ -204,11 +204,6 @@ final class Router: ObservableObject {
     }
 
     @Published var pendingHighlightMessageId: String?
-
-    /// Quand true, la prochaine `ConversationView` ouverte active directement sa
-    /// vue recherche (bouton Recherche de l'aperçu long-press). Consommé + remis
-    /// à false par `ConversationView` à l'ouverture.
-    @Published var pendingOpenSearch: Bool = false
 
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         pendingHighlightMessageId = highlightMessageId
@@ -318,7 +313,7 @@ final class Router: ObservableObject {
             Self.logger.info("Deep link navigated to conversation \(conversationId)")
         } catch {
             Self.logger.error("Failed to load conversation for deep link: \(error.localizedDescription)")
-            FeedbackToastManager.shared.showError(String(localized: "deeplink.conversation.error", defaultValue: "Couldn't open the conversation", bundle: .main))
+            FeedbackToastManager.shared.showError("Impossible d'ouvrir la conversation")
         }
     }
 

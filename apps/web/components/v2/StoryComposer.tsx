@@ -8,7 +8,6 @@ import { Button } from './Button';
 import { toast } from 'sonner';
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
-import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
 
 // ============================================================================
 // Types
@@ -18,11 +17,7 @@ type TextStyle = 'bold' | 'neon' | 'typewriter' | 'handwriting';
 
 type MediaCategory = 'image' | 'video' | 'audio';
 
-/// W3 — parité `PostVisibility` complète (inc.2) : EXCEPT/ONLY sont servis
-/// par l'AudienceUserPicker et gatés à la publication (`isAudienceIncomplete`,
-/// partagé avec PostComposer depuis le module du picker) — jamais publiés
-/// sans liste (le trou W6).
-type StoryVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
+type StoryVisibility = 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
 
 interface StoryComposerProps {
   open: boolean;
@@ -31,9 +26,6 @@ interface StoryComposerProps {
     content?: string;
     storyEffects: Record<string, unknown>;
     visibility: StoryVisibility;
-    /// W3 — audience explicite (EXCEPT/ONLY). Plombé jusqu'au service ;
-    /// alimenté par le picker à l'inc.2.
-    visibilityUserIds?: string[];
     mediaIds?: string[];
   }) => void;
   defaultVisibility?: StoryVisibility;
@@ -75,12 +67,9 @@ const TEXT_STYLES: { id: TextStyle; label: string }[] = [
   { id: 'handwriting', label: 'Hh' },
 ];
 
-export const VISIBILITY_OPTIONS: { id: StoryVisibility; labelKey: string; icon: string }[] = [
+const VISIBILITY_OPTIONS: { id: StoryVisibility; labelKey: string; icon: string }[] = [
   { id: 'PUBLIC', labelKey: 'storyVisibility.public', icon: '\uD83C\uDF0D' },
   { id: 'FRIENDS', labelKey: 'storyVisibility.friends', icon: '\uD83D\uDC65' },
-  { id: 'COMMUNITY', labelKey: 'storyVisibility.community', icon: '\uD83C\uDFD8\uFE0F' },
-  { id: 'EXCEPT', labelKey: 'storyVisibility.except', icon: '\uD83D\uDEAB' },
-  { id: 'ONLY', labelKey: 'storyVisibility.only', icon: '\uD83C\uDFAF' },
   { id: 'PRIVATE', labelKey: 'storyVisibility.private', icon: '\uD83D\uDD12' },
 ];
 
@@ -132,8 +121,6 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyle>('bold');
   const [content, setContent] = useState<string>('');
   const [visibility, setVisibility] = useState<StoryVisibility>(defaultVisibility);
-  // W3 inc.2 — audience explicite des visibilités EXCEPT/ONLY.
-  const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
 
   const token = useAuthStore(s => s.authToken);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -190,15 +177,13 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
         textStyle: selectedTextStyle,
       },
       visibility,
-      visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) ? visibilityUserIds : undefined,
       mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
     });
     setContent('');
     setSelectedBg(BACKGROUND_COLORS[0].value);
     setSelectedTextStyle('bold');
-    setVisibilityUserIds([]);
     clearAttachments();
-  }, [content, selectedBg, selectedTextStyle, visibility, visibilityUserIds, onPublish, uploadedAttachments, clearAttachments]);
+  }, [content, selectedBg, selectedTextStyle, onPublish, uploadedAttachments, clearAttachments]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -206,14 +191,10 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
     setSelectedBg(BACKGROUND_COLORS[0].value);
     setSelectedTextStyle('bold');
     setVisibility(defaultVisibility);
-    setVisibilityUserIds([]);
     clearAttachments();
   }, [onClose, clearAttachments, defaultVisibility]);
 
   const hasContent = content.trim().length > 0 || selectedFiles.length > 0;
-  // W3 inc.2 — EXCEPT/ONLY sans audience = publication bloquée (jamais de
-  // visibilité cassée, cf. W6).
-  const audienceIncomplete = isAudienceIncomplete(visibility, visibilityUserIds.length);
 
   return (
     <Dialog open={open} onClose={handleClose} className="max-w-lg">
@@ -253,7 +234,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
           size="sm"
           variant="primary"
           onClick={handlePublish}
-          disabled={!hasContent || isUploading || audienceIncomplete}
+          disabled={!hasContent || isUploading}
         >
           {isUploading ? t('uploading') : t('publish')}
         </Button>
@@ -451,7 +432,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
           </div>
 
           {/* Visibility Selector */}
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             {VISIBILITY_OPTIONS.map((opt) => (
               <button
                 key={opt.id}
@@ -469,15 +450,6 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
               </button>
             ))}
           </div>
-
-          {/* W3 inc.2 — audience explicite pour EXCEPT/ONLY */}
-          {(AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) && (
-            <AudienceUserPicker
-              mode={visibility as 'EXCEPT' | 'ONLY'}
-              selectedIds={visibilityUserIds}
-              onChange={setVisibilityUserIds}
-            />
-          )}
         </div>
 
         {/* Hidden file inputs */}

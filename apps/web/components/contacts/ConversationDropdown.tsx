@@ -14,7 +14,6 @@ import { MessageSquare, ChevronDown, Plus, Clock } from 'lucide-react';
 import { conversationsService } from '@/services';
 import { Conversation } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/useI18n';
-import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 
 interface ConversationDropdownProps {
   userId: string;
@@ -27,19 +26,18 @@ function formatShortDate(
   date: Date,
   t: (key: string, params?: Record<string, unknown>) => string
 ): string {
-  const bucket = classifyRelativeTime(date.getTime(), Date.now(), { beyondDays: 7 });
-  switch (bucket.unit) {
-    case 'now':
-      return t('status.justNow');
-    case 'minutes':
-      return t('status.minutesAgo', { count: bucket.value });
-    case 'hours':
-      return t('status.hoursAgo', { count: bucket.value });
-    case 'days':
-      return t('status.daysAgo', { count: bucket.value });
-    default:
-      return date.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
-  }
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return t('status.justNow');
+  if (diffMins < 60) return t('status.minutesAgo', { count: diffMins });
+  if (diffHours < 24) return t('status.hoursAgo', { count: diffHours });
+  if (diffDays < 7) return t('status.daysAgo', { count: diffDays });
+
+  return date.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 /**

@@ -227,13 +227,9 @@ extension StoryReaderRepresentable {
 
     /// Construct from a `RepostContent` (feed embed, repost preview).
     /// Synthesizes a `StoryItem` from the repost's media + effects.
-    /// `isPaused` is driven by the host (e.g. PostDetailView) for the SAME
-    /// viewport-visibility + call-aware pausing as the native story canvas — a
-    /// muted feed embed leaves it `false`; an unmuted detail embed must forward it.
     public init(repost: RepostContent,
                 preferredContentLanguages: [String]? = nil,
                 mute: Bool = false,
-                isPaused: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil) {
         let synthetic = StoryItem(
             id: repost.id,
@@ -247,7 +243,6 @@ extension StoryReaderRepresentable {
         self.init(story: synthetic,
                   preferredLanguages: preferredContentLanguages ?? [],
                   mute: mute,
-                  isPaused: isPaused,
                   onCompletion: onCompletion,
                   onContentReady: nil,
                   onContentProgress: nil)

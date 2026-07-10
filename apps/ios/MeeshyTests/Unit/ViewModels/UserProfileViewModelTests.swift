@@ -177,21 +177,6 @@ final class UserProfileViewModelTests: XCTestCase {
         XCTAssertTrue(sut.isBlocked)
     }
 
-    /// R6-4 — le block optimiste doit AUSSI flipper la blocklist canonique
-    /// (`BlockService.blockedUserIds`), pas seulement le `isBlocked` local du
-    /// VM : les swipe labels de la liste lisent `BlockService.isBlocked`, donc
-    /// sans ça ils restaient périmés jusqu'au prochain refresh réseau.
-    func test_blockUser_updatesCanonicalBlockedUserIds() async {
-        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        let sut = makeSUT()
-        XCTAssertFalse(mockBlockService.isBlocked(userId: "target-user-001"))
-
-        await sut.blockUser()
-
-        XCTAssertTrue(mockBlockService.isBlocked(userId: "target-user-001"),
-            "block must flip the canonical BlockService blocklist read by swipe labels")
-    }
-
     func test_blockUser_skipsWhenUserIdIsNil() async {
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
         let sut = makeSUT(userId: nil)

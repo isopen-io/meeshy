@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { isExpired } from '@/utils/time-remaining';
 import { Footer } from '@/components/layout/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -280,7 +279,7 @@ export default function LinksPage() {
         matchesStatus = !link.isActive;
       } else if (statusFilter === 'expired') {
         // Un lien est expiré si expiresAt existe et est dans le passé
-        matchesStatus = isExpired(link.expiresAt);
+        matchesStatus = link.expiresAt ? new Date(link.expiresAt) < new Date() : false;
       }
 
       return matchesSearch && matchesStatus;
@@ -300,7 +299,7 @@ export default function LinksPage() {
         matchesStatus = !link.isActive;
       } else if (statusFilter === 'expired') {
         // Un lien est expiré si expiresAt existe et est dans le passé
-        matchesStatus = isExpired(link.expiresAt);
+        matchesStatus = link.expiresAt ? new Date(link.expiresAt) < new Date() : false;
       }
 
       return matchesSearch && matchesStatus;

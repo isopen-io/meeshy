@@ -121,7 +121,6 @@ struct DataExportView: View {
             Image(systemName: "shield.checkered")
                 .font(MeeshyFont.relative(24, weight: .semibold))
                 .foregroundColor(Color(hex: accentColor))
-                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos donnees, votre controle", bundle: .main))
@@ -142,7 +141,6 @@ struct DataExportView: View {
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
-        .accessibilityElement(children: .combine)
     }
 
     private var formatSection: some View {
@@ -162,7 +160,6 @@ struct DataExportView: View {
                         VStack(spacing: 6) {
                             Image(systemName: format.icon)
                                 .font(MeeshyFont.relative(22, weight: .semibold))
-                                .accessibilityHidden(true)
                             Text(format.rawValue)
                                 .font(MeeshyFont.relative(12, weight: .semibold))
                         }
@@ -178,8 +175,6 @@ struct DataExportView: View {
                                 )
                         )
                     }
-                    .accessibilityLabel(format.rawValue)
-                    .accessibilityAddTraits(selectedFormats.contains(format) ? .isSelected : [])
                 }
             }
         }
@@ -207,8 +202,6 @@ struct DataExportView: View {
 
     private func toggleRow(title: String, icon: String, color: Color, isOn: Binding<Bool>) -> some View {
         HStack(spacing: 12) {
-            // Glyphe figé : badge de dimension fixe 28×28 (doctrine 74i/86i — le scaling
-            // Dynamic Type déborderait/tronquerait le glyphe hors du cadre fixe).
             Image(systemName: icon)
                 .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(color)
@@ -239,7 +232,6 @@ struct DataExportView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(MeeshyFont.relative(14))
                 .foregroundColor(MeeshyColors.error)
-                .accessibilityHidden(true)
             Text(message)
                 .font(MeeshyFont.relative(13))
                 .foregroundColor(MeeshyColors.error)
@@ -250,7 +242,6 @@ struct DataExportView: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(MeeshyColors.error.opacity(0.1))
         )
-        .accessibilityElement(children: .combine)
     }
 
     private var exportButton: some View {
@@ -295,14 +286,11 @@ struct DataExportView: View {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(color)
-                .accessibilityHidden(true)
             Text(title)
                 .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(color)
                 .tracking(1.2)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
         .padding(.leading, 4)
     }
 

@@ -107,10 +107,9 @@ export class ConversationsService {
     page = 1,
     limit = 20,
     cursor?: string | null,
-    signal?: AbortSignal,
-    after?: string
+    signal?: AbortSignal
   ): Promise<GetMessagesResponse> {
-    return messagesService.getMessages(conversationId, page, limit, cursor, signal, after);
+    return messagesService.getMessages(conversationId, page, limit, cursor, signal);
   }
 
   /**

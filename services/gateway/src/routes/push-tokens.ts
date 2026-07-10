@@ -232,7 +232,11 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
-        return sendBadRequest(reply, 'Invalid request data');
+        return reply.status(400).send({
+          success: false,
+          error: 'Invalid request data',
+          details: error.issues
+        });
       }
 
       logError(fastify.log, '[PUSH_TOKEN] Error registering device token:', error);
@@ -323,7 +327,11 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
-        return sendBadRequest(reply, 'Invalid request data');
+        return reply.status(400).send({
+          success: false,
+          error: 'Invalid request data',
+          details: error.issues
+        });
       }
 
       logError(fastify.log, '[PUSH_TOKEN] Error unregistering device token:', error);

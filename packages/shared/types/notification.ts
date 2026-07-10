@@ -206,11 +206,6 @@ export interface NotificationContext {
   readonly reactionId?: string;
   readonly postId?: string;
   readonly commentId?: string;
-  /** Identifiant du commentaire parent quand `commentId` est une réponse.
-   *  Permet au client de naviguer jusqu'à la réponse : ouvrir l'entité,
-   *  déplier le fil du parent, puis défiler/surligner la réponse ciblée.
-   *  `null`/absent = `commentId` est un commentaire racine. */
-  readonly parentCommentId?: string;
   readonly encryptedContent?: string;
   readonly notificationLocKey?: string;
   /** Phase A iOS Communication Notifications — URL accessible publiquement du
@@ -396,9 +391,6 @@ export interface PostCommentNotificationMetadata extends BaseNotificationMetadat
   readonly postThumbnailUrl?: string;
   /** Aperçu du commentaire parent (réponse à un commentaire). */
   readonly parentCommentPreview?: string;
-  /** Identifiant du commentaire parent (réponse à un commentaire) — permet au
-   *  client de déplier le fil parent et défiler jusqu'à la réponse ciblée. */
-  readonly parentCommentId?: string;
   readonly action: 'view_post';
 }
 

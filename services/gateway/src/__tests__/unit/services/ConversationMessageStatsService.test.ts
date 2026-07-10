@@ -578,19 +578,18 @@ describe('ConversationMessageStatsService', () => {
   // ── onMessageEdited ────────────────────────────────────────────────────────
 
   describe('onMessageEdited', () => {
-    it('applies word/char delta to totalWords and totalCharacters via atomic increment', async () => {
+    it('applies word/char delta to totalWords and totalCharacters using Math.max(0, …)', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
 
       await service.onMessageEdited(prisma as any, CONV_ID, USER_A, 'hello', 'hello world');
 
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
-      // "hello" (1 word / 5 chars) → "hello world" (2 words / 11 chars): +1 word, +6 chars
-      expect(updateCall.data.totalWords).toEqual({ increment: 1 });
-      expect(updateCall.data.totalCharacters).toEqual({ increment: 6 });
+      expect(updateCall.data.totalWords).toBe(51);
+      expect(updateCall.data.totalCharacters).toBe(206);
     });
 
-    it('applies a NEGATIVE atomic increment when the edit shrinks the message (no DB-level clamp)', async () => {
+    it('clamps totalWords to 0 when delta would make it negative', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(
         makeExistingStats({ totalWords: 2, totalCharacters: 10 })
@@ -599,11 +598,8 @@ describe('ConversationMessageStatsService', () => {
       await service.onMessageEdited(prisma as any, CONV_ID, USER_A, 'hello world three', '');
 
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
-      // "hello world three" (3 words / 17 chars) → "" (0/0): -3 words, -17 chars.
-      // Atomic decrement replaces the old Math.max(0, …) floor so concurrent edits
-      // never lose an update; recompute() heals any residual drift.
-      expect(updateCall.data.totalWords).toEqual({ increment: -3 });
-      expect(updateCall.data.totalCharacters).toEqual({ increment: -17 });
+      expect(updateCall.data.totalWords).toBe(0);
+      expect(updateCall.data.totalCharacters).toBe(0);
     });
 
     it('applies delta to participant entry wordCount and characterCount', async () => {
@@ -681,20 +677,19 @@ describe('ConversationMessageStatsService', () => {
       expect(prisma.conversationMessageStats.update).not.toHaveBeenCalled();
     });
 
-    it('decrements totalMessages, totalWords, totalCharacters via atomic decrement', async () => {
+    it('decrements totalMessages, totalWords, totalCharacters via Math.max(0, …)', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
 
       await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'hello world', []);
 
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
-      // "hello world" = 2 words / 11 chars
-      expect(updateCall.data.totalMessages).toEqual({ decrement: 1 });
-      expect(updateCall.data.totalWords).toEqual({ decrement: 2 });
-      expect(updateCall.data.totalCharacters).toEqual({ decrement: 11 });
+      expect(updateCall.data.totalMessages).toBe(9);
+      expect(updateCall.data.totalWords).toBe(48);
+      expect(updateCall.data.totalCharacters).toBe(189);
     });
 
-    it('uses atomic decrement even when the stored counters are already 0 (no DB-level clamp)', async () => {
+    it('clamps totalMessages/Words/Characters to 0 when they would go negative', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(
         makeExistingStats({ totalMessages: 0, totalWords: 0, totalCharacters: 0 })
@@ -703,12 +698,9 @@ describe('ConversationMessageStatsService', () => {
       await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'hello world', []);
 
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
-      // Atomic decrement is independent of the read value — it never clobbers a
-      // concurrent write. Balanced create/delete never underflows; drift on this
-      // denormalized counter self-heals via recompute().
-      expect(updateCall.data.totalMessages).toEqual({ decrement: 1 });
-      expect(updateCall.data.totalWords).toEqual({ decrement: 2 });
-      expect(updateCall.data.totalCharacters).toEqual({ decrement: 11 });
+      expect(updateCall.data.totalMessages).toBe(0);
+      expect(updateCall.data.totalWords).toBe(0);
+      expect(updateCall.data.totalCharacters).toBe(0);
     });
 
     it('decrements textMessages when deleted message was text-only', async () => {
@@ -718,7 +710,7 @@ describe('ConversationMessageStatsService', () => {
       await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'hello', []);
 
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
-      expect(updateCall.data.textMessages).toEqual({ decrement: 1 });
+      expect(updateCall.data.textMessages).toBe(7);
     });
 
     it('does not decrement textMessages when message had attachments', async () => {
@@ -731,15 +723,15 @@ describe('ConversationMessageStatsService', () => {
       expect(updateCall.data.textMessages).toBeUndefined();
     });
 
-    it('decrements attachment type counts (image/audio/video) via atomic decrement', async () => {
+    it('decrements attachment type counts (image/audio/video) via Math.max(0, …)', async () => {
       const prisma = makePrisma();
       prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats());
 
       await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, '', ['image', 'audio']);
 
       const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
-      expect(updateCall.data.imageCount).toEqual({ decrement: 1 });
-      expect(updateCall.data.audioCount).toEqual({ decrement: 1 });
+      expect(updateCall.data.imageCount).toBe(0);
+      expect(updateCall.data.audioCount).toBe(0);
     });
 
     it('decrements participant messageCount, wordCount, characterCount and attachment counts', async () => {
@@ -801,40 +793,6 @@ describe('ConversationMessageStatsService', () => {
       // first getStats (1) + onMessageDeleted's internal findUnique (2) + second getStats after invalidate (3)
       expect(prisma.conversationMessageStats.findUnique).toHaveBeenCalledTimes(3);
       expect(result.totalMessages).toBe(9);
-    });
-  });
-
-  // ── Concurrency: scalar counters use atomic operators (lost-update regression) ─
-
-  describe('scalar counters are atomic across new/edit/delete', () => {
-    it('two concurrent edits both emit an independent atomic increment (neither is a read-derived absolute write)', async () => {
-      const prisma = makePrisma();
-      // Both handlers read the SAME pre-write snapshot (the lost-update window).
-      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats({ totalWords: 50 }));
-
-      await Promise.all([
-        service.onMessageEdited(prisma as any, CONV_ID, USER_A, 'a', 'a b c'),   // +2 words
-        service.onMessageEdited(prisma as any, CONV_ID, USER_A, 'x', 'x y z w'), // +3 words
-      ]);
-
-      const calls = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls;
-      expect(calls).toHaveLength(2);
-      // Neither write is an absolute value computed from the shared snapshot (e.g. 52 / 53);
-      // both are relative { increment } so the DB serializes them to +5 total — no lost update.
-      const words = calls.map((c: any) => c[0].data.totalWords);
-      expect(words).toContainEqual({ increment: 2 });
-      expect(words).toContainEqual({ increment: 3 });
-    });
-
-    it('delete emits an atomic decrement independent of the read snapshot', async () => {
-      const prisma = makePrisma();
-      prisma.conversationMessageStats.findUnique.mockResolvedValue(makeExistingStats({ totalMessages: 10, totalWords: 50 }));
-
-      await service.onMessageDeleted(prisma as any, CONV_ID, USER_A, 'one two', []);
-
-      const updateCall = (prisma.conversationMessageStats.update as jest.MockedFunction<any>).mock.calls[0][0];
-      expect(updateCall.data.totalMessages).toEqual({ decrement: 1 });
-      expect(updateCall.data.totalWords).toEqual({ decrement: 2 });
     });
   });
 });

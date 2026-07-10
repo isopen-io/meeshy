@@ -1,13 +1,5 @@
 # Notification System Architecture
 
-> ⚠️ **Document historique — partiellement obsolète.** Ce README date de la refactorisation initiale.
-> L'envoi de push FCM/APNs est désormais assuré par `services/PushNotificationService.ts`
-> (multicast + APNs + routing d'environnement), injecté dans `NotificationService` via
-> `setPushNotificationService()`. L'ancien `FirebaseNotificationService` décrit plus bas a été
-> **supprimé** (itération 92). Le module `NotificationServiceExtensions` référencé ci-dessous n'existe
-> plus. Traiter les sections « Firebase » / « composition » comme du contexte historique, pas comme
-> l'état courant du code.
-
 ## Overview
 
 Système de notifications modulaire et scalable avec support multi-canal (WebSocket + Firebase Push).

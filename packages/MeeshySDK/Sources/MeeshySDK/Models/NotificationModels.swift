@@ -277,9 +277,6 @@ public struct NotificationContext: Codable, Sendable {
     public let reactionId: String?
     public let postId: String?
     public let commentId: String?
-    /// Identifiant du commentaire parent quand `commentId` est une réponse.
-    /// Permet de déplier le fil parent puis de défiler jusqu'à la réponse ciblée.
-    public let parentCommentId: String?
     /// URL publique du 1er attachment du message (image/audio/vidéo).
     public let firstAttachmentUrl: String?
     /// MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`.
@@ -306,7 +303,6 @@ public struct NotificationContext: Codable, Sendable {
         reactionId: String? = nil,
         postId: String? = nil,
         commentId: String? = nil,
-        parentCommentId: String? = nil,
         firstAttachmentUrl: String? = nil,
         firstAttachmentMimeType: String? = nil,
         firstAttachmentDurationMs: Int? = nil,
@@ -324,7 +320,6 @@ public struct NotificationContext: Codable, Sendable {
         self.reactionId = reactionId
         self.postId = postId
         self.commentId = commentId
-        self.parentCommentId = parentCommentId
         self.firstAttachmentUrl = firstAttachmentUrl
         self.firstAttachmentMimeType = firstAttachmentMimeType
         self.firstAttachmentDurationMs = firstAttachmentDurationMs
@@ -379,9 +374,6 @@ public struct NotificationMetadata: Codable, Sendable {
     public let memberCount: Int?
     public let postId: String?
     public let commentId: String?
-    /// Identifiant du commentaire parent (réponse à un commentaire) — permet de
-    /// déplier le fil parent puis de défiler/surligner la réponse (`commentId`).
-    public let parentCommentId: String?
     public let commentPreview: String?
     public let emoji: String?
     public let postType: String?
@@ -422,7 +414,6 @@ public struct NotificationMetadata: Codable, Sendable {
         memberCount = try container.decodeIfPresent(Int.self, forKey: .memberCount)
         postId = try container.decodeIfPresent(String.self, forKey: .postId)
         commentId = try container.decodeIfPresent(String.self, forKey: .commentId)
-        parentCommentId = try container.decodeIfPresent(String.self, forKey: .parentCommentId)
         commentPreview = try container.decodeIfPresent(String.self, forKey: .commentPreview)
         emoji = try container.decodeIfPresent(String.self, forKey: .emoji)
         postType = try container.decodeIfPresent(String.self, forKey: .postType)
@@ -447,7 +438,7 @@ public struct NotificationMetadata: Codable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case messagePreview, action, reactionEmoji, callType, memberCount
-        case postId, commentId, parentCommentId, commentPreview, emoji, postType
+        case postId, commentId, commentPreview, emoji, postType
         case contentType, postPreview, parentCommentPreview, excerpt, mediaType, postThumbnailUrl, attachments
         case deviceName, deviceVendor, deviceOS, deviceOSVersion, deviceType
         case ipAddress, country, countryName, city, location

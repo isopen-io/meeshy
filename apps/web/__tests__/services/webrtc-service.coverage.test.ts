@@ -40,7 +40,6 @@ class FakeSender {
 class FakeTransceiver {
   sender: FakeSender;
   direction: string;
-  setCodecPreferences = jest.fn();
   constructor(track: unknown, direction: string) {
     this.sender = new FakeSender(track);
     this.direction = direction;
@@ -95,9 +94,6 @@ class FakeRTCPeerConnection {
     forEach: jest.fn(),
   }));
   close = jest.fn();
-  setConfiguration = jest.fn((config: unknown) => {
-    this.config = config;
-  });
   constructor(config: unknown) {
     this.config = config;
   }
@@ -144,15 +140,6 @@ const makeFakeMediaStream = () => {
 // ---------------------------------------------------------------------------
 
 let OrigRTCPeerConnection: unknown;
-let OrigRTCRtpSender: unknown;
-
-const FAKE_AUDIO_CAPABILITIES = {
-  codecs: [
-    { mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
-    { mimeType: 'audio/red', clockRate: 48000, channels: 2 },
-    { mimeType: 'audio/PCMU', clockRate: 8000, channels: 1 },
-  ],
-};
 
 beforeAll(() => {
   OrigRTCPeerConnection = (global as Record<string, unknown>).RTCPeerConnection;
@@ -163,16 +150,10 @@ beforeAll(() => {
   (global as Record<string, unknown>).RTCIceCandidate = jest
     .fn()
     .mockImplementation((init: unknown) => init);
-
-  OrigRTCRtpSender = (global as Record<string, unknown>).RTCRtpSender;
-  (global as Record<string, unknown>).RTCRtpSender = {
-    getCapabilities: jest.fn(() => FAKE_AUDIO_CAPABILITIES),
-  };
 });
 
 afterAll(() => {
   (global as Record<string, unknown>).RTCPeerConnection = OrigRTCPeerConnection;
-  (global as Record<string, unknown>).RTCRtpSender = OrigRTCRtpSender;
 });
 
 beforeEach(() => {
@@ -233,27 +214,6 @@ describe('setIceServers', () => {
     // createPeerConnection should use the stored servers
     const pc = service.createPeerConnection('p') as unknown as FakeRTCPeerConnection;
     expect(pc.config).toEqual({ iceServers: servers });
-  });
-
-  it('applies immediately via setConfiguration when TURN credentials arrive after the peer connection already exists', () => {
-    // Reproduces RC-1 (tasks/calls-fonctionnel-todo.md): a peer connection
-    // created before server TURN credentials resolve must not be stuck on
-    // STUN-only defaults for the rest of the call — a late/refreshed
-    // setIceServers() has to reach the live RTCPeerConnection.
-    const service = new WebRTCService();
-    const pc = service.createPeerConnection('p') as unknown as FakeRTCPeerConnection;
-    const servers: RTCIceServer[] = [
-      { urls: 'turn:example.com', username: 'u', credential: 'c' },
-    ];
-
-    service.setIceServers(servers);
-
-    expect(pc.setConfiguration).toHaveBeenCalledWith({ iceServers: servers });
-  });
-
-  it('does not throw when no peer connection has been created yet', () => {
-    const service = new WebRTCService();
-    expect(() => service.setIceServers([{ urls: 'stun:example.com' }])).not.toThrow();
   });
 });
 
@@ -1768,21 +1728,8 @@ describe('enableSimulcast', () => {
 // SDP munging — exercised via createOffer / createAnswer
 // ===========================================================================
 
-describe('Audio codec preferences — applyAudioCodecPreferences (RED via setCodecPreferences)', () => {
-  it('applies Opus+RED codec preferences to the audio transceiver on addLocalMedia', () => {
-    const { service, pc } = setup();
-    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
-
-    const audioTransceiver = pc._transceivers[0] as unknown as FakeTransceiver;
-    expect(audioTransceiver.setCodecPreferences).toHaveBeenCalledTimes(1);
-    const preferred = audioTransceiver.setCodecPreferences.mock.calls[0][0];
-    expect(preferred.map((c: { mimeType: string }) => c.mimeType)).toEqual([
-      'audio/opus',
-      'audio/red',
-    ]);
-  });
-
-  it('does not touch SDP (no more RED munging) — createOffer SDP is unaffected', async () => {
+describe('SDP munging — addAudioRedundancy', () => {
+  it('adds RED codec when opus is present and red is absent', async () => {
     const { service, pc } = setup();
     service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
 
@@ -1795,61 +1742,41 @@ describe('Audio codec preferences — applyAudioCodecPreferences (RED via setCod
     });
 
     const offer = await service.createOffer();
-    expect(offer.sdp).not.toContain('red/48000');
+    expect(offer.sdp).toContain('red/48000');
+    expect(offer.sdp).toContain('a=rtpmap:63 red/48000/2');
   });
 
-  it('no-ops when setCodecPreferences is not a function on the transceiver', () => {
+  it('does NOT duplicate RED when already present in SDP', async () => {
     const { service, pc } = setup();
-    const audioTransceiver = new FakeTransceiver(null, 'sendrecv');
-    (audioTransceiver as unknown as { setCodecPreferences: unknown }).setCodecPreferences = undefined;
-    pc.addTransceiver = jest.fn(() => {
-      pc._transceivers.push(audioTransceiver);
-      return audioTransceiver;
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+
+    pc.createOffer = jest.fn(async () => ({
+      type: 'offer' as RTCSdpType,
+      sdp: 'm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\na=rtpmap:63 red/48000/2\r\n',
+    }));
+    pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
+      pc.localDescription = { type: 'offer', sdp: desc.sdp };
     });
 
-    expect(() => service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false })).not.toThrow();
+    const offer = await service.createOffer();
+    const matches = offer.sdp!.match(/red\/48000/g);
+    expect(matches).toHaveLength(1);
   });
 
-  it('no-ops when RTCRtpSender.getCapabilities is unavailable', () => {
-    const savedSender = (global as Record<string, unknown>).RTCRtpSender;
-    (global as Record<string, unknown>).RTCRtpSender = undefined;
-    try {
-      const { service, pc } = setup();
-      service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
-      const audioTransceiver = pc._transceivers[0] as unknown as FakeTransceiver;
-      expect(audioTransceiver.setCodecPreferences).not.toHaveBeenCalled();
-    } finally {
-      (global as Record<string, unknown>).RTCRtpSender = savedSender;
-    }
-  });
-
-  it('no-ops when getCapabilities returns no codecs', () => {
-    const savedSender = (global as Record<string, unknown>).RTCRtpSender;
-    (global as Record<string, unknown>).RTCRtpSender = {
-      getCapabilities: jest.fn(() => ({ codecs: [] })),
-    };
-    try {
-      const { service, pc } = setup();
-      service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
-      const audioTransceiver = pc._transceivers[0] as unknown as FakeTransceiver;
-      expect(audioTransceiver.setCodecPreferences).not.toHaveBeenCalled();
-    } finally {
-      (global as Record<string, unknown>).RTCRtpSender = savedSender;
-    }
-  });
-
-  it('swallows a setCodecPreferences throw (e.g. "Invalid codec")', () => {
+  it('skips RED insertion when no opus codec in SDP', async () => {
     const { service, pc } = setup();
-    const audioTransceiver = new FakeTransceiver(null, 'sendrecv');
-    audioTransceiver.setCodecPreferences = jest.fn(() => {
-      throw new Error('Invalid codec');
-    });
-    pc.addTransceiver = jest.fn(() => {
-      pc._transceivers.push(audioTransceiver);
-      return audioTransceiver;
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+
+    pc.createOffer = jest.fn(async () => ({
+      type: 'offer' as RTCSdpType,
+      sdp: 'm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=rtpmap:0 PCMU/8000\r\n',
+    }));
+    pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
+      pc.localDescription = { type: 'offer', sdp: desc.sdp };
     });
 
-    expect(() => service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false })).not.toThrow();
+    const offer = await service.createOffer();
+    expect(offer.sdp).not.toContain('red');
   });
 });
 
@@ -1950,7 +1877,7 @@ describe('SDP munging — mungeOpusSdp', () => {
 
     pc.createOffer = jest.fn(async () => ({
       type: 'offer' as RTCSdpType,
-      sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fmtp:111 minptime=10;usedtx=1\r\n',
+      sdp: 'v=0\r\na=fmtp:111 minptime=10;usedtx=1\r\n',
     }));
     pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
       pc.localDescription = { type: 'offer', sdp: desc.sdp };
@@ -1970,7 +1897,7 @@ describe('SDP munging — mungeOpusSdp', () => {
     // A param without '=' (just a key, no value) should be skipped by the if (key && value) branch
     pc.createOffer = jest.fn(async () => ({
       type: 'offer' as RTCSdpType,
-      sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fmtp:111 minptime=10;keyonly\r\n',
+      sdp: 'v=0\r\na=fmtp:111 minptime=10;keyonly\r\n',
     }));
     pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
       pc.localDescription = { type: 'offer', sdp: desc.sdp };
@@ -1980,37 +1907,52 @@ describe('SDP munging — mungeOpusSdp', () => {
     // Should still have the opus params (key-only param is simply skipped)
     expect(offer.sdp).toContain('maxaveragebitrate=128000');
   });
+});
 
-  it('does NOT pollute video fmtp lines with Opus-only params', async () => {
+// ===========================================================================
+// addAudioRedundancy — m=audio line with redPT already in parts
+// ===========================================================================
+
+describe('addAudioRedundancy — m=audio with redPT already in parts', () => {
+  it('does not prepend redPT to m=audio when it is already listed', async () => {
     const { service, pc } = setup();
-    service.addLocalMedia(makeStream({ audio: true, video: true }), { sendVideo: true });
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
 
+    // m=audio that already has 63 (redPT) in the payload list — but no 'red/48000' rtpmap
+    // This exercises the `!parts.includes(redPT)` false branch in addAudioRedundancy
     pc.createOffer = jest.fn(async () => ({
       type: 'offer' as RTCSdpType,
-      sdp:
-        'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fmtp:111 minptime=10;useinbandfec=1\r\n' +
-        'm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=fmtp:96 profile-level-id=42e01f;level-asymmetry-allowed=1\r\n',
+      sdp: 'm=audio 9 UDP/TLS/RTP/SAVPF 63 111\r\na=rtpmap:111 opus/48000/2\r\n',
     }));
     pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
       pc.localDescription = { type: 'offer', sdp: desc.sdp };
     });
 
     const offer = await service.createOffer();
-    const videoFmtpLine = offer.sdp!
-      .split('\r\n')
-      .find((line) => line.startsWith('a=fmtp:96'));
+    // redPT (63) should only appear once in the m= line
+    const mLine = offer.sdp!.split('\r\n').find((l) => l.startsWith('m=audio'));
+    const parts = mLine!.split(' ');
+    expect(parts.filter((p) => p === '63')).toHaveLength(1);
+  });
 
-    // addVideoBitrateHints legitimately appends x-google-{max,min}-bitrate to
-    // video fmtp lines — only the Opus-only params must stay off this line.
-    expect(videoFmtpLine).toContain('profile-level-id=42e01f;level-asymmetry-allowed=1');
-    expect(videoFmtpLine).not.toContain('maxaveragebitrate');
-    expect(videoFmtpLine).not.toContain('stereo=');
-    expect(videoFmtpLine).not.toContain('useinbandfec');
-    expect(videoFmtpLine).not.toContain('usedtx');
-    expect(videoFmtpLine).not.toContain('maxplaybackrate');
+  it('handles m=audio line with fewer than 4 parts (skips the prepend)', async () => {
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+
+    // m=audio with only 3 parts — exercises the parts.length < 4 branch
+    pc.createOffer = jest.fn(async () => ({
+      type: 'offer' as RTCSdpType,
+      sdp: 'm=audio 9 UDP\r\na=rtpmap:111 opus/48000/2\r\n',
+    }));
+    pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
+      pc.localDescription = { type: 'offer', sdp: desc.sdp };
+    });
+
+    // Should not throw
+    const offer = await service.createOffer();
+    expect(offer.sdp).toBeDefined();
   });
 });
-
 
 // ===========================================================================
 // ICE restart failure handlers (catch callbacks)

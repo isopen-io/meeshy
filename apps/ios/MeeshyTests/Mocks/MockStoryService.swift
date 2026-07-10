@@ -32,7 +32,6 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
     var listCallCount = 0
     var lastListCursor: String?
     var lastListLimit: Int?
-    var lastListUpdatedSince: Date?
 
     var markViewedCallCount = 0
     var lastMarkViewedStoryId: String?
@@ -57,16 +56,12 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
     var fetchPostCallCount = 0
     var lastFetchPostId: String?
 
-    var cacheCallCount = 0
-    var lastCachedPost: APIPost?
-
     // MARK: - Protocol Conformance
 
-    func list(cursor: String?, limit: Int, updatedSince: Date?) async throws -> PaginatedAPIResponse<[APIPost]> {
+    func list(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         listCallCount += 1
         lastListCursor = cursor
         lastListLimit = limit
-        lastListUpdatedSince = updatedSince
         return try listResult.get()
     }
 
@@ -114,11 +109,6 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         return try fetchPostResult.get()
     }
 
-    func cache(post: APIPost) {
-        cacheCallCount += 1
-        lastCachedPost = post
-    }
-
     // MARK: - Reset
 
     func reset() {
@@ -162,8 +152,5 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         """))
         fetchPostCallCount = 0
         lastFetchPostId = nil
-
-        cacheCallCount = 0
-        lastCachedPost = nil
     }
 }

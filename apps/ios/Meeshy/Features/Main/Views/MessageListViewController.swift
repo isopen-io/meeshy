@@ -542,18 +542,11 @@ final class MessageListViewController: UIViewController {
                 .filter { $0 is UIContextMenuInteraction }
                 .forEach { cell.removeInteraction($0) }
 
-            // Bulles avec piste temporelle (audio/vidéo) → swipe résistant :
-            // le curseur de lecture se manipule sans déclencher Répondre/
-            // Transférer, sauf swipe horizontal franc (seuil relevé).
-            let hasTimebasedMedia = message.attachments.contains {
-                AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
-            }
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
                     messageId: messageId,
                     messageCreatedAt: message.createdAt,
-                    resistance: hasTimebasedMedia ? .resistant : .normal,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
                     onLongPress: { longPressHandler?(messageId) }

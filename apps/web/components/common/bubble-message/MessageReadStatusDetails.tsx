@@ -6,12 +6,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMessageStatusDetails, type MessageStatusEntry } from '@/hooks/queries/use-message-status-details';
-import { getInitials } from '@/utils/initials';
 
 interface MessageReadStatusDetailsProps {
   messageId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map(w => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 }
 
 function formatTime(dateStr: string | null): string {

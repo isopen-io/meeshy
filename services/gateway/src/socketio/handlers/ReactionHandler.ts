@@ -15,7 +15,6 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -35,7 +34,6 @@ export class ReactionHandler {
   private reactionService: ReactionService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
-  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ReactionHandlerDependencies) {
     this.io = deps.io;
@@ -78,16 +76,6 @@ export class ReactionHandler {
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
-      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
-      if (!rateLimitAllowed) {
-        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
-        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
-        socket.emit(SERVER_EVENTS.ERROR, {
-          message: `Too many reactions. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
-        });
-        return;
-      }
-
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {
         const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
@@ -97,13 +85,13 @@ export class ReactionHandler {
 
       const reactionService = this.reactionService;
 
-      const addResult = await reactionService.addReaction({
+      const reaction = await reactionService.addReaction({
         messageId: validated.messageId,
         emoji: validated.emoji,
         participantId
       });
 
-      if (!addResult) {
+      if (!reaction) {
         const errorResponse: SocketIOResponse<unknown> = {
           success: false,
           error: 'Failed to add reaction'
@@ -111,8 +99,6 @@ export class ReactionHandler {
         if (callback) callback(errorResponse);
         return;
       }
-
-      const { reaction, replacedEmojis } = addResult;
 
       const message = await this.prisma.message.findUnique({
         where: { id: validated.messageId },
@@ -133,28 +119,12 @@ export class ReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      // Fire-and-forget post-success side-effects so errors in broadcast or
-      // notification do not confuse the already-confirmed client response.
+      // Broadcaster l'événement
       if (message) {
-        // Single-reaction-per-user swap: tell other clients the previous emoji
-        // is gone before announcing the new one (order is cosmetic — the two
-        // events target different emojis and merge independently client-side).
-        for (const removedEmoji of replacedEmojis) {
-          reactionService.createUpdateEvent(
-            validated.messageId,
-            removedEmoji,
-            'remove',
-            participantId,
-            message.conversationId
-          )
-            .then(removeEvent => this._broadcastReactionEventWithConversationId(message.conversationId, removeEvent, SERVER_EVENTS.REACTION_REMOVED))
-            .catch(err => logger.error('reaction:add replaced-emoji broadcast failed', { error: err, conversationId: message.conversationId }));
-        }
-        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
-          .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
+        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED);
       }
-      // _createReactionNotification handles errors internally; void to be explicit.
-      void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
+
+      await this._createReactionNotification(validated.messageId, validated.emoji, userId, isAnonymous, reaction.id);
     } catch (error: unknown) {
       logger.error('reaction:add failed', { error });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -196,16 +166,6 @@ export class ReactionHandler {
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
-      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_REMOVE);
-      if (!rateLimitAllowed) {
-        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.REACTION_REMOVE);
-        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
-        socket.emit(SERVER_EVENTS.ERROR, {
-          message: `Too many reaction changes. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
-        });
-        return;
-      }
-
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {
         const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
@@ -222,13 +182,11 @@ export class ReactionHandler {
       });
 
       if (!removed) {
-        // Idempotent: the reaction is already absent — the caller's desired
-        // end-state is achieved. Reply success (no broadcast, nothing changed)
-        // instead of an error, which the client would treat as a failed un-react
-        // and roll the optimistic removal back, re-showing a reaction that is
-        // gone. Mirrors the idempotent REST DELETE (R-GW2) and the add path's
-        // P2002 handling.
-        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
+        const errorResponse: SocketIOResponse<unknown> = {
+          success: false,
+          error: 'Reaction not found'
+        };
+        if (callback) callback(errorResponse);
         return;
       }
 
@@ -252,8 +210,7 @@ export class ReactionHandler {
       if (callback) callback(successResponse);
 
       if (message) {
-        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
-          .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
+        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED);
       }
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
@@ -289,12 +246,6 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-
-      const syncAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_SYNC);
-      if (!syncAllowed) {
-        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
-        return;
-      }
 
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, messageId);
       if (!participantId) {

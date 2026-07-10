@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -14,8 +14,6 @@ import { Label } from '@/components/ui/label';
 import { Sparkles, Mail, CheckCircle, ArrowLeft, Clock, RefreshCw, AlertTriangle, Shield } from 'lucide-react';
 import { usePasswordResetStore } from '@/stores/password-reset-store';
 import { safeInternalPath } from '@/utils/safe-redirect';
-import { isValidEmail } from '@meeshy/shared/utils/email-validator';
-import { formatDuration } from '@/utils/audio-formatters';
 
 // Constants
 const MAGIC_LINK_EXPIRY_SECONDS = 600; // 10 minutes
@@ -146,6 +144,16 @@ function MagicLinkPageContent() {
 
     return () => clearInterval(timer);
   }, [isEmailSent, countdown]);
+
+  const formatCountdown = useCallback((seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, []);
+
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -558,7 +566,7 @@ function MagicLinkPageContent() {
                     <span>{t('magicLink.checkEmail.linkExpired', 'The link has expired')}</span>
                   ) : (
                     <span>
-                      {t('magicLink.checkEmail.expiresIn', { time: formatDuration(countdown) })}
+                      {t('magicLink.checkEmail.expiresIn', { time: formatCountdown(countdown) })}
                     </span>
                   )}
                 </div>

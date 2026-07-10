@@ -12,7 +12,7 @@ import type { AudioEffectType } from '@meeshy/shared/types/video-call';
 // Mock useI18n hook
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string, paramsOrFallback?: Record<string, unknown> | string) => {
+    t: (key: string) => {
       const translations: Record<string, string> = {
         'effects.voice-coder.name': 'Voice Coder',
         'effects.voice-coder.description': 'Auto-tune your voice',
@@ -29,13 +29,8 @@ jest.mock('@/hooks/useI18n', () => ({
         'status.on': 'ON',
         'status.off': 'OFF',
         'configure': 'Configure',
-        'configureEffect': 'Configure the {name} effect',
       };
-      const value = translations[key] || key;
-      const params = typeof paramsOrFallback === 'object' ? paramsOrFallback : undefined;
-      return params
-        ? value.replace(/\{(\w+)\}/g, (match, paramKey) => String(params[paramKey] ?? match))
-        : value;
+      return translations[key] || key;
     },
   }),
 }));
@@ -347,14 +342,14 @@ describe('AudioEffectTile', () => {
     it('should have accessible button for configure', () => {
       render(<AudioEffectTile {...defaultProps} />);
 
-      const configButton = screen.getByText('Configure').closest('button');
+      const configButton = screen.getByRole('button', { name: /configure/i });
       expect(configButton).toBeInTheDocument();
     });
 
-    it('should expose the tile as a focusable button with a descriptive accessible name', () => {
+    it('should expose the tile as a focusable button named after the effect', () => {
       render(<AudioEffectTile {...defaultProps} />);
 
-      const tile = screen.getByRole('button', { name: 'Configure the Voice Coder effect' });
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
       expect(tile).toHaveAttribute('tabindex', '0');
     });
   });
@@ -371,7 +366,7 @@ describe('AudioEffectTile', () => {
     it('should open configuration dialog on Enter', () => {
       renderWithConfig();
 
-      const tile = screen.getByRole('button', { name: 'Configure the Voice Coder effect' });
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
       fireEvent.keyDown(tile, { key: 'Enter' });
 
       expect(screen.getByTestId('dialog')).toBeInTheDocument();
@@ -380,7 +375,7 @@ describe('AudioEffectTile', () => {
     it('should open configuration dialog on Space', () => {
       renderWithConfig();
 
-      const tile = screen.getByRole('button', { name: 'Configure the Voice Coder effect' });
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
       fireEvent.keyDown(tile, { key: ' ' });
 
       expect(screen.getByTestId('dialog')).toBeInTheDocument();
@@ -389,7 +384,7 @@ describe('AudioEffectTile', () => {
     it('should prevent default scroll behavior on Space', () => {
       renderWithConfig();
 
-      const tile = screen.getByRole('button', { name: 'Configure the Voice Coder effect' });
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
       const notPrevented = fireEvent.keyDown(tile, { key: ' ' });
 
       expect(notPrevented).toBe(false);
@@ -398,7 +393,7 @@ describe('AudioEffectTile', () => {
     it('should not prevent default on Enter', () => {
       renderWithConfig();
 
-      const tile = screen.getByRole('button', { name: 'Configure the Voice Coder effect' });
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
       const notPrevented = fireEvent.keyDown(tile, { key: 'Enter' });
 
       expect(notPrevented).toBe(true);
@@ -407,7 +402,7 @@ describe('AudioEffectTile', () => {
     it('should not open configuration dialog on other keys', () => {
       renderWithConfig();
 
-      const tile = screen.getByRole('button', { name: 'Configure the Voice Coder effect' });
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
       fireEvent.keyDown(tile, { key: 'a' });
       fireEvent.keyDown(tile, { key: 'Escape' });
       fireEvent.keyDown(tile, { key: 'Tab' });

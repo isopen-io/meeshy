@@ -783,7 +783,14 @@ describe('CallStore', () => {
       removeSpy.mockRestore();
     });
 
-    it('beforeunload handler emits CALL_END when socket is connected', () => {
+    it('beforeunload handler emits CALL_END and sends beacon when socket is connected', () => {
+      const mockSendBeacon = jest.fn();
+      Object.defineProperty(navigator, 'sendBeacon', {
+        value: mockSendBeacon,
+        configurable: true,
+        writable: true,
+      });
+
       const capturedHandlers: EventListener[] = [];
       const addSpy = jest.spyOn(window, 'addEventListener').mockImplementation(
         (event: string, handler: EventListenerOrEventListenerObject) => {
@@ -794,7 +801,7 @@ describe('CallStore', () => {
       );
 
       act(() => {
-        useCallStore.getState().startHeartbeat('call-unload-end');
+        useCallStore.getState().startHeartbeat('call-beacon');
       });
 
       addSpy.mockRestore();
@@ -805,18 +812,21 @@ describe('CallStore', () => {
 
       expect(mockSocketEmit).toHaveBeenCalledWith(
         expect.stringContaining('end'),
-        { callId: 'call-unload-end', reason: 'completed' },
+        { callId: 'call-beacon', reason: 'completed' },
         expect.any(Function)
       );
+      expect(mockSendBeacon).toHaveBeenCalledWith('/api/v1/calls/call-beacon/end');
     });
 
-    it('beforeunload handler is a no-op (does not throw) when socket is not connected', () => {
-      // Regression guard: a previous sendBeacon "fallback" here pointed at a
-      // route (`POST /api/v1/calls/:callId/end`) that never existed server-side
-      // and could never carry the required Authorization header — it silently
-      // 404'd. There is no fallback anymore; disconnect cleanup relies on the
-      // gateway's grace-window path instead, so this handler should simply not
-      // throw when the socket is already gone.
+    it('beforeunload handler only sends beacon when socket is not connected', () => {
+      const mockSendBeacon = jest.fn();
+      Object.defineProperty(navigator, 'sendBeacon', {
+        value: mockSendBeacon,
+        configurable: true,
+        writable: true,
+      });
+
+      // Return disconnected socket
       mockGetSocket.mockReturnValue({ connected: false, emit: mockSocketEmit });
 
       const capturedHandlers: EventListener[] = [];
@@ -829,18 +839,55 @@ describe('CallStore', () => {
       );
 
       act(() => {
-        useCallStore.getState().startHeartbeat('call-unload-disconnected');
+        useCallStore.getState().startHeartbeat('call-beacon-only');
       });
 
       addSpy.mockRestore();
 
       expect(capturedHandlers.length).toBeGreaterThan(0);
+      capturedHandlers[capturedHandlers.length - 1](new Event('beforeunload'));
+
+      // Socket emit not called (not connected)
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+      // Beacon fallback still fires
+      expect(mockSendBeacon).toHaveBeenCalledWith('/api/v1/calls/call-beacon-only/end');
+    });
+
+    it('beforeunload handler skips sendBeacon when navigator.sendBeacon is not available', () => {
+      // Remove sendBeacon to cover the false-branch of sendBeacon availability check
+      const original = (navigator as any).sendBeacon;
+      Object.defineProperty(navigator, 'sendBeacon', {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
+
+      const capturedHandlers: EventListener[] = [];
+      const addSpy = jest.spyOn(window, 'addEventListener').mockImplementation(
+        (event: string, handler: EventListenerOrEventListenerObject) => {
+          if (event === 'beforeunload') {
+            capturedHandlers.push(handler as EventListener);
+          }
+        }
+      );
+
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-no-beacon');
+      });
+
+      addSpy.mockRestore();
+
+      // Should not throw even without sendBeacon
       expect(() => {
         capturedHandlers[capturedHandlers.length - 1](new Event('beforeunload'));
       }).not.toThrow();
 
-      // Socket emit not called (not connected)
-      expect(mockSocketEmit).not.toHaveBeenCalled();
+      // Restore
+      Object.defineProperty(navigator, 'sendBeacon', {
+        value: original,
+        configurable: true,
+        writable: true,
+      });
     });
   });
 

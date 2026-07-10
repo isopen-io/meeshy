@@ -153,11 +153,7 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     handleStoryTextMock.mockClear();
   });
 
-  it('should NOT trigger PostTranslationService.translatePost for STORY content (G2 — owned by the audience-driven service pipeline)', async () => {
-    // G2 : le `content` d'une STORY est traduit par
-    // `PostService.triggerStoryTextTranslation` (audience-driven). Le pipeline
-    // route (`translatePost`, 5 langues fixes) doublait les jobs ZMQ et créait
-    // des écritures concurrentes dans `Post.translations`.
+  it('should trigger PostTranslationService.translatePost when type=STORY with non-empty content', async () => {
     const createdPost = buildCreatedPost({ type: 'STORY', content: 'Hello story caption' });
     const app = await buildApp(buildMockPostService(createdPost));
 
@@ -168,7 +164,13 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     });
 
     expect(res.statusCode).toBe(201);
-    expect(translatePostMock).not.toHaveBeenCalled();
+    expect(translatePostMock).toHaveBeenCalledTimes(1);
+    expect(translatePostMock).toHaveBeenCalledWith(
+      'post-id-123',
+      'Hello story caption',
+      null,
+      'user-id-abc',
+    );
 
     await app.close();
   });
@@ -227,11 +229,12 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     await app.close();
   });
 
-  it('should not double-translate: the route triggers NEITHER story pipeline (G2)', async () => {
-    // G2 : la route ne déclenche AUCUN des deux services pour une STORY —
-    // le `content` appartient à `PostService.triggerStoryTextTranslation`
-    // (audience-driven, déclenché DANS le service à la création) et les
-    // textObjects à StoryTextObjectTranslationService (déclenché par ZMQ).
+  it('should not double-translate: PostTranslationService and StoryTextObjectTranslationService run independently', async () => {
+    // PostTranslationService handles top-level content.
+    // StoryTextObjectTranslationService handles storyEffects.textObjects[n].translations.
+    // Neither route handler calls the other — they are triggered by separate ZMQ events.
+    // This test asserts that creating a STORY with content triggers translatePost exactly once
+    // and does NOT trigger handleTranslationCompleted (which is only called from ZMQ events).
     const createdPost = buildCreatedPost({ type: 'STORY', content: 'Caption for story' });
     const app = await buildApp(buildMockPostService(createdPost));
 
@@ -246,7 +249,9 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     });
 
     expect(res.statusCode).toBe(201);
-    expect(translatePostMock).not.toHaveBeenCalled();
+    // PostTranslationService.translatePost called exactly once for the caption
+    expect(translatePostMock).toHaveBeenCalledTimes(1);
+    // StoryTextObjectTranslationService is NOT invoked from the HTTP route — only from ZMQ
     expect(handleStoryTextMock).not.toHaveBeenCalled();
 
     await app.close();

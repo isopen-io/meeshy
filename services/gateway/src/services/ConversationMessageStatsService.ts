@@ -81,14 +81,8 @@ export class ConversationMessageStatsService {
     this.cache.set(conversationId, { data, expiresAt: Date.now() + this.ttlMs });
   }
 
-  // NOTE: scalar counters (totalMessages, totalWords, attachment counts, …) are
-  // written with atomic { increment } / { decrement } across onNewMessage /
-  // onMessageEdited / onMessageDeleted so concurrent edits/deletes never clobber
-  // one another (no lost update). The DB-level Math.max(0, …) floor is intentionally
-  // dropped in favour of atomicity: balanced operations never go negative, and any
-  // residual drift on the denormalized JSON fields (participantStats, dailyActivity,
-  // …), which still use non-atomic read-modify-write, is corrected by periodic
-  // recompute().
+  // NOTE: JSON fields (participantStats, dailyActivity, etc.) use read-modify-write
+  // which is not atomic under concurrent writes. Periodic recompute() corrects drift.
   async onNewMessage(
     prisma: PrismaClient,
     conversationId: string,
@@ -223,11 +217,14 @@ export class ConversationMessageStatsService {
       participantStats[senderId] = entry;
     }
 
+    const newTotalWords = Math.max(0, existing.totalWords + wordDiff);
+    const newTotalChars = Math.max(0, existing.totalCharacters + charDiff);
+
     await prisma.conversationMessageStats.update({
       where: { conversationId },
       data: {
-        totalWords: { increment: wordDiff },
-        totalCharacters: { increment: charDiff },
+        totalWords: newTotalWords,
+        totalCharacters: newTotalChars,
         participantStats: participantStats as unknown as Prisma.InputJsonValue,
       },
     });
@@ -279,18 +276,19 @@ export class ConversationMessageStatsService {
     }
 
     const updateData: Record<string, unknown> = {
-      totalMessages: { decrement: 1 },
-      totalWords: { decrement: words },
-      totalCharacters: { decrement: chars },
+      totalMessages: Math.max(0, existing.totalMessages - 1),
+      totalWords: Math.max(0, existing.totalWords - words),
+      totalCharacters: Math.max(0, existing.totalCharacters - chars),
       participantStats: participantStats as unknown as Prisma.InputJsonValue,
     };
 
     if (isTextMessage) {
-      updateData.textMessages = { decrement: 1 };
+      updateData.textMessages = Math.max(0, existing.textMessages - 1);
     }
 
     for (const [field, count] of Object.entries(decrements)) {
-      updateData[field] = { decrement: count };
+      const currentValue = (existing as Record<string, unknown>)[field];
+      updateData[field] = Math.max(0, (typeof currentValue === 'number' ? currentValue : 0) - count);
     }
 
     await prisma.conversationMessageStats.update({

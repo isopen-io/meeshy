@@ -9,7 +9,6 @@ import {
   FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { truncateFilename } from '@/utils/truncate';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { useI18n } from '@/hooks/useI18n';
 
@@ -42,10 +41,17 @@ export const PDFViewerWrapper: React.FC<PDFViewerWrapperProps> = ({
   };
 
   const handleOpenInNewTab = () => {
-    window.open(attachmentFileUrl, '_blank', 'noopener,noreferrer');
+    window.open(attachmentFileUrl, '_blank');
   };
 
   // Truncate filename for mobile
+  const truncateFilename = (filename: string, maxLength: number = 32): string => {
+    if (filename.length <= maxLength) return filename;
+    const ext = filename.split('.').pop() || '';
+    const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
+    const truncatedName = nameWithoutExt.substring(0, maxLength - ext.length - 4) + '...';
+    return `${truncatedName}.${ext}`;
+  };
 
   return (
     <div

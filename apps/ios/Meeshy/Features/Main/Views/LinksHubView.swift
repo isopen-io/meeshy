@@ -73,7 +73,6 @@ struct LinksHubView: View {
         .sheet(isPresented: $showCreateAffiliate) {
             AffiliateCreateView { _ in }
                 .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
         }
     }
 

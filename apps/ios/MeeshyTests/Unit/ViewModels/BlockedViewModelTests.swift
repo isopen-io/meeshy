@@ -87,28 +87,32 @@ final class BlockedViewModelTests: XCTestCase {
 
     // MARK: - unblock
 
-    /// R6-4 incr.2 — unblock passe désormais par l'outbox (durable offline),
-    /// pas par l'appel REST direct (online-only, perdu offline) : retrait
-    /// optimiste de la liste + flip de la blocklist canonique
-    /// (`setBlockedOptimistic`), SANS toucher `unblockUser` (le dispatcher
-    /// outbox possède le DELETE).
-    func test_unblock_routesThroughOutbox_notDirectRESTCall() async {
+    func test_unblock_success_removesFromList() async {
         let (sut, mock) = makeSUT()
         let users = [Self.makeBlockedUser(id: "b1"), Self.makeBlockedUser(id: "b2")]
         mock.listBlockedUsersResult = .success(users)
         await sut.loadBlocked()
-        mock.blockedUserIds = ["b1", "b2"]
 
+        mock.unblockUserResult = .success(())
         await sut.unblock(userId: "b1")
 
         XCTAssertEqual(sut.blockedUsers.count, 1)
         XCTAssertEqual(sut.blockedUsers[0].id, "b2")
-        XCTAssertEqual(mock.unblockUserCallCount, 0,
-            "unblock must NOT hit the direct REST path — the outbox dispatcher owns it")
-        XCTAssertEqual(mock.setBlockedOptimisticCallCount, 1,
-            "unblock must flip the canonical blocklist optimistically")
-        XCTAssertFalse(mock.isBlocked(userId: "b1"),
-            "the canonical blocklist must reflect the optimistic unblock")
+        XCTAssertEqual(mock.unblockUserCallCount, 1)
+        XCTAssertEqual(mock.lastUnblockUserId, "b1")
+    }
+
+    func test_unblock_error_rollsBack() async {
+        let (sut, mock) = makeSUT()
+        let users = [Self.makeBlockedUser(id: "b1"), Self.makeBlockedUser(id: "b2")]
+        mock.listBlockedUsersResult = .success(users)
+        await sut.loadBlocked()
+
+        mock.unblockUserResult = .failure(NSError(domain: "test", code: 500))
+        await sut.unblock(userId: "b1")
+
+        XCTAssertEqual(sut.blockedUsers.count, 2)
+        XCTAssertEqual(sut.blockedUsers[0].id, "b1")
     }
 
     // MARK: - initial state

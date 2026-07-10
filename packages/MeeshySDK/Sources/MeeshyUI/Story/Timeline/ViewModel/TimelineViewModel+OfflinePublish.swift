@@ -159,36 +159,15 @@ extension TimelineViewModel {
             }
         }
 
-        // Serialize the project as a single-element `[StorySlide]` so the queue
-        // can replay it through the ONE executor (`StoryViewModel
-        // .executeQueuedPublish`), which decodes `[StorySlide].self`. Encoding a
-        // bare `TimelineProject` here would fail that decode → the composed story
-        // is dropped as unrecoverable. `TimelineProject.apply` carries the
-        // mediaObjects / audioPlayerObjects / textObjects / clipTransitions onto
-        // the slide so no timeline content is lost on reconnect.
-        //
-        // SCOPE LIMITATION (F5): the slide is seeded FRESH (`StorySlide(id:)`),
-        // not from the originally-edited `StorySlide`, because `TimelineViewModel`
-        // only retains the derived `TimelineProject` — the source slide is not
-        // reachable at this call site. `TimelineProject` models ONLY the timeline
-        // fields (mediaObjects / audio / text / clipTransitions / duration), so a
-        // timeline slide carrying non-timeline effects (`effects.background`,
-        // `filter`, `drawingStrokes`, `stickers`, slide `content`) loses them on
-        // offline flush. This is NO WORSE than pre-WS5.2 (which THREW and dropped
-        // the whole story); the proper fix threads the source slide into the
-        // composer→timeline boot so it can be seeded here. The encode/decode of
-        // the timeline fields themselves (mediaObjects / audio / text /
-        // clipTransitions) is round-trip-pinned by
-        // `TimelineOfflinePayloadSchemaTests`.
+        // Serialize the full TimelineProject as JSON so the queue can replay it
+        // with the same media + transitions + keyframes + text on reconnect.
         let payloadJSON: String = {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
-            var slide = StorySlide(id: project.slideId)
-            project.apply(to: &slide)
-            guard let data = try? encoder.encode([slide]),
+            guard let data = try? encoder.encode(project),
                   let json = String(data: data, encoding: .utf8) else {
                 offlinePublishLogger.error(
-                    "Failed to serialise timeline slide for offline queue — falling back to empty payload"
+                    "Failed to serialise TimelineProject for offline queue — falling back to empty payload"
                 )
                 return "{}"
             }

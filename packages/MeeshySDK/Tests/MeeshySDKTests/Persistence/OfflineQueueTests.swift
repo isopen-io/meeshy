@@ -1,6 +1,5 @@
 import XCTest
 import GRDB
-import Combine
 @testable import MeeshySDK
 
 final class OfflineQueueTests: XCTestCase {
@@ -474,57 +473,6 @@ final class OfflineQueueTests: XCTestCase {
 
     /// Reads back the single persisted `OfflineQueueItem` for a given
     /// `clientMessageId` by decoding the matching `OutboxRecord` payloads.
-    /// T11 edit-into-send merge must PRESERVE the pending visual media
-    /// (`localMediaPaths`). Editing the caption of an offline photo/video message
-    /// BEFORE it flushes rebuilds the send item — dropping the media there sends
-    /// the message with NO images/videos (silent data loss).
-    func test_enqueueEdit_mergingIntoPendingSend_preservesLocalMediaPaths() async throws {
-        let cid = "cid_\(UUID().uuidString.lowercased())"
-        let media = ["conv-1/0.jpg", "conv-1/1.mp4"]
-        try await queue.enqueue(OfflineQueueItem(
-            conversationId: "conv-1",
-            content: "original caption",
-            clientMessageId: cid,
-            attachmentKinds: [AttachmentKind.image.rawValue, AttachmentKind.video.rawValue],
-            localMediaPaths: media
-        ))
-
-        try await queue.enqueueEdit(OfflineEditPayload(
-            messageId: cid, clientMessageId: cid,
-            content: "edited caption", conversationId: "conv-1"
-        ))
-
-        let items = try await readBackItems(forClientMessageId: cid)
-        XCTAssertEqual(items.count, 1, "the edit must coalesce into the pending send (exactly one row)")
-        let merged = try XCTUnwrap(items.first)
-        XCTAssertEqual(merged.content, "edited caption", "the edit's content must win")
-        XCTAssertEqual(merged.localMediaPaths, media,
-            "the pending images/videos must survive the caption edit — else they are silently lost on flush")
-    }
-
-    /// Cancelling a pending media send (delete-before-flush) must reclaim its
-    /// relocated `pending-media/` file. Otherwise the row vanishes but the file
-    /// orphans under Documents/ forever (disk leak) — parity with cancelCreatePost.
-    func test_enqueueDelete_cancellingPendingMediaSend_sweepsOrphanedFile() async throws {
-        let cid = "cid_\(UUID().uuidString.lowercased())"
-        let result = try await queue.enqueueMedia(
-            sourceMediaURLs: [try makeTempMediaFile(ext: "jpg")],
-            kinds: [AttachmentKind.image.rawValue],
-            conversationId: "conv-1", content: "photo", clientMessageId: cid
-        )
-        let abs = OfflineQueue.absoluteMediaPath(forStored: result.localMediaPaths[0])
-        XCTAssertTrue(FileManager.default.fileExists(atPath: abs), "precondition: media file relocated")
-
-        // User deletes the message before it flushes → the send is cancelled locally.
-        try await queue.enqueueDelete(OfflineDeletePayload(
-            messageId: cid, clientMessageId: cid, conversationId: "conv-1"))
-
-        let items = try await readBackItems(forClientMessageId: cid)
-        XCTAssertEqual(items.count, 0, "the cancelled send must be removed from the outbox")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: abs),
-            "the cancelled send's pending-media file must be swept — else it orphans forever")
-    }
-
     private func readBackItems(forClientMessageId cmid: String) async throws -> [OfflineQueueItem] {
         let maybePool = await queue.outboxPoolForTesting
         let pool = try XCTUnwrap(maybePool)
@@ -604,35 +552,6 @@ final class OfflineQueueTests: XCTestCase {
             "an audio-orphan row must be terminal (.exhausted, GC-eligible), not .failed")
     }
 
-    /// Same crash window as audio, but for a VISUAL media send: the copied
-    /// `pending-media/` bytes are gone after a crash. bootRecovery must detect
-    /// the missing file and mark the row `.exhausted` — not leave it `.pending`
-    /// so the dispatcher burns 5 upload attempts (or, if some files survived,
-    /// silently sends a PARTIAL message with fewer images than composed).
-    func test_bootRecovery_mediaFileMissing_marksExhaustedNotFailed() async throws {
-        let maybePool = await queue.outboxPoolForTesting
-        let pool = try XCTUnwrap(maybePool)
-        let cid = "cid_bootmedia_\(UUID().uuidString.lowercased())"
-        let result = try await queue.enqueueMedia(
-            sourceMediaURLs: [try makeTempMediaFile(ext: "jpg")],
-            kinds: [AttachmentKind.image.rawValue],
-            conversationId: "conv-1", content: nil, clientMessageId: cid
-        )
-        for path in result.localMediaPaths {
-            try? FileManager.default.removeItem(
-                atPath: OfflineQueue.absoluteMediaPath(forStored: path))
-        }
-
-        let report = try await queue.bootRecovery()
-
-        XCTAssertEqual(report.mediaOrphanFailed, 1, "the missing-media row must be swept")
-        let status = try await pool.read { db in
-            try OutboxRecord.filter(Column("clientMessageId") == cid).fetchOne(db)?.status
-        }
-        XCTAssertEqual(status, .exhausted,
-            "a media-orphan row must be terminal (.exhausted, GC-eligible), not .failed")
-    }
-
     /// A copy failure in enqueueAudios (source bytes unreadable) is permanent —
     /// the row must end `.exhausted`, not `.failed`.
     func test_enqueueAudios_copyFailure_marksExhaustedNotFailed_andThrows() async throws {
@@ -696,80 +615,5 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertNil(item.localAudioPaths)
         XCTAssertNil(item.localAudioPath)
         XCTAssertEqual(item.content, "hi")
-    }
-
-    // MARK: - Near-capacity publisher
-
-    func test_nearCapacityPublisher_notFiredBelowThreshold() async throws {
-        // Capacity = 500, threshold = 400. Enqueue 399 items — not near capacity.
-        XCTAssertFalse(queue.isNearCapacity)
-
-        for i in 0..<10 {
-            let item = OfflineQueueItem(conversationId: "conv-nc", content: "msg-\(i)")
-            try await queue.enqueue(item)
-        }
-
-        XCTAssertFalse(queue.isNearCapacity,
-            "isNearCapacity must remain false well below the 400-item threshold")
-    }
-
-    func test_nearCapacityPublisher_firesAtThreshold() async throws {
-        // Enqueue exactly 400 items (the threshold = 500 * 4/5) and verify
-        // that isNearCapacity becomes true.
-        let threshold = 400
-        for i in 0..<threshold {
-            let item = OfflineQueueItem(conversationId: "conv-nc2", content: "msg-\(i)")
-            try await queue.enqueue(item)
-        }
-
-        XCTAssertTrue(queue.isNearCapacity,
-            "isNearCapacity must be true once \(threshold) items are queued")
-    }
-
-    func test_nearCapacityPublisher_emitsValueViaPublisher() async throws {
-        var received: [Bool] = []
-        var cancellable: AnyCancellable?
-        let expectation = XCTestExpectation(description: "near-capacity event")
-        expectation.expectedFulfillmentCount = 1
-
-        cancellable = queue.nearCapacityPublisher
-            .filter { $0 }
-            .sink { value in
-                received.append(value)
-                expectation.fulfill()
-            }
-
-        let threshold = 400
-        for i in 0..<threshold {
-            let item = OfflineQueueItem(conversationId: "conv-nc3", content: "msg-\(i)")
-            try await queue.enqueue(item)
-        }
-
-        await fulfillment(of: [expectation], timeout: 5)
-        XCTAssertTrue(received.contains(true), "publisher must emit true when threshold is reached")
-        cancellable?.cancel()
-    }
-
-    func test_isNearCapacity_synchronousReadMatchesPublisher() async throws {
-        XCTAssertFalse(queue.isNearCapacity, "initial state must be false")
-
-        let threshold = 400
-        for i in 0..<threshold {
-            let item = OfflineQueueItem(conversationId: "conv-nc4", content: "msg-\(i)")
-            try await queue.enqueue(item)
-        }
-
-        let synchronousValue = queue.isNearCapacity
-        let publishedValue = await withCheckedContinuation { continuation in
-            var c: AnyCancellable?
-            c = queue.nearCapacityPublisher
-                .first()
-                .sink { v in
-                    continuation.resume(returning: v)
-                    c?.cancel()
-                }
-        }
-        XCTAssertEqual(synchronousValue, publishedValue,
-            "synchronous isNearCapacity and publisher's current value must agree")
     }
 }

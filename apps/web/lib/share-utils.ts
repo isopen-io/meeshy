@@ -3,7 +3,6 @@
  */
 
 import { buildApiUrl } from './config';
-import { copyToClipboard } from './clipboard';
 
 export interface ShareLinkOptions {
   type: 'affiliate' | 'conversation' | 'join' | 'default';
@@ -107,8 +106,8 @@ export async function shareLink(
       });
       return true;
     } else {
-      // Fallback vers la copie dans le presse-papiers (robustesse iOS/WebView via source unique)
-      await copyToClipboard(url);
+      // Fallback vers la copie dans le presse-papiers
+      await navigator.clipboard.writeText(url);
       return false; // Indique que c'est une copie, pas un partage
     }
   } catch (error) {

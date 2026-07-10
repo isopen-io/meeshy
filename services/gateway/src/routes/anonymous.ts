@@ -2,9 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
-import { SecuritySanitizer } from '../utils/sanitize';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -20,11 +18,7 @@ const joinAnonymousSchema = z.object({
   username: z.string().optional(),
   email: z.email().optional().or(z.literal('')),
   birthday: z.iso.datetime().optional().or(z.literal('')),
-  // Normalise at the write boundary: the participant `language` feeds the
-  // translation-target set (MessageTranslationService), which is keyed lowercase.
-  // Storing 'EN' / 'en-US' verbatim would inject a duplicated, never-matching NLLB
-  // target (Prisme rule #1 miss). `normalizeLanguageCode` also strips region subtags.
-  language: z.string().transform((v) => normalizeLanguageCode(v) ?? v.toLowerCase()).default('fr'),
+  language: z.string().default('fr'),
   deviceFingerprint: z.string().optional()
 });
 
@@ -216,8 +210,6 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
     try {
       const { linkId } = request.params as { linkId: string };
       const body = joinAnonymousSchema.parse(request.body);
-      const firstName = SecuritySanitizer.sanitizeText(body.firstName);
-      const lastName = SecuritySanitizer.sanitizeText(body.lastName);
       const clientIP = request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
 
 
@@ -239,19 +231,31 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // 2. Verifications de validite du lien
       if (!shareLink.isActive) {
-        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
+        return reply.status(410).send({
+          success: false,
+          message: 'Ce lien n\'est plus actif'
+        });
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expire' });
+        return reply.status(410).send({
+          success: false,
+          message: 'Ce lien a expire'
+        });
       }
 
       if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-        return sendError(reply, 410, 'LINK_MAX_USES', { message: 'Ce lien a atteint sa limite d\'utilisation' });
+        return reply.status(410).send({
+          success: false,
+          message: 'Ce lien a atteint sa limite d\'utilisation'
+        });
       }
 
       if (shareLink.maxConcurrentUsers && shareLink.currentConcurrentUsers >= shareLink.maxConcurrentUsers) {
-        return sendError(reply, 429, 'MAX_CONCURRENT_USERS', { message: 'Nombre maximum d\'utilisateurs concurrent atteint' });
+        return reply.status(429).send({
+          success: false,
+          message: 'Nombre maximum d\'utilisateurs concurrent atteint'
+        });
       }
 
       // 3. Verifications de securite/restrictions
@@ -262,12 +266,8 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Acces non autorise depuis votre region');
       }
 
-      // Verifier langues autorisees (case-insensitive : body.language est normalise
-      // lowercase, allowedLanguages peut avoir ete configure en casse mixte)
-      if (
-        shareLink.allowedLanguages.length > 0 &&
-        !shareLink.allowedLanguages.some((l) => l.toLowerCase() === body.language)
-      ) {
+      // Verifier langues autorisees
+      if (shareLink.allowedLanguages.length > 0 && !shareLink.allowedLanguages.includes(body.language)) {
         return sendForbidden(reply, 'Langue non autorisee pour ce lien');
       }
 
@@ -281,7 +281,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // 4. Verifier si un compte est requis (bloque l'acces anonyme)
       if (shareLink.requireAccount) {
-        return sendForbidden(reply, 'REQUIRES_ACCOUNT', { message: 'Un compte est requis pour rejoindre cette conversation' });
+        return reply.status(403).send({
+          success: false,
+          message: 'Un compte est requis pour rejoindre cette conversation',
+          requiresAccount: true
+        });
       }
 
       // 5. Verifier si l'email est requis
@@ -301,10 +305,10 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         if (!body.username || body.username.trim() === '') {
           return sendBadRequest(reply, 'Le nom d\'utilisateur est obligatoire pour rejoindre cette conversation');
         }
-        username = SecuritySanitizer.sanitizeUsername(body.username.trim());
+        username = body.username.trim();
       } else {
         // Si l'username n'est pas requis, generer automatiquement
-        username = body.username ? SecuritySanitizer.sanitizeUsername(body.username) : generateNickname(firstName, lastName);
+        username = body.username?.trim() || generateNickname(body.firstName, body.lastName);
       }
 
       // 6. Verifier que le username n'est pas deja pris par un utilisateur enregistre
@@ -317,7 +321,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       if (existingUser) {
         // Generer un username alternatif qui ne soit pas pris par un utilisateur enregistre
-        let suggestedUsername = generateNickname(firstName, lastName);
+        let suggestedUsername = generateNickname(body.firstName, body.lastName);
         let counter = 1;
 
         // Verifier si le username suggere est deja pris par un utilisateur enregistre
@@ -334,11 +338,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           }
 
           // Ajouter un suffixe numerique
-          suggestedUsername = `${generateNickname(firstName, lastName)}${counter}`;
+          suggestedUsername = `${generateNickname(body.firstName, body.lastName)}${counter}`;
           counter++;
         }
 
-        return sendError(reply, 409, 'USERNAME_TAKEN', { message: 'Ce nom d\'utilisateur est deja utilise par un membre du site' });
+        return reply.status(409).send({
+          success: false,
+          message: 'Ce nom d\'utilisateur est deja utilise par un membre du site',
+          suggestedNickname: suggestedUsername
+        });
       }
 
       // 7. Verifier que le username n'est pas deja pris dans cette conversation
@@ -353,7 +361,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       if (existingParticipant) {
         // Generer un username alternatif unique pour cette conversation
-        let suggestedUsername = generateNickname(firstName, lastName);
+        let suggestedUsername = generateNickname(body.firstName, body.lastName);
         let counter = 1;
 
         // Verifier si le username suggere est deja pris et generer une alternative
@@ -381,11 +389,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           }
 
           // Ajouter un suffixe numerique
-          suggestedUsername = `${generateNickname(firstName, lastName)}${counter}`;
+          suggestedUsername = `${generateNickname(body.firstName, body.lastName)}${counter}`;
           counter++;
         }
 
-        return sendError(reply, 409, 'USERNAME_TAKEN_IN_CONVERSATION', { message: 'Ce nom d\'utilisateur est deja utilise dans cette conversation' });
+        return reply.status(409).send({
+          success: false,
+          message: 'Ce nom d\'utilisateur est deja utilise dans cette conversation',
+          suggestedNickname: suggestedUsername
+        });
       }
 
       // 8. Generer le sessionToken unique
@@ -423,8 +435,8 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
               connectedAt: new Date()
             },
             profile: {
-              firstName: firstName,
-              lastName: lastName,
+              firstName: body.firstName,
+              lastName: body.lastName,
               username: username,
               email: body.email || null,
               birthday: body.birthday ? new Date(body.birthday) : null
@@ -585,15 +597,24 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       }) : null;
 
       if (!shareLink) {
-        return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
+        return reply.status(410).send({
+          success: false,
+          message: 'Le lien a ete desactive'
+        });
       }
 
       if (!shareLink.isActive) {
-        return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
+        return reply.status(410).send({
+          success: false,
+          message: 'Le lien a ete desactive'
+        });
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Le lien a expire' });
+        return reply.status(410).send({
+          success: false,
+          message: 'Le lien a expire'
+        });
       }
 
       await fastify.prisma.participant.update({
@@ -875,15 +896,24 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // Verifications de base
       if (!shareLink.isActive) {
-        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
+        return reply.status(410).send({
+          success: false,
+          message: 'Ce lien n\'est plus actif'
+        });
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expire' });
+        return reply.status(410).send({
+          success: false,
+          message: 'Ce lien a expire'
+        });
       }
 
       if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-        return sendError(reply, 410, 'LINK_MAX_USES', { message: 'Ce lien a atteint sa limite d\'utilisation' });
+        return reply.status(410).send({
+          success: false,
+          message: 'Ce lien a atteint sa limite d\'utilisation'
+        });
       }
 
       // Recuperer les statistiques de la conversation
@@ -927,12 +957,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       allActiveParticipants.forEach(p => {
         if (p.type === 'user' && p.user) {
-          // Lowercase so 'en'/'EN' from legacy mixed-case rows count once (spokenLanguages stat)
-          if (p.user.systemLanguage) languageSet.add(p.user.systemLanguage.toLowerCase());
-          if (p.user.regionalLanguage) languageSet.add(p.user.regionalLanguage.toLowerCase());
-          if (p.user.customDestinationLanguage) languageSet.add(p.user.customDestinationLanguage.toLowerCase());
+          if (p.user.systemLanguage) languageSet.add(p.user.systemLanguage);
+          if (p.user.regionalLanguage) languageSet.add(p.user.regionalLanguage);
+          if (p.user.customDestinationLanguage) languageSet.add(p.user.customDestinationLanguage);
         } else {
-          if (p.language) languageSet.add(p.language.toLowerCase());
+          if (p.language) languageSet.add(p.language);
         }
       });
 

@@ -12,7 +12,6 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.socket.RealtimeSessionCoordinator
 import javax.inject.Inject
 
 data class AuthUiState(
@@ -29,14 +28,12 @@ data class AuthUiState(
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val realtimeCoordinator: RealtimeSessionCoordinator,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AuthUiState(isAuthenticated = authRepository.isAuthenticated))
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
 
     init {
-        realtimeCoordinator.onAuthenticatedChanged(authRepository.isAuthenticated)
         if (authRepository.isAuthenticated) {
             viewModelScope.launch { authRepository.restoreSession() }
         }
@@ -59,9 +56,6 @@ class AuthViewModel @Inject constructor(
         _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
         viewModelScope.launch {
             val result = authRepository.login(current.username.trim(), current.password)
-            if (result is NetworkResult.Success) {
-                realtimeCoordinator.onAuthenticatedChanged(true)
-            }
             _state.update {
                 when (result) {
                     is NetworkResult.Success -> it.copy(isSubmitting = false, isAuthenticated = true)
@@ -73,7 +67,6 @@ class AuthViewModel @Inject constructor(
 
     fun logout() {
         authRepository.logout()
-        realtimeCoordinator.onAuthenticatedChanged(false)
         _state.value = AuthUiState()
     }
 }

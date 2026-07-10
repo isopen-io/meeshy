@@ -332,17 +332,8 @@ export function AgentGlobalConfigTab() {
                   <Badge
                     key={type}
                     variant={active ? 'default' : 'outline'}
-                    className="cursor-pointer select-none focus-visible:outline-none"
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={active}
+                    className="cursor-pointer select-none"
                     onClick={() => toggleConversationType(type)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        toggleConversationType(type);
-                      }
-                    }}
                   >
                     {fTypeLabel(type)}
                   </Badge>

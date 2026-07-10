@@ -44,17 +44,8 @@ export const ConversationGroup = memo(function ConversationGroup({
       {/* Header de section */}
       {shouldShowHeader && (
         <div
-          role="button"
-          tabIndex={0}
-          aria-expanded={!isCollapsed}
+          className="flex items-center gap-2 px-2 py-1.5 mb-1 cursor-pointer hover:bg-accent/50 rounded-md transition-colors"
           onClick={handleToggle}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleToggle();
-            }
-          }}
-          className="flex items-center gap-2 px-2 py-1.5 mb-1 cursor-pointer hover:bg-accent/50 rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
         >
           {/* Chevron pour indiquer si la section est ouverte ou fermée */}
           {isCollapsed ? (

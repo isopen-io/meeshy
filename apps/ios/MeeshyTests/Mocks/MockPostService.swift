@@ -92,7 +92,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var createStoryCallCount = 0
     var lastCreateStoryContent: String?
     var lastCreateStoryRepostOfId: String?
-    var lastCreateStoryOriginalLanguage: String?
 
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
@@ -265,7 +264,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         createStoryCallCount += 1
         lastCreateStoryContent = content
         lastCreateStoryRepostOfId = repostOfId
-        lastCreateStoryOriginalLanguage = originalLanguage
         return try createStoryResult.get()
     }
 
@@ -434,7 +432,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         createStoryCallCount = 0
         lastCreateStoryContent = nil
         lastCreateStoryRepostOfId = nil
-        lastCreateStoryOriginalLanguage = nil
 
         createWithTypeResult = .success(stubPost)
         createWithTypeCallCount = 0

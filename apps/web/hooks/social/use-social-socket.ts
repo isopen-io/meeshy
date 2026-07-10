@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
@@ -26,7 +26,6 @@ import type {
   StoryCreatedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
-  StoryDeletedEventData,
   StatusCreatedEventData,
   StatusUpdatedEventData,
   StatusDeletedEventData,
@@ -57,7 +56,6 @@ export interface UseSocialSocketOptions {
   onStoryCreated?: (data: StoryCreatedEventData) => void;
   onStoryViewed?: (data: StoryViewedEventData) => void;
   onStoryReacted?: (data: StoryReactedEventData) => void;
-  onStoryDeleted?: (data: StoryDeletedEventData) => void;
 
   /** Status events */
   onStatusCreated?: (data: StatusCreatedEventData) => void;
@@ -104,28 +102,6 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     handlersRef.current = options;
   });
 
-  // `meeshySocketIOService.getSocket()` returns null until some other code
-  // path (a conversation route, `use-socketio-messaging`) has bootstrapped
-  // the connection at least once. A caller that mounts this hook first —
-  // e.g. landing directly on a feed route via deep link/PWA shortcut,
-  // without visiting a conversation route in the same session — would
-  // otherwise see `getSocket()` return null forever: the subscribe effect
-  // below bails out once on mount and nothing ever retries it. Listening for
-  // status changes lets the hook pick up the socket the moment it's created
-  // elsewhere, without polling.
-  const [socketBootTick, setSocketBootTick] = useState(0);
-  const hadSocketRef = useRef(Boolean(meeshySocketIOService.getSocket()));
-
-  useEffect(() => {
-    if (!enabled || hadSocketRef.current) return;
-    return meeshySocketIOService.onStatusChange(() => {
-      if (hadSocketRef.current) return;
-      if (!meeshySocketIOService.getSocket()) return;
-      hadSocketRef.current = true;
-      setSocketBootTick(tick => tick + 1);
-    });
-  }, [enabled]);
-
   useEffect(() => {
     if (!enabled) return;
 
@@ -133,13 +109,7 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     if (!socket) return;
 
     // ---- Subscribe to feed room ----
-    // Room membership lives on the transient server-side socket and is lost
-    // on every disconnect/reconnect (new socket.id) even though this hook
-    // stays mounted, so the join is re-emitted on `connect` too (mirrors
-    // usePostRoom's reconnect handling).
-    const subscribe = () => socket.emit(CLIENT_EVENTS.FEED_SUBSCRIBE);
-    subscribe();
-    socket.on('connect', subscribe);
+    socket.emit(CLIENT_EVENTS.FEED_SUBSCRIBE);
 
     // ---- Event handlers (delegate to latest ref) ----
 
@@ -173,9 +143,6 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     }
     function handleStoryReacted(data: StoryReactedEventData): void {
       handlersRef.current.onStoryReacted?.(data);
-    }
-    function handleStoryDeleted(data: StoryDeletedEventData): void {
-      handlersRef.current.onStoryDeleted?.(data);
     }
 
     function handleStatusCreated(data: StatusCreatedEventData): void {
@@ -224,7 +191,6 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     socket.on(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
     socket.on(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
     socket.on(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
-    socket.on(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
 
     socket.on(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
     socket.on(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
@@ -242,7 +208,6 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     // ---- Cleanup ----
 
     return () => {
-      socket.off('connect', subscribe);
       socket.emit(CLIENT_EVENTS.FEED_UNSUBSCRIBE);
 
       socket.off(SERVER_EVENTS.POST_CREATED, handlePostCreated);
@@ -256,7 +221,6 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
       socket.off(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
       socket.off(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
       socket.off(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
-      socket.off(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
 
       socket.off(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
       socket.off(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
@@ -271,5 +235,5 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
       socket.off(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
       socket.off(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, handleStoryTranslationUpdated);
     };
-  }, [enabled, socketBootTick]);
+  }, [enabled]);
 }

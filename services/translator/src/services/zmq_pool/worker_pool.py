@@ -262,29 +262,18 @@ class WorkerPool:
 
 def configure_pytorch_threads(total_workers: int):
     """
-    Configure les threads PyTorch du process.
-
-    torch.set_num_threads est GLOBAL au process et l'inférence ML est
-    sérialisée par un threading.Lock par modèle : une seule inférence est
-    active à la fois, les workers asyncio attendent le lock, pas le CPU.
-    L'unique inférence active doit donc disposer de presque tous les cœurs
-    (cpu_count - 1, plancher 2) — diviser par le nombre de workers bridait
-    l'inférence à 2 threads sur le serveur 4 cœurs (~2× plus lente),
-    faisant expirer les budgets des textes longs (incident 2026-07-04).
+    Configure PyTorch pour limiter les threads par worker
 
     Args:
-        total_workers: Nombre total de workers dans tous les pools (loggé
-            pour contexte, n'influence pas le nombre de threads)
+        total_workers: Nombre total de workers dans tous les pools
     """
     try:
         import torch
         cpu_count = multiprocessing.cpu_count()
-        inference_threads = max(2, cpu_count - 1)
-        torch.set_num_threads(inference_threads)
-        logger.info(
-            f"[PYTORCH] Configured {inference_threads} inference threads "
-            f"({cpu_count} cores, {total_workers} async workers)"
-        )
+        # Chaque worker utilise 2 threads PyTorch max (évite contention)
+        threads_per_worker = max(2, cpu_count // total_workers)
+        torch.set_num_threads(threads_per_worker)
+        logger.info(f"[PYTORCH] Configured {threads_per_worker} threads per worker")
     except ImportError:  # pragma: no cover
         logger.debug("[PYTORCH] PyTorch not available, skipping thread configuration")
 

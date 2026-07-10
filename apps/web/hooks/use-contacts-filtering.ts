@@ -6,7 +6,6 @@ import { useState, useMemo, useCallback } from 'react';
 import { User } from '@/types';
 import { usersService } from '@/services';
 import { toast } from 'sonner';
-import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 
 /** @deprecated Use FriendRequest from '@/types/contacts' */
 interface FriendRequest {
@@ -43,9 +42,8 @@ export function useContactsFiltering(
   const [searchResults, setSearchResults] = useState<User[]>([]);
 
   const getUserDisplayName = useCallback((user: User | { firstName: string; lastName: string; username: string; displayName?: string }): string => {
-    // Délègue à la source unique `utils/user-display-name` (displayName >
-    // firstName+lastName > username, trim) — pas de réimplémentation locale.
-    return resolveDisplayName(user, user.username);
+    if ('displayName' in user && user.displayName) return user.displayName;
+    return `${user.firstName} ${user.lastName}`.trim() || user.username;
   }, []);
 
   const filteredContacts = useMemo(() => {

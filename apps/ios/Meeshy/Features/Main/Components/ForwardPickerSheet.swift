@@ -51,16 +51,13 @@ struct ForwardPickerSheet: View {
                 } else if filteredConversations.isEmpty {
                     Spacer()
                     VStack(spacing: 8) {
-                        // Empty-state hero glyph (≥40pt, decorative) — kept fixed per doctrine 74i/86i.
                         Image(systemName: "bubble.left.and.bubble.right")
                             .font(.system(size: 40))
                             .foregroundColor(theme.textMuted)
-                            .accessibilityHidden(true)
                         Text(String(localized: "forward.empty", defaultValue: "Aucune conversation", bundle: .main))
-                            .font(MeeshyFont.relative(15, weight: .medium))
+                            .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
-                    .accessibilityElement(children: .combine)
                     Spacer()
                 } else {
                     ScrollView {
@@ -105,16 +102,15 @@ struct ForwardPickerSheet: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(message.senderName ?? "?")
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .lineLimit(1)
 
                 Text(message.content.isEmpty ? String(localized: "forward.media-placeholder", defaultValue: "[Media]", bundle: .main) : message.content)
-                    .font(MeeshyFont.relative(11))
+                    .font(.system(size: 11))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
-            .accessibilityElement(children: .combine)
 
             Spacer(minLength: 0)
 
@@ -122,7 +118,6 @@ struct ForwardPickerSheet: View {
                 dismiss()
                 onDismiss()
             } label: {
-                // Chrome close glyph in a thin preview banner — kept fixed per chrome doctrine 82i.
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
@@ -169,23 +164,22 @@ struct ForwardPickerSheet: View {
                 ConversationTitleLabel(
                     name: conv.displayName,
                     favoriteEmoji: conv.userState.reaction,
-                    font: MeeshyFont.relative(15, weight: .medium),
+                    font: .system(size: 15, weight: .medium),
                     color: theme.textPrimary
                 )
 
                 HStack(spacing: 4) {
                     Text(conv.type.rawValue)
-                        .font(MeeshyFont.relative(12))
+                        .font(.system(size: 12))
                         .foregroundColor(theme.textMuted)
 
                     if conv.memberCount > 0 {
                         Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), conv.memberCount))
-                            .font(MeeshyFont.relative(12))
+                            .font(.system(size: 12))
                             .foregroundColor(theme.textMuted)
                     }
                 }
             }
-            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -212,7 +206,7 @@ struct ForwardPickerSheet: View {
                 forwardTo(conv)
             } label: {
                 Image(systemName: "paperplane.circle.fill")
-                    .font(MeeshyFont.relative(24))
+                    .font(.system(size: 24))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)))

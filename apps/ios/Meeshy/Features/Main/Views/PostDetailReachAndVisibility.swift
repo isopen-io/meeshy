@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import MeeshySDK
 
 /// Pure formatter for the author "reach line" (`@pseudo · 👁 vues · 📊 impressions`),
 /// shared by the inline author block (`authorReachLine`) and the collapsed header
@@ -18,7 +17,7 @@ enum PostReachFormatter {
     }
 
     static func components(username: String?, isAuthor: Bool, openCount: Int, impressionCount: Int) -> Components {
-        let pseudo = username.flatMap { $0.isEmpty ? nil : "@\($0)" }
+        let pseudo = (username?.isEmpty == false) ? "@\(username!)" : nil
         guard isAuthor else { return Components(pseudo: pseudo, views: nil, impressions: nil) }
         return Components(pseudo: pseudo, views: compact(openCount), impressions: compact(impressionCount))
     }
@@ -32,16 +31,5 @@ enum PostReachFormatter {
 enum StoryCanvasVisibility {
     static func isVisible(canvasFrame: CGRect, viewportHeight: CGFloat) -> Bool {
         canvasFrame.maxY > 0 && canvasFrame.minY < viewportHeight
-    }
-}
-
-/// Pure mute/pause policy for the inline story canvas in PostDetailView, shared by
-/// BOTH the native story canvas and the STORY-repost canvas so the two paths can't
-/// drift (RF3). The canvas pauses when scrolled fully off-screen OR while a call
-/// owns the audio session. Audio is always ON in detail (`mute: false`) — the
-/// detail viewer matches the native story experience, unlike the muted feed.
-enum StoryDetailPlaybackPolicy {
-    static func isPaused(visible: Bool, callActive: Bool) -> Bool {
-        !visible || callActive
     }
 }

@@ -27,9 +27,7 @@ public struct ChatBubble: View {
     public var body: some View {
         bubbleContent
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(isMe
-                ? String(format: String(localized: "accessibility.message_from_me", defaultValue: "Mon message : %@", bundle: .main), text)
-                : String(format: String(localized: "accessibility.message_from_other", defaultValue: "Message : %@", bundle: .main), text))
+            .accessibilityLabel(Text("\(isMe ? String(localized: "a11y.message.is_me", bundle: .main) : String(localized: "a11y.message.not_me", bundle: .main)): \(text)"))
             .opacity(animateEntrance ? (isVisible ? 1 : 0) : 1)
             .offset(x: animateEntrance ? (isVisible ? 0 : (isMe ? 40 : -40)) : 0)
             .scaleEffect(animateEntrance ? (isVisible ? 1 : 0.85) : 1, anchor: isMe ? .bottomTrailing : .bottomLeading)
@@ -47,6 +45,9 @@ public struct ChatBubble: View {
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .padding()
+                .accessibilityLabel(isMe
+                    ? String(format: String(localized: "accessibility.message_from_me", defaultValue: "Mon message : %@", bundle: .main), text)
+                    : String(format: String(localized: "accessibility.message_from_other", defaultValue: "Message : %@", bundle: .main), text))
                 .background(bubbleBackground)
                 .foregroundColor(isMe ? .white : theme.textPrimary)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))

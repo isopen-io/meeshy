@@ -49,29 +49,19 @@ export const AudioEffectsTimeline = memo<AudioEffectsTimelineProps>(({
                   const endTimeSeconds = segment.endTime / 1000;
                   const startPercent = (startTimeSeconds / totalDuration) * 100;
                   const widthPercent = ((endTimeSeconds - startTimeSeconds) / totalDuration) * 100;
-                  const segmentLabel = `${startTimeSeconds.toFixed(2)}s - ${endTimeSeconds.toFixed(2)}s - ${t('timeline.clickToSeek')}`;
 
                   return (
                     <div
                       key={idx}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={segmentLabel}
-                      className="absolute h-full rounded cursor-pointer hover:opacity-100 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      className="absolute h-full rounded cursor-pointer hover:opacity-100 transition-opacity"
                       style={{
                         left: `${startPercent}%`,
                         width: `${widthPercent}%`,
                         backgroundColor: getEffectColor(effect),
                         opacity: 0.8,
                       }}
-                      title={segmentLabel}
+                      title={`${startTimeSeconds.toFixed(2)}s - ${endTimeSeconds.toFixed(2)}s - ${t('timeline.clickToSeek')}`}
                       onClick={() => onSeekToTime(startTimeSeconds)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          onSeekToTime(startTimeSeconds);
-                        }
-                      }}
                     />
                   );
                 })

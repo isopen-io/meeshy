@@ -36,8 +36,7 @@ struct LocationPickerView: View {
                 }
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "location.title", defaultValue: "Choisir un lieu", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .bold))
-                        .accessibilityAddTraits(.isHeader)
+                        .font(.system(size: 16, weight: .bold))
                 }
             }
             .onAppear { viewModel.requestPermission() }
@@ -62,9 +61,6 @@ struct LocationPickerView: View {
                 viewModel.updateSelectedLocation(center)
             }
         ) {
-            // Fixed: MapKit annotation marker anchored to a coordinate — system-pin
-            // chrome rendered at a fixed screen size, not reading text. Scaling it
-            // with Dynamic Type would detach it from the point it marks (74i/86i).
             Image(systemName: "mappin.circle.fill")
                 .font(.system(size: 36))
                 .foregroundStyle(Color(hex: accentColor), Color(hex: accentColor).opacity(0.3))
@@ -78,12 +74,11 @@ struct LocationPickerView: View {
     private var searchBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
 
             TextField(String(localized: "location.search-placeholder", defaultValue: "Rechercher un lieu...", bundle: .main), text: $searchText)
-                .font(MeeshyFont.relative(14))
+                .font(.system(size: 14))
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
                 .onSubmit { viewModel.search(query: searchText) }
@@ -94,7 +89,7 @@ struct LocationPickerView: View {
                     viewModel.searchResults.removeAll()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(14))
+                        .font(.system(size: 14))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Clear search", bundle: .main))
@@ -102,12 +97,11 @@ struct LocationPickerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        // iOS 26 Liquid Glass — floating search bar over the map. The SDK
-        // Compatibility wrapper owns the gating + the .ultraThinMaterial fallback.
-        // Neutral (no tint): a search bar reads as OS chrome, not conversation content.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+        )
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .overlay(alignment: .top) {
@@ -136,28 +130,21 @@ struct LocationPickerView: View {
                     viewModel.searchResults.removeAll()
                 } label: {
                     HStack(spacing: 10) {
-                        // Glyph constrained in a fixed 28×28 badge — a scalable
-                        // font would overflow the frame. Kept fixed + hidden from
-                        // VoiceOver (the result name carries the meaning; doctrine 86i).
                         Image(systemName: "mappin")
-                            // Fixed: glyph centered in a fixed 28×28 circle badge;
-                            // a scalable font would overflow the frame (doctrine 86i).
-                            // Decorative — the place name carries the meaning.
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: accentColor))
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(Color(hex: accentColor).opacity(0.1)))
-                            .accessibilityHidden(true)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.name ?? String(localized: "location.unknown", defaultValue: "Lieu inconnu", bundle: .main))
-                                .font(MeeshyFont.relative(13, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
                                 .lineLimit(1)
 
                             if let subtitle = item.placemark.title {
                                 Text(subtitle)
-                                    .font(MeeshyFont.relative(11))
+                                    .font(.system(size: 11))
                                     .foregroundColor(theme.textSecondary)
                                     .lineLimit(1)
                             }
@@ -172,11 +159,11 @@ struct LocationPickerView: View {
                 }
             }
         }
-        // Neutral Liquid Glass: a search-results dropdown floating over the map
-        // is suggestion chrome, not content — kept neutral for the same reason
-        // as the @mention autocomplete bar (no accent tint on chrome surfaces).
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+        )
         .padding(.horizontal, 16)
     }
 
@@ -186,14 +173,13 @@ struct LocationPickerView: View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "location.fill")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
-                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     if let address = viewModel.addressString {
                         Text(address)
-                            .font(MeeshyFont.relative(13, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(2)
                     } else if viewModel.isGeocoding {
@@ -201,27 +187,24 @@ struct LocationPickerView: View {
                             ProgressView()
                                 .scaleEffect(0.7)
                             Text(String(localized: "location.geocoding", defaultValue: "Recherche de l'adresse...", bundle: .main))
-                                .font(MeeshyFont.relative(12))
+                                .font(.system(size: 12))
                                 .foregroundColor(theme.textSecondary)
                         }
                     } else {
                         Text(String(localized: "location.move-prompt", defaultValue: "Deplacez la carte pour choisir", bundle: .main))
-                            .font(MeeshyFont.relative(12))
+                            .font(.system(size: 12))
                             .foregroundColor(theme.textMuted)
                     }
 
                     if let coord = viewModel.selectedCoordinate {
                         Text(String(format: "%.5f, %.5f", coord.latitude, coord.longitude))
-                            .font(MeeshyFont.relative(10, weight: .medium, design: .monospaced))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundColor(theme.textMuted)
                     }
                 }
 
                 Spacer()
             }
-            // VoiceOver reads the selected-location summary (address + coordinates)
-            // as a single element instead of three disjoint fragments.
-            .accessibilityElement(children: .combine)
 
             HStack(spacing: 12) {
                 Button {
@@ -234,9 +217,9 @@ struct LocationPickerView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "location.circle.fill")
-                            .font(MeeshyFont.relative(14))
+                            .font(.system(size: 14))
                         Text(String(localized: "location.my-position", defaultValue: "Ma position", bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: accentColor))
                     .padding(.horizontal, 14)
@@ -259,9 +242,9 @@ struct LocationPickerView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark")
-                            .font(MeeshyFont.relative(14, weight: .bold))
+                            .font(.system(size: 14, weight: .bold))
                         Text(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
-                            .font(MeeshyFont.relative(13, weight: .bold))
+                            .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -282,11 +265,11 @@ struct LocationPickerView: View {
             }
         }
         .padding(16)
-        // iOS 26 Liquid Glass — floating bottom action card over the map. Neutral
-        // glass; the inner accent CTA + secondary button stay as fills ON the glass.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
-        .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
+        )
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
     }

@@ -104,15 +104,6 @@ public struct ConversationScrollControlsView: View {
     @State private var typingDotPhase: Int = 0
     private let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
-    /// Couleur de contenu lisible sur la teinte glass. L'accent est déterministe
-    /// par conversation et peut tomber sur une couleur claire (jaune/cyan/vert) —
-    /// un contenu blanc y serait illisible (WCAG < 3:1). On choisit blanc ou sombre
-    /// selon la luminance WCAG de l'accent (seuil 0.6, convention repo). Offline :
-    /// la teinte neutral500 est sombre, le blanc reste lisible.
-    private var contentColor: Color {
-        isOffline ? .white : (Color(hex: accentColor).luminance > 0.6 ? .black : .white)
-    }
-
     public var body: some View {
         Button {
             onScrollToBottom()
@@ -132,23 +123,30 @@ public struct ConversationScrollControlsView: View {
                         Text("Hors ligne")
                             .font(.system(size: 13, weight: .semibold))
                     }
-                    .foregroundColor(contentColor)
+                    .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                 } else {
                     // Simple chevron-only pill
                     Image(systemName: "chevron.down")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(contentColor)
+                        .foregroundColor(.white)
                         .padding(12)
                 }
             }
-            // Liquid Glass iOS 26 (fallback material teinté < 26). Teinte accent
-            // FORTE pour préserver le contraste du contenu blanc (badge non-lus,
-            // aperçu pièce jointe) — toutes les infos restent visibles.
-            .adaptiveGlass(
-                in: RoundedRectangle(cornerRadius: (hasUnreadContent || isOffline || isSearchingQuotedMessage) ? 16 : 20, style: .continuous),
-                tint: isOffline ? MeeshyColors.neutral500.opacity(0.9) : Color(hex: accentColor).opacity(0.85)
+            .background(
+                RoundedRectangle(cornerRadius: (hasUnreadContent || isOffline || isSearchingQuotedMessage) ? 16 : 20)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                isOffline ? MeeshyColors.neutral400 : Color(hex: accentColor).opacity(0.95),
+                                isOffline ? MeeshyColors.neutral500 : Color(hex: secondaryColor).opacity(0.9)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .shadow(color: isOffline ? MeeshyColors.neutral400.opacity(0.4) : Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
             )
         }
         .allowsHitTesting(!isSearchingQuotedMessage)
@@ -189,7 +187,7 @@ public struct ConversationScrollControlsView: View {
                 }
             }
         }
-        .foregroundColor(contentColor)
+        .foregroundColor(.white)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: 180)
@@ -269,7 +267,7 @@ public struct ConversationScrollControlsView: View {
                     .font(.system(size: 11, weight: .bold))
             }
         }
-        .foregroundColor(contentColor)
+        .foregroundColor(.white)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxWidth: 260)

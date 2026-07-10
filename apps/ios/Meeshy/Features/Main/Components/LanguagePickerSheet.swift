@@ -84,8 +84,6 @@ struct ProfileLanguagePickerSheet: View {
                         : Color.clear)
             )
         }
-        .accessibilityLabel(Text(String(localized: "language-picker.none", defaultValue: "None", bundle: .main)))
-        .accessibilityAddTraits(selectedCode.isEmpty ? .isSelected : [])
     }
 
     private func languageRow(_ lang: LanguageInfo) -> some View {
@@ -125,10 +123,5 @@ struct ProfileLanguagePickerSheet: View {
                         : Color.clear)
             )
         }
-        .accessibilityLabel(Text(verbatim: "\(lang.nativeName), \(lang.name)"))
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityHint(isSelected
-            ? Text("")
-            : Text(String(localized: "language-picker.select.hint", defaultValue: "Sets this as your language", bundle: .main)))
     }
 }

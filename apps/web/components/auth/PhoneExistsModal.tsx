@@ -15,7 +15,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Phone, Mail, LogIn, UserPlus, ArrowRight, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { phoneTransferService } from '@/services/phone-transfer.service';
-import { getInitials } from '@/utils/initials';
 import { useI18n } from '@/hooks/useI18n';
 
 interface PhoneOwnerInfo {
@@ -191,6 +190,16 @@ export function PhoneExistsModal({
   const handleCodeChange = (value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 6);
     setCode(cleaned);
+  };
+
+  // Get initials for avatar fallback
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   return (

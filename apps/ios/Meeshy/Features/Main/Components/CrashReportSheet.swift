@@ -16,16 +16,16 @@ struct CrashReportSheet: View {
                                 kindBadge(report.kind)
                                 Spacer()
                                 Text(report.timestamp, style: .relative)
-                                    .font(.caption2)
+                                    .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                             }
 
                             Text(report.summary)
-                                .font(.subheadline.weight(.medium))
+                                .font(.system(size: 14, weight: .medium))
 
                             if expandedId == report.id {
                                 Text(report.details)
-                                    .font(.caption2.monospaced())
+                                    .font(.system(size: 11, design: .monospaced))
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
                             }
@@ -40,11 +40,11 @@ struct CrashReportSheet: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle(String(localized: "crash.reports.title", defaultValue: "Crash Reports", bundle: .main))
+            .navigationTitle("Crash Reports")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
+                    Button("Fermer") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     ShareLink(item: formatAllReports()) {
@@ -57,13 +57,15 @@ struct CrashReportSheet: View {
 
     @ViewBuilder
     private func kindBadge(_ kind: CrashDiagnostic.Kind) -> some View {
-        let color: Color = switch kind {
-        case .nsException, .crash: MeeshyColors.error
-        case .hang, .cpuException: MeeshyColors.warning
-        case .diskWriteException: MeeshyColors.info
+        let (label, color): (String, Color) = switch kind {
+        case .nsException: ("Exception", MeeshyColors.error)
+        case .crash: ("Crash", MeeshyColors.error)
+        case .hang: ("Blocage", MeeshyColors.warning)
+        case .cpuException: ("CPU", MeeshyColors.warning)
+        case .diskWriteException: ("Disque", MeeshyColors.info)
         }
-        Text(kind.localizedLabel)
-            .font(.caption2.weight(.bold))
+        Text(label)
+            .font(.system(size: 10, weight: .bold))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

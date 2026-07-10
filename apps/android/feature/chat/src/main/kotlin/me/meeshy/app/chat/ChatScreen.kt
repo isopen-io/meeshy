@@ -23,8 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
@@ -93,7 +91,6 @@ import me.meeshy.ui.theme.hexColor
 @Composable
 fun ChatScreen(
     onBack: () -> Unit,
-    onStartCall: (peerName: String, isVideo: Boolean) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -155,15 +152,6 @@ fun ChatScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_back))
-                    }
-                },
-                actions = {
-                    val peerName = state.conversationTitle.orEmpty()
-                    IconButton(onClick = { onStartCall(peerName, false) }) {
-                        Icon(Icons.Filled.Call, contentDescription = stringResource(R.string.chat_call_audio))
-                    }
-                    IconButton(onClick = { onStartCall(peerName, true) }) {
-                        Icon(Icons.Filled.Videocam, contentDescription = stringResource(R.string.chat_call_video))
                     }
                 },
             )

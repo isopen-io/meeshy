@@ -73,14 +73,6 @@ class TranslationHandler:
         self.gateway_push_port = gateway_push_port
         self.gateway_sub_port = gateway_sub_port
 
-        # Tâches en vol (taskId → échéance time.monotonic()). Le gateway
-        # re-pushe la même tâche toutes les ~30 s tant qu'aucun résultat
-        # n'est publié : sans déduplication, chaque re-push empile une
-        # exécution concurrente du même texte sur le même lock modèle et
-        # tout texte >30 s de traduction s'auto-étrangle (incident
-        # 2026-07-04, tempête de retries).
-        self._inflight_tasks: dict = {}
-
         # Cache Redis si disponible
         if CACHE_AVAILABLE:
             self.cache_service = get_translation_cache_service()
@@ -110,26 +102,6 @@ class TranslationHandler:
         else:
             self.voice_profile_handler = None
             logger.info("ℹ️ Voice Profile Handler non disponible")
-
-    @staticmethod
-    def inflight_ttl_for(text_length: int, language_count: int) -> float:
-        """Fenêtre de déduplication d'une tâche : budget cumulé de toutes
-        ses langues (traduites séquentiellement) + marge fixe. Passé ce
-        délai, un re-push du même taskId est une relance légitime."""
-        from .zmq_pool.translation_processor import inference_timeout_for
-        return max(1, language_count) * inference_timeout_for(text_length) + 30.0
-
-    def claim_inflight(self, task_id: str, ttl_s: float, now_s: float = None) -> bool:
-        """Réserve task_id pour ttl_s secondes. False si déjà en vol."""
-        now = time.monotonic() if now_s is None else now_s
-        self._inflight_tasks = {
-            tid: exp for tid, exp in self._inflight_tasks.items() if exp > now
-        }
-        if task_id in self._inflight_tasks:
-            return False
-        self._inflight_tasks[task_id] = now + ttl_s
-        return True
-
     async def _handle_translation_request_multipart(self, frames: list[bytes]):
         """
         Traite une requête multipart ZMQ.
@@ -320,27 +292,12 @@ class TranslationHandler:
                     logger.info(f"[TRANSLATOR] translation message ignored for message {request_data.get('messageId')}")
                 return
             
-            # Dédupliquer les re-pushes gateway du même taskId pendant que
-            # la tâche initiale tourne encore (cf. _inflight_tasks).
-            incoming_task_id = request_data.get('taskId')
-            if incoming_task_id:
-                ttl = self.inflight_ttl_for(
-                    text_length=len(message_text),
-                    language_count=len(request_data.get('targetLanguages', [])),
-                )
-                if not self.claim_inflight(incoming_task_id, ttl_s=ttl):
-                    logger.info(
-                        f"🔁 [TRANSLATOR] Re-push ignoré, tâche déjà en vol: "
-                        f"{incoming_task_id} (ttl {ttl:.0f}s)"
-                    )
-                    return
-
             # Créer la tâche de traduction
             # CORRECTION: Réutiliser le taskId envoyé par la Gateway pour que la corrélation
             # de la réponse ZMQ fonctionne. Si le worker génère un nouveau uuid4(), la Gateway
             # attend une réponse sur l'ancien taskId qui n'arrivera jamais → timeout 4×30s.
             task = TranslationTask(
-                task_id=incoming_task_id or str(uuid.uuid4()),
+                task_id=request_data.get('taskId') or str(uuid.uuid4()),
                 message_id=request_data.get('messageId'),
                 text=message_text,
                 source_language=request_data.get('sourceLanguage', 'fr'),

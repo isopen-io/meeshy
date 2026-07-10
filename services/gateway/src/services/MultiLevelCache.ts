@@ -165,7 +165,7 @@ export class MultiLevelCache<T = any> {
       }
 
       return deleted;
-    } catch (error) /* istanbul ignore next -- Map.delete() never throws; inner store catch swallows all errors */ {
+    } catch (error) {
       logger.error(`❌ [${this.name}] Erreur suppression ${key}:`, error);
       return false;
     }

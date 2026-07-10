@@ -16,24 +16,6 @@ function isOptimisticMessage(m: Message): m is OptimisticMessage {
   return '_tempId' in m;
 }
 
-function editedAtMs(value: Date | string | undefined | null): number | null {
-  if (!value) return null;
-  const ms = new Date(value).getTime();
-  return Number.isNaN(ms) ? null : ms;
-}
-
-// A `message:edited` socket event carries no monotonic sequence — a delayed
-// duplicate delivery or reordered frame can arrive after a newer edit was
-// already applied. Comparing `editedAt` against the cached row's stops a
-// stale edit from permanently clobbering the current content.
-function isStaleEdit(cached: Message, incoming: Message): boolean {
-  const cachedMs = editedAtMs(cached.editedAt);
-  if (cachedMs === null) return false;
-  const incomingMs = editedAtMs(incoming.editedAt);
-  if (incomingMs === null) return false;
-  return incomingMs < cachedMs;
-}
-
 type CachedMessage = Message & {
   translatedAudios?: Record<string, SocketIOTranslation>;
 };
@@ -305,7 +287,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             pages: old.pages.map((page) => ({
               ...page,
               messages: page.messages.map((m) =>
-                m.id === message.id && !isStaleEdit(m, message) ? { ...m, ...message } : m
+                m.id === message.id ? { ...m, ...message } : m
               ),
             })),
           };
@@ -318,11 +300,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         (old) => {
           if (!old) return old;
           return old.map((conv) => {
-            if (
-              conv.id === targetConversationId &&
-              conv.lastMessage?.id === message.id &&
-              !isStaleEdit(conv.lastMessage, message)
-            ) {
+            if (conv.id === targetConversationId && conv.lastMessage?.id === message.id) {
               return { ...conv, lastMessage: message };
             }
             return conv;
@@ -331,9 +309,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
       updateInfiniteConversationCache(queryClient, (convs) =>
         convs.map((conv) =>
-          conv.id === targetConversationId &&
-          conv.lastMessage?.id === message.id &&
-          !isStaleEdit(conv.lastMessage, message)
+          conv.id === targetConversationId && conv.lastMessage?.id === message.id
             ? { ...conv, lastMessage: message }
             : conv
         )
@@ -597,19 +573,11 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences.categories() });
     };
 
-    // Handler for message:pending-delivered — queued messages delivered on reconnect.
-    // Use targeted per-conversation invalidation to avoid a broad cache flush.
-    const handlePendingMessagesDelivered = (data: { count: number; conversationIds: string[] }) => {
-      const affected = data?.conversationIds ?? [];
-      if (affected.length > 0) {
-        for (const convId of affected) {
-          queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
-        }
-      } else if (conversationId) {
-        // Fallback for old server versions without conversationIds
+    // Handler for message:pending-delivered — queued outgoing messages were delivered after reconnect
+    const handlePendingMessagesDelivered = () => {
+      if (conversationId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(conversationId) });
       }
-      // Always refresh conversation list to update lastMessageAt / unread counts
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
     };
 
@@ -792,15 +760,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
-    // Handler for user:updated — a contact's profile changed (displayName,
-    // avatar, banner, username). Invalidate the cached profile so any
-    // currently-mounted `useUserProfileQuery(userId)` refetches instead of
-    // showing a stale snapshot until the next manual refresh.
-    const handleUserUpdated = (data: { userId: string; changes: Record<string, unknown> }) => {
-      if (!data?.userId) return;
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(data.userId) });
-    };
-
     // Handler for conversation:new — a group was created or the user was added to one.
     // The event carries only partial data, so fetch the full conversation and prepend it.
     const handleConversationNew = (data: { conversationId: string }) => {
@@ -842,22 +801,12 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeAttachmentStatus = meeshySocketIOService.onAttachmentStatusUpdated(handleAttachmentStatusUpdated);
     const unsubscribePreferences = meeshySocketIOService.onPreferencesUpdated((data) => {
       // The event is a union: user-level (has `category`) vs conversation-scoped
-      // (has `conversationId`) vs community-scoped (has `communityId`). Web cache
-      // invalidation here handles the user-level and community-scoped variants;
-      // the conversation-scoped variant is consumed by the new ConversationStore
-      // (iOS first; web wiring lands in a later phase).
+      // (has `conversationId`). Web cache invalidation here only cares about the
+      // user-level variant; the conversation-scoped variant is consumed by the
+      // new ConversationStore (iOS first; web wiring lands in a later phase).
       if ('category' in data) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.preferences.category(data.category),
-        });
-        return;
-      }
-      if ('communityId' in data) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.communities.preferences.detail(data.communityId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.communities.preferences.list(),
         });
       }
     });
@@ -878,7 +827,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeConversationJoinError = meeshySocketIOService.onConversationJoinError(handleConversationJoinError);
     const unsubscribeMessagePinned = meeshySocketIOService.onMessagePinned(handleMessagePinned);
     const unsubscribeMessageUnpinned = meeshySocketIOService.onMessageUnpinned(handleMessageUnpinned);
-    const unsubscribeUserUpdated = meeshySocketIOService.onUserUpdated(handleUserUpdated);
 
     return () => {
       unsubscribeMessage?.();
@@ -907,7 +855,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeConversationJoinError?.();
       unsubscribeMessagePinned?.();
       unsubscribeMessageUnpinned?.();
-      unsubscribeUserUpdated?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

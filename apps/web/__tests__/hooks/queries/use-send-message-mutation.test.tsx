@@ -141,19 +141,12 @@ const mockConversation = {
 } as Conversation;
 
 // Helper to create a wrapper with QueryClient
-//
-// gcTime is intentionally left at its (non-zero) default. gcTime: 0 makes a
-// query with no active `useQuery` observer eligible for removal on the very
-// next real macrotask — these tests only ever reach the cache via
-// `setQueryData`/`getQueryData` (no observers), so a 0 gcTime races the
-// mutation's real (unmocked) async chain and intermittently wipes the cache
-// before assertions run, depending on unrelated timer/microtask ordering
-// from other tests in the file. None of these tests exercise GC behavior.
 function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
+        gcTime: 0,
         staleTime: 0,
       },
     },
@@ -174,6 +167,7 @@ function createWrapperWithClient() {
     defaultOptions: {
       queries: {
         retry: false,
+        gcTime: 0,
         staleTime: 0,
       },
     },
@@ -278,34 +272,6 @@ describe('useSendMessageMutation', () => {
     await waitFor(() => {
       expect(result.current.isPending).toBe(false);
     });
-  });
-
-  it('reconciles the optimistic (cid_-keyed) entry with the real server message on success', async () => {
-    const { wrapper, queryClient } = createWrapperWithClient();
-
-    mockSendMessage.mockResolvedValue(createMockMessage('msg-real', 'Optimistic message'));
-    queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
-      pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
-      pageParams: [1],
-    });
-
-    const { result } = renderHook(() => useSendMessageMutation(), { wrapper });
-
-    await act(async () => {
-      await result.current.mutateAsync({
-        conversationId: 'conv-1',
-        data: { content: 'Optimistic message' } as never,
-      });
-    });
-
-    const settledData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
-      pages: { messages: { id: string; _localStatus?: string }[] }[];
-    };
-    const settledMessages = settledData.pages[0].messages;
-    expect(settledMessages).toHaveLength(3);
-    expect(settledMessages[0].id).toBe('msg-real');
-    expect(settledMessages[0]._localStatus).toBeUndefined();
-    expect(settledMessages.some((m) => m.id.startsWith('cid_'))).toBe(false);
   });
 
   it('should rollback on error', async () => {

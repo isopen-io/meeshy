@@ -26,7 +26,6 @@ import {
   X
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { copyToClipboard } from '@/lib/clipboard';
 import type { Group } from '@meeshy/shared/types';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { cn } from '@/lib/utils';
@@ -227,9 +226,9 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
 
   // Copier l'identifiant au presse-papier (afficher sans mshy_)
   const copyIdentifier = useCallback(async (identifier: string) => {
-    const displayIdentifier = identifier.replace(/^mshy_/, '');
-    const { success } = await copyToClipboard(displayIdentifier);
-    if (success) {
+    try {
+      const displayIdentifier = identifier.replace(/^mshy_/, '');
+      await navigator.clipboard.writeText(displayIdentifier);
       setCopiedIdentifier(identifier);
       toast.success(tGroups('success.identifierCopied'));
 
@@ -237,7 +236,8 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
       setTimeout(() => {
         setCopiedIdentifier(null);
       }, 2000);
-    } else {
+    } catch (error) {
+      console.error('[Groups] Error copying identifier:', error);
       toast.error(tGroups('errors.copyError'));
     }
   }, [tGroups]);

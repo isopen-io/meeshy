@@ -52,8 +52,6 @@ const mockPrisma: any = {
   message: { findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn() },
   conversationReadCursor: {
     upsert: jest.fn(),
-    updateMany: jest.fn(),
-    create: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
     findMany: jest.fn()
@@ -95,7 +93,6 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     // cached cursor.unreadCount field.
     mockPrisma.message.count.mockResolvedValue(UNREAD_COUNT);
     mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-    mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.conversationReadCursor.update.mockResolvedValue({});
     mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
     // No cursor yet → read floor falls back to participant.joinedAt.
@@ -186,7 +183,6 @@ describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset'
     mockPrisma.message.findFirst.mockResolvedValue({ id: LATEST_MESSAGE_ID, createdAt: new Date() });
     mockPrisma.message.count.mockResolvedValue(UNREAD_COUNT);
     mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-    mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.conversationReadCursor.update.mockResolvedValue({});
     mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
     mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
@@ -221,9 +217,7 @@ describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset'
       conversationId: CONVERSATION_ID,
       unreadCount: 0,
     });
-    // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false —
-    // neither the legacy name nor the dual-emitted message:read-status-updated.
+    // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false.
     expect(mockEmit2).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
-    expect(mockEmit2).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
   });
 });

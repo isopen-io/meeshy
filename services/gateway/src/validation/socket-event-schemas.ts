@@ -9,28 +9,14 @@ const clientMessageIdSchema = z
   .string()
   .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)');
 
-// Safety ceiling for message content. Runtime per-role validation (MAX_MESSAGE_LENGTH=4000)
-// is the precise limit for plaintext messages; encrypted payloads may be larger, so we
-// use a generous ceiling here that only blocks truly abusive payloads.
-const MAX_CONTENT_BYTES = 100_000;
-
-// Maximum attachment IDs per message — mirrors MessageValidator.ts (regular conversations: 100).
-// Enforced at schema level to reject bulk-fake-attachment DoS before DB lookups start.
-const MAX_ATTACHMENT_IDS = 100;
-
 export const SocketMessageSendSchema = z.object({
-  conversationId: z.string().min(1).max(255),
-  content: z.string().max(MAX_CONTENT_BYTES),
+  conversationId: z.string(),
+  content: z.string(),
   originalLanguage: z.string().optional(),
   messageType: z.string().optional(),
   replyToId: mongoId.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,
-  // Forward references — validated as ObjectIds so malformed strings are
-  // rejected at the schema boundary before reaching the DB query in
-  // broadcastNewMessage (which would otherwise throw P2023 on a bad id).
-  forwardedFromId: mongoId.optional(),
-  forwardedFromConversationId: mongoId.optional(),
   // Effets de message — parité avec la route REST POST /messages.
   // `MessageProcessor.saveMessage` recompose le bitfield `effectFlags`
   // depuis `isBlurred` / `expiresAt` / `isViewOnce`.
@@ -44,16 +30,13 @@ export const SocketMessageSendSchema = z.object({
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;
 
 export const SocketMessageSendWithAttachmentsSchema = z.object({
-  conversationId: z.string().min(1).max(255),
-  content: z.string().max(MAX_CONTENT_BYTES),
+  conversationId: z.string(),
+  content: z.string(),
   originalLanguage: z.string().optional(),
-  attachmentIds: z.array(mongoId).min(1).max(MAX_ATTACHMENT_IDS),
+  attachmentIds: z.array(mongoId).min(1),
   replyToId: mongoId.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,
-  // Forward references — validated as ObjectIds (mirrors SocketMessageSendSchema).
-  forwardedFromId: mongoId.optional(),
-  forwardedFromConversationId: mongoId.optional(),
 });
 
 export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageSendWithAttachmentsSchema>;
@@ -66,13 +49,13 @@ export const SocketTranslationRequestSchema = z.object({
 export type SocketTranslationRequestData = z.infer<typeof SocketTranslationRequestSchema>;
 
 export const SocketConversationJoinSchema = z.object({
-  conversationId: z.string().min(1).max(255),
+  conversationId: z.string(),
 });
 
 export type SocketConversationJoinData = z.infer<typeof SocketConversationJoinSchema>;
 
 export const SocketConversationLeaveSchema = z.object({
-  conversationId: z.string().min(1).max(255),
+  conversationId: z.string(),
 });
 
 export type SocketConversationLeaveData = z.infer<typeof SocketConversationLeaveSchema>;
@@ -141,19 +124,6 @@ export const SocketPostReactionRequestSyncSchema = z.object({
 });
 
 export type SocketPostReactionRequestSyncData = z.infer<typeof SocketPostReactionRequestSyncSchema>;
-
-export const SocketMessageEditSchema = z.object({
-  messageId: mongoId,
-  content: z.string().min(1).max(MAX_CONTENT_BYTES),
-});
-
-export type SocketMessageEditData = z.infer<typeof SocketMessageEditSchema>;
-
-export const SocketMessageDeleteSchema = z.object({
-  messageId: mongoId,
-});
-
-export type SocketMessageDeleteData = z.infer<typeof SocketMessageDeleteSchema>;
 
 export const SocketAuthenticateSchema = z.object({
   userId: z.string().optional(),

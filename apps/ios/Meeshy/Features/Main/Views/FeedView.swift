@@ -2,7 +2,6 @@ import SwiftUI
 import PhotosUI
 import CoreLocation
 import Combine
-import os
 import MeeshySDK
 import MeeshyUI
 
@@ -33,7 +32,6 @@ struct ShareableLink: Identifiable {
 
 // MARK: - Feed View
 struct FeedView: View {
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "feed")
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -74,11 +72,6 @@ struct FeedView: View {
     /// system share UI as soon as this is non-nil and clears it on dismiss.
     @State private var shareableLink: ShareableLink?
     @State private var editingPost: FeedPost?
-    /// Réel dont les commentaires sont présentés en feuille depuis le feed. Le
-    /// bouton « commentaire » d'une carte réel ouvre la `CommentsSheetView`
-    /// DIRECTEMENT (parité avec les cartes post du feed) au lieu de pousser le
-    /// viewer plein écran — l'utilisateur commente sans quitter le fil.
-    @State private var reelCommentsPost: FeedPost?
 
     // Post reaction state — hoisted to parent so socket events update all cards without
     // mutating FeedPost values (pure socket-driven path, mirrors FeedCommentsSheet pattern).
@@ -629,9 +622,7 @@ struct FeedView: View {
                         .shadow(color: MeeshyColors.indigo300.opacity(0.4), radius: 8, y: 4)
 
                     Image(systemName: "plus")
-                        // Doctrine 86i : glyphe du FAB dans un cercle de dimension fixe 40×40 → figé
-                        // (l'icône ne doit pas déborder du bouton flottant). Bouton déjà labellisé.
-                        .font(.system(size: 18, weight: .bold))
+                        .font(MeeshyFont.relative(18, weight: .bold))
                         .foregroundColor(.white)
                 }
             }
@@ -701,12 +692,16 @@ struct FeedView: View {
             },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
-                // Le bouton commentaire d'un réel ouvre la feuille de commentaires
-                // DIRECTEMENT (parité avec les cartes post du feed) — l'utilisateur
-                // commente sans basculer dans le viewer plein écran. La lecture
-                // muette du feed continue derrière la feuille (translucide).
+                // Les commentaires d'un réel vivent dans le viewer plein écran
+                // (interactions riches) — même handoff que le tap média : on coupe
+                // la lecture muette du feed puis on présente le viewer sur ce post.
+                reelAutoplay.clear()
+                SharedAVPlayerManager.shared.pause()
                 HapticFeedback.medium()
-                reelCommentsPost = post
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                }
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
             onRepost: { postId in togglePostRepost(postId: postId) },
             onBookmark: { postId in togglePostBookmark(postId: postId) },
@@ -819,11 +814,7 @@ struct FeedView: View {
                 storyViewerCoordinator.present(
                     StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
                 )
-            },
-            // RF2: a POST that reposts a REEL renders inside FeedPostCard (not the
-            // immersive reel card) — hand it the shared autoplay coordinator so the
-            // embedded reel plays muted/inline, elected against the native reels.
-            reelAutoplay: reelAutoplay
+            }
         )
         .equatable()
     }
@@ -1309,10 +1300,6 @@ struct FeedView: View {
                 Spacer(minLength: 0)
 
                 // Toolbar
-                // Doctrine 82i : les 6 glyphes d'action du composer ci-dessous (photo/caméra/
-                // emoji/fichier/position/audio, 20pt) sont figés — rangée horizontale contrainte
-                // (HStack spacing 16 + Spacer) qui déborderait si les icônes scalaient en XXXL.
-                // Chaque bouton porte déjà son `.accessibilityLabel` → VoiceOver reste complet.
                 HStack(spacing: 16) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
@@ -1418,18 +1405,12 @@ struct FeedView: View {
                 showEmojiPicker = false
             }
             .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
         .sheet(item: $shareableLink) { link in
             // System share sheet — paste/AirDrop/Messages/etc. all receive the
             // `meeshy.me/l/<token>` URL so every external touchpoint funnels
             // through the user's TrackingLink for attribution.
             ShareSheet(activityItems: [link.url])
-        }
-        .sheet(item: $reelCommentsPost) { post in
-            // Même feuille de commentaires que les cartes post (`FeedPostCard`) —
-            // ouverte directement depuis le bouton commentaire d'un réel du feed.
-            CommentsSheetView(post: post, accentColor: post.authorColor)
         }
         .sheet(item: $editingPost) { post in
             EditPostSheet(
@@ -1487,9 +1468,7 @@ struct FeedView: View {
                 // Mark recorded ONLY on success so a failed flush leaves the ids
                 // eligible to re-enqueue when the card next appears.
                 recordedImpressionIds.formUnion(batch)
-            } catch {
-                FeedView.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
-            }
+            } catch {}
         }
     }
 }

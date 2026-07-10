@@ -17,10 +17,7 @@ struct VideoFiltersPanel: View {
             performanceIndicator
         }
         .padding(MeeshySpacing.lg)
-        // Liquid Glass natif (iOS 26+) sur la surface flottante neutre. La
-        // sous-section `VideoFilterControlView` reste en `.ultraThinMaterial`
-        // (matériau SUR verre = HIG ; jamais verre-dans-verre).
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .padding(.horizontal, MeeshySpacing.lg)
         .onAppear {

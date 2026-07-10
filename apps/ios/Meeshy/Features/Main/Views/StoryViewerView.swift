@@ -102,13 +102,6 @@ struct StoryViewerView: View {
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
-    /// Interstitiel d'identité inter-groupes (directive user 2026-07-03) :
-    /// au passage au groupe d'une AUTRE personne, bannière en fond + pseudo,
-    /// nom, présence, mood pendant `groupIntroDuration` avant le slide.
-    @State var showGroupIntro = false
-    @State var groupIntroData: StoryViewModel.StoryGroupIntro?
-    @State var groupIntroTask: Task<Void, Never>?
-    static let groupIntroDuration: TimeInterval = 2.2
     /// True once the visible slide's background media is fully usable (real
     /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
     /// and the centered loading spinner.
@@ -438,8 +431,6 @@ struct StoryViewerView: View {
             // pipeline est ré-installé au prochain onAppear
             // (`hasInstalledPrefetchPipeline = false` ci-dessous).
             slideTimer.invalidate()
-            groupIntroTask?.cancel()
-            groupIntroTask = nil
             prefetchTasks.forEach { $0.cancel() }
             prefetchTasks.removeAll()
             prefetcher.detach()
@@ -494,21 +485,6 @@ struct StoryViewerView: View {
             slideTimer.markContentReady(slideId: id)
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
-            // U2 — tick haptique léger au passage de slide (parité Instagram).
-            HapticFeedback.light()
-            // U6 — VoiceOver : annonce du changement de slide (« Story 2 sur
-            // 5 ») — sans elle, un utilisateur non-voyant n'a AUCUN signal
-            // que le contenu vient de changer sous ses doigts.
-            if UIAccessibility.isVoiceOverRunning,
-               let total = currentGroup?.stories.count {
-                UIAccessibility.post(
-                    notification: .announcement,
-                    argument: String(
-                        localized: "story.viewer.a11y.slideChanged",
-                        defaultValue: "Story \(currentStoryIndex + 1) sur \(total)"
-                    )
-                )
-            }
             skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
@@ -517,21 +493,6 @@ struct StoryViewerView: View {
             }
             transitionPostRoom(from: previousStory, to: currentStory)
             transitionEngagement(to: currentStory)
-        }
-        // Interstitiel d'identité inter-groupes — au-dessus du canvas ET des
-        // contrôles (identité pleine pendant 2,2 s, tap = skip).
-        .overlay {
-            if showGroupIntro, let intro = groupIntroData {
-                StoryGroupIntroOverlay(
-                    intro: intro,
-                    avatarURL: currentGroup?.avatarURL,
-                    avatarColor: currentGroup?.avatarColor ?? "6366F1",
-                    presence: PresenceManager.shared.presenceMap[intro.userId],
-                    onSkip: { skipGroupIntro() }
-                )
-                .transition(.opacity)
-                .zIndex(30)
-            }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             skipExpiredStoriesIfNeeded()
@@ -543,7 +504,6 @@ struct StoryViewerView: View {
                 : nil
             transitionPostRoom(from: previousStory, to: currentStory)
             transitionEngagement(to: currentStory)
-            presentGroupIntroIfNeeded()
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
             applyCommentReactionEvent(event)
@@ -1431,164 +1391,4 @@ struct StoryViewerView: View {
     @State private var showReportSheet = false
 
     // MARK: - Content, Gestures, Navigation, Timer & Actions (see StoryViewerView+Content.swift)
-}
-
-// MARK: - Group intro (interstitiel d'identité inter-groupes)
-
-extension StoryViewerView {
-    /// Présente l'interstitiel d'identité au passage au groupe d'une AUTRE
-    /// personne : placeholder immédiat (username/avatar du groupe, déjà en
-    /// main — cache-first), enrichi async (nom complet, bannière, mood) par
-    /// `resolveGroupIntro` PENDANT l'affichage. Dismiss auto à 2,2 s ; le tap
-    /// skippe. Mes propres stories et le mode preview n'ont pas d'interstitiel.
-    /// Le gel de lecture passe par `shouldPauseTimer || showGroupIntro`
-    /// (timer + canvas + audio gelés en phase, reprise sans saut).
-    func presentGroupIntroIfNeeded() {
-        guard !isPreviewMode,
-              let group = currentGroup,
-              group.id != AuthManager.shared.currentUser?.id else { return }
-        groupIntroTask?.cancel()
-        groupIntroData = StoryViewModel.StoryGroupIntro(userId: group.id, username: group.username)
-        withAnimation(.easeIn(duration: 0.22)) { showGroupIntro = true }
-        let userId = group.id
-        groupIntroTask = Task { @MainActor in
-            let enrich = Task { @MainActor in
-                let intro = await viewModel.resolveGroupIntro(for: group)
-                guard !Task.isCancelled, showGroupIntro, groupIntroData?.userId == userId else { return }
-                groupIntroData = intro
-            }
-            try? await Task.sleep(for: .seconds(Self.groupIntroDuration))
-            enrich.cancel()
-            guard !Task.isCancelled else { return }
-            dismissGroupIntro()
-        }
-    }
-
-    func skipGroupIntro() {
-        groupIntroTask?.cancel()
-        groupIntroTask = nil
-        dismissGroupIntro()
-    }
-
-    private func dismissGroupIntro() {
-        withAnimation(.easeOut(duration: 0.25)) { showGroupIntro = false }
-    }
-}
-
-/// Interstitiel plein écran : bannière du profil en FOND (ThumbHash placeholder,
-/// fallback gradient couleur avatar → noir), voile de lisibilité, et au centre
-/// l'identité : avatar, nom, @username, présence en ligne, mood (emoji + message).
-/// Tap n'importe où = passer directement au slide.
-private struct StoryGroupIntroOverlay: View {
-    let intro: StoryViewModel.StoryGroupIntro
-    let avatarURL: String?
-    let avatarColor: String
-    let presence: UserPresence?
-    let onSkip: () -> Void
-
-    var body: some View {
-        ZStack {
-            bannerBackground
-            LinearGradient(
-                colors: [.black.opacity(0.62), .black.opacity(0.28), .black.opacity(0.72)],
-                startPoint: .top, endPoint: .bottom
-            )
-            identityContent
-        }
-        .ignoresSafeArea()
-        .contentShape(Rectangle())
-        .onTapGesture { onSkip() }
-        .environment(\.colorScheme, .dark)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilitySummary)
-        .accessibilityHint(String(localized: "story.groupIntro.skipHint",
-                                  defaultValue: "Touchez pour passer à la story"))
-    }
-
-    private var bannerBackground: some View {
-        Group {
-            if let banner = intro.bannerURL, !banner.isEmpty {
-                CachedAsyncImage(url: banner, thumbHash: intro.bannerThumbHash)
-                    .scaledToFill()
-            } else {
-                LinearGradient(
-                    colors: [Color(hex: avatarColor), .black],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            }
-        }
-    }
-
-    private var identityContent: some View {
-        VStack(spacing: 14) {
-            // `storyTray` = 88 pt, le plus grand context avatar — l'identité
-            // est le sujet de l'écran. Présence + mood délégués au badge/capsule
-            // dédiés ci-dessous (plus lisibles qu'un dot 10 pt sur l'avatar).
-            MeeshyAvatar(
-                name: intro.displayName ?? intro.username,
-                context: .storyTray,
-                accentColor: avatarColor,
-                avatarURL: avatarURL
-            )
-            VStack(spacing: 4) {
-                Text(intro.displayName ?? intro.username)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(.white)
-                if intro.displayName != nil {
-                    Text("@\(intro.username)")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-            }
-            presenceBadge
-            if let emoji = intro.moodEmoji {
-                HStack(spacing: 8) {
-                    Text(emoji).font(.title3)
-                    if let message = intro.moodMessage, !message.isEmpty {
-                        Text(message)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(2)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: Capsule())
-            }
-        }
-        .padding(.horizontal, 32)
-    }
-
-    @ViewBuilder
-    private var presenceBadge: some View {
-        let state = presence?.state ?? .offline
-        HStack(spacing: 6) {
-            Circle()
-                .fill(state == .online ? MeeshyColors.success
-                      : state == .away ? MeeshyColors.warning
-                      : Color.white.opacity(0.35))
-                .frame(width: 9, height: 9)
-            Text(presenceLabel(state))
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.85))
-        }
-    }
-
-    private func presenceLabel(_ state: PresenceState) -> String {
-        switch state {
-        case .online:
-            return String(localized: "story.groupIntro.online", defaultValue: "En ligne")
-        case .away:
-            return String(localized: "story.groupIntro.away", defaultValue: "Absent·e")
-        case .offline:
-            return String(localized: "story.groupIntro.offline", defaultValue: "Hors ligne")
-        }
-    }
-
-    private var accessibilitySummary: String {
-        var parts = [intro.displayName ?? intro.username]
-        parts.append(presenceLabel(presence?.state ?? .offline))
-        if let message = intro.moodMessage { parts.append(message) }
-        return parts.joined(separator: ", ")
-    }
 }

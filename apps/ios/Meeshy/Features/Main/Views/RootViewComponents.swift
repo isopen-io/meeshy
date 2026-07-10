@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
-import os
 
 // MARK: - Extracted from RootView.swift
 
@@ -10,8 +9,8 @@ import os
 struct ThemedActionButton: View {
     let icon: String
     let color: String
-    let label: String
-    let hint: String
+    var label: String? = nil
+    var hint: String? = nil
     var badge: Int = 0
     var size: CGFloat = 46
     let action: () -> Void
@@ -45,12 +44,12 @@ struct ThemedActionButton: View {
                     .frame(width: size, height: size)
                     .shadow(
                         color: Color(hex: color).opacity(isGlowing ? 0.65 : 0.45),
-                        radius: isGlowing ? MeeshyShadow.strong.radius : MeeshyShadow.medium.radius,
+                        radius: isGlowing ? 14 : 10,
                         y: 4
                     )
 
                 Image(systemName: icon)
-                    .font(MeeshyFont.relative(iconSize, weight: .semibold))
+                    .font(.system(size: iconSize, weight: .semibold))
                     .foregroundColor(.white)
                     .scaleEffect(isPressed ? 1.2 : 1.0)
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
@@ -67,8 +66,8 @@ struct ThemedActionButton: View {
             }
             .scaleEffect(isPressed ? 0.82 : 1)
         }
-        .accessibilityLabel(label)
-        .accessibilityHint(hint)
+        .accessibilityLabel(label ?? "")
+        .accessibilityHint(hint ?? "")
         .onAppear {
             // Reduce Motion: keep the static base shadow, no breathing glow.
             guard !reduceMotion else { return }
@@ -212,9 +211,7 @@ struct ThemedFeedOverlay: View {
                             postBookmarkedIds.insert(p.id)
                         }
                     }
-                } catch {
-                    Logger.network.error("bookmarks refresh failed: \(error.localizedDescription)")
-                }
+                } catch { }
             }
             return
         }
@@ -378,7 +375,6 @@ struct ThemedFeedOverlay: View {
                         .adaptiveGlass(in: Circle(), interactive: true)
                 }
                 .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
-                .accessibilityIdentifier("feed.header.reels")
             },
             // Compact story trail integrated inside the header (accessory slot,
             // below the title/actions bar) — reveals as the full Story Tray
@@ -457,7 +453,7 @@ struct ThemedFeedOverlay: View {
         // Marge latérale plus serrée que les posts standards (`FeedPostCard` = 16)
         // → la carte Réel est un peu plus large sur iPhone, tout en gardant une
         // séparation nette des bords.
-        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.horizontal, 12)
     }
 
     // MARK: - Standard post card
@@ -569,7 +565,7 @@ struct ThemedFeedOverlay: View {
                     },
                     topPadding: CollapsibleHeaderMetrics.expandedHeight
                 ) {
-                LazyVStack(spacing: MeeshySpacing.md) {
+                LazyVStack(spacing: 14) {
                     // Story Tray — lancement unifié via StoryViewerCoordinator
                     // (même chemin que la liste de conversations), pas de cover local.
                     StoryTrayView(viewModel: storyViewModel, onAddStatus: {
@@ -588,7 +584,7 @@ struct ThemedFeedOverlay: View {
                             )
 
                             Text(String(localized: "composer.placeholder.share", defaultValue: "Share something…", bundle: .main))
-                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                                .font(.footnote)
                                 .foregroundColor(theme.textMuted)
 
                             Spacer()
@@ -597,7 +593,7 @@ struct ThemedFeedOverlay: View {
                                 .font(MeeshyFont.relative(16))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
-                        .padding(MeeshySpacing.md)
+                        .padding(12)
                         .background(
                             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .fill(theme.inputBackground)
@@ -608,8 +604,7 @@ struct ThemedFeedOverlay: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .accessibilityIdentifier("feed.composer.placeholder")
+                    .padding(.horizontal, 16)
 
                     // Feed posts with infinite scroll. Les Réels (`type == REEL`)
                     // rendent plein-cadre via `reelFeedCardView` ; les autres via
@@ -638,7 +633,7 @@ struct ThemedFeedOverlay: View {
                             .padding()
                     }
                 }
-                .padding(.bottom, 100) // Clear floating button / tab bar area
+                .padding(.bottom, 100)
                 }
                 .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
                     reelAutoplay.update(
@@ -745,7 +740,6 @@ struct ThemedFeedOverlay: View {
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullComposer) {
             FeedComposerSheet(

@@ -74,12 +74,10 @@ struct ComposerToolSwitcherHeader: View {
         .accessibilityHint(String(localized: "story.composer.tool.switch.hint", defaultValue: "Ouvre l'éditeur", bundle: .module))
     }
 
-    /// Tous les éditeurs sélectionnables SAUF celui couramment ouvert. Ordre
-    /// stable depuis `StoryToolMode.selectableCases` (media, audio, drawing, text,
-    /// timeline, texture) — le filtre global `.filters` en est exclu (filtrage
-    /// désormais par média via l'éditeur unitaire).
+    /// Tous les éditeurs SAUF celui couramment ouvert. Ordre stable depuis
+    /// `StoryToolMode.allCases` (media, drawing, text, texture, filters, timeline).
     private var otherTools: [StoryToolMode] {
-        StoryToolMode.selectableCases.filter { $0 != currentTool }
+        StoryToolMode.allCases.filter { $0 != currentTool }
     }
 
     // MARK: - Tool icon / title (source de vérité unique pour le chrome composer)

@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { copyToClipboard } from '@/lib/clipboard';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,7 +97,7 @@ export function Header({
         url: shareLink,
       }).catch(console.error);
     } else if (shareLink) {
-      void copyToClipboard(shareLink);
+      navigator.clipboard.writeText(shareLink);
     }
   };
 
@@ -251,7 +250,7 @@ export function Header({
                         url: shareUrl
                       }).catch(console.error);
                     } else {
-                      void copyToClipboard(`${shareText}\n\n${shareUrl}`);
+                      navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
                     }
                   }}
                 >
@@ -298,7 +297,7 @@ export function Header({
                         url: shareUrl
                       }).catch(console.error);
                     } else {
-                      void copyToClipboard(`${shareText}\n\n${shareUrl}`);
+                      navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
                     }
                   }}
                 >
@@ -508,7 +507,7 @@ export function Header({
                           url: shareUrl
                         }).catch(console.error);
                       } else {
-                        void copyToClipboard(`${shareText}\n\n${shareUrl}`);
+                        navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
                       }
                       setIsMobileMenuOpen(false);
                     }}
@@ -577,7 +576,7 @@ export function Header({
                           url: shareUrl
                         }).catch(console.error);
                       } else {
-                        void copyToClipboard(`${shareText}\n\n${shareUrl}`);
+                        navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
                       }
                       setIsMobileMenuOpen(false);
                     }}

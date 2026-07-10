@@ -190,22 +190,6 @@ describe('GET /users/me/stats/timeline', () => {
   });
 });
 
-describe('GET /users/me/stats/timeline — message outside window', () => {
-  it('skips messages whose createdAt falls outside the query window (key not in dailyCounts)', async () => {
-    const appOld = await buildApp(makePrisma({ messages: [{ createdAt: new Date(0) }] }));
-    const res = await appOld.inject({
-      method: 'GET',
-      url: '/users/me/stats/timeline?days=7',
-      headers: AUTH,
-    });
-    expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.body) as { data: Array<{ date: string; messages: number }> };
-    expect(body.data).toHaveLength(7);
-    expect(body.data.every((e) => e.messages === 0)).toBe(true);
-    await appOld.close();
-  });
-});
-
 describe('GET /users/me/stats/timeline — error path', () => {
   let app: FastifyInstance;
 

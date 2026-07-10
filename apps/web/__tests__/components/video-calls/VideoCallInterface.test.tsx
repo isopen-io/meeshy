@@ -38,10 +38,6 @@ const useAdaptiveDegradationMock = jest.fn(() => ({ videoSuspended: false }));
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({ t: (k: string) => k, isLoading: false }),
 }));
-// VideoStream carries heavy WebRTC/ref machinery — stub it for the fullscreen-region test.
-jest.mock('@/components/video-calls/VideoStream', () => ({
-  VideoStream: () => <div data-testid="remote-video-stream" />,
-}));
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'Me' } }),
 }));
@@ -116,20 +112,5 @@ describe('VideoCallInterface (container)', () => {
     render(<VideoCallInterface callId="call1" />);
     fireEvent.click(screen.getByTestId('toggle-video'));
     expect(webrtc.disableVideo).toHaveBeenCalledTimes(1);
-  });
-
-  it('exposes the main remote video as a keyboard-activable fullscreen button', () => {
-    storeState.remoteStreams = new Map([['peer1', {} as MediaStream]]);
-    try {
-      render(<VideoCallInterface callId="call1" />);
-      const button = screen.getByRole('button', { name: 'calls.stream.fullscreen' });
-      expect(button).toHaveAttribute('tabIndex', '0');
-      // Enter/Space must not throw and must be intercepted (preventDefault) by the handler.
-      fireEvent.keyDown(button, { key: 'Enter' });
-      fireEvent.keyDown(button, { key: ' ' });
-      expect(button).toBeInTheDocument();
-    } finally {
-      storeState.remoteStreams = new Map();
-    }
   });
 });

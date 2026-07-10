@@ -49,18 +49,6 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   // InvalidStateError), so candidates that arrive earlier MUST be buffered
   // until the offer/answer has been set — not merely until the service exists.
   const remoteDescriptionSetRef = useRef<Set<string>>(new Set());
-  // Tracks participants whose initial offer is currently being processed
-  // (between receipt and remote-description-applied). The gateway both
-  // relays an offer live AND buffers it for replay on the recipient's next
-  // `call:join` (socket churn/reconnect recovery) — the same browser tab can
-  // legitimately receive the same initial offer twice. `handleOffer` awaits
-  // local media before it creates the peer connection / registers in
-  // `webrtcServicesRef` and `remoteDescriptionSetRef`, so a second delivery
-  // arriving in that window sees no existing/established service and would
-  // otherwise re-run `handleOffer`, calling `createPeerConnection` twice on
-  // the same `WebRTCService` and silently orphaning the first
-  // `RTCPeerConnection`. This ref closes that window synchronously.
-  const offerInFlightRef = useRef<Set<string>>(new Set());
 
   const drainIceCandidateQueue = useCallback(async (peerId: string, service: WebRTCService) => {
     const queuedCandidates = iceCandidateQueueRef.current.get(peerId) || [];
@@ -352,10 +340,6 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
    */
   const handleOffer = useCallback(
     async (offer: RTCSessionDescriptionInit, fromUserId: string) => {
-      // Synchronous — runs before the first `await` below, closing the race
-      // window a duplicate delivery (live relay + buffered replay) would
-      // otherwise slip through. See offerInFlightRef's doc comment.
-      offerInFlightRef.current.add(fromUserId);
       try {
         logger.debug('[useWebRTCP2P]', 'Handling offer', { fromUserId, callId });
         setConnecting(true);
@@ -421,8 +405,6 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         setError(message);
         toast.error(message);
         onError?.(error instanceof Error ? error : new Error(message));
-      } finally {
-        offerInFlightRef.current.delete(fromUserId);
       }
     },
     [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, drainIceCandidateQueue]
@@ -628,24 +610,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           // (A/V switch or ICE restart) — apply it in place (glare-safe)
           // instead of tearing down and rebuilding the peer connection.
           if (existingService && isEstablished) {
-            existingService.handleRenegotiationOffer({ type: 'offer', sdp: signal.sdp }).catch((error) => {
-              logger.error('[useWebRTCP2P]', 'Failed to handle renegotiation offer', { error, from: signal.from });
-              const message = error instanceof Error ? error.message : 'Failed to renegotiate call';
-              setError(message);
-              toast.error(message);
-              onError?.(error instanceof Error ? error : new Error(message));
-            });
-          } else if (offerInFlightRef.current.has(signal.from)) {
-            // The gateway both relays an offer live AND buffers it for
-            // replay on the sender's next call:join (reconnect recovery).
-            // A duplicate arriving while the first is still being processed
-            // already reached this tab — reprocessing it would call
-            // createPeerConnection a second time on the same WebRTCService
-            // and orphan the in-flight RTCPeerConnection. Drop it.
-            logger.debug('[useWebRTCP2P]', 'Dropped duplicate initial offer already in flight', {
-              from: signal.from,
-              callId,
-            });
+            void existingService.handleRenegotiationOffer({ type: 'offer', sdp: signal.sdp });
           } else {
             handleOffer({ type: 'offer', sdp: signal.sdp }, signal.from);
           }
@@ -654,13 +619,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         case 'answer':
           // Answer to one of our renegotiation offers vs. the initial answer.
           if (existingService && isEstablished) {
-            existingService.setRemoteAnswer({ type: 'answer', sdp: signal.sdp }).catch((error) => {
-              logger.error('[useWebRTCP2P]', 'Failed to handle renegotiation answer', { error, from: signal.from });
-              const message = error instanceof Error ? error.message : 'Failed to renegotiate call';
-              setError(message);
-              toast.error(message);
-              onError?.(error instanceof Error ? error : new Error(message));
-            });
+            void existingService.setRemoteAnswer({ type: 'answer', sdp: signal.sdp });
           } else {
             handleAnswer({ type: 'answer', sdp: signal.sdp }, signal.from);
           }

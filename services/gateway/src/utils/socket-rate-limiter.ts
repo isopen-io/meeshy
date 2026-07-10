@@ -28,16 +28,6 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:message:send'
   },
-  /**
-   * Per-conversation burst guard: prevents a single user from flooding one
-   * conversation even while staying within the global 20 msg/min budget.
-   * Key = `${keyPrefix}:${userId}:${conversationId}` (constructed by caller).
-   */
-  MESSAGE_SEND_PER_CONVERSATION: {
-    maxRequests: 10,
-    windowMs: 10000, // 10 seconds — allows bursts of up to 10 in a conversation
-    keyPrefix: 'socket:message:send-conv'
-  },
   CALL_INITIATE: {
     maxRequests: 5,
     windowMs: 60000, // 1 minute
@@ -53,19 +43,6 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 10000, // 10 seconds
     keyPrefix: 'socket:call:signal'
   },
-  // Audit gateway prod 2026-07-02 (C2) — 50/5s was tuned for a single steady
-  // trickle, but real clients flush a full ICE gathering pass (15-25
-  // candidates within milliseconds) AND re-gather on every renegotiation
-  // (camera toggle, ICE restart) — a healthy 262s call observed 7 such
-  // cycles. The old budget let one gathering flush exhaust the window and
-  // throttle a live call (prod: call killed 382ms after connecting).
-  // Candidates are redundant by design (loss-tolerant), so widening this is
-  // safe — it only prevents legitimate bursts from being mistaken for abuse.
-  CALL_ICE_CANDIDATE: {
-    maxRequests: 150,
-    windowMs: 5000,
-    keyPrefix: 'socket:call:ice'
-  },
   CALL_LEAVE: {
     maxRequests: 20,
     windowMs: 60000, // 1 minute
@@ -80,141 +57,6 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 60,
     windowMs: 10000, // 10 seconds (real-time transcription bursts)
     keyPrefix: 'socket:call:transcription'
-  },
-  CALL_HEARTBEAT: {
-    maxRequests: 12,
-    windowMs: 60000, // 1 minute — client heartbeats every ~10s, generous buffer for jitter
-    keyPrefix: 'socket:call:heartbeat'
-  },
-  CALL_QUALITY_REPORT: {
-    maxRequests: 30,
-    windowMs: 60000, // 1 minute — client reports stats every few seconds
-    keyPrefix: 'socket:call:quality'
-  },
-  // Fire-and-forget lifecycle telemetry emitted once per finished call —
-  // a handful per minute covers normal use with headroom for retries.
-  CALL_ANALYTICS: {
-    maxRequests: 10,
-    windowMs: 60000, // 1 minute
-    keyPrefix: 'socket:call:analytics'
-  },
-  CALL_SCREEN_CAPTURE: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute — start/stop toggles only, not a steady stream
-    keyPrefix: 'socket:call:screen-capture'
-  },
-  // Audit calling-feature routine 2026-07-03 — RECONNECTING/RECONNECTED/
-  // REQUEST_ICE_SERVERS were the only call:* handlers left unrate-limited
-  // (unlike every sibling: HEARTBEAT, QUALITY_REPORT, TRANSCRIPTION_SEGMENT,
-  // ANALYTICS, SCREEN_CAPTURE). Each triggers a DB write or HMAC credential
-  // mint, so a flooding client could still amplify load onto the DB/TURN
-  // secret even though authorization was already enforced.
-  CALL_RECONNECTING: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute — one ICE-restart attempt notification per retry, generous buffer
-    keyPrefix: 'socket:call:reconnecting'
-  },
-  CALL_RECONNECTED: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute — mirrors CALL_RECONNECTING
-    keyPrefix: 'socket:call:reconnected'
-  },
-  CALL_ICE_SERVERS_REFRESH: {
-    maxRequests: 10,
-    windowMs: 60000, // 1 minute — client refreshes at ~80% of TTL (minutes apart), not a steady stream
-    keyPrefix: 'socket:call:ice-servers-refresh'
-  },
-  // Calling-stack audit 2026-07-05 — BACKGROUNDED/FOREGROUNDED were the last
-  // call:* handlers left unrate-limited (every sibling lifecycle event does
-  // check). Each triggers a full nested Prisma call-session lookup, so a
-  // flooding client could still amplify DB load even though authorization
-  // (resolveActiveCallParticipantId) was already enforced.
-  CALL_BACKGROUNDED: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute — one app-lifecycle transition notification per background, generous buffer
-    keyPrefix: 'socket:call:backgrounded'
-  },
-  CALL_FOREGROUNDED: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute — mirrors CALL_BACKGROUNDED
-    keyPrefix: 'socket:call:foregrounded'
-  },
-  // Calling-stack audit 2026-07-05 (2) — `call:check-active` was the one
-  // remaining call:* handler with NO rate limit at all (registered as a raw
-  // string literal in CallEventsHandler.ts rather than a CALL_EVENTS
-  // constant, which let it slide past the 2026-07-03 sweep above). It fans
-  // out into 2-4 Prisma queries plus one `generateIceServers()` TURN-secret
-  // HMAC mint PER matching in-progress call, with no payload required to
-  // trigger it — a bigger amplification surface per call than the
-  // already-limited CALL_ICE_SERVERS_REFRESH. Bound to one per socket
-  // connect in normal operation (fired from `onConnect`), so a generous
-  // per-minute budget only catches abusive/scripted flooding.
-  CALL_CHECK_ACTIVE: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute — mirrors CALL_RECONNECTING/CALL_RECONNECTED
-    keyPrefix: 'socket:call:check-active'
-  },
-  REACTION_ADD: {
-    maxRequests: 30,
-    windowMs: 60000, // 1 minute — prevents emoji spam floods
-    keyPrefix: 'socket:reaction:add'
-  },
-  REACTION_REMOVE: {
-    maxRequests: 30,
-    windowMs: 60000, // 1 minute — mirrors add limit
-    keyPrefix: 'socket:reaction:remove'
-  },
-  REACTION_SYNC: {
-    maxRequests: 120,
-    windowMs: 60000, // 1 minute — read-only, triggered on conversation open; must not be
-    // blocked by the stricter REACTION_ADD write limit or users can't view reactions after
-    // hitting the emoji-send budget.
-    keyPrefix: 'socket:reaction:sync'
-  },
-  SOCKET_AUTH: {
-    maxRequests: 10,
-    windowMs: 60000, // 1 minute — prevents credential stuffing via WS
-    keyPrefix: 'socket:auth'
-  },
-  MESSAGE_EDIT: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute — same budget as send; edits are less frequent
-    keyPrefix: 'socket:message:edit'
-  },
-  MESSAGE_DELETE: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute
-    keyPrefix: 'socket:message:delete'
-  },
-  TYPING_INDICATOR: {
-    maxRequests: 60,
-    windowMs: 60000, // 1 minute — global guard; per-conversation 2s throttle is the primary gate
-    keyPrefix: 'socket:typing'
-  },
-  LOCATION_SHARE: {
-    maxRequests: 20,
-    windowMs: 60000, // 1 minute
-    keyPrefix: 'socket:location:share'
-  },
-  LOCATION_LIVE_UPDATE: {
-    maxRequests: 120,
-    windowMs: 60000, // 1 minute — allows ~2 GPS updates/sec (typical accuracy)
-    keyPrefix: 'socket:location:live-update'
-  },
-  LOCATION_LIVE_START: {
-    maxRequests: 10,
-    windowMs: 60000, // 1 minute
-    keyPrefix: 'socket:location:live-start'
-  },
-  LOCATION_LIVE_STOP: {
-    maxRequests: 10,
-    windowMs: 60000, // 1 minute
-    keyPrefix: 'socket:location:live-stop'
-  },
-  CONVERSATION_JOIN: {
-    maxRequests: 30,
-    windowMs: 60000, // 1 minute
-    keyPrefix: 'socket:conversation:join'
   }
 };
 

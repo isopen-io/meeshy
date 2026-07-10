@@ -7,14 +7,13 @@ import { memo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Lock, Copy, CheckCircle2, Users, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useI18n } from '@/hooks/use-i18n';
 import type { Group } from '@meeshy/shared/types';
 
 interface GroupCardProps {
   group: Group;
   isSelected: boolean;
   onSelect: (group: Group) => void;
-  onCopyIdentifier: (identifier: string, e: React.MouseEvent | React.KeyboardEvent) => void;
+  onCopyIdentifier: (identifier: string, e: React.MouseEvent) => void;
   copiedIdentifier: string | null;
 }
 
@@ -25,24 +24,13 @@ export const GroupCard = memo(function GroupCard({
   onCopyIdentifier,
   copiedIdentifier
 }: GroupCardProps) {
-  const { t } = useI18n('groups');
   const displayIdentifier = group.identifier?.replace(/^mshy_/, '') || '';
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-pressed={isSelected}
-      aria-label={t('card.openLabel', { name: group.name })}
       onClick={() => onSelect(group)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect(group);
-        }
-      }}
       className={cn(
-        "flex items-start p-4 rounded-2xl cursor-pointer transition-colors border-2 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+        "flex items-start p-4 rounded-2xl cursor-pointer transition-colors border-2",
         isSelected
           ? "bg-primary/20 dark:bg-primary/30 border-primary/40 dark:border-primary/50 shadow-md"
           : "hover:bg-accent/50 dark:hover:bg-accent/70 border-transparent hover:border-border/30 dark:hover:border-border/40"
@@ -77,18 +65,8 @@ export const GroupCard = memo(function GroupCard({
 
         <div className="flex items-center gap-1 mb-2 group/identifier">
           <span
-            role="button"
-            tabIndex={0}
-            aria-label={t('card.copyIdentifier', { identifier: displayIdentifier })}
-            className="text-xs text-primary font-mono cursor-pointer hover:text-primary/80 transition-colors rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="text-xs text-primary font-mono cursor-pointer hover:text-primary/80 transition-colors"
             onClick={(e) => onCopyIdentifier(group.identifier || '', e)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-                onCopyIdentifier(group.identifier || '', e);
-              }
-            }}
           >
             {displayIdentifier}
           </span>

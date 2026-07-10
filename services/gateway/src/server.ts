@@ -36,7 +36,6 @@ import { conditionalGetOnSend } from './utils/etag';
 import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
-import { syncRoutes } from './routes/sync';
 import { linksRoutes } from './routes/links';
 import { trackingLinksRoutes } from './routes/tracking-links';
 import { anonymousRoutes } from './routes/anonymous';
@@ -808,14 +807,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         manager.setDeliveryQueue(this.deliveryQueue);
         logger.info('[GWY] ✅ RedisDeliveryQueue injected into SocketIOManager');
 
-        // Share the Socket.IO layer's CallService with REST call routes so
-        // both observe the same in-memory ringingTimeouts/heartbeats maps
-        // (previously routes/calls.ts constructed its own, disconnected
-        // instance — a call initiated via REST never had its ringing timeout
-        // registered on the instance CallCleanupService/CallEventsHandler read).
-        this.server.decorate('callService', manager.getCallService());
-        logger.info('[GWY] ✅ CallService shared with REST routes');
-
         const notificationService = manager.getNotificationService();
         this.server.decorate('notificationService', notificationService);
         logger.info('[GWY] ✅ NotificationService exposed for routes');
@@ -965,8 +956,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     }, { prefix: API_PREFIX });
     // Register links management routes
     await this.server.register(linksRoutes, { prefix: API_PREFIX });
-    // SyncEngine unifié — endpoint delta /sync (spec §7, A3)
-    await this.server.register(syncRoutes, { prefix: API_PREFIX });
 
     // Register tracking links routes
     await this.server.register(trackingLinksRoutes, { prefix: API_PREFIX });
@@ -1305,36 +1294,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       const cleanupManager = this.socketIOHandler.getManager();
       if (cleanupManager) {
         this.callCleanupService.attachSocketServer(cleanupManager.getIO());
-        // RC-4 — share the socket layer's CallService so the heartbeat-GC
-        // tier (spec section 2.6) observes real in-memory heartbeat state
-        // instead of staying permanently unwired.
-        this.callCleanupService.setCallService(cleanupManager.getCallService());
-        // P3 — GC-forced call ends (stale ringing/connecting/active) now post
-        // the same call-summary system message as every other terminal path.
-        const callEventsHandler = cleanupManager.getCallEventsHandler();
-        this.callCleanupService.setPostSummaryCallback(
-          (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
-        );
-        // Sibling-drift fix (2026-07-05) — GC-ended calls (the 4th terminal
-        // path) also release their qualityDegradedStreaks entries, matching
-        // the three paths CallEventsHandler already hooks into itself.
-        this.callCleanupService.setQualityStreakCleanupCallback(
-          (callId) => callEventsHandler.clearQualityDegradedStreaks(callId)
-        );
-        // Phantom-ringing safety net — a callee whose VoIP push was
-        // delivered but whose socket never joined the call room needs the
-        // same `call_cancel` background push every other missed-call path
-        // sends, or GC tier 1 (ringing timer never fired) leaves their
-        // CallKit screen ringing until its own client-side timeout.
-        this.callCleanupService.setMissedCallCancelPushCallback(
-          (callId, conversationId, duration) =>
-            callEventsHandler.sendMissedCallCancellationPushForTerminatedCall(callId, conversationId, duration)
-        );
-        // CALL-RESILIENCE (item H) — re-arm the in-process ringing timers a
-        // crash/restart wiped, so pre-answer calls interrupted by the restart
-        // resolve to `missed` (with their push notification) on the nominal
-        // ringing budget instead of ringing until the GC tier.
-        void callEventsHandler.rehydrateActiveCalls(cleanupManager.getIO());
       } else {
         logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
       }
@@ -1368,19 +1327,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     logger.info('🛑 Shutting down server...');
 
     try {
-      // CALL-RESILIENCE — tell the call handler we're shutting down BEFORE the
-      // HTTP/Socket.IO server closes and mass-drops every socket, so it does not
-      // interpret the restart's disconnect storm as everyone hanging up and end
-      // active peer-to-peer calls. Clients re-join the restarted instance; the
-      // media (direct P2P) never dropped.
-      try {
-        const socketManager = this.socketIOHandler?.getManager?.();
-        socketManager?.getCallEventsHandler?.().prepareForShutdown();
-        logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
-      } catch (callShutdownError) {
-        logger.warn('⚠️ Could not set call handler shutdown mode', callShutdownError);
-      }
-
       // Stop call cleanup service
       if (this.callCleanupService) {
         this.callCleanupService.stop();

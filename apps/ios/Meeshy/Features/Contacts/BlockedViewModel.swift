@@ -58,42 +58,17 @@ final class BlockedViewModel: ObservableObject {
         )
     }
 
-    /// R6-4 incr.2 — unblock via l'outbox durable (survit offline + kill), pas
-    /// l'appel REST direct online-only. Retrait optimiste de la liste + flip de
-    /// la blocklist canonique (`setBlockedOptimistic`, lue par les swipe labels
-    /// ailleurs) ; le dispatcher outbox possède le DELETE réseau. Rollback des
-    /// deux sur enqueue-fail ET sur `.exhausted` (miroir UserProfileViewModel).
     func unblock(userId: String) async {
         let snapshot = blockedUsers
-        let cmid = ClientMutationId.generate()
         blockedUsers.removeAll { $0.id == userId }
-        blockService.setBlockedOptimistic(userId: userId, blocked: false)
         HapticFeedback.medium()
-        observeUnblockOutcome(cmid: cmid, userId: userId, snapshot: snapshot)
-        let payload = UnblockUserPayload(clientMutationId: cmid, targetUserId: userId)
         do {
-            try await OfflineQueue.shared.enqueue(.unblockUser, payload: payload)
+            try await blockService.unblockUser(userId: userId)
             FeedbackToastManager.shared.showSuccess("Utilisateur debloque")
         } catch {
             blockedUsers = snapshot
-            blockService.setBlockedOptimistic(userId: userId, blocked: true)
             HapticFeedback.error()
             FeedbackToastManager.shared.showError("Impossible de debloquer")
-        }
-    }
-
-    private func observeUnblockOutcome(cmid: String, userId: String, snapshot: [BlockedUser]) {
-        Task { @MainActor [weak self] in
-            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
-            for await event in stream {
-                if case .exhausted = event {
-                    guard let self else { return }
-                    self.blockedUsers = snapshot
-                    self.blockService.setBlockedOptimistic(userId: userId, blocked: true)
-                    FeedbackToastManager.shared.showError("Impossible de debloquer")
-                    HapticFeedback.error()
-                }
-            }
         }
     }
 }

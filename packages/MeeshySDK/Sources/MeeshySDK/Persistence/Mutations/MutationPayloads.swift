@@ -18,19 +18,6 @@ import Foundation
 
 // MARK: - Conversations & messages metadata
 
-/// R6 — payload du kind `.markStoryViewed` : le « vu » d'une story survit à
-/// un kill/offline et se rejoue au reconnect. `storyId` sert aussi d'anchor
-/// de coalescing (latest-wins par story).
-public struct MarkStoryViewedPayload: Codable, Sendable, Equatable {
-    public let clientMutationId: String
-    public let storyId: String
-
-    public init(clientMutationId: String, storyId: String) {
-        self.clientMutationId = clientMutationId
-        self.storyId = storyId
-    }
-}
-
 public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let conversationId: String

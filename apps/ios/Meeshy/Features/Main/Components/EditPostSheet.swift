@@ -117,9 +117,8 @@ struct EditPostSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     TextEditor(text: $draftContent)
                         .focused($isFocused)
-                        .font(MeeshyFont.relative(17))
+                        .font(.system(size: 17))
                         .foregroundColor(theme.textPrimary)
-                        .accessibilityLabel(String(localized: "feed.post.edit.body.a11y", defaultValue: "Contenu du post", bundle: .main))
                         .scrollContentBackground(.hidden)
                         .padding(12)
                         .background(
@@ -140,9 +139,8 @@ struct EditPostSheet: View {
                     HStack {
                         Spacer()
                         Text("\(remainingChars)")
-                            .font(MeeshyFont.relative(12, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(remainingChars < 100 ? MeeshyColors.warning : theme.textMuted)
-                            .accessibilityLabel(String(format: String(localized: "feed.post.edit.remaining.a11y", defaultValue: "%d caractères restants", bundle: .main), remainingChars))
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
@@ -167,7 +165,7 @@ struct EditPostSheet: View {
                                 .scaleEffect(0.85)
                         } else {
                             Text(String(localized: "feed.post.edit.publish", defaultValue: "Publier", bundle: .main))
-                                .font(MeeshyFont.relative(16, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                         }
                     }
                     .disabled(!isValid || !hasChanges || isSaving)
@@ -212,20 +210,20 @@ struct EditPostSheet: View {
                     Image(systemName: "globe")
                         .foregroundColor(theme.textSecondary)
                     Text(String(localized: "feed.post.edit.language", defaultValue: "Langue du contenu", bundle: .main))
-                        .font(MeeshyFont.relative(15))
+                        .font(.system(size: 15))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     if let info = selectedLanguageInfo {
                         Text("\(info.flag) \(info.name)")
-                            .font(MeeshyFont.relative(15, weight: .medium))
+                            .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     } else {
                         Text(String(localized: "feed.post.edit.language.auto", defaultValue: "Auto", bundle: .main))
-                            .font(MeeshyFont.relative(15))
+                            .font(.system(size: 15))
                             .foregroundColor(theme.textMuted)
                     }
                     Image(systemName: "chevron.right")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
                 .padding(.vertical, 10)
@@ -290,10 +288,6 @@ struct EditPostSheet: View {
             Button {
                 toggleRemove(item.id)
             } label: {
-                // Glyphe de contrôle épinglé au coin d'une vignette 64×64 fixe :
-                // gardé à taille fixe (doctrine — un glyphe dans un cadre rigide
-                // crève sa frame s'il scale), mais doté d'un label VoiceOver
-                // (auparavant absent) pour l'action retirer / restaurer.
                 Image(systemName: removed ? "arrow.uturn.backward.circle.fill" : "xmark.circle.fill")
                     .font(.system(size: 18))
                     .foregroundColor(removed ? MeeshyColors.indigo300 : .white)
@@ -302,9 +296,6 @@ struct EditPostSheet: View {
             .buttonStyle(.plain)
             .offset(x: 6, y: -6)
             .disabled(blockRemoval || isSaving)
-            .accessibilityLabel(removed
-                ? String(localized: "feed.post.edit.media.restore.a11y", defaultValue: "Restaurer le média", bundle: .main)
-                : String(localized: "feed.post.edit.media.remove.a11y", defaultValue: "Retirer le média", bundle: .main))
         }
     }
 
@@ -315,7 +306,6 @@ struct EditPostSheet: View {
             Image(systemName: mediaSymbol(kind))
                 .font(.system(size: 22))
                 .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
         }
     }
 

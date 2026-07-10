@@ -30,16 +30,6 @@ export interface GetReactionsOptions {
   currentParticipantId?: string;
 }
 
-export interface AddReactionResult {
-  reaction: ReactionData;
-  /**
-   * Emojis the participant had on this message before this add and that were
-   * swapped out by it (single-reaction-per-user model). Callers must broadcast
-   * a REACTION_REMOVED event per entry so other clients drop the old emoji.
-   */
-  replacedEmojis: string[];
-}
-
 export class ReactionService {
   private static readonly OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
@@ -51,7 +41,7 @@ export class ReactionService {
 
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addReaction(options: AddReactionOptions): Promise<AddReactionResult | null> {
+  async addReaction(options: AddReactionOptions): Promise<ReactionData | null> {
     const { messageId, participantId, emoji } = options;
 
     this.validateMessageId(messageId);
@@ -80,48 +70,50 @@ export class ReactionService {
       throw new Error('Message not found');
     }
 
-    if (message.messageType === 'system') {
-      throw new Error('Cannot react to a system message');
-    }
-
     const isParticipant = message.conversation.participants.some(p => p.id === participantId);
     if (!isParticipant) {
       throw new Error('User is not a participant of this conversation');
     }
 
-    const previousReaction = await this.prisma.reaction.findFirst({
-      where: { messageId, participantId },
+    const MAX_REACTIONS_PER_USER = 1;
+
+    const userExistingReactions = await this.prisma.reaction.findMany({
+      where: {
+        messageId,
+        participantId
+      },
       select: { emoji: true }
     });
 
-    if (previousReaction?.emoji === sanitized) {
-      const existingReaction = await this.prisma.reaction.findFirst({
-        where: { messageId, participantId, emoji: sanitized }
-      });
-      if (existingReaction) {
-        return { reaction: this.mapReactionToData(existingReaction), replacedEmojis: [] };
-      }
+    const uniqueEmojis = new Set(userExistingReactions.map(r => r.emoji));
+
+    if (uniqueEmojis.size >= MAX_REACTIONS_PER_USER && !uniqueEmojis.has(sanitized)) {
+      throw new Error(`Maximum ${MAX_REACTIONS_PER_USER} different reactions per message reached`);
     }
 
-    // Single-reaction-per-user model: the DB unique key is (messageId,
-    // participantId) — no emoji — so this upsert is atomic at the Mongo
-    // level. Two concurrent addReaction calls for different emojis now race
-    // on the SAME document instead of each inserting its own row (the prior
-    // find/deleteMany/create sequence let both pass the "no existing
-    // reaction" check before either committed).
-    const reaction = await this.prisma.reaction.upsert({
-      where: { participant_reaction_unique: { messageId, participantId } },
-      update: { emoji: sanitized },
-      create: { messageId, participantId, emoji: sanitized }
+    const existingReaction = await this.prisma.reaction.findFirst({
+      where: {
+        messageId,
+        participantId,
+        emoji: sanitized
+      }
     });
 
-    const replacedEmojis = previousReaction && previousReaction.emoji !== sanitized
-      ? [previousReaction.emoji]
-      : [];
+    if (existingReaction) {
+      return this.mapReactionToData(existingReaction);
+    }
 
-    await this.updateMessageReactionSummary(messageId);
+    const reaction = await this.prisma.reaction.create({
+      data: {
+        messageId,
+        participantId,
+        emoji: sanitized
+      }
+    });
 
-    return { reaction: this.mapReactionToData(reaction), replacedEmojis };
+    await this.updateMessageReactionSummary(messageId, sanitized, 'add');
+
+    return this.mapReactionToData(reaction);
   }
 
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {
@@ -143,7 +135,7 @@ export class ReactionService {
     });
 
     if (result.count > 0) {
-      await this.updateMessageReactionSummary(messageId);
+      await this.updateMessageReactionSummary(messageId, sanitized, 'remove', result.count);
     }
 
     return result.count > 0;
@@ -335,39 +327,45 @@ export class ReactionService {
     };
   }
 
-  private async updateMessageReactionSummary(messageId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const message = await tx.message.findUnique({
-        where: { id: messageId },
-        select: { id: true }
-      });
+  private async updateMessageReactionSummary(
+    messageId: string,
+    emoji: string,
+    action: 'add' | 'remove',
+    count: number = 1
+  ): Promise<void> {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { reactionSummary: true, reactionCount: true }
+    });
 
-      if (!message) return;
+    if (!message) {
+      return;
+    }
 
-      // Ventilation par emoji ET total recalculés depuis la table `Reaction`
-      // (source de vérité), au lieu d'appliquer un delta add/remove sur une carte
-      // dénormalisée. La lecture du "previousReaction" dans addReaction se fait hors
-      // transaction, donc deux addReaction concurrents pour le même participant avec
-      // des emojis différents peuvent tous deux la croire absente et incrémenter
-      // chacun leur propre delta — laissant un emoji fantôme dans reactionSummary
-      // sans ligne `Reaction` derrière. Recalculer depuis groupBy est auto-réparant,
-      // quel que soit l'état après la course.
-      const grouped = await tx.reaction.groupBy({
-        by: ['emoji'],
-        where: { messageId },
-        _count: { emoji: true }
-      });
+    const currentSummary = (message.reactionSummary as Record<string, number>) || {};
+    const currentCount = message.reactionCount || 0;
 
-      const reactionSummary = grouped.reduce<Record<string, number>>((summary, group) => {
-        summary[group.emoji] = group._count.emoji;
-        return summary;
-      }, {});
-      const total = grouped.reduce((sum, group) => sum + group._count.emoji, 0);
+    if (action === 'add') {
+      currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
+    } else {
+      if (currentSummary[emoji]) {
+        currentSummary[emoji] -= count;
+        if (currentSummary[emoji] <= 0) {
+          delete currentSummary[emoji];
+        }
+      }
+    }
 
-      await tx.message.update({
-        where: { id: messageId },
-        data: { reactionSummary, reactionCount: total }
-      });
+    const newReactionCount = action === 'add'
+      ? currentCount + count
+      : Math.max(0, currentCount - count);
+
+    await this.prisma.message.update({
+      where: { id: messageId },
+      data: {
+        reactionSummary: currentSummary,
+        reactionCount: newReactionCount
+      }
     });
   }
 

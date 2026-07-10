@@ -404,7 +404,6 @@ extension FeedView {
                     pendingThumbnails.removeValue(forKey: id)
                 }
             } label: {
-                // Glyphe chrome dans un cadre de tap fixe 28×28 : figé (doctrine 82i) ; le libellé porte le sens
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(12, weight: .bold))
                     .foregroundColor(.white)
@@ -415,7 +414,6 @@ extension FeedView {
                             .shadow(color: MeeshyColors.error.opacity(0.4), radius: 4, y: 2)
                     )
             }
-            .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
             .padding(.trailing, 8)
 
             VStack(spacing: 4) {
@@ -431,7 +429,6 @@ extension FeedView {
                             Image(systemName: "play.circle.fill")
                                 .font(MeeshyFont.relative(20))
                                 .foregroundStyle(.white, .black.opacity(0.4))
-                                .accessibilityHidden(true)
                         }
                     } else if attachment.type == .location {
                         ZStack {
@@ -448,7 +445,6 @@ extension FeedView {
                                 Image(systemName: "mappin.circle.fill")
                                     .font(MeeshyFont.relative(22))
                                     .foregroundStyle(.white, .white.opacity(0.3))
-                                    .accessibilityHidden(true)
                                 Circle()
                                     .fill(Color.white.opacity(0.3))
                                     .frame(width: 8, height: 4)
@@ -469,7 +465,6 @@ extension FeedView {
                         Image(systemName: feedIconForType(attachment.type))
                             .font(MeeshyFont.relative(22))
                             .foregroundColor(.white)
-                            .accessibilityHidden(true)
                     }
                 }
                 .frame(width: 56, height: 56)
@@ -1010,17 +1005,15 @@ struct FeedComposerSheet: View {
                         Image(systemName: "play.circle.fill")
                             .font(MeeshyFont.relative(22))
                             .foregroundStyle(.white, .black.opacity(0.4))
-                            .accessibilityHidden(true)
                     }
                 } else if attachment.type == .location {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: [Color(hex: "2ECC71"), Color(hex: "27AE60")], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                         .overlay(
                             Image(systemName: "mappin.circle.fill")
                                 .font(MeeshyFont.relative(26))
                                 .foregroundStyle(.white, .white.opacity(0.3))
-                                .accessibilityHidden(true)
                         )
                 } else {
                     RoundedRectangle(cornerRadius: 10)
@@ -1030,7 +1023,6 @@ struct FeedComposerSheet: View {
                             Image(systemName: sheetIconForType(attachment.type))
                                 .font(MeeshyFont.relative(26))
                                 .foregroundColor(.white)
-                                .accessibilityHidden(true)
                         )
                 }
             }
@@ -1047,7 +1039,6 @@ struct FeedComposerSheet: View {
                         pendingThumbnails.removeValue(forKey: id)
                     }
                 } label: {
-                    // Glyphe chrome dans un cadre de tap fixe 20×20 : figé (doctrine 82i) ; le libellé porte le sens
                     Image(systemName: "xmark")
                         .font(MeeshyFont.relative(9, weight: .bold))
                         .foregroundColor(.white)
@@ -1058,7 +1049,6 @@ struct FeedComposerSheet: View {
                                 .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                         )
                 }
-                .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
                 .offset(x: 6, y: -6)
             }
 

@@ -2,8 +2,6 @@
 <resources>
     <string name="chat_title">Messages</string>
     <string name="chat_back">Retour</string>
-    <string name="chat_call_audio">Appel audio</string>
-    <string name="chat_call_video">Appel vidéo</string>
     <string name="chat_message_placeholder">Message</string>
     <string name="chat_send">Envoyer</string>
     <string name="chat_no_messages">Aucun message pour l\'instant</string>

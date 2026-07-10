@@ -71,7 +71,6 @@ export function hasMinimumRole(
   userRole: GlobalUserRole | GlobalUserRoleType,
   requiredRole: GlobalUserRole | GlobalUserRoleType
 ): boolean {
-  /* v8 ignore next 2 -- TypeScript types ensure roles are always in GLOBAL_ROLE_HIERARCHY; || 0 unreachable */
   const userLevel = GLOBAL_ROLE_HIERARCHY[userRole as GlobalUserRole] || 0;
   const requiredLevel = GLOBAL_ROLE_HIERARCHY[requiredRole as GlobalUserRole] || 0;
   return userLevel >= requiredLevel;
@@ -135,7 +134,6 @@ export function hasMinimumMemberRole(
   requiredRole: MemberRole | MemberRoleType
 ): boolean {
   const userLevel = MEMBER_ROLE_HIERARCHY[userRole as MemberRole] || 0;
-  /* v8 ignore next -- requiredRole is typed MemberRole|MemberRoleType, always in MEMBER_ROLE_HIERARCHY */
   const requiredLevel = MEMBER_ROLE_HIERARCHY[requiredRole as MemberRole] || 0;
   return userLevel >= requiredLevel;
 }
@@ -195,7 +193,6 @@ export function getEffectiveRoleLevel(
  */
 export function hasModeratorPrivileges(effectiveRole: string): boolean {
   const level = UNIFIED_ROLE_LEVELS[effectiveRole.toUpperCase()] || 0;
-  /* v8 ignore next -- UNIFIED_ROLE_LEVELS.MODERATOR is always defined; ?? 60 is unreachable */
   return level >= (UNIFIED_ROLE_LEVELS.MODERATOR ?? 60);
 }
 
@@ -279,7 +276,6 @@ export function isMemberRole(value: string): value is MemberRoleType {
  * Vérifie si un utilisateur est un administrateur global (ADMIN ou BIGBOSS)
  */
 export function isGlobalAdmin(role: GlobalUserRole | GlobalUserRoleType | string): boolean {
-  /* v8 ignore next -- string enum values are always typeof 'string' at runtime; else branch unreachable */
   const normalized = typeof role === 'string' ? role.toUpperCase() : role;
   return normalized === GlobalUserRole.ADMIN ||
          normalized === GlobalUserRole.BIGBOSS;
@@ -296,7 +292,6 @@ export function isGlobalModerator(role: GlobalUserRole | GlobalUserRoleType): bo
  * Vérifie si un membre est admin
  */
 export function isMemberAdmin(role: MemberRole | MemberRoleType | string): boolean {
-  /* v8 ignore next -- string enum values are always typeof 'string' at runtime; else branch unreachable */
   const normalized = typeof role === 'string' ? role.toLowerCase() : role;
   return normalized === MemberRole.ADMIN;
 }
@@ -312,7 +307,6 @@ export function isMemberModerator(role: MemberRole | MemberRoleType | string): b
  * Vérifie si un membre est créateur
  */
 export function isMemberCreator(role: MemberRole | MemberRoleType | string): boolean {
-  /* v8 ignore next -- string enum values are always typeof 'string' at runtime; else branch unreachable */
   const normalized = typeof role === 'string' ? role.toLowerCase() : role;
   return normalized === MemberRole.CREATOR;
 }

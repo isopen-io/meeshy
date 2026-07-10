@@ -22,7 +22,7 @@ import {
   detectOS,
   detectDevice
 } from './types';
-import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 
 /**
  * Routes de suivi et analytics des liens de tracking
@@ -97,11 +97,17 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
       }
 
       if (!trackingLink.isActive) {
-        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
+        return reply.status(410).send({
+          success: false,
+          error: 'Ce lien n\'est plus actif'
+        });
       }
 
       if (trackingLink.expiresAt && new Date() > trackingLink.expiresAt) {
-        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expiré' });
+        return reply.status(410).send({
+          success: false,
+          error: 'Ce lien a expiré'
+        });
       }
 
       const ipAddress = (request.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
@@ -303,7 +309,11 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return sendError(reply, 400, 'Données invalides');
+        return reply.status(400).send({
+          success: false,
+          error: 'Données invalides',
+          details: error.issues
+        });
       }
 
       if (error instanceof Error) {
@@ -311,10 +321,16 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
           return sendNotFound(reply, 'Lien de tracking non trouvé');
         }
         if (error.message === 'Tracking link is inactive') {
-          return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
+          return reply.status(410).send({
+            success: false,
+            error: 'Ce lien n\'est plus actif'
+          });
         }
         if (error.message === 'Tracking link has expired') {
-          return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expiré' });
+          return reply.status(410).send({
+            success: false,
+            error: 'Ce lien a expiré'
+          });
         }
       }
 
@@ -545,7 +561,11 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return sendError(reply, 400, 'Paramètres invalides');
+        return reply.status(400).send({
+          success: false,
+          error: 'Paramètres invalides',
+          details: error.issues
+        });
       }
       logError(fastify.log, 'Get tracking link stats error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -755,7 +775,11 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       const result = await trackingLinkService.getAllTrackingLinks({ limit, offset, search });
 
-      return sendSuccess(reply, { trackingLinks: result.trackingLinks, total: result.total });
+      return reply.send({
+        success: true,
+        trackingLinks: result.trackingLinks,
+        total: result.total
+      });
     } catch (error) {
       logError(fastify.log, 'Admin get all tracking links error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -813,7 +837,11 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       const result = await trackingLinkService.getTrackingLinkClicks(trackingLink.id, limit, offset);
 
-      return sendSuccess(reply, { clicks: result.clicks, total: result.total });
+      return reply.send({
+        success: true,
+        clicks: result.clicks,
+        total: result.total
+      });
     } catch (error) {
       logError(fastify.log, 'Admin get tracking link clicks error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

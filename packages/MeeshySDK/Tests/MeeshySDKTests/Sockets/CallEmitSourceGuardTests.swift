@@ -117,24 +117,6 @@ final class CallEmitSourceGuardTests: XCTestCase {
         )
     }
 
-    func test_emitCallQualityReport_includesJitterMsInPayloadWhenPositive() throws {
-        let src = try managerSource()
-        XCTAssertTrue(
-            src.contains("stats[\"jitterMs\"] = jitterMs"),
-            "emitCallQualityReport must include 'jitterMs' in the stats payload when jitter > 0 " +
-            "so the gateway call-summary and diagnostics can surface audio jitter data."
-        )
-    }
-
-    func test_emitCallQualityReport_jitterMsGatedOnPositiveValue() throws {
-        let src = try managerSource()
-        XCTAssertTrue(
-            src.contains("if jitterMs > 0"),
-            "emitCallQualityReport must gate jitterMs on `jitterMs > 0` — " +
-            "omitting the gate sends a zero jitter value that could mislead the gateway diagnostics."
-        )
-    }
-
     // MARK: - Emit: call:reconnecting
 
     func test_emitCallReconnecting_emitsWithParticipantIdAndAttempt() throws {

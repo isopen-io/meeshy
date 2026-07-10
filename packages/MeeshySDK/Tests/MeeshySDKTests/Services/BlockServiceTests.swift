@@ -177,28 +177,6 @@ final class BlockServiceTests: XCTestCase {
         }
     }
 
-    // MARK: - setBlockedOptimistic (R6-4 — outbox-routed block/unblock)
-
-    /// R6-4 — le chemin outbox (`OfflineQueue.enqueue(.blockUser)`) ne peut PAS
-    /// appeler `blockUser(userId:)` (celui-ci fait le POST réseau, doublon du
-    /// dispatcher). Il lui faut une mutation PUREMENT LOCALE de la blocklist
-    /// canonique pour que les swipe labels (`isBlocked`) reflètent l'état
-    /// optimiste — et sa réciproque pour le rollback sur `.exhausted`.
-    @MainActor
-    func test_setBlockedOptimistic_flipsBlockedUserIds_withoutNetwork() async {
-        XCTAssertFalse(service.isBlocked(userId: "u-opt"))
-
-        service.setBlockedOptimistic(userId: "u-opt", blocked: true)
-        XCTAssertTrue(service.isBlocked(userId: "u-opt"),
-            "optimistic block must flip blockedUserIds locally")
-        XCTAssertEqual(mock.requestCount, 0,
-            "the optimistic setter must NOT hit the network (the dispatcher owns the POST)")
-
-        service.setBlockedOptimistic(userId: "u-opt", blocked: false)
-        XCTAssertFalse(service.isBlocked(userId: "u-opt"),
-            "optimistic unblock (rollback) must remove the id")
-    }
-
     // MARK: - reset (P1 — session quiesce on logout)
 
     /// Prouve que `reset()` purge la blocklist en mémoire pour qu'un user B

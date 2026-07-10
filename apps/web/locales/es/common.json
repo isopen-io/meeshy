@@ -181,7 +181,6 @@
       "messageDeletedByOther": "Un mensaje ha sido eliminado",
       "modifyError": "Error al modificar el mensaje",
       "editError": "Error al modificar el mensaje",
-      "contentRequired": "Contenido obligatorio",
       "deleteError": "Error al eliminar el mensaje",
       "replyTo": "Responder a este mensaje",
       "messageFound": "¡Mensaje encontrado!",
@@ -269,17 +268,7 @@
     "storyVisibility": {
       "public": "Público",
       "friends": "Amigos",
-      "community": "Comunidad",
-      "except": "Todos excepto…",
-      "only": "Solo…",
       "private": "Privado"
-    },
-    "audiencePicker": {
-      "searchPlaceholder": "Buscar personas…",
-      "exceptHint": "Tu historia se ocultará a las personas seleccionadas.",
-      "onlyHint": "Solo las personas seleccionadas verán tu historia.",
-      "empty": "Nadie encontrado",
-      "remove": "Quitar"
     },
     "postComposer": {
       "contentLabel": "Contenido de la publicación",

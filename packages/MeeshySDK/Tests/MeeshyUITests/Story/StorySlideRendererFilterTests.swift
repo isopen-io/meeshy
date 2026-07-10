@@ -7,7 +7,7 @@ import CoreImage
 /// The thumbHash composite (`StorySlideRenderer.renderComposite`) must reflect the
 /// SAME filter the canvas/viewer renders, so the blur placeholder matches the played
 /// story (no colour pop when the real frame replaces the placeholder). Coverage is
-/// gated on `StoryFilterKind(storyFilter:)` — the single source of truth for
+/// gated on `StoryFilteredLayer.Kind(storyFilter:)` — the single source of truth for
 /// "which filters actually render": vintage/bw render → composite filtered;
 /// kernel-less filters (warm/cool/…) don't render → composite left unchanged.
 @MainActor

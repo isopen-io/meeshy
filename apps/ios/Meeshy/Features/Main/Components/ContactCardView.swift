@@ -3,7 +3,6 @@ import Combine
 import Contacts
 import ContactsUI
 import MeeshySDK
-import MeeshyUI
 
 // MARK: - Contact Card View (displayed inside a message bubble)
 
@@ -42,102 +41,76 @@ struct ContactCardView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "contact-card.shared", defaultValue: "Contact partage", bundle: .main))
-                            .font(.caption2.weight(.semibold))
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(Color(hex: accentColor).opacity(0.8))
                             .textCase(.uppercase)
                             .tracking(0.5)
 
                         Text(contact.fullName)
-                            .font(.subheadline.weight(.bold))
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.85)
                     }
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
 
-                // Phone numbers — green is the canonical "call" affordance (semantic success token).
+                // Phone numbers
                 ForEach(contact.phoneNumbers, id: \.self) { phone in
                     HStack(spacing: 8) {
                         Image(systemName: "phone.fill")
-                            .font(.caption.weight(.medium))
-                            .foregroundColor(MeeshyColors.success)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color(hex: "2ECC71"))
                             .frame(width: 20)
 
                         Text(phone)
-                            .font(.footnote.weight(.medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
                     }
                 }
 
-                // Emails — blue is the canonical "message/info" affordance (semantic info token).
+                // Emails
                 ForEach(contact.emails, id: \.self) { email in
                     HStack(spacing: 8) {
                         Image(systemName: "envelope.fill")
-                            .font(.caption.weight(.medium))
-                            .foregroundColor(MeeshyColors.info)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color(hex: "3498DB"))
                             .frame(width: 20)
 
                         Text(email)
-                            .font(.footnote.weight(.medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
                     }
                 }
             }
             .padding(12)
             .frame(width: 240)
-            // iOS 26 Liquid Glass card. The bubble it sits in uses a solid/gradient
-            // fill (not glass), so native glass samples it cleanly — no glass-in-glass.
-            // The SDK Compatibility atom owns the gating + the `.ultraThinMaterial`
-            // fallback; the brand-accent hairline stroke is kept as an explicit overlay
-            // (the atom's single-tint model can't express a gradient stroke). Refines
-            // the 52i deferral of this card now that the stroke is preserved explicitly.
-            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
+            .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color(hex: accentColor).opacity(0.3), Color(hex: accentColor).opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color(hex: accentColor).opacity(0.3), Color(hex: accentColor).opacity(0.1)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
                     )
             )
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.accessibilityLabel(for: contact))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(format: String(localized: "contact-card.a11y-label", defaultValue: "Contact partage: %@", bundle: .main), contact.fullName))
         .accessibilityHint(String(localized: "contact-card.a11y-hint", defaultValue: "Appuyer pour ouvrir le contact", bundle: .main))
-    }
-
-    // MARK: - Accessibility
-
-    /// Composes the full VoiceOver label for a shared contact card.
-    ///
-    /// The visible rows (phone numbers, emails) are otherwise lost to VoiceOver:
-    /// an explicit `.accessibilityLabel` overrides any `children: .combine` merge,
-    /// so the shared phone/email values must be folded into the label explicitly.
-    static func accessibilityLabel(for contact: SharedContact) -> String {
-        var parts = [
-            String(format: String(localized: "contact-card.a11y-label", defaultValue: "Contact partage: %@", bundle: .main), contact.fullName)
-        ]
-        if !contact.phoneNumbers.isEmpty {
-            parts.append(String(format: String(localized: "contact-card.a11y-phones", defaultValue: "Telephone: %@", bundle: .main), contact.phoneNumbers.joined(separator: ", ")))
-        }
-        if !contact.emails.isEmpty {
-            parts.append(String(format: String(localized: "contact-card.a11y-emails", defaultValue: "E-mail: %@", bundle: .main), contact.emails.joined(separator: ", ")))
-        }
-        return parts.joined(separator: ", ")
     }
 }
 

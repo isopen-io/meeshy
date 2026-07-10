@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import os
 import MeeshySDK
 import MeeshyUI
 
@@ -29,8 +28,6 @@ final class RequestsViewModel: ObservableObject {
 
     private let receivedKey = FriendshipCache.PersistenceKeys.receivedRequests
     private let sentKey = FriendshipCache.PersistenceKeys.sentRequests
-
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "requests")
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,
@@ -79,10 +76,7 @@ final class RequestsViewModel: ObservableObject {
             receivedRequests.append(contentsOf: response.data)
             receivedHasMore = response.pagination?.hasMore ?? false
             receivedOffset += response.data.count
-        } catch {
-            Self.logger.error("loadMoreReceived failed: \(error.localizedDescription)")
-            receivedHasMore = false
-        }
+        } catch {}
     }
 
     // MARK: - Load Sent
@@ -126,10 +120,7 @@ final class RequestsViewModel: ObservableObject {
             // the unfiltered `response.data.count` would skip pending items the
             // server returned on the previous page, dropping rows from the UI.
             sentOffset += pending.count
-        } catch {
-            Self.logger.error("loadMoreSent failed: \(error.localizedDescription)")
-            sentHasMore = false
-        }
+        } catch {}
     }
 
     // MARK: - Accept / Reject (Wave 1 Phase B)

@@ -23,7 +23,6 @@ import type {
   BinaryFrameInfo
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { withTimeout } from '../../utils/with-timeout';
 // Logger dédié pour ZmqRequestSender
 const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
 
@@ -95,12 +94,11 @@ export class ZmqRequestSender {
     logger.info(`   📋 message size: ${JSON.stringify(requestMessage).length} chars`);
 
     // Envoyer la commande via PUSH avec timeout (5s) pour détecter les pannes translator
+    const sendTimeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`ZMQ send timeout after 5s for taskId=${taskId}`)), 5_000)
+    );
     try {
-      await withTimeout(
-        this.connectionManager.send(requestMessage),
-        5_000,
-        `ZMQ send timeout after 5s for taskId=${taskId}`
-      );
+      await Promise.race([this.connectionManager.send(requestMessage), sendTimeout]);
     } catch (error) {
       logger.error(`❌ [ZMQ-Client] Échec envoi PUSH taskId=${taskId}:`, error);
       throw error;

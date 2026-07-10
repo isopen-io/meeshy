@@ -182,47 +182,6 @@ export class TypingService {
   }
 
   /**
-   * Clear typing state for a single conversation and notify listeners.
-   * Called when the user leaves a conversation so stale indicators don't
-   * persist in the background.
-   */
-  clearConversationTypingState(conversationId: string): void {
-    const userIds = this.typingUsers.get(conversationId);
-    if (!userIds) return;
-
-    userIds.forEach(userId => {
-      const timeoutKey = `${conversationId}:${userId}`;
-      const t = this.typingTimeouts.get(timeoutKey);
-      if (t) { clearTimeout(t); this.typingTimeouts.delete(timeoutKey); }
-      this.typingListeners.forEach(listener =>
-        listener({ conversationId, userId, isTyping: false } as any)
-      );
-    });
-    this.typingUsers.delete(conversationId);
-    this.lastStartEmitAt.delete(conversationId);
-  }
-
-  /**
-   * Clear all active typing indicators and notify listeners.
-   * Called on socket disconnect so UI reflects reality immediately
-   * instead of waiting for the 15-second safety timeout.
-   */
-  clearAllTypingState(): void {
-    this.typingTimeouts.forEach(timeout => clearTimeout(timeout));
-    this.typingTimeouts.clear();
-
-    this.typingUsers.forEach((userIds, conversationId) => {
-      userIds.forEach(userId => {
-        this.typingListeners.forEach(listener =>
-          listener({ conversationId, userId, isTyping: false } as any)
-        );
-      });
-    });
-    this.typingUsers.clear();
-    this.lastStartEmitAt.clear();
-  }
-
-  /**
    * Cleanup all listeners and timeouts
    */
   cleanup(): void {

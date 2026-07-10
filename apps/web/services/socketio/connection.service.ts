@@ -186,20 +186,6 @@ export class ConnectionService {
       this.emitStatusChange();
     });
 
-    socket.on('reconnect_failed', () => {
-      this.state.isConnecting = false;
-      logger.warn('[Socket]', `reconnection failed after ${this.maxReconnectAttempts} attempts`);
-      if (onError) onError(new Error('reconnect_failed'));
-      this.emitStatusChange();
-      // socket.io's built-in reconnection loop gives up permanently after
-      // `maxReconnectAttempts` — without this, a tab that's open but idle
-      // (no outbound joinConversation/sendMessage to trigger ensureConnection)
-      // stops receiving ALL realtime events (messages, typing, receipts,
-      // reactions) silently until the user takes an action or refreshes.
-      // Hand off to our own manual backoff loop so passive readers recover.
-      this.reconnect();
-    });
-
     socket.on(SERVER_EVENTS.AUTHENTICATED, (data: any) => {
       this.currentUser = data.user;
       if (onAuthenticated) onAuthenticated(data.user);

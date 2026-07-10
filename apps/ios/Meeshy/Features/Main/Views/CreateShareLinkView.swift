@@ -621,7 +621,7 @@ private enum ExpirationOption: String, CaseIterable {
         case .m3:    cal.date(byAdding: .month, value: 3, to: now)
         }
         guard let date else { return nil }
-        return date.formatted(.iso8601)
+        return ISO8601DateFormatter().string(from: date)
     }
 }
 

@@ -10,7 +10,6 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import {
   deviceLocaleMiddleware,
-  createDeviceLocaleMiddleware,
   _resetDeviceLocaleCache,
   _seedDeviceLocaleCache,
 } from '../../../middleware/deviceLocale';
@@ -214,63 +213,5 @@ describe('deviceLocaleMiddleware', () => {
     );
 
     expect(update).not.toHaveBeenCalled();
-  });
-
-  it('is a no-op when user has neither id nor userId (extractUserId returns undefined)', async () => {
-    const { prisma, update } = makePrismaMock();
-
-    await deviceLocaleMiddleware(
-      makeRequest(
-        { 'x-device-locale': 'fr-FR' },
-        { isAnonymous: false } // no id, no userId
-      ),
-      makeReply(),
-      prisma
-    );
-
-    expect(update).not.toHaveBeenCalled();
-  });
-
-  it('is a no-op when prisma is unavailable (no override, no server.prisma)', async () => {
-    // req.server.prisma is undefined — the middleware should warn and skip
-    const req = {
-      headers: { 'x-device-locale': 'fr-FR' },
-      user: { id: 'u3', deviceLocale: null },
-      server: { prisma: undefined },
-    } as unknown as import('fastify').FastifyRequest;
-
-    await expect(
-      deviceLocaleMiddleware(req, makeReply(), undefined)
-    ).resolves.toBeUndefined();
-  });
-
-  describe('createDeviceLocaleMiddleware factory', () => {
-    it('returns a hook function that delegates to deviceLocaleMiddleware', async () => {
-      const { prisma, update } = makePrismaMock();
-      const hook = createDeviceLocaleMiddleware(prisma as any);
-
-      await hook(
-        makeRequest({ 'x-device-locale': 'de-DE' }, { id: 'u4', deviceLocale: null }),
-        makeReply()
-      );
-
-      expect(update).toHaveBeenCalledTimes(1);
-      expect(update).toHaveBeenCalledWith({
-        where: { id: 'u4' },
-        data: { deviceLocale: 'de' },
-      });
-    });
-
-    it('factory hook is a no-op when header is absent', async () => {
-      const { prisma, update } = makePrismaMock();
-      const hook = createDeviceLocaleMiddleware(prisma as any);
-
-      await hook(
-        makeRequest({}, { id: 'u5', deviceLocale: null }),
-        makeReply()
-      );
-
-      expect(update).not.toHaveBeenCalled();
-    });
   });
 });

@@ -595,7 +595,7 @@ Android-port note: A SwiftUI-type-checker-budget workaround — irrelevant on An
 - [ ] In-place text editing overlaid on the canvas (font style, color, stroke, alignment)
 - [ ] Snap-to-guide alignment + safe-zone overlay + out-of-bounds warning while dragging
 - [ ] PencilKit-style freehand drawing layer (pen/marker/eraser, color palette, width, undo/redo/clear)
-- [x] Emoji sticker picker (categorized + searchable) — `story-sticker-picker-search`
+- [ ] Emoji sticker picker (categorized + searchable)
 - [ ] Background: solid color palette / image / looping or non-looping video
 - [ ] Slide filters (vintage, b&w, warm, cool, dramatic, vivid, fade, chrome) with intensity
 - [ ] Glass / frosted-blur text backgrounds

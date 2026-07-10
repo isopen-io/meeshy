@@ -12,7 +12,7 @@ struct ComposerFABColumn: View, Equatable {
     let sonBadge: Int
     let textBadge: Int
     let drawingBadge: Int
-    let textureBadge: Int
+    let filtersBadge: Int
     let timelineBadge: Int
     let activeCategory: BandCategory?
 
@@ -25,7 +25,7 @@ struct ComposerFABColumn: View, Equatable {
     var body: some View {
         VStack(spacing: 12) {
             fab(category: .timeline, icon: "clock", badge: timelineBadge)
-            fab(category: .texture, icon: "paintpalette.fill", badge: textureBadge)
+            fab(category: .filters, icon: "camera.filters", badge: filtersBadge)
             fab(category: .drawing, icon: "pencil.tip", badge: drawingBadge)
             fab(category: .text, icon: "textformat", badge: textBadge)
             fab(category: .son, icon: "music.note", badge: sonBadge)
@@ -48,7 +48,6 @@ struct ComposerFABColumn: View, Equatable {
             case .son: return MeeshyColors.indigo400
             case .text: return MeeshyColors.indigo400
             case .drawing: return MeeshyColors.success
-            case .texture: return MeeshyColors.warning
             case .filters: return MeeshyColors.info
             case .timeline: return MeeshyColors.indigo300
             }
@@ -87,48 +86,11 @@ struct ComposerFABColumn: View, Equatable {
                 }
             }
             .buttonStyle(.plain)
-            // Audit a11y it.88 : `String(describing: category)` annonçait les
-            // noms d'enum INTERNES (« texture », « son ») — jamais localisés
-            // et incohérents avec les libellés affichés (« Fond »). VoiceOver
-            // parle désormais la langue de l'UI, via les clés story.tool.*.
-            .accessibilityLabel(String(
-                localized: "story.composer.fab.open",
-                defaultValue: "Ouvrir l'outil \(toolDisplayName(category))",
-                bundle: .module
-            ))
-            .accessibilityValue(badge > 0
-                ? String(localized: "story.composer.fab.badge",
-                         defaultValue: "\(badge) élément(s) actif(s)", bundle: .module)
-                : String(localized: "story.composer.fab.badge.none",
-                         defaultValue: "Aucun élément", bundle: .module))
-            .accessibilityHint(isActive
-                ? String(localized: "story.composer.fab.hint.close",
-                         defaultValue: "Touchez deux fois pour fermer.", bundle: .module)
-                : String(localized: "story.composer.fab.hint.open",
-                         defaultValue: "Touchez deux fois pour ouvrir.", bundle: .module))
+            .accessibilityLabel("Ouvrir l'outil \(String(describing: category))")
+            .accessibilityValue(badge > 0 ? "\(badge) éléments actifs" : "Aucun élément")
+            .accessibilityHint(isActive ? "Touchez deux fois pour fermer." : "Touchez deux fois pour ouvrir.")
         }
         .frame(width: 56, height: 56)
-    }
-
-    /// Nom AFFICHÉ de l'outil (mêmes clés que les tuiles/chips — story.tool.*),
-    /// pour que VoiceOver annonce ce que l'écran montre.
-    private func toolDisplayName(_ category: BandCategory) -> String {
-        switch category {
-        case .media:
-            return String(localized: "story.tool.media", defaultValue: "Médias", bundle: .module)
-        case .son:
-            return String(localized: "story.tool.audio", defaultValue: "Son", bundle: .module)
-        case .text:
-            return String(localized: "story.tool.text", defaultValue: "Texte", bundle: .module)
-        case .drawing:
-            return String(localized: "story.tool.drawing", defaultValue: "Dessin", bundle: .module)
-        case .filters:
-            return String(localized: "story.tool.filters", defaultValue: "Effets", bundle: .module)
-        case .timeline:
-            return String(localized: "story.tool.timeline", defaultValue: "Timeline", bundle: .module)
-        case .texture:
-            return String(localized: "story.tool.texture", defaultValue: "Fond", bundle: .module)
-        }
     }
 
     static func == (lhs: ComposerFABColumn, rhs: ComposerFABColumn) -> Bool {
@@ -136,7 +98,7 @@ struct ComposerFABColumn: View, Equatable {
             && lhs.sonBadge == rhs.sonBadge
             && lhs.textBadge == rhs.textBadge
             && lhs.drawingBadge == rhs.drawingBadge
-            && lhs.textureBadge == rhs.textureBadge
+            && lhs.filtersBadge == rhs.filtersBadge
             && lhs.timelineBadge == rhs.timelineBadge
             && lhs.activeCategory == rhs.activeCategory
     }

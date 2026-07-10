@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendSuccess } from '../../utils/response.js';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest
@@ -124,7 +124,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       const shareLink = await findShareLinkByIdentifier(fastify.prisma, identifier);
 
       if (!shareLink) {
-        return sendNotFound(reply, 'Lien de partage non trouvé');
+        return reply.status(404).send({
+          success: false,
+          message: 'Lien de partage non trouvé'
+        });
       }
 
       // Vérifier les permissions d'accès
@@ -146,7 +149,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       }
 
       if (!hasAccess) {
-        return sendForbidden(reply, 'Accès non autorisé à ce lien');
+        return reply.status(403).send({
+          success: false,
+          message: 'Accès non autorisé à ce lien'
+        });
       }
 
       const { limit = '50', offset = '0' } = request.query as { limit?: string; offset?: string };
@@ -252,10 +258,8 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
               lastName: member.user.lastName,
               displayName: member.user.displayName,
               avatar: member.user.avatar,
-              // Lien de partage consultable sans authentification : ne jamais
-              // divulguer la présence réelle des membres (joinedAt non sensible).
-              isOnline: false,
-              lastActiveAt: member.joinedAt
+              isOnline: member.user.isOnline ?? false,
+              lastActiveAt: member.user.lastActiveAt ?? member.joinedAt
             }
           })),
           anonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").map(participant => ({
@@ -276,7 +280,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get link info error:', error);
-      return sendInternalError(reply, 'Erreur interne du serveur');
+      return reply.status(500).send({
+        success: false,
+        message: 'Erreur interne du serveur'
+      });
     }
   });
 }

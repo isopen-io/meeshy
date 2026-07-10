@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { Skeleton } from './Skeleton';
 import { TranslationToggle } from './TranslationToggle';
@@ -37,7 +36,21 @@ export interface StatusBarProps {
 // ============================================================================
 
 function getTimeRemaining(expiresAt: string): string {
-  return formatTimeRemaining(new Date(expiresAt).getTime(), Date.now()) ?? 'Expire';
+  const now = Date.now();
+  const expiry = new Date(expiresAt).getTime();
+  const diff = expiry - now;
+
+  if (diff <= 0) return 'Expire';
+
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours >= 1) {
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}h${remainingMinutes}m` : `${hours}h`;
+  }
+
+  return `${minutes}m`;
 }
 
 // ============================================================================

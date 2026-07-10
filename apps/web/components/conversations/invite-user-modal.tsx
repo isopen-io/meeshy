@@ -17,7 +17,7 @@ import {
 import { User } from '@/types';
 import { toast } from 'sonner';
 import { apiService } from '@/services/api.service';
-import { getUserInitials } from '@/lib/avatar-utils';
+import { getUserInitials } from '@/utils/user';
 import { useI18n } from '@/hooks/useI18n';
 
 interface InviteUserModalProps {
@@ -172,9 +172,7 @@ export function InviteUserModal({
             <div className="space-y-2">
               <h4 className="text-sm font-medium">{t('inviteModal.selectedUsers', { count: selectedUsers.length })}</h4>
               <div className="flex flex-wrap gap-2">
-                {selectedUsers.map(user => {
-                  const userName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
-                  return (
+                {selectedUsers.map(user => (
                   <Badge key={user.id} variant="secondary" className="flex items-center gap-2">
                     <Avatar className="h-4 w-4">
                       <AvatarImage src={user.avatar} />
@@ -183,20 +181,18 @@ export function InviteUserModal({
                       </AvatarFallback>
                     </Avatar>
                     <span className="text-xs">
-                      {userName}
+                      {user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username}
                     </span>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
                       onClick={() => removeUserFromSelection(user.id)}
-                      aria-label={t('inviteModal.removeUserAria', { name: userName })}
                     >
                       <X className="h-3 w-3" />
                     </Button>
                   </Badge>
-                  );
-                })}
+                ))}
               </div>
             </div>
           )}
@@ -212,26 +208,11 @@ export function InviteUserModal({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {searchResults.map(user => {
-                    const isSelected = selectedUsers.some(u => u.id === user.id);
-                    const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
-                    return (
+                  {searchResults.map(user => (
                     <div
                       key={user.id}
-                      role="button"
-                      tabIndex={isSelected ? -1 : 0}
-                      aria-disabled={isSelected}
-                      aria-label={isSelected
-                        ? t('inviteModal.selectedUserAria', { name: displayName })
-                        : t('inviteModal.addUserAria', { name: displayName })}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                      onClick={() => !isSelected && addUserToSelection(user)}
-                      onKeyDown={(e) => {
-                        if (!isSelected && (e.key === 'Enter' || e.key === ' ')) {
-                          e.preventDefault();
-                          addUserToSelection(user);
-                        }
-                      }}
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer"
+                      onClick={() => addUserToSelection(user)}
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
@@ -242,7 +223,7 @@ export function InviteUserModal({
                         </Avatar>
                         <div>
                           <p className="font-medium">
-                            {displayName}
+                            {user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username}
                           </p>
                           <p className="text-sm text-muted-foreground">@{user.username}</p>
                         </div>
@@ -250,16 +231,13 @@ export function InviteUserModal({
                       <Button
                         variant="outline"
                         size="sm"
-                        tabIndex={-1}
-                        aria-hidden="true"
-                        disabled={isSelected}
+                        disabled={selectedUsers.some(u => u.id === user.id)}
                       >
                         <UserPlus className="h-4 w-4 mr-1" />
-                        {isSelected ? t('inviteModal.selected') : t('inviteModal.add')}
+                        {selectedUsers.some(u => u.id === user.id) ? t('inviteModal.selected') : t('inviteModal.add')}
                       </Button>
                     </div>
-                    );
-                  })}
+                  ))}
                 </div>
               )}
             </ScrollArea>

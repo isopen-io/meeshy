@@ -30,9 +30,6 @@ struct MessageOverlayMenu: View {
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
     var onDeleteAttachment: ((String) -> Void)?
-    /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
-    /// (message à exactement un attachment enregistrable).
-    var onSaveMedia: (() -> Void)? = nil
     var onShowThread: (() -> Void)?
 
     // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
@@ -49,11 +46,6 @@ struct MessageOverlayMenu: View {
     /// action bar — ouvre l'écran de détail sur l'onglet Langue côté
     /// ConversationView.
     var onShowTranslate: (() -> Void)? = nil
-    /// Ouvre la feuille « Plus… » native (MessageMoreSheet) — action `.more`
-    /// de la liste verticale.
-    var onShowMore: (() -> Void)? = nil
-    /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
-    var onExpandFullPicker: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -188,62 +180,8 @@ struct MessageOverlayMenu: View {
             onShowTranslate?()
         case .delete:
             onDelete?()
-        case .reply, .forward, .react, .pin, .star, .thread, .info:
+        case .reply, .forward, .react, .pin, .info:
             break
-        }
-        dismiss()
-    }
-
-    // MARK: - Primary Actions (liste verticale native-lean)
-
-    private var menuContext: MessageMenuContext {
-        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasMedia = !message.attachments.isEmpty
-        let hasTimebased = message.attachments.contains {
-            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
-        }
-        return MessageMenuContext(
-            isMine: message.isMe,
-            canEdit: canEdit,
-            canDelete: canDelete,
-            hasText: hasText,
-            hasMedia: hasMedia,
-            hasTimebasedMedia: hasTimebased,
-            isPinned: message.pinnedAt != nil,
-            isStarred: isStarred,
-            isEdited: message.isEdited,
-            // Inerte ici : `menuContext` n'alimente que `primaryActions`, qui
-            // n'utilise PAS `hasEditRevisions`. Ce champ ne pilote que l'item
-            // `.history` de la feuille « Plus… », dont le contexte est construit
-            // séparément (ConversationView) avec la vraie valeur
-            // `!editRevisions(for:).isEmpty`.
-            hasEditRevisions: true,
-            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count
-        )
-    }
-
-    private var primaryActions: [PrimaryAction] {
-        MessageActionResolver.primaryActions(menuContext)
-    }
-
-    private func handlePrimaryAction(_ action: PrimaryAction) {
-        switch action {
-        case .edit:
-            onEdit?()
-        case .translate:
-            onShowTranslate?()
-        case .copy:
-            onCopy?()
-        case .saveMedia:
-            onSaveMedia?()
-        case .pin, .unpin:
-            onPin?()
-        case .star, .unstar:
-            onToggleStar?()
-        case .more:
-            onShowMore?()
-        case .delete:
-            onDelete?()
         }
         dismiss()
     }
@@ -275,7 +213,19 @@ struct MessageOverlayMenu: View {
             let bubblePreviewScale: CGFloat = bubbleRect.height > maxPreviewHeight
                 ? max(0.55, maxPreviewHeight / bubbleRect.height)
                 : 1.0
+            let scaledBubbleWidth = bubbleRect.width * bubblePreviewScale
             let scaledBubbleHeight = bubbleRect.height * bubblePreviewScale
+
+            // Ancrage horizontal de la bulle scaled — glué au même bord que
+            // la source : right pour `isMe` (bulles "moi" right-aligned),
+            // left pour les bulles reçues. Au scale 1 l'expression dégénère
+            // en `bubbleRect.midX` (identité, aucune régression). Au scale
+            // < 1 la bulle conserve son edge d'origine au lieu de "flotter"
+            // vers le centre — sans ça une bulle "moi" prés du bord droit
+            // se retrouve décalée vers la gauche après scale-down.
+            let bubbleAnchorX: CGFloat = message.isMe
+                ? bubbleRect.maxX - scaledBubbleWidth / 2
+                : bubbleRect.minX + scaledBubbleWidth / 2
 
             // Mesures du cluster — gaps tightement contrôlés. Heights basées
             // sur les rendus réels mesurés en simulateur.
@@ -311,6 +261,33 @@ struct MessageOverlayMenu: View {
             let clampedClusterTopY = max(minClusterTopY, min(desiredClusterTopY, maxClusterTopY))
             let clusterBottomY = clampedClusterTopY + clusterTotalHeight
 
+            // Positions Y centrales de chaque élément du cluster (pour .position).
+            // Utilise scaledBubbleHeight pour respecter le scale-down visuel
+            // du preview (vidéos / grilles d'images / reply + grid → cap 320pt).
+            let quickActionMenuCenterY = clampedClusterTopY + quickActionMenuHeight / 2
+            let bubbleTopY = clampedClusterTopY + quickActionMenuHeight + quickActionToBubbleGap
+            let bubbleFinalMidY = bubbleTopY + scaledBubbleHeight / 2
+            let emojiBarCenterY = bubbleTopY + scaledBubbleHeight + bubbleToEmojiGap + emojiBarHeight / 2
+
+            // Position X = bubbleAnchorX (centre de la bulle scaled, alignée
+            // au même bord que la source). Action bar et emoji bar suivent
+            // ce même axe vertical avec clamp aux bords écran pour éviter le
+            // débordement quand la bulle est près d'un bord. Au scale 1
+            // `bubbleAnchorX == bubbleRect.midX`, donc pas de régression pour
+            // les bulles courtes ; au scale < 1 le cluster reste solidaire de
+            // la bulle qui ne flotte plus vers le centre.
+            let sidePadding: CGFloat = 16
+            let quickActionMenuWidth = ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).width
+            let emojiBarApproxWidth: CGFloat = 320
+            let quickActionMenuCenterX: CGFloat = max(
+                sidePadding + quickActionMenuWidth / 2,
+                min(geometry.size.width - sidePadding - quickActionMenuWidth / 2, bubbleAnchorX)
+            )
+            let emojiBarCenterX: CGFloat = max(
+                sidePadding + emojiBarApproxWidth / 2,
+                min(geometry.size.width - sidePadding - emojiBarApproxWidth / 2, bubbleAnchorX)
+            )
+
             // Panel auto-expand : si le cluster termine plus haut que le
             // panel naturel, le panel s'agrandit pour combler le gap (le
             // top du panel monte jusqu'à clusterBottom + clearance).
@@ -323,6 +300,7 @@ struct MessageOverlayMenu: View {
             // étendue).
             let maxExpandUp = -(screenH - panelBaseHeight - safeTop - 20)
             let clampedDrag = min(0, max(maxExpandUp, dragOffset))
+            let panelHeight = panelBaseHeight - clampedDrag
 
             // Fade out de la cluster (action bar + bulle + emoji bar) quand
             // l'utilisateur déplie le panneau via le drag handle. Au-delà de
@@ -332,35 +310,6 @@ struct MessageOverlayMenu: View {
             let clusterFadeThreshold: CGFloat = 80
             let clusterFadeOpacity: CGFloat = max(0, 1 - abs(clampedDrag) / clusterFadeThreshold)
             let clusterIsInteractive = clusterFadeOpacity > 0.5
-
-            // ── Géométrie native-lean : barre réactions (haut) + bulle + liste verticale (bas) ──
-            let nlEmojiBarHeight: CGFloat = 52
-            let nlGap: CGFloat = 12
-            let nlSidePadding: CGFloat = 16
-            let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
-            let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
-            let nlEmojiWidth: CGFloat = 300
-            let nlAvailTop = safeTop + 12
-            let nlAvailBottom = screenH - safeBottom - 12
-            let nlAvailable = max(160, nlAvailBottom - nlAvailTop)
-            let nlChrome = nlEmojiBarHeight + nlGap * 2 + nlMenuHeight
-            let nlFitScale: CGFloat = (scaledBubbleHeight + nlChrome > nlAvailable)
-                ? max(0.4, min(bubblePreviewScale, max(60, nlAvailable - nlChrome) / max(1, bubbleRect.height)))
-                : bubblePreviewScale
-            let nlBubbleW = bubbleRect.width * nlFitScale
-            let nlBubbleH = bubbleRect.height * nlFitScale
-            let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlGap + nlMenuHeight
-            let nlAnchorX: CGFloat = message.isMe
-                ? bubbleRect.maxX - nlBubbleW / 2
-                : bubbleRect.minX + nlBubbleW / 2
-            let nlDesiredTop = bubbleRect.minY - nlEmojiBarHeight - nlGap
-            let nlClusterTop = max(nlAvailTop, min(nlDesiredTop, nlAvailBottom - nlClusterH))
-            let nlEmojiY = nlClusterTop + nlEmojiBarHeight / 2
-            let nlBubbleTop = nlClusterTop + nlEmojiBarHeight + nlGap
-            let nlBubbleMidY = nlBubbleTop + nlBubbleH / 2
-            let nlMenuY = nlBubbleTop + nlBubbleH + nlGap + nlMenuHeight / 2
-            let nlMenuX = max(nlSidePadding + nlMenuWidth / 2, min(geometry.size.width - nlSidePadding - nlMenuWidth / 2, nlAnchorX))
-            let nlEmojiX = max(nlSidePadding + nlEmojiWidth / 2, min(geometry.size.width - nlSidePadding - nlEmojiWidth / 2, nlAnchorX))
 
             ZStack {
                 dismissBackground
@@ -413,25 +362,39 @@ struct MessageOverlayMenu: View {
                         .offset(y: isVisible ? 0 : 18)
                     }
 
-                    // Panneau grille retiré (native-lean) — les détails
-                    // passent désormais par la feuille « Plus… » (MessageMoreSheet).
+                    // Le panneau de détail reste ANCRÉ au bas — le drag
+                    // handle laisse l'utilisateur l'agrandir ou le réduire à
+                    // volonté. Pas de lift artificiel : le panel s'ouvre à
+                    // la hauteur permise (`panelBaseHeight`) et le drag fait
+                    // varier `panelHeight` autour de cette base.
+                    detailPanel(safeBottom: safeBottom)
+                        .frame(height: panelHeight)
+                        .offset(y: isVisible ? 0 : panelBaseHeight + 40)
                 }
 
                 if useSourceFrame {
-                    // Liste d'actions verticale EN-DESSOUS de la bulle
-                    // (native-lean). Icônes monochromes accent, destructif
-                    // rouge isolé. Remplace la capsule horizontale + la grille.
-                    MessageActionsMenu(
-                        actions: primaryActions,
-                        accentHex: contactColor,
-                        onSelect: { handlePrimaryAction($0) }
-                    )
-                    .position(
-                        x: nlMenuX,
-                        y: isVisible ? nlMenuY : (bubbleRect.maxY + 8)
-                    )
-                    .opacity(isVisible ? 1 : 0)
-                    .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
+                    // Quick action bar au-dessus de la bulle (iMessage-style)
+                    // — actions rapides Copier/Éditer/Traduire/Supprimer
+                    // filtrées selon le contexte. Tap fire le callback +
+                    // dismiss l'overlay. Visible uniquement si au moins une
+                    // action passe le filtre.
+                    if !quickActions.isEmpty {
+                        ContextActionMenu(
+                            actions: quickActions,
+                            palette: quickActionPalette,
+                            onAction: { kind in handleQuickAction(kind) }
+                        )
+                        .position(
+                            x: quickActionMenuCenterX,
+                            y: isVisible ? quickActionMenuCenterY : (bubbleRect.minY - 4)
+                        )
+                        .opacity(isVisible ? clusterFadeOpacity : 0)
+                        .scaleEffect(
+                            isVisible ? 1.0 : 0.85,
+                            anchor: message.isMe ? .bottomTrailing : .bottomLeading
+                        )
+                        .allowsHitTesting(clusterIsInteractive)
+                    }
 
                     // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
                     // paramètres que la cellule live de la liste : rendu
@@ -469,24 +432,30 @@ struct MessageOverlayMenu: View {
                         )
                     )
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
-                    .scaleEffect(nlFitScale, anchor: .center)
-                    .frame(width: nlBubbleW, height: nlBubbleH)
+                    .scaleEffect(bubblePreviewScale, anchor: .center)
+                    .frame(width: scaledBubbleWidth, height: scaledBubbleHeight)
                     .position(
-                        x: nlAnchorX,
-                        y: isVisible ? nlBubbleMidY : bubbleRect.midY
+                        x: bubbleAnchorX,
+                        y: isVisible ? bubbleFinalMidY : bubbleRect.midY
                     )
-                    .opacity(isVisible ? 1 : 0)
+                    .opacity(isVisible ? clusterFadeOpacity : 0)
                     .allowsHitTesting(false)
 
-                    // Barre de réactions AU-DESSUS de la bulle (native-lean).
+                    // Barre d'emojis rapides — positionnée DIRECTEMENT sous
+                    // la bulle (gap ~10pt) ET ALIGNÉE au même côté que la
+                    // bulle pour rester "à portée de pouce" et créer une
+                    // continuité visuelle bubble ↔ emoji bar ↔ action bar.
                     emojiQuickBar
                         .position(
-                            x: nlEmojiX,
-                            y: isVisible ? nlEmojiY : bubbleRect.minY
+                            x: emojiBarCenterX,
+                            y: isVisible ? emojiBarCenterY : (bubbleRect.maxY + emojiBarHeight / 2)
                         )
-                        .opacity(isVisible ? 1 : 0)
-                        .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
-                        .allowsHitTesting(true)
+                        .opacity(isVisible ? clusterFadeOpacity : 0)
+                        .scaleEffect(
+                            isVisible ? 1.0 : 0.7,
+                            anchor: message.isMe ? .topTrailing : .topLeading
+                        )
+                        .allowsHitTesting(clusterIsInteractive)
                 }
             }
         }
@@ -525,8 +494,8 @@ struct MessageOverlayMenu: View {
             },
             onExpandFullPicker: {
                 HapticFeedback.light()
-                onExpandFullPicker?()
-                dismiss()
+                isEmojiPickerOpen.toggle()
+                forceTab = isEmojiPickerOpen ? .react : .language
             }
         )
         .frame(maxWidth: 280)
@@ -613,15 +582,15 @@ struct MessageOverlayMenu: View {
             }
 
             Text(name)
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color(hex: color))
 
             Text("·")
-                .font(MeeshyFont.relative(13))
+                .font(.system(size: 13))
                 .foregroundColor(theme.textMuted)
 
             Text(formatExactDate(message.createdAt))
-                .font(MeeshyFont.relative(12))
+                .font(.system(size: 12))
                 .foregroundColor(theme.textMuted)
         }
     }
@@ -727,7 +696,7 @@ struct MessageOverlayMenu: View {
 
         return VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
             Text(truncated)
-                .font(MeeshyFont.relative(15))
+                .font(.system(size: 15))
                 .foregroundColor(message.isMe ? .white : theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14)
@@ -829,21 +798,18 @@ struct MessageOverlayMenu: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(accent.opacity(0.15))
                     .frame(width: 36, height: 36)
-                // Decorative glyph inside a fixed 36×36 badge — kept fixed so
-                // it never overflows the badge; filename text carries the label.
                 Image(systemName: "doc.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(accent)
-                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
-                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text(formatFileSize(attachment.fileSize))
-                    .font(MeeshyFont.relative(11))
+                    .font(.system(size: 11))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -991,23 +957,20 @@ struct MessageOverlayMenu: View {
 
         actions.append(MessageAction(
             id: "reply", icon: "arrowshape.turn.up.left.fill",
-            label: String(localized: "action.reply", defaultValue: "Répondre", bundle: .main),
-            color: MeeshyColors.indigo400,
+            label: "Repondre", color: MeeshyColors.indigo400,
             handler: { dismissThen { onReply?() } }
         ))
 
         actions.append(MessageAction(
             id: "thread", icon: "bubble.left.and.bubble.right.fill",
-            label: String(localized: "action.thread", defaultValue: "Discussion", bundle: .main),
-            color: MeeshyColors.warning,
+            label: "Discussion", color: MeeshyColors.warning,
             handler: { dismissThen { onShowThread?() } }
         ))
 
         if hasText {
             actions.append(MessageAction(
                 id: "copy", icon: "doc.on.doc.fill",
-                label: String(localized: "action.copy", defaultValue: "Copier", bundle: .main),
-                color: MeeshyColors.indigo500,
+                label: "Copier", color: MeeshyColors.indigo500,
                 handler: { dismissThen { onCopy?() } }
             ))
         }
@@ -1015,9 +978,7 @@ struct MessageOverlayMenu: View {
         actions.append(MessageAction(
             id: "pin",
             icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
-            label: message.pinnedAt != nil
-                ? String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
-                : String(localized: "action.pin", defaultValue: "Épingler", bundle: .main),
+            label: message.pinnedAt != nil ? "Desepingler" : "Epingler",
             color: MeeshyColors.info,
             handler: { dismissThen { onPin?() } }
         ))
@@ -1026,9 +987,7 @@ struct MessageOverlayMenu: View {
         actions.append(MessageAction(
             id: "star",
             icon: isStarred ? "star.slash.fill" : "star.fill",
-            label: isStarred
-                ? String(localized: "action.unstar", defaultValue: "Retirer des favoris", bundle: .main)
-                : String(localized: "action.star", defaultValue: "Ajouter aux favoris", bundle: .main),
+            label: isStarred ? "Retirer des favoris" : "Ajouter aux favoris",
             color: MeeshyColors.warning,
             handler: { dismissThen { onToggleStar?() } }
         ))
@@ -1036,8 +995,7 @@ struct MessageOverlayMenu: View {
         if canEdit && hasText {
             actions.append(MessageAction(
                 id: "edit", icon: "pencil",
-                label: String(localized: "action.edit", defaultValue: "Modifier", bundle: .main),
-                color: MeeshyColors.warning,
+                label: "Modifier", color: MeeshyColors.warning,
                 handler: { dismissThen { onEdit?() } }
             ))
         }
@@ -1047,8 +1005,7 @@ struct MessageOverlayMenu: View {
                 let attId = message.attachments[0].id
                 actions.append(MessageAction(
                     id: "deleteAttachment", icon: "paperclip.badge.ellipsis",
-                    label: String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main),
-                    color: MeeshyColors.error,
+                    label: "Supprimer le media", color: MeeshyColors.error,
                     handler: { dismissThen { onDeleteAttachment(attId) } }
                 ))
             }
@@ -1118,8 +1075,6 @@ private struct PreviewAudioPlayer: View {
                                 .tint(accent)
                                 .scaleEffect(0.6)
                         } else {
-                            // Glyph inside a fixed 40×40 circle — kept fixed to
-                            // stay centred; the Button carries the a11y label.
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(accent)
@@ -1127,19 +1082,17 @@ private struct PreviewAudioPlayer: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying
-                    ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
-                    : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
-                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.timeLabel(totalDuration: attachment.duration)))
+                .accessibilityLabel(player.isPlaying ? "Mettre en pause" : "Lire l'audio")
+                .accessibilityHint("Audio de \(player.timeLabel(totalDuration: attachment.duration))")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     Text(player.timeLabel(totalDuration: attachment.duration))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .monospacedDigit()
                 }
@@ -1161,7 +1114,7 @@ private struct PreviewAudioPlayer: View {
                     }
                 } label: {
                     Text("\(String(format: "%.2g", player.playbackRate))x")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(accent)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -1172,7 +1125,7 @@ private struct PreviewAudioPlayer: View {
             HStack(spacing: 8) {
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1191,7 +1144,7 @@ private struct PreviewAudioPlayer: View {
 
                 // Pourcentage d'avancement
                 Text("\(player.percentInt)%")
-                    .font(MeeshyFont.relative(11, weight: .heavy, design: .monospaced))
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 36)
                     .contentTransition(.numericText())
@@ -1200,7 +1153,7 @@ private struct PreviewAudioPlayer: View {
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1256,8 +1209,6 @@ private struct PreviewVideoPlayer: View {
                             .fill(.black.opacity(0.5))
                             .frame(width: 52, height: 52)
                             .overlay(
-                                // Glyph inside a fixed 52×52 play circle — kept
-                                // fixed; the Button carries the a11y label.
                                 Image(systemName: "play.fill")
                                     .font(.system(size: 20))
                                     .foregroundColor(.white)
@@ -1298,25 +1249,23 @@ private struct PreviewVideoPlayer: View {
                             .frame(width: 14, height: 14)
                     } else {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(accent)
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying
-                    ? String(localized: "media.pauseVideo", defaultValue: "Mettre la vidéo en pause", bundle: .main)
-                    : String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main))
+                .accessibilityLabel(player.isPlaying ? "Mettre la vidéo en pause" : "Lire la vidéo")
 
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
 
                 Text("\(player.percentInt)%")
-                    .font(MeeshyFont.relative(10, weight: .heavy, design: .monospaced))
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 32)
                     .contentTransition(.numericText())
@@ -1325,7 +1274,7 @@ private struct PreviewVideoPlayer: View {
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1334,7 +1283,7 @@ private struct PreviewVideoPlayer: View {
                 Spacer()
 
                 Text(player.timeLabel(totalDuration: attachment.duration))
-                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .monospacedDigit()
 
@@ -1365,7 +1314,7 @@ private struct PreviewVideoPlayer: View {
             }
         } label: {
             Text("\(String(format: "%.2g", player.playbackRate))x")
-                .font(MeeshyFont.relative(10, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(accent)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)

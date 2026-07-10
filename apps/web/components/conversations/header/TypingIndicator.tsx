@@ -13,8 +13,8 @@ export const TypingIndicator = memo(function TypingIndicator({
   t
 }: TypingIndicatorProps) {
   return (
-    <div className="flex items-center gap-1.5" role="status" aria-live="polite" aria-atomic="true">
-      <Loader2 className="h-4 w-4 animate-spin text-blue-500" aria-hidden="true" />
+    <div className="flex items-center gap-1.5">
+      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
       <span className="text-sm font-medium">
         {typingUserName} {t('conversationParticipants.typing', 'is typing...')}
       </span>

@@ -21,8 +21,6 @@ import {
   Label,
   LanguageOrb,
 } from '@/components/v2';
-import { getInitials } from '@/utils/initials';
-import { formatCompactNumber } from '@/utils/format-number';
 import { useProfileV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 import { useI18n } from '@/hooks/use-i18n';
@@ -39,7 +37,15 @@ import {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-const formatNumber = formatCompactNumber;
+function formatNumber(num: number): string {
+  return num >= 1000 ? (num / 1000).toFixed(1) + 'k' : num.toString();
+}
+
+function getInitials(name: string): string {
+  const parts = name.replace(/^@/, '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
+}
 
 // ─── Modals ────────────────────────────────────────────────────────────────
 

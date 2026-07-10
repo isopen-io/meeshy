@@ -132,14 +132,14 @@ struct ActiveSessionsView: View {
 
                 if let ip = session.ipAddress {
                     Text(ip)
-                        .font(MeeshyFont.relative(12, weight: .regular))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
                 }
 
                 if let lastActive = session.lastActive {
                     let formatted = lastActive.formatted(.relative(presentation: .named))
                     Text(String(localized: "sessions_last_active", defaultValue: "Actif") + " " + formatted)
-                        .font(MeeshyFont.relative(11, weight: .regular))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textSecondary)
                 }
             }

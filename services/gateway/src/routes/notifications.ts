@@ -443,6 +443,59 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   );
 
   // ============================================
+  // DELETE /notifications/test/clear-all - Nettoyer toutes les notifications (TEMP - NO AUTH CHECK)
+  // ============================================
+
+  fastify.delete(
+    '/notifications/test/clear-all',
+    {
+      onRequest: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        fastify.log.warn('TEMP: Clearing all notifications (no admin check)');
+
+        const result = await fastify.prisma.notification.deleteMany({});
+
+        return sendSuccess(reply, { deletedCount: result.count });
+      } catch (error) {
+        fastify.log.error({ error }, 'Error clearing notifications');
+        return sendInternalError(reply, 'Failed to clear notifications');
+      }
+    }
+  );
+
+  // ============================================
+  // POST /notifications/test/create - Créer une notification de test
+  // ============================================
+
+  fastify.post(
+    '/notifications/test/create',
+    {
+      onRequest: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = request.user!.userId;
+        const body = request.body as { recipientUserId?: string; conversationId?: string; message?: string };
+
+        const notification = await notificationService.createMessageNotification({
+          recipientUserId: body.recipientUserId || userId,
+          senderId: userId,
+          messageId: 'test-msg-' + Date.now(),
+          conversationId: body.conversationId || 'test-conv-' + Date.now(),
+          messagePreview: body.message || 'Test notification depuis API',
+        });
+
+        return sendSuccess(reply, { notification });
+      } catch (error) {
+        fastify.log.error({ error }, 'Error creating test notification');
+        return sendInternalError(reply, 'Failed to create test notification');
+      }
+    }
+  );
+
+  // ============================================
   // DELETE /notifications/admin/clear-all - Nettoyer toutes les notifications (ADMIN ONLY)
   // ============================================
 

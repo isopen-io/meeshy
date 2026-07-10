@@ -36,7 +36,6 @@ jest.mock('sonner', () => ({
 
 // Reference au mock pour les assertions
 const mockToast = jest.requireMock('sonner').toast;
-const mockCopyToClipboard = jest.requireMock('@/lib/clipboard').copyToClipboard as jest.Mock;
 
 // Mock de useI18n
 jest.mock('@/hooks/useI18n', () => ({
@@ -232,11 +231,6 @@ jest.mock('@meeshy/shared/types/mention', () => ({
 // Mock cn utility
 jest.mock('@/lib/utils', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
-}));
-
-// Mock de la source unique presse-papiers (utilisée par use-message-interactions)
-jest.mock('@/lib/clipboard', () => ({
-  copyToClipboard: jest.fn(() => Promise.resolve({ success: true, message: '' })),
 }));
 
 // Mock Z_CLASSES
@@ -643,7 +637,7 @@ describe('BubbleMessageNormalView', () => {
       fireEvent.click(screen.getByTestId('action-copy'));
 
       await waitFor(() => {
-        expect(mockCopyToClipboard).toHaveBeenCalled();
+        expect(navigator.clipboard.writeText).toHaveBeenCalled();
         expect(mockToast.success).toHaveBeenCalled();
       });
     });
@@ -904,22 +898,22 @@ describe('BubbleMessageNormalView', () => {
       expect(copyBtn).toBeInTheDocument();
       fireEvent.click(copyBtn);
 
-      // La copie est appelee via la source unique
+      // La copie est appelee (le mock clipboard est dans le composant reel)
       await waitFor(() => {
-        expect(mockCopyToClipboard).toHaveBeenCalled();
+        expect(navigator.clipboard.writeText).toHaveBeenCalled();
       });
     });
 
     it('devrait gerer les erreurs de copie gracieusement', async () => {
-      mockCopyToClipboard.mockResolvedValueOnce({ success: false, message: 'Copy failed' });
+      (navigator.clipboard.writeText as jest.Mock).mockRejectedValueOnce(new Error('Copy failed'));
 
       renderNormalView();
 
       fireEvent.click(screen.getByTestId('action-copy'));
 
-      // Le composant gere l'echec sans crash
+      // Le composant gere l'erreur sans crash
       await waitFor(() => {
-        expect(mockCopyToClipboard).toHaveBeenCalled();
+        expect(navigator.clipboard.writeText).toHaveBeenCalled();
       });
     });
   });

@@ -21,7 +21,6 @@ import { toast } from 'sonner';
 import { Attachment } from '@meeshy/shared/types';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/hooks/useI18n';
-import { copyToClipboard } from '@/lib/clipboard';
 
 export interface AttachmentContextMenuProps {
   attachment: Attachment;
@@ -58,11 +57,11 @@ export function AttachmentContextMenu({
   };
 
   const handleCopyLink = async () => {
-    const { success } = await copyToClipboard(attachment.fileUrl);
-    if (success) {
+    try {
+      await navigator.clipboard.writeText(attachment.fileUrl);
       toast.success(t('contextMenu.linkCopied'));
       onClose();
-    } else {
+    } catch (_error) {
       toast.error(t('contextMenu.linkCopyError'));
     }
   };

@@ -140,14 +140,14 @@ struct SyncPill: View {
         HStack(spacing: 6) {
             statusDot
             Text((visibleEntry?.label ?? "") + (visibleEntry?.showsActivityDots == true ? animatedDots : ""))
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(isDark ? .white.opacity(0.7) : .primary.opacity(0.6))
                 .lineLimit(1)
                 .transition(.opacity.combined(with: .move(edge: .top)))
                 .id(visibleEntry?.id ?? "empty")
             if entries.count > 1 {
                 Text("\(min(rotator.currentIndex + 1, entries.count))/\(entries.count)")
-                    .font(MeeshyFont.relative(10, weight: .regular))
+                    .font(.system(size: 10, weight: .regular))
                     .foregroundStyle(isDark ? .white.opacity(0.45) : .primary.opacity(0.4))
                     .monospacedDigit()
             }
@@ -172,7 +172,7 @@ struct SyncPill: View {
     private var statusDot: some View {
         if let iconName = visibleEntry?.iconName {
             Image(systemName: iconName)
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(dotForeground)
                 .opacity(pulseOpacity)
                 .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)

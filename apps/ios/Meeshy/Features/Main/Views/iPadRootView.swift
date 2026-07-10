@@ -59,9 +59,6 @@ struct iPadRootView: View {
     /// long-press / drag opened the preview (prevents double action).
     @State var suppressToastTap = false
 
-    /// U1 inc.2 — namespace zoom tray→viewer (parité RootView iPhone).
-    @Namespace var storyZoomNamespace
-
     private var isConversationOpen: Bool {
         activeConversation != nil
     }
@@ -90,7 +87,6 @@ struct iPadRootView: View {
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
             .environmentObject(storyViewerCoordinator)
-            .environment(\.zoomTransitionNamespace, storyZoomNamespace)
             // Propagate story viewer presentation state — same role as
             // RootView (cf. ConnectionBanner sync pill chevauchement fix
             // 2026-05-27).

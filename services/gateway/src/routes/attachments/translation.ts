@@ -10,7 +10,7 @@ import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/typ
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendError, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentTranslationRoutes' });
 
@@ -148,7 +148,11 @@ export async function registerTranslationRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!translateService) {
-          return sendError(reply, 503, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
+          return reply.status(503).send({
+            success: false,
+            error: 'SERVICE_UNAVAILABLE',
+            message: 'Translation service not available'
+          });
         }
 
         const authContext = (request as UnifiedAuthRequest).authContext;
@@ -178,15 +182,43 @@ export async function registerTranslationRoutes(
         // Pour les fichiers audio, vérifier les consentements spécifiques
         if (mimeType.startsWith('audio/')) {
           if (!consentStatus.canTranscribeAudio) {
-            return sendForbidden(reply, 'AUDIO_TRANSCRIPTION_NOT_ENABLED', { message: 'You must enable audio transcription consent to translate audio' });
+            return reply.status(403).send({
+              success: false,
+              error: 'AUDIO_TRANSCRIPTION_NOT_ENABLED',
+              message: 'You must enable audio transcription consent to translate audio',
+              requiredConsents: [
+                'dataProcessingConsentAt',
+                'voiceDataConsentAt',
+                'audioTranscriptionEnabledAt'
+              ]
+            });
           }
 
           if (!consentStatus.canTranslateAudio) {
-            return sendForbidden(reply, 'AUDIO_TRANSLATION_NOT_ENABLED', { message: 'You must enable audio translation consent to translate audio' });
+            return reply.status(403).send({
+              success: false,
+              error: 'AUDIO_TRANSLATION_NOT_ENABLED',
+              message: 'You must enable audio translation consent to translate audio',
+              requiredConsents: [
+                'audioTranslationEnabledAt',
+                'audioTranscriptionEnabledAt',
+                'textTranslationEnabledAt'
+              ]
+            });
           }
 
           if (body.generateVoiceClone && !consentStatus.canUseVoiceCloning) {
-            return sendForbidden(reply, 'VOICE_CLONING_NOT_ENABLED', { message: 'You must enable voice cloning consent to use this feature' });
+            return reply.status(403).send({
+              success: false,
+              error: 'VOICE_CLONING_NOT_ENABLED',
+              message: 'You must enable voice cloning consent to use this feature',
+              requiredConsents: [
+                'voiceDataConsentAt',
+                'voiceProfileConsentAt',
+                'voiceCloningConsentAt',
+                'voiceCloningEnabledAt'
+              ]
+            });
           }
         }
 
@@ -326,7 +358,11 @@ export async function registerTranslationRoutes(
       try {
         const translationService = fastify.translationService;
         if (!translationService) {
-          return sendError(reply, 503, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
+          return reply.status(503).send({
+            success: false,
+            error: 'SERVICE_UNAVAILABLE',
+            message: 'Translation service not available'
+          });
         }
 
         const authContext = (request as UnifiedAuthRequest).authContext;
@@ -357,7 +393,16 @@ export async function registerTranslationRoutes(
         const consentStatus = await consentService.getConsentStatus(userId);
 
         if (!consentStatus.canTranscribeAudio) {
-          return sendForbidden(reply, 'AUDIO_TRANSCRIPTION_NOT_ENABLED', { message: 'You must enable audio transcription consent to use this feature' });
+          return reply.status(403).send({
+            success: false,
+            error: 'AUDIO_TRANSCRIPTION_NOT_ENABLED',
+            message: 'You must enable audio transcription consent to use this feature',
+            requiredConsents: [
+              'dataProcessingConsentAt',
+              'voiceDataConsentAt',
+              'audioTranscriptionEnabledAt'
+            ]
+          });
         }
 
         const existingData = await translationService.getAttachmentWithTranscription(attachmentId);

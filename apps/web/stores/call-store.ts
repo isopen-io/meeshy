@@ -369,12 +369,10 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       if (socket?.connected) {
         socket.emit(CLIENT_EVENTS.CALL_END, { callId, reason: 'completed' }, () => {});
       }
-      // No sendBeacon fallback: sendBeacon can only POST and cannot carry the
-      // Authorization header the DELETE /calls/:callId route requires, and
-      // there is no POST /calls/:callId/end route to target anyway — a
-      // previous fallback here silently 404'd. Tab-close cleanup when the
-      // emit above doesn't land relies on the gateway's disconnect +
-      // reconnect-grace-window path (CallEventsHandler.armDisconnectGrace).
+      // sendBeacon fallback for when socket is already closing
+      if (typeof navigator.sendBeacon === 'function') {
+        navigator.sendBeacon(`/api/v1/calls/${callId}/end`);
+      }
     };
     window.addEventListener('beforeunload', beforeUnloadHandler);
   },

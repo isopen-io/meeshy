@@ -287,10 +287,7 @@ CHROME (Quitte)                     GATEWAY                      SAFARI
 ```
 ERROR: ❌ Call already active
 CAUSE: Un appel zombie existe dans la DB
-SOLUTION: CallCleanupService le nettoie automatiquement (GC périodique + self-heal
-          de Conversation.activeCallId, voir reclaimFromTerminalHolder). Le script
-          ad hoc cleanup-zombie-call.js a été retiré (ciblait un seul incident
-          historique, écrivait en Prisma direct en bypassant ces invariants).
+SOLUTION: Nettoyer avec cleanup-zombie-call.js
 ```
 
 ### 2. Socket Not Connected

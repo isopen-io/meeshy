@@ -511,12 +511,6 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// pre-existing CONVERSATION_UPDATED payloads (rename, avatar change,
     /// etc.) that don't advance lastMessageAt.
     public let lastMessageAt: Date?
-    /// Populated by the message-driven `CONVERSATION_UPDATED` path
-    /// (`MessageHandler.ts`) so the client can update the conversation row's
-    /// preview without a separate fetch.
-    public let lastMessageId: String?
-    public let lastMessagePreview: String?
-    public let senderId: String?
     /// Optional because the gateway's message-driven CONVERSATION_UPDATED
     /// payload (handlers/MessageHandler.ts on every new message) only
     /// carries `{ conversationId, lastMessageAt, lastMessageId,
@@ -531,7 +525,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case conversationId, title, description, avatar, banner
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
-        case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
+        case lastMessageAt, updatedBy, updatedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -546,45 +540,8 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         slowModeSeconds = try container.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
         autoTranslateEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
-        lastMessageId = try container.decodeIfPresent(String.self, forKey: .lastMessageId)
-        lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
-        senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
         updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
         updatedAt = try container.decode(String.self, forKey: .updatedAt)
-    }
-
-    public init(
-        conversationId: String,
-        title: String? = nil,
-        description: String? = nil,
-        avatar: String? = nil,
-        banner: String? = nil,
-        defaultWriteRole: String? = nil,
-        isAnnouncementChannel: Bool? = nil,
-        slowModeSeconds: Int? = nil,
-        autoTranslateEnabled: Bool? = nil,
-        lastMessageAt: Date? = nil,
-        lastMessageId: String? = nil,
-        lastMessagePreview: String? = nil,
-        senderId: String? = nil,
-        updatedBy: SocketEventUser? = nil,
-        updatedAt: String
-    ) {
-        self.conversationId = conversationId
-        self.title = title
-        self.description = description
-        self.avatar = avatar
-        self.banner = banner
-        self.defaultWriteRole = defaultWriteRole
-        self.isAnnouncementChannel = isAnnouncementChannel
-        self.slowModeSeconds = slowModeSeconds
-        self.autoTranslateEnabled = autoTranslateEnabled
-        self.lastMessageAt = lastMessageAt
-        self.lastMessageId = lastMessageId
-        self.lastMessagePreview = lastMessagePreview
-        self.senderId = senderId
-        self.updatedBy = updatedBy
-        self.updatedAt = updatedAt
     }
 }
 
@@ -767,12 +724,6 @@ public struct CallMediaToggleData: Decodable, Sendable {
 public struct CallErrorData: Decodable, Sendable {
     public let code: String?
     public let message: String?
-    /// The call this error pertains to, when the gateway knows it. Consumers with
-    /// an active call MUST ignore any error whose `callId` is present and does not
-    /// match their current call — errors for a different call must never affect a
-    /// healthy, unrelated one. Absent for errors that occur before a call context
-    /// exists (e.g. auth failures) or from emit sites not yet call-scoped server-side.
-    public let callId: String?
 }
 
 public struct CallQualityAlertData: Decodable, Sendable {
@@ -790,14 +741,6 @@ public struct CallScreenCaptureAlertData: Decodable, Sendable {
     public let callId: String
     public let participantId: String
     public let isCapturing: Bool
-}
-
-/// Received when the gateway force-removes the current user from an active call.
-/// The gateway emits `call:force-leave` to the user's personal room so every
-/// device they have connected receives the event and tears down the call.
-public struct CallForcedLeaveData: Decodable, Sendable {
-    public let callId: String
-    public let reason: String?
 }
 
 // MARK: - Reaction Sync Event Data
@@ -868,18 +811,6 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public let context: SocketNotificationContext?
     public let metadata: SocketNotificationMetadata?
 
-    /// SyncEngine A5 — numéro de séquence monotone per-user tamponné par le
-    /// gateway (`emitWithSeq`, A2.1) sous la clé JSON `_seq`. `nil` sur un
-    /// gateway antérieur (backward-compat). Consommé par `SyncSeqState` pour
-    /// la détection de gap EXACTE au reconnect.
-    public let seq: Int64?
-
-    private enum CodingKeys: String, CodingKey {
-        case id, userId, type, title, content, priority, isRead
-        case actor, context, metadata
-        case seq = "_seq"
-    }
-
     // Computed accessors: resolve from nested structs (gateway format)
     public var senderUsername: String? { actor?.username }
     public var senderDisplayName: String? { actor?.displayName }
@@ -888,8 +819,6 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public var conversationId: String? { context?.conversationId }
     public var messageId: String? { context?.messageId }
     public var postId: String? { context?.postId ?? metadata?.postId }
-    public var commentId: String? { context?.commentId ?? metadata?.commentId }
-    public var parentCommentId: String? { context?.parentCommentId ?? metadata?.parentCommentId }
     public var postType: String? { metadata?.postType }
     public var messagePreview: String? { metadata?.commentPreview }
     public var conversationTitle: String? { context?.conversationTitle }
@@ -932,14 +861,11 @@ public struct SocketNotificationContext: Decodable, Sendable {
     public let messageId: String?
     public let postId: String?
     public let commentId: String?
-    public let parentCommentId: String?
     public let friendRequestId: String?
 }
 
 public struct SocketNotificationMetadata: Decodable, Sendable {
     public let postId: String?
-    public let commentId: String?
-    public let parentCommentId: String?
     public let postType: String?
     public let commentPreview: String?
     public let emoji: String?
@@ -1018,9 +944,6 @@ public enum ConnectionState: Equatable, Sendable {
 public protocol MessageSocketProviding: Sendable {
     func emitCallJoinWithAck(callId: String) async -> Bool
     var callScreenCaptureAlert: PassthroughSubject<CallScreenCaptureAlertData, Never> { get }
-    /// Fired when the gateway force-removes the current user from the call.
-    /// The client must tear down the call immediately (no user confirmation needed).
-    var callForcedLeave: PassthroughSubject<CallForcedLeaveData, Never> { get }
     var messageReceived: PassthroughSubject<APIMessage, Never> { get }
     var messageEdited: PassthroughSubject<APIMessage, Never> { get }
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
@@ -1073,9 +996,6 @@ public protocol MessageSocketProviding: Sendable {
     var audioTranslationFailed: PassthroughSubject<AudioTranslationFailedEvent, Never> { get }
     var transcriptionFailed: PassthroughSubject<TranscriptionFailedEvent, Never> { get }
     var didReconnect: PassthroughSubject<Void, Never> { get }
-    /// Fires after each heartbeat round-trip with the measured RTT in milliseconds.
-    /// Subscribers can use this to display connection quality indicators.
-    var connectionRTT: PassthroughSubject<Double, Never> { get }
     var notificationReceived: PassthroughSubject<SocketNotificationEvent, Never> { get }
     /// Fired when the gateway emits SERVER_EVENTS.CONVERSATION_NEW (a fresh
     /// conversation was created — the user is now a participant). Replaces
@@ -1147,7 +1067,6 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallBackgrounded(callId: String, participantId: String)
     func emitCallForegrounded(callId: String, participantId: String)
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool)
-    func emitCallAnalytics(callId: String, payload: [String: Any])
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -1175,16 +1094,6 @@ public extension MessageSocketProviding {
                               bytesSent: bytesSent, bytesReceived: bytesReceived)
     }
 
-    /// Shim that adds audio jitter passthrough; mocks can keep the old signatures.
-    func emitCallQualityReport(
-        callId: String, level: String, rtt: Double, packetLoss: Double,
-        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int, jitterMs: Double
-    ) {
-        emitCallQualityReport(callId: callId, level: level, rtt: rtt, packetLoss: packetLoss,
-                              bytesSent: bytesSent, bytesReceived: bytesReceived,
-                              availableOutgoingBitrateBps: availableOutgoingBitrateBps)
-    }
-
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
     func emitCallReconnected(callId: String, participantId: String) {}
     func emitCallJoinWithAck(callId: String) async -> Bool { false }
@@ -1192,7 +1101,6 @@ public extension MessageSocketProviding {
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
-    func emitCallAnalytics(callId: String, payload: [String: Any]) {}
 
     func sendWithAttachments(
         conversationId: String,
@@ -1305,9 +1213,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publisher — reconnection (fires after successful reconnect)
     public let didReconnect = PassthroughSubject<Void, Never>()
 
-    // Combine publisher — heartbeat RTT (fires after each heartbeat:ack with ms value)
-    public let connectionRTT = PassthroughSubject<Double, Never>()
-
     // Combine publishers — notifications
     public let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     public let conversationNew = PassthroughSubject<ConversationNewEvent, Never>()
@@ -1338,7 +1243,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
     public let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
     public let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
-    public let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
 
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
@@ -1647,10 +1551,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         heartbeatTimer?.invalidate()
         heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             guard let self else { return }
-            // Include clientTime so the gateway can compute round-trip latency
-            // and return it in heartbeat:ack for connection quality monitoring.
-            let clientTimeMs = Int64(Date().timeIntervalSince1970 * 1000)
-            self.socket?.emit("heartbeat", ["clientTime": clientTimeMs])
+            self.socket?.emit("heartbeat")
         }
     }
 
@@ -1945,6 +1846,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// NOT for E2EE payloads or attachments — the `message:send` event does not
     /// transport those; the caller routes them through REST or
     /// `sendWithAttachments`.
+    ///
+    /// - Important: Currently UNUSED. `ConversationViewModel.sendMessage`
+    ///   routes text sends through REST because the `message:send` Socket.IO
+    ///   event does not reach the gateway handler (investigation 2026-05-17).
+    ///   Re-wire this path once the Socket.IO channel is repaired.
     public func sendAsync(
         conversationId: String,
         content: String?,
@@ -2182,14 +2088,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         ])
     }
 
-    /// Emits a `call:analytics` event with aggregated call metrics at session end.
-    /// Fire-and-forget — the gateway persists the summary for observability dashboards.
-    public func emitCallAnalytics(callId: String, payload: [String: Any]) {
-        var data = payload
-        data["callId"] = callId
-        socket?.emit("call:analytics", data)
-    }
-
     /// Reports whether the app is in the FOREGROUND so the gateway can decide,
     /// per incoming call, between socket delivery (in-app banner) and a VoIP push
     /// (CallKit). A backgrounded iOS app keeps a live socket for ~45s but is
@@ -2301,8 +2199,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// are cumulative WebRTC counters; `level` is excellent|good|fair|poor.
     public func emitCallQualityReport(
         callId: String, level: String, rtt: Double, packetLoss: Double,
-        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int = 0,
-        jitterMs: Double = 0
+        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int = 0
     ) {
         var stats: [String: Any] = [
             "level": level,
@@ -2313,9 +2210,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         ]
         if availableOutgoingBitrateBps > 0 {
             stats["availableOutgoingBitrateBps"] = availableOutgoingBitrateBps
-        }
-        if jitterMs > 0 {
-            stats["jitterMs"] = jitterMs
         }
         socket?.emit("call:quality-report", ["callId": callId, "stats": stats])
     }
@@ -2420,30 +2314,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // trigger a silent token refresh, and even that preserves the
             // session on failure.
             Logger.socket.error("MessageSocket error: \(data)")
-        }
-
-        // --- Heartbeat ACK — measure RTT ---
-        socket.on("heartbeat:ack") { [weak self] data, _ in
-            guard let self else { return }
-            guard let payload = data.first as? [String: Any],
-                  let serverTimeStr = payload["serverTime"] as? String else { return }
-            // Compute RTT from latencyHintMs when available (server computed it from
-            // clientTime we sent). Fall back to wall-clock if the field is absent.
-            let rtt: Double
-            if let hint = payload["latencyHintMs"] as? Double {
-                rtt = hint * 2 // hint is one-way; double for round-trip
-            } else {
-                // No server-computed hint: approximate from current wall time vs serverTime.
-                let isoFormatter = ISO8601DateFormatter()
-                isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                if let serverDate = isoFormatter.date(from: serverTimeStr) {
-                    rtt = abs(Date().timeIntervalSince(serverDate)) * 1000 // ms
-                } else {
-                    return
-                }
-            }
-            Logger.socket.debug("heartbeat:ack RTT=\(rtt, format: .fixed(precision: 1))ms serverTime=\(serverTimeStr, privacy: .public)")
-            self.connectionRTT.send(rtt)
         }
 
         // --- Message events ---
@@ -2868,10 +2738,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket.on("notification:new") { [weak self] data, _ in
             guard let self else { return }
             self.decode(SocketNotificationEvent.self, from: data) { [weak self] event in
-                // SyncEngine A5 — observe le `_seq` per-user (pilote). Le gap
-                // détecté est tracké ; le déclenchement d'une resync sur gap
-                // est câblé en A5.2. `observe(nil)` (gateway antérieur) = no-op.
-                Task { await SyncSeqTracker.shared.observe(event.seq) }
                 self?.notificationReceived.send(event)
             }
         }
@@ -3049,10 +2915,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        socket.on("call:force-leave") { [weak self] data, _ in
+        // --- Reaction sync events ---
+
+        socket.on("reaction:sync") { [weak self] data, _ in
             guard let self else { return }
-            self.decode(CallForcedLeaveData.self, from: data) { [weak self] event in
-                self?.callForcedLeave.send(event)
+            self.decode(ReactionSyncEvent.self, from: data) { [weak self] event in
+                self?.reactionSynced.send(event)
             }
         }
 

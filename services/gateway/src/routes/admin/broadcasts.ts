@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { SecuritySanitizer } from '../../utils/sanitize';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { BroadcastTranslationService } from '../../services/admin/broadcast-translation.service';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
@@ -66,13 +65,16 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         fastify.prisma.adminBroadcast.count({ where }),
       ]);
 
-      return sendSuccess(reply, {
-        broadcasts,
-        pagination: {
-          total,
-          offset: offsetNum,
-          limit: limitNum,
-          hasMore: offsetNum + limitNum < total,
+      return reply.send({
+        success: true,
+        data: {
+          broadcasts,
+          pagination: {
+            total,
+            offset: offsetNum,
+            limit: limitNum,
+            hasMore: offsetNum + limitNum < total,
+          },
         },
       });
     } catch (error: any) {
@@ -108,9 +110,9 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
 
       const broadcast = await fastify.prisma.adminBroadcast.create({
         data: {
-          name: SecuritySanitizer.sanitizeText(name),
-          subject: SecuritySanitizer.sanitizeText(subject),
-          body: SecuritySanitizer.sanitizeText(body),
+          name,
+          subject,
+          body,
           sourceLanguage,
           targeting: targeting || {},
           status: 'DRAFT',
@@ -197,9 +199,9 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       };
 
       const updateData: any = {};
-      if (name !== undefined) updateData.name = SecuritySanitizer.sanitizeText(name);
-      if (subject !== undefined) updateData.subject = SecuritySanitizer.sanitizeText(subject);
-      if (body !== undefined) updateData.body = SecuritySanitizer.sanitizeText(body);
+      if (name !== undefined) updateData.name = name;
+      if (subject !== undefined) updateData.subject = subject;
+      if (body !== undefined) updateData.body = body;
       if (sourceLanguage !== undefined) updateData.sourceLanguage = sourceLanguage;
       if (targeting !== undefined) updateData.targeting = targeting;
 

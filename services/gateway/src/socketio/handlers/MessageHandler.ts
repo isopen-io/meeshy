@@ -21,7 +21,7 @@ import {
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { validateMessageLength } from '../../config/message-limits';
 import {
@@ -53,15 +53,8 @@ import { AttachmentService } from '../../services/attachments/AttachmentService'
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService.js';
 import { validateSocketEvent } from '../../middleware/validation.js';
-import {
-  SocketMessageSendSchema,
-  SocketMessageSendWithAttachmentsSchema,
-  SocketMessageEditSchema,
-  SocketMessageDeleteSchema,
-} from '../../validation/socket-event-schemas.js';
+import { SocketMessageSendSchema, SocketMessageSendWithAttachmentsSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
-import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
-import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -80,7 +73,6 @@ export interface MessageHandlerDependencies {
   attachmentService: AttachmentService;
   readStatusService: MessageReadStatusService;
   privacyPreferencesService: PrivacyPreferencesService;
-  deliveryQueue?: RedisDeliveryQueue | null;
 }
 
 export class MessageHandler {
@@ -97,23 +89,7 @@ export class MessageHandler {
   private attachmentService: AttachmentService;
   private readStatusService: MessageReadStatusService;
   private privacyPreferencesService: PrivacyPreferencesService;
-  private deliveryQueue: RedisDeliveryQueue | null;
   private rateLimiter = getSocketRateLimiter();
-
-  /**
-   * Short-lived in-process cache for (userId, conversationId) → participantId lookups.
-   * Avoids a DB findFirst query on every message send for active users.
-   * TTL: 5 minutes, size-bounded (BoundedTtlCache) so a long-running gateway
-   * process doesn't accumulate one entry per (user, conversation) pair forever.
-   * Also invalidated on conversation leave / kick events via
-   * `invalidateParticipantCache`. Key: `${userId}:${conversationId}`.
-   */
-  private static readonly PARTICIPANT_ID_CACHE_MAX = 10_000;
-  private readonly PARTICIPANT_CACHE_TTL_MS = 5 * 60 * 1000;
-  private participantIdCache = new BoundedTtlCache<string, string>({
-    maxSize: MessageHandler.PARTICIPANT_ID_CACHE_MAX,
-    ttlMs: this.PARTICIPANT_CACHE_TTL_MS,
-  });
 
   constructor(deps: MessageHandlerDependencies) {
     this.io = deps.io;
@@ -129,16 +105,6 @@ export class MessageHandler {
     this.attachmentService = deps.attachmentService;
     this.readStatusService = deps.readStatusService;
     this.privacyPreferencesService = deps.privacyPreferencesService;
-    this.deliveryQueue = deps.deliveryQueue ?? null;
-  }
-
-  /**
-   * Injected after construction by `MeeshySocketIOManager.setDeliveryQueue`
-   * (same instance shared with the REST broadcast path), since the queue is
-   * built once `server.ts` has the Redis-backed CacheStore ready.
-   */
-  setDeliveryQueue(queue: RedisDeliveryQueue): void {
-    this.deliveryQueue = queue;
   }
 
   /**
@@ -185,23 +151,6 @@ export class MessageHandler {
         if (callback) callback(errorResponse);
         socket.emit(SERVER_EVENTS.ERROR, {
           message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
-        });
-        return;
-      }
-
-      // Per-conversation burst guard: prevents flooding a single conversation
-      // even within the global 20 msg/min budget.
-      const convRateLimitKey = `${userId || participantId}:${validated.conversationId}`;
-      const convRateLimitAllowed = await this.rateLimiter.checkLimit(convRateLimitKey, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
-      if (!convRateLimitAllowed) {
-        const convInfo = this.rateLimiter.getRateLimitInfo(convRateLimitKey, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
-        const errorResponse: SocketIOResponse<{ messageId: string }> = {
-          success: false,
-          error: 'Rate limit exceeded'
-        };
-        if (callback) callback(errorResponse);
-        socket.emit(SERVER_EVENTS.ERROR, {
-          message: `Too many messages in this conversation. Please wait ${Math.ceil(convInfo.resetIn / 1000)} seconds.`
         });
         return;
       }
@@ -260,8 +209,8 @@ export class MessageHandler {
         messageType: validated.messageType || 'text',
         replyToId: validated.replyToId,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: validated.forwardedFromId,
-        forwardedFromConversationId: validated.forwardedFromConversationId,
+        forwardedFromId: data.forwardedFromId,
+        forwardedFromConversationId: data.forwardedFromConversationId,
         encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
         // Effets de message — parité avec POST /messages. Le bitfield final
         // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
@@ -318,7 +267,7 @@ export class MessageHandler {
         });
 
         conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], message.originalLanguage ?? null
+          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], null
         ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
@@ -379,22 +328,6 @@ export class MessageHandler {
         if (callback) callback(errorResponse);
         socket.emit(SERVER_EVENTS.ERROR, {
           message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
-        });
-        return;
-      }
-
-      // Per-conversation burst guard (mirrors handleMessageSend logic)
-      const convRateLimitKeyWA = `${userId || participantId}:${validated.conversationId}`;
-      const convRateLimitAllowedWA = await this.rateLimiter.checkLimit(convRateLimitKeyWA, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
-      if (!convRateLimitAllowedWA) {
-        const convInfoWA = this.rateLimiter.getRateLimitInfo(convRateLimitKeyWA, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
-        const errorResponse: SocketIOResponse<{ messageId: string }> = {
-          success: false,
-          error: 'Rate limit exceeded'
-        };
-        if (callback) callback(errorResponse);
-        socket.emit(SERVER_EVENTS.ERROR, {
-          message: `Too many messages in this conversation. Please wait ${Math.ceil(convInfoWA.resetIn / 1000)} seconds.`
         });
         return;
       }
@@ -464,8 +397,8 @@ export class MessageHandler {
         messageType: 'text',
         replyToId: validated.replyToId,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: validated.forwardedFromId,
-        forwardedFromConversationId: validated.forwardedFromConversationId,
+        forwardedFromId: data.forwardedFromId,
+        forwardedFromConversationId: data.forwardedFromConversationId,
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
@@ -521,7 +454,7 @@ export class MessageHandler {
           return 'file';
         });
         conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, message.originalLanguage ?? null
+          this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, null
         ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
@@ -537,274 +470,6 @@ export class MessageHandler {
       handlerLogger.error('message:send-with-attachments failed', { error });
       this.stats.errors++;
       this._sendError(callback, 'Failed to send message', socket);
-    }
-  }
-
-  /**
-   * Handles real-time message editing via WebSocket.
-   * Mirrors the REST PUT /messages/:messageId logic but operates over socket
-   * so the edit is propagated without an HTTP round-trip.
-   *
-   * Permissions: only the message author can edit their own message.
-   * Anonymous users cannot edit (no stable identity → no ownership proof).
-   */
-  async handleMessageEdit(
-    socket: Socket,
-    data: { messageId: string; content: string },
-    callback?: (response: SocketIOResponse) => void
-  ): Promise<void> {
-    try {
-      const schemaValidation = validateSocketEvent(SocketMessageEditSchema, data);
-      if (schemaValidation.success === false) {
-        this._sendGenericError(callback, schemaValidation.error, socket);
-        return;
-      }
-      const validated = schemaValidation.data;
-
-      const userContext = this._getUserContext(socket);
-      if (!userContext || !userContext.userId || userContext.isAnonymous) {
-        this._sendGenericError(callback, 'Authentication required to edit messages', socket);
-        return;
-      }
-
-      const { userId } = userContext;
-
-      const editRateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.MESSAGE_EDIT);
-      if (!editRateLimitAllowed) {
-        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.MESSAGE_EDIT);
-        this._sendGenericError(callback, `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`, socket);
-        return;
-      }
-
-      const message = await this.prisma.message.findFirst({
-        where: {
-          id: validated.messageId,
-          sender: { userId },
-          deletedAt: null,
-        },
-        select: {
-          id: true,
-          conversationId: true,
-          senderId: true,
-          content: true,
-          originalLanguage: true,
-          sender: { select: { id: true, userId: true, displayName: true, avatar: true } },
-          attachments: { select: attachmentMediaSelect },
-        },
-      });
-
-      if (!message) {
-        this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
-        return;
-      }
-
-      const hasAttachments = message.attachments && message.attachments.length > 0;
-      if (!validated.content.trim() && !hasAttachments) {
-        this._sendGenericError(callback, 'Message content cannot be empty', socket);
-        return;
-      }
-
-      // Optimistic-concurrency guard: only write while the message is still
-      // non-deleted. A `message:delete` landing between the read above and
-      // this write would otherwise resurrect the row with edited content
-      // (unconditional `update` by id succeeds regardless of `deletedAt`),
-      // and the gateway would broadcast MESSAGE_EDITED for a message clients
-      // already removed. Mirrors the guarded `updateMany` used by
-      // handleMessageDelete's lastMessageAt recompute.
-      const editedAt = new Date();
-      const editResult = await this.prisma.message.updateMany({
-        where: { id: validated.messageId, deletedAt: null },
-        data: {
-          content: validated.content.trim(),
-          isEdited: true,
-          editedAt,
-          translations: null,
-        },
-      });
-
-      if (editResult.count === 0) {
-        this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
-        return;
-      }
-
-      const updatedMessage = {
-        id: message.id,
-        conversationId: message.conversationId,
-        content: validated.content.trim(),
-        isEdited: true,
-        editedAt,
-        originalLanguage: message.originalLanguage,
-        sender: message.sender,
-      };
-
-      // Trigger async retranslation — fire-and-forget, non-blocking
-      const retranslationPayload = {
-        id: validated.messageId,
-        content: validated.content.trim(),
-        originalLanguage: message.originalLanguage,
-        conversationId: message.conversationId,
-        senderId: message.senderId,
-      };
-      this.translationService.retranslateMessageAsync(validated.messageId, retranslationPayload)
-        .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
-
-      // Attachments are unaffected by a content edit — carry over the ones
-      // fetched pre-edit so clients that overwrite their cached message with
-      // this payload (`{ ...cached, ...editedPayload }`) do not lose the
-      // photo/video/audio that was attached to the message being edited.
-      const editedPayload = {
-        ...updatedMessage,
-        conversationId: message.conversationId,
-        translations: [],
-        attachments: this._serializeAttachmentsField(message as unknown as Message),
-      };
-
-      const room = ROOMS.conversation(message.conversationId);
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
-
-      this._enqueueOfflineEventForParticipants(
-        message.conversationId, message.senderId, 'edited', validated.messageId, editedPayload
-      ).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
-
-      callback?.({ success: true, data: { messageId: validated.messageId } });
-      handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
-    } catch (error: unknown) {
-      handlerLogger.error('message:edit failed', { error });
-      this._sendGenericError(callback, 'Failed to edit message', socket);
-    }
-  }
-
-  /**
-   * Handles real-time message deletion (soft delete) via WebSocket.
-   * Mirrors the REST DELETE /messages/:messageId logic.
-   *
-   * Permissions: message author OR conversation admin/moderator OR global ADMIN/BIGBOSS.
-   * Anonymous users cannot delete.
-   */
-  async handleMessageDelete(
-    socket: Socket,
-    data: { messageId: string },
-    callback?: (response: SocketIOResponse) => void
-  ): Promise<void> {
-    try {
-      const schemaValidation = validateSocketEvent(SocketMessageDeleteSchema, data);
-      if (schemaValidation.success === false) {
-        this._sendGenericError(callback, schemaValidation.error, socket);
-        return;
-      }
-      const validated = schemaValidation.data;
-
-      const userContext = this._getUserContext(socket);
-      if (!userContext || !userContext.userId || userContext.isAnonymous) {
-        this._sendGenericError(callback, 'Authentication required to delete messages', socket);
-        return;
-      }
-
-      const { userId } = userContext;
-
-      const deleteRateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.MESSAGE_DELETE);
-      if (!deleteRateLimitAllowed) {
-        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.MESSAGE_DELETE);
-        this._sendGenericError(callback, `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`, socket);
-        return;
-      }
-
-      const message = await this.prisma.message.findFirst({
-        where: { id: validated.messageId, deletedAt: null },
-        select: {
-          id: true,
-          conversationId: true,
-          senderId: true,
-          sender: { select: { id: true, userId: true } },
-          conversation: {
-            select: {
-              createdAt: true,
-              lastMessageAt: true,
-              participants: {
-                where: { userId, isActive: true },
-                select: { role: true },
-              },
-            },
-          },
-          attachments: { select: { id: true } },
-        },
-      });
-
-      if (!message) {
-        this._sendGenericError(callback, 'Message not found', socket);
-        return;
-      }
-
-      const memberRole = message.conversation.participants[0]?.role;
-      const isAuthor = message.sender?.userId === userId;
-
-      let canDelete = isAuthor || memberRole === 'admin' || memberRole === 'moderator';
-
-      // Lazy global role lookup — only when author + conversation-role checks fail
-      if (!canDelete) {
-        const userRecord = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: { role: true },
-        });
-        const globalRole = userRecord?.role;
-        canDelete = globalRole === 'ADMIN' || globalRole === 'BIGBOSS' || globalRole === 'MODERATOR';
-      }
-
-      if (!canDelete) {
-        this._sendGenericError(callback, 'You are not authorized to delete this message', socket);
-        return;
-      }
-
-      // Delete attachments (best-effort, non-blocking on individual failures)
-      if (message.attachments && message.attachments.length > 0) {
-        await Promise.allSettled(
-          message.attachments.map((att) => this.attachmentService.deleteAttachment(att.id))
-        );
-      }
-
-      // Soft delete: atomically clear translations and set deletedAt in one write
-      await this.prisma.message.update({
-        where: { id: validated.messageId },
-        data: { translations: null, deletedAt: new Date() },
-      });
-
-      // Recompute conversation's lastMessageAt to the latest non-deleted message.
-      // Optimistic-concurrency guard: only write while lastMessageAt is still the
-      // value read at handler start. A `message:new` committing between the read
-      // and this write advances lastMessageAt; the guard then mismatches (0 rows
-      // updated) so the cursor never regresses backward onto the deleted message
-      // and mis-sorts the conversation list.
-      const lastNonDeleted = await this.prisma.message.findFirst({
-        where: { conversationId: message.conversationId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
-      });
-      await this.prisma.conversation.updateMany({
-        where: {
-          id: message.conversationId,
-          lastMessageAt: message.conversation.lastMessageAt,
-        },
-        data: {
-          lastMessageAt: lastNonDeleted?.createdAt ?? message.conversation.createdAt,
-        },
-      });
-
-      const room = ROOMS.conversation(message.conversationId);
-      const deletedPayload = {
-        messageId: validated.messageId,
-        conversationId: message.conversationId,
-      };
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
-
-      this._enqueueOfflineEventForParticipants(
-        message.conversationId, message.senderId, 'deleted', validated.messageId, deletedPayload
-      ).catch((err) => handlerLogger.warn('offline enqueue (delete) failed', { error: err }));
-
-      callback?.({ success: true, data: { messageId: validated.messageId } });
-      handlerLogger.debug('message:delete processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
-    } catch (error: unknown) {
-      handlerLogger.error('message:delete failed', { error });
-      this._sendGenericError(callback, 'Failed to delete message', socket);
     }
   }
 
@@ -1012,26 +677,6 @@ export class MessageHandler {
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: sharedParticipants.filter((p) => p.userId).length });
       }
 
-      // Offline delivery queue — parity with the REST send path
-      // (`MeeshySocketIOManager.broadcastMessage` / `_broadcastNewMessage`).
-      // Without this, a message sent via the primary WS `message:send` path
-      // to a currently-offline recipient is never replayed on their next
-      // reconnect (`_drainPendingMessages`) and never triggers the
-      // sent→delivered receipt upgrade for the sender. Uses the cid-stripped
-      // `broadcastPayload` (same one peers receive live) so a replayed
-      // message never leaks the sender's local optimistic id to another user.
-      if (this.deliveryQueue) {
-        for (const p of sharedParticipants) {
-          if (!p.userId || p.id === message.senderId || this.connectedUsers.has(p.userId)) continue;
-          this.deliveryQueue.enqueue(p.userId, {
-            messageId: message.id,
-            conversationId: normalizedId,
-            payload: broadcastPayload,
-            enqueuedAt: new Date().toISOString(),
-          }).catch((err) => handlerLogger.warn('Failed to enqueue message for offline user', { userId: p.userId, error: err }));
-        }
-      }
-
       // Mettre à jour unread counts (re-uses the participant list already fetched above)
       await this._updateUnreadCounts(message, normalizedId, sharedParticipants);
 
@@ -1097,43 +742,6 @@ export class MessageHandler {
       let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
       for (const sid of restSids) emitter = emitter.to(sid);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
-    }
-  }
-
-  /**
-   * Offline delivery queue for message:edit / message:delete — mirrors the
-   * enqueue block in `broadcastNewMessage` for the WS `message:send` path.
-   * Without this, an edit or delete made while a recipient is offline is
-   * lost for them: `RedisDeliveryQueue` only ever replayed `message:new`
-   * entries on reconnect, so the recipient's cached message stays on the
-   * pre-edit content (or a "deleted" message stays visible) until an
-   * unrelated full refetch of that conversation happens to occur.
-   */
-  private async _enqueueOfflineEventForParticipants(
-    conversationId: string,
-    senderParticipantId: string | null | undefined,
-    eventType: 'edited' | 'deleted',
-    messageId: string,
-    payload: Record<string, unknown>
-  ): Promise<void> {
-    if (!this.deliveryQueue) return;
-    try {
-      const participants = await this.prisma.participant.findMany({
-        where: { conversationId, isActive: true },
-        select: { id: true, userId: true }
-      });
-      for (const p of participants) {
-        if (!p.userId || p.id === senderParticipantId || this.connectedUsers.has(p.userId)) continue;
-        this.deliveryQueue.enqueue(p.userId, {
-          messageId,
-          conversationId,
-          payload,
-          enqueuedAt: new Date().toISOString(),
-          eventType,
-        }).catch((err) => handlerLogger.warn('Failed to enqueue offline event', { userId: p.userId, eventType, error: err }));
-      }
-    } catch (err) {
-      handlerLogger.warn('Failed to fetch participants for offline enqueue', { conversationId, eventType, error: err });
     }
   }
 
@@ -1214,7 +822,6 @@ export class MessageHandler {
       emitter = emitter.to(userRoom);
     }
     emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-    emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
     handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms: [...seen], deliveredCount: summary.deliveredCount });
   }
 
@@ -1259,12 +866,6 @@ export class MessageHandler {
 
     if (!userId) return null;
 
-    const cacheKey = `${userId}:${conversationId}`;
-    const cached = this.participantIdCache.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
     const result = await resolveParticipant({
       prisma: this.prisma,
       userIdOrToken: userId,
@@ -1272,27 +873,7 @@ export class MessageHandler {
       connectedUsers: this.connectedUsers,
     });
 
-    if (result?.participantId) {
-      this.participantIdCache.set(cacheKey, result.participantId);
-    }
-
     return result?.participantId ?? null;
-  }
-
-  /**
-   * Invalidate participantId cache entries for a given user (e.g. on leave/kick).
-   * Pass conversationId to remove just one entry, omit to clear all for the user.
-   */
-  invalidateParticipantCache(userId: string, conversationId?: string): void {
-    if (conversationId) {
-      this.participantIdCache.delete(`${userId}:${conversationId}`);
-    } else {
-      for (const key of this.participantIdCache.keys()) {
-        if (key.startsWith(`${userId}:`)) {
-          this.participantIdCache.delete(key);
-        }
-      }
-    }
   }
 
   /**
@@ -1430,11 +1011,11 @@ export class MessageHandler {
       // Filter out the sender — unread counts are for recipients only
       const participants = allParticipants.filter((p) => p.id !== senderId);
 
-      // Batch: 1 cursor query + 1 message fetch instead of 3N sequential queries.
-      // Each recipient's count excludes their OWN messages (handled inside the service).
+      // Batch: 1 cursor query + N parallel counts instead of 3N sequential queries
       const unreadCounts = await this.readStatusService.getUnreadCountsForParticipants(
         participants,
-        conversationId
+        conversationId,
+        senderId
       );
 
       await Promise.all(participants.map(async (participant) => {
@@ -1508,21 +1089,6 @@ export class MessageHandler {
     socket.emit(SERVER_EVENTS.ERROR, { message: error, ...(code ? { code } : {}) });
   }
 
-  private _sendGenericError(
-    callback: ((response: SocketIOResponse) => void) | undefined,
-    error: string,
-    socket: Socket,
-    code?: string
-  ): void {
-    const errorResponse: SocketIOResponse = {
-      success: false,
-      error,
-      ...(code ? { code } : {})
-    };
-    if (callback) callback(errorResponse);
-    socket.emit(SERVER_EVENTS.ERROR, { message: error, ...(code ? { code } : {}) });
-  }
-
   /**
    * DM-only bidirectional block gate shared by `message:send` and
    * `message:send-with-attachments`. Returns true when the conversation is a
@@ -1577,10 +1143,6 @@ export class MessageHandler {
 
   /**
    * Envoie une réponse de succès
-   *
-   * Wrapped in try-catch: a throwing callback must never propagate up to the
-   * Socket.IO event handler frame, which would tear down the entire socket
-   * connection for an unrelated serialization / client-side bug.
    */
   private _sendResponse(
     callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string; createdAt?: string }>) => void) | undefined,
@@ -1588,35 +1150,31 @@ export class MessageHandler {
   ): void {
     if (!callback) return;
 
-    try {
-      if (response.success && response.data) {
-        // Phase 4 §6.2 — echo `clientMessageId` back so iOS / web can match the
-        // ACK against their pending optimistic row by cid (the `messageId`
-        // alone is insufficient: the optimistic row has a `cid_*` local id
-        // and only learns the server `messageId` from this very ACK).
-        // `createdAt` is echoed too so the WS-first send path can stamp the
-        // optimistic row with the authoritative server time without waiting
-        // for the `message:new` broadcast.
-        const data = response.data as { id: string; clientMessageId?: string; createdAt?: Date | string };
-        const createdAt = data.createdAt instanceof Date
-          ? data.createdAt.toISOString()
-          : data.createdAt;
-        callback({
-          success: true,
-          data: {
-            messageId: data.id,
-            ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
-            ...(createdAt ? { createdAt } : {})
-          }
-        });
-      } else {
-        callback({
-          success: false,
-          error: response.error || 'Failed to send message'
-        });
-      }
-    } catch (error) {
-      handlerLogger.error('ACK callback threw — socket connection preserved', { error });
+    if (response.success && response.data) {
+      // Phase 4 §6.2 — echo `clientMessageId` back so iOS / web can match the
+      // ACK against their pending optimistic row by cid (the `messageId`
+      // alone is insufficient: the optimistic row has a `cid_*` local id
+      // and only learns the server `messageId` from this very ACK).
+      // `createdAt` is echoed too so the WS-first send path can stamp the
+      // optimistic row with the authoritative server time without waiting
+      // for the `message:new` broadcast.
+      const data = response.data as { id: string; clientMessageId?: string; createdAt?: Date | string };
+      const createdAt = data.createdAt instanceof Date
+        ? data.createdAt.toISOString()
+        : data.createdAt;
+      callback({
+        success: true,
+        data: {
+          messageId: data.id,
+          ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
+          ...(createdAt ? { createdAt } : {})
+        }
+      });
+    } else {
+      callback({
+        success: false,
+        error: response.error || 'Failed to send message'
+      });
     }
   }
 }

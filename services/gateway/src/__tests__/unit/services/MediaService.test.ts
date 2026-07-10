@@ -53,18 +53,6 @@ describe('MediaService.relativePathFromUrl', () => {
     const result = service.relativePathFromUrl('/api/v1/attachments/file/snapshots%2Fsnapshot_uuid.mp4');
     expect(result).toBe('snapshots/snapshot_uuid.mp4');
   });
-
-  it('returns null when the absolute URL is syntactically invalid', () => {
-    // URL constructor throws for malformed URLs like unclosed brackets
-    const result = service.relativePathFromUrl('https://[invalid-host');
-    expect(result).toBeNull();
-  });
-
-  it('returns the raw encoded segment when decodeURIComponent throws', () => {
-    // %ZZ is not valid percent-encoding; decodeURIComponent throws URIError
-    const result = service.relativePathFromUrl('/api/v1/attachments/file/%ZZ');
-    expect(result).toBe('%ZZ');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -185,94 +173,5 @@ describe('MediaService.deleteMedia', () => {
 
   it('does not throw for an unrecognised URL pattern', async () => {
     await expect(service.deleteMedia('https://external.com/file.jpg')).resolves.toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// duplicateMedia — EEXIST retry exhaustion
-// ---------------------------------------------------------------------------
-
-describe('MediaService.duplicateMedia — EEXIST retry loop', () => {
-  let tmpDir: string;
-  let service: MediaService;
-
-  beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'meeshy-media-test-'));
-    service = new MediaService(tmpDir, '');
-  });
-
-  afterEach(async () => {
-    await fs.rm(tmpDir, { recursive: true, force: true });
-    jest.restoreAllMocks();
-  });
-
-  it('throws after 3 failed EEXIST attempts (UUID collision guard)', async () => {
-    await writeTestFile(tmpDir, 'orig.jpg');
-    const url = `/api/v1/attachments/file/${encodeURIComponent('orig.jpg')}`;
-
-    const eexist = Object.assign(new Error('EEXIST'), { code: 'EEXIST' });
-    jest.spyOn(fs, 'copyFile').mockRejectedValue(eexist);
-
-    await expect(service.duplicateMedia(url)).rejects.toThrow(/failed to find a free snapshot path/);
-    expect(fs.copyFile).toHaveBeenCalledTimes(3);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// planDuplicate
-// ---------------------------------------------------------------------------
-
-describe('MediaService.planDuplicate', () => {
-  let tmpDir: string;
-  let service: MediaService;
-
-  beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'meeshy-plan-test-'));
-    service = new MediaService(tmpDir, '');
-  });
-
-  afterEach(async () => {
-    await fs.rm(tmpDir, { recursive: true, force: true });
-  });
-
-  it('throws for an unrecognised URL pattern', () => {
-    expect(() => service.planDuplicate('https://external.com/file.jpg')).toThrow(/cannot parse URL/);
-  });
-
-  it('returns planned paths without copying the source file', async () => {
-    await writeTestFile(tmpDir, 'images/photo.jpg');
-    const url = `/api/v1/attachments/file/${encodeURIComponent('images/photo.jpg')}`;
-
-    const plan = service.planDuplicate(url);
-
-    expect(plan.plannedFileUrl).toContain('/api/v1/attachments/file/');
-    expect(plan.plannedFilePath).toMatch(/^snapshots[/\\]snapshot_.*\.jpg$/);
-
-    // commit not called → destination must not exist yet
-    const destPath = path.join(tmpDir, plan.plannedFilePath);
-    await expect(fs.access(destPath)).rejects.toThrow();
-  });
-
-  it('commit() copies the file and returns matching metadata', async () => {
-    const content = Buffer.from('plan-media-data');
-    await writeTestFile(tmpDir, 'images/photo.png', content);
-    const url = `/api/v1/attachments/file/${encodeURIComponent('images/photo.png')}`;
-
-    const plan = service.planDuplicate(url);
-    const result = await plan.commit();
-
-    expect(result.fileUrl).toBe(plan.plannedFileUrl);
-    expect(result.filePath).toBe(plan.plannedFilePath);
-    expect(result.fileSize).toBe(content.length);
-    expect(result.mimeType).toBe('image/png');
-
-    const destContent = await fs.readFile(path.join(tmpDir, plan.plannedFilePath));
-    expect(destContent).toEqual(content);
-  });
-
-  it('commit() throws when the source file does not exist', async () => {
-    const url = `/api/v1/attachments/file/${encodeURIComponent('missing.jpg')}`;
-    const plan = service.planDuplicate(url);
-    await expect(plan.commit()).rejects.toThrow();
   });
 });

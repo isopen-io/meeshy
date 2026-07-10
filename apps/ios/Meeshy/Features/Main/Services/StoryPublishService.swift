@@ -74,65 +74,9 @@ final class StoryPublishService: ObservableObject {
     /// called before the StoryViewModel mounted : the M5 auto-drain on
     /// setPublishHandler would fire with a nil executor and burn retry
     /// budget on a guaranteed-to-fail handler.
-    /// E10 — cœur PUR du balayage des dossiers orphelins (testable) : un
-    /// dossier de `meeshy_offline_queue/` sans item de queue vivant ET plus
-    /// vieux que `cutoff` est un reliquat (fuite pré-it.16 ou crash entre
-    /// dequeue et rm). La garde d'âge évite la course avec un enqueue en
-    /// cours (dossier créé AVANT l'insertion de l'item).
-    nonisolated static func orphanedQueueDirectories(
-        children: [URL],
-        liveTempIds: Set<String>,
-        cutoff: Date,
-        modificationDate: (URL) -> Date?
-    ) -> [URL] {
-        children.filter { dir in
-            guard !liveTempIds.contains(dir.lastPathComponent) else { return false }
-            let mtime = modificationDate(dir) ?? .distantPast
-            return mtime < cutoff
-        }
-    }
-
-    /// E10 — balayage one-shot au boot, best-effort et hors chemin critique.
-    private func sweepOrphanedQueueMediaDirectories() {
-        Task.detached(priority: .utility) {
-            let fm = FileManager.default
-            let root = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("meeshy_offline_queue")
-            guard let children = try? fm.contentsOfDirectory(
-                at: root, includingPropertiesForKeys: [.contentModificationDateKey]
-            ) else { return }
-            let liveTempIds = Set(await StoryPublishQueue.shared.pendingItems.map(\.tempStoryId))
-            let orphans = Self.orphanedQueueDirectories(
-                children: children,
-                liveTempIds: liveTempIds,
-                cutoff: Date().addingTimeInterval(-3600),
-                modificationDate: { url in
-                    (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                }
-            )
-            for dir in orphans {
-                try? fm.removeItem(at: dir)
-            }
-        }
-    }
-
     func configure() {
         guard !configured else { return }
         configured = true
-        // E6 — draine l'ancien fichier `StoryOfflineQueue` (JSON legacy sous
-        // applicationSupport/) dans la queue unifiée AVANT tout le reste :
-        // les items migrés doivent exister quand `setExecutor` enregistre le
-        // handler (dont l'auto-drain M5 publie la queue). One-shot idempotent
-        // (no-op sans fichier legacy ; JSON corrompu quarantainé) — c'était
-        // écrit et testé mais jamais appelé en prod.
-        Task {
-            let migrated = await StoryQueueMigrator.migrateLegacyOfflineQueue()
-            if migrated > 0 {
-                Logger.stories.info("StoryQueueMigrator: \(migrated) legacy item(s) migrated into StoryPublishQueue")
-            }
-            await self.refreshPendingCount()
-        }
-        sweepOrphanedQueueMediaDirectories()
 
         // Subscribe to the success / failure streams. The publishers are
         // exposed as nonisolated SendablePassthrough so we can subscribe

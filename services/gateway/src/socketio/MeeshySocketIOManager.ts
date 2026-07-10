@@ -39,7 +39,6 @@ import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
-import { getBlockedUserIdsAmong } from '../utils/blocking';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
@@ -58,22 +57,12 @@ import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socket
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
-import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
-
-// Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
-// event replayed on reconnect for that offline-queue entry.
-function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string {
-  if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
-  if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
-  return SERVER_EVENTS.MESSAGE_NEW;
-}
 
 export interface SocketUser {
   id: string;
@@ -114,21 +103,6 @@ export class MeeshySocketIOManager {
     return this.io;
   }
 
-  /// RC-4 — exposes the shared CallService instance so CallCleanupService's
-  /// heartbeat GC tier observes the same in-memory heartbeat/ringing-timeout
-  /// state that CallEventsHandler and AuthHandler write to, instead of an
-  /// unwired second instance that always looks empty.
-  getCallService(): CallService {
-    return this.callService;
-  }
-
-  /// Exposes the shared CallEventsHandler so CallCleanupService's GC tiers
-  /// can post the call-summary system message on calls they force-end —
-  /// mirrors `getCallService()` above.
-  getCallEventsHandler(): CallEventsHandler {
-    return this.callEventsHandler;
-  }
-
   private prisma: PrismaClient;
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
@@ -164,9 +138,9 @@ export class MeeshySocketIOManager {
   // Rate limiter in-memory par socket (clé → timestamps des requêtes)
   private socketRateLimits: Map<string, number[]> = new Map();
 
-  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries FIFO)
+  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries LRU)
+  private conversationIdCache = new Map<string, string>();
   private readonly CONVERSATION_ID_CACHE_MAX = 2000;
-  private conversationIdCache = new BoundedTtlCache<string, string>({ maxSize: this.CONVERSATION_ID_CACHE_MAX });
 
   // Cache presence snapshot par userId — évite 2 queries Prisma par reconnexion (TTL 60s)
   private presenceSnapshotCache = new Map<string, { users: Array<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }>; cachedAt: number }>();
@@ -204,18 +178,13 @@ export class MeeshySocketIOManager {
     this.notificationService = new NotificationService(prisma);
     this.mentionService = new MentionService(prisma);
     this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
-    // RC-4 — construct the shared CallService BEFORE CallEventsHandler so both
-    // it and AuthHandler observe the same in-memory ringingTimeouts/heartbeats/
-    // backgroundedParticipants maps (previously two independent instances,
-    // silently desyncing disconnect-cleanup from the ringing-timeout/heartbeat
-    // state actually being written by the socket handlers).
-    this.callService = new CallService(prisma);
-    this.callEventsHandler = new CallEventsHandler(prisma, this.callService);
+    this.callEventsHandler = new CallEventsHandler(prisma);
     // P3 — let the call handler post the call-summary system message through
     // the canonical message broadcast path when a call ends.
     this.callEventsHandler.setMessageBroadcaster(
       (message, conversationId) => this.broadcastMessage(message as Message, conversationId)
     );
+    this.callService = new CallService(prisma);
 
     // CORRECTION: Configurer le callback de broadcast pour le MaintenanceService
     this.maintenanceService.setStatusBroadcastCallback(
@@ -337,7 +306,6 @@ export class MeeshySocketIOManager {
       privacyPreferencesService: this.privacyPreferencesService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
-      userSockets: this.userSockets,
     });
 
     this.reactionHandler = new ReactionHandler({
@@ -390,9 +358,6 @@ export class MeeshySocketIOManager {
 
   setDeliveryQueue(queue: RedisDeliveryQueue): void {
     this.deliveryQueue = queue;
-    // The WS `message:send` path (MessageHandler) enqueues offline recipients
-    // itself, in parallel with this REST-path queue — same shared instance.
-    this.messageHandler.setDeliveryQueue(queue);
   }
 
   private async _drainPendingMessages(socket: Socket, userId: string): Promise<void> {
@@ -403,83 +368,12 @@ export class MeeshySocketIOManager {
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
       for (const entry of pending) {
-        socket.emit(_drainedEventName(entry.eventType), entry.payload);
+        socket.emit(SERVER_EVENTS.MESSAGE_NEW, entry.payload);
       }
-      const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
-      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
-
-      // Emit delivery receipts to senders so their checkmarks advance from
-      // "sent" (single tick) to "delivered" (double tick) as soon as the
-      // messages land on the recipient's device — matching WhatsApp / iMessage
-      // behaviour instead of waiting for the user to open the conversation.
-      this._emitDeliveryForDrainedMessages(userId, pending).catch(err => {
-        logger.warn('Failed to emit delivery receipts for drained messages', { userId, error: err });
-      });
+      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length });
     } catch (error) {
       logger.warn('Failed to drain pending messages', { userId, error });
     }
-  }
-
-  /**
-   * After draining queued messages to a reconnecting user, mark those
-   * messages as "received" on their behalf and broadcast `read-status:updated`
-   * to the conversation rooms so senders see the delivery checkmark advance.
-   *
-   * Respects the user's `showReadReceipts` privacy preference.
-   * Batches the participant lookup across all affected conversations in a
-   * single Prisma query to minimise round-trips on the reconnect path.
-   */
-  private async _emitDeliveryForDrainedMessages(
-    userId: string,
-    pending: QueuedMessagePayload[]
-  ): Promise<void> {
-    // Delivery receipts only make sense for actual new messages — an edited
-    // or deleted entry replays its own event (see `_drainedEventName`) but
-    // was never awaiting a "delivered" checkmark in the first place.
-    const newEntries = pending.filter((entry) => (entry.eventType ?? 'new') === 'new');
-    if (newEntries.length === 0) return;
-
-    // Check privacy preference first — single cheap cached call.
-    const prefMap = await this.privacyPreferencesService.getPreferencesForUsers([
-      { id: userId, isAnonymous: false },
-    ]);
-    if (!prefMap.get(userId)?.showReadReceipts) return;
-
-    // Group by conversationId, keeping the last (newest) messageId per conv
-    // so we call markMessagesAsReceived once per conversation.
-    const convLatest = new Map<string, string>();
-    for (const entry of newEntries) {
-      convLatest.set(entry.conversationId, entry.messageId);
-    }
-
-    // Batch-resolve participant rows for all affected conversations.
-    const participantRows = await this.prisma.participant.findMany({
-      where: { userId, conversationId: { in: [...convLatest.keys()] }, isActive: true },
-      select: { id: true, conversationId: true },
-    });
-
-    await Promise.allSettled(
-      participantRows.map(async ({ id: participantId, conversationId }) => {
-        const latestMessageId = convLatest.get(conversationId);
-        if (!latestMessageId) return;
-
-        await this.readStatusService.markMessagesAsReceived(participantId, conversationId, latestMessageId);
-
-        const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
-        const drainPayload = {
-          conversationId,
-          participantId,
-          userId,
-          type: 'received' as const,
-          updatedAt: new Date(),
-          summary,
-        };
-        const drainRoom = this.io.to(ROOMS.conversation(conversationId));
-        drainRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, drainPayload);
-        drainRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, drainPayload);
-        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId });
-      })
-    );
   }
 
   /**
@@ -496,6 +390,11 @@ export class MeeshySocketIOManager {
         select: { id: true, identifier: true }
       });
       if (conversation) {
+        // Evict oldest entry when cap reached (simple FIFO bounded LRU)
+        if (this.conversationIdCache.size >= this.CONVERSATION_ID_CACHE_MAX) {
+          const firstKey = this.conversationIdCache.keys().next().value;
+          if (firstKey !== undefined) this.conversationIdCache.delete(firstKey);
+        }
         this.conversationIdCache.set(conversationId, conversation.id);
         return conversation.id;
       }
@@ -511,17 +410,6 @@ export class MeeshySocketIOManager {
    */
   public getNotificationService(): NotificationService {
     return this.notificationService;
-  }
-
-  /**
-   * Invalidate the in-process participant-ID cache for a user.
-   * Called by REST routes that change participant membership or role so that
-   * the next socket `message:send` re-validates against the DB instead of
-   * serving a stale cached entry (e.g. a kicked user still appearing as
-   * member for up to 5 minutes without this invalidation).
-   */
-  public invalidateParticipantCache(userId: string, conversationId?: string): void {
-    this.messageHandler.invalidateParticipantCache(userId, conversationId);
   }
 
   /**
@@ -557,40 +445,11 @@ export class MeeshySocketIOManager {
    * Permet au client de seed son store sans attendre qu'un changement d'état arrive
    * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
    */
-  /**
-   * Masque la présence des contacts selon leurs préférences privacy (cascade
-   * showOnlineStatus maître + showLastSeen) ET le blocage bidirectionnel avec
-   * `viewerId` — même règle que `GET /users/presence` (`PresenceVisibilityService`).
-   * Anonymes → défaut (montrés, non-bloquables). Appliqué à l'émission (pas au
-   * cache) pour couvrir aussi le cache-hit.
-   */
-  private async _applyPresencePrefs(
-    viewerId: string,
-    users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
-  ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
-    if (users.length === 0) return users;
-    const [prefsMap, blockedUserIds] = await Promise.all([
-      this.privacyPreferencesService.getPreferencesForUsers(
-        users.map(u => ({ id: u.userId, isAnonymous: false })),
-      ),
-      getBlockedUserIdsAmong(this.prisma, viewerId, users.map(u => u.userId)),
-    ]);
-    return users.map(u => {
-      if (blockedUserIds.has(u.userId)) return { ...u, isOnline: false, lastActiveAt: null };
-      const p = prefsMap.get(u.userId);
-      if (p && !p.showOnlineStatus) return { ...u, isOnline: false, lastActiveAt: null };
-      return { ...u, lastActiveAt: p && !p.showLastSeen ? null : u.lastActiveAt };
-    });
-  }
-
   private async _emitPresenceSnapshot(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
-        const users = await this._applyPresencePrefs(
-          userId,
-          cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
-        );
+        const users = cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) }));
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
         logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
       } else {
@@ -644,7 +503,7 @@ export class MeeshySocketIOManager {
           }
 
           this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
-          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: await this._applyPresencePrefs(userId, users) });
+          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
           logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
       }
@@ -801,14 +660,6 @@ export class MeeshySocketIOManager {
         try { await this.messageHandler.handleMessageSendWithAttachments(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND_WITH_ATTACHMENTS] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
-      socket.on(CLIENT_EVENTS.MESSAGE_EDIT, async (data, callback) => {
-        try { await this.messageHandler.handleMessageEdit(socket, data, callback); } catch (error) { logger.error('[MESSAGE_EDIT] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
-      });
-
-      socket.on(CLIENT_EVENTS.MESSAGE_DELETE, async (data, callback) => {
-        try { await this.messageHandler.handleMessageDelete(socket, data, callback); } catch (error) { logger.error('[MESSAGE_DELETE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
-      });
-
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
         // Rate limit: 10 requêtes/min par userId (multi-device inclus) pour éviter la saturation ZMQ
         const translationUserId = this.socketToUser.get(socket.id);
@@ -851,33 +702,23 @@ export class MeeshySocketIOManager {
         }
       );
 
-      socket.on(CLIENT_EVENTS.FEED_SUBSCRIBE, async (callback?: (response: SocketIOResponse) => void) => {
-        try {
-          const userId = this.socketToUser.get(socket.id);
-          if (!userId) {
-            callback?.({ success: false, error: 'Not authenticated' });
-            return;
-          }
-          await this.socialEventsHandler.handleFeedSubscribe(socket, userId);
-          callback?.({ success: true });
-        } catch (error) {
-          logger.error('[FEED_SUBSCRIBE] Error:', error);
-          callback?.({ success: false, error: 'Failed to subscribe to feed' });
+      socket.on(CLIENT_EVENTS.FEED_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
+        const userId = this.socketToUser.get(socket.id);
+        if (userId) {
+          this.socialEventsHandler.handleFeedSubscribe(socket, userId);
+          if (callback) callback({ success: true });
+        } else {
+          if (callback) callback({ success: false, error: 'Not authenticated' });
         }
       });
 
-      socket.on(CLIENT_EVENTS.FEED_UNSUBSCRIBE, async (callback?: (response: SocketIOResponse) => void) => {
-        try {
-          const userId = this.socketToUser.get(socket.id);
-          if (!userId) {
-            callback?.({ success: false, error: 'Not authenticated' });
-            return;
-          }
-          await this.socialEventsHandler.handleFeedUnsubscribe(socket, userId);
-          callback?.({ success: true });
-        } catch (error) {
-          logger.error('[FEED_UNSUBSCRIBE] Error:', error);
-          callback?.({ success: false, error: 'Failed to unsubscribe from feed' });
+      socket.on(CLIENT_EVENTS.FEED_UNSUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
+        const userId = this.socketToUser.get(socket.id);
+        if (userId) {
+          this.socialEventsHandler.handleFeedUnsubscribe(socket, userId);
+          if (callback) callback({ success: true });
+        } else {
+          if (callback) callback({ success: false, error: 'Not authenticated' });
         }
       });
 
@@ -889,8 +730,8 @@ export class MeeshySocketIOManager {
         this.statusHandler.handleTypingStop(socket, data).catch((error) => logger.error('[TYPING_STOP] Error:', error));
       });
 
-      socket.on(CLIENT_EVENTS.HEARTBEAT, (data?: { clientTime?: number }) => {
-        this.authHandler.handleHeartbeat(socket, data).catch((error) => logger.error('[HEARTBEAT] Error:', error));
+      socket.on(CLIENT_EVENTS.HEARTBEAT, () => {
+        this.authHandler.handleHeartbeat(socket).catch((error) => logger.error('[HEARTBEAT] Error:', error));
       });
 
       socket.on(CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
@@ -898,12 +739,7 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
-        try {
-          this.adminAgentHandler.handleUnsubscribe(socket, callback);
-        } catch (error) {
-          logger.error('[ADMIN_AGENT_UNSUBSCRIBE] Error:', error);
-          callback?.({ success: false, error: 'Internal server error' });
-        }
+        this.adminAgentHandler.handleUnsubscribe(socket, callback);
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
@@ -977,24 +813,10 @@ export class MeeshySocketIOManager {
       socket.on('disconnecting', (_reason: string) => {
         const disconnectingUserId = this.socketToUser.get(socket.id);
         if (disconnectingUserId) {
-          // Build the set of OTHER sockets for this user (excluding the one
-          // that is disconnecting). Passed to handleSocketDisconnecting so it
-          // can suppress typing:stop broadcasts for conversations where the
-          // user is still typing on another device — prevents false indicator
-          // flicker when a user has multiple active sessions.
-          const allUserSockets = this.userSockets.get(disconnectingUserId) ?? new Set<string>();
-          const otherSocketIds = new Set([...allUserSockets].filter(sid => sid !== socket.id));
-          void this.statusHandler.handleSocketDisconnecting(
-            socket.id,
-            (room, event, data, exceptSocketIds) => {
-              // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
-              const emitter = exceptSocketIds && exceptSocketIds.length > 0
-                ? this.io.to(room).except(exceptSocketIds)
-                : this.io.to(room);
-              emitter.emit(event as keyof ServerToClientEvents, data as any);
-            },
-            otherSocketIds.size > 0 ? otherSocketIds : undefined
-          );
+          this.statusHandler.handleSocketDisconnecting(socket.id, (room, event, data) => {
+            // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
+            this.io.to(room).emit(event as keyof ServerToClientEvents, data as any);
+          });
         }
       });
 
@@ -1664,23 +1486,7 @@ export class MeeshySocketIOManager {
           // Broadcaster dans toutes les conversations de l'utilisateur (batch: 1 emit au lieu de N)
           const rooms = participantRows.map(p => ROOMS.conversation(p.conversationId));
           if (rooms.length > 0) {
-            // PRIVACY: exclure les sockets des viewers en relation de blocage
-            // bidirectionnel avec ce user — même règle que GET /users/presence
-            // (PresenceVisibilityService). Un socket.id est aussi une room
-            // Socket.IO (auto-join), donc .except(socketId) l'exclut du
-            // broadcast même s'il est par ailleurs membre de `rooms`.
-            const onlineOtherUserIds = [...this.connectedUsers.keys()].filter(id => id !== user.id);
-            const blockedUserIds = onlineOtherUserIds.length > 0
-              ? await getBlockedUserIdsAmong(this.prisma, user.id, onlineOtherUserIds)
-              : new Set<string>();
-            const blockedSocketIds = [...blockedUserIds].flatMap(
-              id => [...(this.userSockets.get(id) ?? [])],
-            );
-
-            const emitter = blockedSocketIds.length > 0
-              ? this.io.to(rooms).except(blockedSocketIds)
-              : this.io.to(rooms);
-            emitter.emit(SERVER_EVENTS.USER_STATUS, {
+            this.io.to(rooms).emit(SERVER_EVENTS.USER_STATUS, {
               userId: user.id,
               username: displayName,
               isOnline,
@@ -1885,7 +1691,7 @@ export class MeeshySocketIOManager {
           // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
           const readStatusService = this.readStatusService;
 
-          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId);
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId, senderId);
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
@@ -2145,22 +1951,9 @@ export class MeeshySocketIOManager {
         metadata: { source: 'api' as const },
       };
 
-      // Résout le Participant.id du sender AVANT d'appeler handleMessage — mirroring
-      // handleAgentReaction just below. MessagingService attend un Participant.id ;
-      // lui passer asUserId (un User.id) ne fonctionnait que via son fallback
-      // DEPRECATED (query supplémentaire + log d'erreur à chaque réponse d'agent).
-      const senderParticipant = await this.prisma.participant.findFirst({
-        where: { userId: response.asUserId, conversationId: response.conversationId, isActive: true },
-        select: { id: true },
-      });
-      if (!senderParticipant) {
-        logger.warn(`[Agent] No active participant for userId=${response.asUserId} in conv=${response.conversationId}`);
-        return;
-      }
-
       const result = await this.messagingService.handleMessage(
         messageRequest,
-        senderParticipant.id
+        response.asUserId
       );
 
       if (!result.success || !result.data) {
@@ -2252,18 +2045,6 @@ export class MeeshySocketIOManager {
 
       if (message) {
         const normalizedConversationId = message.conversationId;
-        // Swap 1-réaction-par-user : broadcast du retrait de l'ancien emoji de
-        // l'agent avant l'ajout du nouveau.
-        for (const removedEmoji of result.replacedEmojis) {
-          const removeEvent = await reactionService.createUpdateEvent(
-            reaction.targetMessageId,
-            removedEmoji,
-            'remove',
-            participant.id,
-            normalizedConversationId
-          );
-          this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
-        }
         this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
 
         const authorParticipant = message.senderId

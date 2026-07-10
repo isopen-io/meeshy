@@ -244,7 +244,8 @@ export function ConversationParticipantsDrawer({
           user.username?.toLowerCase().includes(searchTerm) ||
           user.displayName?.toLowerCase().includes(searchTerm) ||
           user.firstName?.toLowerCase().includes(searchTerm) ||
-          user.lastName?.toLowerCase().includes(searchTerm)
+          user.lastName?.toLowerCase().includes(searchTerm) ||
+          user.email?.toLowerCase().includes(searchTerm)
         );
       });
 
@@ -577,7 +578,7 @@ export function ConversationParticipantsDrawer({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   )}
                   <Input
-                    placeholder={isAdmin ? t('conversationDetails.searchOrAddParticipants', 'Search or add a member...') : t('conversationDetails.searchParticipants', 'Search participants...')}
+                    placeholder={isAdmin ? "Rechercher ou ajouter un membre..." : (t('conversationDetails.searchParticipants') || "Rechercher un membre...")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10 pr-10 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 focus-visible:ring-blue-500 focus-visible:border-blue-500"
@@ -807,7 +808,7 @@ export function ConversationParticipantsDrawer({
                   className="w-full backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 hover:bg-blue-500/10 text-sm"
                 >
                   <Settings className="h-4 w-4 mr-2" />
-                  {t('conversationHeader.settings', 'Settings')}
+                  {t('conversationHeader.settings') || 'Paramètres de la conversation'}
                 </Button>
               </div>
             )}

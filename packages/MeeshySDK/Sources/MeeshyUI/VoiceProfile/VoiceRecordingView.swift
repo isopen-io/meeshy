@@ -159,7 +159,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundColor(Color(hex: "2ECC71"))
 
                     Text("Echantillon \(index + 1)")
                         .font(.system(size: 13, weight: .medium))

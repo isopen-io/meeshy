@@ -19,7 +19,6 @@ import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/useI18n';
 import type { Post } from '@meeshy/shared/types/post';
-import { copyToClipboard } from '@/lib/clipboard';
 
 const LIKE_EMOJI = '❤️';
 
@@ -121,27 +120,14 @@ export default function ReelPage() {
 
   const onShare = useCallback(async () => {
     if (!current) return;
-    const { success } = await copyToClipboard(`${window.location.origin}/reel/${current.id}`);
-    if (success) {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/reel/${current.id}`);
       shareMutation.mutate({ postId: current.id });
       toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
-    } else {
+    } catch {
       toastCtx.addToast(t('linkCopyError', "Couldn't copy the link"), 'error');
     }
   }, [current, shareMutation, toastCtx, t]);
-
-  // Reel comment notifications link to `/reel/:id#comment-:cid`. The reel player
-  // surfaces comments via the post-detail thread, so forward to it preserving the
-  // anchor — the post page scrolls to and highlights the exact comment. Replace
-  // (not push) so Back returns to where the user came from, not this redirect.
-  useEffect(() => {
-    if (typeof window === 'undefined' || !postId) return;
-    const anchorCommentId = window.location.hash.match(/^#comment-(.+)$/)?.[1]
-      ?? new URLSearchParams(window.location.search).get('comment');
-    if (anchorCommentId) {
-      router.replace(`/feeds/post/${postId}#comment-${anchorCommentId}`);
-    }
-  }, [postId, router]);
 
   const onComment = useCallback(() => {
     if (current) router.push(`/feeds/post/${current.id}`);

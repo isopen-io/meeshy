@@ -56,24 +56,6 @@ public extension View {
         }
     }
 
-    /// Translucent sheet backdrop — the Liquid Glass treatment for sheets: the
-    /// presenting context shows through instead of an opaque slab.
-    ///
-    /// - iOS 16.4+ (incl. 26): `presentationBackground(.ultraThinMaterial)` —
-    ///   on iOS 26 the system sheet chrome already composes this as glass.
-    /// - iOS < 16.4: no-op (the API doesn't exist; the sheet keeps its default
-    ///   opaque background).
-    ///
-    /// Apply on the sheet's ROOT view, alongside `presentationDetents`.
-    @ViewBuilder
-    func adaptiveSheetGlassBackground() -> some View {
-        if #available(iOS 16.4, *) {
-            presentationBackground(.ultraThinMaterial)
-        } else {
-            self
-        }
-    }
-
     @ViewBuilder
     private func adaptiveGlassRegularFallback<S: Shape>(in shape: S, tint: Color?) -> some View {
         if let tint {

@@ -97,16 +97,15 @@ struct DataStorageView: View {
                             .foregroundColor(theme.textPrimary)
 
                         Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et videos mis en cache", bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .regular))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .accessibilityElement(children: .combine)
 
                 Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les medias plus rapidement et reduit la consommation de donnees. Les fichiers mis en cache sont automatiquement supprimes apres 7 jours.", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .regular))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(theme.textMuted)
                     .lineSpacing(3)
                     .padding(.horizontal, 14)

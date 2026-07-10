@@ -14,10 +14,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     CONVERSATION_JOINED: 'conversation:joined',
     CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   },
-  ROOMS: {
-    conversation: (id: string) => `conversation:${id}`,
-    user: (id: string) => `user:${id}`,
-  },
+  ROOMS: { conversation: (id: string) => `conversation:${id}` },
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
@@ -31,7 +28,6 @@ jest.mock('@meeshy/shared/types', () => ({
 
 import { canAccessConversation } from '../../../routes/conversations/utils/access-control';
 import { registerParticipantsRoutes } from '../../../routes/conversations/participants';
-import { cacheParticipant, getCachedParticipant } from '../../../utils/participant-lookup-cache';
 
 const VALID_CONV_ID = '507f1f77bcf86cd799439011';
 const VALID_USER_ID = '507f1f77bcf86cd799439022';
@@ -83,16 +79,10 @@ function createMockNotificationService() {
 
 function createMockIO() {
   const mockEmit = jest.fn<any>();
-  const mockLeave = jest.fn<any>();
-  const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
-  const io = {
+  return {
     to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
-    in: jest.fn<any>().mockReturnValue({ fetchSockets: mockFetchSockets }),
     _emit: mockEmit,
-    _leave: mockLeave,
-    _fetchSockets: mockFetchSockets,
   };
-  return io;
 }
 
 type RouteHandler = (request: any, reply: any) => Promise<any>;
@@ -135,12 +125,10 @@ function wireServerToFastify(
   fastify: any,
   server?: { io?: unknown; notificationService?: unknown }
 ) {
-  const invalidateParticipantCache = jest.fn<any>();
   fastify.socketIOHandler = server?.io
-    ? { getManager: () => ({ getIO: () => server.io, invalidateParticipantCache }) }
+    ? { getManager: () => ({ getIO: () => server.io }) }
     : undefined;
   fastify.notificationService = server?.notificationService;
-  fastify._invalidateParticipantCache = invalidateParticipantCache;
 }
 
 function createParticipant(overrides: Record<string, unknown> = {}) {
@@ -284,6 +272,7 @@ describe('registerParticipantsRoutes', () => {
               lastName: 'User',
               displayName: 'TestUser',
               avatar: 'avatar.png',
+              email: 'test@test.com',
               role: 'USER',
               conversationRole: 'member',
               isOnline: true,
@@ -300,10 +289,6 @@ describe('registerParticipantsRoutes', () => {
           pagination: expect.objectContaining({ nextCursor: null, hasMore: false }),
         })
       );
-      // PII: l'email des co-participants n'est jamais exposé dans la liste des
-      // participants (aucun client ne l'affiche ; les modos ont les endpoints admin).
-      const participantData = reply.send.mock.calls[0][0].data[0];
-      expect(participantData.email).toBeUndefined();
     });
 
     it('should use default limit of 20 when not provided', async () => {
@@ -484,7 +469,7 @@ describe('registerParticipantsRoutes', () => {
       expect(data.firstName).toBe('AnonUser');
       expect(data.lastName).toBe('');
       expect(data.avatar).toBeNull();
-      expect(data.email).toBeUndefined();
+      expect(data.email).toBe('');
       expect(data.role).toBe('USER');
       expect(data.systemLanguage).toBe('de');
       expect(data.regionalLanguage).toBe('de');
@@ -1228,41 +1213,6 @@ describe('registerParticipantsRoutes', () => {
         displayName: 'TestUser',
         leftAt: expect.any(String),
       }));
-      expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-    });
-
-    it('should evict removed user socket from conversation room and invalidate participant cache', async () => {
-      const route = getRoute(mockFastify, 'DELETE', '/participants');
-      const io = createMockIO();
-      const request = createDeleteRequest({ server: { io, notificationService: createMockNotificationService() } });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
-      mockPrisma.participant.findMany.mockResolvedValue([]);
-      const reply = createMockReply();
-
-      await route.handler(request, reply);
-
-      expect(io.in).toHaveBeenCalledWith(`user:${TARGET_USER_ID}`);
-      expect(io._leave).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
-      expect(mockFastify._invalidateParticipantCache).toHaveBeenCalledWith(TARGET_USER_ID, VALID_CONV_ID);
-      expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-    });
-
-    it('should evict the removed participant from the message-send lookup cache', async () => {
-      const route = getRoute(mockFastify, 'DELETE', '/participants');
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
-      mockPrisma.participant.findMany.mockResolvedValue([]);
-      const reply = createMockReply();
-      cacheParticipant(PARTICIPANT_ID, VALID_CONV_ID, {
-        id: PARTICIPANT_ID,
-        conversationId: VALID_CONV_ID,
-        isActive: true,
-      });
-
-      await route.handler(createDeleteRequest(), reply);
-
-      expect(getCachedParticipant(PARTICIPANT_ID, VALID_CONV_ID)).toBeUndefined();
     });
 
     it('should soft delete the participant when authorized as ADMIN user role', async () => {

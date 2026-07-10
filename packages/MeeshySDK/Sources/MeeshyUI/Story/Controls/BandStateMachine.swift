@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Category & ElementKind
 
 public nonisolated enum BandCategory: Equatable, Sendable {
-    case media, son, text, drawing, filters, timeline, texture
+    case media, son, text, drawing, filters, timeline
 }
 
 public nonisolated enum BandElementKind: Equatable, Sendable {
@@ -43,8 +43,7 @@ nonisolated extension StoryToolMode {
     /// Bridges the existing `StoryToolMode` enum to `BandCategory` for the new layer.
     public var bandCategory: BandCategory {
         switch self {
-        case .media: return .media
-        case .texture: return .texture
+        case .media, .texture: return .media
         case .audio: return .son
         case .drawing: return .drawing
         case .text: return .text
@@ -57,7 +56,6 @@ nonisolated extension StoryToolMode {
     public static func from(category: BandCategory) -> StoryToolMode {
         switch category {
         case .media: return .media
-        case .texture: return .texture
         case .son: return .audio
         case .text: return .text
         case .drawing: return .drawing
@@ -75,10 +73,6 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
     public init() {}
 
     public mutating func tapFAB(_ category: BandCategory) {
-        // La timeline se présente en SHEET (ComposerToolPanelHost la rend en
-        // EmptyView, panelHeight 0) — le band ne doit jamais atteindre
-        // .toolPanel(.timeline). Les call sites ouvrent la sheet à la place.
-        guard category != .timeline else { return }
         switch state {
         case .hidden:
             state = .toolPanel(StoryToolMode.from(category: category))
@@ -95,7 +89,6 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
     }
 
     public mutating func swipeUpOnFAB(_ category: BandCategory) {
-        guard category != .timeline else { return }  // sheet-only (cf. tapFAB)
         // Force open (idempotent on same category).
         switch state {
         case .formatPanel:
@@ -116,12 +109,15 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
         }
     }
 
+    public mutating func swipeHorizontalOnBand() {
+        // No horizontal swipe anymore as we removed categories
+    }
+
     public mutating func openFormatPanel(_ kind: BandElementKind, id: String) {
         state = .formatPanel(kind, elementId: id)
     }
 
     public mutating func tapTile(_ tool: StoryToolMode) {
-        guard tool != .timeline else { return }  // sheet-only (cf. tapFAB)
         switch state {
         case .formatPanel:
             break  // formatPanel takes precedence

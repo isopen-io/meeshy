@@ -19,19 +19,6 @@ struct AboutView: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
-    private var versionString: String {
-        String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main)
-    }
-
-    private var copyLabel: String {
-        String(localized: "common.copy", defaultValue: "Copy", bundle: .main)
-    }
-
-    private func copyValue(_ value: String) {
-        UIPasteboard.general.string = value
-        HapticFeedback.success()
-    }
-
     var body: some View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
@@ -111,17 +98,9 @@ struct AboutView: View {
                 .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            Text(versionString)
+            Text(String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main))
                 .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
-                .contextMenu {
-                    Button {
-                        copyValue(versionString)
-                    } label: {
-                        Label(copyLabel, systemImage: "doc.on.doc")
-                    }
-                }
-                .accessibilityAction(named: Text(copyLabel)) { copyValue(versionString) }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
@@ -151,7 +130,7 @@ struct AboutView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(String(localized: "about.description.body", defaultValue: "Meeshy est une plateforme de messagerie en temps reel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .regular))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textPrimary)
                     .lineSpacing(4)
                     .padding(.horizontal, 14)
@@ -216,9 +195,6 @@ struct AboutView: View {
                 .tracking(1.2)
         }
         .padding(.leading, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionBackground(tint: String) -> some View {
@@ -259,14 +235,6 @@ struct AboutView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
-        .contextMenu {
-            Button {
-                copyValue(value)
-            } label: {
-                Label(copyLabel, systemImage: "doc.on.doc")
-            }
-        }
-        .accessibilityAction(named: Text(copyLabel)) { copyValue(value) }
     }
 
     private func featureRow(title: String, icon: String) -> some View {
@@ -281,35 +249,32 @@ struct AboutView: View {
 
             Image(systemName: "checkmark.circle.fill")
                 .font(MeeshyFont.relative(16))
-                .foregroundColor(MeeshyColors.success)
+                .foregroundColor(Color(hex: "4ADE80"))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder
     private func linkRow(icon: String, title: String, url: String, color: String) -> some View {
-        if let destination = URL(string: url) {
-            Link(destination: destination) {
-                HStack(spacing: 12) {
-                    fieldIcon(icon, color: color)
+        Link(destination: URL(string: url)!) {
+            HStack(spacing: 12) {
+                fieldIcon(icon, color: color)
 
-                    Text(title)
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                Text(title)
+                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
 
-                    Spacer()
+                Spacer()
 
-                    Image(systemName: "arrow.up.right")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
-                        .foregroundColor(Color(hex: color))
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                Image(systemName: "arrow.up.right")
+                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .foregroundColor(Color(hex: color))
             }
-            .accessibilityLabel(title)
-            .accessibilityHint(String(localized: "about.link.hint", defaultValue: "Ouvre \(title) dans Safari", bundle: .main))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
+        .accessibilityLabel(title)
+        .accessibilityHint(String(localized: "about.link.hint", defaultValue: "Ouvre \(title) dans Safari", bundle: .main))
     }
 }

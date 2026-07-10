@@ -12,17 +12,9 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 const mockNormalizeConversationId = jest.fn() as jest.Mock<any>;
 const mockValidateSocketEvent = jest.fn() as jest.Mock<any>;
 const mockUpdateOnNewMessage = jest.fn() as jest.Mock<any>;
-const mockCheckLimit = jest.fn() as jest.Mock<any>;
 
 jest.mock('../../utils/socket-helpers', () => ({
   normalizeConversationId: (...args: unknown[]) => mockNormalizeConversationId(...args),
-}));
-
-jest.mock('../../../utils/socket-rate-limiter.js', () => ({
-  getSocketRateLimiter: () => ({ checkLimit: (...a: unknown[]) => mockCheckLimit(...a) }),
-  SOCKET_RATE_LIMITS: {
-    CONVERSATION_JOIN: { maxRequests: 5, windowMs: 60000, keyPrefix: 'socket:conv:join' },
-  },
 }));
 
 jest.mock('../../../middleware/validation.js', () => ({
@@ -109,7 +101,6 @@ describe('ConversationHandler', () => {
     mockNormalizeConversationId.mockResolvedValue(CONV_ID);
     mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: CONV_ID } });
     mockUpdateOnNewMessage.mockResolvedValue(null);
-    mockCheckLimit.mockResolvedValue(true); // allow by default
   });
 
   // ── handleConversationJoin ──────────────────────────────────────────────────
@@ -218,13 +209,11 @@ describe('ConversationHandler', () => {
 
       await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
 
-      // Valid anonymous member (owns the participant): the handler joins the
-      // room and, having no userId, does NOT emit CONVERSATION_JOINED.
-      expect(socket.join).toHaveBeenCalled();
-      expect(socket.emit).not.toHaveBeenCalledWith(
-        SERVER_EVENTS.CONVERSATION_JOINED,
-        expect.anything()
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
+        expect.objectContaining({ reason: 'not_authenticated' })
       );
+      expect(socket.join).not.toHaveBeenCalled();
     });
 
     it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {
@@ -265,20 +254,6 @@ describe('ConversationHandler', () => {
       expect(socket.join).not.toHaveBeenCalled();
     });
 
-    it('emits join-error with rate_limited reason when rate limiter denies the request', async () => {
-      mockCheckLimit.mockResolvedValue(false);
-      const socket = makeSocket();
-      const handler = makeHandler();
-
-      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
-
-      expect(socket.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
-        expect.objectContaining({ reason: 'rate_limited', conversationId: CONV_ID })
-      );
-      expect(socket.join).not.toHaveBeenCalled();
-    });
-
     it('calls sendConversationStatsToSocket after successful join', async () => {
       const participant = { id: 'part-1', bannedAt: null, leftAt: null, isActive: true };
       const prisma = makePrisma(participant);
@@ -289,35 +264,6 @@ describe('ConversationHandler', () => {
       await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
 
       expect(spy).toHaveBeenCalledWith(socket, CONV_ID);
-    });
-
-    it('emits CONVERSATION_UNREAD_UPDATED with unread count after successful join', async () => {
-      const participant = { id: 'part-1', bannedAt: null, leftAt: null, isActive: true };
-      const prisma = makePrisma(participant);
-      const readStatusService = { getUnreadCount: jest.fn<any>().mockResolvedValue(7) };
-      const socket = makeSocket();
-      const handler = makeHandler({ prisma, readStatusService: readStatusService as any });
-      jest.spyOn(handler, 'sendConversationStatsToSocket').mockResolvedValue(undefined);
-
-      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
-
-      expect(socket.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
-        { conversationId: CONV_ID, unreadCount: 7 }
-      );
-    });
-
-    it('does not crash when getUnreadCount rejects (non-blocking path)', async () => {
-      const participant = { id: 'part-1', bannedAt: null, leftAt: null, isActive: true };
-      const prisma = makePrisma(participant);
-      const readStatusService = { getUnreadCount: jest.fn<any>().mockRejectedValue(new Error('Redis down')) };
-      const socket = makeSocket();
-      const handler = makeHandler({ prisma, readStatusService: readStatusService as any });
-      jest.spyOn(handler, 'sendConversationStatsToSocket').mockResolvedValue(undefined);
-
-      await expect(handler.handleConversationJoin(socket, { conversationId: CONV_ID })).resolves.toBeUndefined();
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_JOINED, expect.anything());
-      expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, expect.anything());
     });
 
     it('emits server_error join-error when an exception is thrown', async () => {

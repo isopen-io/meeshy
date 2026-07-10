@@ -85,38 +85,4 @@ final class StoryPublishServiceTests: XCTestCase {
         }
         XCTAssertEqual(service.pendingCount, 2)
     }
-
-    // MARK: - E10 : sweep des dossiers médias orphelins
-
-    func test_orphanedQueueDirectories_keepsLiveAndRecentDirs() {
-        let live = URL(fileURLWithPath: "/q/pending_live")
-        let oldOrphan = URL(fileURLWithPath: "/q/pending_dead")
-        let freshOrphan = URL(fileURLWithPath: "/q/pending_fresh")
-        let now = Date()
-        let dates: [String: Date] = [
-            "pending_live": now.addingTimeInterval(-7200),
-            "pending_dead": now.addingTimeInterval(-7200),
-            "pending_fresh": now.addingTimeInterval(-60),
-        ]
-
-        let orphans = StoryPublishService.orphanedQueueDirectories(
-            children: [live, oldOrphan, freshOrphan],
-            liveTempIds: ["pending_live"],
-            cutoff: now.addingTimeInterval(-3600),
-            modificationDate: { dates[$0.lastPathComponent] }
-        )
-
-        XCTAssertEqual(orphans, [oldOrphan],
-                       "Only unclaimed directories older than the cutoff are swept — live items and freshly created dirs (enqueue race) survive")
-    }
-
-    func test_orphanedQueueDirectories_missingMtime_treatedAsOld() {
-        let unknown = URL(fileURLWithPath: "/q/pending_unknown")
-        let orphans = StoryPublishService.orphanedQueueDirectories(
-            children: [unknown], liveTempIds: [],
-            cutoff: Date().addingTimeInterval(-3600),
-            modificationDate: { _ in nil }
-        )
-        XCTAssertEqual(orphans, [unknown])
-    }
 }

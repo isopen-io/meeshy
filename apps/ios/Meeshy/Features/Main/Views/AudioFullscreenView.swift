@@ -124,13 +124,15 @@ private struct AudioFullscreenPage: View {
     @StateObject private var player = AudioPlaybackManager()
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
 
-    @StateObject private var saveCoordinator = MediaSaveCoordinator()
+    @State private var saveState: SaveState = .idle
     @State private var isSeeking = false
     @State private var seekValue: Double = 0
     @State private var selectedLanguage: String = "orig"
     @State private var showLanguagePicker = false
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var isRequestingTranscription = false
+
+    private enum SaveState { case idle, saving, saved, failed }
 
     private var attachment: MessageAttachment { item.attachment }
     private var message: Message { item.message }
@@ -298,14 +300,12 @@ private struct AudioFullscreenPage: View {
                 onDismiss()
                 HapticFeedback.light()
             } label: {
-                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le libellé porte le sens
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.white.opacity(0.2)))
             }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
             Spacer()
 
@@ -392,35 +392,25 @@ private struct AudioFullscreenPage: View {
     // MARK: - Download Button
 
     private var downloadButton: some View {
-        Button { requestSave() } label: {
+        Button { saveAudio() } label: {
             Group {
-                if saveCoordinator.isProcessing {
-                    ProgressView().tint(.white)
-                } else {
+                switch saveState {
+                case .idle:
                     Image(systemName: "arrow.down.to.line")
+                case .saving:
+                    ProgressView().tint(.white)
+                case .saved:
+                    Image(systemName: "checkmark")
+                case .failed:
+                    Image(systemName: "xmark")
                 }
             }
-            // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le libellé porte le sens
-            .font(.system(size: 16, weight: .semibold))
+            .font(MeeshyFont.relative(16, weight: .semibold))
             .foregroundColor(.white.opacity(0.9))
             .frame(width: 36, height: 36)
             .background(Circle().fill(Color.white.opacity(0.2)))
         }
-        .disabled(saveCoordinator.isProcessing)
-        .accessibilityLabel(String(localized: "media.download", defaultValue: "Télécharger", bundle: .main))
-        // Composant UNIFIÉ « Enregistrer » : même sheet de destinations que
-        // les images, vidéos et documents (issue via toast + haptics).
-        .mediaSaveFlow(saveCoordinator)
-    }
-
-    private func requestSave() {
-        HapticFeedback.light()
-        saveCoordinator.requestSave(MediaSaveRequest(
-            kind: .audio,
-            remoteURLString: currentAudioUrl,
-            suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-            attachmentId: attachment.id.isEmpty ? nil : attachment.id
-        ))
+        .disabled(saveState == .saving || saveState == .saved)
     }
 
     // MARK: - Waveform Section
@@ -492,9 +482,6 @@ private struct AudioFullscreenPage: View {
     // MARK: - Center Controls
 
     private var centerControls: some View {
-        // Contrôles de transport média : tailles de glyphes figées pour préserver
-        // la cohérence du rang (bouton lecture ancré dans un cercle fixe 64×64) —
-        // les libellés VoiceOver portent le sens des boutons icône-seule.
         HStack(spacing: 48) {
             Button {
                 player.skip(seconds: -10)
@@ -504,7 +491,6 @@ private struct AudioFullscreenPage: View {
                     .font(MeeshyFont.relative(28, weight: .semibold))
                     .foregroundColor(.white)
             }
-            .accessibilityLabel(String(localized: "media.skipBack10s", defaultValue: "Reculer de 10 secondes", bundle: .main))
 
             Button {
                 if player.isPlaying || player.progress > 0 {
@@ -529,9 +515,6 @@ private struct AudioFullscreenPage: View {
                     }
                 }
             }
-            .accessibilityLabel(player.isPlaying
-                ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
-                : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
 
             Button {
                 player.skip(seconds: 10)
@@ -541,7 +524,6 @@ private struct AudioFullscreenPage: View {
                     .font(MeeshyFont.relative(28, weight: .semibold))
                     .foregroundColor(.white)
             }
-            .accessibilityLabel(String(localized: "media.skipForward10s", defaultValue: "Avancer de 10 secondes", bundle: .main))
         }
     }
 
@@ -652,7 +634,6 @@ private struct AudioFullscreenPage: View {
             Image(systemName: "text.word.spacing")
                 .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(.white.opacity(0.25))
-                .accessibilityHidden(true)
 
             Text(String(localized: "audio.fullscreen.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
                 .font(MeeshyFont.relative(14, weight: .medium))
@@ -737,14 +718,12 @@ private struct AudioFullscreenPage: View {
                 showLanguagePicker = true
                 HapticFeedback.light()
             } label: {
-                // Glyphe dans un cercle de dimension fixe 26×26 : figé (déborderait s'il scalait, doctrine 86i) ; le libellé porte le sens
                 Image(systemName: "translate")
                     .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.white.opacity(0.08)))
             }
-            .accessibilityLabel(String(localized: "audio.fullscreen.language.choose", defaultValue: "Choisir une langue", bundle: .main))
         }
         .padding(.horizontal, 8)
     }
@@ -769,7 +748,7 @@ private struct AudioFullscreenPage: View {
             HStack(spacing: 3) {
                 Text(flag).font(MeeshyFont.relative(12))
                 Text(label)
-                    .font(MeeshyFont.relative(10, weight: isSelected ? .bold : .medium))
+                    .font(MeeshyFont.relative(10))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
@@ -804,7 +783,7 @@ private struct AudioFullscreenPage: View {
                             Text(lang.flag).font(MeeshyFont.relative(20))
 
                             Text(lang.name)
-                                .font(MeeshyFont.relative(15, weight: isSelected ? .bold : .regular))
+                                .font(MeeshyFont.relative(15))
                                 .foregroundColor(.primary)
 
                             Spacer()
@@ -875,4 +854,47 @@ private struct AudioFullscreenPage: View {
         }
     }
 
+    private func saveAudio() {
+        let url = currentAudioUrl
+        guard let resolved = MeeshyConfig.resolveMediaURL(url) else { return }
+        saveState = .saving
+        HapticFeedback.light()
+
+        Task {
+            do {
+                let (tempURL, _) = try await URLSession.shared.download(from: resolved)
+                let ext = resolved.pathExtension.isEmpty ? "m4a" : resolved.pathExtension
+                let tempFile = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("audio_\(UUID().uuidString).\(ext)")
+                try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                defer { try? FileManager.default.removeItem(at: tempFile) }
+
+                // One-tap save into the Files app (Documents) — no share sheet
+                // detour (the previous UIActivityViewController was presented
+                // without an iPad popover anchor and crashed there).
+                let preferred = attachment.originalName.isEmpty
+                    ? "Audio Meeshy.\(ext)"
+                    : attachment.originalName
+                _ = try MediaFileSaver.save(tempFile, preferredName: preferred)
+
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        saveState = .saved
+                    }
+                    HapticFeedback.success()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation { saveState = .failed }
+                    HapticFeedback.error()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
+                    }
+                }
+            }
+        }
+    }
 }

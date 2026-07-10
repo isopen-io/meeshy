@@ -27,7 +27,6 @@ export function TypingIndicator({
   className = ""
 }: TypingIndicatorProps) {
   const [dots, setDots] = useState('');
-  const { t } = useI18n('typingIndicator');
 
   // Animation des points
   useEffect(() => {
@@ -59,11 +58,11 @@ export function TypingIndicator({
 
   const renderTypingMessage = () => {
     if (typingUserNames.length === 1) {
-      return t('single', { name: typingUserNames[0] }) + dots;
+      return `${typingUserNames[0]} écrit${dots}`;
     } else if (typingUserNames.length === 2) {
-      return t('double', { name1: typingUserNames[0], name2: typingUserNames[1] }) + dots;
+      return `${typingUserNames[0]} et ${typingUserNames[1]} écrivent${dots}`;
     } else {
-      return t('multiple', { name: typingUserNames[0], count: String(typingUserNames.length - 1) }) + dots;
+      return `${typingUserNames.length} personnes écrivent${dots}`;
     }
   };
 

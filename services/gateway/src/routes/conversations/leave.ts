@@ -4,7 +4,6 @@ import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
-import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -65,12 +64,10 @@ export function registerLeaveRoutes(
         where: { id: participant.id },
         data: { isActive: false, leftAt: now },
       })
-      invalidateParticipantLookup(participant.id, id)
 
       const io = socketIOHandler?.getManager()?.getIO()
       const room = ROOMS.conversation(id)
 
-      const manager = socketIOHandler?.getManager()
       if (io) {
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, {
           conversationId: id,
@@ -81,8 +78,6 @@ export function registerLeaveRoutes(
 
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
         await Promise.all(userSockets.map(s => s.leave(room)))
-
-        manager?.invalidateParticipantCache?.(userId, id)
       }
 
       return sendSuccess(reply, { conversationId: id, leftAt: now.toISOString() })

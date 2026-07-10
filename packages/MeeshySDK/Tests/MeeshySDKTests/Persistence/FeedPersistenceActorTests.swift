@@ -116,64 +116,6 @@ final class FeedPersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched.count, 0)
     }
 
-    private func commentReactionSummary(forCommentId commentId: String, postId: String) throws -> [String: Int] {
-        let comment = try actor.comments(forPostId: postId, limit: 50).first { $0.id == commentId }
-        return comment?.reactionSummary ?? [:]
-    }
-
-    func test_updateCommentReactionSummary_setsAndMergesEmojiCounts() async throws {
-        try await actor.insertComment(CommentRecordFactory.make(id: "c_rx", postId: "post_rx"))
-
-        try await actor.updateCommentReactionSummary(commentId: "c_rx", emoji: "👍", count: 3)
-        try await actor.updateCommentReactionSummary(commentId: "c_rx", emoji: "🔥", count: 2)
-
-        let summary = try commentReactionSummary(forCommentId: "c_rx", postId: "post_rx")
-        XCTAssertEqual(summary["👍"], 3)
-        XCTAssertEqual(summary["🔥"], 2)
-    }
-
-    func test_updateCommentReactionSummary_isIdempotentUnderDuplicateDelivery() async throws {
-        try await actor.insertComment(CommentRecordFactory.make(id: "c_rx_dup", postId: "post_rx"))
-
-        // Same absolute count delivered twice (feed room + post room) must not double.
-        try await actor.updateCommentReactionSummary(commentId: "c_rx_dup", emoji: "👍", count: 4)
-        try await actor.updateCommentReactionSummary(commentId: "c_rx_dup", emoji: "👍", count: 4)
-
-        let summary = try commentReactionSummary(forCommentId: "c_rx_dup", postId: "post_rx")
-        XCTAssertEqual(summary["👍"], 4)
-    }
-
-    func test_updateCommentReactionSummary_zeroCountRemovesEmoji() async throws {
-        try await actor.insertComment(CommentRecordFactory.make(id: "c_rx_zero", postId: "post_rx"))
-
-        try await actor.updateCommentReactionSummary(commentId: "c_rx_zero", emoji: "👍", count: 2)
-        try await actor.updateCommentReactionSummary(commentId: "c_rx_zero", emoji: "👍", count: 0)
-
-        let summary = try commentReactionSummary(forCommentId: "c_rx_zero", postId: "post_rx")
-        XCTAssertNil(summary["👍"])
-    }
-
-    func test_updateCommentReactionSummary_bumpsChangeVersion() async throws {
-        try await actor.insertComment(CommentRecordFactory.make(id: "c_rx_ver", postId: "post_rx", changeVersion: 0))
-        try await actor.updateCommentReactionSummary(commentId: "c_rx_ver", emoji: "❤️", count: 1)
-
-        let comment = try actor.comments(forPostId: "post_rx", limit: 10).first { $0.id == "c_rx_ver" }
-        XCTAssertEqual(comment?.changeVersion, 1)
-    }
-
-    func test_replaceCommentReactionSummary_overwritesFullSet() async throws {
-        try await actor.insertComment(CommentRecordFactory.make(id: "c_rx_sync", postId: "post_rx"))
-        try await actor.updateCommentReactionSummary(commentId: "c_rx_sync", emoji: "👍", count: 9)
-
-        // Sync ACK is authoritative — it replaces the whole dict, dropping 👍.
-        try await actor.replaceCommentReactionSummary(commentId: "c_rx_sync", counts: ["🔥": 5, "❤️": 0])
-
-        let summary = try commentReactionSummary(forCommentId: "c_rx_sync", postId: "post_rx")
-        XCTAssertEqual(summary["🔥"], 5)
-        XCTAssertNil(summary["👍"], "stale emoji must be dropped on full sync")
-        XCTAssertNil(summary["❤️"], "zero-count emoji must not be persisted")
-    }
-
     func test_cursorPagination() async throws {
         for i in 0..<30 {
             var post = PostRecordFactory.make(id: "post_\(i)")

@@ -55,7 +55,6 @@ struct CameraView: View {
         HStack {
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
-                    // doctrine 82i — glyphe borné par le cadre tap fixe 44×44
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
@@ -67,7 +66,6 @@ struct CameraView: View {
 
             Button { cycleFlash() } label: {
                 Image(systemName: flashIcon)
-                    // doctrine 82i — glyphe borné par le cadre tap fixe 44×44
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(flashMode == .off ? .white.opacity(0.6) : .yellow)
                     .frame(width: 44, height: 44)
@@ -121,7 +119,6 @@ struct CameraView: View {
 
                 Button { camera.switchCamera() } label: {
                     Image(systemName: "camera.rotate.fill")
-                        // doctrine 82i — glyphe borné par le cadre tap fixe 50×50
                         .font(.system(size: 22))
                         .foregroundColor(.white)
                         .frame(width: 50, height: 50)
@@ -151,7 +148,7 @@ struct CameraView: View {
     private func modeTab(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(MeeshyFont.relative(14, weight: selected ? .bold : .medium))
+                .font(.system(size: 14, weight: selected ? .bold : .medium))
                 .foregroundColor(selected ? .white : .white.opacity(0.5))
         }
     }
@@ -213,7 +210,7 @@ struct CameraView: View {
                 .fill(MeeshyColors.error)
                 .frame(width: 10, height: 10)
             Text(formatDuration(camera.recordingDuration))
-                .font(MeeshyFont.relative(16, weight: .semibold, design: .monospaced))
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
                 .foregroundColor(.white)
         }
         .padding(.horizontal, 16)

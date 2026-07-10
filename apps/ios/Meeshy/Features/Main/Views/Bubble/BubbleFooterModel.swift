@@ -38,10 +38,6 @@ struct BubbleFooterModel: Equatable, Sendable {
     var delivery: MeeshyMessage.DeliveryStatus?
     var isOffline: Bool
     var isMe: Bool
-    /// The message's `createdAt`, carried through only while `delivery ==
-    /// .sending` — drives `BubbleDeliveryCheck.SendingClockGlyph`'s reveal
-    /// debounce (spec §6.2). `nil` for every other delivery state.
-    var sendStartedAt: Date?
 
     /// A send still in flight — clock territory (excludes `.failed`).
     var isPending: Bool {
@@ -56,7 +52,7 @@ struct BubbleFooterModel: Equatable, Sendable {
 
     static let empty = BubbleFooterModel(
         sender: nil, flags: [], showsTranslate: false,
-        timestamp: nil, delivery: nil, isOffline: false, isMe: false, sendStartedAt: nil
+        timestamp: nil, delivery: nil, isOffline: false, isMe: false
     )
 }
 
@@ -74,7 +70,7 @@ struct BubbleFooterActions {
     /// l'onglet "Vues" pour consulter le statut de reception/lecture detail.
     /// Wirage UIKit-bridged : `MessageListViewController` -> `MessageListView`
     /// -> `ConversationView` (onShowReadStatus) -> `overlayState.detailSheetMessage`
-    /// + `.moreSheetInitialItem = .views` (feuille native MessageMoreSheet).
+    /// + `.detailSheetInitialTab = .views`.
     var onShowReadStatus: (() -> Void)?
 
     init(
@@ -110,8 +106,7 @@ extension BubbleFooterModel {
         isOnline: Bool,
         sender: SenderIdentity?,
         flags: [FooterFlag],
-        showsTranslate: Bool,
-        sendStartedAt: Date? = nil
+        showsTranslate: Bool
     ) -> BubbleFooterModel {
         BubbleFooterModel(
             sender: sender,
@@ -120,8 +115,7 @@ extension BubbleFooterModel {
             timestamp: timeString,
             delivery: isMe ? deliveryStatus : nil,
             isOffline: !isOnline,
-            isMe: isMe,
-            sendStartedAt: (isMe && deliveryStatus == .sending) ? sendStartedAt : nil
+            isMe: isMe
         )
     }
 }

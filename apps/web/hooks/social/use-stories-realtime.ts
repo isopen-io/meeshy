@@ -9,9 +9,7 @@ import type {
   StoryCreatedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
-  StoryDeletedEventData,
 } from '@meeshy/shared/types/post';
-import type { StoryTranslationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 
 // ============================================================================
 // Types
@@ -70,46 +68,10 @@ export function useStoriesRealtime(
     []
   );
 
-  // W4 — une story supprimée disparaît du tray en direct (avant : elle
-  // restait affichée jusqu'au refetch et son ouverture échouait).
-  const onStoryDeleted = useCallback(
-    (data: StoryDeletedEventData) => {
-      queryClient.setQueryData<Post[]>(queryKeys.stories.feed(), (old) =>
-        old?.filter((s) => s.id !== data.storyId)
-      );
-    },
-    [queryClient]
-  );
-
-  // W4 — les traductions Prisme arrivées après coup se fusionnent en direct,
-  // PAR TEXT-OBJECT (payload { postId, textObjectIndex, translations } —
-  // parité iOS withTextObjectTranslationsMerged). Les langues existantes de
-  // l'objet sont écrasées, les nouvelles ajoutées ; index hors borne → no-op.
-  const onStoryTranslationUpdated = useCallback(
-    (data: StoryTranslationUpdatedEventData) => {
-      queryClient.setQueryData<Post[]>(queryKeys.stories.feed(), (old) =>
-        old?.map((s) => {
-          if (s.id !== data.postId) return s;
-          const textObjects = s.storyEffects?.textObjects;
-          if (!textObjects || !textObjects[data.textObjectIndex]) return s;
-          const merged = textObjects.map((t, i) =>
-            i === data.textObjectIndex
-              ? { ...t, translations: { ...t.translations, ...data.translations } }
-              : t
-          );
-          return { ...s, storyEffects: { ...s.storyEffects, textObjects: merged } };
-        })
-      );
-    },
-    [queryClient]
-  );
-
   useSocialSocket({
     onStoryCreated,
     onStoryViewed,
     onStoryReacted,
-    onStoryDeleted,
-    onStoryTranslationUpdated,
     enabled,
   });
 

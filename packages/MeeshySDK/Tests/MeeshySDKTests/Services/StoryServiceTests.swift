@@ -184,15 +184,6 @@ final class StoryServiceTests: XCTestCase {
         XCTAssertEqual(service.cachedPost(id: "p1")?.id, "p1")
     }
 
-    func testCacheSeedsByIdTrayWithoutNetwork() {
-        // External seed (e.g. an NSE-prefetched story drained on a cold-start tap)
-        // must resolve via cachedPost without any list()/fetchPost() round-trip.
-        XCTAssertNil(service.cachedPost(id: "seeded"))
-        service.cache(post: makePost(id: "seeded"))
-        XCTAssertEqual(service.cachedPost(id: "seeded")?.id, "seeded")
-        XCTAssertTrue(mock.requests.isEmpty, "cache(post:) must not hit the network")
-    }
-
     // MARK: - fetchPost
 
     func testFetchPostReturnsAPIPostFromEndpoint() async throws {

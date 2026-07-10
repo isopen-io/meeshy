@@ -22,6 +22,7 @@ interface MessagesDisplayProps {
   emptyStateDescription?: string;
   reverseOrder?: boolean;
   className?: string;
+  onTranslation?: (messageId: string, translations: unknown[]) => void;
   onEditMessage?: (messageId: string, newContent: string, originalLanguage: string) => Promise<void>;
   onDeleteMessage?: (messageId: string) => Promise<void>;
   onReplyMessage?: (message: Message) => void;
@@ -57,6 +58,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   emptyStateDescription,
   reverseOrder = false,
   className = "",
+  _onTranslation,
   onEditMessage,
   onDeleteMessage,
   onReplyMessage,

@@ -108,9 +108,9 @@ struct OnboardingFlowView: View {
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
-                            .font(MeeshyFont.relative(15, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                         Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 14)
@@ -124,27 +124,22 @@ struct OnboardingFlowView: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }) {
                     Image(systemName: "xmark")
-                        // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 38×38 →
-                        // taille figée (l'icône ne doit pas déborder du cercle en XXL).
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 38, height: 38)
                         .background(Circle().fill(Color(.systemGray6).opacity(0.9)))
                 }
-                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 .bounceOnTap(scale: 0.88)
             }
 
             Spacer()
 
             Image(systemName: viewModel.currentStep.iconName)
-                .font(MeeshyFont.relative(20, weight: .medium))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundColor(viewModel.currentStep.accentColor)
-                // Décoratif : le compteur adjacent + l'en-tête portent le sens de l'étape.
-                .accessibilityHidden(true)
 
             Text("\(viewModel.currentStep.rawValue + 1)/\(viewModel.totalSteps)")
-                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -159,12 +154,11 @@ struct OnboardingFlowView: View {
     private var stepHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(viewModel.currentStep.funHeader)
-                .font(MeeshyFont.relative(26, weight: .bold, design: .rounded))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundColor(.primary)
-                .accessibilityAddTraits(.isHeader)
 
             Text(viewModel.currentStep.funSubtitle)
-                .font(MeeshyFont.relative(14))
+                .font(.system(size: 14, weight: .regular))
                 .foregroundColor(.secondary)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -192,7 +186,7 @@ struct OnboardingFlowView: View {
             if viewModel.currentStep == .profile {
                 Button(action: { viewModel.nextStep() }) {
                     Text(String(localized: "onboarding.skip-step", defaultValue: "Passer cette etape", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
                 .bounceOnTap(scale: 0.94)

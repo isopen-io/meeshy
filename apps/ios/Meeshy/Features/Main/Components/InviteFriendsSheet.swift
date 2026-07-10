@@ -105,7 +105,7 @@ struct InviteFriendsSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 20)) // toolbar chrome glyph — fixed size (nav bar affordance)
+                            .font(.system(size: 20))
                             .foregroundStyle(.ultraThinMaterial)
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Close", bundle: .main))
@@ -128,24 +128,24 @@ struct InviteFriendsSheet: View {
                         .fill(Color(hex: conversation.accentColor).opacity(0.2))
                         .frame(width: 44, height: 44)
                     Image(systemName: conversationIcon)
-                        .font(.system(size: 18, weight: .semibold)) // glyph in fixed 44pt avatar circle — kept fixed to avoid clipping at large Dynamic Type
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(Color(hex: conversation.accentColor))
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(conversation.name)
-                        .font(MeeshyFont.relative(16, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     HStack(spacing: 4) {
                         Text("\(conversation.memberCount) \(String(localized: "invite.members", defaultValue: "membres"))")
-                            .font(MeeshyFont.relative(12))
+                            .font(.system(size: 12))
                             .foregroundColor(theme.textSecondary)
                         Text("·")
                             .foregroundColor(theme.textMuted)
                         Text(conversation.type.displayName)
-                            .font(MeeshyFont.relative(12))
+                            .font(.system(size: 12))
                             .foregroundColor(theme.textSecondary)
                     }
                 }
@@ -156,12 +156,12 @@ struct InviteFriendsSheet: View {
             // Editable invite message
             VStack(alignment: .leading, spacing: 4) {
                 Text(String(localized: "invite.messageLabel", defaultValue: "Message d'invitation"))
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .textCase(.uppercase)
 
                 TextField(defaultInviteMessage, text: $inviteMessage, axis: .vertical)
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(2...4)
                     .adaptiveOnChange(of: inviteMessage) { _, _ in optionsModified = true }
@@ -174,12 +174,12 @@ struct InviteFriendsSheet: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "link")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(Color(hex: conversation.accentColor))
 
                     if let url = shareURL {
                         Text(url)
-                            .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .foregroundColor(Color(hex: conversation.accentColor))
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -188,7 +188,7 @@ struct InviteFriendsSheet: View {
                             ProgressView()
                                 .scaleEffect(0.7)
                             Text(String(localized: "invite.creatingLink", defaultValue: "Creation du lien..."))
-                                .font(MeeshyFont.relative(13))
+                                .font(.system(size: 13))
                                 .foregroundColor(theme.textMuted)
                         }
                     }
@@ -199,7 +199,7 @@ struct InviteFriendsSheet: View {
                         Text(showCopiedFeedback
                                 ? String(localized: "invite.copied", defaultValue: "Copie !")
                                 : String(localized: "invite.copy", defaultValue: "Copier"))
-                            .font(MeeshyFont.relative(11, weight: .bold))
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
@@ -220,7 +220,7 @@ struct InviteFriendsSheet: View {
             }
             .buttonStyle(.plain)
             .disabled(shareURL == nil)
-            .accessibilityLabel(String(localized: "invite.a11y.copyLink", defaultValue: "Copy invitation link", bundle: .main))
+            .accessibilityLabel("Copier le lien d'invitation")
         }
         .padding(16)
         .background(
@@ -238,7 +238,7 @@ struct InviteFriendsSheet: View {
     private var optionsSummary: some View {
         HStack(spacing: 8) {
             Label(expirationOption.label, systemImage: "clock")
-                .font(MeeshyFont.relative(12, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
             Text("·")
@@ -247,22 +247,22 @@ struct InviteFriendsSheet: View {
             HStack(spacing: 4) {
                 if allowMessages {
                     Image(systemName: "bubble.left.fill")
-                        .font(MeeshyFont.relative(10))
+                        .font(.system(size: 10))
                         .foregroundColor(MeeshyColors.success)
                 }
                 if allowImages {
                     Image(systemName: "photo.fill")
-                        .font(MeeshyFont.relative(10))
+                        .font(.system(size: 10))
                         .foregroundColor(MeeshyColors.success)
                 }
                 if allowFiles {
                     Image(systemName: "paperclip")
-                        .font(MeeshyFont.relative(10))
+                        .font(.system(size: 10))
                         .foregroundColor(MeeshyColors.success)
                 }
                 if allowHistory {
                     Image(systemName: "clock.fill")
-                        .font(MeeshyFont.relative(10))
+                        .font(.system(size: 10))
                         .foregroundColor(MeeshyColors.success)
                 }
             }
@@ -284,10 +284,10 @@ struct InviteFriendsSheet: View {
                         ProgressView().tint(.white).scaleEffect(0.85)
                     } else {
                         Image(systemName: "square.and.arrow.up")
-                            .font(MeeshyFont.relative(16, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                     }
                     Text(String(localized: "invite.share", defaultValue: "Partager"))
-                        .font(MeeshyFont.relative(17, weight: .bold))
+                        .font(.system(size: 17, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -307,14 +307,14 @@ struct InviteFriendsSheet: View {
                 )
             }
             .disabled(isCreating && createdLink == nil)
-            .accessibilityLabel(String(localized: "invite.a11y.shareLink", defaultValue: "Share invitation link", bundle: .main))
+            .accessibilityLabel("Partager le lien d'invitation")
 
             if let error = errorMessage {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(MeeshyColors.error)
                     Text(error)
-                        .font(MeeshyFont.relative(12))
+                        .font(.system(size: 12))
                         .foregroundColor(MeeshyColors.error)
                 }
             }
@@ -331,14 +331,14 @@ struct InviteFriendsSheet: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "slider.horizontal.3")
-                    .font(MeeshyFont.relative(13))
+                    .font(.system(size: 13))
                 Text(String(localized: "invite.customize", defaultValue: "Personnaliser les options"))
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                 Image(systemName: "chevron.down")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
             }
             .foregroundColor(theme.textSecondary)
-            .accessibilityLabel(String(localized: "invite.a11y.customizeOptions", defaultValue: "Customize link options", bundle: .main))
+            .accessibilityLabel("Personnaliser les options du lien")
         }
     }
 
@@ -380,7 +380,7 @@ struct InviteFriendsSheet: View {
                     if maxUsesEnabled {
                         Stepper(value: $maxUsesValue, in: 1...10000, step: maxUsesValue < 100 ? 1 : 10) {
                             Text("\(maxUsesValue)")
-                                .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
                                 .foregroundColor(Color(hex: conversation.accentColor))
                         }
                         .padding(14)
@@ -426,9 +426,9 @@ struct InviteFriendsSheet: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.up")
-                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                     Text(String(localized: "invite.hideOptions", defaultValue: "Masquer les options"))
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                 }
                 .foregroundColor(theme.textSecondary)
             }
@@ -445,10 +445,10 @@ struct InviteFriendsSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: conversation.accentColor))
                 Text(title)
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
                     .kerning(0.8)
             }
@@ -465,10 +465,10 @@ struct InviteFriendsSheet: View {
     private func optionTextField(_ label: String, placeholder: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(theme.textMuted)
             TextField(placeholder, text: text)
-                .font(MeeshyFont.relative(15))
+                .font(.system(size: 15))
                 .foregroundColor(theme.textPrimary)
                 .adaptiveOnChange(of: text.wrappedValue) { _, _ in optionsModified = true }
         }
@@ -489,17 +489,17 @@ struct InviteFriendsSheet: View {
                     .fill(iconColor.opacity(0.15))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold)) // glyph in fixed 32pt tile — kept fixed to avoid clipping at large Dynamic Type
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(iconColor)
             }
             Toggle(isOn: isOn) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                     if let subtitle {
                         Text(subtitle)
-                            .font(MeeshyFont.relative(11))
+                            .font(.system(size: 11))
                             .foregroundColor(theme.textSecondary)
                     }
                 }
@@ -523,7 +523,7 @@ struct InviteFriendsSheet: View {
                     .fill(iconColor.opacity(0.15))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold)) // glyph in fixed 32pt tile — kept fixed to avoid clipping at large Dynamic Type
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(iconColor)
             }
             content()
@@ -677,7 +677,7 @@ private enum ExpirationOption: String, CaseIterable {
         case .m3: cal.date(byAdding: .month, value: 3, to: now)
         }
         guard let date else { return nil }
-        return date.formatted(.iso8601)
+        return ISO8601DateFormatter().string(from: date)
     }
 }
 

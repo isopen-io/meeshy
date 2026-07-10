@@ -251,7 +251,7 @@ public struct VoiceProfileWizardView: View {
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 60))
-                .foregroundColor(MeeshyColors.success)
+                .foregroundColor(Color(hex: "2ECC71"))
 
             Text(String(localized: "voiceProfile.complete.title", defaultValue: "Profil vocal cree !", bundle: .module))
                 .font(.system(size: 22, weight: .bold))

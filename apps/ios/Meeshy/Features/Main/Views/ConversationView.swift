@@ -38,9 +38,7 @@ struct ConversationOverlayState {
     var showOverlayMenu = false
     var longPressEnabled = false
     var detailSheetMessage: Message? = nil
-    var moreSheetInitialItem: MoreItem? = nil
-    /// Message dont le picker d'emoji complet (réaction) est présenté.
-    var fullReactionPickerMessage: Message? = nil
+    var detailSheetInitialTab: DetailTab? = nil
     var quickReactionMessageId: String? = nil
 
     // MARK: - Context overlay (iMessage-style long-press)
@@ -100,10 +98,6 @@ struct ConversationScrollState {
     var editingPendingAttachmentId: String? = nil
     var videoToEdit: URL? = nil
     var audioToEdit: PendingAudioEdit? = nil
-    // "Éditer" from the recent-media strip — edited BEFORE staging (the edited
-    // output goes through the camera-capture pipeline, never the original).
-    var recentImageToEdit: UIImage? = nil
-    var recentVideoToEdit: URL? = nil
 }
 
 struct PreviewMedia: Identifiable {
@@ -144,11 +138,6 @@ struct ConversationComposerState {
     var showCamera = false
     var showFilePicker = false
     var selectedPhotoItems: [PhotosPickerItem] = []
-    /// True while `selectedPhotoItems` is being primed with the recent-media
-    /// strip's multi-selection before presenting the PhotosPicker. Priming
-    /// fires the selection onChange once — this flag swallows that echo so
-    /// items are only ingested when the user actually confirms in the picker.
-    var photoPickerPriming = false
     
     // Location & Upload
     var isLoadingLocation = false
@@ -231,8 +220,6 @@ struct ConversationView: View {
     @Environment(\.scenePhase) private var scenePhase
     var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) var colorScheme
-    /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
-    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
     var isDark: Bool { colorScheme == .dark }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la conversation. La présence est rafraîchie via les refreshs naturels.
@@ -262,10 +249,6 @@ struct ConversationView: View {
     @StateObject var audioRecorder = AudioRecorderManager()
     @StateObject var scrollButtonAudioPlayer = AudioPlaybackManager()
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
-    /// Composant unifié « Enregistrer » au niveau écran — sert l'action
-    /// `.saveMedia` du menu appui-long (l'overlay n'est pas un cover, la
-    /// sheet de destinations se présente sans conflit).
-    @StateObject var mediaSaveCoordinator = MediaSaveCoordinator()
     
     @FocusState var isTyping: Bool
     @FocusState var isSearchFocused: Bool
@@ -297,14 +280,8 @@ struct ConversationView: View {
     /// effects, blur, ephemeral duration) so the user never loses context when
     /// the app is killed mid-sentence. Empty drafts are purged from
     /// `UserDefaults` by `DraftStore.save(_:for:)`.
-    private func persistDraft(text: String, attachmentRefs: [DraftAttachmentRef]? = nil) {
+    private func persistDraft(text: String) {
         let ref = composerState.pendingReplyReference
-        // Les refs de pièces jointes sont l'autorité du handler background
-        // (copie durable) : une frappe intermédiaire les PRÉSERVE au lieu de
-        // les écraser — sinon chaque lettre tapée perdrait les pièces du
-        // brouillon persisté.
-        let refs = attachmentRefs
-            ?? DraftStore.shared.load(for: viewModel.conversationId)?.attachments
         let draft = MessageDraft(
             text: text,
             replyToId: ref?.messageId,
@@ -314,24 +291,9 @@ struct ConversationView: View {
             selectedLanguage: composerState.selectedLanguage,
             effectFlags: viewModel.pendingEffects.flags.rawValue,
             isBlurEnabled: viewModel.isBlurEnabled,
-            ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue,
-            attachments: (refs?.isEmpty ?? true) ? nil : refs
+            ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue
         )
         DraftStore.shared.save(draft, for: viewModel.conversationId)
-    }
-
-    /// Copie durable des pièces jointes du tray au passage en background,
-    /// puis re-save du brouillon avec leurs références. Rebuild complet à
-    /// chaque background : une pièce retirée du tray ne ressuscite jamais.
-    private func persistDraftAttachmentsForBackground() {
-        guard let userId = AuthManager.shared.currentUser?.id else { return }
-        let refs = MessageDraftMediaStore.persist(
-            attachments: composerState.pendingAttachments,
-            files: composerState.pendingMediaFiles,
-            userId: userId,
-            conversationId: viewModel.conversationId
-        )
-        persistDraft(text: composerText.text, attachmentRefs: refs)
     }
 
     private func updateComposerHeight(_ contentHeight: CGFloat) {
@@ -504,7 +466,7 @@ struct ConversationView: View {
             Button {
                 HapticFeedback.medium()
                 Task {
-                    await BlockActionCoordinator.shared.unblock(userId: userId)
+                    try? await blockService.unblockUser(userId: userId)
                     await MainActor.run { HapticFeedback.success() }
                 }
             } label: {
@@ -550,9 +512,6 @@ struct ConversationView: View {
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationListViewModel)
-                // U1 inc.2 — zoom depuis la bulle si elle est enregistrée
-                // (tray in-chat), fallback cover standard sinon (avatar header).
-                .zoomTransitionDestination(sourceID: headerState.storyUserIdForHeader ?? "", in: zoomNamespace)
             }
             .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
                 StoryViewerContainer(
@@ -574,7 +533,6 @@ struct ConversationView: View {
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationListViewModel)
-                .zoomTransitionDestination(sourceID: overlayState.storyViewerUserId ?? "", in: zoomNamespace)
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
                 if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
@@ -612,7 +570,6 @@ struct ConversationView: View {
             .sheet(item: $composerState.forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
             }
             .overlay { overlayMenuContent }
             .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
@@ -649,46 +606,27 @@ struct ConversationView: View {
                     ImageFullscreen(imageUrl: media.url, accentColor: accentColor)
                 }
             }
-            .mediaSaveFlow(mediaSaveCoordinator)
             .sheet(item: $overlayState.detailSheetMessage) { msg in
-                let ctx = MessageMenuContext(
-                    isMine: msg.isMe,
-                    canEdit: msg.isMe || isCurrentUserAdminOrMod,
-                    canDelete: msg.isMe || isCurrentUserAdminOrMod,
-                    hasText: !msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                    hasMedia: !msg.attachments.isEmpty,
-                    hasTimebasedMedia: msg.attachments.contains { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack },
-                    isPinned: msg.pinnedAt != nil,
-                    isStarred: viewModel.isStarred(messageId: msg.id),
-                    isEdited: msg.isEdited,
-                    hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty
-                )
-                MessageMoreSheet(
+                MessageDetailSheet(
                     message: msg,
                     contactColor: conversation?.accentColor ?? MeeshyColors.brandPrimaryHex,
                     conversationId: viewModel.conversationId,
-                    sections: MessageActionResolver.moreSections(ctx),
-                    initialItem: overlayState.moreSheetInitialItem,
+                    initialTab: overlayState.detailSheetInitialTab,
+                    canDelete: msg.isMe || isCurrentUserAdminOrMod,
                     textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                     transcription: viewModel.messageTranscriptions[msg.id],
                     translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
-                    editRevisions: viewModel.editRevisions(for: msg.id),
-                    onReply: { triggerReply(for: msg) },
-                    onForward: { composerState.forwardMessage = msg },
-                    onThread: {
-                        overlayState.replyThreadParentId = msg.id
-                        overlayState.showReplyThread = true
-                    },
-                    onDeleteMedia: {
-                        if let attId = msg.attachments.first?.id {
-                            Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attId) }
-                        }
-                    },
                     onSelectTranslation: { translation in
                         viewModel.setActiveTranslation(for: msg.id, translation: translation)
                     },
                     onSelectAudioLanguage: { langCode in
                         viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
+                    },
+                    onRequestTranslation: { messageId, lang in
+                        MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
+                    },
+                    onReact: { emoji in
+                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                     },
                     onReport: { type, reason in
                         Task {
@@ -696,19 +634,15 @@ struct ConversationView: View {
                             if success { HapticFeedback.success() }
                             else { HapticFeedback.error() }
                         }
-                    }
+                    },
+                    onDelete: {
+                        // Route through the confirmation dialog so the user
+                        // picks between "Delete for me" and "Delete for
+                        // everyone" instead of silently losing the message.
+                        overlayState.deleteConfirmMessageId = msg.id
+                    },
+                    editRevisions: viewModel.editRevisions(for: msg.id)
                 )
-            }
-            .sheet(item: $overlayState.fullReactionPickerMessage) { msg in
-                EmojiPickerSheet(
-                    quickReactions: ["❤️", "😂", "👍", "🔥", "😍", "😮", "😢", "👏", "🎉"],
-                    onSelect: { emoji in
-                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                        overlayState.fullReactionPickerMessage = nil
-                    }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
             }
     }
 
@@ -740,17 +674,6 @@ struct ConversationView: View {
                         guard !Task.isCancelled else { return }
                         scrollState.scrollToMessageId = messageId
                         scrollState.scrollToMessageTrigger += 1
-                    }
-                }
-
-                // Ouverture depuis le bouton Recherche de l'aperçu long-press :
-                // active directement la barre de recherche in-conversation.
-                if router.pendingOpenSearch {
-                    router.pendingOpenSearch = false
-                    try? await Task.sleep(nanoseconds: 250_000_000)
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        headerState.showSearch = true
                     }
                 }
             }
@@ -815,27 +738,6 @@ struct ConversationView: View {
                        let duration = EphemeralDuration(rawValue: raw) {
                         viewModel.ephemeralDuration = duration
                     }
-                    // Pièces jointes du brouillon (copiées en durable au
-                    // background) : restaure les survivantes dans le tray —
-                    // un fichier purgé est sauté silencieusement, le texte
-                    // reste intact. Thumbnails régénérées pour les images.
-                    if let refs = draft.attachments, !refs.isEmpty,
-                       composerState.pendingAttachments.isEmpty,
-                       let userId = AuthManager.shared.currentUser?.id {
-                        let restored = MessageDraftMediaStore.restore(
-                            refs: refs,
-                            userId: userId,
-                            conversationId: viewModel.conversationId
-                        )
-                        composerState.pendingAttachments = restored.attachments
-                        composerState.pendingMediaFiles = restored.files
-                        for attachment in restored.attachments where attachment.kind == .image {
-                            if let url = restored.files[attachment.id],
-                               let thumb = UIImage(contentsOfFile: url.path) {
-                                composerState.pendingThumbnails[attachment.id] = thumb
-                            }
-                        }
-                    }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { overlayState.longPressEnabled = true }
             }
@@ -874,13 +776,6 @@ struct ConversationView: View {
                 // gateway-level dedup makes a redundant call harmless.
                 if phase == .active && scrollState.isNearBottom {
                     viewModel.markAsRead()
-                }
-                // Pièces jointes du brouillon : copie durable au passage en
-                // background (les fichiers du tray vivent dans tmp/, purgeable
-                // par iOS) — miroir du D1 story. Rebuild complet : la vérité
-                // est l'état courant du tray.
-                if phase == .background {
-                    persistDraftAttachmentsForBackground()
                 }
             }
             .adaptiveOnChange(of: viewModel.accessRevoked) { _, revoked in
@@ -1077,10 +972,6 @@ struct ConversationView: View {
                     // du menu existant (sans remplacer le menu lui-même).
                     guard overlayState.longPressEnabled else { return }
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    // Bulles système (journal d'appel, notices) : réactions,
-                    // édition, traduction, épinglage… n'ont aucun sens dessus.
-                    // Le call-notice garde son propre long-press (sheet détails).
-                    guard msg.messageSource != .system else { return }
                     overlayState.overlayMessage = msg
                     overlayState.showOverlayMenu = true
                 },
@@ -1102,20 +993,21 @@ struct ConversationView: View {
                 },
                 onOpenReactPicker: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.fullReactionPickerMessage = msg
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .react
                 },
                 onShowMessageInfo: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.moreSheetInitialItem = .views
                     overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .views
                 },
                 onShowReadStatus: { messageId in
                     // Tap sur les coches (✓ / ✓✓ / ✓✓ bleu) d'un message envoyé.
                     // Ouvre la sheet detail sur l'onglet "Vues" pour consulter
                     // qui a reçu / qui a lu — sans passer par le long-press.
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.moreSheetInitialItem = .views
                     overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .views
                 },
                 onRetry: { messageId in
                     // Tap on the orange retry band of a FAILED outgoing message.
@@ -1127,13 +1019,13 @@ struct ConversationView: View {
                 },
                 onShowReactions: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.moreSheetInitialItem = .reactions
                     overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .reactions
                 },
                 onShowTranslationDetail: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.moreSheetInitialItem = .language
                     overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .language
                 },
                 onMediaTap: { attachment in
                     // User tapped a media — opportunistically warm the cache,
@@ -1521,7 +1413,7 @@ struct ConversationView: View {
                 .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 28, height: 28)
-                .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+                .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
                 .meeshyTapTarget()
         }
         .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", bundle: .main))
@@ -1532,10 +1424,10 @@ struct ConversationView: View {
     @ViewBuilder
     private var expandedHeaderBackground: some View {
         if composerState.showOptions {
-            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+            RoundedRectangle(cornerRadius: 22)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                    RoundedRectangle(cornerRadius: 22)
                         .stroke(
                             LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)], startPoint: .leading, endPoint: .trailing),
                             lineWidth: 1
@@ -1606,18 +1498,6 @@ struct ConversationView: View {
                 onDeleteAttachment: { attachmentId in
                     Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
                 },
-                onSaveMedia: {
-                    // Composant unifié « Enregistrer » — l'action n'apparaît
-                    // que pour un message à exactement UN attachment.
-                    guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
-                    HapticFeedback.light()
-                    mediaSaveCoordinator.requestSave(MediaSaveRequest(
-                        kind: attachment.kind,
-                        remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
-                        suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-                        attachmentId: attachment.id.isEmpty ? nil : attachment.id
-                    ))
-                },
                 onShowThread: {
                     overlayState.replyThreadParentId = msg.id
                     overlayState.showReplyThread = true
@@ -1629,15 +1509,8 @@ struct ConversationView: View {
                 userRegionalLanguage: AuthManager.shared.currentUser?.regionalLanguage,
                 userCustomDestinationLanguage: AuthManager.shared.currentUser?.customDestinationLanguage,
                 onShowTranslate: {
-                    overlayState.moreSheetInitialItem = .language
                     overlayState.detailSheetMessage = msg
-                },
-                onShowMore: {
-                    overlayState.moreSheetInitialItem = nil
-                    overlayState.detailSheetMessage = msg
-                },
-                onExpandFullPicker: {
-                    overlayState.fullReactionPickerMessage = msg
+                    overlayState.detailSheetInitialTab = .language
                 }
             )
             .transition(.opacity).zIndex(999)

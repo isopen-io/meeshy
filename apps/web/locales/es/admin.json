@@ -967,8 +967,7 @@
     "clickColReferrer": "Referrer",
     "clickColSource": "Fuente",
     "clickColStatus": "Estado",
-    "fieldNamePlaceholder": "Promo verano",
-    "copyError": "Error al copiar el enlace"
+    "fieldNamePlaceholder": "Promo verano"
   },
   "users": {
     "newUser": {
@@ -1969,8 +1968,7 @@
     "next": "Siguiente",
     "deleteTitle": "Eliminar enlace de compartición",
     "deleteDescription": "Esta acción es irreversible. El enlace de compartición y todos sus accesos serán eliminados permanentemente.",
-    "deleteConfirm": "Eliminar",
-    "copyError": "Error al copiar el enlace"
+    "deleteConfirm": "Eliminar"
   },
   "translationsPage": {
     "loadError": "Error al cargar las traducciones",

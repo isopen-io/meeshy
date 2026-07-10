@@ -19,7 +19,6 @@
  */
 
 import { enhancedLogger } from './logger-enhanced';
-import { withTimeout } from './with-timeout';
 
 export enum CircuitState {
   CLOSED = 'CLOSED',
@@ -76,7 +75,6 @@ export interface CircuitBreakerStats {
 export class CircuitBreaker {
   private state: CircuitState = CircuitState.CLOSED;
   private failureCount = 0;
-  private failureWindowStart?: number;
   private successCount = 0;
   private totalRequests = 0;
   private lastFailureTime?: number;
@@ -129,11 +127,15 @@ export class CircuitBreaker {
    * Execute function with timeout
    */
   private executeWithTimeout<T>(fn: () => Promise<T>): Promise<T> {
-    return withTimeout(
+    return Promise.race([
       fn(),
-      this.config.timeout,
-      `Operation timed out after ${this.config.timeout}ms`
-    );
+      new Promise<T>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Operation timed out after ${this.config.timeout}ms`)),
+          this.config.timeout
+        )
+      )
+    ]);
   }
 
   /**
@@ -157,25 +159,8 @@ export class CircuitBreaker {
    * Handle failed execution
    */
   private onFailure(error: unknown) {
-    const now = Date.now();
-    this.lastFailureTime = now;
-
-    // Count failures only within the configured rolling window. A failure that
-    // arrives more than failureWindowMs after the window opened (or the first
-    // failure after a reset/success) starts a fresh window instead of adding to
-    // a stale count. Without this, isolated failures spread arbitrarily far
-    // apart would accumulate forever and trip the breaker OPEN even though no
-    // burst ever occurred within failureWindowMs.
-    const windowExpired =
-      this.failureWindowStart === undefined ||
-      now - this.failureWindowStart > this.config.failureWindowMs;
-
-    if (this.failureCount === 0 || windowExpired) {
-      this.failureWindowStart = now;
-      this.failureCount = 1;
-    } else {
-      this.failureCount++;
-    }
+    this.lastFailureTime = Date.now();
+    this.failureCount++;
 
     enhancedLogger.error(
       `Circuit breaker failure: ${this.config.name}`,
@@ -199,7 +184,6 @@ export class CircuitBreaker {
   private transitionToClosed() {
     this.state = CircuitState.CLOSED;
     this.failureCount = 0;
-    this.failureWindowStart = undefined;
     this.successCount = 0;
 
     enhancedLogger.info(`Circuit breaker CLOSED: ${this.config.name}`, {

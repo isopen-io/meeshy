@@ -90,8 +90,10 @@ final class StoryComposerProtocolConformanceTests: XCTestCase {
         // Filter — driven by the filter panel.
         provider.selectedFilter = "noir"
         provider.filterIntensity = 0.6
+        provider.filterAppliesToEntireSlide = true
         XCTAssertEqual(provider.selectedFilter, "noir")
         XCTAssertEqual(provider.filterIntensity, 0.6, accuracy: 0.001)
+        XCTAssertTrue(provider.filterAppliesToEntireSlide)
 
         // Canvas viewport — driven by pinch / pan gestures.
         provider.canvasScale = 1.8

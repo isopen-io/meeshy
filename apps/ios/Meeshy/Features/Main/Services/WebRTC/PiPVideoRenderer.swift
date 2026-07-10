@@ -32,10 +32,6 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
 
     private var lastEnqueueNs: UInt64 = 0
     private var lastRotation: Int = -1
-    /// Mutated only on `queue` — the peer turned its camera off, so live
-    /// frames are dropped and a placeholder is shown instead of the last
-    /// live frame frozen indefinitely (spec 2026-06-20 §5.3).
-    private var isRemoteVideoMuted = false
 
     init(displayLayer: AVSampleBufferDisplayLayer,
          maxFrameRate: Int = 15,
@@ -60,8 +56,6 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
     // MARK: - Pipeline (serial queue)
 
     private func consume(_ frame: RTCVideoFrame) {
-        guard !isRemoteVideoMuted else { return }   // peer's camera is off — placeholder is showing instead
-
         let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         guard now &- lastEnqueueNs >= minIntervalNs else { return }   // throttle
 
@@ -74,34 +68,21 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
         notifyRotationIfChanged(Int(frame.rotation.rawValue))
     }
 
+    /// Vide la file + réinitialise le converter (à l'arrêt du PiP).
+    func reset() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.flush()
+            self.converter.reset()
+            self.lastEnqueueNs = 0
+            self.lastRotation = -1
+        }
+    }
+
     /// Ajuste le framerate cible (thermal-aware). Muté sur la serial queue.
     func setMaxFrameRate(_ fps: Int) {
         let interval = UInt64(1_000_000_000 / max(1, fps))
         queue.async { [weak self] in self?.minIntervalNs = interval }
-    }
-
-    /// The peer toggled its camera. While muted, live frames are dropped
-    /// (`consume`) and a generic placeholder is enqueued once so the PiP
-    /// window never shows the last live frame frozen indefinitely.
-    func setRemoteVideoMuted(_ muted: Bool) {
-        queue.async { [weak self] in
-            guard let self, self.isRemoteVideoMuted != muted else { return }
-            self.isRemoteVideoMuted = muted
-            if muted {
-                self.enqueuePlaceholder()
-            }
-        }
-    }
-
-    private func enqueuePlaceholder() {
-        flushIfFailed()
-        guard isReadyForMoreMediaData else { return }
-        guard let pixelBuffer = VideoFrameConverter.makePlaceholderPixelBuffer(),
-              let sample = converter.makeSampleBuffer(
-                  pixelBuffer: pixelBuffer,
-                  timeStampNs: Int64(clock_gettime_nsec_np(CLOCK_UPTIME_RAW))
-              ) else { return }
-        enqueue(sample)
     }
 
     // MARK: - Surface d'enqueue (iOS 16 vs 17+)

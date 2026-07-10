@@ -1,10 +1,4 @@
 /**
- * ⚠️ SUPERSEDÉE — voir `2026-07-02-fix-message-client-id-partial-index.mongodb.js`.
- * Le `partialFilterExpression` ci-dessous utilise `$ne`, un opérateur NON
- * supporté par MongoDB dans un index partiel : `createIndex` lève une erreur
- * et cet index n'a jamais existé en prod (audit gateway 2026-07-02, finding
- * C6). Ne PAS exécuter ce script tel quel — utiliser la migration de fix.
- *
  * Migration MongoDB — Phase 4 §6.2 (offline-queue clientMessageId dedup)
  *
  * Crée un index unique partiel sur (conversationId, clientMessageId) pour le

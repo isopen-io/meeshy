@@ -10,7 +10,6 @@ import React from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { AudioEffectsTimeline, AudioEffectType } from '@meeshy/shared/types';
 import { calculateEffectsStats } from '@meeshy/shared/types/audio-effects-timeline';
-import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { cn } from '@/lib/utils';
 
 interface AudioEffectsTimelineViewProps {
@@ -47,8 +46,13 @@ export function AudioEffectsTimelineView({ timeline }: AudioEffectsTimelineViewP
   // Calculer les statistiques
   const stats = calculateEffectsStats(timeline);
 
-  // Formater une durée en ms → mm:ss — délègue à la source unique formatClock
-  const formatDuration = (ms: number) => formatClock(ms / 1000);
+  // Formater la durée en mm:ss
+  const formatDuration = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Formater la durée totale
   const totalDuration = formatDuration(timeline.duration);

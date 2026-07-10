@@ -2,8 +2,6 @@
  * Utilitaire de formatage de dates relatives avec support i18n
  */
 
-import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
-
 const DEFAULT_LOCALE = 'fr';
 
 export interface DateFormatOptions {
@@ -43,8 +41,15 @@ export function formatRelativeDate(
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
 
-  // Différence en jours calendaires (comparaison des minuits locaux)
-  const diffDays = calendarDayDiff(messageDate.getTime(), now.getTime());
+  // Calculer la différence en jours (en comparant les dates à minuit)
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const messageDateStart = new Date(
+    messageDate.getFullYear(),
+    messageDate.getMonth(),
+    messageDate.getDate()
+  );
+  const diffTime = todayStart.getTime() - messageDateStart.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
   // Moins d'une minute
   if (diffMinutes < 1) {
@@ -102,8 +107,15 @@ export function formatConversationDate(
   const messageDate = typeof date === 'string' ? new Date(date) : date;
   const now = new Date();
 
-  // Différence en jours calendaires (comparaison des minuits locaux)
-  const diffDays = calendarDayDiff(messageDate.getTime(), now.getTime());
+  // Calculer la différence en jours (en comparant les dates à minuit)
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const messageDateStart = new Date(
+    messageDate.getFullYear(),
+    messageDate.getMonth(),
+    messageDate.getDate()
+  );
+  const diffTime = todayStart.getTime() - messageDateStart.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
   // Si c'est aujourd'hui, afficher seulement l'heure
   if (diffDays === 0) {

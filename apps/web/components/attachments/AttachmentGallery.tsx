@@ -126,13 +126,13 @@ export function AttachmentGallery({
 
   const handleDownload = () => {
     if (currentAttachmentUrl) {
-      window.open(currentAttachmentUrl, '_blank', 'noopener,noreferrer');
+      window.open(currentAttachmentUrl, '_blank');
     }
   };
 
   const handleFullscreen = () => {
     if (currentAttachmentUrl) {
-      window.open(currentAttachmentUrl, '_blank', 'noopener,noreferrer');
+      window.open(currentAttachmentUrl, '_blank');
     }
   };
 

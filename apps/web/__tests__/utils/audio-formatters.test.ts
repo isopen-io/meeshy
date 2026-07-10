@@ -78,17 +78,6 @@ describe('formatDuration', () => {
   it('formats large value with hours', () => {
     expect(formatDuration(7322)).toBe('2:02:02');
   });
-
-  // Contrat « source unique » des lecteurs média (iter 62) : AudioPlayer, MediaAudioCard,
-  // MediaVideoCard, VideoControls, VideoLightbox, SimpleAudioPlayer délèguent tous ici.
-  it('clamps negative durations to 0:00 (media players never render negative time)', () => {
-    expect(formatDuration(-5)).toBe('0:00');
-  });
-
-  it('rolls minutes into hours past 60 min (MM:SS-only players used to render 61:01)', () => {
-    expect(formatDuration(3661)).toBe('1:01:01');
-    expect(formatDuration(5400)).toBe('1:30:00');
-  });
 });
 
 describe('snapPlaybackRate', () => {

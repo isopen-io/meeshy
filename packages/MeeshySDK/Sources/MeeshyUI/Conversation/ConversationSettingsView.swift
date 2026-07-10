@@ -71,9 +71,9 @@ public struct ConversationSettingsView: View {
         } message: {
             Text(String(localized: "conversation.settings.leave.confirm.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .module))
         }
-        .alert(String(localized: "conversation.settings.deleteForMe.confirm.title", defaultValue: "Supprimer pour moi ?", bundle: .module), isPresented: $showDeleteForMeAlert) {
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
-            Button(String(localized: "conversation.settings.delete.button", defaultValue: "Supprimer", bundle: .module), role: .destructive) {
+        .alert("Supprimer pour moi ?", isPresented: $showDeleteForMeAlert) {
+            Button("Annuler", role: .cancel) {}
+            Button("Supprimer", role: .destructive) {
                 Task {
                     try? await ConversationService.shared.deleteForMe(conversationId: viewModel.conversationId)
                     NotificationCoordinator.shared.removeConversation(viewModel.conversationId)
@@ -83,7 +83,7 @@ public struct ConversationSettingsView: View {
                 }
             }
         } message: {
-            Text(String(localized: "conversation.settings.deleteForMe.confirm.message", defaultValue: "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes.", bundle: .module))
+            Text("Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes.")
         }
         .alert(String(localized: "conversation.settings.delete.confirm.title", defaultValue: "Supprimer la conversation", bundle: .module), isPresented: $viewModel.showDeleteConversation) {
             Button(String(localized: "conversation.settings.delete.button", defaultValue: "Supprimer", bundle: .module), role: .destructive) {
@@ -95,7 +95,7 @@ public struct ConversationSettingsView: View {
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.settings.delete.confirm.message", defaultValue: "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire.", bundle: .module))
+            Text("Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire.")
         }
         .entityImagePickerFlow(pickerItem: $avatarItem, context: .avatar, accentColor: viewModel.accentColor, maxSizeKB: 500) { data in
             Task { await viewModel.uploadCompressedAvatar(data) }
@@ -280,15 +280,15 @@ public struct ConversationSettingsView: View {
 
     private var permissionsSection: some View {
         VStack(spacing: 16) {
-            sectionHeader(String(localized: "conversation.settings.section.permissions", defaultValue: "Permissions", bundle: .module))
+            sectionHeader("Permissions")
 
             VStack(spacing: 12) {
-                settingsField(label: String(localized: "conversation.settings.permissions.writeRole", defaultValue: "Qui peut ecrire", bundle: .module)) {
+                settingsField(label: "Qui peut ecrire") {
                     Picker("", selection: $viewModel.defaultWriteRole) {
-                        Text(String(localized: "conversation.settings.permissions.writeRole.everyone", defaultValue: "Tout le monde", bundle: .module)).tag("everyone")
-                        Text(String(localized: "conversation.settings.permissions.writeRole.members", defaultValue: "Membres", bundle: .module)).tag("member")
-                        Text(String(localized: "conversation.settings.permissions.writeRole.moderators", defaultValue: "Moderateurs", bundle: .module)).tag("moderator")
-                        Text(String(localized: "conversation.settings.permissions.writeRole.admins", defaultValue: "Admins", bundle: .module)).tag("admin")
+                        Text("Tout le monde").tag("everyone")
+                        Text("Membres").tag("member")
+                        Text("Moderateurs").tag("moderator")
+                        Text("Admins").tag("admin")
                     }
                     .pickerStyle(.segmented)
                     .disabled(viewModel.isAnnouncementChannel)
@@ -296,10 +296,10 @@ public struct ConversationSettingsView: View {
 
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
+                        Text("Mode annonce")
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundColor(theme.textPrimary)
-                        Text(String(localized: "conversation.settings.permissions.announcement.subtitle", defaultValue: "Seuls les admins peuvent ecrire", bundle: .module))
+                        Text("Seuls les admins peuvent ecrire")
                             .font(.system(size: 11, design: .rounded))
                             .foregroundColor(theme.textMuted)
                     }
@@ -312,9 +312,9 @@ public struct ConversationSettingsView: View {
                 .background(theme.backgroundSecondary.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                settingsField(label: String(localized: "conversation.settings.permissions.slowMode", defaultValue: "Mode lent", bundle: .module)) {
+                settingsField(label: "Mode lent") {
                     Picker("", selection: $viewModel.slowModeSeconds) {
-                        Text(String(localized: "conversation.settings.permissions.slowMode.off", defaultValue: "Desactive", bundle: .module)).tag(0)
+                        Text("Desactive").tag(0)
                         Text("10s").tag(10)
                         Text("30s").tag(30)
                         Text("1min").tag(60)
@@ -325,10 +325,10 @@ public struct ConversationSettingsView: View {
 
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "conversation.settings.permissions.autoTranslate", defaultValue: "Traduction automatique", bundle: .module))
+                        Text("Traduction automatique")
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundColor(theme.textPrimary)
-                        Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Les messages sont traduits automatiquement", bundle: .module))
+                        Text("Les messages sont traduits automatiquement")
                             .font(.system(size: 11, design: .rounded))
                             .foregroundColor(theme.textMuted)
                     }
@@ -348,14 +348,14 @@ public struct ConversationSettingsView: View {
 
     private var membersSection: some View {
         VStack(spacing: 16) {
-            sectionHeader(String(format: String(localized: "conversation.settings.section.members", defaultValue: "Membres (%d)", bundle: .module), viewModel.totalMemberCount))
+            sectionHeader("Membres (\(viewModel.totalMemberCount))")
 
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(theme.textMuted)
-                    TextField(String(localized: "conversation.settings.members.search.placeholder", defaultValue: "Rechercher un membre...", bundle: .module), text: $viewModel.memberSearchText)
+                    TextField("Rechercher un membre...", text: $viewModel.memberSearchText)
                         .font(.system(size: 14, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .autocorrectionDisabled()
@@ -377,7 +377,7 @@ public struct ConversationSettingsView: View {
                 } else {
                     let filtered = filteredMembers
                     if filtered.isEmpty {
-                        Text(String(localized: "conversation.settings.members.empty", defaultValue: "Aucun membre trouve", bundle: .module))
+                        Text("Aucun membre trouve")
                             .font(.system(size: 13, weight: .medium, design: .rounded))
                             .foregroundColor(theme.textMuted)
                             .padding(.vertical, 20)
@@ -448,17 +448,17 @@ public struct ConversationSettingsView: View {
         case .creator:
             HStack(spacing: 3) {
                 Image(systemName: "crown.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.creator", defaultValue: "Createur", bundle: .module)).font(.system(size: 11, weight: .medium))
+                Text("Creator").font(.system(size: 11, weight: .medium))
             }.foregroundColor(Color(hex: "F8B500"))
         case .admin:
             HStack(spacing: 3) {
                 Image(systemName: "shield.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .module)).font(.system(size: 11, weight: .medium))
+                Text("Admin").font(.system(size: 11, weight: .medium))
             }.foregroundColor(Color(hex: "3B82F6"))
         case .moderator:
             HStack(spacing: 3) {
                 Image(systemName: "checkmark.shield.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.moderator", defaultValue: "Moderateur", bundle: .module)).font(.system(size: 11, weight: .medium))
+                Text("Moderateur").font(.system(size: 11, weight: .medium))
             }.foregroundColor(MeeshyColors.success)
         case .member:
             EmptyView()
@@ -472,25 +472,25 @@ public struct ConversationSettingsView: View {
 
         if viewModel.currentUserRole == .creator && targetRole < .admin {
             Button { Task { await viewModel.updateRole(participantId: participantId, newRole: "ADMIN") } } label: {
-                Label(String(localized: "conversation.settings.member.promoteAdmin", defaultValue: "Promouvoir Admin", bundle: .module), systemImage: "shield.fill")
+                Label("Promouvoir Admin", systemImage: "shield.fill")
             }
         }
         if viewModel.currentUserRole.hasMinimumRole(.admin) && targetRole == .member {
             Button { Task { await viewModel.updateRole(participantId: participantId, newRole: "MODERATOR") } } label: {
-                Label(String(localized: "conversation.settings.member.promoteModerator", defaultValue: "Promouvoir Moderateur", bundle: .module), systemImage: "checkmark.shield.fill")
+                Label("Promouvoir Moderateur", systemImage: "checkmark.shield.fill")
             }
         }
         if viewModel.currentUserRole > targetRole && targetRole > .member {
             Button { Task { await viewModel.updateRole(participantId: participantId, newRole: "MEMBER") } } label: {
-                Label(String(localized: "conversation.settings.member.demoteMember", defaultValue: "Retrograder Membre", bundle: .module), systemImage: "person.fill")
+                Label("Retrograder Membre", systemImage: "person.fill")
             }
         }
         Button(role: .destructive) { Task { await viewModel.expelParticipant(participantId: participantId) } } label: {
-            Label(String(localized: "conversation.settings.member.expel", defaultValue: "Expulser", bundle: .module), systemImage: "person.fill.xmark")
+            Label("Expulser", systemImage: "person.fill.xmark")
         }
         if viewModel.currentUserRole.hasMinimumRole(.admin) {
             Button(role: .destructive) { Task { await viewModel.banParticipant(userId: userId) } } label: {
-                Label(String(localized: "conversation.settings.member.ban", defaultValue: "Bannir", bundle: .module), systemImage: "hand.raised.fill")
+                Label("Bannir", systemImage: "hand.raised.fill")
             }
         }
     }
@@ -506,7 +506,7 @@ public struct ConversationSettingsView: View {
             } label: {
                 HStack {
                     Image(systemName: "eye.slash")
-                    Text(String(localized: "conversation.settings.deleteForMe.label", defaultValue: "Supprimer pour moi", bundle: .module))
+                    Text("Supprimer pour moi")
                 }
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(MeeshyColors.error)
@@ -522,7 +522,7 @@ public struct ConversationSettingsView: View {
                 } label: {
                     HStack {
                         Image(systemName: "trash.fill")
-                        Text(String(localized: "conversation.settings.deleteForAll.label", defaultValue: "Supprimer pour tous", bundle: .module))
+                        Text("Supprimer pour tous")
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(MeeshyColors.error)
@@ -766,7 +766,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
                 participantId: participantId,
                 role: newRole
             )
-            postToast(message: String(localized: "conversation.settings.toast.roleUpdated", defaultValue: "Role mis a jour", bundle: .module), isSuccess: true)
+            postToast(message: "Role mis a jour", isSuccess: true)
             await loadMembers()
         } catch {
             errorMessage = error.localizedDescription
@@ -780,7 +780,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
                 conversationId: conversationId,
                 participantId: participantId
             )
-            postToast(message: String(localized: "conversation.settings.toast.memberExpelled", defaultValue: "Membre expulse", bundle: .module), isSuccess: true)
+            postToast(message: "Membre expulse", isSuccess: true)
             await loadMembers()
         } catch {
             errorMessage = error.localizedDescription
@@ -794,7 +794,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
                 conversationId: conversationId,
                 userId: userId
             )
-            postToast(message: String(localized: "conversation.settings.toast.memberBanned", defaultValue: "Membre banni", bundle: .module), isSuccess: true)
+            postToast(message: "Membre banni", isSuccess: true)
             await loadMembers()
         } catch {
             errorMessage = error.localizedDescription

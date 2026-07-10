@@ -77,7 +77,6 @@ struct LicensesView: View {
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 4)
-                    .textSelection(.enabled)
 
                 ForEach(licenses) { license in
                     licenseCard(license)
@@ -92,10 +91,8 @@ struct LicensesView: View {
 
     // MARK: - License Card
 
-    @ViewBuilder
     private func licenseCard(_ license: OpenSourceLicense) -> some View {
-        if let destination = URL(string: license.url) {
-        Link(destination: destination) {
+        Link(destination: URL(string: license.url)!) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(license.name)
@@ -135,7 +132,6 @@ struct LicensesView: View {
         }
         .accessibilityLabel(String(localized: "about.licenses.card.label", defaultValue: "\(license.name) par \(license.author), licence \(license.licenseType)", bundle: .main))
         .accessibilityHint(String(localized: "about.licenses.card.hint", defaultValue: "Ouvre le depot dans Safari", bundle: .main))
-        }
     }
 
     // MARK: - Helpers
@@ -152,9 +148,6 @@ struct LicensesView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(.isHeader)
     }
 
     private func badgeColor(for licenseType: String) -> String {

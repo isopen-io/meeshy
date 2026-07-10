@@ -99,8 +99,5 @@ private final class MockBlockService: BlockServiceProviding, @unchecked Sendable
     func unblockUser(userId: String) async throws { blockedUserIds.remove(userId) }
     func listBlockedUsers() async throws -> [BlockedUser] { [] }
     func isBlocked(userId: String) -> Bool { blockedUserIds.contains(userId) }
-    @MainActor func setBlockedOptimistic(userId: String, blocked: Bool) {
-        if blocked { blockedUserIds.insert(userId) } else { blockedUserIds.remove(userId) }
-    }
     func refreshCache() async {}
 }

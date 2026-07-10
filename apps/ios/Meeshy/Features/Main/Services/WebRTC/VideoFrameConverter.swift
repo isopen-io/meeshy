@@ -16,7 +16,6 @@
 
 import AVFoundation
 import CoreVideo
-import UIKit
 import os
 
 // MARK: - Protocol
@@ -84,46 +83,6 @@ nonisolated final class VideoFrameConverter: VideoSampleBufferMaking, @unchecked
         nv12Pool = nil
         nv12PoolWidth = 0
         nv12PoolHeight = 0
-    }
-
-    /// Fond neutre + silhouette générique — remplace le flux live du PiP système
-    /// quand le pair coupe sa caméra, pour ne jamais figer le dernier frame vidéo
-    /// à l'écran (spec 2026-06-20 §5.3: "enqueue un buffer placeholder, pas le
-    /// dernier frame figé"). Pur CoreGraphics/CoreVideo, aucune dépendance WebRTC.
-    static func makePlaceholderPixelBuffer(width: Int = 480, height: Int = 854) -> CVPixelBuffer? {
-        var pixelBuffer: CVPixelBuffer?
-        let attrs: [String: Any] = [
-            kCVPixelBufferCGImageCompatibilityKey as String: true,
-            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
-        ]
-        let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pixelBuffer)
-        guard status == kCVReturnSuccess, let buffer = pixelBuffer else { return nil }
-
-        CVPixelBufferLockBaseAddress(buffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-
-        guard let context = CGContext(
-            data: CVPixelBufferGetBaseAddress(buffer),
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
-        ) else { return nil }
-
-        context.setFillColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
-        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-
-        let symbolConfig = UIImage.SymbolConfiguration(pointSize: CGFloat(min(width, height)) * 0.32, weight: .regular)
-        if let symbolImage = UIImage(systemName: "person.crop.circle.fill", withConfiguration: symbolConfig)?
-            .withTintColor(UIColor.white.withAlphaComponent(0.4), renderingMode: .alwaysOriginal),
-           let cgSymbol = symbolImage.cgImage {
-            let symbolSize = CGSize(width: cgSymbol.width, height: cgSymbol.height)
-            let origin = CGPoint(x: (CGFloat(width) - symbolSize.width) / 2, y: (CGFloat(height) - symbolSize.height) / 2)
-            context.draw(cgSymbol, in: CGRect(origin: origin, size: symbolSize))
-        }
-        return buffer
     }
 
     // MARK: - Format description cache

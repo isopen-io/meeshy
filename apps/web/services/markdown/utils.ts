@@ -14,7 +14,6 @@ import { INDENTATION_PATTERN, MEESHY_URL_PATTERN } from './rules/patterns';
  */
 export const getIndentLevel = (line: string): number => {
   const match = INDENTATION_PATTERN.exec(line);
-  /* istanbul ignore next -- INDENTATION_PATTERN (/^(\s*)/) always matches; match is never null */
   return match ? match[1].length : 0;
 };
 

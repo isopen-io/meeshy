@@ -4,7 +4,6 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
 import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneWithCountry, normalizePhoneNumber } from '../utils/normalize';
-import { SecuritySanitizer } from '../utils/sanitize.js';
 import { RequestContext } from './GeoIPService';
 import { emailSchema } from '@meeshy/shared/types/validation';
 import { EmailService } from './EmailService';
@@ -468,9 +467,9 @@ export class AuthService {
       // Normaliser les données utilisateur
       const normalizedEmail = normalizeEmail(data.email);
       const normalizedUsername = normalizeUsername(data.username);
-      const normalizedFirstName = SecuritySanitizer.sanitizeText(capitalizeName(data.firstName));
-      const normalizedLastName = SecuritySanitizer.sanitizeText(capitalizeName(data.lastName));
-      const normalizedDisplayName = SecuritySanitizer.sanitizeText(normalizeDisplayName(`${normalizedFirstName} ${normalizedLastName}`));
+      const normalizedFirstName = capitalizeName(data.firstName);
+      const normalizedLastName = capitalizeName(data.lastName);
+      const normalizedDisplayName = normalizeDisplayName(`${normalizedFirstName} ${normalizedLastName}`);
 
       // Normaliser le phoneNumber avec libphonenumber-js
       // Utilise le code pays fourni, ou détecte depuis le numéro, ou utilise la géoloc

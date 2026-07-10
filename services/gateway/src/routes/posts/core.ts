@@ -10,7 +10,6 @@ import { resolveMentionedUsers, MentionService } from '../../services/MentionSer
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
-import { SecuritySanitizer } from '../../utils/sanitize.js';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -68,7 +67,6 @@ export function registerCoreRoutes(
         kind: 'createPost',
         op: () => postService.createPost({
           ...parsed.data,
-          content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
           type: parsed.data.type ?? 'POST',
           visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
         }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>,
@@ -94,14 +92,12 @@ export function registerCoreRoutes(
         }
       }
 
-      // Trigger async translation for plain posts with text content
-      // (fire-and-forget). G2 — les STORY sont EXCLUES : leur `content` est
-      // déjà traduit par le pipeline audience-driven du service
-      // (`PostService.triggerStoryTextTranslation`) ; déclencher AUSSI
-      // `translatePost` (5 langues fixes) doublait les jobs ZMQ et créait
-      // des écritures concurrentes dans `Post.translations`.
+      // Trigger async translation for posts/stories with text content (fire-and-forget)
       const postType = parsed.data.type ?? 'POST';
-      const shouldTranslateContent = Boolean(parsed.data.content) && postType === 'POST';
+      const shouldTranslateContent = Boolean(parsed.data.content) && (
+        postType === 'POST' ||
+        (postType === 'STORY' && parsed.data.content?.trim())
+      );
       if (shouldTranslateContent) {
         try {
           const translationService = PostTranslationService.shared;
@@ -224,10 +220,7 @@ export function registerCoreRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const sanitizedUpdateData = parsed.data.content !== undefined
-        ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
-        : parsed.data;
-      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData);
+      const post = await postService.updatePost(postId, authContext.registeredUser.id, parsed.data);
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }

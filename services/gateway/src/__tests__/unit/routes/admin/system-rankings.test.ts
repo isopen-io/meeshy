@@ -319,33 +319,6 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       expect(res.statusCode).toBe(200);
     });
 
-    it('messages_sent — sums a users participants into ONE row, never duplicates the user', async () => {
-      // Alice is a distinct Participant in three conversations (one Participant per
-      // conversation). Her message counts must fold into a single 180 entry, not
-      // three separate rows.
-      const PART2 = 'part002';
-      const PART3 = 'part003';
-      mockPrisma.message.groupBy.mockResolvedValue([
-        { senderId: PART_ID, _count: { id: 100 } },
-        { senderId: PART2, _count: { id: 50 } },
-        { senderId: PART3, _count: { id: 30 } },
-      ]);
-      mockPrisma.participant.findMany.mockResolvedValue([
-        { id: PART_ID, userId: USER_ID },
-        { id: PART2, userId: USER_ID },
-        { id: PART3, userId: USER_ID },
-      ]);
-      mockPrisma.user.findMany.mockResolvedValue([mockUser]);
-
-      const res = await inject(app, { entityType: 'users', criterion: 'messages_sent' });
-      expect(res.statusCode).toBe(200);
-      const rankings = JSON.parse(res.body).data.rankings;
-      expect(rankings).toHaveLength(1);
-      expect(rankings[0].id).toBe(USER_ID);
-      expect(rankings[0].username).toBe('alice');
-      expect(rankings[0].count).toBe(180); // 100 + 50 + 30
-    });
-
     it('reactions_given — resolves participant→user', async () => {
       mockPrisma.reaction.groupBy.mockResolvedValue([
         { participantId: PART_ID, _count: { id: 10 } },
@@ -375,54 +348,6 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       const res = await inject(app, { entityType: 'users', criterion: 'reactions_received' });
       expect(res.statusCode).toBe(200);
       expect(JSON.parse(res.body).data.rankings[0].count).toBe(7);
-    });
-
-    it('reactions_received — resolves the message senders participant to a real user (not "Unknown")', async () => {
-      // The reaction count is attributed to the message author. senderId is a
-      // Participant id, so it must be folded to the owning user before display.
-      mockPrisma.reaction.groupBy.mockResolvedValue([
-        { messageId: MSG_ID, _count: { id: 7 } },
-      ]);
-      mockPrisma.message.findMany.mockResolvedValue([
-        { id: MSG_ID, senderId: PART_ID },
-      ]);
-      mockPrisma.participant.findMany.mockResolvedValue([mockParticipant]);
-      mockPrisma.user.findMany.mockResolvedValue([mockUser]);
-
-      const res = await inject(app, { entityType: 'users', criterion: 'reactions_received' });
-      expect(res.statusCode).toBe(200);
-      const rankings = JSON.parse(res.body).data.rankings;
-      expect(rankings).toHaveLength(1);
-      expect(rankings[0].id).toBe(USER_ID);
-      expect(rankings[0].username).toBe('alice'); // resolved, not "Unknown"
-      expect(rankings[0].count).toBe(7);
-    });
-
-    it('reactions_received — folds two of a users participants into one summed row', async () => {
-      // Two messages by the same user but authored under different conversation
-      // participants must sum into a single user row.
-      const MSG2 = 'msg002';
-      const PART2 = 'part002';
-      mockPrisma.reaction.groupBy.mockResolvedValue([
-        { messageId: MSG_ID, _count: { id: 3 } },
-        { messageId: MSG2, _count: { id: 4 } },
-      ]);
-      mockPrisma.message.findMany.mockResolvedValue([
-        { id: MSG_ID, senderId: PART_ID },
-        { id: MSG2, senderId: PART2 },
-      ]);
-      mockPrisma.participant.findMany.mockResolvedValue([
-        { id: PART_ID, userId: USER_ID },
-        { id: PART2, userId: USER_ID },
-      ]);
-      mockPrisma.user.findMany.mockResolvedValue([mockUser]);
-
-      const res = await inject(app, { entityType: 'users', criterion: 'reactions_received' });
-      expect(res.statusCode).toBe(200);
-      const rankings = JSON.parse(res.body).data.rankings;
-      expect(rankings).toHaveLength(1);
-      expect(rankings[0].id).toBe(USER_ID);
-      expect(rankings[0].count).toBe(7); // 3 + 4 across two participants
     });
 
     it('reactions_received — accumulates multiple messages from same sender', async () => {
@@ -1361,24 +1286,25 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       expect(JSON.parse(res.body).data.rankings).toHaveLength(0);
     });
 
-    it('files_shared — a participant with null userId stays visible under its participant id (orphan)', async () => {
+    it('files_shared filter(Boolean) — excludes participants with null userId', async () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { senderId: PART_ID, _count: { id: 8 } },
       ]);
       mockPrisma.participant.findMany.mockResolvedValue([
-        { id: PART_ID, userId: null }, // no owning user → folds to its own participant id
+        { id: PART_ID, userId: null }, // null userId filtered out
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const res = await inject(app, { entityType: 'users', criterion: 'files_shared' });
       expect(res.statusCode).toBe(200);
-      const rankings = JSON.parse(res.body).data.rankings;
-      // Orphan activity is not silently dropped: it surfaces keyed by the participant
-      // id (username Unknown since no user resolves), preserving the count.
-      expect(rankings).toHaveLength(1);
-      expect(rankings[0].id).toBe(PART_ID);
-      expect(rankings[0].username).toBe('Unknown');
-      expect(rankings[0].count).toBe(8);
+      // user.findMany called with empty array (null userId filtered)
+      const userCall = mockPrisma.user.findMany.mock.calls[0];
+      if (userCall) {
+        expect(userCall[0].where.id.in).toHaveLength(0);
+      } else {
+        // fetchUserDetails early-returned (empty userIds)
+        expect(mockPrisma.user.findMany).not.toHaveBeenCalled();
+      }
     });
   });
 });

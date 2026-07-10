@@ -56,7 +56,6 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
-      /* istanbul ignore next -- requireAuth:true rejects before handler; userId always set */
       if (!userId) {
         return sendUnauthorized(reply, 'Authentification requise');
       }
@@ -65,7 +64,6 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       const resolvedContextType = contextType ?? 'conversation';
       const resolvedContextId = contextId ?? conversationId;
 
-      /* istanbul ignore next -- SuggestionsQuerySchema.refine() enforces (contextId+contextType)|conversationId; reached only if validation is bypassed */
       if (!resolvedContextId) {
         return sendBadRequest(reply, 'Either (contextId + contextType) or conversationId is required');
       }
@@ -124,7 +122,6 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
-      /* istanbul ignore next -- requireAuth:true rejects before handler; userId always set */
       if (!userId) {
         return sendUnauthorized(reply, 'Authentification requise');
       }
@@ -185,7 +182,6 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
-      /* istanbul ignore next -- requireAuth:true rejects before handler; userId always set */
       if (!userId) {
         return sendUnauthorized(reply, 'Authentification requise');
       }

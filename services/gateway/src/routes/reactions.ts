@@ -160,17 +160,15 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'You are not a participant of this conversation');
       }
 
-      const addResult = await reactionService.addReaction({
+      const reaction = await reactionService.addReaction({
         messageId,
         emoji,
         participantId,
       });
 
-      if (!addResult) {
+      if (!reaction) {
         return sendInternalError(reply, 'Failed to add reaction');
       }
-
-      const { reaction, replacedEmojis } = addResult;
 
       // Récupérer la conversation pour savoir à qui broadcaster
       const message = await prisma.message.findUnique({
@@ -191,29 +189,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       if (socketIOHandler) {
 
         if (message) {
-          const io = fastify.socketIOHandler.getManager()?.getIO();
-          if (io) {
-            // Swap 1-réaction-par-user : signaler la disparition de l'ancien
-            // emoji avant l'ajout du nouveau, pour que les autres clients le
-            // retirent (chaque event porte son agrégation recalculée).
-            for (const removedEmoji of replacedEmojis) {
-              const removeEvent = await reactionService.createUpdateEvent(
-                messageId,
-                removedEmoji,
-                'remove',
-                participantId,
-                message.conversationId
-              );
-              io.to(ROOMS.conversation(message.conversationId)).emit(
-                SERVER_EVENTS.REACTION_REMOVED,
-                removeEvent
-              );
-            }
-            io.to(ROOMS.conversation(message.conversationId)).emit(
-              SERVER_EVENTS.REACTION_ADDED,
-              updateEvent
-            );
-          }
+          // Broadcaster l'événement à tous les participants de la conversation
+          // Note: La méthode broadcastToConversation sera ajoutée au handler Socket.IO
+          fastify.socketIOHandler.getManager()?.getIO().to(ROOMS.conversation(message.conversationId)).emit(
+            SERVER_EVENTS.REACTION_ADDED,
+            updateEvent
+          );
         }
       }
 
@@ -240,10 +221,6 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       if (error.message === 'Message not found') {
         return sendNotFound(reply, 'Message not found');
-      }
-
-      if (error.message === 'Cannot react to a system message') {
-        return sendBadRequest(reply, 'Cannot react to a system message');
       }
 
       if (error.message.includes('not a member') || error.message.includes('not a participant')) {
@@ -348,12 +325,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       });
 
       if (!removed) {
-        // Idempotent DELETE: the reaction is already absent — the caller's
-        // desired end-state is achieved. Return success (nothing changed → no
-        // broadcast) instead of 404, which the iOS outbox treats as a permanent
-        // reject and rolls the optimistic un-react back, re-showing a reaction
-        // that is gone. Mirrors the idempotent P2002 handling on the add path.
-        return sendSuccess(reply, { message: 'Reaction already absent' });
+        return sendNotFound(reply, 'Reaction not found');
       }
 
       // Récupérer la conversation pour broadcaster

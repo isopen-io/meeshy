@@ -23,7 +23,6 @@ import { twoFactorService } from '@/services/two-factor.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { useReducedMotion } from '@/hooks/use-accessibility';
-import { copyToClipboard } from '@/lib/clipboard';
 
 type FlowState =
   | { step: 'idle' }
@@ -127,11 +126,10 @@ export function TwoFactorSettings() {
     }
   };
 
-  const handleCopy = async (text: string) => {
-    const { success } = await copyToClipboard(text);
-    if (success) {
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
       toast.success(t('twoFactor.copied', 'Copied to clipboard'));
-    }
+    });
   };
 
   const cancelFlow = () => {
@@ -280,7 +278,7 @@ export function TwoFactorSettings() {
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => handleCopy(flow.secret)}
+                  onClick={() => copyToClipboard(flow.secret)}
                   title={t('twoFactor.copySecret', 'Copy secret')}
                 >
                   <Copy className="h-4 w-4" />
@@ -359,7 +357,7 @@ export function TwoFactorSettings() {
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => handleCopy(flow.codes.join('\n'))}
+                onClick={() => copyToClipboard(flow.codes.join('\n'))}
               >
                 <Copy className="h-4 w-4 mr-2" />
                 {t('twoFactor.backupCodes.copyAll', 'Copy All Codes')}

@@ -1,0 +1,2569 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "./client"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+// Python client generator (disabled - requires prisma-client-py installed)
+// generator client_py {
+//   provider = "prisma-client-py"
+// }
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+/// Utilisateur enregistré de la plateforme
+model User {
+  id                        String   @id @default(auto()) @map("_id") @db.ObjectId
+  username                  String   @unique
+  firstName                 String
+  lastName                  String
+  bio                       String   @default("")
+  email                     String   @unique
+  phoneNumber               String?
+  /// ISO 3166-1 alpha-2 country code for phone (e.g., "FR", "US", "GB")
+  phoneCountryCode          String?
+  password                  String
+  displayName               String?
+  /// User profile picture
+  avatar                    String?
+  /// User profile banner/cover image
+  banner                    String?
+  isOnline                  Boolean  @default(false)
+  /// Updated on every detectable activity (heartbeat, API request, typing, message send)
+  lastActiveAt              DateTime @default(now())
+  /// User's timezone (IANA format, e.g., "America/New_York", "Europe/Paris")
+  timezone                  String?
+  /// Array of blocked user IDs for quick access
+  blockedUserIds            String[] @default([]) @db.ObjectId
+  // ============================================
+  // LANGUAGE CONFIGURATION
+  // ============================================
+  /// User's primary system language (ISO 639-1)
+  systemLanguage            String   @default("en")
+  /// User's secondary regional language (ISO 639-1)
+  regionalLanguage          String?
+  /// Custom destination language for translations (if set, takes priority)
+  customDestinationLanguage String?
+
+  /// USER, ADMIN, MODO, AUDIT, ANALYST, BIGBOSS
+  role          String    @default("USER")
+  isActive      Boolean   @default(true)
+  deactivatedAt DateTime?
+
+  // Security & verification fields (DateTime? non-null = vérifié/activé)
+  emailVerifiedAt         DateTime?
+  emailVerificationToken  String? // Token de vérification email (hash SHA-256)
+  emailVerificationExpiry DateTime? // Expiration du token (24h par défaut)
+  phoneVerifiedAt         DateTime?
+  phoneVerificationCode   String? // Code SMS 6 chiffres (hashé)
+  phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)
+
+  /// Phone Transfer Tracking (audit trail)
+  phoneTransferredFromUserId String?   @db.ObjectId // ID de l'ancien compte d'où le numéro a été transféré
+  phoneTransferredAt         DateTime? // Date du transfert de numéro
+
+  twoFactorSecret        String? // TOTP secret (base32 encoded)
+  twoFactorBackupCodes   String[] @default([]) // Hashed backup codes for 2FA recovery
+  twoFactorPendingSecret String? // Temporary secret during 2FA setup (before confirmation)
+  twoFactorEnabledAt     DateTime? // Date when 2FA was enabled
+
+  // Account Lockout
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  lockedReason        String? // "FAILED_LOGIN" | "PASSWORD_RESET_ABUSE" | "SUSPICIOUS_ACTIVITY"
+
+  // Password Management
+  lastPasswordChange       DateTime? @default(now())
+  passwordResetAttempts    Int       @default(0)
+  lastPasswordResetAttempt DateTime?
+
+  // Device & Location Tracking (Login)
+  lastLoginIp       String?
+  lastLoginLocation String? // "City, Country"
+  lastLoginDevice   String? // Device fingerprint/user agent
+
+  // Registration Context (captured once at signup)
+  registrationIp       String?
+  registrationLocation String? // "City, Country" at signup
+  registrationDevice   String? // User agent at signup
+  registrationCountry  String? // ISO 3166-1 alpha-2 (e.g., "FR", "US")
+
+  // Soft delete fields
+  deletedAt DateTime?
+  deletedBy String?   @db.ObjectId
+
+  // Profile completion
+  profileCompletionRate Int? @default(0)
+
+  // ============================================
+  // E2EE / SIGNAL PROTOCOL ENCRYPTION FIELDS
+  // ============================================
+  /// Signal Protocol identity key (public part - base64 encoded)
+  signalIdentityKeyPublic String?
+
+  /// Signal Protocol identity key (private part - encrypted, base64 encoded)
+  signalIdentityKeyPrivate String?
+
+  /// Signal Protocol registration ID (14-bit random number)
+  signalRegistrationId Int?
+
+  /// Pre-key bundle version (incremented on rotation)
+  signalPreKeyBundleVersion Int?
+
+  /// Last key rotation timestamp
+  lastKeyRotation DateTime?
+
+  /// Date de naissance déclarée (pour calcul expiration profil vocal)
+  birthDate DateTime?
+
+  // ============================================
+  // VOICE PROFILE & CLONING CONSENTS (GDPR)
+  // ============================================
+  /// Consentement pour créer un profil vocal
+  voiceProfileConsentAt DateTime?
+
+  /// Consentement pour le traitement des données vocales
+  voiceDataConsentAt DateTime?
+
+  /// Consentement pour le traitement général des données
+  dataProcessingConsentAt DateTime?
+
+  /// Clonage vocal activé (DateTime non-null = activé)
+  voiceCloningEnabledAt DateTime?
+
+  /// Vérification de l'âge (requis pour profil vocal)
+  ageVerifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdCommunities      Community[]              @relation("CommunityCreator")
+  communityMemberships    CommunityMember[]
+  conversations           ConversationMember[]
+  conversationPreferences ConversationPreference[]
+  createdShareLinks       ConversationShareLink[]  @relation("ShareLinkCreator")
+  receivedFriendRequests  FriendRequest[]          @relation("FriendRequestReceiver")
+  sentFriendRequests      FriendRequest[]          @relation("FriendRequestSender")
+
+  // Message & Attachment status tracking
+  messageStatusEntries    MessageStatusEntry[]
+  attachmentStatusEntries AttachmentStatusEntry[]
+  readCursors             ConversationReadCursor[] @relation("UserReadCursors")
+  attachmentReactions     AttachmentReaction[]     @relation("UserAttachmentReactions")
+
+  sentMessages           Message[]                     @relation("MessageSender")
+  reactions              Reaction[]                    @relation("UserReactions")
+  mentions               Mention[]                     @relation("UserMentions")
+  notifications          Notification[]
+  userPreferences        UserPreferences?              @relation("UserPreferences")
+  stats                  UserStats?
+  createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
+  affiliateRelations     AffiliateRelation[]           @relation("AffiliateUser")
+  referredRelations      AffiliateRelation[]           @relation("ReferredUser")
+  createdTrackingLinks   TrackingLink[]                @relation("TrackingLinkCreator")
+  trackingLinkClicks     TrackingLinkClick[]           @relation("TrackingLinkClickUser")
+  initiatedCalls         CallSession[]                 @relation("CallInitiator")
+  callParticipations     CallParticipant[]             @relation("CallParticipants")
+  conversationPrefs      UserConversationPreferences[]
+  conversationCategories UserConversationCategory[]
+  communityPrefs         UserCommunityPreferences[]
+
+  // Password Reset & Magic Link Relations
+  passwordResetTokens      PasswordResetToken[]
+  phonePasswordResetTokens PhonePasswordResetToken[]
+  magicLinkTokens          MagicLinkToken[]
+  passwordHistory          PasswordHistory[]
+  securityEvents           SecurityEvent[]
+  sessions                 UserSession[]
+  pushTokens               PushToken[]
+
+  // Signal Protocol E2EE Relations
+  signalPreKeyBundle SignalPreKeyBundle?
+
+  // DMA Interoperability Relations
+  dmaSessions DMASession[]
+
+  // Voice cloning relation
+  voiceModel UserVoiceModel?
+
+  // E2EE key exchange relation
+  conversationPublicKeys ConversationPublicKey[]
+
+  // Per-user message deletions ("delete for me" feature)
+  messageDeletions UserMessageDeletion[]
+
+  // Report relations
+  reportsMade      Report[] @relation("ReportReporter")
+  reportsModerated Report[] @relation("ReportModerator")
+
+  // Conversation sharing
+  sharedConversations ConversationShare[] @relation("ConversationSharer")
+}
+
+/// Conversation entre utilisateurs (direct, group, public, global)
+model Conversation {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// Identifiant lisible par l'homme (ex: "mee_meeshy", "general", "mee_support")
+  identifier    String   @unique
+  /// direct, group, public, global
+  type          String
+  title         String?
+  description   String?
+  /// Conversation profile picture
+  avatar        String?
+  /// Conversation banner/cover image
+  banner        String?
+  communityId   String?  @db.ObjectId
+  isActive      Boolean  @default(true)
+  /// Denormalized member count for performance
+  memberCount   Int      @default(0)
+  lastMessageAt DateTime @default(now())
+
+  // ============================================
+  // WRITE PERMISSIONS
+  // ============================================
+  /// Minimum role required to send messages: everyone, member, moderator, admin, creator
+  defaultWriteRole      String   @default("everyone")
+  /// Announcement-only mode (only creator/admins can write, overrides defaultWriteRole)
+  isAnnouncementChannel Boolean  @default(false)
+  /// Slow mode - minimum seconds between messages per user (0 = disabled)
+  slowModeSeconds       Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // ============================================
+  // E2EE / ENCRYPTION FIELDS
+  // ============================================
+  /// Encryption mode: null (disabled), "server" (server-side), "e2ee" (end-to-end)
+  encryptionMode String?
+
+  /// Encryption protocol: "aes-256-gcm" (server), "signal_v3" (e2ee)
+  encryptionProtocol String?
+
+  /// When encryption was enabled (immutable once set)
+  encryptionEnabledAt DateTime?
+
+  /// User who enabled encryption
+  encryptionEnabledBy String? @db.ObjectId
+
+  /// Server encryption key ID (for server mode only)
+  serverEncryptionKeyId String?
+  /// Relation to ServerEncryptionKey for optimized queries
+  serverEncryptionKey   ServerEncryptionKey? @relation(fields: [serverEncryptionKeyId], references: [id])
+
+  /// Auto-translation (disabled for E2EE mode)
+  autoTranslateEnabled Boolean @default(true)
+
+  anonymousParticipants AnonymousParticipant[]
+  members               ConversationMember[]
+  preferences           ConversationPreference[]
+  shareLinks            ConversationShareLink[]
+  community             Community?               @relation(fields: [communityId], references: [id])
+  messages              Message[]
+
+  // Status tracking relations
+  messageStatusEntries    MessageStatusEntry[]
+  attachmentStatusEntries AttachmentStatusEntry[]
+  readCursors             ConversationReadCursor[]
+
+  callSessions    CallSession[]
+  userPreferences UserConversationPreferences[]
+
+  // E2EE key exchange relation
+  conversationPublicKeys ConversationPublicKey[]
+
+  // Shares of this conversation to communities
+  shares ConversationShare[] @relation("SharedConversation")
+}
+
+/// Share/forward a conversation to a community or another context
+/// Allows conversations to be featured/linked within communities
+model ConversationShare {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// The conversation being shared
+  conversationId String   @db.ObjectId
+  /// Target community where the conversation is shared
+  communityId    String   @db.ObjectId
+  /// User who shared the conversation
+  sharedBy       String   @db.ObjectId
+  /// Optional title/label for the share
+  title          String?
+  /// Optional description for why it's shared
+  description    String?
+  /// Whether the share is pinned/featured in the community
+  isPinned       Boolean  @default(false)
+  /// Display order when pinned
+  pinOrder       Int?
+  /// Whether the share is active
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversation Conversation @relation("SharedConversation", fields: [conversationId], references: [id], onDelete: Cascade)
+  community    Community    @relation("CommunityShares", fields: [communityId], references: [id], onDelete: Cascade)
+  sharer       User         @relation("ConversationSharer", fields: [sharedBy], references: [id])
+
+  @@unique([conversationId, communityId])
+  @@index([communityId])
+  @@index([sharedBy])
+  @@index([isPinned])
+}
+
+/// Appartenance d'un utilisateur à une conversation
+model ConversationMember {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId   String    @db.ObjectId
+  userId           String    @db.ObjectId
+  /// admin, moderator, member
+  role             String    @default("member")
+  /// Per-conversation display name override
+  nickname         String?
+  canSendMessage   Boolean   @default(true)
+  canSendFiles     Boolean   @default(true)
+  canSendImages    Boolean   @default(true)
+  canSendVideos    Boolean   @default(true)
+  canSendAudios    Boolean   @default(true)
+  canSendLocations Boolean   @default(true)
+  canSendLinks     Boolean   @default(true)
+  joinedAt         DateTime  @default(now())
+  leftAt           DateTime?
+  isActive         Boolean   @default(true)
+
+  user         User         @relation(fields: [userId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+}
+
+/// Lien de partage pour accès anonyme à une conversation
+model ConversationShareLink {
+  id                     String    @id @default(auto()) @map("_id") @db.ObjectId
+  linkId                 String    @unique
+  /// Identifiant lisible par l'homme (ex: "mshy_meeshy-public", "mshy_support-link")
+  identifier             String    @unique
+  conversationId         String    @db.ObjectId
+  createdBy              String    @db.ObjectId
+  name                   String?
+  description            String?
+  maxUses                Int?
+  currentUses            Int       @default(0)
+  maxConcurrentUsers     Int?
+  currentConcurrentUsers Int       @default(0)
+  maxUniqueSessions      Int?
+  currentUniqueSessions  Int       @default(0)
+  expiresAt              DateTime?
+  isActive               Boolean   @default(true)
+  allowAnonymousMessages Boolean   @default(true)
+  allowAnonymousFiles    Boolean   @default(false)
+  allowAnonymousImages   Boolean   @default(true)
+  allowViewHistory       Boolean   @default(true)
+  /// Si true, seuls les utilisateurs avec compte peuvent rejoindre (bloque l'accès anonyme)
+  requireAccount         Boolean   @default(false)
+  requireNickname        Boolean   @default(true)
+  requireEmail           Boolean   @default(false)
+  /// Si true, demande la date de naissance pour vérifier l'âge minimum
+  requireBirthday        Boolean   @default(false)
+  allowedCountries       String[]  @default([])
+  allowedLanguages       String[]  @default([])
+  allowedIpRanges        String[]  @default([])
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  anonymousParticipants AnonymousParticipant[] @relation("ShareLinkParticipants")
+  creator               User                   @relation("ShareLinkCreator", fields: [createdBy], references: [id])
+  conversation          Conversation           @relation(fields: [conversationId], references: [id])
+}
+
+/// Participant anonyme via lien de partage
+model AnonymousParticipant {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId    String    @db.ObjectId
+  shareLinkId       String    @db.ObjectId
+  firstName         String
+  lastName          String
+  username          String
+  email             String?
+  birthday          DateTime?
+  sessionToken      String    @unique
+  ipAddress         String?
+  country           String?
+  language          String    @default("fr")
+  deviceFingerprint String?
+  isActive          Boolean   @default(true)
+  isOnline          Boolean   @default(false)
+  /// Updated on every detectable activity (heartbeat, API request, typing, message send)
+  lastActiveAt      DateTime  @default(now())
+  /// Permissions (consistent with ConversationMember)
+  canSendMessages   Boolean   @default(true)
+  canSendFiles      Boolean   @default(false)
+  canSendImages     Boolean   @default(true)
+  canSendVideos     Boolean   @default(false)
+  canSendAudios     Boolean   @default(true)
+  canSendLocations  Boolean   @default(false)
+  canSendLinks      Boolean   @default(true)
+  joinedAt          DateTime  @default(now())
+  leftAt            DateTime?
+
+  shareLink          ConversationShareLink @relation("ShareLinkParticipants", fields: [shareLinkId], references: [id])
+  conversation       Conversation          @relation(fields: [conversationId], references: [id])
+  sentMessages       Message[]             @relation("AnonymousMessageSender")
+  reactions          Reaction[]            @relation("AnonymousReactions")
+  trackingLinkClicks TrackingLinkClick[]   @relation("TrackingLinkClickAnonymous")
+
+  // Message & Attachment status tracking
+  messageStatusEntries    MessageStatusEntry[]     @relation("AnonymousMessageStatus")
+  attachmentStatusEntries AttachmentStatusEntry[]  @relation("AnonymousAttachmentStatus")
+  readCursors             ConversationReadCursor[] @relation("AnonymousReadCursors")
+  attachmentReactions     AttachmentReaction[]     @relation("AnonymousAttachmentReactions")
+
+  // Call participation
+  callParticipations CallParticipant[] @relation("AnonymousCallParticipants")
+}
+
+/// Message dans une conversation
+model Message {
+  id                          String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId              String    @db.ObjectId
+  senderId                    String?   @db.ObjectId
+  anonymousSenderId           String?   @db.ObjectId
+  content                     String
+  originalLanguage            String    @default("fr")
+  /// Content type: text, image, file, audio, video, location
+  messageType                 String    @default("text")
+  /// Message origin: user, system, ads, app, agent, authority
+  messageSource               String    @default("user")
+  isEdited                    Boolean   @default(false)
+  editedAt                    DateTime?
+  isDeleted                   Boolean   @default(false)
+  deletedAt                   DateTime?
+  replyToId                   String?   @db.ObjectId
+  /// ID of the original message if this is a forwarded message
+  forwardedFromId             String?   @db.ObjectId
+  /// ID of the original conversation (for cross-conversation/community forwarding)
+  forwardedFromConversationId String?   @db.ObjectId
+  /// Expiration timestamp for self-destructing messages
+  expiresAt                   DateTime?
+
+  // ============================================
+  // SECRET / VIEW-ONCE / BLUR FIELDS
+  // ============================================
+  /// View-once message (disappears after user views it)
+  isViewOnce       Boolean @default(false)
+  /// Max unique viewers allowed (null = all members can view once each)
+  maxViewOnceCount Int?
+  /// Number of unique users who have viewed (denormalized for performance)
+  viewOnceCount    Int     @default(0)
+  /// Content is blurred until user taps to reveal
+  isBlurred        Boolean @default(false)
+
+  // ============================================
+  // PINNING
+  // ============================================
+  /// Date when message was pinned (null = not pinned)
+  pinnedAt DateTime?
+  /// User who pinned the message
+  pinnedBy String?   @db.ObjectId
+
+  validatedMentions String[] @default([]) // Usernames des mentions validées (pour performance)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // ============================================
+  // COMPUTED STATUS FIELDS (denormalized for performance)
+  // Updated when all conversation participants complete each action
+  // ============================================
+  /// Date when message was delivered to ALL participants
+  deliveredToAllAt DateTime?
+  /// Date when message was received (acknowledged) by ALL participants
+  receivedByAllAt  DateTime?
+  /// Date when message was read by ALL participants
+  readByAllAt      DateTime?
+  /// Number of participants who have received this message
+  deliveredCount   Int       @default(0)
+  /// Number of participants who have read this message
+  readCount        Int       @default(0)
+
+  // ============================================
+  // REACTION SUMMARY (denormalized for performance)
+  // Updated when reactions are added/removed
+  // ============================================
+  /// Aggregated reaction counts by emoji: { "❤️": 5, "👍": 3, "🔥": 1 }
+  reactionSummary Json?
+  /// Total reaction count (denormalized for quick access)
+  reactionCount   Int   @default(0)
+
+  // ============================================
+  // E2EE / ENCRYPTION FIELDS
+  // ============================================
+  /// Encrypted content (base64 encoded ciphertext)
+  encryptedContent String?
+
+  /// Encryption metadata (IV, auth tag, key version, etc.)
+  encryptionMetadata Json?
+
+  /// Flag indicating if message is encrypted
+  isEncrypted Boolean @default(false)
+
+  /// Encryption mode: "e2ee" (end-to-end), "server" (server-side), "hybrid".
+  encryptionMode String?
+
+  // Status tracking (per-user per-message)
+  statusEntries       MessageStatusEntry[]    @relation("MessageStatusEntries")
+  attachmentStatuses  AttachmentStatusEntry[] @relation("MessageAttachmentStatuses")
+  attachmentReactions AttachmentReaction[]    @relation("MessageAttachmentReactions")
+
+  translations    MessageTranslation[]
+  attachments     MessageAttachment[]
+  reactions       Reaction[]            @relation("MessageReactions")
+  mentions        Mention[]             @relation("MessageMentions")
+  notifications   Notification[]        @relation("NotificationMessage")
+  replyTo         Message?              @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies         Message[]             @relation("MessageReplies")
+  anonymousSender AnonymousParticipant? @relation("AnonymousMessageSender", fields: [anonymousSenderId], references: [id])
+  sender          User?                 @relation("MessageSender", fields: [senderId], references: [id])
+  conversation    Conversation          @relation(fields: [conversationId], references: [id])
+
+  // Per-user deletions ("delete for me" feature)
+  userDeletions UserMessageDeletion[]
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([messageSource])
+  @@index([createdAt])
+}
+
+/// Traduction d'un message
+model MessageTranslation {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId         String   @db.ObjectId
+  targetLanguage    String
+  translatedContent String
+  translationModel  String // "basic", "medium", "premium"
+  confidenceScore   Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Encryption fields for secure conversations (server/hybrid modes)
+  // Translations inherit encryption from parent message
+  isEncrypted       Boolean @default(false)
+  encryptionKeyId   String? // References server_encryption_keys.id
+  encryptionIv      String? // Base64 encoded IV (12 bytes for AES-GCM)
+  encryptionAuthTag String? // Base64 encoded auth tag (16 bytes)
+
+  // Source language is derived from message.originalLanguage
+  message Message @relation(fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // Contrainte d'unicité: une seule traduction par message et langue cible
+  @@unique([messageId, targetLanguage], name: "messageId_targetLanguage")
+  @@index([messageId])
+  @@index([targetLanguage])
+  @@index([translationModel])
+}
+
+/// Attachement de fichier pour un message
+model MessageAttachment {
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  messageId    String? @db.ObjectId
+  fileName     String // Nom de fichier généré (unique)
+  originalName String // Nom original du fichier
+  mimeType     String // Type MIME (image/jpeg, application/pdf, etc.)
+  fileSize     Int // Taille en bytes
+  filePath     String // Chemin relatif: attachments/YYYY/mm/userId/filename
+  fileUrl      String // URL complète pour accès
+
+  // =====================================================
+  // USER-PROVIDED METADATA
+  // =====================================================
+  /// Human-readable title for the attachment
+  title   String?
+  /// Accessibility alt text (for images/media)
+  alt     String?
+  /// Caption/legend displayed with the attachment
+  caption String?
+
+  // =====================================================
+  // FORWARDING FIELDS
+  // =====================================================
+  /// Original attachment ID if this is a forwarded attachment
+  forwardedFromAttachmentId String? @db.ObjectId
+  /// Whether this attachment is forwarded (references another)
+  isForwarded               Boolean @default(false)
+
+  // =====================================================
+  // SECRET / VIEW-ONCE / BLUR FIELDS
+  // =====================================================
+  /// View-once attachment (disappears after user views it)
+  isViewOnce       Boolean @default(false)
+  /// Max unique viewers allowed (null = all members can view once each)
+  maxViewOnceCount Int?
+  /// Number of unique users who have viewed (denormalized for performance)
+  viewOnceCount    Int     @default(0)
+  /// Content is blurred until user taps to reveal
+  isBlurred        Boolean @default(false)
+
+  // Métadonnées spécifiques aux images
+  width         Int?
+  height        Int?
+  thumbnailPath String? // Miniature générée pour images
+  thumbnailUrl  String?
+
+  // Métadonnées spécifiques audio/vidéo
+  duration   Int? // Durée en MILLISECONDES (précision complète)
+  bitrate    Int? // Débit en bps (bits per second)
+  sampleRate Int? // Fréquence d'échantillonnage en Hz (ex: 44100, 48000)
+  codec      String? // Codec audio (ex: "opus", "aac", "vorbis", "mp3")
+  channels   Int? // Nombre de canaux audio (1: mono, 2: stereo)
+
+  // Métadonnées spécifiques vidéo
+  fps        Float? // Frames per second pour vidéos
+  videoCodec String? // Codec vidéo (ex: "h264", "h265", "vp8", "vp9", "av1")
+
+  // Métadonnées spécifiques documents/PDF
+  pageCount Int? // Nombre de pages pour PDF et documents
+
+  // Métadonnées spécifiques code/texte
+  lineCount Int? // Nombre de lignes pour fichiers texte/code
+
+  // Métadonnées générales
+  uploadedBy  String  @db.ObjectId // ID utilisateur ou anonyme
+  isAnonymous Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  // =====================================================
+  // AUDIO/VIDEO PROCESSING (integrated)
+  // =====================================================
+
+  /// Transcription du contenu audio/vidéo original
+  /// Structure: {
+  ///   text: string,
+  ///   language: string,
+  ///   confidence: number,
+  ///   source: "mobile" | "whisper" | "voice_api",
+  ///   model?: string,
+  ///   segments?: Array<{
+  ///     text: string,
+  ///     start: number,
+  ///     end: number,
+  ///     speaker_id?: string,
+  ///     confidence?: number
+  ///   }>,
+  ///   speakerCount?: number,
+  ///   primarySpeakerId?: string,
+  ///   durationMs: number
+  /// }
+  transcription Json?
+
+  /// Traductions (audio/vidéo/texte) - map: langue -> données
+  /// Structure: {
+  ///   "en": {
+  ///     type: "audio" | "video" | "text",
+  ///     transcription: string,
+  ///     path?: string,
+  ///     url?: string,
+  ///     durationMs?: number,
+  ///     format?: string,
+  ///     cloned?: boolean,
+  ///     quality?: number,
+  ///     voiceModelId?: string,
+  ///     ttsModel?: string,
+  ///     createdAt: Date
+  ///   }
+  /// }
+  translations Json?
+
+  /// Métadonnées génériques extensibles
+  /// Structure libre pour données custom, EXIF, AI analysis, etc.
+  metadata Json?
+
+  // =====================================================
+  // SECURITY & MODERATION FIELDS
+  // =====================================================
+  /// Virus/malware scan status: pending, clean, infected, error
+  scanStatus       String?
+  /// When the security scan was completed
+  scanCompletedAt  DateTime?
+  /// Content moderation status: pending, approved, flagged, rejected
+  moderationStatus String?
+  /// Reason for flagging/rejection
+  moderationReason String?
+
+  // =====================================================
+  // COMPUTED STATUS FIELDS (denormalized for performance)
+  // Updated when all conversation participants complete each action
+  // =====================================================
+  /// Date when attachment was delivered to ALL participants
+  deliveredToAllAt  DateTime?
+  /// Date when attachment was viewed by ALL participants
+  viewedByAllAt     DateTime?
+  /// Date when attachment was downloaded by ALL participants
+  downloadedByAllAt DateTime?
+  /// Date when audio was listened to by ALL participants (audio only)
+  listenedByAllAt   DateTime?
+  /// Date when video was watched by ALL participants (video only)
+  watchedByAllAt    DateTime?
+  /// Number of participants who have viewed this attachment
+  viewedCount       Int       @default(0)
+  /// Number of participants who have downloaded this attachment
+  downloadedCount   Int       @default(0)
+  /// Number of participants who have listened (audio) or watched (video)
+  consumedCount     Int       @default(0)
+
+  // =====================================================
+  // ENCRYPTION FIELDS (for encrypted conversations)
+  // =====================================================
+
+  /// Whether this attachment is encrypted
+  isEncrypted Boolean @default(false)
+
+  /// Encryption mode: "e2ee" (end-to-end), "server" (server-side), "hybrid".
+  encryptionMode String?
+
+  /// Base64-encoded initialization vector (12 bytes for AES-GCM)
+  encryptionIv String?
+
+  /// Base64-encoded authentication tag (16 bytes for AES-GCM)
+  encryptionAuthTag String?
+
+  /// Base64-encoded HMAC-SHA256 for integrity verification
+  encryptionHmac String?
+
+  /// SHA-256 hash of original file (for verification after decryption)
+  originalFileHash String?
+
+  /// SHA-256 hash of encrypted file
+  encryptedFileHash String?
+
+  /// Original file size before encryption (fileSize stores encrypted size when encrypted)
+  originalFileSize Int?
+
+  /// Server key ID (for server/hybrid mode decryption)
+  serverKeyId String?
+
+  /// Encrypted thumbnail IV (if thumbnail is also encrypted)
+  thumbnailEncryptionIv String?
+
+  /// Encrypted thumbnail auth tag
+  thumbnailEncryptionAuthTag String?
+
+  message Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  // Status tracking (per-user per-attachment)
+  statusEntries AttachmentStatusEntry[] @relation("AttachmentStatusEntries")
+  reactions     AttachmentReaction[]    @relation("AttachmentReactions")
+
+  @@index([messageId])
+  @@index([uploadedBy])
+}
+
+// =====================================================
+// MESSAGE & ATTACHMENT STATUS TRACKING
+// Granular per-message and per-attachment status for each user
+// =====================================================
+
+/// Per-message status entry for each user
+/// One record per user per message - detailed tracking
+model MessageStatusEntry {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  messageId      String  @db.ObjectId
+  conversationId String  @db.ObjectId
+  userId         String? @db.ObjectId
+  anonymousId    String? @db.ObjectId
+
+  // ===== DELIVERY STATUS =====
+  /// When message was delivered to user's device
+  deliveredAt DateTime?
+  /// When message was received by client (acknowledged)
+  receivedAt  DateTime?
+  /// When user read/saw the message
+  readAt      DateTime?
+
+  // ===== READ DETAILS =====
+  /// How long user viewed the message (ms) - for analytics
+  readDurationMs Int?
+  /// Device type where message was read
+  readDevice     String? // 'ios', 'android', 'web', 'desktop'
+  /// Client version
+  clientVersion  String?
+
+  // ===== VIEW-ONCE STATUS =====
+  /// When user viewed view-once content (null = not yet viewed)
+  viewedOnceAt DateTime?
+  /// Whether view-once content was revealed/unblurred
+  revealedAt   DateTime?
+
+  // ===== METADATA =====
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  message       Message               @relation("MessageStatusEntries", fields: [messageId], references: [id], onDelete: Cascade)
+  conversation  Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousMessageStatus", fields: [anonymousId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId], name: "message_user_status")
+  @@unique([messageId, anonymousId], name: "message_anonymous_status")
+  @@index([conversationId])
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([readAt])
+  @@index([deliveredAt])
+}
+
+/// Per-attachment status entry for each user
+/// Tracks viewed, downloaded, listened, watched status per attachment
+model AttachmentStatusEntry {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  attachmentId   String  @db.ObjectId
+  messageId      String  @db.ObjectId
+  conversationId String  @db.ObjectId
+  userId         String? @db.ObjectId
+  anonymousId    String? @db.ObjectId
+
+  // ===== UNIVERSAL STATUS =====
+  /// When attachment was delivered to device
+  deliveredAt  DateTime?
+  /// When user first viewed/opened the attachment
+  viewedAt     DateTime?
+  /// When user downloaded the attachment locally
+  downloadedAt DateTime?
+
+  // ===== AUDIO-SPECIFIC =====
+  /// When user listened to audio (first play)
+  listenedAt            DateTime?
+  /// Number of times audio was played
+  listenCount           Int       @default(0)
+  /// Last playback position (ms) - for resume
+  lastPlayPositionMs    Int?
+  /// Total listen duration (ms) - cumulative
+  totalListenDurationMs Int       @default(0)
+  /// Whether audio was played to completion
+  listenedComplete      Boolean   @default(false)
+
+  // ===== VIDEO-SPECIFIC =====
+  /// When user watched video (first play)
+  watchedAt            DateTime?
+  /// Number of times video was played
+  watchCount           Int       @default(0)
+  /// Last playback position (ms) - for resume
+  lastWatchPositionMs  Int?
+  /// Total watch duration (ms) - cumulative
+  totalWatchDurationMs Int       @default(0)
+  /// Whether video was watched to completion
+  watchedComplete      Boolean   @default(false)
+
+  // ===== IMAGE-SPECIFIC =====
+  /// Time spent viewing image (ms)
+  viewDurationMs Int?
+  /// Whether image was zoomed
+  wasZoomed      Boolean @default(false)
+
+  // ===== DOCUMENT-SPECIFIC =====
+  /// Number of pages viewed (for PDFs)
+  pagesViewed    Int  @default(0)
+  /// Last page viewed
+  lastPageViewed Int?
+
+  // ===== VIEW-ONCE STATUS =====
+  /// When user viewed view-once attachment (null = not yet viewed)
+  viewedOnceAt DateTime?
+  /// Whether view-once content was revealed/unblurred
+  revealedAt   DateTime?
+
+  // ===== METADATA =====
+  /// Device where attachment was accessed
+  accessDevice String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  attachment    MessageAttachment     @relation("AttachmentStatusEntries", fields: [attachmentId], references: [id], onDelete: Cascade)
+  message       Message               @relation("MessageAttachmentStatuses", fields: [messageId], references: [id], onDelete: Cascade)
+  conversation  Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousAttachmentStatus", fields: [anonymousId], references: [id], onDelete: Cascade)
+
+  @@unique([attachmentId, userId], name: "attachment_user_status")
+  @@unique([attachmentId, anonymousId], name: "attachment_anonymous_status")
+  @@index([messageId])
+  @@index([conversationId])
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([viewedAt])
+  @@index([listenedAt])
+  @@index([watchedAt])
+}
+
+/// Reaction on an individual attachment (separate from message reactions)
+model AttachmentReaction {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  attachmentId String   @db.ObjectId
+  messageId    String   @db.ObjectId
+  userId       String?  @db.ObjectId
+  anonymousId  String?  @db.ObjectId
+  emoji        String // Emoji (ex: 🎉, ❤️, 🔥)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  attachment    MessageAttachment     @relation("AttachmentReactions", fields: [attachmentId], references: [id], onDelete: Cascade)
+  message       Message               @relation("MessageAttachmentReactions", fields: [messageId], references: [id], onDelete: Cascade)
+  user          User?                 @relation("UserAttachmentReactions", fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousAttachmentReactions", fields: [anonymousId], references: [id], onDelete: Cascade)
+
+  @@unique([attachmentId, userId, emoji], name: "attachment_user_reaction")
+  @@unique([attachmentId, anonymousId, emoji], name: "attachment_anonymous_reaction")
+  @@index([attachmentId])
+  @@index([messageId])
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([emoji])
+}
+
+/// Conversation-level read cursor (optimized for unread count queries)
+/// Kept for performance - aggregated view of MessageStatusEntry
+model ConversationReadCursor {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String  @db.ObjectId
+  userId         String? @db.ObjectId
+  anonymousId    String? @db.ObjectId
+
+  /// Last message ID that was read
+  lastReadMessageId String?   @db.ObjectId
+  lastReadAt        DateTime?
+
+  /// Last message ID that was delivered
+  lastDeliveredMessageId String?   @db.ObjectId
+  lastDeliveredAt        DateTime?
+
+  /// Cached unread count (updated on new message or read)
+  unreadCount Int @default(0)
+
+  /// Version for optimistic locking
+  version Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  conversation  Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user          User?                 @relation("UserReadCursors", fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousReadCursors", fields: [anonymousId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId], name: "conversation_user_cursor")
+  @@unique([conversationId, anonymousId], name: "conversation_anonymous_cursor")
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([unreadCount])
+}
+
+/// Réaction emoji sur un message par un utilisateur
+model Reaction {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId   String   @db.ObjectId
+  userId      String?  @db.ObjectId // null pour utilisateurs anonymes
+  anonymousId String?  @db.ObjectId // ID de l'utilisateur anonyme (consistent naming)
+  emoji       String // Emoji libre (ex: 🎉, ❤️, 🔥, ⭐)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  message       Message               @relation("MessageReactions", fields: [messageId], references: [id], onDelete: Cascade)
+  user          User?                 @relation("UserReactions", fields: [userId], references: [id], onDelete: Cascade)
+  anonymousUser AnonymousParticipant? @relation("AnonymousReactions", fields: [anonymousId], references: [id], onDelete: Cascade)
+
+  // Contrainte: un utilisateur ne peut ajouter le même emoji qu'une seule fois par message
+  @@unique([messageId, userId, emoji], name: "user_reaction_unique")
+  // Contrainte: un utilisateur anonyme ne peut ajouter le même emoji qu'une seule fois par message
+  @@unique([messageId, anonymousId, emoji], name: "anonymous_reaction_unique")
+  @@index([messageId])
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([emoji])
+}
+
+/// Mention d'un utilisateur dans un message
+model Mention {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId       String   @db.ObjectId
+  mentionedUserId String   @db.ObjectId
+  mentionedAt     DateTime @default(now())
+
+  message       Message @relation("MessageMentions", fields: [messageId], references: [id], onDelete: Cascade)
+  mentionedUser User    @relation("UserMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  // Contrainte: un utilisateur ne peut être mentionné qu'une seule fois par message
+  @@unique([messageId, mentionedUserId], name: "message_user_mention_unique")
+  @@index([messageId])
+  @@index([mentionedUserId])
+  @@index([mentionedAt])
+}
+
+/// Demande d'amitié entre utilisateurs
+model FriendRequest {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  senderId    String    @db.ObjectId
+  receiverId  String    @db.ObjectId
+  /// Message optionnel accompagnant la demande d'amitié
+  message     String?
+  /// pending, accepted, rejected, blocked
+  status      String    @default("pending")
+  /// When the request was accepted/rejected
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  receiver User @relation("FriendRequestReceiver", fields: [receiverId], references: [id])
+  sender   User @relation("FriendRequestSender", fields: [senderId], references: [id])
+}
+
+/// DEPRECATED: Use UserPreferences.notification JSON instead
+/// Kept temporarily for backward compatibility
+model NotificationPreference {
+  id                        String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId                    String    @unique @db.ObjectId
+  newMessage                Boolean   @default(true)
+  messageReply              Boolean   @default(true)
+  messageMention            Boolean   @default(true)
+  newConversation           Boolean   @default(true)
+  conversationInvite        Boolean   @default(true)
+  friendRequest             Boolean   @default(true)
+  friendRequestAccepted     Boolean   @default(true)
+  groupInvite               Boolean   @default(true)
+  missedCall                Boolean   @default(true)
+  voicemailReceived         Boolean   @default(true)
+  soundEnabled              Boolean   @default(true)
+  vibrationEnabled          Boolean   @default(true)
+  dndEnabled                Boolean   @default(false)
+  dndStartTime              String?
+  dndEndTime                String?
+  emailNotifications        Boolean   @default(true)
+  pushNotifications         Boolean   @default(true)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@map("notification_preferences")
+}
+
+/// Notification pour un utilisateur
+model Notification {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String    @db.ObjectId
+  /// new_conversation, new_message, message_edited, friend_request, missed_call, etc.
+  type      String
+  title     String
+  content   String
+  data      String?
+  priority  String    @default("normal")
+  isRead    Boolean   @default(false)
+  /// When the notification was read (more precise than isRead boolean)
+  readAt    DateTime?
+  emailSent Boolean   @default(false)
+  pushSent  Boolean   @default(false)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  /// Informations de l'expéditeur (pour les notifications de messages/appels)
+  senderId          String? @db.ObjectId
+  senderUsername    String?
+  senderAvatar      String?
+  senderDisplayName String?
+  senderFirstName   String?
+  senderLastName    String?
+
+  /// Aperçu du message (tronqué à 32 caractères)
+  messagePreview String?
+
+  /// Références pour navigation
+  conversationId String? @db.ObjectId
+  messageId      String? @db.ObjectId
+  callSessionId  String? @db.ObjectId
+
+  user    User     @relation(fields: [userId], references: [id])
+  message Message? @relation("NotificationMessage", fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId, isRead])
+  @@index([userId, type])
+  @@index([createdAt])
+  @@index([messageId])
+}
+
+/// Fonctionnalités et consentements utilisateur (1:1 avec User)
+/// Communauté (représente une communauté de conversation)
+model Community {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  /// Identifiant lisible par l'homme (ex: "mshy_meeshy-paris", "mshy_support-lycee-njanda")
+  identifier  String    @unique
+  name        String
+  description String?
+  /// Community profile picture
+  avatar      String?
+  /// Community banner/cover image
+  banner      String?
+  isPrivate   Boolean   @default(true)
+  /// Whether the community is active (soft-delete capability)
+  isActive    Boolean   @default(true)
+  /// When the community was deleted/deactivated (null if active)
+  deletedAt   DateTime?
+  createdBy   String    @db.ObjectId
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members             CommunityMember[]
+  creator             User                       @relation("CommunityCreator", fields: [createdBy], references: [id])
+  sharedConversations ConversationShare[]        @relation("CommunityShares")
+  Conversation        Conversation[]
+  userPreferences     UserCommunityPreferences[]
+}
+
+/// Appartenance aux communautés
+model CommunityMember {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  communityId String    @db.ObjectId
+  userId      String    @db.ObjectId
+  joinedAt    DateTime  @default(now())
+  /// admin, moderator, member
+  role        String    @default("member")
+  /// Whether member is currently active in the community
+  isActive    Boolean   @default(true)
+  /// When the member left the community (null if still active)
+  leftAt      DateTime?
+
+  user      User      @relation(fields: [userId], references: [id])
+  community Community @relation(fields: [communityId], references: [id])
+}
+
+/// Statistiques d'utilisation d'un utilisateur
+model UserStats {
+  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId                   String   @unique @db.ObjectId
+  messagesSent             Int      @default(0)
+  messagesReceived         Int      @default(0)
+  charactersTyped          Int      @default(0)
+  imageMessagesSent        Int      @default(0)
+  filesShared              Int      @default(0)
+  conversationsJoined      Int      @default(0)
+  communitiesCreated       Int      @default(0)
+  friendsAdded             Int      @default(0)
+  friendRequestsSent       Int      @default(0)
+  translationsUsed         Int      @default(0)
+  languagesDetected        Int      @default(0)
+  autoTranslateTimeMinutes Int      @default(0)
+  totalOnlineTimeMinutes   Int      @default(0)
+  sessionCount             Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+/// Préférences utilisateur centralisées (embedded documents JSON)
+model UserPreferences {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+
+  // ═══════════════════════════════════════════════════════════
+  // SOUS-OBJETS DE PRÉFÉRENCES (JSON Documents)
+  // ═══════════════════════════════════════════════════════════
+
+  /// Paramètres de confidentialité
+  privacy Json?
+
+  /// Paramètres audio (transcription, traduction, TTS)
+  audio Json?
+
+  /// Paramètres de messages (formatage, auto-save, etc.)
+  message Json?
+
+  /// Paramètres de notifications
+  notification Json?
+
+  /// Paramètres vidéo (calls, qualité, codec)
+  video Json?
+
+  /// Paramètres documents (preview, download, storage)
+  document Json?
+
+  /// Paramètres application (thème, langue, UI)
+  application Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation("UserPreferences", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+/// DEPRECATED: Use UserPreferences JSON instead
+/// Kept temporarily for backward compatibility
+model UserPreference {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  key         String
+  value       String
+  valueType   String   @default("string")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([key])
+  @@map("user_preference")
+}
+
+/// Préférence spécifique à une conversation
+model ConversationPreference {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String   @db.ObjectId
+  userId         String   @db.ObjectId
+  key            String
+  value          String
+  valueType      String   @default("string")
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+}
+
+/// Token d'affiliation pour inviter des utilisateurs
+model AffiliateToken {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  token       String    @unique
+  name        String // Nom de la campagne d'affiliation
+  createdBy   String    @db.ObjectId
+  maxUses     Int? // Limite d'utilisation (null = illimité)
+  currentUses Int       @default(0)
+  expiresAt   DateTime? // Date d'expiration (null = pas d'expiration)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  creator      User                @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
+  affiliations AffiliateRelation[]
+}
+
+/// Relation d'affiliation entre utilisateurs
+model AffiliateRelation {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  affiliateTokenId String    @db.ObjectId
+  affiliateUserId  String    @db.ObjectId // Utilisateur qui a invité
+  referredUserId   String    @db.ObjectId // Utilisateur invité
+  status           String    @default("pending") // pending, completed, expired
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime? // Date de finalisation de l'inscription
+
+  affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
+  affiliateUser  User           @relation("AffiliateUser", fields: [affiliateUserId], references: [id])
+  referredUser   User           @relation("ReferredUser", fields: [referredUserId], references: [id])
+}
+
+/// Lien de tracking pour compter les clics sur les liens partagés
+model TrackingLink {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  token          String    @unique // Token de 6 caractères (ex: "a1b2c3")
+  name           String? // Nom du lien (max 32 caractères)
+  originalUrl    String // URL originale complète
+  shortUrl       String // URL courte générée (meeshy.me/l/<token>)
+  createdBy      String?   @db.ObjectId // Utilisateur qui a créé le lien (null si anonyme)
+  conversationId String?   @db.ObjectId // Conversation où le lien a été partagé
+  messageId      String?   @db.ObjectId // Message contenant le lien
+  totalClicks    Int       @default(0) // Nombre total de clics
+  uniqueClicks   Int       @default(0) // Nombre de clics uniques (par IP/fingerprint)
+  isActive       Boolean   @default(true) // Le lien est-il actif
+  expiresAt      DateTime? // Date d'expiration (null = pas d'expiration)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lastClickedAt  DateTime? // Date du dernier clic
+
+  clicks  TrackingLinkClick[]
+  creator User?               @relation("TrackingLinkCreator", fields: [createdBy], references: [id])
+}
+
+/// Clic sur un lien de tracking
+model TrackingLinkClick {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  trackingLinkId    String   @db.ObjectId
+  userId            String?  @db.ObjectId // Utilisateur connecté qui a cliqué (null si anonyme)
+  anonymousId       String?  @db.ObjectId // Participant anonyme qui a cliqué
+  ipAddress         String? // Adresse IP du visiteur
+  country           String? // Pays d'origine
+  city              String? // Ville
+  region            String? // Région
+  userAgent         String? // User agent du navigateur
+  browser           String? // Navigateur détecté
+  os                String? // Système d'exploitation
+  device            String? // Type d'appareil (mobile, desktop, tablet)
+  language          String? // Langue du navigateur
+  referrer          String? // Page d'origine
+  deviceFingerprint String? // Empreinte unique du device
+  clickedAt         DateTime @default(now())
+
+  trackingLink  TrackingLink          @relation(fields: [trackingLinkId], references: [id])
+  user          User?                 @relation("TrackingLinkClickUser", fields: [userId], references: [id])
+  anonymousUser AnonymousParticipant? @relation("TrackingLinkClickAnonymous", fields: [anonymousId], references: [id])
+}
+
+/// Journal d'audit des actions administratives
+model AdminAuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// ID de l'utilisateur affecté par l'action
+  userId    String   @db.ObjectId
+  /// ID de l'administrateur qui a effectué l'action
+  adminId   String   @db.ObjectId
+  /// Type d'action (VIEW_USER, CREATE_USER, UPDATE_PROFILE, etc.)
+  action    String
+  /// Type d'entité affectée (User, Community, etc.)
+  entity    String   @default("User")
+  /// ID de l'entité affectée
+  entityId  String
+  /// Changements effectués (JSON stringifié)
+  changes   String?
+  /// Métadonnées supplémentaires (JSON stringifié)
+  metadata  String?
+  /// Adresse IP de l'admin
+  ipAddress String?
+  /// User agent du navigateur
+  userAgent String?
+  /// Date de création du log
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+/// Signalement de contenu inapproprié
+model Report {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  /// Type de contenu signalé: message, user, conversation, community
+  reportedType     String
+  /// ID de l'entité signalée
+  reportedEntityId String    @db.ObjectId
+  /// ID de l'utilisateur qui signale (null si anonyme)
+  reporterId       String?   @db.ObjectId
+  /// Nom de l'utilisateur anonyme qui signale
+  reporterName     String?
+  /// Type de signalement: spam, inappropriate, harassment, violence, hate_speech, other
+  reportType       String
+  /// Raison détaillée du signalement
+  reason           String?
+  /// Statut: pending, under_review, resolved, rejected, dismissed
+  status           String    @default("pending")
+  /// ID du modérateur qui traite le signalement
+  moderatorId      String?   @db.ObjectId
+  /// Notes du modérateur
+  moderatorNotes   String?
+  /// Action prise: none, warning_sent, content_removed, user_suspended, user_banned
+  actionTaken      String?
+  /// Date de création du signalement
+  createdAt        DateTime  @default(now())
+  /// Date de mise à jour
+  updatedAt        DateTime  @updatedAt
+  /// Date de résolution
+  resolvedAt       DateTime?
+
+  /// Relations
+  reporter  User? @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  moderator User? @relation("ReportModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
+
+  @@index([reportedType])
+  @@index([reportedEntityId])
+  @@index([reporterId])
+  @@index([status])
+  @@index([reportType])
+  @@index([createdAt])
+  @@index([resolvedAt])
+}
+
+// ============================================
+// VIDEO CALLS FEATURE - PHASE 1A: P2P MVP
+// ============================================
+
+/// Call Session - Represents an active or completed video call
+model CallSession {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String       @db.ObjectId
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// Call mode: p2p for 2 participants, sfu for 3+
+  mode CallMode @default(p2p)
+
+  /// Call status: initiated, ringing, active, ended
+  status CallStatus @default(initiated)
+
+  /// User who initiated the call
+  initiatorId String @db.ObjectId
+  initiator   User   @relation("CallInitiator", fields: [initiatorId], references: [id])
+
+  /// Timestamps
+  startedAt  DateTime  @default(now())
+  answeredAt DateTime? // When first participant answered
+  endedAt    DateTime?
+  duration   Int? // Duration in seconds
+
+  /// Participants in this call
+  participants CallParticipant[]
+
+  /// Transcriptions (Phase 2A/2B)
+  transcriptions Transcription[]
+
+  /// Call metadata
+  metadata Json? // { maxParticipants, recordingEnabled, etc. }
+
+  /// Indexes
+  @@index([conversationId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+/// Call Participant - Represents a user participating in a call
+model CallParticipant {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  callSessionId String      @db.ObjectId
+  callSession   CallSession @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
+
+  /// Authenticated user (null for anonymous)
+  userId String? @db.ObjectId
+  user   User?   @relation("CallParticipants", fields: [userId], references: [id])
+
+  /// Anonymous participant ID (from AnonymousParticipant model)
+  anonymousId   String?               @db.ObjectId
+  anonymousUser AnonymousParticipant? @relation("AnonymousCallParticipants", fields: [anonymousId], references: [id])
+
+  /// Participant role: initiator or participant
+  role ParticipantRole @default(participant)
+
+  /// Timestamps
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  /// Media state
+  isAudioEnabled Boolean @default(true)
+  isVideoEnabled Boolean @default(true)
+
+  /// Connection quality metadata
+  connectionQuality Json? // { latency, packetLoss, bandwidth }
+
+  /// Indexes
+  @@index([callSessionId])
+  @@index([userId])
+  @@index([anonymousId])
+}
+
+/// Transcription - Phase 2A/2B (prepared for future)
+/// Stores transcriptions from client or server
+model Transcription {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  callSessionId String      @db.ObjectId
+  callSession   CallSession @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
+
+  /// Participant who spoke
+  participantId String @db.ObjectId
+
+  /// Transcription source: client (Web Speech API/Whisper.js) or server (faster-whisper)
+  source TranscriptionSource
+
+  /// Transcribed text
+  text String
+
+  /// Original language detected/specified
+  language String
+
+  /// Confidence score (0-1)
+  confidence Float?
+
+  /// Timestamp in call (milliseconds from call start)
+  timestamp DateTime @default(now())
+  offsetMs  Int? // Offset from call start in milliseconds
+
+  /// Translations of this transcription (Phase 3)
+  translations TranslationCall[]
+
+  /// Indexes
+  @@index([callSessionId])
+  @@index([timestamp])
+}
+
+/// Translation - Phase 3 (prepared for future)
+/// Stores translations of transcriptions
+model TranslationCall {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  transcriptionId String        @db.ObjectId
+  transcription   Transcription @relation(fields: [transcriptionId], references: [id], onDelete: Cascade)
+
+  /// Target language code
+  targetLanguage String
+
+  /// Translated text
+  translatedText String
+
+  /// Translation confidence (0-1)
+  confidence Float?
+
+  /// Translation model used
+  model String? // e.g., "gpt-4", "google-translate", etc.
+
+  /// Cached translation
+  cached Boolean @default(false)
+
+  /// Timestamp
+  createdAt DateTime @default(now())
+
+  /// Indexes
+  @@index([transcriptionId])
+}
+
+/// Enums for video calls
+
+enum CallMode {
+  p2p // Peer-to-peer (2 participants)
+  sfu // Selective Forwarding Unit (3+ participants)
+}
+
+enum CallStatus {
+  initiated // Call created, waiting for participants
+  ringing // Ringing on remote participants
+  active // Call is active with participants
+  ended // Call has ended
+  missed // Call was not answered
+  rejected // Call was rejected by recipient
+}
+
+enum ParticipantRole {
+  initiator // User who started the call
+  participant // Regular participant
+}
+
+enum TranscriptionSource {
+  client // Client-side (Web Speech API or Whisper.js)
+  server // Server-side (faster-whisper)
+}
+
+/// User-specific conversation preferences (personal settings per conversation)
+model UserConversationPreferences {
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String @db.ObjectId
+  conversationId String @db.ObjectId
+
+  /// Pin conversation to top
+  isPinned Boolean @default(false)
+
+  /// Mute notifications for this conversation
+  isMuted Boolean @default(false)
+
+  /// Archive conversation (hide from main list)
+  isArchived Boolean @default(false)
+
+  /// User has deleted this conversation from their view (soft delete)
+  isDeletedForUser Boolean @default(false)
+
+  /// When the user deleted this conversation
+  deletedForUserAt DateTime?
+
+  /// Hide all messages before this timestamp (clear history feature)
+  clearHistoryBefore DateTime?
+
+  /// Personal tags for this conversation
+  tags String[] @default([])
+
+  /// Assigned category ID
+  categoryId String? @db.ObjectId
+
+  /// Order within category (for manual sorting)
+  orderInCategory Int?
+
+  /// Custom display name override
+  customName String?
+
+  /// Emoji reaction on conversation
+  reaction String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation              @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  category     UserConversationCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, conversationId])
+  @@index([userId])
+  @@index([conversationId])
+  @@index([categoryId])
+}
+
+/// User-defined categories for organizing conversations
+model UserConversationCategory {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  /// Category name
+  name String
+
+  /// Color hex code (optional)
+  color String?
+
+  /// Icon name/emoji (optional)
+  icon String?
+
+  /// Display order
+  order Int @default(0)
+
+  /// Accordion expanded state
+  isExpanded Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversations UserConversationPreferences[]
+
+  @@index([userId])
+  @@index([userId, order])
+}
+
+/// User-specific preferences for communities
+model UserCommunityPreferences {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  communityId String @db.ObjectId
+
+  /// Pin community to top of list
+  isPinned Boolean @default(false)
+
+  /// Mute notifications for this community
+  isMuted Boolean @default(false)
+
+  /// Archive community (hide from main list)
+  isArchived Boolean @default(false)
+
+  /// Hide community from list without leaving
+  isHidden Boolean @default(false)
+
+  /// Notification level: "all", "mentions", "none"
+  notificationLevel String @default("all")
+
+  /// Custom display name override
+  customName String?
+
+  /// Assigned category ID for organization
+  categoryId String? @db.ObjectId
+
+  /// Order within category (for manual sorting)
+  orderInCategory Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, communityId])
+  @@index([userId])
+  @@index([communityId])
+  @@index([categoryId])
+}
+
+/// =====================================================
+/// PASSWORD RESET & SECURITY MODELS
+/// =====================================================
+
+/// Password Reset Token - Stores hashed tokens for secure password reset
+model PasswordResetToken {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  /// SHA-256 hash of the token (NOT the token itself)
+  tokenHash String @unique
+
+  /// Expiry & Usage
+  expiresAt     DateTime // 15 minutes from creation
+  usedAt        DateTime? // Null if not used yet
+  isRevoked     Boolean   @default(false)
+  revokedReason String? // "MANUAL" | "SUSPICIOUS_ACTIVITY" | "PASSWORD_CHANGED" | "NEW_REQUEST"
+
+  /// Request Metadata (for anomaly detection)
+  ipAddress         String?
+  userAgent         String?
+  deviceFingerprint String?
+  geoLocation       String? // "City, Country"
+  geoCoordinates    String? // "lat,lon"
+
+  createdAt DateTime @default(now())
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+/// Phone Password Reset Token - For password reset via SMS verification
+/// Security: User must verify identity (username + email) before receiving SMS code
+model PhonePasswordResetToken {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  /// SHA-256 hash of the SMS code (NOT the code itself)
+  codeHash String
+
+  /// Expiry & Usage
+  expiresAt DateTime // 10 minutes from creation
+  usedAt    DateTime? // Null if not used yet
+  isRevoked Boolean   @default(false)
+
+  /// Verification flow step: IDENTITY_PENDING | CODE_PENDING | COMPLETED
+  verificationStep   String    @default("IDENTITY_PENDING")
+  identityVerifiedAt DateTime? // When username + email were verified
+  identityAttempts   Int       @default(0) // Failed identity verification attempts (max 3)
+  codeAttempts       Int       @default(0) // Failed code verification attempts (max 5)
+
+  /// Request Metadata (for anomaly detection)
+  ipAddress   String?
+  userAgent   String?
+  geoLocation String? // "City, Country"
+
+  createdAt DateTime @default(now())
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+/// Magic Link Token - Stores hashed tokens for passwordless login
+/// Token expires after 1 minute for security
+model MagicLinkToken {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  /// SHA-256 hash of the token (NOT the token itself)
+  tokenHash String @unique
+
+  /// Expiry & Usage
+  expiresAt     DateTime // 1 minute from creation
+  usedAt        DateTime? // Null if not used yet
+  isRevoked     Boolean   @default(false)
+  revokedReason String? // "MANUAL" | "EXPIRED" | "NEW_REQUEST"
+
+  /// Request Metadata (for security audit)
+  ipAddress         String?
+  userAgent         String?
+  deviceFingerprint String?
+  geoLocation       String? // "City, Country"
+  geoCoordinates    String? // "lat,lon"
+
+  /// Remember Device preference (stored server-side for security, not in client sessionStorage)
+  rememberDevice Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+/// Password History - Prevents password reuse
+model PasswordHistory {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String @db.ObjectId
+  passwordHash String // bcrypt hash (cost=12)
+
+  /// Metadata
+  changedVia String // "RESET" | "USER_CHANGE" | "ADMIN_RESET" | "FORCED_RESET"
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt DateTime @default(now())
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+/// Security Event - Audit log for security-related events
+model SecurityEvent {
+  id     String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId String? @db.ObjectId // Null for failed login attempts
+
+  /// Event Classification
+  eventType String // "PASSWORD_RESET_REQUEST" | "PASSWORD_RESET_SUCCESS" | "PASSWORD_RESET_FAILED" | "ACCOUNT_LOCKED" | etc.
+  severity  String // "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  status    String // "SUCCESS" | "FAILED" | "BLOCKED"
+
+  /// Event Details
+  description String?
+  metadata    Json? // Additional context
+
+  /// Request Context
+  ipAddress         String?
+  userAgent         String?
+  deviceFingerprint String?
+  geoLocation       String?
+
+  createdAt DateTime @default(now())
+
+  /// Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+/// User Session - Complete session tracking for security dashboard
+model UserSession {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  /// Session Data
+  sessionToken String  @unique // JWT token hash (SHA-256)
+  refreshToken String? @unique // For refresh token rotation
+
+  /// Device Information (parsed from User-Agent)
+  deviceType     String? // mobile, tablet, desktop, smarttv
+  deviceVendor   String? // Apple, Samsung, Huawei
+  deviceModel    String? // iPhone, Galaxy S23, Pixel 8
+  osName         String? // iOS, Android, Windows, macOS
+  osVersion      String? // 17.0, 14, 10
+  browserName    String? // Safari, Chrome, Firefox
+  browserVersion String?
+  isMobile       Boolean @default(false)
+  userAgent      String? // Raw user agent string
+
+  /// Network & Location
+  ipAddress String?
+  country   String? // ISO 3166-1 alpha-2 (FR, US)
+  city      String?
+  location  String? // "Paris, France"
+  latitude  Float?
+  longitude Float?
+  timezone  String? // IANA timezone
+
+  /// Security
+  deviceFingerprint String? // Optional browser fingerprint
+  isTrusted         Boolean @default(false) // User-marked as trusted device
+  isCurrentSession  Boolean @default(false) // Marked during response
+
+  /// Lifecycle
+  expiresAt         DateTime
+  isValid           Boolean   @default(true)
+  invalidatedAt     DateTime?
+  invalidatedReason String? // "LOGOUT" | "PASSWORD_RESET" | "USER_REVOKED" | "ADMIN_ACTION" | "EXPIRED" | "SECURITY_BREACH"
+
+  createdAt      DateTime @default(now())
+  lastActivityAt DateTime @default(now())
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([isValid])
+}
+
+/// =====================================================
+/// SIGNAL PROTOCOL E2EE - PRE-KEY BUNDLE STORAGE
+/// =====================================================
+
+/// Signal Pre-Key Bundle - Stores Signal Protocol keys for E2EE
+/// Each user has one active pre-key bundle for establishing encrypted sessions
+model SignalPreKeyBundle {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+
+  /// Identity key (public part, base64 encoded, 32 bytes)
+  identityKey String
+
+  /// Identity key (private part, encrypted + base64 encoded)
+  /// Encrypted using server master key (AES-256-GCM)
+  identityKeyPrivate String?
+
+  /// Registration ID (14-bit random number, unique per device)
+  registrationId Int
+
+  /// Device ID (for multi-device support)
+  deviceId Int @default(1)
+
+  /// One-time pre-key (consumed after first use)
+  preKeyId     Int?
+  preKeyPublic String? // Base64 encoded
+
+  /// Signed pre-key (rotated periodically, typically weekly)
+  signedPreKeyId        Int
+  signedPreKeyPublic    String // Base64 encoded
+  signedPreKeySignature String // Base64 encoded signature
+
+  /// Signed pre-key private (encrypted + base64 encoded)
+  signedPreKeyPrivate String?
+
+  /// Kyber post-quantum pre-key (future-proofing)
+  kyberPreKeyId        Int?
+  kyberPreKeyPublic    String? // Base64 encoded
+  kyberPreKeySignature String? // Base64 encoded signature
+
+  /// Pre-key pool (JSON array of one-time pre-keys)
+  /// Each entry: { id: number, publicKey: string, privateKey: string (encrypted), createdAt: string }
+  preKeyPool String? // JSON array
+
+  /// Whether this bundle is active
+  isActive Boolean @default(true)
+
+  /// Timestamps
+  createdAt     DateTime @default(now())
+  lastRotatedAt DateTime @default(now())
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lastRotatedAt])
+  @@index([isActive])
+}
+
+/// =====================================================
+/// CONVERSATION PUBLIC KEY - E2EE KEY EXCHANGE
+/// =====================================================
+
+/// Conversation Public Key - Stores public keys for E2EE conversations
+/// Used for Signal Protocol key exchange between conversation participants
+model ConversationPublicKey {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// User who owns this key
+  userId String @db.ObjectId
+
+  /// Conversation this key is for
+  conversationId String @db.ObjectId
+
+  /// Key type (identity, preKey, signedPreKey)
+  keyType String
+
+  /// The public key (base64 encoded)
+  publicKey String
+
+  /// Key identifier (for preKey and signedPreKey)
+  keyId Int?
+
+  /// Signature (for signed pre-keys)
+  signature String?
+
+  /// Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// Unique constraint - one key per user/conversation/keyType combo
+  @@unique([userId, conversationId, keyType])
+  @@index([conversationId])
+  @@index([userId])
+}
+
+/// =====================================================
+/// SERVER ENCRYPTION KEYS - ATTACHMENT ENCRYPTION
+/// =====================================================
+
+/// Server Encryption Key - Stores encrypted data keys for server/hybrid mode attachments
+/// Keys are encrypted with a master key (envelope encryption) before storage
+/// Used for audio translation in hybrid mode where server needs to decrypt
+model ServerEncryptionKey {
+  id String @id @map("_id")
+
+  /// Encrypted data key (AES-256-GCM encrypted with master key, base64 encoded)
+  encryptedKey String
+
+  /// IV used for encrypting the data key (base64 encoded, 12 bytes)
+  iv String
+
+  /// Auth tag from encrypting the data key (base64 encoded, 16 bytes)
+  authTag String
+
+  /// Algorithm used for the data key
+  algorithm String @default("aes-256-gcm")
+
+  /// Purpose of this key (attachment, audio, etc.)
+  purpose String @default("attachment")
+
+  /// Associated conversation ID (one key per conversation)
+  conversationId String? @db.ObjectId
+
+  /// Optional: Associated user ID (owner/creator)
+  userId String? @db.ObjectId
+
+  /// Key creation timestamp
+  createdAt DateTime @default(now())
+
+  /// Key expiration timestamp (null = no expiration)
+  expiresAt DateTime?
+
+  /// When the key was last accessed (for cache management)
+  lastAccessedAt DateTime @default(now())
+
+  /// Whether the key is active (can be used for decryption)
+  isActive Boolean @default(true)
+
+  /// Relation inverse - conversations using this key
+  conversations Conversation[]
+
+  @@index([conversationId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([isActive])
+}
+
+/// =====================================================
+/// DMA INTEROPERABILITY - SESSION & ENROLLMENT STORAGE
+/// =====================================================
+
+/// DMA Session - Stores Signal Protocol session state for DMA interoperability
+/// Each session represents an encrypted channel with a remote party (WhatsApp/Messenger user)
+model DMASession {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// Remote party identifier (WhatsApp internal ID, Messenger ID, etc.)
+  remotePartyId String @unique
+
+  /// Session owner (Meeshy user)
+  userId String @db.ObjectId
+
+  /// Root key from X3DH key agreement (base64 encoded, 32 bytes)
+  rootKey String
+
+  /// Current send chain key for Double Ratchet (base64 encoded, 32 bytes)
+  chainKeySend String
+
+  /// Current receive chain key for Double Ratchet (base64 encoded, 32 bytes)
+  chainKeyReceive String
+
+  /// DH ratchet public key (base64 encoded)
+  dhRatchetPublicKey String?
+
+  /// DH ratchet private key (encrypted, base64 encoded)
+  dhRatchetPrivateKey String?
+
+  /// Remote party's last DH ratchet key (base64 encoded)
+  dhRatchetRemoteKey String?
+
+  /// Session type: "signal_protocol_x3dh", "mls_group", etc.
+  sessionType String @default("signal_protocol_x3dh")
+
+  /// Session state: "pending", "established", "expired", "revoked"
+  sessionState String @default("pending")
+
+  /// Message counters for Double Ratchet
+  messageNumberSend    Int @default(0)
+  messageNumberReceive Int @default(0)
+  previousChainLength  Int @default(0)
+
+  /// Epoch for MLS group sessions
+  epoch Int @default(0)
+
+  /// Timestamps
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime?
+
+  /// Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionState])
+  @@index([lastUsedAt])
+}
+
+/// DMA Enrollment - Stores external platform user's Signal Protocol keys
+/// Used for X3DH key agreement when initiating encrypted sessions
+model DMAEnrollment {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// External platform identifier (WhatsApp internal ID, Messenger ID)
+  whatsappInternalId String @unique
+
+  /// Platform type: "whatsapp", "messenger", "imessage"
+  platform String @default("whatsapp")
+
+  /// Identity key (public part, base64 encoded, 32 bytes)
+  identityKey String
+
+  /// Signed pre-key (base64 encoded)
+  signedPreKey String
+
+  /// Signed pre-key signature (base64 encoded)
+  signedPreKeySignature String
+
+  /// Signed pre-key ID
+  signedPreKeyId Int
+
+  /// Registration ID for this enrollment
+  registrationId Int @default(0)
+
+  /// Enrollment status: "active", "revoked", "expired"
+  status String @default("active")
+
+  /// Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastVerifiedAt DateTime @default(now())
+
+  /// Relations - one-time pre-keys for this enrollment
+  preKeys PreKey[]
+
+  @@index([platform])
+  @@index([status])
+}
+
+/// Pre-Key - One-time pre-keys for X3DH key agreement
+/// Each pre-key can only be used once, then marked as consumed
+model PreKey {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// Pre-key ID (unique within enrollment)
+  preKeyId Int
+
+  /// Public key data (base64 encoded)
+  keyData String
+
+  /// Whether this key has been used
+  isUsed Boolean @default(false)
+
+  /// When the key was used
+  usedAt DateTime?
+
+  /// Who used this key (Meeshy user ID)
+  usedBy String? @db.ObjectId
+
+  /// Timestamps
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  /// Relations
+  signalEnrollmentId String        @db.ObjectId
+  signalEnrollment   DMAEnrollment @relation(fields: [signalEnrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([signalEnrollmentId, preKeyId])
+  @@index([isUsed])
+  @@index([expiresAt])
+}
+
+/// =====================================================
+/// AUDIO TRANSCRIPTION & TTS / VOICE CLONING MODELS
+/// =====================================================
+
+/// Transcription d'un message audio
+model MessageAudioTranscription {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// Relation vers l'attachment source (unique - 1 transcription par attachment)
+  attachmentId String            @unique @db.ObjectId
+  attachment   MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  /// Relation vers le message (pour requêtes directes)
+  messageId String  @db.ObjectId
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  /// Texte transcrit
+  transcribedText String
+
+  /// Langue détectée (code ISO 639-1: fr, en, es...)
+  language String
+
+  /// Score de confiance (0-1)
+  confidence Float
+
+  /// Source de la transcription: "mobile" (iOS/Android) ou "whisper" (serveur)
+  source String
+
+  /// Segments avec timestamps (JSON optionnel)
+  segments Json?
+
+  /// Durée audio en millisecondes
+  audioDurationMs Int
+
+  /// Modèle utilisé (si whisper: "whisper-large-v3")
+  model String?
+
+  /// ============================================
+  /// SPEAKER DIARIZATION (Multi-speaker support)
+  /// ============================================
+  /// Number of distinct speakers detected in the audio
+  speakerCount Int?
+
+  /// ID of the primary speaker (who speaks the most)
+  primarySpeakerId String?
+
+  /// Speaker analysis metadata as JSON:
+  /// {
+  ///   "speakers": [
+  ///     {
+  ///       "speaker_id": "speaker_0",
+  ///       "is_primary": true,
+  ///       "speaking_time_ms": 25000,
+  ///       "speaking_ratio": 0.7,
+  ///       "voice_characteristics": {...},
+  ///       "fingerprint": {...},
+  ///       "segments": [{"start": 0.0, "end": 5.0}, ...]
+  ///     }
+  ///   ],
+  ///   "clarity_score": 0.85,
+  ///   "has_background_noise": false,
+  ///   "noise_level_db": -45.0
+  /// }
+  speakerAnalysis Json?
+
+  /// Whether the sender's voice was identified in the audio
+  senderVoiceIdentified Boolean?
+
+  /// Matched speaker ID if sender was identified
+  senderSpeakerId String?
+
+  /// ============================================
+  /// VOICE QUALITY ANALYSIS (Advanced metrics)
+  /// ============================================
+  /// Comprehensive voice analysis for quality assessment and voice cloning
+  /// {
+  ///   "pitch": {
+  ///     "mean": 150.0,
+  ///     "std": 25.0,
+  ///     "min": 100.0,
+  ///     "max": 200.0,
+  ///     "contour": [150, 155, 148, ...]
+  ///   },
+  ///   "timbre": {
+  ///     "spectralCentroid": 2500.0,
+  ///     "spectralBandwidth": 1800.0,
+  ///     "spectralRolloff": 4500.0,
+  ///     "spectralFlatness": 0.15
+  ///   },
+  ///   "mfcc": {
+  ///     "coefficients": [13.5, -2.1, 5.8, ...],
+  ///     "mean": [12.0, -1.5, 5.0, ...],
+  ///     "std": [2.5, 1.2, 0.8, ...]
+  ///   },
+  ///   "energy": {
+  ///     "rms": 0.05,
+  ///     "peak": 0.8,
+  ///     "dynamicRange": 45.0
+  ///   },
+  ///   "classification": {
+  ///     "voiceType": "medium_male",
+  ///     "gender": "male",
+  ///     "ageRange": "adult",
+  ///     "confidence": 0.85
+  ///   },
+  ///   "qualityMetrics": {
+  ///     "overallScore": 0.82,
+  ///     "clarity": 0.85,
+  ///     "consistency": 0.78,
+  ///     "suitableForCloning": true
+  ///   }
+  /// }
+  voiceQualityAnalysis Json?
+
+  /// Timestamp when voice analysis was performed
+  voiceAnalysisAt DateTime?
+
+  /// Model/version used for voice analysis
+  voiceAnalysisModel String?
+
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+  @@index([language])
+  @@index([speakerCount])
+}
+
+/// Version audio traduite d'un message (une par langue destinataire)
+model MessageTranslatedAudio {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  /// Relation vers l'attachment source
+  attachmentId String            @db.ObjectId
+  attachment   MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  /// Relation vers le message
+  messageId String  @db.ObjectId
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  /// Langue de cette version (code ISO 639-1)
+  targetLanguage String
+
+  /// Texte traduit utilisé pour la synthèse
+  translatedText String
+
+  /// Chemin du fichier audio généré
+  audioPath String
+
+  /// URL accessible pour lecture
+  audioUrl String
+
+  /// Durée en millisecondes
+  durationMs Int
+
+  /// Format audio (mp3, wav, ogg)
+  format String @default("mp3")
+
+  /// Voix clonée utilisée (true si clonage vocal actif)
+  voiceCloned Boolean @default(true)
+
+  /// Qualité du clonage vocal (0-1)
+  voiceQuality Float
+
+  /// ID du modèle de voix utilisé
+  voiceModelId String? @db.ObjectId
+
+  /// Modèle TTS utilisé (xtts, openvoice)
+  ttsModel String @default("xtts")
+
+  createdAt DateTime @default(now())
+
+  /// Une seule version par attachment + langue
+  @@unique([attachmentId, targetLanguage])
+  @@index([messageId])
+  @@index([targetLanguage])
+}
+
+/// Modèle de voix cloné d'un utilisateur
+model UserVoiceModel {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+
+  /// Identifiant unique du profil vocal (vfp_xxx)
+  profileId String? @unique
+
+  /// ============================================
+  /// EMBEDDING STORAGE (Binary in MongoDB)
+  /// ============================================
+  /// Embedding vector stored as binary data (numpy array serialized)
+  /// Typically 256-512 floats = 1-2KB
+  embedding Bytes?
+
+  /// Model used to generate the embedding (e.g., "openvoice_v2", "resemblyzer")
+  embeddingModel String @default("openvoice_v2")
+
+  /// Dimension of the embedding vector (e.g., 256, 512)
+  embeddingDimension Int @default(256)
+
+  /// Legacy: Path to embedding file (deprecated, kept for migration)
+  embeddingPath String?
+
+  /// Nombre d'audios utilisés pour l'entraînement
+  audioCount Int
+
+  /// Durée totale des audios d'entraînement (ms)
+  totalDurationMs Int
+
+  /// ============================================
+  /// TRAINING AUDIO REFERENCES
+  /// ============================================
+  /// JSON array containing references to the audio attachments used for training.
+  /// This allows retrieval of original training samples and their metadata.
+  /// [
+  ///   {
+  ///     "attachmentId": "ObjectId",
+  ///     "audioUrl": "/api/v1/attachments/file/...",
+  ///     "duration": 15000,
+  ///     "language": "fr",
+  ///     "addedAt": "2025-01-18T00:00:00Z"
+  ///   }
+  /// ]
+  trainingAudioSamples Json?
+
+  /// Score de qualité du modèle (0-1)
+  /// - 0-0.3: faible (audio trop court)
+  /// - 0.3-0.5: moyen
+  /// - 0.5-0.7: bon
+  /// - 0.7-1.0: excellent
+  qualityScore Float
+
+  /// Version du modèle (incrémentée à chaque recalibration)
+  version Int @default(1)
+
+  /// ============================================
+  /// VOICE CHARACTERISTICS (Aggregated Analysis)
+  /// ============================================
+  /// JSON object containing aggregated voice analysis from all training samples:
+  /// {
+  ///   "pitch": {
+  ///     "mean": 150.0,
+  ///     "std": 25.0,
+  ///     "min": 100.0,
+  ///     "max": 200.0,
+  ///     "contour": [150, 155, 148, ...]
+  ///   },
+  ///   "timbre": {
+  ///     "spectralCentroid": 2500.0,
+  ///     "spectralBandwidth": 1800.0,
+  ///     "spectralRolloff": 4500.0,
+  ///     "spectralFlatness": 0.15,
+  ///     "brightness": 1500.0,
+  ///     "warmth": 3.5
+  ///   },
+  ///   "mfcc": {
+  ///     "coefficients": [13.5, -2.1, 5.8, ...],
+  ///     "mean": [12.0, -1.5, 5.0, ...],
+  ///     "std": [2.5, 1.2, 0.8, ...]
+  ///   },
+  ///   "energy": {
+  ///     "rms": 0.05,
+  ///     "peak": 0.8,
+  ///     "dynamicRange": 45.0
+  ///   },
+  ///   "classification": {
+  ///     "voiceType": "medium_male",
+  ///     "gender": "male",
+  ///     "ageRange": "adult",
+  ///     "confidence": 0.85
+  ///   },
+  ///   "prosody": {
+  ///     "energyMean": 0.05,
+  ///     "energyStd": 0.02,
+  ///     "silenceRatio": 0.2,
+  ///     "speechRateWpm": 130.0
+  ///   },
+  ///   "qualityMetrics": {
+  ///     "overallScore": 0.82,
+  ///     "clarity": 0.85,
+  ///     "consistency": 0.78,
+  ///     "suitableForCloning": true,
+  ///     "trainingQuality": "excellent"
+  ///   }
+  /// }
+  voiceCharacteristics Json?
+
+  /// Timestamp when voice characteristics were last analyzed
+  voiceAnalysisAt DateTime?
+
+  /// Model/version used for voice analysis
+  voiceAnalysisModel String? @default("voice_quality_analyzer_v1")
+
+  /// ============================================
+  /// VOICE FINGERPRINT (For identification)
+  /// ============================================
+  /// JSON object containing unique voice signature for quick matching.
+  /// NOTE: Does NOT contain the full embedding vector (stored in embeddingPath binary file).
+  /// The fingerprint uses hashes for fast comparison, not raw vectors.
+  /// {
+  ///   "fingerprint_id": "vfp_abc123",
+  ///   "version": "1.0",
+  ///   "signature": "sha256_hash_64_chars",
+  ///   "signature_short": "12_char_short",
+  ///   "components": { "pitch_hash": "...", "spectral_hash": "...", "prosody_hash": "..." },
+  ///   "checksum": "crc32_8_chars",
+  ///   "metadata": { "audio_duration_ms": 15000, "created_at": "2025-01-01T00:00:00Z" }
+  /// }
+  /// For vector similarity search at scale, consider using:
+  /// - MongoDB Atlas Vector Search (native)
+  /// - Pinecone / Qdrant / Milvus (dedicated vector DB)
+  fingerprint Json?
+
+  /// Short signature for quick lookups (12 chars from fingerprint)
+  signatureShort String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Prochaine recalibration prévue (mensuelle)
+  nextRecalibrationAt DateTime?
+
+  /// Relation vers l'utilisateur
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+  @@index([signatureShort])
+}
+
+/// =====================================================
+/// USER MESSAGE DELETION - Per-user "delete for me" feature
+/// =====================================================
+
+/// Tracks messages that a user has deleted from their view
+/// Other participants still see the message - only hidden for this user
+model UserMessageDeletion {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  messageId String   @db.ObjectId
+  deletedAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+  @@index([userId])
+  @@index([messageId])
+}
+
+/// =====================================================
+/// PUSH NOTIFICATION TOKENS - Device registration for push notifications
+/// =====================================================
+
+/// Stores push notification tokens for mobile/web devices
+/// Supports APNS (iOS), FCM (Firebase - iOS/Android/Web), and VoIP (iOS calls)
+model PushToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+
+  /// The push notification token from the device
+  token     String
+
+  /// Token type: apns (Apple Push), fcm (Firebase Cloud Messaging), voip (Apple VoIP Push)
+  type      String   @default("fcm")
+
+  /// Platform: ios, android, web
+  platform  String
+
+  /// Unique device identifier (for managing multiple devices per user)
+  deviceId  String?
+
+  /// Device name/model for user identification (e.g., "iPhone 15 Pro", "Pixel 8")
+  deviceName String?
+
+  /// App version when token was registered (for compatibility tracking)
+  appVersion String?
+
+  /// App bundle ID (e.g., "com.meeshy.app", "com.meeshy.app.voip")
+  bundleId   String?
+
+  /// Whether this token is currently active/valid
+  isActive  Boolean  @default(true)
+
+  /// Last time this token was successfully used to send a notification
+  lastUsedAt DateTime?
+
+  /// Number of consecutive failed delivery attempts (for cleanup)
+  failedAttempts Int @default(0)
+
+  /// Last error message if delivery failed
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Ensure unique token per user per type (user can have apns + fcm + voip)
+  @@unique([userId, token, type])
+  /// Index for efficient lookup by token (for unregistration)
+  @@index([token])
+  /// Index for finding all tokens for a user
+  @@index([userId])
+  /// Index for cleanup queries (inactive or failed tokens)
+  @@index([isActive, failedAttempts])
+  /// Index for platform-specific queries
+  @@index([platform, type])
+}

@@ -111,8 +111,8 @@ extension iPadRootView {
         case .dataExport:
             DataExportView()
                                 .navigationBarHidden(true)
-        case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
-            PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
+        case .postDetail(let postId, let initialPost, let showComments):
+            PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments)
                         case .bookmarks:
             BookmarksView()
                                 .navigationBarHidden(true)
@@ -182,14 +182,13 @@ struct iPadLeftColumnHeader: View {
                             .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
                     )
                 }
-                .accessibilityLabel(String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main))
-                .accessibilityHint(String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main))
+                .accessibilityLabel(String(localized: "root.a11y.feed_button.label", defaultValue: "Retour au flux", bundle: .main))
+                .accessibilityHint(String(localized: "root.a11y.feed_button.hint", defaultValue: "Ferme la conversation actuelle pour afficher le flux de publications.", bundle: .main))
             }
 
             Text(title)
                 .font(MeeshyFont.relative(20, weight: .bold))
                 .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -205,21 +204,19 @@ struct iPadLeftColumnHeader: View {
 
                         if notificationCount > 0 {
                             Text("\(min(notificationCount, 99))")
-                                // Doctrine 86i : compteur dans une pastille circulaire fixe 16×16 → figé.
-                                .font(.system(size: 9, weight: .bold))
+                                .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(MeeshyColors.error))
                                 .offset(x: 6, y: -6)
-                                .accessibilityHidden(true)
                         }
                     }
                 }
-                .accessibilityLabel(String(localized: "root.menu.notifications", defaultValue: "Notifications", bundle: .main))
-                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main))
+                .accessibilityLabel(String(localized: "root.a11y.notifications_button.label", defaultValue: "Notifications", bundle: .main))
                 .accessibilityValue(notificationCount > 0
-                    ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationCount)
-                    : "")
+                    ? String(format: String(localized: "root.a11y.notifications_count", defaultValue: "%d notifications non lues", bundle: .main), notificationCount)
+                    : String(localized: "root.a11y.no_notifications", defaultValue: "Aucune notification", bundle: .main))
+                .accessibilityHint(String(localized: "root.a11y.notifications_button.hint", defaultValue: "Ouvre la liste de vos alertes et interactions.", bundle: .main))
             }
 
             if let onSettingsTap {
@@ -231,8 +228,8 @@ struct iPadLeftColumnHeader: View {
                         .font(MeeshyFont.relative(16, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                 }
-                .accessibilityLabel(String(localized: "root.menu.settings", defaultValue: "Réglages", bundle: .main))
-                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main))
+                .accessibilityLabel(String(localized: "root.a11y.settings_button.label", defaultValue: "Param\u{00E8}tres", bundle: .main))
+                .accessibilityHint(String(localized: "root.a11y.settings_button.hint", defaultValue: "G\u{00E9}rez votre compte, votre profil et vos pr\u{00E9}f\u{00E9}rences.", bundle: .main))
             }
         }
         .padding(.horizontal, 16)
@@ -282,13 +279,20 @@ struct iPadResizableHandle: View {
                     isDragging = false
                 }
         )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "a11y.ipad.resize_handle", defaultValue: "Poignée de redimensionnement", bundle: .main))
-        .accessibilityHint(String(localized: "a11y.ipad.resize_handle.hint", defaultValue: "Faites glisser pour ajuster la largeur des colonnes", bundle: .main))
-        .accessibilityValue(String(format: "%.0f%%", ratio * 100))
-        .accessibilityAction(named: String(localized: "a11y.ipad.resize_handle.reset", defaultValue: "Réinitialiser la taille", bundle: .main)) {
-            withAnimation(.spring()) { ratio = 0.38 }
-        }
         .ignoresSafeArea()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "root.a11y.resize_handle.label", defaultValue: "S\u{00E9}parateur de colonnes", bundle: .main))
+        .accessibilityValue(String(format: String(localized: "root.a11y.resize_handle.value", defaultValue: "Largeur de la colonne gauche : %d%%", bundle: .main), Int(ratio * 100)))
+        .accessibilityHint(String(localized: "root.a11y.resize_handle.hint", defaultValue: "Balayez vers le haut ou le bas avec un doigt pour ajuster la largeur.", bundle: .main))
+        .accessibilityAction(.increment) {
+            withAnimation(.spring()) {
+                ratio = min(maxRatio, ratio + 0.05)
+            }
+        }
+        .accessibilityAction(.decrement) {
+            withAnimation(.spring()) {
+                ratio = max(minRatio, ratio - 0.05)
+            }
+        }
     }
 }

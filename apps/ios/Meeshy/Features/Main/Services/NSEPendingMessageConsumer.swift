@@ -22,14 +22,12 @@ final class NSEPendingMessageConsumer {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            // Modern Date.ISO8601FormatStyle supports fractional seconds and
-            // is more efficient than legacy ISO8601DateFormatter.
-            if let date = try? Date(dateStr, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
-                return date
-            }
-            if let date = try? Date(dateStr, strategy: .iso8601) {
-                return date
-            }
+            let fmtFrac = ISO8601DateFormatter()
+            fmtFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = fmtFrac.date(from: dateStr) { return date }
+            let fmtBasic = ISO8601DateFormatter()
+            fmtBasic.formatOptions = [.withInternetDateTime]
+            if let date = fmtBasic.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
 
@@ -41,11 +39,8 @@ final class NSEPendingMessageConsumer {
         var consumedFiles: [URL] = []
         for item in pending {
             guard let apiMsg = try? decoder.decode(APIMessage.self, from: item.data) else {
-                // Corrupt payload — log and drop so it isn't re-read every launch.
-                logger.error("NSE prefetch decode failed for \(item.conversationId, privacy: .public) — dropping \(item.url.lastPathComponent, privacy: .public)")
-                do { try fm.removeItem(at: item.url) } catch {
-                    logger.error("NSE prefetch file removal failed: \(error.localizedDescription, privacy: .public)")
-                }
+                // Corrupt payload — drop it instead of re-reading it every launch.
+                try? fm.removeItem(at: item.url)
                 continue
             }
             decodedAPIMessages.append(apiMsg)

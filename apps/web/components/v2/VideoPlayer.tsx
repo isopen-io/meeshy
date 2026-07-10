@@ -3,7 +3,6 @@
 import { forwardRef, useRef, useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/use-i18n';
-import { formatDuration } from '@/utils/audio-formatters';
 
 export interface VideoPlayerProps {
   /** Video source URL */
@@ -20,6 +19,20 @@ export interface VideoPlayerProps {
   onEnded?: () => void;
   /** Additional CSS classes */
   className?: string;
+}
+
+/**
+ * Format seconds to MM:SS or HH:MM:SS
+ */
+function formatDuration(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(

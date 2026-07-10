@@ -41,8 +41,6 @@ final class StoryActiveBridgeTests: XCTestCase {
 
         XCTAssertEqual(coordinator.lastRequest?.initialAction, .showCommentsOverlay)
         XCTAssertEqual(coordinator.lastRequest?.id, "user-42")
-        XCTAssertEqual(coordinator.lastRequest?.postId, "p1",
-                       "R4 inc.2: the notification request must carry the exact story post id so the container can unit-fetch it when absent from the tray")
         XCTAssertEqual(coordinator.presentCallCount, 1)
     }
 

@@ -76,6 +76,7 @@ export interface ConversationParticipantResponse {
   lastName: string;
   displayName: string;
   avatar: string | null;
+  email: string;
   role: string;
   conversationRole: string;
   joinedAt: string;

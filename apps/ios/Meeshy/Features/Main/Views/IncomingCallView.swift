@@ -12,9 +12,11 @@ struct IncomingCallView: View {
     // Receive the manager from the parent so SwiftUI keeps the same
     // subscription throughout the view's lifetime.
     @ObservedObject var callManager: CallManager
+    @Environment(\.colorScheme) private var colorScheme
     // Audit P2-iOS-9 — see CallView; skip repeating animations for
     // motion-sensitive users.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var ringScale: CGFloat = 0.8
     @State private var ringOpacity: Double = 1.0
@@ -55,21 +57,6 @@ struct IncomingCallView: View {
             actionButtons
                 .padding(.bottom, 80)
         }
-        .onAppear {
-            let callerName = callManager.remoteUsername
-                ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main)
-            let callTypeLabel = callManager.isVideoEnabled
-                ? String(localized: "call.incoming.video", defaultValue: "Appel video entrant", bundle: .main)
-                : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main)
-            UIAccessibility.post(
-                notification: .screenChanged,
-                argument: String(
-                    localized: "call.incoming.a11y.announced",
-                    defaultValue: "\(callTypeLabel), \(callerName)",
-                    bundle: .main
-                )
-            )
-        }
     }
 
     // MARK: - Ring Animation
@@ -97,7 +84,8 @@ struct IncomingCallView: View {
                     .scaleEffect(ringScale)
                     .opacity(ringOpacity - Double(index) * 0.15)
                     .animation(
-                        reduceMotion ? nil
+                        reduceMotion
+                            ? nil
                             : .easeInOut(duration: 1.2)
                                 .repeatForever(autoreverses: true)
                                 .delay(Double(index) * 0.2),
@@ -151,16 +139,31 @@ struct IncomingCallView: View {
                 .foregroundColor(.white)
         }
         .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)
+        .accessibilityLabel(name)
     }
 
     // MARK: - Call Type Badge
 
     private var callTypeBadge: some View {
-        CallTypeBadgeView(
-            isVideo: callManager.isVideoEnabled,
-            label: callManager.isVideoEnabled
+        HStack(spacing: 6) {
+            Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
+                .font(MeeshyFont.relative(12, weight: .semibold))
+                .accessibilityHidden(true)
+            Text(callManager.isVideoEnabled
                 ? String(localized: "call.incoming.badge.video", defaultValue: "Video", bundle: .main)
-                : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main)
+                : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main))
+                .font(.caption2.weight(.semibold))
+        }
+        .foregroundColor(MeeshyColors.indigo400)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(MeeshyColors.indigo400.opacity(0.15))
+                .overlay(
+                    Capsule()
+                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 0.5)
+                )
         )
     }
 

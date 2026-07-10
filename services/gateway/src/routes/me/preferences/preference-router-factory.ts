@@ -10,7 +10,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { withMutationLog } from '../../../utils/withMutationLog';
-import { sendSuccess, sendForbidden, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 
 type PreferenceCategory =
   | 'privacy'
@@ -158,7 +158,7 @@ export function createPreferenceRouter<T>(
               success: false,
               error: 'CONSENT_REQUIRED',
               message: 'Missing required consents for requested preferences',
-              violations: consentViolations,
+              violations: consentViolations
             });
           }
 
@@ -199,7 +199,12 @@ export function createPreferenceRouter<T>(
           return sendSuccess(reply, (updated as any)[category] as T);
         } catch (error: any) {
           if (error.name === 'ZodError') {
-            return sendBadRequest(reply, 'VALIDATION_ERROR');
+            return reply.status(400).send({
+              success: false,
+              error: 'VALIDATION_ERROR',
+              message: 'Invalid preference data',
+              details: error.errors
+            });
           }
 
           fastify.log.error({ error, category }, 'Error updating preferences');
@@ -275,7 +280,7 @@ export function createPreferenceRouter<T>(
               success: false,
               error: 'CONSENT_REQUIRED',
               message: 'Missing required consents for requested preferences',
-              violations: consentViolations,
+              violations: consentViolations
             });
           }
 
@@ -313,7 +318,12 @@ export function createPreferenceRouter<T>(
           return sendSuccess(reply, (updated as any)[category] as T);
         } catch (error: any) {
           if (error.name === 'ZodError') {
-            return sendBadRequest(reply, 'VALIDATION_ERROR');
+            return reply.status(400).send({
+              success: false,
+              error: 'VALIDATION_ERROR',
+              message: 'Invalid preference data',
+              details: error.errors
+            });
           }
 
           fastify.log.error({ error, category }, 'Error partially updating preferences');

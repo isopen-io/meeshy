@@ -159,7 +159,7 @@ struct TermsOfServiceView: View {
             }
 
             Text(content)
-                .font(MeeshyFont.relative(14, weight: .regular))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textSecondary)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)

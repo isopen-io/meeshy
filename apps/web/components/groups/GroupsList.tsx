@@ -24,7 +24,7 @@ interface GroupsListProps {
   onTabChange: (tab: string) => void;
   onSearchChange: (search: string) => void;
   onSelectGroup: (group: Group) => void;
-  onCopyIdentifier: (identifier: string, e: React.MouseEvent | React.KeyboardEvent) => void;
+  onCopyIdentifier: (identifier: string, e: React.MouseEvent) => void;
   onCreateClick: () => void;
   tGroups: (key: string) => string;
 }

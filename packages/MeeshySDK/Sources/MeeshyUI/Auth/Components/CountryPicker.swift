@@ -136,13 +136,6 @@ public struct CountryPicker: View {
         country(forPhoneNumber: number)?.flag ?? globeFlag
     }
 
-    /// Libellé VoiceOver d'un pays, ex. « France, +33 ».
-    /// L'emoji drapeau est volontairement omis : VoiceOver le vocalise
-    /// « drapeau de la France », ce qui fait doublon avec le nom localisé.
-    public static func accessibilityLabel(for country: CountryCode) -> String {
-        "\(country.name), \(country.dialCode)"
-    }
-
     private static func buildCountries() -> [CountryCode] {
         let locale = Locale.current
         let rank = Dictionary(uniqueKeysWithValues: priority.enumerated().map { ($1, $0) })
@@ -186,7 +179,6 @@ public struct CountryPicker: View {
                     Image(systemName: "chevron.down")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 14)
@@ -200,9 +192,6 @@ public struct CountryPicker: View {
                 )
             }
             .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Self.accessibilityLabel(for: selectedCountry))
-            .accessibilityHint(String(localized: "auth.countryPicker.selector.hint", defaultValue: "Changer de pays", bundle: .module))
 
             // Phone number field
             TextField(String(localized: "auth.countryPicker.phoneNumber", defaultValue: "Numero de telephone", bundle: .module), text: $phoneNumber)
@@ -234,8 +223,6 @@ public struct CountryPicker: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(Self.accessibilityLabel(for: country))
                 }
                 .searchable(text: $searchText, prompt: String(localized: "auth.countryPicker.searchPrompt", defaultValue: "Rechercher un pays", bundle: .module))
                 .navigationTitle(String(localized: "auth.countryPicker.title", defaultValue: "Pays", bundle: .module))
@@ -247,7 +234,6 @@ public struct CountryPicker: View {
                 }
             }
             .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
     }
 }

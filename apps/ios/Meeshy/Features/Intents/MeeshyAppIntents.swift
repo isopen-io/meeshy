@@ -103,10 +103,8 @@ struct SendMessageIntent: AppIntent {
 
         // Build deep link
         let urlString = "meeshy://send?contactId=\(selectedContact.id)&message=\(messageText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
-        guard let url = URL(string: urlString) else {
-            throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
-        }
-        return .result(opensIntent: OpenURLIntent(url))
+
+        return .result(opensIntent: OpenURLIntent(URL(string:urlString)!))
     }
 }
 
@@ -149,10 +147,8 @@ struct CallContactIntent: AppIntent {
 
         let type = callType == .video ? "video" : "audio"
         let urlString = "meeshy://call?contactId=\(selectedContact.id)&type=\(type)"
-        guard let url = URL(string: urlString) else {
-            throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
-        }
-        return .result(opensIntent: OpenURLIntent(url))
+
+        return .result(opensIntent: OpenURLIntent(URL(string:urlString)!))
     }
 }
 
@@ -210,10 +206,8 @@ struct TranslateTextIntent: AppIntent {
         }
 
         let urlString = "meeshy://translate?text=\(textToTranslate.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&target=\(targetLanguage.rawValue)"
-        guard let url = URL(string: urlString) else {
-            throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
-        }
-        return .result(opensIntent: OpenURLIntent(url))
+
+        return .result(opensIntent: OpenURLIntent(URL(string:urlString)!))
     }
 }
 
@@ -320,7 +314,7 @@ struct ContactEntity: AppEntity {
         DisplayRepresentation(
             title: "\(name)",
             subtitle: "",
-            image: avatar.flatMap { URL(string: $0) }.map { DisplayRepresentation.Image(url: $0) }
+            image: avatar != nil ? DisplayRepresentation.Image(url: URL(string: avatar!)!) : nil
         )
     }
 }

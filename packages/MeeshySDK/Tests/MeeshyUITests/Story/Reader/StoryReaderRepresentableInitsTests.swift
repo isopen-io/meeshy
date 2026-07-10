@@ -20,26 +20,6 @@ final class StoryReaderRepresentableInitsTests: XCTestCase {
         XCTAssertEqual(rep.mute, true)
     }
 
-    /// RF3: the repost init must forward `isPaused` (defaulting false) so the
-    /// PostDetail STORY-repost canvas gets the same off-screen + call-aware pause
-    /// wiring as the native story canvas — without it, an unmuted repost would
-    /// play with sound while scrolled off-screen.
-    func test_initRepost_forwardsIsPaused() {
-        let repost = RepostContent(
-            id: "r1", author: "Bob", authorId: "u1",
-            authorUsername: "bob", content: "",
-            storyEffects: StoryEffects(), media: []
-        )
-        let paused = StoryReaderRepresentable(
-            repost: repost, preferredContentLanguages: ["fr"], mute: false, isPaused: true
-        )
-        XCTAssertTrue(paused.isPaused)
-        XCTAssertFalse(paused.mute)
-
-        let playing = StoryReaderRepresentable(repost: repost, mute: false)
-        XCTAssertFalse(playing.isPaused, "isPaused defaults to false (backward-compatible)")
-    }
-
     func test_initPost_buildsRepresentable() {
         let author = APIAuthor(id: "u1", username: "alice", displayName: "Alice", avatar: nil)
         let post = APIPost(

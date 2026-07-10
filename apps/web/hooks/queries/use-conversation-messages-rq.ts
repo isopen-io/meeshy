@@ -17,7 +17,6 @@ import { apiService } from '@/services/api.service';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
 import { useConversationUIStore } from '@/stores/conversation-ui-store';
 import { messagesService } from '@/services/conversations/messages.service';
-import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type { Message, User } from '@meeshy/shared/types';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
@@ -512,63 +511,6 @@ export function useConversationMessagesRQ(
       };
     });
   }, [queryClient, conversationId, queryKey]);
-
-  // Sync messages missed during a socket disconnection gap.
-  // Fires when the socket transitions false → true (reconnect), not on initial mount.
-  // Uses the `after` watermark to fetch only messages newer than the local cache's
-  // newest entry — avoids the destructive full-page replacement that caused the
-  // "message appears then disappears" regression (see refetchOnReconnect: false comment).
-  const { isSocketConnected } = useConnectionStatus();
-  const prevSocketConnectedRef = useRef<boolean | null>(null);
-
-  useEffect(() => {
-    const prev = prevSocketConnectedRef.current;
-    prevSocketConnectedRef.current = isSocketConnected;
-
-    const isReconnect = prev === false && isSocketConnected === true;
-    if (!isReconnect || !conversationId || linkId) return;
-
-    const sync = async () => {
-      const cached = queryClient.getQueryData<typeof data>(queryKey);
-      if (!cached) return;
-
-      const allCached = cached.pages.flatMap(p => p.messages);
-      if (allCached.length === 0) return;
-
-      const newestMs = allCached.reduce((max, m) => {
-        const t = m.createdAt ? new Date(m.createdAt).getTime() : 0;
-        return t > max ? t : max;
-      }, 0);
-      if (newestMs === 0) return;
-
-      try {
-        const after = new Date(newestMs).toISOString();
-        const result = await conversationsService.getMessages(conversationId, 1, 50, null, undefined, after);
-        const missed = result.messages ?? [];
-        if (missed.length === 0) return;
-
-        const cachedIds = new Set(allCached.map(m => m.id));
-        const genuinelyNew = missed.filter(m => !cachedIds.has(m.id));
-        if (genuinelyNew.length === 0) return;
-
-        queryClient.setQueryData(queryKey, (old: typeof data) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page, i) =>
-              i === 0
-                ? { ...page, messages: [...genuinelyNew, ...page.messages] }
-                : page
-            ),
-          };
-        });
-      } catch {
-        // Silent — socket events will carry new messages going forward
-      }
-    };
-
-    sync();
-  }, [isSocketConnected, conversationId, linkId, queryClient, queryKey]);
 
   return {
     messages,

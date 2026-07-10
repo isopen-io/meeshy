@@ -149,17 +149,8 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
           </div>
         ) : (
           <div
-            role="button"
-            tabIndex={0}
-            aria-label={t('conversationDetails.editCustomName')}
-            className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors"
             onClick={() => setIsEditingName(true)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setIsEditingName(true);
-              }
-            }}
           >
             <Type className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm flex-1">
@@ -227,17 +218,8 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
           </div>
         ) : (
           <div
-            role="button"
-            tabIndex={0}
-            aria-label={t('conversationDetails.editReaction')}
-            className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors"
             onClick={() => setIsEditingReaction(true)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setIsEditingReaction(true);
-              }
-            }}
           >
             <Smile className="h-4 w-4 text-muted-foreground" />
             <span className="text-2xl flex-1">

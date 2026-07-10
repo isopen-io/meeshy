@@ -35,12 +35,7 @@
     "minutesAgo": "hace {count} min",
     "hoursAgo": "hace {count}h",
     "daysAgo": "hace {count}d",
-    "lastSeenDate": "Visto el {date}",
-    "lastSeenMinutes": "Visto hace {count} min",
-    "lastSeenHours": "Visto hace {count}h",
-    "lastSeenYesterday": "Visto ayer a las {time}",
-    "lastSeenBeforeYesterday": "Visto anteayer a las {time}",
-    "lastSeenDateTime": "Visto el {date} a las {time}"
+    "lastSeenDate": "Visto el {date}"
   },
   "actions": {
     "menu": "Menú de acciones",

@@ -87,26 +87,6 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertNil(context.callSessionId)
     }
 
-    func testNotificationContextDecodesCommentNavigationIds() throws {
-        let json = """
-        {"postId":"post1","commentId":"reply-9","parentCommentId":"parent-3"}
-        """.data(using: .utf8)!
-
-        let context = try JSONDecoder().decode(NotificationContext.self, from: json)
-        XCTAssertEqual(context.commentId, "reply-9")
-        XCTAssertEqual(context.parentCommentId, "parent-3")
-    }
-
-    func testNotificationMetadataDecodesParentCommentId() throws {
-        let json = """
-        {"postId":"post1","commentId":"reply-9","parentCommentId":"parent-3","action":"view_post"}
-        """.data(using: .utf8)!
-
-        let metadata = try JSONDecoder().decode(NotificationMetadata.self, from: json)
-        XCTAssertEqual(metadata.commentId, "reply-9")
-        XCTAssertEqual(metadata.parentCommentId, "parent-3")
-    }
-
     // MARK: - NotificationState
 
     func testNotificationStateDecoding() throws {

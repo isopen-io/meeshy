@@ -9,6 +9,7 @@ import { MeeshySocketIOManager } from './MeeshySocketIOManager';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { requireAdmin } from '../middleware/auth';
 
 export class MeeshySocketIOHandler {
@@ -111,6 +112,24 @@ export class MeeshySocketIOHandler {
    */
   public getManager(): MeeshySocketIOManager | null {
     return this.socketIOManager;
+  }
+
+  /**
+   * Méthode pour envoyer des notifications push via Socket.IO
+   */
+  public async sendNotificationToUser(userId: string, notification: any): Promise<void> {
+    try {
+      if (this.socketIOManager) {
+        const sent = this.socketIOManager.sendToUser(userId, SERVER_EVENTS.NOTIFICATION, notification);
+        if (sent) {
+          logger.info(`📱 Notification envoyée à l'utilisateur ${userId}`, notification);
+        } else {
+          logger.warn(`⚠️ Utilisateur ${userId} non connecté pour notification`);
+        }
+      }
+    } catch (error) {
+      logger.error('Erreur envoi notification:', error);
+    }
   }
 
   /**

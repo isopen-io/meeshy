@@ -95,11 +95,7 @@ export function AudioEffectsPanel({
       <Label className="text-gray-300 text-[10px] font-semibold">{label}</Label>
       <Popover>
         <PopoverTrigger asChild>
-          <button
-            type="button"
-            aria-label={t('moreInfo')}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
+          <button type="button" className="text-gray-400 hover:text-white transition-colors">
             <Info className="w-3 h-3" />
           </button>
         </PopoverTrigger>
@@ -193,11 +189,7 @@ export function AudioEffectsPanel({
               {/* Tooltip Info - visible sur mobile */}
               <Popover>
                 <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={t('moreInfo')}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
+                  <button className="text-gray-400 hover:text-white transition-colors">
                     <Info className="w-3 h-3" />
                   </button>
                 </PopoverTrigger>

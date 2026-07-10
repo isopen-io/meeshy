@@ -129,7 +129,7 @@ struct PrivacyPolicyView: View {
     // MARK: - Last Updated
 
     private var lastUpdated: some View {
-        Text(selectedLanguage == "fr" ? String(localized: "legal.privacy.lastUpdated.fr", defaultValue: "Derniere mise a jour : 24 fevrier 2026", bundle: .main) : String(localized: "legal.privacy.lastUpdated.en", defaultValue: "Last updated: February 24, 2026", bundle: .main))
+        Text(selectedLanguage == "fr" ? "Derniere mise a jour : 24 fevrier 2026" : "Last updated: February 24, 2026")
             .font(MeeshyFont.relative(12, weight: .medium))
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -151,7 +151,7 @@ struct PrivacyPolicyView: View {
             }
 
             Text(content)
-                .font(MeeshyFont.relative(14, weight: .regular))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textSecondary)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)

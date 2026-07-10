@@ -457,8 +457,7 @@ fileprivate struct BubbleGridCell: View {
                 HStack {
                     Spacer()
                     Text("\(attachment.viewOnceCount)")
-                        // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
                         .background(
@@ -619,8 +618,6 @@ fileprivate struct BubbleGridVideoThumbnailView: View {
                 .fill(Color(hex: contactColor).opacity(0.85))
                 .frame(width: solo ? 42 : 30, height: solo ? 42 : 30)
             Image(systemName: "play.fill")
-                // Doctrine 86i : glyphe play dans un cercle de lecture de dimension fixe
-                // (48/36) → taille figée, proportionnée au cercle (ne doit pas déborder).
                 .font(.system(size: solo ? 18 : 12, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: solo ? 2 : 1)
@@ -786,14 +783,12 @@ struct BubbleCarouselView: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "xmark")
-                    // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))
                     .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
             }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
             Spacer()
 
@@ -906,7 +901,6 @@ struct BubbleCarouselView: View {
                     Image(systemName: "photo")
                         .font(MeeshyFont.relative(28))
                         .foregroundColor(.white.opacity(0.4))
-                        .accessibilityHidden(true)
                 )
         }
     }
@@ -944,7 +938,7 @@ struct BubbleCarouselView: View {
             // le cache image (téléchargement complet + échec de décodage
             // UIImage). On prefetch le thumbnail uniquement ; si absent, skip.
             let urlStr: String = attachment.type == .video
-                ? (attachment.thumbnailUrl ?? "")
+                ? (attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl! : "")
                 : (attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl)
             guard !urlStr.isEmpty else { continue }
             Task {

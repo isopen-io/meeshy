@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowRight, Home, Zap, Globe, Sparkles } from 'lucide-react';
+import { ArrowRight, Home, Zap, Globe, Sparkles, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LargeLogo } from '@/components/branding';
 import { useI18n } from '@/hooks/useI18n';
 import { buildApiUrl } from '@/lib/config';
-import { getUserInitials } from '@/lib/avatar-utils';
 
 interface InviterInfo {
   firstName: string | null;
@@ -65,6 +64,15 @@ export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps
     return inviter.username;
   };
 
+  // Get initials for avatar fallback
+  const getInitials = () => {
+    if (!inviter) return '';
+    if (inviter.firstName) {
+      return `${inviter.firstName[0]}${inviter.lastName?.[0] || ''}`.toUpperCase();
+    }
+    return inviter.username.substring(0, 2).toUpperCase();
+  };
+
   const features = [
     { icon: Zap, label: t('landing.feature1') },
     { icon: Globe, label: t('landing.feature2') },
@@ -115,7 +123,7 @@ export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps
                   <Avatar className="h-16 w-16 ring-4 ring-violet-200 dark:ring-violet-800">
                     <AvatarImage src={inviter.avatar || undefined} alt={getInviterDisplayName() || ''} />
                     <AvatarFallback className="bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 text-lg font-semibold">
-                      {getUserInitials(inviter)}
+                      {getInitials() || <User className="h-6 w-6" />}
                     </AvatarFallback>
                   </Avatar>
                   <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1">

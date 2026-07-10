@@ -181,60 +181,6 @@ describe('AuthMiddleware', () => {
       expect(ctx.userLanguage).toBe('de')
     })
 
-    it('uses deviceLocale (Prisme 4th priority) when all in-app language prefs are absent', async () => {
-      const user = createTestUser({
-        systemLanguage: null,
-        regionalLanguage: null,
-        customDestinationLanguage: null,
-        deviceLocale: 'en-US',
-      })
-      const prisma = createMockPrisma({
-        userFindUnique: jest.fn().mockResolvedValue(user),
-      })
-      const middleware = new AuthMiddleware(prisma as never)
-      const token = signJwt(user.id)
-
-      const ctx = await middleware.createAuthContext(`Bearer ${token}`)
-
-      expect(ctx.userLanguage).toBe('en')
-    })
-
-    it('does not let deviceLocale supplant an in-app systemLanguage', async () => {
-      const user = createTestUser({
-        systemLanguage: 'fr',
-        regionalLanguage: null,
-        customDestinationLanguage: null,
-        deviceLocale: 'en',
-      })
-      const prisma = createMockPrisma({
-        userFindUnique: jest.fn().mockResolvedValue(user),
-      })
-      const middleware = new AuthMiddleware(prisma as never)
-      const token = signJwt(user.id)
-
-      const ctx = await middleware.createAuthContext(`Bearer ${token}`)
-
-      expect(ctx.userLanguage).toBe('fr')
-    })
-
-    it('falls back to fr when in-app prefs and deviceLocale are all absent', async () => {
-      const user = createTestUser({
-        systemLanguage: null,
-        regionalLanguage: null,
-        customDestinationLanguage: null,
-        deviceLocale: null,
-      })
-      const prisma = createMockPrisma({
-        userFindUnique: jest.fn().mockResolvedValue(user),
-      })
-      const middleware = new AuthMiddleware(prisma as never)
-      const token = signJwt(user.id)
-
-      const ctx = await middleware.createAuthContext(`Bearer ${token}`)
-
-      expect(ctx.userLanguage).toBe('fr')
-    })
-
     it('throws for invalid JWT', async () => {
       const prisma = createMockPrisma()
       const middleware = new AuthMiddleware(prisma as never)

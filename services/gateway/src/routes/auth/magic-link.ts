@@ -198,11 +198,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           where: { id: activeSession.id },
           data: {
             expiresAt: nextExpiresAt,
-            // P7-3 : le champ du modèle UserSession est `lastActivityAt` —
-            // `lastActiveAt` (champ du modèle User) levait
-            // PrismaClientValidationError sur CHAQUE refresh, avalée par le
-            // .catch ci-dessous → le sliding window n'a jamais fonctionné.
-            lastActivityAt: now
+            lastActiveAt: now
           }
         }).catch((err: unknown) => {
           logger.warn('Failed to slide session expiresAt on refresh', { err });

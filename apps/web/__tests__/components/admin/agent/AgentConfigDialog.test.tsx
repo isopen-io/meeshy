@@ -24,10 +24,6 @@ jest.mock('sonner', () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-jest.mock('@/lib/clipboard', () => ({
-  copyToClipboard: jest.fn().mockResolvedValue({ success: true, message: 'ok' }),
-}));
-
 jest.mock('next/dynamic', () => (loader: any, opts?: any) => {
   loader().catch(() => {});
   return () => null;
@@ -117,13 +113,12 @@ jest.mock('@/components/ui/label', () => ({
 }));
 
 jest.mock('@/components/ui/badge', () => ({
-  Badge: ({ children, onClick, variant, ...rest }: any) => (
+  Badge: ({ children, onClick, variant }: any) => (
     <span
       data-testid="badge"
       data-variant={variant}
       onClick={onClick}
       style={{ cursor: 'pointer' }}
-      {...rest}
     >
       {children}
     </span>
@@ -731,59 +726,6 @@ describe('AgentConfigDialog — form interactions', () => {
     expect(userBadge).toHaveAttribute('data-variant', 'outline');
   });
 
-  it('exposes role badges as keyboard-operable toggle buttons', async () => {
-    render(
-      <AgentConfigDialog
-        open={true}
-        onOpenChange={jest.fn()}
-        config={makeConfig({ excludedRoles: ['USER'] })}
-        onSave={jest.fn()}
-      />,
-    );
-    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
-    const badges = screen.getAllByTestId('badge');
-    const userBadge = badges.find(b => b.textContent === 'USER')!;
-    const adminBadge = badges.find(b => b.textContent === 'ADMIN')!;
-    expect(userBadge).toHaveAttribute('role', 'button');
-    expect(userBadge).toHaveAttribute('tabindex', '0');
-    expect(userBadge).toHaveAttribute('aria-pressed', 'true');
-    expect(adminBadge).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  it('toggles a role badge into excludedRoles via the Enter key', async () => {
-    render(
-      <AgentConfigDialog
-        open={true}
-        onOpenChange={jest.fn()}
-        config={makeConfig({ excludedRoles: [] })}
-        onSave={jest.fn()}
-      />,
-    );
-    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
-    const userBadge = screen.getAllByTestId('badge').find(b => b.textContent === 'USER')!;
-    fireEvent.keyDown(userBadge, { key: 'Enter' });
-    expect(userBadge).toHaveAttribute('data-variant', 'destructive');
-    expect(userBadge).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  it('toggles a role badge via the Space key and ignores neutral keys', async () => {
-    render(
-      <AgentConfigDialog
-        open={true}
-        onOpenChange={jest.fn()}
-        config={makeConfig({ excludedRoles: [] })}
-        onSave={jest.fn()}
-      />,
-    );
-    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
-    const userBadge = screen.getAllByTestId('badge').find(b => b.textContent === 'USER')!;
-    fireEvent.keyDown(userBadge, { key: 'Tab' });
-    expect(userBadge).toHaveAttribute('data-variant', 'outline');
-    fireEvent.keyDown(userBadge, { key: ' ' });
-    expect(userBadge).toHaveAttribute('data-variant', 'destructive');
-    expect(userBadge).toHaveAttribute('aria-pressed', 'true');
-  });
-
   it('updates weekdayMaxMessages input', async () => {
     render(
       <AgentConfigDialog
@@ -1148,8 +1090,8 @@ describe('AgentConfigDialog — edit mode with convMeta', () => {
   });
 
   it('copies conversation id to clipboard when ID button is clicked', async () => {
-    const { copyToClipboard: mockCopyToClipboard } = jest.requireMock('@/lib/clipboard');
-    mockCopyToClipboard.mockResolvedValue({ success: true, message: 'ok' });
+    const mockWriteText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText: mockWriteText } });
     mockGetConversation.mockResolvedValue({
       id: '507f1f77bcf86cd799439011',
       type: 'group',
@@ -1172,8 +1114,8 @@ describe('AgentConfigDialog — edit mode with convMeta', () => {
     await waitFor(() => expect(screen.getByText('agentConfig.conversationSection')).toBeInTheDocument());
     const idButton = screen.getByText('507f1f77bcf86cd799439011');
     fireEvent.click(idButton);
-    await waitFor(() => expect(mockCopyToClipboard).toHaveBeenCalledWith('507f1f77bcf86cd799439011'));
-    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('copied'));
+    await waitFor(() => expect(mockWriteText).toHaveBeenCalledWith('507f1f77bcf86cd799439011'));
+    expect(mockToastSuccess).toHaveBeenCalledWith('copied');
   });
 });
 

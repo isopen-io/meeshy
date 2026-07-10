@@ -1,12 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
-import { config } from '@/lib/config';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
@@ -34,18 +31,10 @@ export interface StoryTextObjectData {
   sourceLanguage?: string;
   textStyle?: 'bold' | 'neon' | 'typewriter' | 'handwriting';
   textColor?: string;
-  /// Legacy css-px size (old web payloads). Rendered as raw `px`.
   textSize?: number;
-  /// Canonical iOS size in design pixels on the 1080-wide reference canvas.
-  /// Rendered relative to the live canvas width (`cqw`) so a story authored on
-  /// iOS keeps the same proportions on web instead of being ~2.25× too large.
-  fontSizeDesign?: number;
   textAlign?: string;
   textBg?: string;
   zIndex?: number;
-  /// W1 — timing par élément + keyframes posés par le composer iOS.
-  startTime?: number;
-  keyframes?: StoryKeyframeData[];
 }
 
 export interface StoryMediaObjectData {
@@ -58,9 +47,6 @@ export interface StoryMediaObjectData {
   rotation: number;
   isBackground?: boolean;
   zIndex?: number;
-  /// W1 inc.2 — timing par élément + keyframes posés par le composer iOS.
-  startTime?: number;
-  keyframes?: StoryKeyframeData[];
 }
 
 export interface StoryAudioObjectData {
@@ -94,9 +80,6 @@ interface StoryData {
     textObjects?: StoryTextObjectData[];
     mediaObjects?: StoryMediaObjectData[];
     audioObjects?: StoryAudioObjectData[];
-    /// W1 inc.4 — crossfades intra-slide entre clips foreground (parité
-    /// reader iOS R14). Passthrough intégral depuis le JSON serveur.
-    clipTransitions?: StoryClipTransitionData[];
     /// Slide duration in milliseconds (5000 default if absent). Without this,
     /// every story fell to the hardcoded 5s STORY_DURATION even when the author
     /// set a longer duration to fit a 30s video.
@@ -130,10 +113,6 @@ interface StoryViewerProps {
 // ============================================================================
 
 const DEFAULT_STORY_DURATION_MS = 6000;
-
-/// Reference canvas width the iOS composer authors against (`CanvasGeometry`).
-/// Design-pixel text sizes are projected back to the live canvas relative to it.
-const STORY_DESIGN_WIDTH = 1080;
 
 const FILTER_MAP: Record<string, string> = {
   vintage: 'sepia(0.5) saturate(1.3)',
@@ -214,21 +193,9 @@ function parseBackground(bg?: string): React.CSSProperties {
     return { background: `linear-gradient(135deg, ${from}, ${to})` };
   }
 
-  // W7 — treat as image URL, but ONLY internal/allow-listed ones: an
-  // arbitrary URL here would make every viewer of the story issue a request
-  // to a third-party host (tracking pixel / viewer IP-leak). Anything else
-  // falls back to the default gradient.
-  const allowedOrigins = typeof window !== 'undefined'
-    ? [window.location.origin, config.backend.url]
-    : [config.backend.url];
-  const safe = safeBackgroundImageUrl(bg, allowedOrigins);
-  if (!safe) {
-    return {
-      background: 'linear-gradient(135deg, var(--gp-terracotta), var(--gp-deep-teal))',
-    };
-  }
+  // Treat as image URL
   return {
-    backgroundImage: `url(${safe})`,
+    backgroundImage: `url(${bg})`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
   };
@@ -281,13 +248,12 @@ function StoryAudioElement({
 function ProgressBar({
   total,
   current,
-  isFrozen,
+  isPaused,
   durationMs,
 }: {
   total: number;
   current: number;
-  /** Pause utilisateur OU buffering vidéo (W2) — la barre gèle dans les deux cas. */
-  isFrozen: boolean;
+  isPaused: boolean;
   durationMs: number;
 }) {
   return (
@@ -302,8 +268,8 @@ function ProgressBar({
               'h-full rounded-full bg-white',
               i < current && 'w-full',
               i > current && 'w-0',
-              i === current && !isFrozen && 'animate-story-progress',
-              i === current && isFrozen && 'story-progress-paused'
+              i === current && !isPaused && 'animate-story-progress',
+              i === current && isPaused && 'story-progress-paused'
             )}
             style={
               i === current
@@ -416,115 +382,20 @@ function StoryViewer({
   // Honor the per-story `slideDurationMs` (set by the composer to fit longer
   // videos / TTS narrations) instead of a global 5s constant.
   const storyDurationMs = stories[currentIndex]?.storyEffects?.slideDurationMs ?? DEFAULT_STORY_DURATION_MS;
-
-  // W2 — unified-timeline gate (portage du pattern iOS R1/R2) : le timer NE
-  // court plus sur une vidéo de fond qui bufferise. `isBuffering` est piloté
-  // par les événements natifs du <video> principal (waiting/stalled → gel,
-  // playing/canplay → reprise) ; le watchdog 5 s ci-dessous garantit qu'un
-  // flux mort ne gèle jamais la story pour toujours (parité iOS
-  // playbackStallWatchdogSeconds).
-  const [isBuffering, setIsBuffering] = useState(false);
-  const remainingMsRef = useRef<number>(storyDurationMs);
-  const startedAtRef = useRef<number | null>(null);
-
   useEffect(() => {
-    remainingMsRef.current = storyDurationMs;
-    startedAtRef.current = null;
-    setIsBuffering(false);
-  }, [currentIndex, storyDurationMs]);
+    if (isPaused) return;
 
-  const isTimerFrozen = isPaused || isBuffering;
-  useEffect(() => {
-    if (isTimerFrozen) return;
-
-    // Reprend depuis le temps RESTANT — un gel (pause utilisateur ou
-    // buffering) ne rejoue plus la durée entière alors que la barre CSS,
-    // elle, conservait déjà sa position (défaut préexistant corrigé).
-    startedAtRef.current = Date.now();
     timerRef.current = setTimeout(() => {
       goNext();
-    }, remainingMsRef.current);
+    }, storyDurationMs);
 
     return () => {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      if (startedAtRef.current != null) {
-        remainingMsRef.current = Math.max(
-          0,
-          remainingMsRef.current - (Date.now() - startedAtRef.current)
-        );
-        startedAtRef.current = null;
-      }
     };
-  }, [currentIndex, isTimerFrozen, goNext, storyDurationMs]);
-
-  // Watchdog anti-deadlock : un buffering qui dure > 5 s retombe sur
-  // l'horloge murale (le timer reprend) plutôt que de geler la story.
-  useEffect(() => {
-    if (!isBuffering) return;
-    const watchdog = setTimeout(() => setIsBuffering(false), 5000);
-    return () => clearTimeout(watchdog);
-  }, [isBuffering]);
-
-  // W1 — playhead du slide pour l'interpolation des keyframes : rAF actif
-  // UNIQUEMENT si le slide courant porte des keyframes (les stories statiques
-  // ne paient rien) ; hérite du gel W2/pause gratuitement — quand le timer est
-  // gelé, startedAtRef est nul et le temps consommé cesse d'avancer.
-  const slideHasKeyframes = Boolean(
-    stories[currentIndex]?.storyEffects?.textObjects?.some((t) => t.keyframes?.length)
-    || stories[currentIndex]?.storyEffects?.mediaObjects?.some(
-      (m) => !m.isBackground && m.keyframes?.length
-    )
-  );
-  // W1 inc.4 — les crossfades intra-slide consomment le même playhead que
-  // les keyframes (et héritent du même gel W2 pause/buffering).
-  const slideNeedsPlayhead = slideHasKeyframes
-    || Boolean(stories[currentIndex]?.storyEffects?.clipTransitions?.length);
-  const [playheadSec, setPlayheadSec] = useState(0);
-  useEffect(() => {
-    setPlayheadSec(0);
-    if (!slideNeedsPlayhead) return;
-    let raf = 0;
-    const tick = () => {
-      const consumedMs = storyDurationMs - remainingMsRef.current;
-      const liveMs = startedAtRef.current != null ? Date.now() - startedAtRef.current : 0;
-      setPlayheadSec(Math.max(0, (consumedMs + liveMs) / 1000));
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [slideNeedsPlayhead, currentIndex, storyDurationMs]);
-
-  const primaryVideoGateHandlers = {
-    onWaiting: () => setIsBuffering(true),
-    onStalled: () => setIsBuffering(true),
-    onPlaying: () => setIsBuffering(false),
-    onCanPlay: () => setIsBuffering(false),
-  };
-
-  // ---- W5 — préchargement du slide SUIVANT ----
-  // Aucun preload n'existait : chaque avance payait le cold-fetch du média.
-  // Image : un décodage `new Image()` chauffe le cache HTTP du navigateur.
-  // Vidéo : un élément détaché `preload="auto"` amorce le buffer (le <video>
-  // monté ensuite réutilise la même entrée de cache). Fenêtre N+1 seulement —
-  // parité avec la fenêtre glissante du prefetcher iOS, sans exploser la
-  // bande passante mobile.
-  useEffect(() => {
-    const next = stories[currentIndex + 1];
-    if (!next?.mediaUrl) return;
-    if (next.mediaType === 'video') {
-      const v = document.createElement('video');
-      v.preload = 'auto';
-      v.muted = true;
-      v.src = next.mediaUrl;
-      return () => { v.removeAttribute('src'); v.load(); };
-    }
-    const img = new Image();
-    img.src = next.mediaUrl;
-    return undefined;
-  }, [currentIndex, stories]);
+  }, [currentIndex, isPaused, goNext, storyDurationMs]);
 
   // ---- Escape key ----
   useEffect(() => {
@@ -714,8 +585,6 @@ function StoryViewer({
             playsInline
             loop
             className="absolute inset-0 w-full h-full object-cover"
-            data-testid="story-primary-video"
-            {...primaryVideoGateHandlers}
           />
         )}
 
@@ -740,7 +609,6 @@ function StoryViewer({
                 loop
                 className="absolute inset-0 w-full h-full object-cover"
                 style={{ zIndex: m.zIndex ?? 0 }}
-                {...primaryVideoGateHandlers}
               />
             ) : (
               <img
@@ -755,28 +623,7 @@ function StoryViewer({
           // Foreground: 65% of canvas short-dimension at scale=1, matches iOS
           // `baseMediaSize = shortDim * 0.65` heuristic so cross-platform render
           // stays roughly consistent.
-          // W1 inc.2 — keyframes interpolés (parité iOS, fallback statique).
-          const mkf = resolveKeyframeState(m.keyframes, playheadSec, m.startTime ?? 0);
-          const mx = mkf?.x ?? m.x;
-          const my = mkf?.y ?? m.y;
-          const mScale = mkf?.scale ?? m.scale;
-          const sizePct = 65 * mScale;
-          // W1 inc.4 — crossfade intra-slide : opacité keyframes × facteur
-          // transition (parité reader iOS R14 : composition multiplicative,
-          // clips hors fenêtre masqués sur les slides à transitions). Sans
-          // transitions, `undefined` préserve le style historique.
-          const clipTransitions = effects?.clipTransitions;
-          const fgOpacity = clipTransitions?.length
-            ? (mkf?.opacity ?? 1) * resolveClipTransitionOpacity(m, clipTransitions, playheadSec)
-            : mkf?.opacity;
-          const fgStyle = {
-            left: `${mx * 100}%`,
-            top: `${my * 100}%`,
-            width: `${sizePct}%`,
-            opacity: fgOpacity,
-            transform: `translate(-50%, -50%) rotate(${m.rotation}deg)`,
-            zIndex: m.zIndex ?? 1,
-          };
+          const sizePct = 65 * m.scale;
           return m.mediaType === 'video' ? (
             <video
               key={m.id}
@@ -786,7 +633,13 @@ function StoryViewer({
               playsInline
               loop
               className="absolute pointer-events-none rounded-lg"
-              style={fgStyle}
+              style={{
+                left: `${m.x * 100}%`,
+                top: `${m.y * 100}%`,
+                width: `${sizePct}%`,
+                transform: `translate(-50%, -50%) rotate(${m.rotation}deg)`,
+                zIndex: m.zIndex ?? 1,
+              }}
             />
           ) : (
             <img
@@ -794,7 +647,13 @@ function StoryViewer({
               src={resolved.url}
               alt=""
               className="absolute pointer-events-none rounded-lg"
-              style={fgStyle}
+              style={{
+                left: `${m.x * 100}%`,
+                top: `${m.y * 100}%`,
+                width: `${sizePct}%`,
+                transform: `translate(-50%, -50%) rotate(${m.rotation}deg)`,
+                zIndex: m.zIndex ?? 1,
+              }}
             />
           );
         })}
@@ -804,26 +663,10 @@ function StoryViewer({
             by 100 for CSS percentages. Each text picks its own translation
             via the Prisme chain (passed via `userLanguage` for now; full
             chain support ships in B11B). */}
-        {/* `containerType: inline-size` scopes `cqw` units to the canvas width
-            so iOS design-pixel font sizes (1080 reference) scale to the live
-            canvas. Isolated to this full-bleed wrapper so it never becomes the
-            containing block for the fixed-position overlays elsewhere. */}
-        <div className="absolute inset-0 pointer-events-none" style={{ containerType: 'inline-size' }}>
         {effects?.textObjects?.map((t) => {
           const resolvedText = resolvePrismeText(t, userLanguage);
           if (!resolvedText) return null;
-          // Canonical iOS size is design px on the 1080-wide canvas → express it
-          // as a fraction of the live canvas width (`cqw`). Legacy `textSize` is
-          // raw css px. Fallback default keeps old behaviour for untyped data.
-          const fontSize = t.fontSizeDesign != null
-            ? `${((t.fontSizeDesign / STORY_DESIGN_WIDTH) * 100).toFixed(4)}cqw`
-            : `${t.textSize ?? 24}px`;
-          // W1 — keyframes interpolés (fallback : pose statique). `time` est
-          // relatif au startTime de l'objet, easing par segment (parité iOS).
-          const kf = resolveKeyframeState(t.keyframes, playheadSec, t.startTime ?? 0);
-          const kx = kf?.x ?? t.x;
-          const ky = kf?.y ?? t.y;
-          const kScale = kf?.scale ?? t.scale;
+          const fontSize = t.textSize ?? 24;
           return (
             <div
               key={t.id}
@@ -832,11 +675,10 @@ function StoryViewer({
                 textObjectClass(t.textStyle),
               )}
               style={{
-                left: `${kx * 100}%`,
-                top: `${ky * 100}%`,
-                opacity: kf?.opacity,
-                transform: `translate(-50%, -50%) scale(${kScale}) rotate(${t.rotation}deg)`,
-                fontSize,
+                left: `${t.x * 100}%`,
+                top: `${t.y * 100}%`,
+                transform: `translate(-50%, -50%) scale(${t.scale}) rotate(${t.rotation}deg)`,
+                fontSize: `${fontSize}px`,
                 color: t.textColor ? (t.textColor.startsWith('#') ? t.textColor : `#${t.textColor}`) : '#ffffff',
                 textShadow: textObjectShadow(t.textStyle),
                 textAlign: (t.textAlign as 'left' | 'right' | 'center' | undefined) ?? 'center',
@@ -853,7 +695,6 @@ function StoryViewer({
             </div>
           );
         })}
-        </div>
 
         {/* Foreground / background audio players. Volume is set on mount via
             a ref because React's native `<audio>` doesn't accept `volume` as
@@ -893,7 +734,7 @@ function StoryViewer({
             <ProgressBar
               total={stories.length}
               current={currentIndex}
-              isFrozen={isPaused || isBuffering}
+              isPaused={isPaused}
               durationMs={storyDurationMs}
             />
           </div>
@@ -984,8 +825,11 @@ function StoryViewer({
                 </span>
               )}
               {story.expiresAt && (() => {
-                const remaining = formatTimeRemaining(new Date(story.expiresAt).getTime(), Date.now());
-                if (remaining === null) return null;
+                const diff = new Date(story.expiresAt).getTime() - Date.now();
+                if (diff <= 0) return null;
+                const mins = Math.floor(diff / 60000);
+                const hrs = Math.floor(mins / 60);
+                const remaining = hrs >= 1 ? `${hrs}h${mins % 60 > 0 ? `${mins % 60}m` : ''}` : `${mins}m`;
                 return <span className="text-xs text-white/40">{remaining}</span>;
               })()}
             </div>

@@ -17,7 +17,6 @@ import {
   socketCallBackgroundedSchema,
   socketCallForegroundedSchema,
   socketCallScreenCaptureDetectedSchema,
-  socketCallAnalyticsSchema,
 } from '../validation/call-schemas';
 
 const validMongoId = '507f1f77bcf86cd799439011';
@@ -551,99 +550,6 @@ describe('socketCallScreenCaptureDetectedSchema', () => {
       isCapturing: true,
     });
     expect(result.success).toBe(false);
-  });
-});
-
-describe('socketCallAnalyticsSchema', () => {
-  const validMongoId3 = '507f1f77bcf86cd799439099';
-  const validPayload = {
-    callId: validMongoId3,
-    setupTimeMs: 1250,
-    durationSeconds: 65.4,
-    reconnectionCount: 0,
-    networkTransitions: 1,
-    averageRtt: 42.5,
-    averagePacketLoss: 0.3,
-    maxPacketLoss: 2.1,
-    codec: 'opus',
-    effectsUsed: ['voiceCoder'],
-    filtersUsed: false,
-    transcriptionUsed: true,
-    qualityDistribution: { excellent: 0.8, good: 0.15, fair: 0.05, poor: 0.0 },
-    platform: 'ios',
-    deviceModel: 'iPhone',
-    isVideo: false,
-    endReason: 'local',
-  };
-
-  it('accepts a valid complete payload', () => {
-    expect(socketCallAnalyticsSchema.safeParse(validPayload).success).toBe(true);
-  });
-
-  it('accepts setupTimeMs of -1 (setup incomplete — call never connected)', () => {
-    const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, setupTimeMs: -1 });
-    expect(result.success).toBe(true);
-  });
-
-  // setupTimeMs inclut le temps de sonnerie (humain) — negotiationTimeMs
-  // isole answer→connected (la partie technique WebRTC seule). Optionnel :
-  // les anciens builds iOS ne l'envoient pas.
-  it('accepts the optional negotiationTimeMs field', () => {
-    const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, negotiationTimeMs: 850 });
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.negotiationTimeMs).toBe(850);
-  });
-
-  it('accepts a payload WITHOUT negotiationTimeMs (older iOS builds)', () => {
-    const result = socketCallAnalyticsSchema.safeParse(validPayload);
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.negotiationTimeMs).toBeUndefined();
-  });
-
-  it('accepts negotiationTimeMs of -1 (never connected / anchor missing)', () => {
-    const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, negotiationTimeMs: -1 });
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts empty effectsUsed array', () => {
-    const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, effectsUsed: [] });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects invalid callId (not a mongo ObjectId)', () => {
-    const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, callId: 'bad-id' });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects negative durationSeconds', () => {
-    const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, durationSeconds: -1 });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects qualityDistribution with out-of-range fractions', () => {
-    const result = socketCallAnalyticsSchema.safeParse({
-      ...validPayload,
-      qualityDistribution: { excellent: 1.5, good: 0.0, fair: 0.0, poor: 0.0 },
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects missing qualityDistribution fields', () => {
-    const result = socketCallAnalyticsSchema.safeParse({
-      ...validPayload,
-      qualityDistribution: { excellent: 1.0 },
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects non-boolean filtersUsed', () => {
-    const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, filtersUsed: 'yes' });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects missing callId', () => {
-    const { callId: _, ...rest } = validPayload;
-    expect(socketCallAnalyticsSchema.safeParse(rest).success).toBe(false);
   });
 });
 

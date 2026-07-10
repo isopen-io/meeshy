@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { User } from '@/types';
 import { usersService } from '@/services';
-import { getUserInitials } from '@/lib/avatar-utils';
+import { getUserInitials } from '@/utils/user';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { authManager } from '@/services/auth-manager.service';

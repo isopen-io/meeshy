@@ -72,7 +72,7 @@ export function LinkDetailsModal({ link, isOpen, onClose }: LinkDetailsModalProp
 
   const handleOpenConversation = () => {
     if (link.conversation.conversationUrl) {
-      window.open(link.conversation.conversationUrl, '_blank', 'noopener,noreferrer');
+      window.open(link.conversation.conversationUrl, '_blank');
     }
   };
 

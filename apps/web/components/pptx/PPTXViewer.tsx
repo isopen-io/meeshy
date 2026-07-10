@@ -44,7 +44,7 @@ export const PPTXViewer: React.FC<PPTXViewerProps> = ({
   };
 
   const handleOpenInNewTab = () => {
-    window.open(attachmentFileUrl, '_blank', 'noopener,noreferrer');
+    window.open(attachmentFileUrl, '_blank');
   };
 
   return (

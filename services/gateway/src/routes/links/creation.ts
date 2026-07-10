@@ -1,11 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { SecuritySanitizer } from '../../utils/sanitize';
 import {
   sendSuccess,
   sendForbidden,
-  sendBadRequest,
   sendNotFound,
   sendInternalError
 } from '../../utils/response.js';
@@ -95,7 +93,9 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const body = createLinkSchema.parse(request.body);
 
       if (!isRegisteredUser(request.authContext)) {
-        return sendForbidden(reply, 'Utilisateur enregistré requis pour créer un lien');
+        return reply.status(403).send({
+          error: 'Utilisateur enregistré requis pour créer un lien'
+        });
       }
 
       const user = request.authContext.registeredUser!;
@@ -220,8 +220,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           data: {
             identifier: conversationIdentifier,
             type: 'public',
-            title: body.name ? SecuritySanitizer.sanitizeText(body.name) : 'Conversation partagée',
-            description: body.description ? SecuritySanitizer.sanitizeText(body.description) : undefined,
+            title: body.name || 'Conversation partagée',
+            description: body.description,
             participants: {
               create: [{
                 userId,
@@ -261,8 +261,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           linkId: initialLinkId,
           conversationId: conversationId!,
           createdBy: userId,
-          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
-          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
+          name: body.name,
+          description: body.description,
           maxUses: body.maxUses,
           maxConcurrentUsers: body.maxConcurrentUsers,
           maxUniqueSessions: body.maxUniqueSessions,
@@ -338,7 +338,11 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return sendBadRequest(reply, 'Données invalides');
+        return reply.status(400).send({
+          success: false,
+          message: 'Données invalides',
+          errors: error.issues
+        });
       }
       logError(fastify.log, 'Create link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

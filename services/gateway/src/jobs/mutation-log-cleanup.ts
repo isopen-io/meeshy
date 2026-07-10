@@ -39,13 +39,13 @@ export class MutationLogCleanupJob {
     // Run shortly after startup so an out-of-band cron doesn't ride on
     // the request critical path. setImmediate keeps server boot snappy.
     setImmediate(() => {
-      this.cleanup().catch(/* istanbul ignore next -- cleanup() never rejects; its own catch returns 0 */ err =>
+      this.cleanup().catch(err =>
         logger.error('Initial cleanup failed', err)
       );
     });
 
     this.intervalId = setInterval(() => {
-      this.cleanup().catch(/* istanbul ignore next -- cleanup() never rejects; its own catch returns 0 */ err =>
+      this.cleanup().catch(err =>
         logger.error('Scheduled cleanup failed', err)
       );
     }, this.intervalMs);

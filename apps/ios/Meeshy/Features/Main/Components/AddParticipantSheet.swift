@@ -74,9 +74,8 @@ struct AddParticipantSheet: View {
     private var headerBar: some View {
         HStack {
             Text(String(localized: "participants.add.title", defaultValue: "Ajouter un membre", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold, design: .rounded))
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -84,8 +83,6 @@ struct AddParticipantSheet: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                // Glyphe chrome de fermeture dans un cadre tap fixe 28×28 — laissé
-                // figé (doctrine 82i/87i : le chrome ne suit pas Dynamic Type).
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.textMuted)
@@ -104,12 +101,11 @@ struct AddParticipantSheet: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
 
             TextField(String(localized: "participants.add.search-placeholder", defaultValue: "Rechercher un utilisateur...", bundle: .main), text: $searchQuery)
-                .font(MeeshyFont.relative(15))
+                .font(.system(size: 15))
                 .foregroundColor(theme.textPrimary)
                 .focused($isSearchFocused)
                 .autocorrectionDisabled()
@@ -124,7 +120,7 @@ struct AddParticipantSheet: View {
                     searchResults = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(16))
+                        .font(.system(size: 16))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
@@ -167,8 +163,8 @@ struct AddParticipantSheet: View {
 
             if let error = errorMessage {
                 Text(error)
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(hex: "FF6B6B"))
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
             }
@@ -192,22 +188,21 @@ struct AddParticipantSheet: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.name)
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(isMember ? theme.textMuted : theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
-            .accessibilityElement(children: .combine)
 
             Spacer()
 
             if isMember {
                 Text(String(localized: "participants.add.member", defaultValue: "Membre", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -221,7 +216,7 @@ struct AddParticipantSheet: View {
                     Task { await addParticipant(userId: user.id) }
                 } label: {
                     Text(String(localized: "common.add", defaultValue: "Ajouter", bundle: .main))
-                        .font(MeeshyFont.relative(12, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -240,36 +235,30 @@ struct AddParticipantSheet: View {
 
     private var searchPrompt: some View {
         VStack(spacing: 12) {
-            // Glyphe décoratif d'état vide — laissé figé (illustration, pas du texte)
-            // et masqué de VoiceOver via le `.combine` parent.
             Image(systemName: "person.badge.plus")
                 .font(.system(size: 32, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
             Text(String(localized: "participants.add.prompt", defaultValue: "Recherchez par nom ou @pseudo", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Empty Results
 
     private var emptyResults: some View {
         VStack(spacing: 12) {
-            // Glyphe décoratif d'état vide — laissé figé (illustration, pas du texte)
-            // et masqué de VoiceOver via le `.combine` parent.
             Image(systemName: "person.slash")
                 .font(.system(size: 32, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
             Text(String(localized: "participants.add.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Skeleton Row

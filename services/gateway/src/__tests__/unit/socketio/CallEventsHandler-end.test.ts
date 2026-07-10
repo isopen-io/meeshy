@@ -122,26 +122,23 @@ function makePrisma(overrides: {
     participant: {
       findFirst: overrides.participantFindFirst
         ?? jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
-      findMany: jest.fn<any>().mockResolvedValue([]),
     },
   } as unknown as PrismaClient;
 }
 
-function makeSocket(rooms: string[] = []) {
+function makeSocket() {
   const handlers: Record<string, (...args: any[]) => any> = {};
   const directEmit = jest.fn<any>();
-  const socketToEmit = jest.fn<any>();
   const socket = {
     id: 'socket-test-1',
     on: jest.fn((event: string, fn: (...args: any[]) => any) => {
       handlers[event] = fn;
     }),
     emit: directEmit,
-    to: jest.fn().mockReturnValue({ emit: socketToEmit }),
-    rooms: new Set<string>(['socket-test-1', ...rooms]),
+    to: jest.fn().mockReturnValue({ emit: jest.fn() }),
     data: {},
   };
-  return { socket, handlers, directEmit, socketToEmit };
+  return { socket, handlers, directEmit };
 }
 
 function makeIo() {
@@ -196,22 +193,22 @@ describe('CallEventsHandler — call:end handler', () => {
       );
     });
 
-    it('broadcasts ENDED targeting the call room', () => {
+    it('broadcasts ENDED to the call room', () => {
       const callRoomCalls = (io.to as jest.MockedFunction<any>).mock.calls
-        .filter(([rooms]) => Array.isArray(rooms) && rooms.includes(`call:${CALL_ID}`));
+        .filter(([room]) => room === `call:${CALL_ID}`);
       expect(callRoomCalls).toHaveLength(1);
     });
 
-    it('broadcasts ENDED targeting the conversation room', () => {
+    it('broadcasts ENDED to the conversation room', () => {
       const convRoomCalls = (io.to as jest.MockedFunction<any>).mock.calls
-        .filter(([rooms]) => Array.isArray(rooms) && rooms.includes(`conversation:${CONV_ID}`));
+        .filter(([room]) => room === `conversation:${CONV_ID}`);
       expect(convRoomCalls).toHaveLength(1);
     });
 
-    it('emits CALL_EVENTS.ENDED once (single deduplicated multi-room emit)', () => {
-      expect(roomEmit).toHaveBeenCalledTimes(1);
+    it('emits CALL_EVENTS.ENDED on both rooms', () => {
+      expect(roomEmit).toHaveBeenCalledTimes(2);
       const events = roomEmit.mock.calls.map(([ev]) => ev);
-      expect(events).toEqual([CALL_EVENTS.ENDED]);
+      expect(events).toEqual([CALL_EVENTS.ENDED, CALL_EVENTS.ENDED]);
     });
 
     it('acks { success: true }', () => {
@@ -224,83 +221,6 @@ describe('CallEventsHandler — call:end handler', () => {
 
     it('posts call summary', () => {
       expect(mockCreateCallSummaryMessage).toHaveBeenCalledWith(CALL_ID);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Fast-path: instant call:ended to the call room BEFORE any DB round trip
-  // (2026-07-04 — the peer must hang up immediately, not after the multi-query
-  // termination path). Room membership is the in-memory authorization.
-  // -------------------------------------------------------------------------
-
-  describe('fast-path: sender socket is inside the call room', () => {
-    it('emits an immediate call:ended to the call room (excluding the sender)', async () => {
-      mockEndCall.mockResolvedValue(makeCallSession());
-
-      const prisma = makePrisma();
-      const { socket, handlers, socketToEmit } = makeSocket([`call:${CALL_ID}`]);
-      const { io } = makeIo();
-
-      const handler = new CallEventsHandler(prisma);
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END](END_DATA, jest.fn<any>());
-
-      expect(socket.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
-      expect(socketToEmit).toHaveBeenCalledWith(
-        CALL_EVENTS.ENDED,
-        expect.objectContaining({
-          callId: CALL_ID,
-          endedBy: CALLER_ID,
-          reason: END_DATA.reason,
-        })
-      );
-    });
-
-    it('fires the fast-path even when the DB termination path then fails', async () => {
-      mockEndCall.mockRejectedValue(new Error('CALL_NOT_FOUND: call does not exist'));
-
-      const prisma = makePrisma();
-      const { socket, handlers, socketToEmit } = makeSocket([`call:${CALL_ID}`]);
-      const { io } = makeIo();
-
-      const handler = new CallEventsHandler(prisma);
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END](END_DATA, jest.fn<any>());
-
-      expect(socketToEmit).toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.anything());
-    });
-
-    it('defaults the fast-path reason to "completed" when the client sends none', async () => {
-      mockEndCall.mockResolvedValue(makeCallSession());
-
-      const prisma = makePrisma();
-      const { socket, handlers, socketToEmit } = makeSocket([`call:${CALL_ID}`]);
-      const { io } = makeIo();
-
-      const handler = new CallEventsHandler(prisma);
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END]({ callId: CALL_ID }, jest.fn<any>());
-
-      expect(socketToEmit).toHaveBeenCalledWith(
-        CALL_EVENTS.ENDED,
-        expect.objectContaining({ reason: 'completed' })
-      );
-    });
-  });
-
-  describe('fast-path guard: sender socket is NOT in the call room', () => {
-    it('does not emit any early call:ended (authorization = room membership)', async () => {
-      mockEndCall.mockResolvedValue(makeCallSession());
-
-      const prisma = makePrisma();
-      const { socket, handlers, socketToEmit } = makeSocket();
-      const { io } = makeIo();
-
-      const handler = new CallEventsHandler(prisma);
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END](END_DATA, jest.fn<any>());
-
-      expect(socketToEmit).not.toHaveBeenCalled();
     });
   });
 
@@ -526,48 +446,6 @@ describe('CallEventsHandler — call:end handler', () => {
 
     it('does NOT call endCall', () => {
       expect(mockEndCall).not.toHaveBeenCalled();
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Audit C3/C4: endCall() resolving pre-answer calls to `missed` must trigger
-  // the same missed-call notification path as call:leave.
-  // -------------------------------------------------------------------------
-
-  describe('C3/C4: pre-answer end resolving to missed status', () => {
-    it('broadcasts call:ended with reason=missed and posts a summary', async () => {
-      mockEndCall.mockResolvedValue(makeCallSession({ status: 'missed', endReason: 'missed', duration: 0 }));
-
-      const prisma = makePrisma();
-      const { socket, handlers } = makeSocket();
-      const { io, roomEmit } = makeIo();
-      const ack = jest.fn<any>();
-
-      const handler = new CallEventsHandler(prisma);
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END](END_DATA, ack);
-
-      const endedPayload = roomEmit.mock.calls[0][1];
-      expect(endedPayload.reason).toBe('missed');
-      expect(endedPayload.duration).toBe(0);
-      expect(mockCreateCallSummaryMessage).toHaveBeenCalledWith(CALL_ID);
-      expect(ack).toHaveBeenCalledWith({ success: true });
-    });
-
-    it('does not attempt missed-call handling for a normally completed call', async () => {
-      mockEndCall.mockResolvedValue(makeCallSession({ status: 'ended', endReason: 'completed' }));
-
-      const prisma = makePrisma();
-      const { socket, handlers } = makeSocket();
-      const { io } = makeIo();
-      const ack = jest.fn<any>();
-
-      const handler = new CallEventsHandler(prisma);
-      const handleMissedCallSpy = jest.spyOn(handler, 'handleMissedCall');
-      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
-      await handlers[CALL_EVENTS.END](END_DATA, ack);
-
-      expect(handleMissedCallSpy).not.toHaveBeenCalled();
     });
   });
 

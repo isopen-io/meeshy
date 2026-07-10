@@ -75,13 +75,9 @@ jest.mock('../../../utils/logger', () => ({
   },
 }));
 
-jest.mock('../../../utils/response', () => {
-  const actual = jest.requireActual('../../../utils/response') as Record<string, any>;
-  return {
-    ...actual,
-    sendSuccess: (...args: any[]) => mockSendSuccess(...args),
-  };
-});
+jest.mock('../../../utils/response', () => ({
+  sendSuccess: (...args: any[]) => mockSendSuccess(...args),
+}));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   callSessionSchema: { type: 'object' },
@@ -328,8 +324,10 @@ describe('callRoutes', () => {
       expect(reply.status).toHaveBeenCalledWith(400);
       expect(reply._body).toMatchObject({
         success: false,
-        error: 'CALL_ALREADY_ACTIVE',
-        message: 'A call is already active in this conversation',
+        error: {
+          code: 'CALL_ALREADY_ACTIVE',
+          message: 'A call is already active in this conversation',
+        },
       });
     });
 
@@ -343,8 +341,10 @@ describe('callRoutes', () => {
       expect(reply.status).toHaveBeenCalledWith(400);
       expect(reply._body).toMatchObject({
         success: false,
-        error: 'Unexpected failure',
-        message: 'Unexpected failure',
+        error: {
+          code: 'Unexpected failure',
+          message: 'Unexpected failure',
+        },
       });
     });
 
@@ -356,10 +356,10 @@ describe('callRoutes', () => {
       await getRoute(routes, 'POST', '/calls')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(400);
-      expect(reply._body?.error).toBe('Failed to initiate call');
+      expect(reply._body?.error?.code).toBe('Failed to initiate call');
     });
 
-    it('error from service is propagated (details not in standard response)', async () => {
+    it('includes error.details when present', async () => {
       const { routes, reply } = setup();
       const err: any = new Error('INVALID:bad input');
       err.details = { field: 'conversationId' };
@@ -368,8 +368,7 @@ describe('callRoutes', () => {
       const req = makeRequest({ body: { conversationId: CONV_ID, type: 'video' } });
       await getRoute(routes, 'POST', '/calls')(req, reply);
 
-      expect(reply.status).toHaveBeenCalledWith(400);
-      expect(reply._body?.success).toBe(false);
+      expect(reply._body?.error?.details).toEqual({ field: 'conversationId' });
     });
 
     it('handles error with multiple colons in message correctly', async () => {
@@ -381,8 +380,8 @@ describe('callRoutes', () => {
       const req = makeRequest({ body: { conversationId: CONV_ID, type: 'video' } });
       await getRoute(routes, 'POST', '/calls')(req, reply);
 
-      expect(reply._body?.error).toBe('CODE');
-      expect(reply._body?.message).toBe('message: with: colons');
+      expect(reply._body?.error?.code).toBe('CODE');
+      expect(reply._body?.error?.message).toBe('message: with: colons');
     });
   });
 
@@ -413,8 +412,8 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/:callId')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(404);
-      expect(reply._body?.error).toBe('CALL_NOT_FOUND');
-      expect(reply._body?.message).toBe('Call does not exist');
+      expect(reply._body?.error?.code).toBe('CALL_NOT_FOUND');
+      expect(reply._body?.error?.message).toBe('Call does not exist');
     });
 
     it('returns 400 for non-NOT_FOUND errors', async () => {
@@ -425,7 +424,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/:callId')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(400);
-      expect(reply._body?.error).toBe('INVALID_ID');
+      expect(reply._body?.error?.code).toBe('INVALID_ID');
     });
 
     it('uses fallback message when error has no message', async () => {
@@ -435,7 +434,7 @@ describe('callRoutes', () => {
       const req = makeRequest({ params: { callId: CALL_ID } });
       await getRoute(routes, 'GET', '/calls/:callId')(req, reply);
 
-      expect(reply._body?.error).toBe('Failed to get call');
+      expect(reply._body?.error?.code).toBe('Failed to get call');
     });
   });
 
@@ -513,17 +512,11 @@ describe('callRoutes', () => {
       await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(403);
-      expect(reply._body?.error).toBe('NOT_A_PARTICIPANT');
+      expect(reply._body?.error?.code).toBe('NOT_A_PARTICIPANT');
       expect(mockEndCall).not.toHaveBeenCalled();
     });
 
-    it('allows a regular member (not initiator/admin/moderator) to end the call — parity with socket call:end', async () => {
-      // The route must NOT re-implement a stricter initiator/admin/moderator-only
-      // gate: CallService.endCall() itself is the single source of truth for
-      // "who may end this call" (P2P: any active participant), and the socket
-      // `call:end` path already delegates to it with no extra gate. A plain
-      // conversation member who IS an active call participant must be able to
-      // end their own call via REST exactly like they can via the socket.
+    it('returns 403 when caller is a regular member and not the initiator', async () => {
       const session = makeCallSession({ initiatorId: 'other-user-id' });
       const membership = makeMembership({ role: 'member' });
 
@@ -533,34 +526,12 @@ describe('callRoutes', () => {
       });
 
       mockGetCallSession.mockResolvedValueOnce(session);
-      mockEndCall.mockResolvedValueOnce(session);
 
       const req = makeRequest({ params: { callId: CALL_ID } });
       await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
 
-      expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
-      expect(reply._body).toMatchObject({ success: true, data: session });
-    });
-
-    it('surfaces NOT_A_PARTICIPANT from CallService.endCall when the member is a conversation member but not an active call participant', async () => {
-      // Authorization for "must be an active participant of THIS call" still
-      // happens — just inside CallService.endCall(), not duplicated in the route.
-      const session = makeCallSession({ initiatorId: 'other-user-id' });
-      const membership = makeMembership({ role: 'member' });
-
-      const { routes, reply } = setup({
-        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
-        callSession: { findFirst: jest.fn<any>() },
-      });
-
-      mockGetCallSession.mockResolvedValueOnce(session);
-      mockEndCall.mockRejectedValueOnce(new Error('NOT_A_PARTICIPANT: You are not in this call'));
-
-      const req = makeRequest({ params: { callId: CALL_ID } });
-      await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
-
-      expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
-      expect(reply._body?.success).toBe(false);
+      expect(reply.status).toHaveBeenCalledWith(403);
+      expect(reply._body?.error?.code).toBe('PERMISSION_DENIED');
     });
 
     it('uses membership.id for endParticipantId when authContext.participantId absent', async () => {
@@ -599,7 +570,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(404);
-      expect(reply._body?.error).toBe('CALL_NOT_FOUND');
+      expect(reply._body?.error?.code).toBe('CALL_NOT_FOUND');
     });
 
     it('returns 400 on generic endCall error', async () => {
@@ -618,7 +589,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(400);
-      expect(reply._body?.error).toBe('ALREADY_ENDED');
+      expect(reply._body?.error?.code).toBe('ALREADY_ENDED');
     });
 
     it('uses fallback message on error without message', async () => {
@@ -632,7 +603,7 @@ describe('callRoutes', () => {
       const req = makeRequest({ params: { callId: CALL_ID } });
       await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
 
-      expect(reply._body?.error).toBe('Failed to end call');
+      expect(reply._body?.error?.code).toBe('Failed to end call');
     });
   });
 
@@ -734,7 +705,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'POST', '/calls/:callId/participants')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(404);
-      expect(reply._body?.error).toBe('CALL_NOT_FOUND');
+      expect(reply._body?.error?.code).toBe('CALL_NOT_FOUND');
     });
 
     it('returns 400 on other errors', async () => {
@@ -745,7 +716,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'POST', '/calls/:callId/participants')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(400);
-      expect(reply._body?.error).toBe('ALREADY_IN_CALL');
+      expect(reply._body?.error?.code).toBe('ALREADY_IN_CALL');
     });
 
     it('uses fallback message when error has no message', async () => {
@@ -755,7 +726,7 @@ describe('callRoutes', () => {
       const req = makeRequest({ params: { callId: CALL_ID }, body: {} });
       await getRoute(routes, 'POST', '/calls/:callId/participants')(req, reply);
 
-      expect(reply._body?.error).toBe('Failed to join call');
+      expect(reply._body?.error?.code).toBe('Failed to join call');
     });
   });
 
@@ -809,9 +780,8 @@ describe('callRoutes', () => {
       );
     });
 
-    it('resolves leaveParticipantId from the DB when authContext.participantId absent (registered self-leave)', async () => {
+    it('uses params.participantId for leaveParticipantId when authContext.participantId absent', async () => {
       const { routes, reply } = setup();
-      mockGetCallSession.mockResolvedValueOnce(makeCallSession());
       mockLeaveCall.mockResolvedValueOnce(makeCallSession());
 
       const req = makeRequest({
@@ -824,27 +794,17 @@ describe('callRoutes', () => {
         reply
       );
 
-      // No Participant row resolves for USER_ID in this test's (empty) prisma
-      // mock, so the code falls back to the raw participantId — same
-      // behavior as before, but now reached via an explicit DB lookup
-      // instead of blindly trusting a User.id as a Participant.id.
       expect(mockLeaveCall).toHaveBeenCalledWith(
         expect.objectContaining({ participantId: USER_ID })
       );
     });
 
-    it('allows a moderator to remove another participant, using the TARGET participant id (not the moderator\'s own)', async () => {
+    it('allows a moderator to remove another participant', async () => {
       const session = makeCallSession();
       const modMembership = makeMembership({ role: 'moderator' });
-      const resolvedTargetParticipant = { id: 'resolved-target-part-id' };
-
-      const participantFindFirst = jest
-        .fn<any>()
-        .mockResolvedValueOnce(modMembership) // moderator role check (caller)
-        .mockResolvedValueOnce(resolvedTargetParticipant); // target resolution
 
       const { routes, reply } = setup({
-        participant: { findFirst: participantFindFirst },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(modMembership) },
         callSession: { findFirst: jest.fn<any>() },
       });
 
@@ -860,29 +820,15 @@ describe('callRoutes', () => {
         reply
       );
 
-      // Regression guard: a moderator kicking someone else must never end up
-      // marking the MODERATOR's own participation as "left" (PART_ID is the
-      // moderator's own id per `makeMembership()`/default authContext).
-      expect(mockLeaveCall).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: resolvedTargetParticipant.id })
-      );
-      expect(mockLeaveCall).not.toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: PART_ID })
-      );
+      expect(mockLeaveCall).toHaveBeenCalled();
     });
 
-    it('allows an admin to remove another participant, using the TARGET participant id (not the admin\'s own)', async () => {
+    it('allows an admin to remove another participant', async () => {
       const session = makeCallSession();
       const adminMembership = makeMembership({ role: 'admin' });
-      const resolvedTargetParticipant = { id: 'resolved-target-part-id' };
-
-      const participantFindFirst = jest
-        .fn<any>()
-        .mockResolvedValueOnce(adminMembership) // moderator role check (caller)
-        .mockResolvedValueOnce(resolvedTargetParticipant); // target resolution
 
       const { routes, reply } = setup({
-        participant: { findFirst: participantFindFirst },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(adminMembership) },
         callSession: { findFirst: jest.fn<any>() },
       });
 
@@ -898,12 +844,7 @@ describe('callRoutes', () => {
         reply
       );
 
-      expect(mockLeaveCall).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: resolvedTargetParticipant.id })
-      );
-      expect(mockLeaveCall).not.toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: PART_ID })
-      );
+      expect(mockLeaveCall).toHaveBeenCalled();
     });
 
     it('returns 403 when regular member tries to remove another participant', async () => {
@@ -927,7 +868,7 @@ describe('callRoutes', () => {
       );
 
       expect(reply.status).toHaveBeenCalledWith(403);
-      expect(reply._body?.error).toBe('PERMISSION_DENIED');
+      expect(reply._body?.error?.code).toBe('PERMISSION_DENIED');
       expect(mockLeaveCall).not.toHaveBeenCalled();
     });
 
@@ -951,7 +892,7 @@ describe('callRoutes', () => {
       );
 
       expect(reply.status).toHaveBeenCalledWith(403);
-      expect(reply._body?.error).toBe('PERMISSION_DENIED');
+      expect(reply._body?.error?.code).toBe('PERMISSION_DENIED');
     });
 
     it('returns 404 on CALL_NOT_FOUND error', async () => {
@@ -988,7 +929,7 @@ describe('callRoutes', () => {
       );
 
       expect(reply.status).toHaveBeenCalledWith(400);
-      expect(reply._body?.error).toBe('NOT_IN_CALL');
+      expect(reply._body?.error?.code).toBe('NOT_IN_CALL');
     });
 
     it('uses fallback message on error without message', async () => {
@@ -1004,7 +945,7 @@ describe('callRoutes', () => {
         reply
       );
 
-      expect(reply._body?.error).toBe('Failed to leave call');
+      expect(reply._body?.error?.code).toBe('Failed to leave call');
     });
   });
 
@@ -1066,7 +1007,7 @@ describe('callRoutes', () => {
       );
 
       expect(reply.status).toHaveBeenCalledWith(403);
-      expect(reply._body?.error).toBe('NOT_A_PARTICIPANT');
+      expect(reply._body?.error?.code).toBe('NOT_A_PARTICIPANT');
       expect(mockGetActiveCallForConversation).not.toHaveBeenCalled();
     });
 
@@ -1087,7 +1028,7 @@ describe('callRoutes', () => {
       );
 
       expect(reply.status).toHaveBeenCalledWith(500);
-      expect(reply._body?.error).toBe('INTERNAL_ERROR');
+      expect(reply._body?.error?.code).toBe('INTERNAL_ERROR');
     });
 
     it('verifies membership with correct where clause', async () => {
@@ -1149,9 +1090,7 @@ describe('callRoutes', () => {
             participants: {
               some: {
                 participant: { userId: USER_ID },
-                // Audit C5 — Prisma-on-Mongo: null alone misses documents
-                // where the field is absent (historical CallParticipant).
-                OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+                leftAt: null,
               },
             },
           }),
@@ -1186,7 +1125,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/active')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(404);
-      expect(reply._body?.error).toBe('NO_ACTIVE_CALL');
+      expect(reply._body?.error?.code).toBe('NO_ACTIVE_CALL');
     });
 
     it('returns 401 when userId is falsy', async () => {
@@ -1199,7 +1138,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/active')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(401);
-      expect(reply._body?.error).toBe('NOT_AUTHENTICATED');
+      expect(reply._body?.error?.code).toBe('NOT_AUTHENTICATED');
     });
 
     it('returns 401 when authContext.userId is null', async () => {
@@ -1226,7 +1165,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/active')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(500);
-      expect(reply._body?.error).toBe('INTERNAL_ERROR');
+      expect(reply._body?.error?.code).toBe('INTERNAL_ERROR');
     });
 
     it('includes nested participants.include in query', async () => {
@@ -1343,7 +1282,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/history')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(401);
-      expect(reply._body?.error).toBe('NOT_AUTHENTICATED');
+      expect(reply._body?.error?.code).toBe('NOT_AUTHENTICATED');
       expect(mockListHistory).not.toHaveBeenCalled();
     });
 
@@ -1357,7 +1296,7 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/history')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(401);
-      expect(reply._body?.error).toBe('NOT_AUTHENTICATED');
+      expect(reply._body?.error?.code).toBe('NOT_AUTHENTICATED');
       expect(mockListHistory).not.toHaveBeenCalled();
     });
 
@@ -1369,8 +1308,8 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/history')(req, reply);
 
       expect(reply.status).toHaveBeenCalledWith(500);
-      expect(reply._body?.error).toBe('INTERNAL_ERROR');
-      expect(reply._body?.message).toBe('Failed to get call history');
+      expect(reply._body?.error?.code).toBe('INTERNAL_ERROR');
+      expect(reply._body?.error?.message).toBe('Failed to get call history');
     });
 
     it('falls back to default params (limit=30, filter=all) when Zod safeParse fails', async () => {

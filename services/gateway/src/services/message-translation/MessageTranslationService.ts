@@ -28,7 +28,6 @@ import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -50,7 +49,6 @@ export interface MessageData {
   targetLanguage?: string;
   isEncrypted?: boolean;
   encryptionMode?: 'e2ee' | 'server' | 'hybrid' | null;
-  modelType?: string;
 }
 
 interface TranslationEncryptionData {
@@ -82,17 +80,6 @@ export class MessageTranslationService extends EventEmitter {
   private readonly PROCESSED_TASK_TTL_MS = 3_600_000; // 1 heure
   private readonly processedTasksCleanupInterval: ReturnType<typeof setInterval>;
 
-  // Ordering guard : dernier taskId de RETRADUCTION dispatché par message.
-  // Une édition rapide (ou une édition qui court avec la traduction initiale)
-  // peut faire arriver deux réponses ZMQ dans le désordre : la traduction d'un
-  // contenu périmé écraserait alors la traduction du contenu courant (violation
-  // du Prisme Linguistique). On mémorise le task le plus récent ; toute réponse
-  // dont le taskId n'est plus le plus récent pour son message est périmée et
-  // droppée. Borné par TTL (balayé par le timer existant) + plafond FIFO.
-  private readonly latestRetranslationTask = new Map<string, { taskId: string; ts: number }>();
-  private readonly RETRANSLATION_TASK_TTL_MS = 3_600_000; // 1h ≫ round-trip ZMQ (timeout 5s)
-  private static readonly RETRANSLATION_TASK_MAX = 5000;
-
   constructor(prisma: PrismaClient, jobMappingCache?: MultiLevelJobMappingCache) {
     super();
     this.prisma = prisma;
@@ -104,18 +91,11 @@ export class MessageTranslationService extends EventEmitter {
     // Utiliser le cache partagé si fourni, sinon en créer un (rétro-compatibilité)
     this.jobMappingService = jobMappingCache || new MultiLevelJobMappingCache();
 
-    // Periodic cleanup of processedTasks dedup cache (every 30 min).
-    // Le même timer balaie aussi les entrées de retranslationTask expirées
-    // (pas de nouveau timer — cf. idiome des caches bornés du gateway).
+    // Periodic cleanup of processedTasks dedup cache (every 30 min)
     this.processedTasksCleanupInterval = setInterval(() => {
-      const now = Date.now();
-      const expiry = now - this.PROCESSED_TASK_TTL_MS;
+      const expiry = Date.now() - this.PROCESSED_TASK_TTL_MS;
       for (const [key, ts] of this.processedTasks) {
         if (ts < expiry) this.processedTasks.delete(key);
-      }
-      const retransExpiry = now - this.RETRANSLATION_TASK_TTL_MS;
-      for (const [id, entry] of this.latestRetranslationTask) {
-        if (entry.ts < retransExpiry) this.latestRetranslationTask.delete(id);
       }
     }, 30 * 60 * 1000);
     this.processedTasksCleanupInterval.unref?.();
@@ -123,15 +103,6 @@ export class MessageTranslationService extends EventEmitter {
 
   getZmqClient(): ZmqTranslationClient | null {
     return this.zmqClient;
-  }
-
-  /**
-   * Purge all in-memory cached translations for a given message.
-   * Must be called before triggering a re-translation so that the old
-   * cached result is never served in place of the freshly computed one.
-   */
-  invalidateCacheForMessage(messageId: string): void {
-    this.translationCache.deleteByMessageId(messageId);
   }
 
   async initialize(): Promise<void> {
@@ -278,7 +249,8 @@ export class MessageTranslationService extends EventEmitter {
               where: { id: messageId }
             });
             if (savedMessage) {
-              await this._processTranslationsAsync(savedMessage, messageData.targetLanguage, messageData.modelType);
+              const requestedModelType = (messageData as any).modelType;
+              await this._processTranslationsAsync(savedMessage, messageData.targetLanguage, requestedModelType);
             } else {
               logger.error(`❌ [TranslationService] Message ${messageId} non trouvé en base`);
             }
@@ -528,7 +500,7 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`📤 [PARTIAL CACHE] Message ${message.id}: ${cacheResults.length} cached, ${cacheMisses.length} to translate`);
 
       // Déterminer le model type
-      const finalModelType = modelType ?? ((message.content?.length ?? 0) < 80 ? 'medium' : 'premium');
+      const finalModelType = modelType || (message as any).modelType || ((message.content?.length ?? 0) < 80 ? 'medium' : 'premium');
 
       // 6. ENVOYER LA REQUÊTE DE TRADUCTION VIA ZMQ (seulement pour cache misses)
       const request: TranslationRequest = {
@@ -552,14 +524,6 @@ export class MessageTranslationService extends EventEmitter {
     }
   }
 
-
-  /**
-   * Public entry-point for retranslating an edited message.
-   * Fire-and-forget: callers should `.catch()` the returned promise.
-   */
-  async retranslateMessageAsync(messageId: string, messageData: MessageData): Promise<void> {
-    return this._processRetranslationAsync(messageId, messageData);
-  }
 
   /**
    * Traite une retraduction d'un message existant
@@ -615,8 +579,9 @@ export class MessageTranslationService extends EventEmitter {
       
       // 2. DÉTERMINER LE MODEL TYPE
       // Priorité: 1) modelType du messageData (demandé par l'utilisateur), 2) auto-détection
+      const requestedModelType = (messageData as any).modelType;
       const autoModelType = (existingMessage.content?.length ?? 0) < 80 ? 'medium' : 'premium';
-      const finalModelType = messageData.modelType ?? autoModelType;
+      const finalModelType = requestedModelType || autoModelType;
       
       
       // 3. SUPPRIMER LES ANCIENNES TRADUCTIONS POUR LES LANGUES CIBLES
@@ -659,7 +624,6 @@ export class MessageTranslationService extends EventEmitter {
       };
       
       const taskId = await this.zmqClient.sendTranslationRequest(request);
-      this._registerLatestRetranslationTask(messageId, taskId);
       this.stats.incrementRequestsSent();
 
 
@@ -667,45 +631,6 @@ export class MessageTranslationService extends EventEmitter {
       logger.error(`❌ Erreur retraduction: ${error}`);
       this.stats.incrementErrors();
     }
-  }
-
-  /**
-   * Enregistre le taskId de la retraduction la plus récente pour un message.
-   * Sert d'ordering guard : toute réponse ZMQ ultérieure dont le taskId ne
-   * correspond plus à cette entrée est considérée périmée (voir
-   * `_isStaleTranslationResult`). Borné par plafond FIFO — le TTL est balayé
-   * par le timer périodique existant.
-   */
-  private _registerLatestRetranslationTask(messageId: string, taskId: string): void {
-    const now = Date.now();
-
-    if (this.latestRetranslationTask.size >= MessageTranslationService.RETRANSLATION_TASK_MAX) {
-      const expiry = now - this.RETRANSLATION_TASK_TTL_MS;
-      for (const [id, entry] of this.latestRetranslationTask) {
-        if (entry.ts < expiry) this.latestRetranslationTask.delete(id);
-      }
-      // Toujours au plafond après balayage des expirés → évincer le plus ancien.
-      if (this.latestRetranslationTask.size >= MessageTranslationService.RETRANSLATION_TASK_MAX) {
-        const oldest = this.latestRetranslationTask.keys().next().value;
-        if (oldest !== undefined) this.latestRetranslationTask.delete(oldest);
-      }
-    }
-
-    // delete+set : replace l'entrée en fin d'ordre d'insertion (éviction FIFO
-    // = purge d'abord les messages les moins récemment retraduits).
-    this.latestRetranslationTask.delete(messageId);
-    this.latestRetranslationTask.set(messageId, { taskId, ts: now });
-  }
-
-  /**
-   * Vrai si une retraduction plus récente que `taskId` a été dispatchée pour ce
-   * message — le résultat porté par `taskId` correspond alors à un contenu
-   * périmé et doit être ignoré. Un message jamais retraduit (pas d'entrée) n'est
-   * jamais considéré périmé.
-   */
-  private _isStaleTranslationResult(messageId: string, taskId: string): boolean {
-    const latest = this.latestRetranslationTask.get(messageId);
-    return latest !== undefined && latest.taskId !== taskId;
   }
 
   /**
@@ -788,16 +713,8 @@ export class MessageTranslationService extends EventEmitter {
             `language=${participant.language}`
           );
 
-          // Normalise like the registered branch: an anonymous/bot participant
-          // stores `language` unvalidated (anonymous join schema is a bare
-          // `z.string()`), so it may hold `'EN'` or `'en-US'`. Adding it verbatim
-          // would inject an uppercase/locale-cased target that never matches the
-          // lowercase-keyed MessageTranslation store — a duplicated NLLB request
-          // and a Prisme rule #1 miss (client falls back to the original).
           if (participant.language) {
-            languages.add(
-              normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
-            );
+            languages.add(participant.language);
           }
         }
       }
@@ -881,17 +798,6 @@ export class MessageTranslationService extends EventEmitter {
         for (const [key, ts] of this.processedTasks) {
           if (ts < expiry) this.processedTasks.delete(key);
         }
-      }
-
-      // Ordering guard : dropper une traduction dont le contenu source a été
-      // supplanté par une édition plus récente (réponses ZMQ dans le désordre).
-      // Le contenu courant a déjà (ou aura) sa propre traduction ; écraser avec
-      // ce résultat périmé casserait le Prisme Linguistique.
-      if (this._isStaleTranslationResult(data.result.messageId, data.taskId)) {
-        logger.debug(
-          `⏭️ [TranslationService] Traduction périmée droppée (message ${data.result.messageId} ré-édité, task ${data.taskId} supplanté)`
-        );
-        return;
       }
 
 

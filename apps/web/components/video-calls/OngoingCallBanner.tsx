@@ -10,7 +10,6 @@ import React from 'react';
 import { Phone, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { useI18n } from '@/hooks/useI18n';
 
 interface OngoingCallBannerProps {
@@ -32,7 +31,11 @@ export function OngoingCallBanner({
 }: OngoingCallBannerProps) {
   const { t } = useI18n('calls');
 
-  const formatDuration = (seconds: number): string => formatClock(seconds);
+  const formatDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const participantLabel = t(
     participantCount === 1 ? 'calls.banner.participant' : 'calls.banner.participants',

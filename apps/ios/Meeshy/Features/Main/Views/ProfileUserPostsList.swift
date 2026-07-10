@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import os
 import MeeshySDK
 import MeeshyUI
 
@@ -319,8 +318,6 @@ final class ProfileUserPostsViewModel: ObservableObject {
     @Published private(set) var posts: [FeedPost] = []
     @Published var isLoading = false
     @Published var hasMore = true
-
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
     /// Number of posts actually rendered. Grows via the infinite-scroll sentinel
     /// so the nested LazyVStack never builds the whole cached list at once.
     @Published private(set) var renderWindow = ProfileUserPostsViewModel.initialRenderWindow
@@ -616,8 +613,6 @@ final class ProfileUserPostsViewModel: ObservableObject {
             // Mark recorded ONLY on success so a failed flush leaves the ids
             // eligible to re-enqueue when the card next appears.
             recordedImpressionIds.formUnion(batch)
-        } catch {
-            ProfileUserPostsViewModel.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
-        }
+        } catch {}
     }
 }

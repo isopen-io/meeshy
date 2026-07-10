@@ -95,7 +95,6 @@ enum SyncPillLabels {
     private static func otherLabel(forRaw raw: String) -> String {
         switch raw {
         case "markAsRead":              return "Synchronisation des lus"
-        case "markStoryViewed":         return "Synchronisation des vues story"
         case "sendFriendRequest":       return "Demande d'ami"
         case "respondFriendRequest":    return "Réponse demande d'ami"
         case "blockUser":               return "Blocage utilisateur"
@@ -116,7 +115,6 @@ enum SyncPillLabels {
     private static func failedOtherLabel(forRaw raw: String) -> String {
         switch raw {
         case "markAsRead":              return "Lus non synchronisés"
-        case "markStoryViewed":         return "Vues story non synchronisées"
         case "sendFriendRequest":       return "Demande d'ami non envoyée"
         case "respondFriendRequest":    return "Réponse demande d'ami échouée"
         case "blockUser":               return "Blocage non effectué"

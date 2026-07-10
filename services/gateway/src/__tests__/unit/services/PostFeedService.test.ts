@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { PostFeedService } from '../../../services/PostFeedService';
-import { decodeCursor, encodeCursor } from '../../../routes/posts/types';
+import { decodeCursor } from '../../../routes/posts/types';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -292,8 +292,8 @@ describe('PostFeedService.getStories', () => {
     const service = new PostFeedService(mockPrisma);
     const result = await service.getStories('user-1');
 
-    expect(result.items).toHaveLength(1);
-    expect((result.items[0] as any).currentUserReactions).toEqual([]);
+    expect(result).toHaveLength(1);
+    expect((result[0] as any).currentUserReactions).toEqual([]);
   });
 
   it('returns currentUserReactions: ["❤️"] when user reacted to a story', async () => {
@@ -305,28 +305,7 @@ describe('PostFeedService.getStories', () => {
     const service = new PostFeedService(mockPrisma);
     const result = await service.getStories('user-1');
 
-    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
-  });
-
-  it('adds an updatedAt delta filter when updatedSince is provided (G1 delta-sync)', async () => {
-    mockPostFindMany.mockResolvedValue([]);
-    const since = new Date('2026-07-03T10:00:00Z');
-
-    const service = new PostFeedService(mockPrisma);
-    await service.getStories('user-1', { updatedSince: since });
-
-    const where = mockPostFindMany.mock.calls[0][0].where;
-    expect(where.AND).toEqual(expect.arrayContaining([{ updatedAt: { gt: since } }]));
-  });
-
-  it('omits the delta filter without updatedSince (full tray, backward compatible)', async () => {
-    mockPostFindMany.mockResolvedValue([]);
-
-    const service = new PostFeedService(mockPrisma);
-    await service.getStories('user-1');
-
-    const where = mockPostFindMany.mock.calls[0][0].where;
-    expect(JSON.stringify(where)).not.toContain('updatedAt');
+    expect((result[0] as any).currentUserReactions).toEqual(['❤️']);
   });
 
   it('skips the postReaction batch query when the stories list is empty', async () => {
@@ -336,97 +315,6 @@ describe('PostFeedService.getStories', () => {
     await service.getStories('user-1');
 
     expect(mockPostReactionFindMany).not.toHaveBeenCalled();
-  });
-
-  it('uses the lean tray select without storyEffects when projection tray is requested (G1b)', async () => {
-    mockPostFindMany.mockResolvedValue([]);
-
-    const service = new PostFeedService(mockPrisma);
-    await service.getStories('user-1', { projection: 'tray' });
-
-    const args = mockPostFindMany.mock.calls[0][0];
-    expect(args.include).toBeUndefined();
-    expect(args.select).toBeDefined();
-    expect(args.select.storyEffects).toBeUndefined();
-    expect(args.select.translations).toBeUndefined();
-    expect(args.select.media).toBeDefined();
-    expect(args.select.author).toBeDefined();
-  });
-
-  it('keeps the full include without projection (backward compatible)', async () => {
-    mockPostFindMany.mockResolvedValue([]);
-
-    const service = new PostFeedService(mockPrisma);
-    await service.getStories('user-1');
-
-    const args = mockPostFindMany.mock.calls[0][0];
-    expect(args.include).toBeDefined();
-    expect(args.select).toBeUndefined();
-  });
-
-  it('still flags isViewedByMe in the tray projection', async () => {
-    const story = makePost('s-tray', { type: 'STORY' });
-    mockPostFindMany.mockResolvedValue([story]);
-    mockPostViewFindMany.mockResolvedValue([{ postId: 's-tray' }]);
-
-    const service = new PostFeedService(mockPrisma);
-    const result = await service.getStories('user-1', { projection: 'tray' });
-
-    expect((result.items[0] as any).isViewedByMe).toBe(true);
-  });
-
-  it('skips the reactions batch query in the tray projection (rings need no reactions)', async () => {
-    const story = makePost('s-tray-2', { type: 'STORY' });
-    mockPostFindMany.mockResolvedValue([story]);
-    mockPostViewFindMany.mockResolvedValue([]);
-
-    const service = new PostFeedService(mockPrisma);
-    const result = await service.getStories('user-1', { projection: 'tray' });
-
-    expect(mockPostReactionFindMany).not.toHaveBeenCalled();
-    expect((result.items[0] as any).currentUserReactions).toEqual([]);
-  });
-
-  it('adds a keyset filter and tiebreaker ordering when a cursor is provided (G1c)', async () => {
-    mockPostFindMany.mockResolvedValue([]);
-    const service = new PostFeedService(mockPrisma);
-    const anchor = makePost('s-anchor', { type: 'STORY' });
-
-    // Round-trip a real cursor (same encoder the service hands out).
-    const first = await service.getStories('user-1');
-    expect(first.nextCursor).toBeNull();
-    await service.getStories('user-1', { cursor: encodeCursor(anchor.createdAt as Date, anchor.id) });
-
-    const args = mockPostFindMany.mock.calls[1][0];
-    expect(JSON.stringify(args.where)).toContain('"lt"');
-    expect(args.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
-  });
-
-  it('returns hasMore + nextCursor when more stories exist than the limit (G1c)', async () => {
-    const rows = Array.from({ length: 3 }, (_, i) =>
-      makePost(`s-page-${i}`, { type: 'STORY', createdAt: new Date(Date.UTC(2025, 0, 10 - i)) }));
-    mockPostFindMany.mockResolvedValue(rows);
-    mockPostViewFindMany.mockResolvedValue([]);
-    mockPostReactionFindMany.mockResolvedValue([]);
-
-    const service = new PostFeedService(mockPrisma);
-    const result = await service.getStories('user-1', { limit: 2 });
-
-    expect(result.items).toHaveLength(2);
-    expect(result.hasMore).toBe(true);
-    const decoded = decodeCursor(result.nextCursor as string);
-    expect(decoded?.id).toBe('s-page-1');
-  });
-
-  it('first page without cursor keeps the historic 50 cap and take limit+1 (G1c)', async () => {
-    mockPostFindMany.mockResolvedValue([]);
-
-    const service = new PostFeedService(mockPrisma);
-    await service.getStories('user-1');
-
-    const args = mockPostFindMany.mock.calls[0][0];
-    expect(args.take).toBe(51);
-    expect(JSON.stringify(args.where)).not.toContain('"lt"');
   });
 });
 
@@ -680,18 +568,13 @@ describe('PostFeedService.getReels', () => {
     expect(where.AND).toEqual(expect.arrayContaining([{ id: { not: 'seed-1' } }]));
   });
 
-  it('récupère une fenêtre chronologique limit+1 (pas d\'over-fetch-then-drop, cf. getFeed)', async () => {
-    // Anciennement `limit * 4` : la fenêtre était sur-dimensionnée puis tronquée,
-    // et le curseur pris sur un item réordonné par score sautait/re-servait des
-    // réels. Aligné sur l'invariant lossless documenté de getFeed : fenêtre
-    // chronologique + 1 ligne sonde pour détecter hasMore ; le scoring ne
-    // réordonne QUE l'affichage.
+  it('récupère un pool de candidats plus large que la page (limit×4) pour scorer', async () => {
     mockPostFindMany.mockResolvedValue([]);
 
     const service = new PostFeedService(mockPrisma);
     await service.getReels('user-1', { limit: 5 });
 
-    expect(mockPostFindMany.mock.calls[0][0].take).toBe(6);
+    expect(mockPostFindMany.mock.calls[0][0].take).toBe(20);
   });
 
   it('classe le réel du même auteur que le seed AVANT un réel sans affinité', async () => {
@@ -812,81 +695,5 @@ describe('PostFeedService — deletedAt soft-delete matcher (MongoDB isSet)', ()
     const where = mockPostFindMany.mock.calls[0][0].where;
     expect(where.deletedAt).toEqual({ isSet: false });
     expect(where.deletedAt).not.toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// PostFeedService.getReels — chronological cursor (lossless infinite scroll)
-//
-// Regression: getReels used to over-fetch a `limit * 4` pool, score the whole
-// pool, and take `nextCursor` from the score-sorted last item. Since the next
-// page filters `createdAt < cursor.createdAt`, a cursor pulled from an
-// arbitrary score position silently skips (or re-serves) reels. The cursor MUST
-// be the chronologically-oldest reel of the SHOWN window — captured before
-// score reordering — mirroring getFeed's documented lossless-window invariant.
-// ---------------------------------------------------------------------------
-describe('PostFeedService.getReels — chronological cursor', () => {
-  beforeEach(() => {
-    mockPostReactionFindMany.mockResolvedValue([]);
-  });
-
-  const rNew = makePost('r-new', {
-    type: 'REEL',
-    createdAt: new Date('2025-03-03T00:00:00Z'),
-    likeCount: 0,
-    commentCount: 0,
-    viewCount: 0,
-  });
-  const rMid = makePost('r-mid', {
-    type: 'REEL',
-    createdAt: new Date('2025-03-02T00:00:00Z'),
-    commentCount: 1000,
-    viewCount: 100000,
-  });
-  const rOld = makePost('r-old', {
-    type: 'REEL',
-    createdAt: new Date('2025-03-01T00:00:00Z'),
-  });
-
-  it('derives nextCursor from the chronologically-oldest SHOWN reel, not the score-sorted last item', async () => {
-    // findMany returns createdAt desc: [r-new, r-mid, r-old]. limit=2 → the
-    // probe row (r-old) proves hasMore; the shown window is [r-new, r-mid].
-    mockPostFindMany.mockResolvedValue([rNew, rMid, rOld]);
-
-    const service = new PostFeedService(mockPrisma);
-    const result = await service.getReels('user-1', { limit: 2 });
-
-    // Scoring still reorders the DISPLAY: r-mid has heavy engagement and
-    // outscores the fresher-but-empty r-new, so it renders first.
-    expect(result.items.map((p: any) => p.id)).toEqual(['r-mid', 'r-new']);
-
-    // But the cursor is the chronological boundary of the shown window (r-mid,
-    // the oldest of the two shown) — NOT the score-sorted last item (r-new).
-    expect(result.hasMore).toBe(true);
-    const decoded = decodeCursor(result.nextCursor as string);
-    expect(decoded?.id).toBe('r-mid');
-    expect(decoded?.createdAt).toBe(rMid.createdAt.toISOString());
-    // Guard against the reintroduced bug: never the newest (r-new) reel.
-    expect(decoded?.createdAt).not.toBe(rNew.createdAt.toISOString());
-  });
-
-  it('fetches only a limit+1 window (no over-fetch-then-drop)', async () => {
-    mockPostFindMany.mockResolvedValue([rNew, rMid, rOld]);
-
-    const service = new PostFeedService(mockPrisma);
-    await service.getReels('user-1', { limit: 2 });
-
-    expect(mockPostFindMany.mock.calls[0][0].take).toBe(3);
-  });
-
-  it('returns hasMore:false and a null cursor when the window fits in one page', async () => {
-    mockPostFindMany.mockResolvedValue([rNew, rMid]);
-
-    const service = new PostFeedService(mockPrisma);
-    const result = await service.getReels('user-1', { limit: 2 });
-
-    expect(result.hasMore).toBe(false);
-    expect(result.nextCursor).toBeNull();
-    expect(result.items).toHaveLength(2);
   });
 });

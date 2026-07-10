@@ -11,7 +11,7 @@ import { stat } from 'fs/promises';
 import { resolve as pathResolve, sep as pathSep } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
@@ -329,7 +329,10 @@ export async function registerDownloadRoutes(
             const match = /^bytes=(\d*)-(\d*)$/.exec(range);
             if (!match) {
               reply.header('Content-Range', `bytes */${fileSize}`);
-              return sendError(reply, 416, 'Range Not Satisfiable');
+              return reply.status(416).send({
+                success: false,
+                error: 'Range Not Satisfiable',
+              });
             }
             const startStr = match[1];
             const endStr = match[2];
@@ -343,7 +346,10 @@ export async function registerDownloadRoutes(
               || start > end
             ) {
               reply.header('Content-Range', `bytes */${fileSize}`);
-              return sendError(reply, 416, 'Range Not Satisfiable');
+              return reply.status(416).send({
+                success: false,
+                error: 'Range Not Satisfiable',
+              });
             }
             const chunkSize = (end - start) + 1;
 

@@ -2,7 +2,6 @@
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
-import os
 
 // MARK: - Header, Background & Navigation
 extension ConversationView {
@@ -170,9 +169,7 @@ extension ConversationView {
             )
             await conversationListViewModel.refresh()
             router.navigateToConversation(newConv)
-        } catch {
-            Logger.network.error("createDirectConversation failed: \(error.localizedDescription)")
-        }
+        } catch { }
     }
 }
 

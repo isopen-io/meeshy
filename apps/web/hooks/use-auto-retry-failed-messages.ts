@@ -36,8 +36,6 @@ export function useAutoRetryFailedMessages() {
             msg.replyToId,
             undefined,
             msg.attachmentIds?.length ? msg.attachmentIds : undefined,
-            undefined,
-            msg.clientMessageId,
           );
           store.removeFailedMessage(msg.id);
         } catch {

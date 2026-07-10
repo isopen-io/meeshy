@@ -114,21 +114,10 @@ public struct SwipeableRow<Content: View>: View {
             content
                 .environment(\.swipeProgress, swipeProgress)
                 .offset(x: effectiveOffset)
-                // Tap-pour-fermer piloté par GestureMask. L'ancien
-                // `.onTapGesture { if openOffset != 0 close() }` était
-                // systématiquement court-circuité par le tap du contenu
-                // (le geste de l'enfant gagne) : taper une ligne aux actions
-                // révélées OUVRAIT la conversation au lieu de refermer.
-                // Ouvert → `.gesture` : ce tap est actif et les taps du
-                // contenu sont masqués. Fermé → `.subviews` : ce tap est
-                // inerte, le contenu reprend ses interactions. Attaché AVANT
-                // `simultaneousGesture(swipeGesture)` pour que le masque ne
-                // couvre jamais le drag d'ouverture/fermeture.
-                .gesture(
-                    TapGesture().onEnded { close() },
-                    including: openOffset != 0 ? .gesture : .subviews
-                )
                 .simultaneousGesture(swipeGesture)
+                .onTapGesture {
+                    if openOffset != 0 { close() }
+                }
         }
         .clipped()
         .animation(.spring(response: 0.40, dampingFraction: 0.74), value: dragOffset)

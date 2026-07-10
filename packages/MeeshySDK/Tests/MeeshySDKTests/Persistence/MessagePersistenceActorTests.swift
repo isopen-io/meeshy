@@ -270,40 +270,6 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertTrue(fetched[0].isEdited)
     }
 
-    func test_markEdited_ignoresOutOfOrderStaleEdit() async throws {
-        let record = MessageRecordFactory.make(localId: "edit_stale", content: "Original")
-        try await actor.insertOptimistic(record)
-
-        let newer = Date()
-        let older = newer.addingTimeInterval(-60)
-
-        // Newer edit applies first, then a stale/delayed duplicate delivery
-        // of an older edit arrives — it must not clobber the newer content.
-        try await actor.markEdited(localId: "edit_stale", newContent: "Newer edit", editedAt: newer)
-        try await actor.markEdited(localId: "edit_stale", newContent: "Stale edit", editedAt: older)
-
-        let fetched = try actor.messages(for: "conv_default", limit: 10)
-        XCTAssertEqual(fetched[0].content, "Newer edit")
-    }
-
-    /// Regression: `editMessage`'s failure-rollback path calls `markEdited`
-    /// TWICE with the exact same in-memory `editedAt` (optimistic write, then
-    /// rollback to the original content on network failure). GRDB round-trips
-    /// `Date` through a millisecond-precision column, so the second call's
-    /// stored-vs-incoming comparison must tolerate that round-trip noise —
-    /// a strict `<` misfired here and silently dropped the rollback.
-    func test_markEdited_sameEditedAtReappliedTwice_stillApplies() async throws {
-        let record = MessageRecordFactory.make(localId: "edit_rollback", content: "Original")
-        try await actor.insertOptimistic(record)
-
-        let editedAt = Date()
-        try await actor.markEdited(localId: "edit_rollback", newContent: "Edited", editedAt: editedAt)
-        try await actor.markEdited(localId: "edit_rollback", newContent: "Original", editedAt: editedAt)
-
-        let fetched = try actor.messages(for: "conv_default", limit: 10)
-        XCTAssertEqual(fetched[0].content, "Original")
-    }
-
     func test_markDeleted_clearsContentAndSetsTimestamp() async throws {
         let record = MessageRecordFactory.make(localId: "del_1", content: "Delete me")
         try await actor.insertOptimistic(record)

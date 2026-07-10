@@ -377,7 +377,6 @@ public struct APIMessage: Sendable {
     public let messageType: String?
     public let messageSource: String?
     public let isEdited: Bool?
-    public let editedAt: Date?
     public let deletedAt: Date?
     public var isDeleted: Bool { deletedAt != nil }
     public let replyToId: String?
@@ -435,7 +434,7 @@ public struct APIMessage: Sendable {
 extension APIMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
-        case messageType, messageSource, isEdited, editedAt, deletedAt
+        case messageType, messageSource, isEdited, deletedAt
         case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
         case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt
         case isEncrypted, encryptionMode, createdAt, updatedAt
@@ -473,7 +472,6 @@ extension APIMessage: Decodable {
         messageType = try c.decodeIfPresent(String.self, forKey: .messageType)
         messageSource = try c.decodeIfPresent(String.self, forKey: .messageSource)
         isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
-        editedAt = try c.decodeIfPresent(Date.self, forKey: .editedAt)
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
         storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)

@@ -43,24 +43,18 @@ final class StoryItemExpirationTests: XCTestCase {
         XCTAssertTrue(story.isExpired(at: now))
     }
 
-    // MARK: - 21h fallback (no explicit expiresAt — G6, aligné STORY_EXPIRY_HOURS serveur)
+    // MARK: - 24h fallback (no explicit expiresAt)
 
-    func test_isExpired_withoutExpiresAt_underDefaultExpiry_returnsFalse() {
+    func test_isExpired_withoutExpiresAt_under24h_returnsFalse() {
         let now = Date(timeIntervalSince1970: 1_000_000)
-        let story = makeStory(createdAt: now.addingTimeInterval(-StoryItem.defaultExpiryInterval + 3600))
+        let story = makeStory(createdAt: now.addingTimeInterval(-23 * 3600))
         XCTAssertFalse(story.isExpired(at: now))
     }
 
-    func test_isExpired_withoutExpiresAt_exactlyDefaultExpiry_returnsTrue() {
+    func test_isExpired_withoutExpiresAt_exactly24h_returnsTrue() {
         let now = Date(timeIntervalSince1970: 1_000_000)
-        let story = makeStory(createdAt: now.addingTimeInterval(-StoryItem.defaultExpiryInterval))
+        let story = makeStory(createdAt: now.addingTimeInterval(-24 * 3600))
         XCTAssertTrue(story.isExpired(at: now))
-    }
-
-    func test_defaultExpiryInterval_matchesServerStoryExpiryHours() {
-        // G6 — piège dormant fermé : 21 h partout (PostService.STORY_EXPIRY_HOURS,
-        // toStoryGroups fallback, pinDeadline, isExpired).
-        XCTAssertEqual(StoryItem.defaultExpiryInterval, 21 * 3600)
     }
 
     func test_isExpired_withoutExpiresAt_over24h_returnsTrue() {

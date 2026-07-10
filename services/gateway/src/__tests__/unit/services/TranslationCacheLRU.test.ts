@@ -45,35 +45,3 @@ describe('TranslationCache (in-memory) — true LRU eviction', () => {
     expect(cache.get('c')).not.toBeNull();
   });
 });
-
-describe('TranslationCache.deleteByMessageId', () => {
-  it('removes all entries whose key starts with the given messageId prefix', () => {
-    const cache = new TranslationCache(10);
-    const msgId = 'abc123';
-    cache.set(`${msgId}_en_fr`, res(msgId));
-    cache.set(`${msgId}_fr`, res(msgId));
-    cache.set(`${msgId}_en_de`, res(msgId));
-    cache.set('other_en_fr', res('other'));
-
-    const deleted = cache.deleteByMessageId(msgId);
-
-    expect(deleted).toBe(3);
-    expect(cache.get(`${msgId}_en_fr`)).toBeNull();
-    expect(cache.get(`${msgId}_fr`)).toBeNull();
-    expect(cache.get(`${msgId}_en_de`)).toBeNull();
-    expect(cache.get('other_en_fr')).not.toBeNull();
-  });
-
-  it('returns 0 when no entries match', () => {
-    const cache = new TranslationCache(10);
-    cache.set('msg1_en_fr', res('msg1'));
-
-    expect(cache.deleteByMessageId('nonexistent')).toBe(0);
-    expect(cache.size).toBe(1);
-  });
-
-  it('handles empty cache gracefully', () => {
-    const cache = new TranslationCache(10);
-    expect(cache.deleteByMessageId('anyid')).toBe(0);
-  });
-});

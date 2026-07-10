@@ -129,41 +129,6 @@ describe('resolveConversationId', () => {
     });
   });
 
-  describe('cache eviction (bounded FIFO)', () => {
-    it('test_resolveConversationId_evictsOldestWhenOverCap_reQueriesEvictedSlug', async () => {
-      let resolveConversationId: (prisma: PrismaClient, identifier: string) => Promise<string | null>;
-      let CONVERSATION_ID_CACHE_MAX: number;
-      jest.isolateModules(() => {
-        ({ resolveConversationId, CONVERSATION_ID_CACHE_MAX } = require('../../../utils/conversation-id-cache'));
-      });
-
-      // Each distinct slug resolves to a stable 24-char id derived from its index.
-      const idFor = (n: number) => n.toString(16).padStart(24, '0');
-      const findFirst = jest.fn().mockImplementation(({ where }: { where: { identifier: string } }) =>
-        Promise.resolve({ id: idFor(Number(where.identifier.replace('slug-', ''))) })
-      );
-      const prisma = makePrisma(findFirst);
-
-      // Fill the cache to capacity — 'slug-0' is the oldest entry.
-      for (let n = 0; n < CONVERSATION_ID_CACHE_MAX!; n++) {
-        await resolveConversationId!(prisma, `slug-${n}`);
-      }
-      // One more distinct slug pushes the cache over the cap → evicts 'slug-0'.
-      await resolveConversationId!(prisma, `slug-${CONVERSATION_ID_CACHE_MAX!}`);
-
-      findFirst.mockClear();
-
-      // slug-1 was NOT evicted → served from cache (no DB hit).
-      await resolveConversationId!(prisma, 'slug-1');
-      expect(findFirst).not.toHaveBeenCalled();
-
-      // slug-0 WAS evicted → must re-query the DB.
-      const result = await resolveConversationId!(prisma, 'slug-0');
-      expect(findFirst).toHaveBeenCalledWith({ where: { identifier: 'slug-0' }, select: { id: true } });
-      expect(result).toBe(idFor(0));
-    });
-  });
-
   describe('identifier pattern edge cases', () => {
     it('test_resolveConversationId_23charHex_treatedAsSlug', async () => {
       let resolveConversationId: (prisma: PrismaClient, identifier: string) => Promise<string | null>;

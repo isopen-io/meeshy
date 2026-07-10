@@ -35,7 +35,6 @@ export const renderTable = (
 const renderTableRow = (
   node: MarkdownNode,
   index: number,
-  /* istanbul ignore next -- private; callers (renderTable) always pass options explicitly */
   options: RenderOptions = {}
 ): string => {
   const rowChildren = node.children?.map((child, i) => renderTableCell(child, i, options)).join('') || '';
@@ -53,7 +52,6 @@ const renderTableRow = (
 const renderTableCell = (
   node: MarkdownNode,
   index: number,
-  /* istanbul ignore next -- private; callers (renderTableRow) always pass options explicitly */
   options: RenderOptions = {}
 ): string => {
   const cellTag = node.isHeader ? 'th' : 'td';

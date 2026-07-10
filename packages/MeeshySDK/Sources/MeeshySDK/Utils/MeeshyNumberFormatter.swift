@@ -5,26 +5,39 @@ import Foundation
 public enum MeeshyNumberFormatter {
 
     /// Formats a number with k/M/B suffixes and 1 decimal place if needed.
-    /// Example: 1234 -> "1.2k", 1234567 -> "1.2M"
+    /// Example: 1000 -> "1k", 1234 -> "1.2k", 1234567 -> "1.2M"
     /// Fully localized through String Catalogs.
     public static func formatCompact(_ value: Int) -> String {
+        if value < 1000 { return "\(value)" }
         let doubleValue = Double(value)
 
+        let divisor: Double
+        let key: String
+        let defaultSuffix: String
+
         if value >= 1_000_000_000 {
-            let val = String(format: "%.1f", doubleValue / 1_000_000_000.0)
-            return String(format: String(localized: "unit.billions", defaultValue: "%@B", bundle: .main), val)
+            divisor = 1_000_000_000.0
+            key = "unit.billions"
+            defaultSuffix = "B"
+        } else if value >= 1_000_000 {
+            divisor = 1_000_000.0
+            key = "unit.millions"
+            defaultSuffix = "M"
+        } else {
+            divisor = 1_000.0
+            key = "unit.thousands"
+            defaultSuffix = "k"
         }
 
-        if value >= 1_000_000 {
-            let val = String(format: "%.1f", doubleValue / 1_000_000.0)
-            return String(format: String(localized: "unit.millions", defaultValue: "%@M", bundle: .main), val)
+        let normalized = doubleValue / divisor
+        let formattedVal: String
+        if normalized.truncatingRemainder(dividingBy: 1) == 0 {
+            formattedVal = String(format: "%.0f", normalized)
+        } else {
+            formattedVal = String(format: "%.1f", normalized)
         }
 
-        if value >= 1_000 {
-            let val = String(format: "%.1f", doubleValue / 1_000.0)
-            return String(format: String(localized: "unit.thousands", defaultValue: "%@k", bundle: .main), val)
-        }
-
-        return "\(value)"
+        let format = String(localized: String.LocalizationValue(key), defaultValue: "%@\(defaultSuffix)", bundle: .main)
+        return String(format: format, formattedVal)
     }
 }

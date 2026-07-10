@@ -9,8 +9,6 @@ import {
   SignalValidation,
   UserSchemas,
   updateBannerSchema,
-  updateUserProfileSchema,
-  AuthSchemas,
   SignalProtocolLimits,
 } from '../utils/validation.js';
 import { z } from 'zod';
@@ -40,33 +38,6 @@ describe('CommonSchemas', () => {
   it('mongoId should validate format', () => {
     expect(CommonSchemas.mongoId.safeParse('507f1f77bcf86cd799439011').success).toBe(true);
     expect(CommonSchemas.mongoId.safeParse('invalid').success).toBe(false);
-  });
-
-  describe('language', () => {
-    it('accepts ISO 639-1 two-letter codes', () => {
-      expect(CommonSchemas.language.safeParse('fr').success).toBe(true);
-      expect(CommonSchemas.language.safeParse('en').success).toBe(true);
-    });
-
-    it('accepts ISO 639-3 three-letter supported codes', () => {
-      // Cameroonian languages first-class in packages/shared/utils/languages.ts
-      // and preserved verbatim by normalizeLanguageCode — must not be rejected
-      // on sendMessage/editMessage while systemLanguage/regionalLanguage accept them.
-      for (const code of ['bas', 'ksf', 'nnh', 'dua', 'ewo']) {
-        expect(CommonSchemas.language.safeParse(code).success).toBe(true);
-      }
-    });
-
-    it('accepts a BCP-47 region subtag', () => {
-      expect(CommonSchemas.language.safeParse('en-US').success).toBe(true);
-    });
-
-    it('rejects malformed codes', () => {
-      expect(CommonSchemas.language.safeParse('f').success).toBe(false);
-      expect(CommonSchemas.language.safeParse('english').success).toBe(false);
-      expect(CommonSchemas.language.safeParse('EN').success).toBe(false);
-      expect(CommonSchemas.language.safeParse('fr2').success).toBe(false);
-    });
   });
 });
 
@@ -161,45 +132,6 @@ describe('UserSchemas', () => {
   it('should validate minimal user', () => {
     const user = { id: '1', username: 'u', displayName: 'd' };
     expect(UserSchemas.minimal.safeParse(user).success).toBe(true);
-  });
-});
-
-describe('language-code normalization at the write boundary', () => {
-  it('updateUserProfileSchema lowercases in-app language prefs', () => {
-    const parsed = updateUserProfileSchema.parse({
-      systemLanguage: 'EN',
-      regionalLanguage: 'Fr',
-      customDestinationLanguage: 'DE',
-    });
-    expect(parsed.systemLanguage).toBe('en');
-    expect(parsed.regionalLanguage).toBe('fr');
-    expect(parsed.customDestinationLanguage).toBe('de');
-  });
-
-  it('AuthSchemas.register lowercases system/regional language', () => {
-    const parsed = AuthSchemas.register.parse({
-      username: 'alice',
-      password: 'password123',
-      firstName: 'Alice',
-      lastName: 'Smith',
-      email: 'alice@example.com',
-      systemLanguage: 'EN',
-      regionalLanguage: 'ES',
-    });
-    expect(parsed.systemLanguage).toBe('en');
-    expect(parsed.regionalLanguage).toBe('es');
-  });
-
-  it('AuthSchemas.register still rejects unsupported codes', () => {
-    const result = AuthSchemas.register.safeParse({
-      username: 'alice',
-      password: 'password123',
-      firstName: 'Alice',
-      lastName: 'Smith',
-      email: 'alice@example.com',
-      systemLanguage: 'zz',
-    });
-    expect(result.success).toBe(false);
   });
 });
 

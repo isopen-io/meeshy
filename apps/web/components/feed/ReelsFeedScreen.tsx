@@ -29,7 +29,6 @@ import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
-import { copyToClipboard } from '@/lib/clipboard';
 
 const LIKE_EMOJI = '❤️';
 
@@ -140,11 +139,11 @@ export function ReelsFeedScreen() {
 
   const onShare = useCallback(async () => {
     if (!current) return;
-    const { success } = await copyToClipboard(`${window.location.origin}/reel/${current.id}`);
-    if (success) {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/reel/${current.id}`);
       shareMutation.mutate({ postId: current.id });
       toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
-    } else {
+    } catch {
       toastCtx.addToast(t('linkCopyError', "Couldn't copy the link"), 'error');
     }
   }, [current, shareMutation, toastCtx, t]);

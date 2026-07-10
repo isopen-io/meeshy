@@ -7,7 +7,6 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import dynamic from 'next/dynamic';
 import { useResolvedTheme } from '@/hooks/use-resolved-theme';
-import { truncateFilename } from '@/utils/truncate';
 import {
   Download,
   AlertTriangle,
@@ -104,6 +103,13 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   const downloadUrl = attachment.fileUrl;
 
   // Tronquer le nom de fichier sur mobile (32 caractères max)
+  const truncateFilename = (filename: string, maxLength: number = 32): string => {
+    if (filename.length <= maxLength) return filename;
+    const ext = filename.split('.').pop() || '';
+    const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
+    const truncatedName = nameWithoutExt.substring(0, maxLength - ext.length - 4) + '...';
+    return `${truncatedName}.${ext}`;
+  };
 
   return (
     <div

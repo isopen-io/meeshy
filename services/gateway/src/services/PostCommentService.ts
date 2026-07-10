@@ -225,16 +225,10 @@ export class PostCommentService {
       deletedAt: NOT_DELETED,
     };
 
-    // Replies are ordered ASCENDING (oldest → newest, threaded reading order),
-    // so the cursor must select rows strictly AFTER the last item of the
-    // previous page (`gt`). `nextCursor` is the last item's (createdAt, id) —
-    // the largest so far under asc ordering — so `lt` would walk BACKWARD,
-    // re-yielding already-shown replies and permanently dropping the rest.
-    // (Sibling `getComments` orders DESC and correctly pairs that with `lt`.)
     if (cursorData) {
       where.OR = [
-        { createdAt: { gt: new Date(cursorData.createdAt) } },
-        { createdAt: new Date(cursorData.createdAt), id: { gt: cursorData.id } },
+        { createdAt: { lt: new Date(cursorData.createdAt) } },
+        { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
       ];
     }
 

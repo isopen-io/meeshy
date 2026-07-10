@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { isExpired } from '@/utils/time-remaining';
-import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -149,10 +147,11 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
   };
 
   const copyToClipboard = async (text: string) => {
-    const { success } = await copyTextToClipboard(text);
-    if (success) {
+    try {
+      await navigator.clipboard.writeText(text);
       toast.success(t('linkCopied'));
-    } else {
+    } catch (error) {
+      console.error('Erreur copie:', error);
       toast.error(t('errorCopying'));
     }
   };
@@ -189,7 +188,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
 
   const getTokenStatus = (token: AffiliateToken) => {
     if (!token.isActive) return { status: 'inactive', label: t('tokenStatus.inactive'), color: 'bg-gray-500' };
-    if (isExpired(token.expiresAt)) return { status: 'expired', label: t('tokenStatus.expired'), color: 'bg-red-500' };
+    if (token.expiresAt && new Date(token.expiresAt) < new Date()) return { status: 'expired', label: t('tokenStatus.expired'), color: 'bg-red-500' };
     if (token.maxUses && token.currentUses >= token.maxUses) return { status: 'limit', label: t('tokenStatus.limitReached'), color: 'bg-orange-500' };
     return { status: 'active', label: t('tokenStatus.active'), color: 'bg-green-500' };
   };

@@ -136,24 +136,27 @@ final class PresenceManager: ObservableObject {
     /// (closes the "stale online forever" failure mode).
     func ingestSnapshot(_ users: [UserStatusEvent]) {
         guard !users.isEmpty else { return }
-        let updates = Dictionary(
-            uniqueKeysWithValues: users.map { entry in
-                (entry.userId, UserPresence(isOnline: entry.isOnline, lastActiveAt: entry.lastActiveAt))
-            }
-        )
-        presenceMap.merge(updates) { _, newEntry in newEntry }
+        // TODO presence-bulk: expose a single bulk write on PresenceManager once
+        // we lift the cache into CacheCoordinator. Today the dictionary write is
+        // already main-actor and cheap, so per-row assignment is acceptable.
+        for entry in users {
+            presenceMap[entry.userId] = UserPresence(
+                isOnline: entry.isOnline,
+                lastActiveAt: entry.lastActiveAt
+            )
+        }
     }
 
     /// Apply a bulk REST presence response (no `username` field — see
     /// `PresenceRefreshEntry` in `PresenceService`).
     func ingestRefresh(_ entries: [PresenceRefreshEntry]) {
         guard !entries.isEmpty else { return }
-        let updates = Dictionary(
-            uniqueKeysWithValues: entries.map { entry in
-                (entry.userId, UserPresence(isOnline: entry.isOnline, lastActiveAt: entry.lastActiveAt))
-            }
-        )
-        presenceMap.merge(updates) { _, newEntry in newEntry }
+        for entry in entries {
+            presenceMap[entry.userId] = UserPresence(
+                isOnline: entry.isOnline,
+                lastActiveAt: entry.lastActiveAt
+            )
+        }
     }
 
     /// The set of userIds we currently track. Used by `PresenceService` to build

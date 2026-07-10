@@ -79,19 +79,6 @@ export interface SecurityAlertEmailData {
   language?: string;
 }
 
-/**
- * Social / general notification email (mention, missed call, …) sent to an
- * offline user. Rendered as a neutral informational message (never the red
- * security-alert styling) and tracked separately from security alerts.
- */
-export interface NotificationEmailData {
-  to: string;
-  name: string;
-  notificationType: string;
-  details: string;
-  language?: string;
-}
-
 export interface LoginAlertEmailData {
   to: string;
   name: string;
@@ -1019,46 +1006,6 @@ export class EmailService {
         missed_call: { label: 'Missed call', description: 'You have a missed call.', icon: '📞', isInfo: true },
         generic_notification: { label: 'New notification', description: 'You have a new notification.', icon: '🔔', isInfo: true },
       },
-      es: {
-        login_new_device: { label: 'Nuevo inicio de sesión detectado', description: 'Se ha iniciado sesión desde un nuevo dispositivo o navegador.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Contraseña modificada', description: 'Tu contraseña se ha cambiado correctamente.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Autenticación de dos factores activada', description: 'La verificación en dos pasos se ha activado en tu cuenta.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Autenticación de dos factores desactivada', description: 'La verificación en dos pasos se ha desactivado en tu cuenta.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Actividad sospechosa', description: 'Hemos detectado actividad inusual en tu cuenta.', icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'Nueva mención', description: 'Te han mencionado.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Llamada perdida', description: 'Tienes una llamada perdida.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'Nueva notificación', description: 'Tienes una nueva notificación.', icon: '🔔', isInfo: true },
-      },
-      pt: {
-        login_new_device: { label: 'Novo início de sessão detetado', description: 'Foi efetuado um início de sessão a partir de um novo dispositivo ou navegador.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Palavra-passe alterada', description: 'A sua palavra-passe foi alterada com sucesso.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Autenticação de dois fatores ativada', description: 'A verificação em duas etapas foi ativada na sua conta.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Autenticação de dois fatores desativada', description: 'A verificação em duas etapas foi desativada na sua conta.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Atividade suspeita', description: 'Detetámos atividade invulgar na sua conta.', icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'Nova menção', description: 'Você foi mencionado.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Chamada perdida', description: 'Tem uma chamada perdida.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'Nova notificação', description: 'Tem uma nova notificação.', icon: '🔔', isInfo: true },
-      },
-      it: {
-        login_new_device: { label: 'Nuovo accesso rilevato', description: 'È stato effettuato un accesso da un nuovo dispositivo o browser.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Password modificata', description: 'La tua password è stata modificata correttamente.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Autenticazione a due fattori attivata', description: 'La verifica in due passaggi è stata attivata sul tuo account.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Autenticazione a due fattori disattivata', description: 'La verifica in due passaggi è stata disattivata sul tuo account.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Attività sospetta', description: "Abbiamo rilevato un'attività insolita sul tuo account.", icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'Nuova menzione', description: 'Sei stato menzionato.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Chiamata persa', description: 'Hai una chiamata persa.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'Nuova notifica', description: 'Hai una nuova notifica.', icon: '🔔', isInfo: true },
-      },
-      de: {
-        login_new_device: { label: 'Neue Anmeldung erkannt', description: 'Es wurde eine Anmeldung von einem neuen Gerät oder Browser vorgenommen.', icon: '🔐', isInfo: true },
-        password_changed: { label: 'Passwort geändert', description: 'Dein Passwort wurde erfolgreich geändert.', icon: '🔑', isInfo: true },
-        two_factor_enabled: { label: 'Zwei-Faktor-Authentifizierung aktiviert', description: 'Die Zwei-Schritt-Verifizierung wurde für dein Konto aktiviert.', icon: '🛡️', isInfo: true },
-        two_factor_disabled: { label: 'Zwei-Faktor-Authentifizierung deaktiviert', description: 'Die Zwei-Schritt-Verifizierung wurde für dein Konto deaktiviert.', icon: '⚠️', isInfo: false },
-        suspicious_activity: { label: 'Verdächtige Aktivität', description: 'Wir haben ungewöhnliche Aktivitäten in deinem Konto festgestellt.', icon: '🚨', isInfo: false },
-        user_mentioned: { label: 'Neue Erwähnung', description: 'Du wurdest erwähnt.', icon: '💬', isInfo: true },
-        missed_call: { label: 'Verpasster Anruf', description: 'Du hast einen verpassten Anruf.', icon: '📞', isInfo: true },
-        generic_notification: { label: 'Neue Benachrichtigung', description: 'Du hast eine neue Benachrichtigung.', icon: '🔔', isInfo: true },
-      },
     };
     const lang = labels[language] ? language : 'fr';
     // Unknown types fall back to a neutral notification label — NEVER to
@@ -1067,18 +1014,9 @@ export class EmailService {
     return labels[lang][alertType] ?? labels[lang]['generic_notification'];
   }
 
-  /**
-   * Shared renderer for label-driven emails (security alerts AND social/general
-   * notifications). `alert.isInfo` drives neutral (indigo info box) vs. alarming
-   * (red warning box + recommended-actions list) styling. `trackingType`
-   * distinguishes the two families for analytics.
-   */
-  private composeLabeledEmail(
-    data: { to: string; name: string; details: string; language?: string },
-    alert: { label: string; description: string; icon: string; isInfo: boolean },
-    trackingType: string,
-  ): Promise<EmailResult> {
+  async sendSecurityAlertEmail(data: SecurityAlertEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
+    const alert = this.getAlertTypeLabel(data.alertType, data.language);
     const details = data.details && data.details.length > 0 ? data.details : alert.description;
     const headerBg = alert.isInfo ? 'background:linear-gradient(135deg,#6366F1 0%,#4338CA 100%)' : 'background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)';
     const headerTitle = alert.isInfo ? `${alert.icon} ${alert.label}` : `🚨 ${t.securityAlert.title}`;
@@ -1094,21 +1032,7 @@ export class EmailService {
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="${headerBg}"><h1>${headerTitle}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><div class="${alert.isInfo ? 'info' : 'warning'}"><strong>${alert.label}</strong><br>${details}</div>${actionsHtml}<p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
     const text = `${alert.icon} ${alert.label}\n\n${t.common.greeting} ${data.name},\n\n${details}${actionsText}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
-    return this.sendEmail({ to: data.to, subject, html, text, trackingType, trackingLang: data.language });
-  }
-
-  async sendSecurityAlertEmail(data: SecurityAlertEmailData): Promise<EmailResult> {
-    return this.composeLabeledEmail(data, this.getAlertTypeLabel(data.alertType, data.language), 'security_alert');
-  }
-
-  /**
-   * Social / general notification email (mention, missed call, …). Always
-   * informational — never the red security-alert styling — and tracked as
-   * 'notification' so it is never conflated with account-security alerts.
-   */
-  async sendNotificationEmail(data: NotificationEmailData): Promise<EmailResult> {
-    const label = this.getAlertTypeLabel(data.notificationType, data.language);
-    return this.composeLabeledEmail(data, { ...label, isInfo: true }, 'notification');
+    return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'security_alert', trackingLang: data.language });
   }
 
   async sendLoginAlertEmail(data: LoginAlertEmailData): Promise<EmailResult> {

@@ -103,7 +103,7 @@ export function validateSocketEvent<T>(
 
       return {
         success: false,
-        error: `Validation failed: ${error.issues[0]?.message /* istanbul ignore next -- ZodError with no issues is structurally impossible */ ?? 'Invalid data'}`,
+        error: `Validation failed: ${error.issues[0]?.message || 'Invalid data'}`,
         details
       };
     }

@@ -110,21 +110,12 @@ public enum ComposerMode: Equatable {
 
 // MARK: - Attachment Status Body
 
-public struct AttachmentStatusBody: Encodable, Sendable {
-    public let action: String
-    public let playPositionMs: Int
-    public let durationMs: Int
-    public let complete: Bool
-    public var wasZoomed: Bool?
-
-    public init(action: String, playPositionMs: Int, durationMs: Int,
-                complete: Bool, wasZoomed: Bool? = nil) {
-        self.action = action
-        self.playPositionMs = playPositionMs
-        self.durationMs = durationMs
-        self.complete = complete
-        self.wasZoomed = wasZoomed
-    }
+struct AttachmentStatusBody: Encodable, Sendable {
+    let action: String
+    let playPositionMs: Int
+    let durationMs: Int
+    let complete: Bool
+    var wasZoomed: Bool?
 }
 
 // MARK: - Playback Speed

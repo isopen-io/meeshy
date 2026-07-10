@@ -11,7 +11,6 @@ import { resolveParticipantFromMessage } from '../utils/participant-resolver';
 import type { SocketUser } from '../utils/socket-helpers';
 import { AttachmentReactionService } from '../../services/AttachmentReactionService';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentReactionHandler' });
 const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
@@ -25,7 +24,6 @@ export interface AttachmentReactionHandlerDependencies {
 }
 
 export class AttachmentReactionHandler {
-  private rateLimiter = getSocketRateLimiter();
   constructor(private deps: AttachmentReactionHandlerDependencies) {}
 
   async handleAdd(
@@ -69,14 +67,6 @@ export class AttachmentReactionHandler {
         callback?.({ success: false, error: 'User not authenticated' });
         return;
       }
-
-      const rateLimit = action === 'add' ? SOCKET_RATE_LIMITS.REACTION_ADD : SOCKET_RATE_LIMITS.REACTION_REMOVE;
-      const rateLimitAllowed = await this.rateLimiter.checkLimit(userIdOrToken, rateLimit);
-      if (!rateLimitAllowed) {
-        callback?.({ success: false, error: 'Rate limit exceeded' });
-        return;
-      }
-
       const resolved = await resolveParticipantFromMessage({
         prisma: this.deps.prisma,
         userIdOrToken,

@@ -10,7 +10,6 @@ import base64
 import json
 import logging
 import time
-import traceback
 import uuid
 from typing import Dict, Optional, List
 
@@ -19,56 +18,13 @@ logger = logging.getLogger(__name__)
 from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
 from utils.audio_format import read_audio_bytes
 
-# Import du pipeline audio.
-#
-# Incident prod 2026-07-03 : un ImportError au boot du process (ordre
-# d'import/circularité transitoire) était avalé par un `except: pass`
-# silencieux et figeait AUDIO_PIPELINE_AVAILABLE=False pour TOUTE la vie du
-# process — tous les messages vocaux répondaient pipeline_unavailable pendant
-# 8 h alors que le module s'importait très bien après coup (vérifié dans le
-# container). Le flag n'est plus définitif : l'échec est LOGGÉ avec son
-# traceback et l'import est retenté à chaud à la première requête via
-# `_retry_audio_pipeline_import()`.
+# Import du pipeline audio
 AUDIO_PIPELINE_AVAILABLE = False
 try:
     from .audio_message_pipeline import AudioMessagePipeline, AudioMessageMetadata, get_audio_pipeline
     AUDIO_PIPELINE_AVAILABLE = True
 except ImportError:
-    logger.error(
-        "[TRANSLATOR] ❌ Import du pipeline audio échoué au chargement du module — "
-        "retentera à chaud à la première requête audio:\n%s",
-        traceback.format_exc()
-    )
-
-
-def _retry_audio_pipeline_import() -> bool:
-    """Retente l'import du pipeline audio si le boot l'a raté.
-
-    Idempotent et bon marché quand le pipeline est déjà disponible. Met à
-    jour les symboles module (`get_audio_pipeline`, …) et le flag — le mode
-    dégradé du boot n'est plus irréversible.
-    """
-    global AUDIO_PIPELINE_AVAILABLE, AudioMessagePipeline, AudioMessageMetadata, get_audio_pipeline
-    if AUDIO_PIPELINE_AVAILABLE:
-        return True
-    try:
-        from .audio_message_pipeline import (
-            AudioMessagePipeline as _pipeline_cls,
-            AudioMessageMetadata as _metadata_cls,
-            get_audio_pipeline as _get_pipeline,
-        )
-    except ImportError:
-        logger.error(
-            "[TRANSLATOR] ❌ Retry d'import du pipeline audio échoué:\n%s",
-            traceback.format_exc()
-        )
-        return False
-    AudioMessagePipeline = _pipeline_cls
-    AudioMessageMetadata = _metadata_cls
-    get_audio_pipeline = _get_pipeline
-    AUDIO_PIPELINE_AVAILABLE = True
-    logger.info("[TRANSLATOR] ✅ Pipeline audio importé au retry — mode dégradé du boot levé")
-    return True
+    pass
 
 # Import du service audio fetcher
 AUDIO_FETCHER_AVAILABLE = False
@@ -95,9 +51,8 @@ class AudioHandler:
         self.pub_socket = pub_socket
         self.db = database_service
         
-        # Obtenir le pipeline audio si disponible (retente l'import si le
-        # boot du module l'a raté — voir _retry_audio_pipeline_import).
-        if _retry_audio_pipeline_import():
+        # Obtenir le pipeline audio si disponible
+        if AUDIO_PIPELINE_AVAILABLE:
             self.audio_pipeline = get_audio_pipeline()
         else:
             self.audio_pipeline = None
@@ -174,7 +129,7 @@ class AudioHandler:
         task_id = str(uuid.uuid4())
         start_time = time.time()
 
-        if not _retry_audio_pipeline_import():
+        if not AUDIO_PIPELINE_AVAILABLE:
             logger.error("[TRANSLATOR] ❌ Audio pipeline non disponible")
             await self._publish_audio_error(
                 task_id=task_id,

@@ -385,15 +385,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         return preferred
     }
 
-    /// Normalise un identifier de langue vers un code supporté par Meeshy.
-    ///
-    /// Préserve les codes supportés tels quels — y compris les codes ISO 639-3
-    /// des langues sans équivalent 639-1 (`"bas"`, `"dua"`, `"ewo"`), qui NE
-    /// doivent jamais être tronqués à 2 lettres (`"bas"` → `"ba"` = Bachkir,
-    /// langue sans rapport, casserait la résolution du Prisme Linguistique).
-    /// Un ISO 639-3 sans entrée Meeshy est réduit à son préfixe 2-lettres
-    /// uniquement si ce préfixe est lui-même supporté (`"eng"` → `"en"`) ;
-    /// sinon il est rejeté (`nil`) plutôt que corrompu (`"spa"` → `"sp"` ≠ `"es"`).
+    /// Normalise un identifier de langue vers ISO 639-1 (2 lettres lowercase).
     ///
     /// Miroir Swift de `normalizeLanguageCode` :
     /// - `packages/shared/utils/language-normalize.ts` (source de vérité TS)
@@ -412,20 +404,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
               primary.allSatisfy({ $0.isLetter && $0.isASCII }) else {
             return nil
         }
-
-        // Un code supporté (2 ou 3 lettres, ex. "bas") est renvoyé tel quel.
-        if LanguageData.supportedCodeSet.contains(primary) {
-            return primary
-        }
-
-        // ISO 639-3 sans entrée Meeshy : réduction 2-lettres si supportée.
-        if primary.count > 2 {
-            let twoLetter = String(primary.prefix(2))
-            return LanguageData.supportedCodeSet.contains(twoLetter) ? twoLetter : nil
-        }
-
-        // Code 2-lettres inconnu : conservé (comportement historique).
-        return primary
+        return String(primary.prefix(2))
     }
 }
 

@@ -9,7 +9,6 @@ import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbid
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
-import { SecuritySanitizer } from '../../utils/sanitize.js';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -126,7 +125,7 @@ export function registerCommentRoutes(
           const c = await commentService.addComment(
             postId,
             authContext.registeredUser.id,
-            SecuritySanitizer.sanitizeText(parsed.data.content),
+            parsed.data.content,
             parsed.data.parentId,
             parsed.data.effectFlags,
             parsed.data.originalLanguage,
@@ -212,7 +211,6 @@ export function registerCommentRoutes(
               postId,
               commentAuthorId: parentComment.authorId,
               commentId: comment.id,
-              parentCommentId: parsed.data.parentId,
               replyPreview: parsed.data.content,
               parentCommentPreview: parentComment.content?.slice(0, 80),
               // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).

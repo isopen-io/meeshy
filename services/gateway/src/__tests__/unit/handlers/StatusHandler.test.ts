@@ -49,7 +49,6 @@ function makePrisma(overrides: Partial<{
   conversationFindUnique: unknown;
   userFindUnique: unknown;
   participantFindUnique: unknown;
-  participantFindFirst: unknown;
 }> = {}) {
   return {
     conversation: {
@@ -71,9 +70,6 @@ function makePrisma(overrides: Partial<{
               displayName: 'Alice Smith',
             }
       ),
-      // Backs `getBlockedUserIdsAmong`'s "who did I block" lookup — empty by
-      // default (no `blockedUserIds` on the default user fixture).
-      findMany: jest.fn().mockResolvedValue([]),
     },
     participant: {
       findUnique: jest.fn().mockResolvedValue(
@@ -81,18 +77,6 @@ function makePrisma(overrides: Partial<{
           ? overrides.participantFindUnique
           : { id: USER_ID, displayName: 'Guest', nickname: null }
       ),
-      // Backs `resolveParticipant`'s conversation-membership lookup for registered
-      // users (typing:start/typing:stop authorization guard). Defaults to an active
-      // participant so pre-existing tests that don't care about this guard keep
-      // passing; override to `null` to simulate a caller who isn't a member.
-      findFirst: jest.fn().mockResolvedValue(
-        overrides.participantFindFirst !== undefined
-          ? overrides.participantFindFirst
-          : { id: 'participant-1', displayName: 'Alice Smith', nickname: null }
-      ),
-      // Backs `_getBlockedSocketIdsInRoom`'s room-membership lookup — empty by
-      // default (no other online participants → no blocking check needed).
-      findMany: jest.fn().mockResolvedValue([]),
     },
   } as any;
 }
@@ -256,15 +240,6 @@ describe('StatusHandler', () => {
       await handler.handleTypingStart(makeSocket() as any, TYPING_PAYLOAD);
       expect(deps.statusService.updateLastSeen).toHaveBeenCalledWith(USER_ID, false);
     });
-
-    it('does not broadcast when the caller is not a participant of the conversation', async () => {
-      const prisma = makePrisma({ participantFindFirst: null });
-      const deps = makeDeps({ prisma });
-      const handler = new StatusHandler(deps);
-      const socket = makeSocket();
-      await handler.handleTypingStart(socket as any, TYPING_PAYLOAD);
-      expect(socket.to).not.toHaveBeenCalled();
-    });
   });
 
   // ─── anonymous user typing:start ──────────────────────────────────────────
@@ -333,15 +308,6 @@ describe('StatusHandler', () => {
       await handler.handleTypingStop(socket as any, TYPING_PAYLOAD);
       expect(socket.to).not.toHaveBeenCalled();
     });
-
-    it('does not broadcast when the caller is not a participant of the conversation', async () => {
-      const prisma = makePrisma({ participantFindFirst: null });
-      const deps = makeDeps({ prisma });
-      const handler = new StatusHandler(deps);
-      const socket = makeSocket();
-      await handler.handleTypingStop(socket as any, TYPING_PAYLOAD);
-      expect(socket.to).not.toHaveBeenCalled();
-    });
   });
 
   // ─── throttle ─────────────────────────────────────────────────────────────
@@ -389,35 +355,6 @@ describe('StatusHandler', () => {
       jest.advanceTimersByTime(2100);
       await handler.handleTypingStart(socket as any, TYPING_PAYLOAD);
       expect(deps.prisma.user.findUnique).toHaveBeenCalledTimes(2);
-    });
-
-    it('periodic sweep evicts expired identity entries from the cache map', async () => {
-      const deps = makeDeps();
-      const handler = new StatusHandler(deps);
-      await handler.handleTypingStart(makeSocket() as any, TYPING_PAYLOAD);
-      const cache = (handler as any).identityCache as Map<string, unknown>;
-      expect(cache.size).toBe(1);
-      // Past the 60s identity TTL AND at least one 30s cleanup-timer tick.
-      jest.advanceTimersByTime(60_000 + 30_000);
-      expect(cache.size).toBe(0);
-      handler.destroy();
-    });
-
-    it('bounds the identity cache with FIFO eviction of the oldest entry at capacity', async () => {
-      const deps = makeDeps();
-      const handler = new StatusHandler(deps);
-      const cache = (handler as any).identityCache as Map<string, { expiresAt: number }>;
-      const notExpired = Date.now() + 60_000;
-      for (let i = 0; i < 5_000; i++) {
-        cache.set(`user:filler-${i}`, { username: 'x', displayName: 'x', expiresAt: notExpired } as any);
-      }
-      expect(cache.size).toBe(5_000);
-      await handler.handleTypingStart(makeSocket() as any, TYPING_PAYLOAD);
-      // Capacity held: oldest fresh entry evicted, new identity inserted.
-      expect(cache.size).toBe(5_000);
-      expect(cache.has('user:filler-0')).toBe(false);
-      expect(cache.has(`user:${USER_ID}`)).toBe(true);
-      handler.destroy();
     });
   });
 

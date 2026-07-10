@@ -11,7 +11,6 @@ import { CommentList } from './CommentList';
 import type { TranslationItem } from './TranslationToggle';
 import type { Post, PostComment } from '@meeshy/shared/types/post';
 import { getLanguageName } from './flags';
-import { formatCompactNumber } from '@/utils/format-number';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,7 +34,11 @@ function postTranslationsToItems(translations: unknown): TranslationItem[] {
     }));
 }
 
-const formatCount = formatCompactNumber;
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,10 +58,11 @@ export interface PostDetailProps {
   commentsHasMore?: boolean;
   commentsLoadingMore?: boolean;
   onLike?: () => void;
-  onUnlike?: () => void;
   onReact?: (emoji: string) => void;
   onBookmark?: () => void;
-  onUnbookmark?: () => void;
+  isLiked?: boolean;
+  isBookmarked?: boolean;
+  userReaction?: string;
   onShare?: () => void;
   onRepost?: () => void;
   onDelete?: () => void;
@@ -70,8 +74,6 @@ export interface PostDetailProps {
   onUnlikeComment?: (commentId: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onShowReplies?: (commentId: string) => void;
-  /** Commentaire ciblé par une navigation depuis une notification. */
-  targetCommentId?: string | null;
   className?: string;
 }
 
@@ -108,7 +110,6 @@ function PostDetail({
   onUnlikeComment,
   onDeleteComment,
   onShowReplies,
-  targetCommentId,
   className,
 }: PostDetailProps) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -347,7 +348,6 @@ function PostDetail({
           onDeleteComment={onDeleteComment}
           onSubmitComment={onSubmitComment}
           onShowReplies={onShowReplies}
-          targetCommentId={targetCommentId}
         />
       </div>
     </div>

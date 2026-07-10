@@ -172,36 +172,13 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         set { UserDefaults.standard.set(newValue, forKey: cleanupDateKey) }
     }
 
-    // P7-10 — checkpoint de la dernière réconciliation COMPLÈTE (fullSync).
-    // Le delta `?updatedSince=` est upsert-only : une conversation
-    // HARD-supprimée côté serveur n'y apparaît jamais (contrairement aux
-    // `isActive:false` que mergeDeltaConversations retire) → sans
-    // réconciliation périodique, un `conversation:deleted` raté (offline)
-    // laisse une ligne fantôme inouvrable à vie — le cache reste
-    // perpétuellement fresh/stale via les deltas, donc le fullSync de
-    // cold-start ne court jamais (observé E2E 2026-07-02 : « Test Conv »
-    // épinglée, absente du serveur, tuée uniquement par pull-to-refresh).
-    private let fullReconcileKey = "me.meeshy.lastFullReconcileAt"
-    private var lastFullReconcileAt: Date? {
-        get { UserDefaults.standard.object(forKey: fullReconcileKey) as? Date }
-        set { UserDefaults.standard.set(newValue, forKey: fullReconcileKey) }
-    }
-    /// Borne « données jamais rapatriées inutilement » : au plus UN full
-    /// refetch par fenêtre. 24 h par défaut ; injectable pour les tests.
-    private let fullReconcileInterval: TimeInterval
-
-    private var isFullReconcileDue: Bool {
-        Date().timeIntervalSince(lastFullReconcileAt ?? .distantPast) >= fullReconcileInterval
-    }
-
     init(
         cache: CacheCoordinator = .shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         messageService: MessageServiceProviding = MessageService.shared,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
-        api: APIClientProviding = APIClient.shared,
-        fullReconcileInterval: TimeInterval = 86_400
+        api: APIClientProviding = APIClient.shared
     ) {
         self.cache = cache
         self.conversationService = conversationService
@@ -209,7 +186,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         self.messageSocket = messageSocket
         self.socialSocket = socialSocket
         self.api = api
-        self.fullReconcileInterval = fullReconcileInterval
     }
 
     // MARK: - Full Sync (cold start)
@@ -304,9 +280,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // assume "fewer than requested" means the tail (matches REST
         // pagination convention).
         if let total = totalCount, total <= firstPage.count {
-            // Server time, not the device clock (R15b) — authoritative full fetch.
-            lastSyncTimestamp = SyncWatermark.fromFullSync(receivedUpdatedAt: firstPage.map(\.updatedAt), fallback: lastSyncTimestamp)
-            lastFullReconcileAt = Date()
+            lastSyncTimestamp = Date()
             return true
         }
         if totalCount == nil && firstPageReturnedCount < pageSize {
@@ -499,9 +473,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
 
         if succeeded {
-            // Server time, not the device clock (R15b) — authoritative full fetch.
-            lastSyncTimestamp = SyncWatermark.fromFullSync(receivedUpdatedAt: merged.map(\.updatedAt), fallback: lastSyncTimestamp)
-            lastFullReconcileAt = Date()
+            lastSyncTimestamp = Date()
         }
         return succeeded
     }
@@ -510,21 +482,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     @discardableResult
     public func syncSinceLastCheckpoint() async -> Bool {
-        let ok = await deltaSyncCore()
-        // P7-10 — réconciliation complète périodique, chaînée APRÈS le delta
-        // (hors du garde `isSyncing` que le corps tient) : fullSync remplace
-        // la liste par la vérité serveur → purge les fantômes hard-supprimés
-        // que le delta upsert-only ne peut pas voir. Bornée à 1× par
-        // `fullReconcileInterval` (24 h) — le delta reste le chemin nominal
-        // bon marché. Seulement sur delta RÉUSSI : offline/panne, on garde
-        // le cache intact (local-first) et on retentera au prochain delta.
-        if ok && isFullReconcileDue {
-            await fullSync()
-        }
-        return ok
-    }
-
-    private func deltaSyncCore() async -> Bool {
         guard !isSyncing else { return true }
         // Throttle bursts: when several signals (socket reconnect,
         // foreground return, cache-stale revalidate) fire within the
@@ -573,11 +530,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
             _conversationsDidChange.send()
 
-            // Advance the delta cursor to the newest SERVER `updatedAt` seen, not
-            // the device clock (R15b) — a device ahead of the server used to push
-            // `updatedSince` past real updates in `[serverNow, deviceNow]` and drop
-            // them. Never regresses; an empty delta keeps the prior cursor.
-            lastSyncTimestamp = SyncWatermark.advanced(previous: lastSyncTimestamp, receivedUpdatedAt: deltaConversations.map(\.updatedAt))
+            lastSyncTimestamp = Date()
             return true
         } catch {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
@@ -830,14 +783,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
-        // Attachment content updated (Whisper transcription, NLLB+TTS audio translation)
-        messageSocket.attachmentUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleAttachmentUpdated(event) }
-            }
-            .store(in: &socketSubscriptions)
-
         // Conversation closed
         messageSocket.conversationClosed
             .sink { [weak self] event in
@@ -916,12 +861,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == msg.conversationId }) {
-                    // Monotone guard: a REST send racing the socket broadcast
-                    // (or any other out-of-order `message:new`) must not
-                    // regress the row to older content/position once a
-                    // newer message has already been applied.
-                    guard msg.createdAt > updated[idx].lastMessageAt else { return updated }
-                    updated[idx].lastMessagePreview = msg.content.meeshyPreviewTruncated
+                    updated[idx].lastMessagePreview = msg.content
                     updated[idx].lastMessageId = msg.id
                     if let resolvedSenderName, !resolvedSenderName.isEmpty {
                         updated[idx].lastMessageSenderName = resolvedSenderName
@@ -1009,7 +949,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].lastMessagePreview = newContent.meeshyPreviewTruncated
+                updated[idx].lastMessagePreview = newContent
             }
             return updated
         }
@@ -1033,7 +973,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 if let newLast {
-                    updated[idx].lastMessagePreview = newLast.content.meeshyPreviewTruncated
+                    updated[idx].lastMessagePreview = newLast.content
                     updated[idx].lastMessageId = newLast.id
                     if let name = newLast.senderName ?? newLast.senderUsername, !name.isEmpty {
                         updated[idx].lastMessageSenderName = name
@@ -1150,11 +1090,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // a 'received' read-status:updated arrives moments later and wipes
         // it to 0 even though the conversation is still unread.
         if eventUserId == userId && event.type == "read" {
-            let authoritative = event.unreadCount ?? 0
             await cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
-                    updated[idx].userState.unreadCount = authoritative
+                    updated[idx].userState.unreadCount = 0
                 }
                 return updated
             }
@@ -1225,68 +1164,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         _messagesDidChange.send(event.conversationId)
     }
 
-    /// Patches the enriched attachment fields (Whisper transcription, NLLB+TTS audio
-    /// translations) into the cached `MeeshyMessage` for conversations that are not
-    /// currently open. The open-conversation path is handled by `ConversationSocketHandler`
-    /// which also updates the GRDB store and in-memory ViewModel dictionaries; this
-    /// handler ensures the `CacheCoordinator` message cache stays consistent for every
-    /// conversation, preventing stale previews after the user closes and reopens a chat.
-    private func handleAttachmentUpdated(_ event: AttachmentUpdatedEvent) async {
-        await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
-            guard let idx = msg.attachments.firstIndex(where: { $0.id == event.attachment.id }) else { return }
-            let api = event.attachment
-            if let t = api.transcription {
-                msg.attachments[idx].transcription = MeeshyMessageAttachment.EmbeddedTranscription(
-                    text: t.resolvedText,
-                    language: t.language ?? "und",
-                    confidence: t.confidence,
-                    durationMs: t.durationMs,
-                    speakerCount: t.speakerCount,
-                    segments: t.segments?.map { s in
-                        MeeshyMessageAttachment.EmbeddedTranscription.TranscriptionSegmentData(
-                            text: s.text,
-                            startTime: s.startTime,
-                            endTime: s.endTime,
-                            speakerId: s.speakerId
-                        )
-                    }
-                )
-            }
-            if let translations = api.translations {
-                let mapped = translations.compactMapValues { t -> MeeshyMessageAttachment.EmbeddedAudioTranslation? in
-                    guard let url = t.url else { return nil }
-                    return MeeshyMessageAttachment.EmbeddedAudioTranslation(
-                        url: url,
-                        transcription: t.transcription,
-                        durationMs: t.durationMs,
-                        format: t.format,
-                        cloned: t.cloned,
-                        quality: t.quality,
-                        voiceModelId: t.voiceModelId,
-                        ttsModel: t.ttsModel,
-                        segments: t.segments?.map { s in
-                            MeeshyMessageAttachment.EmbeddedTranscription.TranscriptionSegmentData(
-                                text: s.text,
-                                startTime: s.startTime,
-                                endTime: s.endTime,
-                                speakerId: s.speakerId
-                            )
-                        }
-                    )
-                }
-                if !mapped.isEmpty {
-                    msg.attachments[idx].audioTranslations = mapped
-                }
-            }
-        }
-        _messagesDidChange.send(event.conversationId)
-    }
-
     public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async {
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].lastMessagePreview = messagePreview.meeshyPreviewTruncated
+                updated[idx].lastMessagePreview = messagePreview
                 updated[idx].lastMessageAt = messageAt
                 // Propagate the author so the conversation list renders
                 // "You: <preview>" in groups immediately — previously this

@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { serializeAttachmentForSocket, aggregateAttachmentReactions } from '../serializeAttachmentForSocket';
+import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 
 describe('serializeAttachmentForSocket', () => {
   it('preserves transcription and translations on audio attachment', () => {
@@ -79,108 +79,5 @@ describe('serializeAttachmentForSocket', () => {
 
     const result = serializeAttachmentForSocket(attachment as Record<string, unknown>);
     expect(result.fileSize).toBe(0);
-  });
-
-  it('aggregates reactions into reactionSummary and currentUserReactions', () => {
-    const attachment = {
-      id: 'att-4',
-      messageId: 'msg-4',
-      mimeType: 'image/png',
-      fileSize: 5000,
-      fileUrl: 'https://cdn.meeshy.me/uploads/img.png',
-      transcription: null,
-      translations: null,
-      createdAt: new Date(),
-      reactions: [
-        { emoji: '❤️', participantId: 'user-A' },
-        { emoji: '❤️', participantId: 'user-B' },
-        { emoji: '👍', participantId: 'user-A' },
-      ],
-    };
-
-    const result = serializeAttachmentForSocket(attachment as Record<string, unknown>, 'user-A');
-
-    expect(result.reactionSummary).toEqual({ '❤️': 2, '👍': 1 });
-    expect(result.currentUserReactions).toEqual(['❤️', '👍']);
-  });
-
-  it('returns empty reactions when no reactions provided', () => {
-    const attachment = {
-      id: 'att-5',
-      messageId: 'msg-5',
-      mimeType: 'image/png',
-      fileSize: 1000,
-      fileUrl: 'https://cdn.meeshy.me/uploads/img2.png',
-      transcription: null,
-      translations: null,
-      createdAt: new Date(),
-    };
-
-    const result = serializeAttachmentForSocket(attachment as Record<string, unknown>);
-
-    expect(result.reactionSummary).toEqual({});
-    expect(result.currentUserReactions).toEqual([]);
-  });
-
-  it('currentUserReactions is empty when currentParticipantId not provided', () => {
-    const attachment = {
-      id: 'att-6',
-      messageId: 'msg-6',
-      mimeType: 'image/png',
-      fileSize: 1000,
-      fileUrl: 'https://cdn.meeshy.me/uploads/img3.png',
-      transcription: null,
-      translations: null,
-      createdAt: new Date(),
-      reactions: [
-        { emoji: '😊', participantId: 'user-X' },
-      ],
-    };
-
-    const result = serializeAttachmentForSocket(attachment as Record<string, unknown>);
-
-    expect(result.reactionSummary).toEqual({ '😊': 1 });
-    expect(result.currentUserReactions).toEqual([]);
-  });
-});
-
-describe('aggregateAttachmentReactions', () => {
-  it('returns empty results for null rows', () => {
-    const result = aggregateAttachmentReactions(null);
-    expect(result.reactionSummary).toEqual({});
-    expect(result.currentUserReactions).toEqual([]);
-  });
-
-  it('returns empty results for undefined rows', () => {
-    const result = aggregateAttachmentReactions(undefined);
-    expect(result.reactionSummary).toEqual({});
-    expect(result.currentUserReactions).toEqual([]);
-  });
-
-  it('counts multiple reactions of the same emoji', () => {
-    const rows = [
-      { emoji: '❤️', participantId: 'u1' },
-      { emoji: '❤️', participantId: 'u2' },
-      { emoji: '❤️', participantId: 'u3' },
-    ];
-    const result = aggregateAttachmentReactions(rows);
-    expect(result.reactionSummary['❤️']).toBe(3);
-  });
-
-  it('does not duplicate an emoji in currentUserReactions if user reacted twice (defensive)', () => {
-    const rows = [
-      { emoji: '❤️', participantId: 'u1' },
-      { emoji: '❤️', participantId: 'u1' },
-    ];
-    const result = aggregateAttachmentReactions(rows, 'u1');
-    expect(result.currentUserReactions).toEqual(['❤️']);
-    expect(result.reactionSummary['❤️']).toBe(2);
-  });
-
-  it('does not add to currentUserReactions when participant does not match', () => {
-    const rows = [{ emoji: '👍', participantId: 'other-user' }];
-    const result = aggregateAttachmentReactions(rows, 'u1');
-    expect(result.currentUserReactions).toEqual([]);
-    expect(result.reactionSummary['👍']).toBe(1);
   });
 });

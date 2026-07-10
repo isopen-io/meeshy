@@ -83,24 +83,4 @@ export class TranslationCache {
   has(key: string): boolean {
     return this.cache.has(key);
   }
-
-  /**
-   * Supprime toutes les entrées de cache liées à un message donné.
-   * Les clés ont la forme `${messageId}_${sourceLang}_${targetLang}` ou
-   * `${messageId}_${targetLang}` — un préfixe `${messageId}_` identifie
-   * toutes les traductions de ce message.
-   * À appeler avant toute retraduction (message édité) pour éviter que
-   * l'ancien résultat caché ne soit servi à la place du nouveau.
-   */
-  deleteByMessageId(messageId: string): number {
-    const prefix = `${messageId}_`;
-    const toDelete: string[] = [];
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(prefix)) {
-        toDelete.push(key);
-      }
-    }
-    toDelete.forEach(k => this.cache.delete(k));
-    return toDelete.length;
-  }
 }

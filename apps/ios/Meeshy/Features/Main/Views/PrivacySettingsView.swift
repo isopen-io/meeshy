@@ -48,7 +48,6 @@ struct PrivacySettingsView: View {
             Text(String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -165,7 +164,6 @@ struct PrivacySettingsView: View {
             ))
             .labelsHidden()
             .tint(Color(hex: accentColor))
-            .accessibilityLabel(title)
         }
     }
 
@@ -218,7 +216,6 @@ struct PrivacySettingsView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(hex: color).opacity(0.12))
                 )
-                .accessibilityHidden(true)
 
             Text(title)
                 .font(MeeshyFont.relative(14, weight: .medium))

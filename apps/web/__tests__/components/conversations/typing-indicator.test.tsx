@@ -7,18 +7,11 @@ import type { User } from '@/types';
 // Mock hooks
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string, params?: Record<string, string>) => {
+    t: (key: string) => {
       const translations: Record<string, string> = {
         'typingIndicator.typing': 'is typing',
-        'single': '{name} is typing...',
-        'double': '{name1} and {name2} are typing...',
-        'multiple': '{name} and {count} others are typing...',
       };
-      let value = translations[key] || key;
-      if (params) {
-        value = value.replace(/\{(\w+)\}/g, (_, k) => params[k] ?? `{${k}}`);
-      }
-      return value;
+      return translations[key] || key;
     },
   }),
 }));
@@ -91,7 +84,7 @@ describe('TypingIndicator', () => {
         />
       );
 
-      expect(screen.getByText(/john is typing/)).toBeInTheDocument();
+      expect(screen.getByText(/john écrit/)).toBeInTheDocument();
     });
 
     it('should apply custom className', () => {
@@ -116,7 +109,7 @@ describe('TypingIndicator', () => {
         />
       );
 
-      expect(screen.getByText(/john is typing/)).toBeInTheDocument();
+      expect(screen.getByText(/john écrit/)).toBeInTheDocument();
     });
   });
 
@@ -129,7 +122,7 @@ describe('TypingIndicator', () => {
         />
       );
 
-      expect(screen.getByText(/john and jane are typing/)).toBeInTheDocument();
+      expect(screen.getByText(/john et jane écrivent/)).toBeInTheDocument();
     });
   });
 
@@ -142,7 +135,7 @@ describe('TypingIndicator', () => {
         />
       );
 
-      expect(screen.getByText(/john and 2 others are typing/)).toBeInTheDocument();
+      expect(screen.getByText(/3 personnes écrivent/)).toBeInTheDocument();
     });
   });
 
@@ -169,7 +162,7 @@ describe('TypingIndicator', () => {
         />
       );
 
-      expect(screen.getByText(/jane is typing/)).toBeInTheDocument();
+      expect(screen.getByText(/jane écrit/)).toBeInTheDocument();
     });
 
     it('should filter out typing users from other conversations', () => {
@@ -187,7 +180,7 @@ describe('TypingIndicator', () => {
       );
 
       // Should only show user-1 from chat-1
-      expect(screen.getByText(/john is typing/)).toBeInTheDocument();
+      expect(screen.getByText(/john écrit/)).toBeInTheDocument();
     });
   });
 
@@ -200,23 +193,23 @@ describe('TypingIndicator', () => {
         />
       );
 
-      const initialText = screen.getByText(/john is typing/).textContent;
+      const initialText = screen.getByText(/john écrit/).textContent;
 
       act(() => {
         jest.advanceTimersByTime(500);
       });
 
-      const textAfter500ms = screen.getByText(/john is typing/).textContent;
+      const textAfter500ms = screen.getByText(/john écrit/).textContent;
 
       // Text should have changed (dots animation)
       // Due to animation cycle, content might be the same or different
-      expect(screen.getByText(/john is typing/)).toBeInTheDocument();
+      expect(screen.getByText(/john écrit/)).toBeInTheDocument();
 
       act(() => {
         jest.advanceTimersByTime(500);
       });
 
-      expect(screen.getByText(/john is typing/)).toBeInTheDocument();
+      expect(screen.getByText(/john écrit/)).toBeInTheDocument();
     });
 
     it('should cycle through dot animation states', () => {
@@ -228,14 +221,14 @@ describe('TypingIndicator', () => {
       );
 
       // Initial state
-      expect(screen.getByText(/john is typing/)).toBeInTheDocument();
+      expect(screen.getByText(/john écrit/)).toBeInTheDocument();
 
       // After 2 seconds (4 intervals), should cycle through all states
       act(() => {
         jest.advanceTimersByTime(2000);
       });
 
-      expect(screen.getByText(/john is typing/)).toBeInTheDocument();
+      expect(screen.getByText(/john écrit/)).toBeInTheDocument();
     });
   });
 

@@ -15,3 +15,4 @@ export { OngoingCallBanner } from './OngoingCallBanner';
 
 // Hooks
 export { useWebRTC } from './hooks/useWebRTC';
+export { useCallSignaling } from './hooks/useCallSignaling';

@@ -371,7 +371,6 @@ struct StoryActionSidebarView: View {
                                     )
                                 }
                             } label: {
-                                // Drapeau dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                                 Text(lang.flag)
                                     .font(MeeshyFont.relative(22))
                                     .frame(width: 38, height: 38)
@@ -399,7 +398,6 @@ struct StoryActionSidebarView: View {
                     Circle()
                         .fill(Color.white.opacity(0.15))
                         .frame(width: 38, height: 38)
-                    // Glyphe dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                     Image(systemName: "plus")
                         .font(MeeshyFont.relative(13, weight: .bold))
                         .foregroundColor(.white.opacity(0.85))
@@ -695,7 +693,6 @@ struct StoryHeaderView: View {
                     }
                 }
             } label: {
-                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "ellipsis")
                     .font(MeeshyFont.relative(15, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))
@@ -716,7 +713,6 @@ struct StoryHeaderView: View {
                 HapticFeedback.light()
                 dismissViewer()
             } label: {
-                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))

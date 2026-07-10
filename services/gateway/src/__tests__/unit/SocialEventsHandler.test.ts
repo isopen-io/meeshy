@@ -354,12 +354,10 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
 
-      // Single deduped emit (io.to([...])) → an author watching their own story
-      // (in both rooms) receives STORY_REACTED exactly once, no `+2`.
-      expect(mockIO.to).toHaveBeenCalledTimes(1);
-      const rooms = mockIO.to.mock.calls[0][0] as string[];
-      expect(rooms).toContain(ROOMS.feed(AUTHOR_ID));
-      expect(rooms).toContain(ROOMS.post('story-1'));
+      // Two emits: feed:{authorId} and post:{storyId}
+      expect(mockIO.to).toHaveBeenCalledTimes(2);
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post('story-1'));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.STORY_REACTED, data);
     });
   });
@@ -425,11 +423,10 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
 
-      // Single deduped emit (io.to([...])) → author-viewer counts the emoji once.
-      expect(mockIO.to).toHaveBeenCalledTimes(1);
-      const rooms = mockIO.to.mock.calls[0][0] as string[];
-      expect(rooms).toContain(ROOMS.feed(AUTHOR_ID));
-      expect(rooms).toContain(ROOMS.post('status-1'));
+      // Two emits: feed:{authorId} and post:{statusId}
+      expect(mockIO.to).toHaveBeenCalledTimes(2);
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post('status-1'));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.STATUS_REACTED, data);
     });
 
@@ -442,9 +439,8 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
 
-      const rooms = mockIO.to.mock.calls[0][0] as string[];
-      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
-      expect(rooms).not.toContain(ROOMS.feed(FRIEND_2));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
     });
   });
 
@@ -899,7 +895,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
       expect(calledRooms).toContain(ROOMS.post('story-42'));
       // Both emits use the same event constant
@@ -916,7 +912,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
       expect(calledRooms).not.toContain(ROOMS.feed(FRIEND_1));
       expect(calledRooms).not.toContain(ROOMS.feed(FRIEND_2));
     });
@@ -936,7 +932,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStoryUnreacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
       expect(calledRooms).toContain(ROOMS.post('story-42'));
       const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
@@ -968,7 +964,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
       expect(calledRooms).toContain(ROOMS.post('status-99'));
     });
@@ -988,7 +984,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStatusUnreacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
       expect(calledRooms).toContain(ROOMS.post('status-99'));
       const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
@@ -1026,7 +1022,7 @@ describe('SocialEventsHandler', () => {
       const post = createMockPost();
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
       expect(calledRooms).toContain(ROOMS.feed(FRIEND_1));
       expect(calledRooms).toContain(ROOMS.feed(FRIEND_2));
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
@@ -1044,7 +1040,7 @@ describe('SocialEventsHandler', () => {
       };
       handler.broadcastStoryViewed(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
       expect(calledRooms).toEqual([ROOMS.feed(AUTHOR_ID)]);
     });
   });

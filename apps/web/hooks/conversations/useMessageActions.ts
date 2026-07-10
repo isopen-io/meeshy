@@ -26,8 +26,8 @@ interface UseMessageActionsOptions {
   removeMessage: (id: string) => void;
   /** Refresh des messages */
   refreshMessages: () => Promise<void>;
-  /** Fonction de traduction (le 2e argument est un secours natif anti-flash) */
-  t: (key: string, fallback?: string) => string;
+  /** Fonction de traduction */
+  t: (key: string) => string;
   /** Fonction pour charger plus de messages */
   loadMore?: () => Promise<void>;
   /** Y a-t-il plus de messages à charger */
@@ -66,7 +66,7 @@ export function useMessageActions({
     // Sanitize input
     const sanitizedContent = sanitizeText(newContent);
     if (!sanitizedContent.trim()) {
-      toast.error(t('messages.contentRequired', 'Content required'));
+      toast.error(t('messages.contentRequired') || 'Content required');
       return;
     }
 
@@ -85,10 +85,10 @@ export function useMessageActions({
         originalLanguage,
       });
 
-      toast.success(t('messages.messageEdited', 'Message edited successfully'));
+      toast.success(t('messages.messageEdited') || 'Message edited');
     } catch (error) {
       console.error('Edit error:', error);
-      toast.error(t('messages.editError', 'Error editing message'));
+      toast.error(t('messages.editError') || 'Edit failed');
 
       // Rollback: recharger les messages
       await refreshMessages();
@@ -107,10 +107,10 @@ export function useMessageActions({
       // API call
       await messageService.deleteMessage(conversationId, messageId);
 
-      toast.success(t('messages.messageDeleted', 'Message deleted successfully'));
+      toast.success(t('messages.messageDeleted') || 'Message deleted');
     } catch (error) {
       console.error('Delete error:', error);
-      toast.error(t('messages.deleteError', 'Error deleting message'));
+      toast.error(t('messages.deleteError') || 'Delete failed');
 
       // Rollback
       await refreshMessages();
@@ -133,7 +133,7 @@ export function useMessageActions({
         element.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
       }, 2000);
 
-      toast.success(t('messages.messageFound', 'Message found!'));
+      toast.success(t('messages.messageFound') || 'Message found');
     };
 
     // Helper pour attendre l'élément dans le DOM
@@ -156,7 +156,7 @@ export function useMessageActions({
     // Étape 2: Vérifier si le message est chargé mais pas rendu
     const messageExists = messages.some(msg => msg.id === messageId);
     if (messageExists) {
-      toast.info(t('messages.loadingMessage', 'Loading message...'));
+      toast.info(t('messages.loadingMessage') || 'Loading message...');
       messageElement = await waitForElement(messageId);
       if (messageElement) {
         scrollToMessageElement(messageElement);
@@ -166,11 +166,11 @@ export function useMessageActions({
 
     // Étape 3: Charger plus de messages si disponible
     if (!loadMore || !hasMore) {
-      toast.error(t('messages.messageNotFound', 'Message not found'));
+      toast.error(t('messages.messageNotFound') || 'Message not found');
       return;
     }
 
-    toast.info(t('messages.loadingOlderMessages', 'Loading older messages...'));
+    toast.info(t('messages.loadingOlderMessages') || 'Loading older messages...');
 
     // Max 3 tentatives de chargement
     const maxLoadAttempts = 3;
@@ -188,7 +188,7 @@ export function useMessageActions({
     }
 
     // Message non trouvé
-    toast.error(t('messages.messageNotFound', 'Message not found'));
+    toast.error(t('messages.messageNotFound') || 'Message not found');
   }, [messages, t, loadMore, hasMore]);
 
   // Extraire les attachments images pour la galerie

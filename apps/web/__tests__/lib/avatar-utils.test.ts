@@ -29,24 +29,22 @@ describe('Avatar Utils Module', () => {
       expect(getUserInitials(user as any)).toBe('JD');
     });
 
-    it('should use two letters of firstName when lastName is missing', () => {
+    it('should use firstName only when lastName is missing', () => {
       const user = {
         id: '1',
         firstName: 'John',
       };
 
-      // Nom résolu "John" → mot unique → 2 premières lettres (canonique)
-      expect(getUserInitials(user as any)).toBe('JO');
+      expect(getUserInitials(user as any)).toBe('J');
     });
 
-    it('should use two letters of lastName when firstName is missing', () => {
+    it('should use lastName only when firstName is missing', () => {
       const user = {
         id: '1',
         lastName: 'Doe',
       };
 
-      // Nom résolu "Doe" → mot unique → 2 premières lettres
-      expect(getUserInitials(user as any)).toBe('DO');
+      expect(getUserInitials(user as any)).toBe('D');
     });
 
     it('should use displayName when no first/last name', () => {
@@ -58,24 +56,22 @@ describe('Avatar Utils Module', () => {
       expect(getUserInitials(user as any)).toBe('JD');
     });
 
-    it('should use two letters from displayName with one word', () => {
+    it('should use single initial from displayName with one word', () => {
       const user = {
         id: '1',
         displayName: 'John',
       };
 
-      // Mot unique → 2 premières lettres (canonique)
-      expect(getUserInitials(user as any)).toBe('JO');
+      expect(getUserInitials(user as any)).toBe('J');
     });
 
-    it('should use two letters from username when no other name data', () => {
+    it('should use username when no other name data', () => {
       const user = {
         id: '1',
         username: 'johndoe123',
       };
 
-      // Nom résolu "johndoe123" → mot unique → 2 premières lettres
-      expect(getUserInitials(user as any)).toBe('JO');
+      expect(getUserInitials(user as any)).toBe('J');
     });
 
     it('should return ?? when user has no name data', () => {
@@ -103,8 +99,7 @@ describe('Avatar Utils Module', () => {
         lastName: 'Doe',
       };
 
-      // Nom résolu "Doe" → mot unique → 2 premières lettres
-      expect(getUserInitials(user as any)).toBe('DO');
+      expect(getUserInitials(user as any)).toBe('D');
     });
 
     it('should handle whitespace in displayName', () => {
@@ -122,8 +117,8 @@ describe('Avatar Utils Module', () => {
         displayName: 'John Michael Doe',
       };
 
-      // Multi-mot → 1ʳᵉ lettre du 1er + 1ʳᵉ lettre du dernier mot (canonique)
-      expect(getUserInitials(user as any)).toBe('JD');
+      // Should use first two words
+      expect(getUserInitials(user as any)).toBe('JM');
     });
 
     it('should handle special characters in names', () => {
@@ -181,8 +176,7 @@ describe('Avatar Utils Module', () => {
         },
       };
 
-      // Nom résolu "Anonymous" → mot unique → 2 premières lettres
-      expect(getMessageInitials(message)).toBe('AN');
+      expect(getMessageInitials(message)).toBe('A');
     });
 
     it('should handle sender with only lastName', () => {
@@ -193,8 +187,7 @@ describe('Avatar Utils Module', () => {
         },
       };
 
-      // Nom résolu "User" → mot unique → 2 premières lettres
-      expect(getMessageInitials(message)).toBe('US');
+      expect(getMessageInitials(message)).toBe('U');
     });
 
     it('should handle sender with username only', () => {
@@ -205,8 +198,7 @@ describe('Avatar Utils Module', () => {
         },
       };
 
-      // Nom résolu "anon123" → mot unique → 2 premières lettres
-      expect(getMessageInitials(message)).toBe('AN');
+      expect(getMessageInitials(message)).toBe('A');
     });
 
     it('should return ?? when no sender data', () => {
@@ -330,8 +322,8 @@ describe('Avatar Utils Module', () => {
   });
 
   describe('Priority order verification', () => {
-    it('should derive initials from the resolved display name (displayName > firstName+lastName > username)', () => {
-      // displayName présent → initiales du nom affiché "Johnny D" → "JD"
+    it('should follow correct priority for initials: firstName+lastName > firstName > lastName > displayName > username', () => {
+      // Full data - uses firstName + lastName
       const fullUser = {
         id: '1',
         firstName: 'John',
@@ -341,39 +333,38 @@ describe('Avatar Utils Module', () => {
       };
       expect(getUserInitials(fullUser as any)).toBe('JD');
 
-      // displayName l'emporte sur firstName seul → "Johnny D" → "JD"
+      // No lastName - uses firstName
       const noLastName = {
         id: '1',
         firstName: 'John',
         displayName: 'Johnny D',
         username: 'jdoe',
       };
-      expect(getUserInitials(noLastName as any)).toBe('JD');
+      expect(getUserInitials(noLastName as any)).toBe('J');
 
-      // displayName l'emporte sur lastName seul → "Johnny D" → "JD"
+      // No firstName - uses lastName
       const noFirstName = {
         id: '1',
         lastName: 'Doe',
         displayName: 'Johnny D',
         username: 'jdoe',
       };
-      expect(getUserInitials(noFirstName as any)).toBe('JD');
+      expect(getUserInitials(noFirstName as any)).toBe('D');
 
-      // Pas de displayName → firstName+lastName → "John Doe" → "JD"
-      const noDisplay = {
+      // No firstName/lastName - uses displayName
+      const onlyDisplayName = {
         id: '1',
-        firstName: 'John',
-        lastName: 'Doe',
+        displayName: 'Johnny D',
         username: 'jdoe',
       };
-      expect(getUserInitials(noDisplay as any)).toBe('JD');
+      expect(getUserInitials(onlyDisplayName as any)).toBe('JD');
 
-      // username seul (mot unique) → 2 premières lettres "jdoe" → "JD"
+      // Only username
       const onlyUsername = {
         id: '1',
         username: 'jdoe',
       };
-      expect(getUserInitials(onlyUsername as any)).toBe('JD');
+      expect(getUserInitials(onlyUsername as any)).toBe('J');
     });
 
     it('should follow correct priority for displayName: displayName > firstName+lastName > firstName > lastName > username', () => {

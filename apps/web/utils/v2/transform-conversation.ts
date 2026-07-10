@@ -5,7 +5,6 @@
  */
 
 import type { Conversation, Message } from '@meeshy/shared/types';
-import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 import type { ConversationItemData, ConversationTag } from '@/components/v2';
 
 export type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
@@ -29,25 +28,23 @@ function formatRelativeTime(
 ): string {
   if (!date) return '';
 
+  const now = new Date();
   const messageDate = typeof date === 'string' ? new Date(date) : date;
-  const bucket = classifyRelativeTime(messageDate.getTime(), Date.now());
+  const diffMs = now.getTime() - messageDate.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
 
-  switch (bucket.unit) {
-    case 'now':
-      return t('timeCompact.now');
-    case 'minutes':
-      return t('timeCompact.minutes', { count: bucket.value });
-    case 'hours':
-      return t('timeCompact.hours', { count: bucket.value });
-    case 'days':
-      return t('timeCompact.days', { count: bucket.value });
-    case 'beyond':
-      // Format as date for older messages
-      return messageDate.toLocaleDateString(locale, {
-        day: 'numeric',
-        month: 'short',
-      });
-  }
+  if (diffMins < 1) return t('timeCompact.now');
+  if (diffMins < 60) return t('timeCompact.minutes', { count: diffMins });
+  if (diffHours < 24) return t('timeCompact.hours', { count: diffHours });
+  if (diffDays < 7) return t('timeCompact.days', { count: diffDays });
+
+  // Format as date for older messages
+  return messageDate.toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'short',
+  });
 }
 
 /**

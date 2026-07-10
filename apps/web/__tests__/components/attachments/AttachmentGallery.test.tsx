@@ -393,7 +393,7 @@ describe('AttachmentGallery', () => {
         fireEvent.click(fullscreenButton);
       });
 
-      expect(mockOpen).toHaveBeenCalledWith('https://example.com/1.jpg', '_blank', 'noopener,noreferrer');
+      expect(mockOpen).toHaveBeenCalledWith('https://example.com/1.jpg', '_blank');
     });
 
     it('downloads image on download button click', async () => {
@@ -407,7 +407,7 @@ describe('AttachmentGallery', () => {
         fireEvent.click(downloadButton);
       });
 
-      expect(mockOpen).toHaveBeenCalledWith('https://example.com/1.jpg', '_blank', 'noopener,noreferrer');
+      expect(mockOpen).toHaveBeenCalledWith('https://example.com/1.jpg', '_blank');
     });
   });
 

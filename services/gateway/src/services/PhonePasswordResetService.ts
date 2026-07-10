@@ -322,17 +322,8 @@ export class PhonePasswordResetService {
         return { success: false, error: 'invalid_step' };
       }
 
-      // 3. Consume an identity attempt atomically (conditional cap guard — no check-then-act).
-      // A separate `if (attempts >= MAX)` read + later `increment` is a TOCTOU: concurrent
-      // requests all read the same snapshot, all pass the cap, and each consumes an attempt —
-      // amplifying brute-force past MAX. `updateMany` with a `< MAX` filter + `$inc` is a single
-      // atomic write per document, so at most MAX consumptions can ever succeed.
-      const consumed = await this.prisma.phonePasswordResetToken.updateMany({
-        where: { id: token.id, identityAttempts: { lt: MAX_IDENTITY_ATTEMPTS } },
-        data: { identityAttempts: { increment: 1 } }
-      });
-
-      if (consumed.count === 0) {
+      // 3. Check identity attempts
+      if (token.identityAttempts >= MAX_IDENTITY_ATTEMPTS) {
         await this.revokeToken(token.id, 'MAX_IDENTITY_ATTEMPTS');
         await this.logSecurityEvent(token.userId, 'PHONE_RESET_IDENTITY_BLOCKED', 'HIGH', {
           tokenId: token.id,
@@ -347,7 +338,12 @@ export class PhonePasswordResetService {
       const emailMatch = token.user.email.toLowerCase() === fullEmail.toLowerCase().trim();
 
       if (!usernameMatch || !emailMatch) {
-        // Attempt already consumed atomically above — do not double-count.
+        // Increment attempts
+        await this.prisma.phonePasswordResetToken.update({
+          where: { id: token.id },
+          data: { identityAttempts: { increment: 1 } }
+        });
+
         const attemptsRemaining = MAX_IDENTITY_ATTEMPTS - token.identityAttempts - 1;
 
         await this.logSecurityEvent(token.userId, 'PHONE_RESET_IDENTITY_FAILED', 'MEDIUM', {
@@ -446,16 +442,8 @@ export class PhonePasswordResetService {
         return { success: false, error: 'invalid_step' };
       }
 
-      // 3. Consume a code attempt atomically (conditional cap guard — no check-then-act).
-      // Same TOCTOU class as verifyIdentity: the 6-digit SMS code cap is the primary brute-force
-      // defence, so the cap check and the increment MUST be a single atomic write. `updateMany`
-      // with a `< MAX` filter guarantees at most MAX consumptions succeed under concurrency.
-      const consumed = await this.prisma.phonePasswordResetToken.updateMany({
-        where: { id: token.id, codeAttempts: { lt: MAX_CODE_ATTEMPTS } },
-        data: { codeAttempts: { increment: 1 } }
-      });
-
-      if (consumed.count === 0) {
+      // 3. Check code attempts
+      if (token.codeAttempts >= MAX_CODE_ATTEMPTS) {
         await this.revokeToken(token.id, 'MAX_CODE_ATTEMPTS');
         await this.logSecurityEvent(token.userId, 'PHONE_RESET_CODE_BLOCKED', 'HIGH', {
           tokenId: token.id,
@@ -473,7 +461,12 @@ export class PhonePasswordResetService {
       );
 
       if (!isCodeValid) {
-        // Attempt already consumed atomically above — do not double-count.
+        // Increment attempts
+        await this.prisma.phonePasswordResetToken.update({
+          where: { id: token.id },
+          data: { codeAttempts: { increment: 1 } }
+        });
+
         await this.logSecurityEvent(token.userId, 'PHONE_RESET_CODE_FAILED', 'MEDIUM', {
           tokenId: token.id,
           attempt: token.codeAttempts + 1,

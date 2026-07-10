@@ -95,6 +95,10 @@ jest.mock('sonner', () => ({
 }));
 
 // Mock des utilitaires
+jest.mock('@/utils/user', () => ({
+  getUserInitials: (user: any) => user?.firstName?.[0] || 'U',
+}));
+
 jest.mock('@/utils/avatar-upload', () => ({
   validateAvatarFile: jest.fn(() => ({ valid: true })),
 }));

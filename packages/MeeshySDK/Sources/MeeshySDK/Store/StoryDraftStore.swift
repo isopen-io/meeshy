@@ -39,10 +39,10 @@ public final class StoryDraftStore: @unchecked Sendable {
             return disk
         }
         Logger.cache.warning("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory")
-        guard let mem = try? DatabaseQueue() else {
-            fatalError("[StoryDraftStore] Cannot create in-memory GRDB queue — out of memory")
-        }
-        return mem
+        return (try? DatabaseQueue()) ?? {
+            // Last-resort path; `DatabaseQueue()` is trivially constructible.
+            try! DatabaseQueue()  // swiftlint:disable:this force_try
+        }()
     }
 
     private func createSchema() throws {
@@ -335,38 +335,6 @@ public final class StoryDraftStore: @unchecked Sendable {
     }
 
     // MARK: - Clear
-
-    // MARK: - Command history blob (E4 inc.2)
-
-    /// E4 inc.2 — historique undo/redo du composer en blob OPAQUE : le store
-    /// core ne peut pas dépendre de `CommandStackSnapshot` (MeeshyUI), il
-    /// persiste des bytes. Rangé dans `story_draft_meta` (base64, colonne
-    /// TEXT existante — zéro migration) → purgé avec le draft par `clear()`.
-    public func saveCommandHistoryBlob(_ data: Data) {
-        do {
-            try db.write { db in
-                try db.execute(
-                    sql: "INSERT OR REPLACE INTO story_draft_meta (key, value) VALUES ('command_history', ?)",
-                    arguments: [data.base64EncodedString()])
-            }
-        } catch {
-            Logger.cache.error("[StoryDraftStore] Erreur saveCommandHistoryBlob: \(error.localizedDescription)")
-        }
-    }
-
-    public func loadCommandHistoryBlob() -> Data? {
-        let base64: String?
-        do {
-            base64 = try db.read { db in
-                try String.fetchOne(db, sql: "SELECT value FROM story_draft_meta WHERE key = 'command_history'")
-            }
-        } catch {
-            Logger.cache.error("[StoryDraftStore] Erreur loadCommandHistoryBlob: \(error.localizedDescription)")
-            return nil
-        }
-        guard let base64 else { return nil }
-        return Data(base64Encoded: base64)
-    }
 
     public func clear() {
         clearMediaDir()

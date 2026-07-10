@@ -18,6 +18,7 @@ import { AuthHandler } from '../AuthHandler';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
+import jwt from 'jsonwebtoken';
 
 // ---------------------------------------------------------------------------
 // Socket / Prisma mocks

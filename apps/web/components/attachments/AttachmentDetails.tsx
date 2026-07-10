@@ -13,8 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Attachment } from '@meeshy/shared/types/attachment';
-import { getAttachmentType, formatFileSize } from '@meeshy/shared/types/attachment';
-import { formatClock } from '@meeshy/shared/utils/duration-format';
+import { getAttachmentType } from '@meeshy/shared/types/attachment';
 
 interface AttachmentDetailsProps {
   attachment: Attachment;
@@ -42,8 +41,29 @@ export function AttachmentDetails({
     lg: 'h-6 w-6'
   }[iconSize];
 
-  // Formatage d'une durée (millisecondes -> HH:MM:SS ou MM:SS) via la source unique `formatClock`
-  const formatDuration = (milliseconds: number): string => formatClock(milliseconds / 1000);
+  // Fonction pour formater la durée (millisecondes -> HH:MM:SS ou MM:SS)
+  const formatDuration = (milliseconds: number): string => {
+    if (!milliseconds || milliseconds <= 0) return '0:00';
+
+    const seconds = Math.floor(milliseconds / 1000);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Fonction pour formater la taille de fichier
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  };
 
   // Obtenir l'icône et les détails selon le type
   const getIconAndDetails = () => {

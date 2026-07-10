@@ -19,12 +19,6 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     public var effectFlags: Int
     public var createdAt: Date
     public var changeVersion: Int64
-    /// Per-emoji aggregate counts (`[emoji: count]`) persisted from the
-    /// `comment:reaction-added` / `comment:reaction-removed` / sync socket events.
-    /// `nil` until the first reaction arrives — mirrors `PostRecord.reactionSummaryJson`
-    /// so the displayed count survives an app restart instead of reverting to the
-    /// last REST snapshot. Decoded lazily via the `reactionSummary` accessor.
-    public var reactionSummaryJson: Data?
 
     public init(
         id: String, postId: String, parentId: String?,
@@ -33,8 +27,7 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         content: String, originalLanguage: String?,
         translatedContent: String?,
         likeCount: Int, replyCount: Int, effectFlags: Int,
-        createdAt: Date, changeVersion: Int64,
-        reactionSummaryJson: Data? = nil
+        createdAt: Date, changeVersion: Int64
     ) {
         self.id = id
         self.postId = postId
@@ -51,19 +44,6 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.effectFlags = effectFlags
         self.createdAt = createdAt
         self.changeVersion = changeVersion
-        self.reactionSummaryJson = reactionSummaryJson
-    }
-}
-
-public extension CommentRecord {
-    /// Decoded per-emoji reaction counts (`[emoji: count]`), empty when no
-    /// reaction has been persisted yet. Computed (not a stored column) so GRDB
-    /// ignores it — only `reactionSummaryJson` maps to a table column.
-    var reactionSummary: [String: Int] {
-        guard let reactionSummaryJson,
-              let decoded = try? JSONDecoder().decode([String: Int].self, from: reactionSummaryJson)
-        else { return [:] }
-        return decoded
     }
 }
 

@@ -146,6 +146,7 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
     // MARK: - Filter
     var selectedFilter: String?
     var filterIntensity: Double = 1.0
+    var filterAppliesToEntireSlide: Bool = false
 
     var _applyFilterCalls: Int = 0
     var _applyFilterLastName: String??

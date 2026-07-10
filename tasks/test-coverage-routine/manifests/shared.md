@@ -45,7 +45,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `packages/shared/types/api-schemas.ts`
 - [x] `packages/shared/types/attachment-audio.ts`
 - [x] `packages/shared/types/attachment-transcription.ts`
-- [x] `packages/shared/types/attachment.ts`
+- [ ] `packages/shared/types/attachment.ts`
 - [x] `packages/shared/types/audio-effects-timeline.ts`
 - [x] `packages/shared/types/audio-transcription.ts`
 - [ ] `packages/shared/types/community.ts`
@@ -69,7 +69,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/push-notification.ts`
 - [x] `packages/shared/types/reaction.ts`
 - [ ] `packages/shared/types/report.ts`
-- [x] `packages/shared/types/role-types.ts`
+- [ ] `packages/shared/types/role-types.ts`
 - [ ] `packages/shared/types/security.ts`
 - [ ] `packages/shared/types/signal-database.ts`
 - [~] `packages/shared/types/socketio-events.ts`
@@ -84,14 +84,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## types/preferences  (0/8 have a test)
 
-- [x] `packages/shared/types/preferences/application.ts`
-- [x] `packages/shared/types/preferences/audio.ts`
-- [x] `packages/shared/types/preferences/document.ts`
+- [ ] `packages/shared/types/preferences/application.ts`
+- [ ] `packages/shared/types/preferences/audio.ts`
+- [ ] `packages/shared/types/preferences/document.ts`
 - [ ] `packages/shared/types/preferences/index.ts`
-- [x] `packages/shared/types/preferences/message.ts`
+- [ ] `packages/shared/types/preferences/message.ts`
 - [x] `packages/shared/types/preferences/notification.ts`
-- [x] `packages/shared/types/preferences/privacy.ts`
-- [x] `packages/shared/types/preferences/video.ts`
+- [ ] `packages/shared/types/preferences/privacy.ts`
+- [ ] `packages/shared/types/preferences/video.ts`
 
 ## types/validation  (0/2 have a test)
 

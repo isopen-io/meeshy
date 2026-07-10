@@ -11,11 +11,6 @@ public struct ImageViewerView: View {
 
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
-    /// Hook paramétrique « Enregistrer » : quand fourni, le bouton save du
-    /// fullscreen délègue au composant unifié de l'app au lieu du save
-    /// Photos direct legacy. Nil = comportement historique (consommateurs
-    /// existants intacts).
-    public var onSaveRequested: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showFullscreen = false
@@ -51,12 +46,10 @@ public struct ImageViewerView: View {
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
                 accentColor: String = MeeshyColors.brandPrimaryHex, isOwnMessage: Bool = false,
-                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
-                onSaveRequested: (() -> Void)? = nil) {
+                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.isOwnMessage = isOwnMessage
         self.onDelete = onDelete; self.onEdit = onEdit
-        self.onSaveRequested = onSaveRequested
     }
 
     // MARK: - Body
@@ -78,8 +71,7 @@ public struct ImageViewerView: View {
             ImageFullscreen(
                 imageUrl: imageURL,
                 accentColor: accentColor,
-                attachmentId: isOwnMessage ? nil : attachment.id,
-                onSaveRequested: onSaveRequested
+                attachmentId: isOwnMessage ? nil : attachment.id
             )
         }
     }
@@ -119,7 +111,7 @@ public struct ImageViewerView: View {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 18))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundColor(Color(hex: "FF6B6B"))
                             .background(Circle().fill(.ultraThinMaterial).frame(width: 14, height: 14))
                     }
                     .padding(6)
@@ -188,9 +180,6 @@ public struct ImageFullscreen: View {
     public var caption: String? = nil
     public var mentionDisplayNames: [String: String]? = nil
     public var attachmentId: String? = nil
-    /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
-    /// l'app quand fourni ; nil = save Photos direct legacy.
-    public var onSaveRequested: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var scale: CGFloat = 1.0
@@ -203,13 +192,10 @@ public struct ImageFullscreen: View {
         case idle, saving, saved, failed
     }
 
-    public init(imageUrl: URL?, accentColor: String, caption: String? = nil,
-                mentionDisplayNames: [String: String]? = nil, attachmentId: String? = nil,
-                onSaveRequested: (() -> Void)? = nil) {
+    public init(imageUrl: URL?, accentColor: String, caption: String? = nil, mentionDisplayNames: [String: String]? = nil, attachmentId: String? = nil) {
         self.imageUrl = imageUrl; self.accentColor = accentColor
         self.caption = caption; self.mentionDisplayNames = mentionDisplayNames
         self.attachmentId = attachmentId
-        self.onSaveRequested = onSaveRequested
     }
 
     public var body: some View {
@@ -277,13 +263,7 @@ public struct ImageFullscreen: View {
                         }
                         Spacer()
 
-                        Button {
-                            if let onSaveRequested {
-                                onSaveRequested()
-                            } else {
-                                saveToPhotos()
-                            }
-                        } label: {
+                        Button { saveToPhotos() } label: {
                             Group {
                                 switch saveState {
                                 case .idle:

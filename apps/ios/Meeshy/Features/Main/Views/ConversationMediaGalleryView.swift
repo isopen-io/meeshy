@@ -22,15 +22,10 @@ struct ConversationMediaGalleryView: View {
     @State private var showControls = true
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
-    @StateObject private var saveCoordinator = MediaSaveCoordinator()
+    @State private var saveState: SaveState = .idle
     @ObservedObject private var videoManager = SharedAVPlayerManager.shared
 
-    /// Annonce VoiceOver de l'état du bouton d'enregistrement. Vide au repos.
-    private var saveStateAccessibilityValue: String {
-        saveCoordinator.isProcessing
-            ? String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
-            : ""
-    }
+    private enum SaveState { case idle, saving, saved, failed }
 
     var body: some View {
         ZStack {
@@ -248,11 +243,9 @@ struct ConversationMediaGalleryView: View {
                 }
             }
         } else {
-            // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
             Image(systemName: "photo")
                 .font(MeeshyFont.relative(48))
                 .foregroundColor(.white.opacity(0.3))
-                .accessibilityHidden(true)
         }
     }
 
@@ -278,14 +271,11 @@ struct ConversationMediaGalleryView: View {
                     stopActiveVideoAudio()
                     dismiss()
                 } label: {
-                    // Chrome : glyphe `xmark` figé (cadre tap = icône + padding
-                    // par défaut ≈ 60pt, doctrine 82i) — ne pas scaler.
                     Image(systemName: "xmark.circle.fill")
                         .font(MeeshyFont.relative(28))
                         .foregroundColor(.white.opacity(0.8))
                         .padding()
                 }
-                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
                 Spacer()
 
@@ -303,30 +293,27 @@ struct ConversationMediaGalleryView: View {
                 Spacer()
 
                 if currentIndex < allAttachments.count {
-                    Button { requestSaveCurrent() } label: {
+                    Button { saveCurrentToPhotos() } label: {
                         Group {
-                            if saveCoordinator.isProcessing {
-                                ProgressView().tint(.white)
-                            } else {
+                            switch saveState {
+                            case .idle:
                                 Image(systemName: "arrow.down.to.line")
+                            case .saving:
+                                ProgressView().tint(.white)
+                            case .saved:
+                                Image(systemName: "checkmark")
+                            case .failed:
+                                Image(systemName: "xmark")
                             }
                         }
-                        // Chrome : glyphe d'état figé dans un cadre tap fixe
-                        // 40×40 (doctrine 82i) — ne pas scaler.
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(MeeshyFont.relative(18, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 40, height: 40)
                         .background(Circle().fill(Color.white.opacity(0.2)))
                         .padding(.trailing, 12)
                         .padding(.top, 8)
                     }
-                    .disabled(saveCoordinator.isProcessing)
-                    .accessibilityLabel(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main))
-                    .accessibilityValue(saveStateAccessibilityValue)
-                    // Composant UNIFIÉ « Enregistrer » : même sheet de
-                    // destinations pour image et vidéo (Photos / Fichiers /
-                    // Partager), issue via toast + haptics.
-                    .mediaSaveFlow(saveCoordinator)
+                    .disabled(saveState == .saving || saveState == .saved)
                 } else {
                     Color.clear.frame(width: 52, height: 40).padding(.trailing, 12)
                 }
@@ -391,15 +378,11 @@ struct ConversationMediaGalleryView: View {
                     }
                     Spacer()
                 }
-                .accessibilityElement(children: .combine)
             }
             HStack(spacing: 8) {
-                // Glyphe de type média décoratif (apparié aux dimensions) —
-                // scale avec le texte mais masqué de VoiceOver.
                 Image(systemName: att.type == .video ? "video.fill" : "photo")
                     .font(MeeshyFont.relative(11))
                     .foregroundColor(.white.opacity(0.6))
-                    .accessibilityHidden(true)
                 if let w = att.width, let h = att.height, w > 0, h > 0 {
                     Text("\(w) \u{00D7} \(h)")
                         .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
@@ -472,18 +455,39 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
-    private func requestSaveCurrent() {
+    private func saveCurrentToPhotos() {
         guard currentIndex < allAttachments.count else { return }
         let att = allAttachments[currentIndex]
         let urlStr = att.fileUrl.isEmpty ? (att.thumbnailUrl ?? "") : att.fileUrl
-        guard !urlStr.isEmpty else { return }
+        guard !urlStr.isEmpty, let url = MeeshyConfig.resolveMediaURL(urlStr) else { return }
+        saveState = .saving
         HapticFeedback.light()
-        saveCoordinator.requestSave(MediaSaveRequest(
-            kind: att.type == .video ? .video : .image,
-            remoteURLString: urlStr,
-            suggestedFileName: att.originalName.isEmpty ? nil : att.originalName,
-            attachmentId: att.id.isEmpty ? nil : att.id
-        ))
+        Task {
+            do {
+                if att.type == .video {
+                    let (tempURL, _) = try await URLSession.shared.download(from: url)
+                    let tempFile = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("save_\(UUID().uuidString).mp4")
+                    try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                    let saved = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
+                    try? FileManager.default.removeItem(at: tempFile)
+                    withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
+                    saved ? HapticFeedback.success() : HapticFeedback.error()
+                } else {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    let saved = await PhotoLibraryManager.shared.saveImage(data)
+                    withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
+                    saved ? HapticFeedback.success() : HapticFeedback.error()
+                }
+                try? await Task.sleep(for: .seconds(2))
+                withAnimation { saveState = .idle }
+            } catch {
+                withAnimation { saveState = .failed }
+                HapticFeedback.error()
+                try? await Task.sleep(for: .seconds(2))
+                withAnimation { saveState = .idle }
+            }
+        }
     }
 }
 
@@ -619,27 +623,10 @@ private struct GalleryVideoPage: View {
             if case .downloading = availability { return true }
             return false
         }())
-        .accessibilityLabel(playOrDownloadAccessibilityLabel)
-    }
-
-    /// Label VoiceOver du bouton central selon l'état (lecture / téléchargement
-    /// / progression). Les glyphes internes sont décoratifs.
-    private var playOrDownloadAccessibilityLabel: String {
-        switch availability {
-        case .ready:
-            return String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main)
-        case .needsDownload:
-            return String(localized: "media.downloadVideo", defaultValue: "Télécharger la vidéo", bundle: .main)
-        case .downloading:
-            return String(localized: "common.downloading", defaultValue: "Téléchargement…", bundle: .main)
-        }
     }
 
     @ViewBuilder
     private var buttonContent: some View {
-        // Glyphes/label figés : contenus d'un contrôle circulaire de taille
-        // fixe (56/64pt) — les scaler déborderait le cercle. État porté par
-        // `playOrDownloadAccessibilityLabel` sur le bouton parent.
         switch availability {
         case .ready:
             Image(systemName: "play.fill")

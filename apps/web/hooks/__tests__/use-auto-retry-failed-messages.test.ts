@@ -29,7 +29,6 @@ function makeFailedMessage(overrides: Partial<{
   originalLanguage: string;
   attachmentIds: string[];
   replyToId: string | undefined;
-  clientMessageId: string | undefined;
   retryCount: number;
   error: string;
   timestamp: number;
@@ -41,7 +40,6 @@ function makeFailedMessage(overrides: Partial<{
     originalLanguage: 'en',
     attachmentIds: [],
     replyToId: undefined,
-    clientMessageId: 'cid-msg-1',
     retryCount: 0,
     error: 'Network error',
     timestamp: Date.now(),
@@ -104,8 +102,8 @@ describe('useAutoRetryFailedMessages', () => {
   });
 
   it('retries failed messages sequentially when online and connected', async () => {
-    const msg1 = makeFailedMessage({ id: 'msg-1', content: 'first', clientMessageId: 'cid-1' });
-    const msg2 = makeFailedMessage({ id: 'msg-2', content: 'second', clientMessageId: 'cid-2' });
+    const msg1 = makeFailedMessage({ id: 'msg-1', content: 'first' });
+    const msg2 = makeFailedMessage({ id: 'msg-2', content: 'second' });
     const store = makeStore([msg1, msg2]);
     mockGetState.mockReturnValue(store);
 
@@ -115,7 +113,7 @@ describe('useAutoRetryFailedMessages', () => {
     await jest.advanceTimersByTimeAsync(2000);
 
     expect(mockSendMessage).toHaveBeenCalledWith(
-      'conv-1', 'first', 'en', undefined, undefined, undefined, undefined, 'cid-1',
+      'conv-1', 'first', 'en', undefined, undefined, undefined,
     );
     expect(store.incrementRetryCount).toHaveBeenCalledWith('msg-1');
 
@@ -123,37 +121,9 @@ describe('useAutoRetryFailedMessages', () => {
     await jest.advanceTimersByTimeAsync(2000);
 
     expect(mockSendMessage).toHaveBeenCalledWith(
-      'conv-1', 'second', 'en', undefined, undefined, undefined, undefined, 'cid-2',
+      'conv-1', 'second', 'en', undefined, undefined, undefined,
     );
     expect(store.incrementRetryCount).toHaveBeenCalledWith('msg-2');
-  });
-
-  it('reuses the original clientMessageId so the gateway can dedup a retried send', async () => {
-    const msg = makeFailedMessage({ clientMessageId: 'cid-original' });
-    const store = makeStore([msg]);
-    mockGetState.mockReturnValue(store);
-
-    renderHook(() => useAutoRetryFailedMessages());
-
-    await jest.advanceTimersByTimeAsync(2000);
-
-    expect(mockSendMessage).toHaveBeenCalledWith(
-      'conv-1', 'hello', 'en', undefined, undefined, undefined, undefined, 'cid-original',
-    );
-  });
-
-  it('forwards an undefined clientMessageId for pre-Phase-4 entries lacking the field', async () => {
-    const msg = makeFailedMessage({ clientMessageId: undefined });
-    const store = makeStore([msg]);
-    mockGetState.mockReturnValue(store);
-
-    renderHook(() => useAutoRetryFailedMessages());
-
-    await jest.advanceTimersByTimeAsync(2000);
-
-    expect(mockSendMessage).toHaveBeenCalledWith(
-      'conv-1', 'hello', 'en', undefined, undefined, undefined, undefined, undefined,
-    );
   });
 
   it('removes message from store on successful retry', async () => {
@@ -214,7 +184,7 @@ describe('useAutoRetryFailedMessages', () => {
     await jest.advanceTimersByTimeAsync(2000);
 
     expect(mockSendMessage).toHaveBeenCalledWith(
-      'conv-1', 'hello', 'en', undefined, undefined, ['att-1', 'att-2'], undefined, 'cid-msg-1',
+      'conv-1', 'hello', 'en', undefined, undefined, ['att-1', 'att-2'],
     );
   });
 
@@ -228,7 +198,7 @@ describe('useAutoRetryFailedMessages', () => {
     await jest.advanceTimersByTimeAsync(2000);
 
     expect(mockSendMessage).toHaveBeenCalledWith(
-      'conv-1', 'hello', 'en', undefined, undefined, undefined, undefined, 'cid-msg-1',
+      'conv-1', 'hello', 'en', undefined, undefined, undefined,
     );
   });
 

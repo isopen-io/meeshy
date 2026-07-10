@@ -56,23 +56,22 @@ export function DetailsHeader({
       {/* Avatar with optional edit */}
       {canModifyImage ? (
         <div className="relative group mx-auto w-fit">
-          <button
-            type="button"
-            aria-label={t('conversationDetails.changeImage', 'Change image')}
+          <Avatar
+            className="h-16 w-16 ring-2 ring-primary/20 cursor-pointer group-hover:ring-primary/50 transition-[box-shadow]"
             onClick={onOpenImageUpload}
-            className="relative block rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <Avatar className="h-16 w-16 ring-2 ring-primary/20 group-hover:ring-primary/50 transition-[box-shadow]">
-              <AvatarImage src={avatarUrl} />
-              <AvatarFallback className="bg-primary/20 text-primary font-bold text-lg">
-                {displayName.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex items-center justify-center">
-              <Camera className="h-6 w-6 text-white" />
-            </span>
-          </button>
-          <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+            <AvatarImage src={avatarUrl} />
+            <AvatarFallback className="bg-primary/20 text-primary font-bold text-lg">
+              {displayName.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div
+            className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+            onClick={onOpenImageUpload}
+          >
+            <Camera className="h-6 w-6 text-white" />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {t('conversationDetails.clickToChangeImage', 'Click to change image')}
           </p>
         </div>

@@ -48,12 +48,15 @@ export function getUserTranslation(
   user: User,
   originalLanguage: string
 ): BubbleTranslation | null {
-  const targetLanguage = resolveUserPreferredLanguage(user);
+  // Détermine la langue cible de l'utilisateur
+  const targetLanguage = resolveUserLanguage(user);
 
+  // Si c'est déjà la langue d'origine, pas besoin de traduction
   if (targetLanguage === originalLanguage) {
     return null;
   }
 
+  // Cherche la traduction correspondante
   const translation = translations.find(t => t.targetLanguage === targetLanguage);
 
   if (!translation) {
@@ -61,6 +64,14 @@ export function getUserTranslation(
   }
 
   return translationDataToBubbleTranslation(translation);
+}
+
+/**
+ * Détermine la langue cible d'un utilisateur selon ses préférences
+ * @deprecated Use resolveUserPreferredLanguage from user-language-preferences
+ */
+export function resolveUserLanguage(user: User): string {
+  return resolveUserPreferredLanguage(user);
 }
 
 /**

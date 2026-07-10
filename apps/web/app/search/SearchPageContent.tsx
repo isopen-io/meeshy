@@ -38,8 +38,6 @@ import { User } from '@/types';
 import { authManager } from '@/services/auth-manager.service';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
-import { getUserInitials } from '@/lib/avatar-utils';
-import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
 import { useUser } from '@/stores';
 import type { ConversationType, Community as BaseCommunity } from '@meeshy/shared/types';
@@ -221,9 +219,13 @@ export function SearchPageContent() {
   };
 
   const getUserDisplayName = (user: User): string => {
-    // Délègue à la source unique `utils/user-display-name` (displayName >
-    // firstName+lastName > username, trim) — pas de réimplémentation locale.
-    return resolveDisplayName(user, user.username);
+    if (user.displayName) return user.displayName;
+    return `${user.firstName} ${user.lastName}`.trim() || user.username;
+  };
+
+  const getInitials = (user: User): string => {
+    const displayName = getUserDisplayName(user);
+    return displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   // Envoyer une demande d'ami
@@ -498,7 +500,7 @@ export function SearchPageContent() {
                                 <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-white dark:border-gray-700 shadow-lg">
                                   <AvatarImage src={user.avatar} alt={getUserDisplayName(user)} />
                                   <AvatarFallback className="text-sm sm:text-lg font-bold">
-                                    {getUserInitials(user)}
+                                    {getInitials(user)}
                                   </AvatarFallback>
                                 </Avatar>
                                 <OnlineIndicator

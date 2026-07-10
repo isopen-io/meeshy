@@ -71,15 +71,13 @@ export function sendError(
     message?: string;
     code?: string;
     details?: Record<string, unknown>;
-    violations?: unknown[];
   }
 ): void {
-  const response: ApiResponse<never> & { violations?: unknown[] } = {
+  const response: ApiResponse<never> = {
     success: false,
     error,
     message: options?.message || error,
-    code: options?.code,
-    ...(options?.violations ? { violations: options.violations } : {})
+    code: options?.code
   };
 
   reply.status(statusCode).send(response);
@@ -113,7 +111,7 @@ export function sendUnauthorized(
 export function sendForbidden(
   reply: FastifyReply,
   error: string = 'Access denied',
-  options?: { message?: string; code?: string; violations?: unknown[] }
+  options?: { message?: string; code?: string }
 ): void {
   sendError(reply, 403, error, options);
 }

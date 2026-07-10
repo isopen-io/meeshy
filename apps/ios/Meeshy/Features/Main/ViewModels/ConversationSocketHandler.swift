@@ -74,11 +74,7 @@ final class ConversationSocketHandler {
     private let conversationId: String
     private let currentUserId: String
     private let messageSocket: MessageSocketProviding
-    // `nonisolated(unsafe)` for the same reason as the typing state below:
-    // `deinit` needs to snapshot this reference into a local BEFORE handing
-    // it (not `self`) to the MainActor `Task` that clears it — self is
-    // uniquely referenced at that point, so there's no real race.
-    nonisolated(unsafe) weak var delegate: ConversationSocketDelegate?
+    weak var delegate: ConversationSocketDelegate?
 
     /// Foreground/active probe for the read-receipt precision gate. Injected so
     /// the XCTest host — which never reaches `.active` — can force a known value.
@@ -89,17 +85,12 @@ final class ConversationSocketHandler {
     /// write through the actor in addition to updating the delegate/ViewModel.
     var persistence: MessagePersistenceActor?
 
-    // Message deduplication: combined count + time-based eviction.
-    // Tracks messageId → timestamp so:
-    //   • Entries older than dedupMaxAge are always evictable (prevents stale
-    //     entries from blocking legitimate re-delivers after long gaps).
-    //   • When the table exceeds dedupMaxSize the oldest half is pruned
-    //     to keep memory bounded even during reconnect bursts.
-    // TTL matches the server-side delivery queue retention (48h) so messages
-    // queued while offline for up to 48h cannot replay after cache eviction.
-    private static let dedupMaxSize: Int = 10_000
-    private static let dedupMaxAge: TimeInterval = 48 * 60 * 60 // 48 hours — matches DELIVERY_QUEUE_TTL_SECONDS
-    private var recentMessageTimestamps: [String: Date] = [:]
+    // Message deduplication: sliding window of recently seen message IDs
+    // to prevent duplicates when REST refresh and socket broadcast deliver
+    // the same message during reconnection.
+    private static let dedupWindowSize = 1000
+    private var recentMessageIds: Set<String> = []
+    private var recentMessageIdOrder: [String] = []
 
     // Typing emission state. `nonisolated(unsafe)` is REQUIRED (not cosmetic):
     // the nonisolated `deinit` invalidates these timers for cleanup, and under
@@ -114,12 +105,7 @@ final class ConversationSocketHandler {
     private static let typingDebounceInterval: TimeInterval = 3.0
     private static let typingReemitInterval: TimeInterval = 3.0
     private static let typingSafetyTimeout: TimeInterval = 15.0
-    // Keyed by userId (NOT display name) — two participants can share a display
-    // name (e.g. two uncustomized "John Smith"s in a group), and keying by name
-    // caused one user's typing:stop to wipe the other's still-active entry.
     nonisolated(unsafe) private var typingSafetyTimers: [String: Timer] = [:]
-    nonisolated(unsafe) private var typingUserOrder: [String] = []
-    nonisolated(unsafe) private var typingUserNames: [String: String] = [:]
 
     /// `true` une fois `activate()` exécuté (instance réelle, installée par
     /// `@StateObject`). SwiftUI alloue EAGER un `ConversationViewModel`
@@ -192,44 +178,21 @@ final class ConversationSocketHandler {
         typingTimer?.invalidate()
         typingIdleTimer?.invalidate()
         typingSafetyTimers.values.forEach { $0.invalidate() }
-        typingSafetyTimers.removeAll()
-        typingUserOrder.removeAll()
-        typingUserNames.removeAll()
-        // Snapshot `delegate` now, while `self` is still valid, and hand the
-        // snapshot (not `self`) to the Task. ARC zeroes weak references to
-        // `self` as soon as `deinit` begins — a `[weak self]` capture inside
-        // a Task launched FROM `deinit` already observes `self` as nil by
-        // the time it runs, making `self?.delegate?...` silently dead code
-        // and leaving stale typing indicators on the delegate after teardown.
-        let delegateSnapshot = delegate
-        Task { @MainActor in
-            delegateSnapshot?.typingUsernames.removeAll()
-        }
     }
 
     // MARK: - Deduplication
 
     private func markSeen(_ messageId: String) {
-        guard recentMessageTimestamps[messageId] == nil else { return }
-        recentMessageTimestamps[messageId] = Date()
-        if recentMessageTimestamps.count > Self.dedupMaxSize {
-            evictDedup()
+        guard recentMessageIds.insert(messageId).inserted else { return }
+        recentMessageIdOrder.append(messageId)
+        while recentMessageIdOrder.count > Self.dedupWindowSize {
+            let oldest = recentMessageIdOrder.removeFirst()
+            recentMessageIds.remove(oldest)
         }
     }
 
     private func wasSeen(_ messageId: String) -> Bool {
-        recentMessageTimestamps[messageId] != nil
-    }
-
-    private func evictDedup() {
-        let cutoff = Date().addingTimeInterval(-Self.dedupMaxAge)
-        recentMessageTimestamps = recentMessageTimestamps.filter { $0.value > cutoff }
-        guard recentMessageTimestamps.count > Self.dedupMaxSize else { return }
-        let sorted = recentMessageTimestamps.sorted { $0.value < $1.value }
-        let excessCount = recentMessageTimestamps.count - Self.dedupMaxSize / 2
-        for (key, _) in sorted.prefix(excessCount) {
-            recentMessageTimestamps.removeValue(forKey: key)
-        }
+        recentMessageIds.contains(messageId)
     }
 
     // MARK: - Room Management
@@ -290,49 +253,19 @@ final class ConversationSocketHandler {
 
     // MARK: - Typing Safety Timers
 
-    // Guard against runaway timer growth in large conversations: beyond this
-    // cap we skip scheduling a new timer (the oldest entry stays at its current
-    // timeout, which is the desired no-op for very large groups).
-    // Cap set to 1000 to support large group chats (500+ participants) without
-    // silently dropping typing indicators mid-conversation.
-    private static let typingSafetyTimerCap = 1_000
-
-    private func resetTypingSafetyTimer(for userId: String) {
-        if typingSafetyTimers[userId] == nil,
-           typingSafetyTimers.count >= Self.typingSafetyTimerCap {
-            return
-        }
-        typingSafetyTimers[userId]?.invalidate()
-        typingSafetyTimers[userId] = Timer.scheduledTimer(withTimeInterval: Self.typingSafetyTimeout, repeats: false) { [weak self] _ in
+    private func resetTypingSafetyTimer(for username: String) {
+        typingSafetyTimers[username]?.invalidate()
+        typingSafetyTimers[username] = Timer.scheduledTimer(withTimeInterval: Self.typingSafetyTimeout, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.removeTypingUser(id: userId)
-                self.typingSafetyTimers.removeValue(forKey: userId)
+                self?.delegate?.typingUsernames.removeAll { $0 == username }
+                self?.typingSafetyTimers.removeValue(forKey: username)
             }
         }
     }
 
-    private func clearTypingSafetyTimer(for userId: String) {
-        typingSafetyTimers[userId]?.invalidate()
-        typingSafetyTimers.removeValue(forKey: userId)
-    }
-
-    /// Roster of currently-typing users, keyed by userId so a same-name
-    /// collision can't make one user's departure clear another's entry.
-    /// `delegate.typingUsernames` is recomputed from this roster on every
-    /// change, preserving first-seen order.
-    private func addTypingUser(id: String, name: String) {
-        typingUserNames[id] = name
-        if !typingUserOrder.contains(id) {
-            typingUserOrder.append(id)
-        }
-        delegate?.typingUsernames = typingUserOrder.compactMap { typingUserNames[$0] }
-    }
-
-    private func removeTypingUser(id: String) {
-        guard typingUserNames.removeValue(forKey: id) != nil else { return }
-        typingUserOrder.removeAll { $0 == id }
-        delegate?.typingUsernames = typingUserOrder.compactMap { typingUserNames[$0] }
+    private func clearTypingSafetyTimer(for username: String) {
+        typingSafetyTimers[username]?.invalidate()
+        typingSafetyTimers.removeValue(forKey: username)
     }
 
     // MARK: - Socket Subscriptions
@@ -397,15 +330,11 @@ final class ConversationSocketHandler {
                         // Persist server ACK (state machine) via actor — store
                         // observation will surface the delivery-status change.
                         if let persistence = self.persistence {
-                            do {
-                                _ = try await persistence.applyEvent(
-                                    localId: tempId,
-                                    event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt)
-                                )
-                                Logger.messages.info("SendFlow PENDING->SENT (socket broadcast) tempId=\(tempId, privacy: .public) serverId=\(apiMsg.id, privacy: .public) transport=broadcast")
-                            } catch {
-                                Logger.messages.error("Persistence serverAck failed: \(error, privacy: .public) tempId=\(tempId, privacy: .public)")
-                            }
+                            _ = try? await persistence.applyEvent(
+                                localId: tempId,
+                                event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt)
+                            )
+                            Logger.messages.info("SendFlow PENDING->SENT (socket broadcast) tempId=\(tempId, privacy: .public) serverId=\(apiMsg.id, privacy: .public) transport=broadcast")
                             // Persist server-confirmed content/attachments/reactions
                             // so the store snapshot reflects ground-truth values.
                             // `nil` attachments/reactions are preserved by
@@ -416,26 +345,22 @@ final class ConversationSocketHandler {
                                 : try? JSONEncoder().encode(serverMsg.attachments)
                             let reactionsJson = serverMsg.reactions.isEmpty ? nil
                                 : try? JSONEncoder().encode(serverMsg.reactions)
-                            do {
-                                try await persistence.updateServerAckedFields(
-                                    localId: tempId,
-                                    content: reconciledContent,
-                                    attachmentsJson: attachmentsJson,
-                                    reactionsJson: reactionsJson,
-                                    pinnedAt: serverMsg.pinnedAt,
-                                    pinnedBy: serverMsg.pinnedBy,
-                                    isEdited: serverMsg.isEdited,
-                                    editedAt: serverMsg.editedAt,
-                                    deletedAt: serverMsg.deletedAt,
-                                    deliveredCount: serverMsg.deliveredCount,
-                                    readCount: serverMsg.readCount,
-                                    deliveredToAllAt: serverMsg.deliveredToAllAt,
-                                    readByAllAt: serverMsg.readByAllAt,
-                                    updatedAt: serverMsg.updatedAt
-                                )
-                            } catch {
-                                Logger.messages.error("Persistence updateServerAckedFields failed: \(error, privacy: .public) tempId=\(tempId, privacy: .public)")
-                            }
+                            try? await persistence.updateServerAckedFields(
+                                localId: tempId,
+                                content: reconciledContent,
+                                attachmentsJson: attachmentsJson,
+                                reactionsJson: reactionsJson,
+                                pinnedAt: serverMsg.pinnedAt,
+                                pinnedBy: serverMsg.pinnedBy,
+                                isEdited: serverMsg.isEdited,
+                                editedAt: serverMsg.editedAt,
+                                deletedAt: serverMsg.deletedAt,
+                                deliveredCount: serverMsg.deliveredCount,
+                                readCount: serverMsg.readCount,
+                                deliveredToAllAt: serverMsg.deliveredToAllAt,
+                                readByAllAt: serverMsg.readByAllAt,
+                                updatedAt: serverMsg.updatedAt
+                            )
                         }
                         // Persist using server id so a future cold-start REST
                         // fetch reconciles cleanly without duplicates.
@@ -460,14 +385,10 @@ final class ConversationSocketHandler {
                                 // store observation surfaces the update to the view.
                                 let refreshed = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                                 let attachmentsJson = try? JSONEncoder().encode(refreshed.attachments)
-                                do {
-                                    try await persistence.updateAttachmentsJson(
-                                        localId: existing.id,
-                                        attachmentsJson: attachmentsJson
-                                    )
-                                } catch {
-                                    Logger.messages.error("Persistence updateAttachmentsJson failed: \(error, privacy: .public) messageId=\(existing.id, privacy: .public)")
-                                }
+                                try? await persistence.updateAttachmentsJson(
+                                    localId: existing.id,
+                                    attachmentsJson: attachmentsJson
+                                )
                             }
                         }
                         return
@@ -530,8 +451,9 @@ final class ConversationSocketHandler {
                     delegate.lastUnreadMessage = msg
 
                     if let sender = apiMsg.sender {
-                        self.removeTypingUser(id: sender.id)
-                        self.clearTypingSafetyTimer(for: sender.id)
+                        let senderName = sender.displayName ?? sender.username ?? sender.id
+                        delegate.typingUsernames.removeAll { $0 == senderName }
+                        self.clearTypingSafetyTimer(for: senderName)
                     }
 
                     // Read PRECISION gate. Being subscribed to the socket is NOT
@@ -578,20 +500,11 @@ final class ConversationSocketHandler {
                 guard let self else { return }
                 if let persistence = self.persistence {
                     // Write through persistence; store observation surfaces the edit.
-                    let msgId = apiMsg.id
-                    let content = apiMsg.content ?? ""
-                    // Use the server's editedAt, not the device clock: markEdited
-                    // compares this against the stored editedAt to reject stale,
-                    // out-of-order edit events, which only works if every device
-                    // is comparing the same (server) clock.
-                    let editedAt = apiMsg.editedAt ?? Date()
-                    Task {
-                        do {
-                            try await persistence.markEdited(localId: msgId, newContent: content, editedAt: editedAt)
-                        } catch {
-                            Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
+                    Task { try? await persistence.markEdited(
+                        localId: apiMsg.id,
+                        newContent: apiMsg.content ?? "",
+                        editedAt: Date()
+                    ) }
                 }
                 // Keep the (frozen) starred snapshot's preview in sync with the edit.
                 StarredMessagesStore.shared.updatePreview(
@@ -609,14 +522,7 @@ final class ConversationSocketHandler {
                 if let persistence = self.persistence {
                     // Write through persistence; store observation surfaces the deletion.
                     let now = Date()
-                    let msgId = event.messageId
-                    Task {
-                        do {
-                            try await persistence.markDeleted(localId: msgId, deletedAt: now)
-                        } catch {
-                            Logger.messages.warning("[ConversationSocket] markDeleted failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
+                    Task { try? await persistence.markDeleted(localId: event.messageId, deletedAt: now) }
                 }
                 // A delete-for-everyone broadcast must also evict the starred
                 // snapshot so the Starred Messages list stops showing a tombstone.
@@ -632,14 +538,7 @@ final class ConversationSocketHandler {
             .sink { [weak self] event in
                 guard let self, let persistence = self.persistence else { return }
                 let pinnedBy = event.pinnedBy
-                let msgId = event.messageId
-                Task {
-                    do {
-                        try await persistence.updatePinned(localId: msgId, pinnedAt: Date(), pinnedBy: pinnedBy)
-                    } catch {
-                        Logger.messages.warning("[ConversationSocket] updatePinned failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
+                Task { try? await persistence.updatePinned(localId: event.messageId, pinnedAt: Date(), pinnedBy: pinnedBy) }
             }
             .store(in: &cancellables)
 
@@ -649,14 +548,7 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let persistence = self.persistence else { return }
-                let msgId = event.messageId
-                Task {
-                    do {
-                        try await persistence.updatePinned(localId: msgId, pinnedAt: nil, pinnedBy: nil)
-                    } catch {
-                        Logger.messages.warning("[ConversationSocket] updateUnpinned failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
+                Task { try? await persistence.updatePinned(localId: event.messageId, pinnedAt: nil, pinnedBy: nil) }
             }
             .store(in: &cancellables)
 
@@ -685,23 +577,15 @@ final class ConversationSocketHandler {
                 // row (keyed by the currentUserId sentinel) — which rendered a
                 // single tap as "2". Other users' reactions still land because the
                 // cap rises with each genuine new reactor.
-                let msgId = event.messageId
-                let participantId = event.participantId
-                let emoji = event.emoji
-                let maxCount = event.aggregation?.count
                 Task {
-                    do {
-                        try await persistence.appendReaction(
-                            localId: msgId,
-                            reactionId: UUID().uuidString,
-                            messageId: msgId,
-                            participantId: participantId,
-                            emoji: emoji,
-                            maxCount: maxCount
-                        )
-                    } catch {
-                        Logger.messages.warning("[ConversationSocket] appendReaction failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
+                    try? await persistence.appendReaction(
+                        localId: event.messageId,
+                        reactionId: UUID().uuidString,
+                        messageId: event.messageId,
+                        participantId: event.participantId,
+                        emoji: event.emoji,
+                        maxCount: event.aggregation?.count
+                    )
                 }
             }
             .store(in: &cancellables)
@@ -714,15 +598,11 @@ final class ConversationSocketHandler {
                 guard let self, let persistence = self.persistence else { return }
                 // Write through persistence; store observation surfaces the removal.
                 Task {
-                    do {
-                        try await persistence.removeReaction(
-                            localId: event.messageId,
-                            emoji: event.emoji,
-                            participantId: event.participantId
-                        )
-                    } catch {
-                        Logger.messages.warning("[ConversationSocket] removeReaction failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
+                    try? await persistence.removeReaction(
+                        localId: event.messageId,
+                        emoji: event.emoji,
+                        participantId: event.participantId
+                    )
                 }
             }
             .store(in: &cancellables)
@@ -749,18 +629,20 @@ final class ConversationSocketHandler {
             .store(in: &cancellables)
 
         // Typing started (with safety timeout). The client picks the name to show —
-        // `preferredDisplayName` is displayName-first, username-fallback — but the
-        // roster is keyed by `userId` (see `addTypingUser`/`removeTypingUser`): two
-        // participants can share the same display name, and keying by name would
-        // let one user's typing:stop wipe the other's still-active entry.
+        // `preferredDisplayName` is displayName-first, username-fallback. It matches
+        // the `sender.displayName` used by the message-received cleanup above, so
+        // entries clear correctly.
         socketManager.typingStarted
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, self.delegate != nil else { return }
+                guard let self, let delegate = self.delegate else { return }
                 guard event.userId != userId else { return }
-                self.addTypingUser(id: event.userId, name: event.preferredDisplayName)
-                self.resetTypingSafetyTimer(for: event.userId)
+                let name = event.preferredDisplayName
+                if !delegate.typingUsernames.contains(name) {
+                    delegate.typingUsernames.append(name)
+                }
+                self.resetTypingSafetyTimer(for: name)
             }
             .store(in: &cancellables)
 
@@ -769,9 +651,10 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, self.delegate != nil else { return }
-                self.removeTypingUser(id: event.userId)
-                self.clearTypingSafetyTimer(for: event.userId)
+                guard let self, let delegate = self.delegate else { return }
+                let name = event.preferredDisplayName
+                delegate.typingUsernames.removeAll { $0 == name }
+                self.clearTypingSafetyTimer(for: name)
             }
             .store(in: &cancellables)
 
@@ -833,13 +716,7 @@ final class ConversationSocketHandler {
                 guard let self, let persistence = self.persistence else { return }
                 // Touch the record so the store observation fires and
                 // bubbles re-render with the updated attachment status.
-                Task {
-                    do {
-                        try await persistence.touchUpdatedAt(localId: event.messageId)
-                    } catch {
-                        Logger.messages.error("Persistence touchUpdatedAt failed: \(error, privacy: .public) messageId=\(event.messageId, privacy: .public)")
-                    }
-                }
+                Task { try? await persistence.touchUpdatedAt(localId: event.messageId) }
             }
             .store(in: &cancellables)
 
@@ -871,16 +748,10 @@ final class ConversationSocketHandler {
                     : nil
                 if let persistence = self.persistence {
                     // Write through persistence; store observation surfaces the count update.
-                    Task {
-                        do {
-                            try await persistence.updateViewOnceCount(
-                                localId: event.messageId,
-                                count: event.viewOnceCount
-                            )
-                        } catch {
-                            Logger.messages.error("Persistence updateViewOnceCount failed: \(error, privacy: .public) messageId=\(event.messageId, privacy: .public)")
-                        }
-                    }
+                    Task { try? await persistence.updateViewOnceCount(
+                        localId: event.messageId,
+                        count: event.viewOnceCount
+                    ) }
                 }
                 // Eviction is media-cache housekeeping; not a messages array mutation.
                 if event.isFullyConsumed {
@@ -949,11 +820,7 @@ final class ConversationSocketHandler {
                                     sourceLanguage: t.sourceLanguage,
                                     receivedAt: Date()
                                 )
-                                do {
-                                    try await persistence.saveTranslation(record)
-                                } catch {
-                                    Logger.messages.error("Persistence saveTranslation failed: \(error, privacy: .public) messageId=\(t.messageId, privacy: .public) lang=\(t.targetLanguage, privacy: .public)")
-                                }
+                                try? await persistence.saveTranslation(record)
                             }
                         }
                     }
@@ -1114,37 +981,15 @@ final class ConversationSocketHandler {
 
     // MARK: - Reconnection Sync
 
-    private var lastSyncTriggerAt: Date = .distantPast
-    private static let syncCoalesceWindow: TimeInterval = 2.0
-
-    private func triggerSyncIfNeeded() {
-        let now = Date()
-        guard now.timeIntervalSince(lastSyncTriggerAt) > Self.syncCoalesceWindow else { return }
-        lastSyncTriggerAt = now
-        Task { [weak self] in
-            await self?.delegate?.syncMissedMessages()
-            await PendingStatusQueue.shared.flush()
-            // Flush the OfflineQueue on socket reconnect. OutboxRetryScheduler
-            // covers the network-reconnect path (NWPathMonitor) but a socket
-            // reconnect without a NW path change (e.g. server restart) would
-            // leave queued outbox records stranded until the next foreground.
-            await OutboxFlushTrigger.flushNow()
-        }
-    }
-
     private func subscribeToReconnect() {
         messageSocket.didReconnect
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
-                // Typing state from before the disconnect is stale — remote peers
-                // will re-emit typing:start only if they are still typing.
-                self.typingSafetyTimers.values.forEach { $0.invalidate() }
-                self.typingSafetyTimers.removeAll()
-                self.typingUserOrder.removeAll()
-                self.typingUserNames.removeAll()
-                self.delegate?.typingUsernames.removeAll()
-                self.triggerSyncIfNeeded()
+                Task { [weak self] in
+                    await self?.delegate?.syncMissedMessages()
+                    await PendingStatusQueue.shared.flush()
+                }
             }
             .store(in: &cancellables)
 
@@ -1157,7 +1002,11 @@ final class ConversationSocketHandler {
             .publisher(for: UIApplication.willEnterForegroundNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.triggerSyncIfNeeded()
+                guard let self else { return }
+                Task { [weak self] in
+                    await self?.delegate?.syncMissedMessages()
+                    await PendingStatusQueue.shared.flush()
+                }
             }
             .store(in: &cancellables)
     }

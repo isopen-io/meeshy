@@ -18,7 +18,7 @@ interface UseRecoverySubmissionProps {
   resetBotProtection: () => void;
   isSessionExpiredError: (errorCode: string) => boolean;
   handleSessionExpired: () => void;
-  t: (key: string, fallback?: string) => string;
+  t: (key: string) => string;
   router: any;
   onClose: () => void;
 }
@@ -53,12 +53,12 @@ export function useRecoverySubmission({
       if (result.success) {
         setStoredEmail(email.trim());
         resetBotProtection();
-        toast.success(t('magicLink.success.title', 'Magic Link Sent!'));
+        toast.success(t('magicLink.success.title') || 'Magic Link envoyé !');
         setStep('success');
       } else {
         console.error('[AccountRecovery] Magic link error:', result.error);
         if (result.error === 'RATE_LIMITED') {
-          setError(t('magicLink.errors.rateLimited', 'Too many attempts. Please try again in about an hour.'));
+          setError(t('magicLink.errors.rateLimited') || 'Trop de tentatives. Veuillez réessayer dans environ une heure.');
         } else {
           setError(result.error || t('magicLink.errors.requestFailed'));
         }

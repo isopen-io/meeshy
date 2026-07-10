@@ -10,7 +10,7 @@ import {
 } from '@meeshy/shared/types/socketio-events';
 import { logger } from '../utils/logger';
 
-type RedisSubscriber = Pick<Redis, 'connect' | 'subscribe' | 'unsubscribe' | 'quit' | 'on'>;
+type RedisSubscriber = Pick<Redis, 'subscribe' | 'unsubscribe' | 'quit' | 'on'>;
 
 export function parseAgentAdminEvent(message: string): AgentAdminEventData | null {
   try {
@@ -74,11 +74,6 @@ export class AgentAdminRelay {
       this.io.to(ROOMS.adminAgent()).emit(SERVER_EVENTS.AGENT_ADMIN_EVENT, event);
     });
 
-    // Le subscriber est créé lazyConnect + enableOfflineQueue:false : un
-    // subscribe() émis avant l'établissement du stream est REJETÉ («Stream
-    // isn't writeable») — connect() explicite d'abord, sinon le relay ne
-    // démarre jamais (observé à chaque boot en prod).
-    await subscriber.connect();
     await subscriber.subscribe(AGENT_ADMIN_EVENT_CHANNEL);
     logger.info('AgentAdminRelay subscribed', { channel: AGENT_ADMIN_EVENT_CHANNEL });
   }

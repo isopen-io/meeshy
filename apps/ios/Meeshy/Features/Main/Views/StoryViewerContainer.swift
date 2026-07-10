@@ -16,11 +16,6 @@ struct StoryViewerContainer: View {
     @Binding var isPresented: Bool
     var onReplyToStory: ((ReplyContext) -> Void)? = nil
     var singleGroup: Bool = false
-    /// R4 inc.2 — id exact du post story quand le point d'entrée le connaît
-    /// (bookmark, notification, deep link) : permet un fetch unitaire léger
-    /// si le tray ignore le groupe, au lieu du refetch full-tray bloquant.
-    /// `nil` conserve le comportement historique.
-    var postId: String? = nil
     var initialStoryIndex: Int = 0
     /// Forwarded to `StoryViewerView` : ouvre le viewer sur la première story
     /// non vue (points d'entrée « toucher le profil / avatar / tray »).
@@ -184,27 +179,6 @@ struct StoryViewerContainer: View {
 
         Logger.messages.info("[StoryViewerContainer] Group missing uid=\(uid, privacy: .public) source=\(presentationSource, privacy: .public) groupCount=\(viewModel.storyGroups.count) availableIds=\(viewModel.storyGroups.map(\.id).joined(separator: ","), privacy: .public)")
 
-        // R4 — Cache-first (mission produit n°2 : jamais de spinner si un rendu
-        // partiel est possible) : un deep link / une notification à froid arrive
-        // AVANT le `loadStories` du boot — le tray du cache 24 h contient très
-        // probablement le groupe. `loadStories()` le sert immédiatement
-        // (`.fresh` → zéro réseau ; `.stale` → servi + refetch silencieux) et
-        // le body réactif monte le viewer sans spinner plein écran.
-        await viewModel.loadStories()
-
-        if viewModel.groupIndex(forUserId: uid) != nil { return }
-
-        // R4 inc.2 — le cache ignore ce groupe mais le point d'entrée connaît
-        // le post exact : fetch unitaire léger (GET /posts/:id) AVANT le
-        // full-tray. Ne court-circuite que si le groupe du uid demandé est
-        // bien monté (un postId d'un autre auteur retombe sur le full fetch).
-        if let postId {
-            _ = await viewModel.ensureStoryLoaded(postId: postId)
-            if viewModel.groupIndex(forUserId: uid) != nil { return }
-        }
-
-        // Le cache ne connaît pas ce groupe (story récente d'un contact, tray
-        // périmé) : refetch réseau complet — comportement historique conservé.
         await viewModel.loadStories(forceNetwork: true)
 
         if viewModel.groupIndex(forUserId: uid) != nil { return }

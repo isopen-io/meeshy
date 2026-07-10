@@ -52,7 +52,6 @@ struct CallsTab: View {
                 .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
         }
         .accessibilityLabel(label)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Content
@@ -217,6 +216,5 @@ private struct CallRowDialButton: View {
                 .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
         }
         .accessibilityLabel(String(localized: "calls.redial", defaultValue: "Rappeler", bundle: .main))
-        .accessibilityHint(String(localized: "calls.redial.hint", defaultValue: "Ouvre le choix entre appel vocal et appel vidéo", bundle: .main))
     }
 }
