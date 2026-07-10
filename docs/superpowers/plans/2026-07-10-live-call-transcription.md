@@ -1530,7 +1530,7 @@ git commit -m "feat(ios/calls): add live captions toggle button to the call cont
 - Consumes: nothing new (the iOS client already emits `call:transcription-segment` unconditionally when the user toggles captions on — Task 3/4 — so the real product gate is client-side).
 - Produces: no interface change — `translateAndEmitSegment` and its emitted `call:translated-segment` shape are untouched.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Open `services/gateway/src/__tests__/unit/socketio/CallEventsHandler-transcription-translation.test.ts`. Add a new test after the existing `it('subscribes to the scoped translationCompleted:<messageId> event...')`:
 
@@ -1572,7 +1572,7 @@ Open `services/gateway/src/__tests__/unit/socketio/CallEventsHandler-transcripti
   });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy/services/gateway
@@ -1581,7 +1581,7 @@ bun test src/__tests__/unit/socketio/CallEventsHandler-transcription-translation
 
 Expected: FAIL — with the current gate, `metadata: {}` means `translationEnabled` is falsy, so the handler falls into the relay-original-text branch instead of calling `translateAndEmitSegment`; `payload.segment.translatedText` is `undefined`, not `'Hello world'`.
 
-- [ ] **Step 3: Remove the gate**
+- [x] **Step 3: Remove the gate**
 
 In `services/gateway/src/socketio/CallEventsHandler.ts`, locate the `socket.on(CALL_EVENTS.TRANSCRIPTION_SEGMENT, ...)` handler. Replace:
 
@@ -1620,7 +1620,7 @@ with:
         } else {
 ```
 
-- [ ] **Step 4: Run to verify both tests pass**
+- [x] **Step 4: Run to verify both tests pass**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy/services/gateway
@@ -1629,7 +1629,7 @@ bun test src/__tests__/unit/socketio/CallEventsHandler-transcription-translation
 
 Expected: PASS (both the pre-existing test and the new one — the pre-existing test's mock still sets `metadata: { translationEnabled: true }`, which is now simply ignored, and its assertions are unaffected).
 
-- [ ] **Step 5: Run the full gateway suite for this file's neighbors**
+- [x] **Step 5: Run the full gateway suite for this file's neighbors**
 
 ```bash
 bun test src/socketio/__tests__/CallEventsHandler.test.ts 2>&1 | tail -60
@@ -1637,7 +1637,7 @@ bun test src/socketio/__tests__/CallEventsHandler.test.ts 2>&1 | tail -60
 
 Expected: PASS, no regressions (this suite has its own `metadata: { translationEnabled: true }` mock per the earlier grep — same reasoning: the field becomes inert, not wrong).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
