@@ -515,7 +515,7 @@ export class MeeshySocketIOManager {
         };
         // Chain the conversation room + each participant's user room, deduped so
         // Socket.IO delivers the event at most once per socket. Mirrors the two
-        // sibling emitters of this same event — `_autoDeliverToOnlineRecipients`
+        // sibling emitters of this same event — `autoDeliverToOnlineRecipients`
         // and `broadcastReadStatusUpdate` — which fan out identically so authors
         // never get stuck on a single "sent" tick after navigating away.
         const convRoom = ROOMS.conversation(conversationId);

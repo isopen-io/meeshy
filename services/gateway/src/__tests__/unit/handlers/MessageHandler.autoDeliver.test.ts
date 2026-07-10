@@ -38,7 +38,7 @@ jest.mock('../../../services/MentionService', () => ({
 import { MessageHandler } from '../../../socketio/handlers/MessageHandler';
 
 interface AutoDeliverAccess {
-  _autoDeliverToOnlineRecipients(msg: unknown, conversationId: string): Promise<void>;
+  autoDeliverToOnlineRecipients(msg: unknown, conversationId: string): Promise<void>;
 }
 
 const senderParticipantId = 'p_sender';
@@ -120,7 +120,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
     const { handler, prisma, readStatusService, privacyPreferencesService, to, emit } =
       makeHandler({ onlineUsers: [onlineUserId] });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
@@ -174,7 +174,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       onlineUsers: [onlineUserId, offlineUserId]
     });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
@@ -210,7 +210,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       .mockRejectedValueOnce(new Error('cursor conflict'))
       .mockResolvedValueOnce(undefined);
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
@@ -229,7 +229,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
   it('does nothing when no recipient is online', async () => {
     const { handler, readStatusService, emit } = makeHandler({ onlineUsers: [] });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
@@ -244,7 +244,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       showReadReceipts: false
     });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
@@ -256,7 +256,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
   it('aborts safely when senderId is missing', async () => {
     const { handler, readStatusService, emit } = makeHandler({ onlineUsers: [onlineUserId] });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: null } as any,
       conversationId
     );
