@@ -428,6 +428,19 @@ export const CLIENT_EVENTS = {
   CALL_BACKGROUNDED: 'call:backgrounded',
   CALL_FOREGROUNDED: 'call:foregrounded',
   CALL_TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
+  /**
+   * --- Reserved: abandoned leader/follower transcription design ---
+   * Built for an earlier "one device transcribes both streams, negotiates
+   * who leads and whether to translate" architecture. The shipped design
+   * (docs/superpowers/specs/2026-07-10-live-call-transcription-design.md)
+   * sidesteps it entirely: each device transcribes ONLY its own microphone
+   * locally and relays finals over CALL_TRANSCRIPTION_SEGMENT instead. The
+   * gateway has no handler for these five and no client emits them — kept
+   * declared (not deleted, matching the CALL_TRANSLATION_REQUESTED-style
+   * reserved block above) so nobody assumes the gateway already relays
+   * capability/role negotiation or raw audio chunks. Delete only if the
+   * leader/follower design is formally abandoned rather than shelved.
+   */
   CALL_TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
   CALL_TRANSCRIPTION_ROLE: 'call:transcription-role',
   CALL_TRANSLATION_REQUEST: 'call:translation-request',
