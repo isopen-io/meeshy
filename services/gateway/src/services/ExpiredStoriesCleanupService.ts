@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { NOT_DELETED } from './posts/postIncludes';
 
 const log = enhancedLogger.child({ module: 'ExpiredStoriesCleanupService' });
 
@@ -73,7 +74,13 @@ export class ExpiredStoriesCleanupService {
         where: {
           type: 'STORY',
           expiresAt: { lt: now },
-          deletedAt: null,
+          // MongoDB: never-deleted posts store NO `deletedAt` key (Prisma omits
+          // unset optional fields at insert). A bare `{ deletedAt: null }` filter
+          // matches ZERO of them, so no expired story was ever soft-deleted (and
+          // thus never hard-deleted) — the exact unbounded row leak this service
+          // exists to prevent. Match on the field being unset, per the codebase
+          // invariant documented on NOT_DELETED (posts/postIncludes.ts).
+          deletedAt: NOT_DELETED,
         },
         data: {
           deletedAt: now,

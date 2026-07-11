@@ -155,6 +155,31 @@ describe('ExpiredStoriesCleanupService — start/stop lifecycle', () => {
   });
 });
 
+describe('ExpiredStoriesCleanupService — soft-delete matcher (MongoDB unset invariant)', () => {
+  // Regression: never-deleted posts store NO `deletedAt` key on MongoDB (Prisma
+  // omits unset optional fields at insert), so a bare `{ deletedAt: null }`
+  // filter matches ZERO live stories — no expired story was ever soft-deleted,
+  // and the hard-delete pass (which only targets already-soft-deleted rows) then
+  // found nothing either. Expired stories accumulated forever. The soft-delete
+  // pass MUST match on the field being UNSET (`{ isSet: false }`), the same
+  // NOT_DELETED invariant every other Post query uses (posts/postIncludes.ts).
+  it('soft-delete matches live stories by the unset `deletedAt` field, not `null`', async () => {
+    const prisma = makeSimplePrisma();
+    (prisma.post.updateMany as jest.Mock<any>).mockResolvedValue({ count: 3 });
+
+    const service = new ExpiredStoriesCleanupService(prisma as any);
+    const result = await service.cleanup();
+
+    const args = (prisma.post.updateMany as jest.Mock<any>).mock.calls[0][0] as any;
+    expect(args.where.type).toBe('STORY');
+    expect(args.where.expiresAt).toHaveProperty('lt');
+    // The bug: `deletedAt: null` matches no unset-field document on MongoDB.
+    expect(args.where.deletedAt).not.toBeNull();
+    expect(args.where.deletedAt).toEqual({ isSet: false });
+    expect(result.softDeleted).toBe(3);
+  });
+});
+
 describe('ExpiredStoriesCleanupService — error handling', () => {
   it('cleanup() catches soft-delete errors and continues to hard-delete pass', async () => {
     const prisma = makeSimplePrisma();
