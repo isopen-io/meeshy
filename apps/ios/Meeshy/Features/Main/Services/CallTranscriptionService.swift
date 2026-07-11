@@ -168,21 +168,21 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     func requestPermission() async -> TranscriptionPermission {
         let status = await withCheckedContinuation { continuation in
-            // Same isolation trap as the AVAudioEngine tap block (see
-            // startLocalCapture): requestAuthorization's completion runs on
-            // an Apple-arbitrary background queue, but a closure literal
-            // written inline here is implicitly MainActor-isolated under
-            // this project's SWIFT_DEFAULT_ACTOR_ISOLATION — invoking it
-            // off-MainActor traps (SIGTRAP). Established fix elsewhere in
-            // this codebase for the same ObjC-permission-callback shape
-            // (PHPhotoLibrary.requestAuthorization in RecentMediaStrip.swift,
-            // AVCaptureDevice.requestAccess in CameraView.swift): re-enter
-            // via Task { @MainActor in } rather than resuming inline.
-            SFSpeechRecognizer.requestAuthorization { status in
-                Task { @MainActor in
-                    continuation.resume(returning: status)
-                }
+            // Confirmed on device (crash Meeshy-2026-07-11-020237.ips,
+            // faulting thread invoked by tccd via XPC): the `Task { @MainActor
+            // in }`-wrapping tried first was NOT sufficient — the OUTER
+            // closure passed to requestAuthorization is itself implicitly
+            // MainActor-isolated (same SWIFT_DEFAULT_ACTOR_ISOLATION
+            // inference as the AVAudioEngine tap block, see
+            // startLocalCapture), and the dynamic isolation assertion traps
+            // at the CALL SITE — before the closure's body (the Task{}) ever
+            // runs — when tccd invokes it off-MainActor. The only fix that
+            // actually breaks the inference is the same one used for the tap
+            // block: an explicit @Sendable-typed local.
+            let completion: @Sendable (SFSpeechRecognizerAuthorizationStatus) -> Void = { status in
+                continuation.resume(returning: status)
             }
+            SFSpeechRecognizer.requestAuthorization(completion)
         }
         let result = mapAuthorizationStatus(status)
         permission = result
@@ -370,9 +370,17 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private func startRecognitionTask(language: String) {
         guard let recognizer, let request else { return }
         let speakerId = localUserId
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+        // @Sendable-typed local: recognitionTask(with:)'s resultHandler runs
+        // on the recognizer's own queue, off-MainActor — same isolation trap
+        // as startLocalCapture's tap block and requestPermission's
+        // authorization completion. Not yet observed crashing here (no
+        // report reached this far before the requestPermission fix), but
+        // it's the identical Apple-completion-handler shape, so fixed
+        // preemptively rather than waiting for a third device round-trip.
+        let resultHandler: @Sendable (SFSpeechRecognitionResult?, Error?) -> Void = { [weak self] result, error in
             self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language)
         }
+        recognitionTask = recognizer.recognitionTask(with: request, resultHandler: resultHandler)
     }
 
     /// PERF-005: runs on the recognizer's own queue (off-Main). Extracts
