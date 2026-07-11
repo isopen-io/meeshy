@@ -22,8 +22,14 @@
 > sont une cascade VOLONTAIRE (client < serveur < GC, ordre à préserver) et
 > le refresh TURN est quasi-inerte par construction (TTL clampé ≥ cap d'appel
 > 2 h) — filet à garder, pas à « réparer ».
-> Restent : #5 (parité Android socket), #9 (restartIce iOS), harnais e2e
-> 2-sockets.
+> #5 (partiel) `ae6da4356` : Android émet presence:app-state (edge-only +
+> replay par socket) — fin de la double sonnerie app-ouverte ; le gateway
+> peut enfin router socket-vs-push. Restent de #5 : listeners
+> participant-left/quality-alert/screen-capture-alert/transcription-segment/
+> translated-segment + emits call:backgrounded/foregrounded (grâce heartbeat
+> in-call) ; s'abonner à call:force-leave est INUTILE tant que le serveur ne
+> l'émet pas (vérifié : jamais émis).
+> Restent : #5 (reste ci-dessus), #9 (restartIce iOS), harnais e2e 2-sockets.
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,
