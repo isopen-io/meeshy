@@ -109,6 +109,20 @@ describe('CallSystemMessage — état vivant (kind call-live)', () => {
     renderCall(liveMetadata());
     expect(screen.queryByRole('button', { name: 'Rappeler' })).not.toBeInTheDocument();
   });
+
+  it('« Rejoindre » pose la demande de join sur le call-store', () => {
+    const { useCallStore } = jest.requireActual('@/stores/call-store');
+    useCallStore.setState({ joinRequest: null, isInCall: false, currentCall: null });
+
+    renderCall(liveMetadata({ callId: 'call-9', callType: 'video' }));
+    screen.getByRole('button', { name: 'Rejoindre' }).click();
+
+    expect(useCallStore.getState().joinRequest).toEqual({
+      callId: 'call-9',
+      conversationId: 'conv-1',
+      callType: 'video',
+    });
+  });
 });
 
 describe('CallSystemMessage — annulé par-spectateur (missed + endedByInitiator)', () => {

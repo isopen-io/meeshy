@@ -85,6 +85,7 @@
       "cameraSwitched": "Caméra changée",
       "cameraSwitchFailed": "Échec du changement de caméra",
       "joinFailed": "Impossible de rejoindre l'appel",
+      "callAlreadyEnded": "L'appel est terminé",
       "videoSuspendedPoorConnection": "Connexion faible — vidéo suspendue pour maintenir l'appel",
       "videoResumed": "Connexion rétablie — vidéo réactivée"
     },

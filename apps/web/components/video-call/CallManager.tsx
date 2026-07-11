@@ -21,9 +21,12 @@ import type {
   CallEndedEvent,
   CallMediaToggleEvent,
   CallError,
+  CallSession,
 } from '@meeshy/shared/types/video-call';
+import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
+import { callsService } from '@/services/calls.service';
 
 const CALL_TIMEOUT_MS = 30000; // 30 seconds
 
@@ -44,6 +47,8 @@ export function CallManager() {
     removePeerConnection,
     startHeartbeat,
     stopHeartbeat,
+    joinRequest,
+    clearJoinRequest,
   } = useCallStore();
 
   const [incomingCall, setIncomingCall] = useState<CallInitiatedEvent | null>(null);
@@ -415,6 +420,88 @@ export function CallManager() {
   }, []);
 
   /**
+   * Shared join path — used by BOTH the incoming-call Accept button and the
+   * live-bubble join (cold rehydration via `useCallStore.requestJoin`).
+   *
+   * Privacy fix (audit 2026-07-07): acquire local media BEFORE joining,
+   * gated on the call's ACTUAL type — mirrors the caller's own
+   * pre-authorization in use-video-call.ts's startCall. Handing the stream
+   * off via `__preauthorizedMediaStream` reuses the same Safari-compatible
+   * path VideoCallInterface already checks on mount.
+   *
+   * Vague 19 — the join must be confirmed via its ack before the UI commits
+   * to "in call": the gateway can reject call:join at any point right up to
+   * the moment the caller hangs up (already-ended call, no-longer-a-
+   * participant, rate limit, etc.). A failure anywhere after getUserMedia
+   * succeeded must not leave the mic/camera hot — the stream is stopped
+   * before rethrowing to the caller (which owns the user-facing toast).
+   */
+  const acceptOrJoinCall = useCallback(async (params: {
+    callId: string;
+    conversationId: string;
+    mode: CallSession['mode'];
+    initiatorId: string;
+    participants: CallSession['participants'];
+    isVideo: boolean;
+  }) => {
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(
+        getCallMediaConstraints(params.isVideo ? 'video' : 'audio')
+      );
+      (window as any).__preauthorizedMediaStream = stream;
+
+      // Join call via Socket.IO - CallInterface will initialize local stream
+      const socket = meeshySocketIOService.getSocket();
+      if (!socket) {
+        throw new Error('No socket connection');
+      }
+
+      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve) => {
+        (socket as unknown).emit(
+          CLIENT_EVENTS.CALL_JOIN,
+          {
+            callId: params.callId,
+            settings: {
+              audioEnabled: true,
+              videoEnabled: params.isVideo,
+            },
+          },
+          resolve
+        );
+      });
+
+      if (!ack?.success) {
+        throw new Error('Failed to join call');
+      }
+
+      // Apply the server-provided ICE servers (STUN + time-limited TURN) so
+      // the RTCPeerConnection is built with TURN credentials before any SDP
+      // is answered/offered.
+      if (ack.data?.iceServers?.length) {
+        setIceServers(ack.data.iceServers);
+      }
+
+      // Create call session in store
+      setCurrentCall({
+        id: params.callId,
+        conversationId: params.conversationId,
+        mode: params.mode,
+        status: 'active',
+        initiatorId: params.initiatorId,
+        startedAt: new Date(),
+        participants: params.participants,
+      } as CallSession);
+
+      // Set call as active
+      setInCall(true);
+    } catch (error) {
+      stopPreauthorizedStream(stream);
+      throw error;
+    }
+  }, [setCurrentCall, setInCall, setIceServers]);
+
+  /**
    * Accept incoming call
    */
   const handleAcceptCall = useCallback(async () => {
@@ -423,9 +510,6 @@ export function CallManager() {
     acceptingCallIdRef.current = incomingCall.callId;
 
     logger.debug('[CallManager]', 'Accepting call - callId: ' + incomingCall.callId);
-
-    const isVideoCall = incomingCall.type === 'video';
-    let stream: MediaStream | null = null;
 
     try {
       // Clear timeout since we're accepting
@@ -438,92 +522,27 @@ export function CallManager() {
         logger.error('[CallManager]', 'Failed to load ringtone module: ' + error?.message);
       });
 
-      // Privacy fix (audit 2026-07-07): acquire local media BEFORE joining,
-      // gated on the call's ACTUAL type — mirrors the caller's own
-      // pre-authorization in use-video-call.ts's startCall. Previously the
-      // callee never called getUserMedia here at all; VideoCallInterface's
-      // mount effect fell back to unconditional audio+video constraints
-      // (DEFAULT_MEDIA_CONSTRAINTS in webrtc-service.ts) regardless of call
-      // type, so an audio-only call still activated the callee's camera and
-      // transmitted live video with no consent. Handing the stream off via
-      // `__preauthorizedMediaStream` reuses the same Safari-compatible path
-      // VideoCallInterface already checks on mount — no changes needed there.
-      stream = await navigator.mediaDevices.getUserMedia(
-        getCallMediaConstraints(isVideoCall ? 'video' : 'audio')
-      );
-      (window as any).__preauthorizedMediaStream = stream;
-
-      // Join call via Socket.IO - CallInterface will initialize local stream
-      const socket = meeshySocketIOService.getSocket();
-      if (!socket) {
-        throw new Error('No socket connection');
-      }
-
-      // Vague 19 — the join must be confirmed via its ack before the UI
-      // commits to "in call": the gateway can reject call:join at any point
-      // right up to the moment the caller hangs up (already-ended call,
-      // no-longer-a-participant, rate limit, etc.), and previously this ack
-      // was only used to opportunistically apply ICE servers while
-      // setCurrentCall/setInCall/setIncomingCall(null) ran unconditionally
-      // right after emit() — a rejected join still left the callee staring
-      // at a fully-mounted VideoCallInterface with no peer connection ever
-      // formed. Mirrors the already-correct ack check in the sibling
-      // (but unwired) `answerCall` in hooks/conversations/use-video-call.ts.
-      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve) => {
-        (socket as unknown).emit(
-          CLIENT_EVENTS.CALL_JOIN,
-          {
-            callId: incomingCall.callId,
-            settings: {
-              audioEnabled: true,
-              videoEnabled: isVideoCall,
-            },
-          },
-          resolve
-        );
-      });
-
-      if (!ack?.success) {
-        throw new Error('Failed to join call');
-      }
-
-      // Apply the server-provided ICE servers (STUN + time-limited TURN) so
-      // the callee's RTCPeerConnection is built with TURN credentials before
-      // the incoming SDP offer is answered.
-      if (ack.data?.iceServers?.length) {
-        setIceServers(ack.data.iceServers);
-      }
-
-      // Create call session in store
-      setCurrentCall({
-        id: incomingCall.callId,
+      await acceptOrJoinCall({
+        callId: incomingCall.callId,
         conversationId: incomingCall.conversationId,
         mode: incomingCall.mode,
-        status: 'active',
         initiatorId: incomingCall.initiator.userId,
-        startedAt: new Date(),
-        participants: incomingCall.participants,
+        participants: incomingCall.participants as CallSession['participants'],
+        isVideo: incomingCall.type === 'video',
       });
-
-      // Set call as active
-      setInCall(true);
 
       // Clear incoming call notification
       setIncomingCall(null);
 
       logger.info('[CallManager]', 'Call accepted - callId: ' + incomingCall.callId);
     } catch (error: unknown) {
-      // A failure anywhere after getUserMedia succeeded (no socket, rejected
-      // join ack) must not leave the mic/camera hot with nothing consuming
-      // the stream.
-      stopPreauthorizedStream(stream);
-      logger.error('[CallManager]', 'Failed to accept call: ' + (error?.message || 'Unknown error'));
+      logger.error('[CallManager]', 'Failed to accept call: ' + ((error as Error)?.message || 'Unknown error'));
       toast.error(t('calls.toasts.joinFailed'));
       setIncomingCall(null);
     } finally {
       acceptingCallIdRef.current = null;
     }
-  }, [incomingCall, setCurrentCall, setInCall, setIceServers, clearCallTimeout]);
+  }, [incomingCall, acceptOrJoinCall, clearCallTimeout, t]);
 
   /**
    * Reject incoming call
@@ -595,6 +614,52 @@ export function CallManager() {
       }
     );
   }, []);
+
+  /**
+   * Live call bubble → join (cold-rehydration path). The bubble
+   * (`CallSystemMessage`, message kind 'call-live') owns no media/UI: it
+   * poses a `requestJoin` on the call store, consumed here. The call is
+   * revalidated via REST (`GET /conversations/:id/active-call`) — no
+   * dependency on a previously received `call:initiated` socket event, so a
+   * page reloaded mid-call can still join. A call that ended in the meantime
+   * surfaces a toast instead of a broken join.
+   */
+  useEffect(() => {
+    if (!joinRequest) return;
+    const request = joinRequest;
+    clearJoinRequest();
+
+    // Guard: already in a call — the store's requestJoin also refuses this,
+    // but the state may have changed between the tap and this effect.
+    if (useCallStore.getState().isInCall) return;
+
+    void (async () => {
+      try {
+        const response = await callsService.getActiveCall(request.conversationId);
+        const session = response.success ? response.data : null;
+        const isJoinable = !!session
+          && session.id === request.callId
+          && !CALL_TERMINAL_STATUSES.includes(session.status);
+        if (!isJoinable) {
+          toast.info(t('calls.toasts.callAlreadyEnded'));
+          return;
+        }
+
+        logger.info('[CallManager]', 'Joining ongoing call from live bubble', { callId: session.id });
+        await acceptOrJoinCall({
+          callId: session.id,
+          conversationId: request.conversationId,
+          mode: session.mode,
+          initiatorId: session.initiatorId,
+          participants: session.participants ?? [],
+          isVideo: request.callType === 'video',
+        });
+      } catch (error: unknown) {
+        logger.error('[CallManager]', 'Failed to join ongoing call from bubble: ' + ((error as Error)?.message || 'Unknown error'));
+        toast.error(t('calls.toasts.joinFailed'));
+      }
+    })();
+  }, [joinRequest, clearJoinRequest, acceptOrJoinCall, t]);
 
   // Stable refs for all handlers - prevents useEffect re-fires on every render
   const handleIncomingCallRef = useRef(handleIncomingCall);

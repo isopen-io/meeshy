@@ -10,6 +10,7 @@ import {
   type CallNetworkQuality,
 } from '@meeshy/shared/utils/call-summary';
 import { useVideoCall } from '@/hooks/conversations/use-video-call';
+import { useCallStore } from '@/stores/call-store';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 
@@ -57,6 +58,7 @@ export const CallSystemMessage = memo(function CallSystemMessage({
   const { startCall } = useVideoCall({
     conversation: { id: conversationId, type: conversationType } as never,
   });
+  const requestJoin = useCallStore((s) => s.requestJoin);
   const canCallBack = !isLive && conversationType === 'direct';
   const canJoin = isLive && conversationType === 'direct' && !isAnonymous;
 
@@ -153,7 +155,13 @@ export const CallSystemMessage = memo(function CallSystemMessage({
           {canJoin && (
             <button
               type="button"
-              onClick={() => { /* câblé sur le call-store (requestJoin) en W2 */ }}
+              onClick={() => {
+                requestJoin({
+                  callId: metadata.callId,
+                  conversationId,
+                  callType: isVideo ? 'video' : 'audio',
+                });
+              }}
               aria-label={t('callSystemMessage.join', 'Rejoindre')}
               className={cn(
                 'flex h-8 shrink-0 items-center justify-center rounded-full px-3 text-xs font-semibold text-white transition-colors',
