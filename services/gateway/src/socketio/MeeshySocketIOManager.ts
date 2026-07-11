@@ -2035,8 +2035,11 @@ export class MeeshySocketIOManager {
 
             // 5.3 SCOPE — le filtre SOCKET_LANG_FILTER s'applique au message:new
             // ONLINE uniquement. L'enqueue offline ci-dessous stocke le payload
-            // complet (multi-traduit), NON filtré par langue. Acceptable car le
-            // chemin principal `message:send` (MessageHandler) n'enqueue pas offline.
+            // complet (multi-traduit), NON filtré par langue. Acceptable car les
+            // DEUX transports d'envoi enqueuent le payload complet offline de façon
+            // identique : le chemin WS `message:send` (MessageHandler.broadcastNewMessage,
+            // qui enqueue son `broadcastPayload` cid-strippé) et ce chemin REST/ZMQ.
+            // Un message ne traverse qu'un seul transport, donc pas de double-enqueue.
             // Le drain (`_drainPendingMessages`) EST câblé : il s'exécute sur
             // connexion (post-auth, post-room-join) — voir l'appel ~ligne 521.
             // Le destinataire reconnecté rejoue donc ces messages au prochain login.
