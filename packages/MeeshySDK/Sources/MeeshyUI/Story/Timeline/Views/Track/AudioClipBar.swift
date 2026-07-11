@@ -39,6 +39,10 @@ public struct AudioClipBar: View, Equatable {
     /// the drift snowballs across frames because each `onChanged` re-reads
     /// the (already-mutated) clip start. Mirrors `VideoClipBar.onMoveEnded`.
     public let onMoveEnded: () -> Void
+    /// Poignées de trim — la fenêtre d'un audio se règle au doigt (affichées
+    /// à la sélection). Défauts no-op pour les call sites existants.
+    public let onTrimStartDelta: (CGFloat) -> Void
+    public let onTrimEndDelta: (CGFloat) -> Void
 
     public init(
         clipId: String, title: String, startTime: Float, duration: Float,
@@ -49,7 +53,9 @@ public struct AudioClipBar: View, Equatable {
         onDoubleTap: @escaping () -> Void,
         onLongPress: @escaping () -> Void,
         onMoveDelta: @escaping (CGFloat) -> Void,
-        onMoveEnded: @escaping () -> Void = {}
+        onMoveEnded: @escaping () -> Void = {},
+        onTrimStartDelta: @escaping (CGFloat) -> Void = { _ in },
+        onTrimEndDelta: @escaping (CGFloat) -> Void = { _ in }
     ) {
         self.clipId = clipId; self.title = title
         self.startTime = startTime; self.duration = duration
@@ -60,6 +66,8 @@ public struct AudioClipBar: View, Equatable {
         self.onTap = onTap; self.onDoubleTap = onDoubleTap
         self.onLongPress = onLongPress; self.onMoveDelta = onMoveDelta
         self.onMoveEnded = onMoveEnded
+        self.onTrimStartDelta = onTrimStartDelta
+        self.onTrimEndDelta = onTrimEndDelta
     }
 
     public var accessibilityComposed: String {
@@ -84,6 +92,11 @@ public struct AudioClipBar: View, Equatable {
             if isSelected {
                 RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
                     .allowsHitTesting(false)
+            }
+            if isSelected, !isLocked {
+                ClipTrimHandles(laneHeight: laneHeight,
+                                onTrimStartDelta: onTrimStartDelta,
+                                onTrimEndDelta: onTrimEndDelta)
             }
         }
         .frame(width: geometry.width(for: duration), height: laneHeight - 4)

@@ -58,7 +58,7 @@ the same translated string). This blocks any original/translated toggle. Extract
 into a small, directly-testable static function so this stays correct without depending on
 source-inspection.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Open `apps/ios/MeeshyTests/Unit/Services/CallManagerTests.swift` and add at the end of the file
 (after the last `}` that closes the last test class — check with `tail -5` first, insert a new
@@ -128,7 +128,7 @@ final class CallManagerTranscriptionMappingTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -138,7 +138,7 @@ xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
 
 Expected: FAIL — `Type 'CallManager' has no member 'makeTranscriptionSegment'`.
 
-- [ ] **Step 3: Extract the static mapping function and use it in the sink**
+- [x] **Step 3: Extract the static mapping function and use it in the sink**
 
 In `apps/ios/Meeshy/Features/Main/Services/CallManager.swift`, replace the
 `socket.callTranslatedSegmentReceived` subscription (currently lines 3568-3587):
@@ -206,7 +206,7 @@ Then add the extracted static function anywhere in `CallManager` (e.g. right abo
     }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -221,7 +221,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: PASS, both tests green. Keep `$SIM` for the remaining tasks in this plan.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -247,7 +247,7 @@ git commit -m "fix(ios/calls): stop discarding the original text when mapping tr
   consumes `showOriginalText` (adds the button that toggles it), Task 4 consumes
   `transcriptSegmentsList` (reuses it inside the new audio-mode structural panel).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Open `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, inside
 `CallHangupFastPathTests` (the same class holding `test_transcriptionToggleButton_wiresToCallManager`
@@ -291,7 +291,7 @@ from the previous plan), add:
     }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -304,7 +304,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: FAIL — both new tests fail with "CallView must define transcriptSegmentRow(_:)".
 
-- [ ] **Step 3: Add `showOriginalText` state**
+- [x] **Step 3: Add `showOriginalText` state**
 
 In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, right after the existing
 `@State private var showTranscript = false` (currently line 38), add:
@@ -313,7 +313,7 @@ In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, right after the existin
     @State private var showOriginalText = false
 ```
 
-- [ ] **Step 4: Replace `transcriptOverlay`'s per-segment rendering**
+- [x] **Step 4: Replace `transcriptOverlay`'s per-segment rendering**
 
 Replace `transcriptOverlay` (currently lines 1343-1385):
 
@@ -430,7 +430,7 @@ one authoritative source beats two `.onAppear`/`.onChange` copies):
     }
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -443,7 +443,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: PASS, all tests in `CallHangupFastPathTests` including the two new ones.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -469,7 +469,7 @@ git commit -m "feat(ios/calls): per-speaker visible name + primary/secondary col
   directly, but Task 4's layout must not visually collide with it (both float on the trailing
   edge).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, inside
 `CallHangupFastPathTests`, add:
@@ -507,7 +507,7 @@ In `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, inside
     }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -520,7 +520,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: FAIL — both new tests fail (`translationToggleButton` not defined).
 
-- [ ] **Step 3: Add the button and wire it into the floating stack**
+- [x] **Step 3: Add the button and wire it into the floating stack**
 
 In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, find `transcriptionToggleButton`'s
 declaration (added in the previous plan, search for `private var transcriptionToggleButton: some View {`)
@@ -625,7 +625,7 @@ Finally, move the `isShowingOverlay` side effect out of `transcriptOverlay` (Tas
     }
 ```
 
-- [ ] **Step 4: Add the xcstrings keys**
+- [x] **Step 4: Add the xcstrings keys**
 
 Open `apps/ios/Meeshy/Localizable.xcstrings`, find `"call.control.transcript.on"` (added in the
 previous plan) and insert the three new keys right after its closing `},` (alphabetically,
@@ -745,7 +745,7 @@ Validate the JSON is still well-formed:
 python3 -c "import json; json.load(open('apps/ios/Meeshy/Localizable.xcstrings'))" && echo OK
 ```
 
-- [ ] **Step 5: Run to verify tests pass, then run the localization consistency suite**
+- [x] **Step 5: Run to verify tests pass, then run the localization consistency suite**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -760,7 +760,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: both suites PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -790,7 +790,7 @@ This task ONLY changes the audio-call path (`!callManager.isVideoUIActive`). The
 keeps using `transcriptOverlay` (Task 2's video-only floating banner) unchanged — video calls
 must not shrink the video feed, per the spec.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, inside
 `CallHangupFastPathTests`, add:
@@ -831,7 +831,7 @@ In `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`, inside
     }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -847,7 +847,7 @@ Expected: `test_connectedView_audioPath_usesStructuralTranscriptPanel_notFloatin
 PASSES already (nothing removed yet) — that's fine, it's a regression guard for the NEXT step,
 not a RED step itself.
 
-- [ ] **Step 3: Add `compactAudioCallHeader` and `transcriptPanel`**
+- [x] **Step 3: Add `compactAudioCallHeader` and `transcriptPanel`**
 
 In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, find `audioCallLayout`'s closing `}`
 (search for `private var audioCallLayout: some View {`, the property ends right before `// MARK:
@@ -902,7 +902,7 @@ In `apps/ios/Meeshy/Features/Main/Views/CallView.swift`, find `audioCallLayout`'
     }
 ```
 
-- [ ] **Step 4: Restructure `connectedView`'s audio-path VStack**
+- [x] **Step 4: Restructure `connectedView`'s audio-path VStack**
 
 In the same file, inside `connectedView` (starts at line 658), replace the main content
 `VStack` (currently):
@@ -970,7 +970,7 @@ and adds the new audio-with-captions case without touching `pipView`, `transcrip
 floating button stack, `reconnectingBanner`, or any other sibling in `connectedView`'s `ZStack` —
 all of those stay exactly where they already are, untouched by this edit.
 
-- [ ] **Step 5: Run to verify tests pass**
+- [x] **Step 5: Run to verify tests pass**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -983,7 +983,7 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 
 Expected: PASS, including both new tests from Step 1.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
@@ -998,7 +998,7 @@ git commit -m "feat(ios/calls): structural (non-overlay) captions layout for aud
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Run the full iOS suite**
+- [x] **Step 1: Run the full iOS suite**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
@@ -1010,11 +1010,17 @@ Expected: all 3 phases green, per `apps/ios/CLAUDE.md`'s phased test run. Revert
 first — if it only reorders GUIDs for files unrelated to this plan, `git checkout --` it; do NOT
 discard the actual source changes from Tasks 1-4).
 
-- [ ] **Step 2: Build and install on a real device**
+- [x] **Step 2: Build and install on a real device**
 
 ```bash
 ./apps/ios/meeshy.sh device
 ```
+
+**Deferred (2026-07-11):** user explicitly chose to continue development and defer Steps 3-4
+(manual two-device QA) + Step 5 (final commit gate) to later, per "poursuis le developpement on
+fais la QA et les corrections après!!" — everything up to here (all 4 code tasks + full
+automated suite green + build/install/launch on a real device succeeded) is done and committed.
+Resume at Step 3 when the user is ready to QA.
 
 - [ ] **Step 3: Manual verification protocol — audio call**
 

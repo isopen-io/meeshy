@@ -23,6 +23,8 @@ import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.language.DataStoreInterfaceLanguageStore
 import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.media.DataStoreMediaDownloadPreferencesStore
+import me.meeshy.sdk.media.MediaDownloadPreferencesStore
 import me.meeshy.sdk.notification.DataStoreNotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
@@ -92,6 +94,16 @@ object SdkModule {
             context.preferencesDataStoreFile("meeshy_notifications")
         }
         return DataStoreNotificationPreferencesStore(dataStore, scope)
+    }
+
+    @Provides
+    @Singleton
+    fun providesMediaDownloadPreferencesStore(@ApplicationContext context: Context): MediaDownloadPreferencesStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_media_download")
+        }
+        return DataStoreMediaDownloadPreferencesStore(dataStore, scope)
     }
 
     @Provides

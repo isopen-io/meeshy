@@ -677,7 +677,7 @@ export class MessageHandler {
       // edit of the latest message updates their row — MESSAGE_EDITED alone
       // only reaches the conversation room. Mirrors broadcastNewMessage.
       await emitConversationPreviewUpdate(
-        this.prisma, this.io, message.conversationId,
+        this.prisma, this.io, message.conversationId, userId,
         (err) => handlerLogger.warn('conversation preview fanout (edit) failed', { error: err })
       );
 
@@ -821,7 +821,7 @@ export class MessageHandler {
       // only) never tells them. The latest non-deleted message is recomputed
       // inside the helper, consistent with the lastMessageAt recompute above.
       await emitConversationPreviewUpdate(
-        this.prisma, this.io, message.conversationId,
+        this.prisma, this.io, message.conversationId, userId,
         (err) => handlerLogger.warn('conversation preview fanout (delete) failed', { error: err })
       );
 
@@ -1062,6 +1062,12 @@ export class MessageHandler {
       if (sharedParticipants.length > 0) {
         const updatePayload = {
           conversationId: normalizedId,
+          // `updatedBy` is REQUIRED by ConversationUpdatedEventData — the sender's
+          // User.id (participant senderId fallback for anonymous). Parity with the
+          // REST/ZMQ send path in MeeshySocketIOManager, whose typed `io` forced
+          // this field; here `io` is the loose Socket.IO Server, so the compiler
+          // never caught the omission.
+          updatedBy: { id: senderUserId ?? message.senderId },
           lastMessageAt: message.createdAt,
           lastMessageId: message.id,
           lastMessagePreview: message.content,

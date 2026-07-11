@@ -81,6 +81,47 @@ final class CallSignalStrengthTests: XCTestCase {
         // 30 s puis disparaît — assez long pour rassurer, pas permanent.
         XCTAssertEqual(TransientCallSignalGlyph.recoveryLingerSeconds, 30)
     }
+
+    // MARK: - Accessibility label must describe signal QUALITY, never a connection EVENT
+
+    /// `.fair`/`.poor`/`.lost` are reachable both via a live, fully `.connected`
+    /// link (real-time RTT/loss stats) AND via the pre-first-sample ICE fallback
+    /// — the case alone cannot tell which. A VoiceOver label claiming
+    /// "Reconnecting"/"Connection lost" on a healthy-but-degraded `.connected`
+    /// call is actively false; only signal-strength wording is honest in both
+    /// branches. Asserted on the resolved live property (not source text) —
+    /// none of the 5 locale translations for these keys contain the old
+    /// connection-event wording, so this holds regardless of test-runtime locale.
+    func test_accessibilityLabel_fairOnHealthyConnection_doesNotClaimReconnecting() {
+        let strength = CallSignalStrength.from(level: .fair, connection: .connected)
+        XCTAssertEqual(strength, .fair)
+        XCTAssertFalse(
+            strength.accessibilityLabel.localizedCaseInsensitiveContains("reconnec"),
+            "`.fair` on a `.connected` link is a live quality metric, not a reconnection " +
+            "event — the label must describe signal strength, e.g. \"Fair signal\"."
+        )
+    }
+
+    func test_accessibilityLabel_poorOnHealthyConnection_doesNotClaimConnectionLost() {
+        let strength = CallSignalStrength.from(level: .poor, connection: .connected)
+        XCTAssertEqual(strength, .poor)
+        XCTAssertFalse(
+            strength.accessibilityLabel.localizedCaseInsensitiveContains("lost")
+                && !strength.accessibilityLabel.localizedCaseInsensitiveContains("signal"),
+            "`.poor` on a `.connected` link must not be announced as \"Connection lost\"."
+        )
+        XCTAssertFalse(strength.accessibilityLabel.localizedCaseInsensitiveContains("perdu"))
+    }
+
+    func test_accessibilityLabel_poorAndLost_areDistinctStrings() {
+        // Before this fix both cases shared the single "Connexion perdue"/
+        // "Connection lost" label — a VoiceOver user could not tell mild
+        // degradation (`.poor`) from a near-total loss (`.lost`) apart.
+        XCTAssertNotEqual(
+            CallSignalStrength.poor.accessibilityLabel,
+            CallSignalStrength.lost.accessibilityLabel
+        )
+    }
 }
 
 // MARK: - DataChannel inbound routing
@@ -195,6 +236,104 @@ final class CallHangupFastPathTests: XCTestCase {
             "transcriptionToggleButton must call callManager.toggleTranscription() " +
             "— this is the UI entry point that was missing before this feature was rebuilt."
         )
+    }
+
+    func test_transcriptSegmentRow_usesPrimarySecondaryColorsPerSpeaker() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+            XCTFail("CallView must define transcriptSegmentRow(_:)")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("MeeshyColors.indigo400"),
+            "transcriptSegmentRow must color the local speaker (\"Moi\") with MeeshyColors.indigo400 " +
+            "— the codebase's established \"secondary elements\" tone."
+        )
+        XCTAssertTrue(
+            body.contains("MeeshyColors.brandPrimary"),
+            "transcriptSegmentRow must color the remote speaker with MeeshyColors.brandPrimary " +
+            "— the signature brand color, used for the interlocutor."
+        )
+    }
+
+    func test_transcriptSegmentRow_showsSpeakerNameAsVisibleText() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+            XCTFail("CallView must define transcriptSegmentRow(_:)")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("Text(speakerName)"),
+            "transcriptSegmentRow must render the speaker's name as its own visible Text, " +
+            "not just a colored dot — user-requested 2026-07-11."
+        )
+    }
+
+    func test_translationToggleButton_togglesShowOriginalText() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "private var translationToggleButton: some View {") else {
+            XCTFail("CallView must define translationToggleButton")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 1500, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("showOriginalText.toggle()"),
+            "translationToggleButton must toggle showOriginalText on tap."
+        )
+    }
+
+    func test_connectedView_showsTranslationButton_nextToTranscriptionToggle() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "transcriptionToggleButton") else {
+            XCTFail("CallView must reference transcriptionToggleButton")
+            return
+        }
+        // Search backward up to 500 chars from the reference for translationToggleButton,
+        // confirming both buttons live in the same floating stack.
+        let searchStart = view.index(range.lowerBound, offsetBy: -500, limitedBy: view.startIndex) ?? view.startIndex
+        let body = String(view[searchStart ..< range.lowerBound])
+        XCTAssertTrue(
+            body.contains("translationToggleButton"),
+            "translationToggleButton must be wired into the same floating trailing-edge stack as transcriptionToggleButton."
+        )
+    }
+
+    func test_connectedView_audioPath_usesStructuralTranscriptPanel_notFloatingOverlay() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "private var connectedView: some View {") else {
+            XCTFail("CallView must define connectedView")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 4000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("compactAudioCallHeader"),
+            "connectedView must show a compacted header (avatar + name, no status pills) " +
+            "when captions are active on an audio call — user-requested 2026-07-11."
+        )
+        XCTAssertTrue(
+            body.contains("transcriptPanel"),
+            "connectedView must show the structural (non-overlay) transcriptPanel " +
+            "for the audio-call captions layout."
+        )
+    }
+
+    func test_connectedView_stillReferencesUnmovedElements() throws {
+        // Regression guard: the layout restructuring must not drop or relocate
+        // pipView / reconnectingBanner / showEffectsToolbar's trigger — spec risk table.
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "private var connectedView: some View {") else {
+            XCTFail("CallView must define connectedView")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 6000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
     }
 }
 

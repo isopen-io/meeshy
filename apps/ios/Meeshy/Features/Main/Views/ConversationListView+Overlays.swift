@@ -18,6 +18,14 @@ extension ConversationListView {
 
     // MARK: - Native Context Menu (iOS 26 Liquid Glass)
 
+    /// Box stable pour `ConversationRowItem.nativeContextMenu` : le menu est
+    /// construit UNE fois par évaluation de `conversationRow` (pas à chaque
+    /// body pass de la row) et seulement quand l'OS rend le menu natif.
+    func nativeContextMenuView(for conversation: Conversation) -> AnyView {
+        guard #available(iOS 26.0, *) else { return AnyView(EmptyView()) }
+        return AnyView(conversationContextMenu(for: conversation))
+    }
+
     @ViewBuilder
     func conversationContextMenu(for conversation: Conversation) -> some View {
         // Pin/Unpin

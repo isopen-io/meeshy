@@ -36,4 +36,18 @@ public struct TimelineGeometry: Equatable, Sendable {
     public nonisolated var snapToleranceSeconds: Float {
         Float(6.0 / pixelsPerSecond)
     }
+
+    /// Fenêtre d'affichage d'un clip sur sa lane. Un élément « permanent »
+    /// (duration nil ou ≤ 0 — texte/sticker sans fenêtre temporelle) est
+    /// visible toute la slide : sa barre s'étend de startTime à slideDuration.
+    /// Sans cette résolution, la barre avait une largeur de 0 pt et l'élément
+    /// était ineditable dans la timeline (constat simulateur 2026-07-11).
+    public nonisolated static func effectiveClipDuration(
+        startTime: Float,
+        duration: Float?,
+        slideDuration: Float
+    ) -> Float {
+        if let duration, duration > 0 { return duration }
+        return max(0, slideDuration - max(0, startTime))
+    }
 }

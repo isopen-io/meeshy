@@ -893,7 +893,8 @@ extension StoryComposerView {
             // un rebuild qu'aux mutations utiles.
             loadedImages: viewModel.loadedImages,
             loadedImagesVersion: viewModel.loadedImagesVersion,
-            canvasCornerRadius: cornerRadius
+            canvasCornerRadius: cornerRadius,
+            timelineBridge: viewModel.canvasTimelineBridge
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
         .overlay {

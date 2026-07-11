@@ -265,12 +265,14 @@ final class StoryCanvasUIViewZOrderAndLayerTests: XCTestCase {
         XCTAssertEqual(canvas.currentManipulationLayer, .foreground)
     }
 
-    // MARK: - resolveManipulationTarget bg fallback
+    // MARK: - resolveManipulationTarget : pas de fallback bg (règle 2026-07-11)
 
-    /// Pin the UX décidée 2026-05-22 : en mode `.foreground` (au moins un
-    /// foreground posé), un pinch / drag sur une zone vide doit retomber
-    /// sur le bg media — sinon le fond devient figé dès qu'on pose un texte.
-    func test_resolveManipulationTarget_foregroundMode_fallsBackToBackgroundWhenNoForegroundHit() {
+    /// RÈGLE PRODUIT (user 2026-07-11, remplace l'UX 2026-05-22) : le fond
+    /// n'est manipulable QUE via le chip Background. En mode `.foreground`,
+    /// rater un item ne doit RIEN manipuler — l'ancien fallback bg faisait
+    /// bouger le fond au moindre raté de hit-test (dessin pleine toile qui
+    /// avalait les hits) alors que le chip affichait Foreground.
+    func test_resolveManipulationTarget_foregroundMode_missDoesNotTouchBackground() {
         var effects = StoryEffects()
         // BG image qui couvre toute la slide + sticker minuscule au centre.
         effects.mediaObjects = [
@@ -281,12 +283,12 @@ final class StoryCanvasUIViewZOrderAndLayerTests: XCTestCase {
         // Couche calculée à init = .foreground (le sticker compte comme fg).
         XCTAssertEqual(canvas.currentManipulationLayer, .foreground)
 
-        // Touche en (0, 0) — coin haut-gauche, là où le sticker (au centre)
-        // n'est jamais. Foreground hit-test rate, fallback bg doit kick in.
+        // Touche en (5, 5) — coin haut-gauche, là où le sticker (au centre)
+        // n'est jamais. Foreground hit-test rate → AUCUNE cible.
         let target = canvas.resolveManipulationTarget(at: CGPoint(x: 5, y: 5))
 
-        XCTAssertEqual(target, "bg",
-            "Fallback bg manquant : sans foreground sous le doigt, on doit pouvoir manipuler le bg.")
+        XCTAssertNil(target,
+            "En couche Foreground, un raté de hit-test ne doit pas manipuler le fond (chip Background = seul chemin)")
     }
 
     func test_resolveManipulationTarget_foregroundMode_foregroundUnderTouchTakesPriority() {

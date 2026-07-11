@@ -250,6 +250,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     var _timelineViewModel: TimelineViewModel?
 
+    /// Pont UIKit timeline → canvas (preview vivante) : le canvas visible
+    /// derrière la sheet timeline suit chaque mouvement du playhead sans
+    /// re-évaluation SwiftUI du composer. Enregistré par
+    /// `StoryComposerCanvasView.makeUIView`, alimenté par les callbacks du
+    /// `timelineViewModel` (cf. StoryComposerViewModel+Timeline).
+    public let canvasTimelineBridge = StoryCanvasTimelineBridge()
+
     enum MediaKind { case video, audio }
 
     // MARK: - Filter

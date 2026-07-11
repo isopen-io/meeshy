@@ -36,9 +36,13 @@ final class CallViewAccessibilityTests: XCTestCase {
     }
 
     func test_videoDurationBadge_hasUpdatesFrequentlyTrait() throws {
+        // Anchored on the composed-label call site, not the raw "call.duration.a11y.label"
+        // key — that key also appears earlier, inside videoDurationBadgeAccessibilityLabel's
+        // own body (a plain computed property with no SwiftUI modifiers nearby), which
+        // would make this window search land on the wrong occurrence.
         let source = try callViewSource()
-        let badgeRange = source.range(of: "call.duration.a11y.label")
-        XCTAssertNotNil(badgeRange, "Duration badge must have accessibility label")
+        let badgeRange = source.range(of: ".accessibilityLabel(videoDurationBadgeAccessibilityLabel)")
+        XCTAssertNotNil(badgeRange, "Duration badge must use the composed accessibility label")
         if let r = badgeRange {
             let window = source.index(r.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
             let vicinity = String(source[r.lowerBound ..< window])
@@ -418,6 +422,90 @@ final class CallViewAccessibilityTests: XCTestCase {
             vicinity.contains(".accessibilityHidden(true)"),
             "audioCallLayout's callAvatarPair(size: 120) must carry .accessibilityHidden(true) " +
             "to avoid VoiceOver double-reading the avatar initial and the adjacent remote-name Text."
+        )
+    }
+
+    // MARK: - Video duration badge does not swallow child accessibility content
+
+    /// `.accessibilityLabel`/`.accessibilityValue` applied directly to a
+    /// container implicitly collapses it into one opaque VoiceOver element
+    /// (`children: .ignore`) — any child's own `.accessibilityLabel` (the
+    /// signal glyph, the peer-degraded wifi icon) is silently discarded. The
+    /// video layout has no separate `statusPill` row like the audio layout, so
+    /// this badge is the ONLY place that state surfaces — the composed label
+    /// must carry it explicitly rather than relying on children that never reach
+    /// VoiceOver.
+    func test_videoDurationBadge_composesAccessibilityLabel_insteadOfRawKey() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains(".accessibilityLabel(videoDurationBadgeAccessibilityLabel)"),
+            "The video duration badge must use the composed videoDurationBadgeAccessibilityLabel, " +
+            "not a raw String(localized: \"call.duration.a11y.label\") literal — the composed " +
+            "form is what folds in the swallowed signal-quality / peer-degraded state."
+        )
+    }
+
+    /// TransientCallSignalGlyph is mounted TWICE (audio capsule status area + this video
+    /// overlay badge, cf. test_signalGlyph_isMountedInDurationBadges) — these two tests must
+    /// scope their search to the SECOND (video) occurrence, inside videoCallLayout, or they'd
+    /// silently inspect the unrelated audio-layout mount instead.
+    private func videoDurationBadgeVicinity(_ source: String, window: Int = 1400) -> String {
+        guard let layoutRange = source.range(of: "private var videoCallLayout: some View {") else {
+            XCTFail("CallView must define videoCallLayout")
+            return ""
+        }
+        guard let badgeRange = source.range(
+            of: "TransientCallSignalGlyph(strength: signalStrength)",
+            range: layoutRange.upperBound..<source.endIndex
+        ) else {
+            XCTFail("CallView must mount TransientCallSignalGlyph in the video duration badge")
+            return ""
+        }
+        let end = source.index(badgeRange.lowerBound, offsetBy: window, limitedBy: source.endIndex) ?? source.endIndex
+        return String(source[badgeRange.lowerBound ..< end])
+    }
+
+    func test_videoDurationBadge_isExplicitOpaqueAccessibilityElement() throws {
+        let source = try callViewSource()
+        let vicinity = videoDurationBadgeVicinity(source)
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityElement(children: .ignore)"),
+            "The badge must explicitly declare children: .ignore — implicit collapsing from " +
+            "the parent .accessibilityLabel is fragile (a future refactor that removes the " +
+            "outer label would silently re-expose fragmented per-child announcements)."
+        )
+    }
+
+    func test_videoDurationBadge_wifiIcon_hasNoOrphanedAccessibilityLabel() throws {
+        // The icon's own .accessibilityLabel was dead (swallowed by the parent's
+        // opaque element) — leaving it in place after the fix would be
+        // misleading dead code implying VoiceOver reads it directly.
+        let source = try callViewSource()
+        let vicinity = videoDurationBadgeVicinity(source)
+        XCTAssertFalse(
+            vicinity.contains("wifi.exclamationmark") && vicinity.contains("call.status.peer.network"),
+            "The badge's wifi.exclamationmark icon must not carry its own .accessibilityLabel " +
+            "anymore — that information now lives in the composed videoDurationBadgeAccessibilityLabel."
+        )
+    }
+
+    func test_videoDurationBadgeAccessibilityLabel_includesPeerDegradedState() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "private var videoDurationBadgeAccessibilityLabel: String {") else {
+            XCTFail("CallView must define videoDurationBadgeAccessibilityLabel")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("callManager.isRemoteQualityDegraded"),
+            "videoDurationBadgeAccessibilityLabel must fold in isRemoteQualityDegraded so the " +
+            "peer-network warning (visually the wifi.exclamationmark icon) reaches VoiceOver."
+        )
+        XCTAssertTrue(
+            body.contains("signalStrength.isDegraded") && body.contains("signalStrength.accessibilityLabel"),
+            "videoDurationBadgeAccessibilityLabel must fold in the signal glyph's own state when " +
+            "degraded — visual parity: the glyph itself only appears when isDegraded."
         )
     }
 }

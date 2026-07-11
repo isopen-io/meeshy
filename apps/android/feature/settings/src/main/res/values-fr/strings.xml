@@ -79,4 +79,36 @@
     <string name="settings_privacy_policy">Politique de confidentialité</string>
     <string name="settings_log_out">Se déconnecter</string>
     <string name="settings_delete_account">Supprimer le compte</string>
+    <!-- Change password (§L) -->
+    <string name="settings_change_password">Changer le mot de passe</string>
+    <string name="change_password_title">Mot de passe</string>
+    <string name="change_password_current_label">Mot de passe actuel</string>
+    <string name="change_password_new_label">Nouveau mot de passe</string>
+    <string name="change_password_confirm_label">Confirmer le mot de passe</string>
+    <string name="change_password_submit">Changer le mot de passe</string>
+    <string name="change_password_show">Afficher le mot de passe</string>
+    <string name="change_password_hide">Masquer le mot de passe</string>
+    <string name="change_password_hint_length">Au moins 8 caractères</string>
+    <string name="change_password_hint_match">Les mots de passe correspondent</string>
+    <string name="change_password_hint_different">Différent de votre mot de passe actuel</string>
+    <string name="change_password_error_current">Mot de passe actuel incorrect</string>
+    <string name="change_password_error_network">Pas de connexion. Vérifiez votre réseau et réessayez.</string>
+    <string name="change_password_error_generic">Une erreur est survenue. Veuillez réessayer.</string>
+    <string name="change_password_strength_0">Trop faible</string>
+    <string name="change_password_strength_1">Faible</string>
+    <string name="change_password_strength_2">Moyen</string>
+    <string name="change_password_strength_3">Bon</string>
+    <string name="change_password_strength_4">Fort</string>
+    <string name="change_password_strength_5">Excellent</string>
+    <string name="settings_media_download">Téléchargement auto</string>
+    <string name="media_download_title">Téléchargement auto</string>
+    <string name="media_download_info">Choisissez quand chaque type de média se télécharge automatiquement selon votre connexion.</string>
+    <string name="media_download_images">Images</string>
+    <string name="media_download_audio">Audio</string>
+    <string name="media_download_audio_translation">Traductions audio</string>
+    <string name="media_download_video">Vidéo</string>
+    <string name="media_policy_always">Toujours</string>
+    <string name="media_policy_wifi_good_cellular">Wi-Fi et bon réseau mobile</string>
+    <string name="media_policy_wifi_only">Wi-Fi uniquement</string>
+    <string name="media_policy_never">Jamais</string>
 </resources>

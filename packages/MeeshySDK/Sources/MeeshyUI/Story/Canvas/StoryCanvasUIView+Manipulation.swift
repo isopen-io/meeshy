@@ -53,10 +53,12 @@ extension StoryCanvasUIView {
     /// (gesture absorbé), ou si le hit-test n'a rien trouvé de manipulable
     /// pour la couche courante.
     ///
-    /// Règle `.foreground` : si un foreground est sous le doigt, il prend la
-    /// priorité ; sinon on retombe sur le background media (s'il existe).
-    /// Sans ce fallback le fond devenait figé dès qu'on posait un texte /
-    /// sticker — frustrant pour recadrer une image de fond.
+    /// Règle `.foreground` : SEULS les éléments foreground sont manipulables.
+    /// Le fond n'est mouvable QUE via le chip Background (règle produit,
+    /// user 2026-07-11 : « le background ne doit être mouvable que si le
+    /// chip background est sélectionné ») — l'ancien fallback bg (spec
+    /// 2026-05-22) rendait n'importe quel raté de hit-test destructeur pour
+    /// le cadrage du fond.
     internal func resolveManipulationTarget(at location: CGPoint) -> String? {
         switch currentManipulationLayer {
         case .canvas:
@@ -64,13 +66,7 @@ extension StoryCanvasUIView {
         case .background:
             return resolveBackgroundMediaId()
         case .foreground:
-            if let fgId = hitTestForegroundItem(at: location) {
-                return fgId
-            }
-            // Pas de foreground sous le doigt → on manipule le bg s'il existe
-            // pour permettre le recadrage du fond même quand des éléments
-            // sont déjà posés (cf. spec UX décidée 2026-05-22).
-            return resolveBackgroundMediaId()
+            return hitTestForegroundItem(at: location)
         }
     }
 

@@ -26,22 +26,34 @@ public struct TransitionInspector: View {
     public let onKindChanged: (StoryTransitionKind) -> Void
     public let onDurationChanged: (Float) -> Void
     public let onDelete: () -> Void
+    /// Ferme l'inspecteur (désélection) — même affordance que ClipInspector.
+    public let onClose: () -> Void
+    /// Courbe d'interpolation de la transition (le modèle la porte depuis
+    /// Plan 1 — elle n'était pas éditable, figée sur « Easing: Linear »).
+    public let onEasingChanged: (StoryEasing) -> Void
 
     @State private var kind: StoryTransitionKind
     @State private var duration: Float
+    @State private var easing: StoryEasing
 
     public init(transition: TransitionSnapshot,
                 isAdvancedEnabled: Bool,
                 onKindChanged: @escaping (StoryTransitionKind) -> Void,
                 onDurationChanged: @escaping (Float) -> Void,
-                onDelete: @escaping () -> Void) {
+                onDelete: @escaping () -> Void,
+                onClose: @escaping () -> Void = {},
+                onEasingChanged: @escaping (StoryEasing) -> Void = { _ in },
+                easing: StoryEasing = .linear) {
         self.transition = transition
         self.isAdvancedEnabled = isAdvancedEnabled
         self.onKindChanged = onKindChanged
         self.onDurationChanged = onDurationChanged
         self.onDelete = onDelete
+        self.onClose = onClose
+        self.onEasingChanged = onEasingChanged
         _kind = State(initialValue: transition.kind)
         _duration = State(initialValue: transition.duration)
+        _easing = State(initialValue: easing)
     }
 
     public func simulateKindCommit(_ value: StoryTransitionKind) {
@@ -58,7 +70,7 @@ public struct TransitionInspector: View {
             header
             kindPicker
             durationSlider
-            easingDisabledNotice
+            easingPicker
             deleteButton
         }
         .padding(18)
@@ -66,16 +78,26 @@ public struct TransitionInspector: View {
         .accessibilityLabel(String(localized: "story.timeline.a11y.transition", bundle: .module))
     }
 
+    /// Titre lisible — l'ancien header affichait les UUID bruts des deux
+    /// clips (« 5D212F9D-6530-… »), inutilisables (retour user 2026-07-11).
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "diamond.fill")
                 .foregroundStyle(MeeshyColors.warning)
                 .accessibilityHidden(true)
-            Text("\(transition.fromClipId) → \(transition.toClipId)")
-                .font(.system(.subheadline, design: .monospaced))
+            Text(String(localized: "story.timeline.inspector.transition.title",
+                        defaultValue: "Transition entre les clips", bundle: .module))
+                .font(.headline)
                 .lineLimit(1)
-                .truncationMode(.middle)
             Spacer(minLength: 0)
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle().inset(by: -8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "story.timeline.inspector.close", bundle: .module))
         }
     }
 
@@ -96,9 +118,18 @@ public struct TransitionInspector: View {
 
     private var durationSlider: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(String(localized: "story.timeline.transition.duration", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+            HStack {
+                // Clé dédiée : l'ancien label réutilisait la clé de TOOLTIP
+                // « DURATION %@ » et affichait le format brut (retour user).
+                Text(String(localized: "story.timeline.inspector.transition.duration",
+                            defaultValue: "Durée", bundle: .module).uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Text(String(format: "%.2f s", duration))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(MeeshyColors.indigo400)
+            }
             Slider(value: $duration, in: Self.durationRange, step: 0.05) { editing in
                 if !editing { onDurationChanged(duration) }
             }
@@ -107,13 +138,48 @@ public struct TransitionInspector: View {
         }
     }
 
-    @ViewBuilder
-    private var easingDisabledNotice: some View {
-        if !isAdvancedEnabled {
-            Text(Self.easingDisabledNoticeText(easingName: Self.linearEasingName))
-                .font(.caption2)
+    /// Nom d'affichage localisé d'une courbe d'easing.
+    public static func easingDisplayName(_ easing: StoryEasing) -> String {
+        switch easing {
+        case .linear:
+            return String(localized: "story.timeline.inspector.easing.linear", bundle: .module)
+        case .easeIn:
+            return String(localized: "story.timeline.inspector.easing.easeIn",
+                          defaultValue: "Accélère", bundle: .module)
+        case .easeOut:
+            return String(localized: "story.timeline.inspector.easing.easeOut",
+                          defaultValue: "Décélère", bundle: .module)
+        case .easeInOut:
+            return String(localized: "story.timeline.inspector.easing.easeInOut",
+                          defaultValue: "Douce", bundle: .module)
+        }
+    }
+
+    private var easingPicker: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(String(localized: "story.timeline.inspector.easing.section",
+                        defaultValue: "Courbe", bundle: .module).uppercased())
+                .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+            HStack(spacing: 6) {
+                ForEach([StoryEasing.linear, .easeIn, .easeOut, .easeInOut], id: \.self) { candidate in
+                    let isOn = easing == candidate
+                    Button {
+                        easing = candidate
+                        onEasingChanged(candidate)
+                    } label: {
+                        Text(Self.easingDisplayName(candidate))
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(
+                                isOn ? MeeshyColors.indigo500 : MeeshyColors.indigo500.opacity(0.14)))
+                            .foregroundStyle(isOn ? .white : MeeshyColors.indigo400)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isOn ? [.isSelected] : [])
+                }
+            }
         }
     }
 

@@ -184,6 +184,17 @@ public struct QuickTimelineView: View {
         )
     }
 
+    private var hoistedJunctions: [TransitionJunction] {
+        TransitionJunctionResolver.resolve(
+            project: viewModel.project,
+            slideDuration: viewModel.project.slideDuration
+        )
+    }
+
+    private var hoistedKeyframeMarkers: [KeyframeMarker] {
+        KeyframeMarkerResolver.resolve(project: viewModel.project)
+    }
+
     // MARK: - Body
 
     public var body: some View {
@@ -197,8 +208,7 @@ public struct QuickTimelineView: View {
                 .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
             }
             transport
-            rulerStrip
-            tracksRegion
+            scrubRegion
             footerTrigger
         }
         // Parent TimelineContainerSwitcher already paints the sheet with
@@ -224,28 +234,25 @@ public struct QuickTimelineView: View {
             duration: viewModel.project.slideDuration,
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
+            // Quick n'a pas de TimelineToolbar — l'undo/redo vit dans le
+            // transport (le Pro passe nil et garde sa toolbar dédiée).
+            canUndo: viewModel.canUndo,
+            canRedo: viewModel.canRedo,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
             onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
             onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
-            onZoomReset: { viewModel.zoomScale = 1.0 }
+            onZoomReset: { viewModel.zoomScale = 1.0 },
+            onUndo: { viewModel.undo() },
+            onRedo: { viewModel.redo() }
         )
     }
 
-    private var rulerStrip: some View {
-        let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
-        return RulerView(
-            totalDuration: viewModel.project.slideDuration,
-            geometry: geometry,
-            isDark: colorScheme == .dark,
-            height: 22,                     // unified with ProTimelineView
-            onTapTime: { _ in }
-        )
-        .equatable() // HIGH 3: short-circuit body re-evaluation during playhead scrubbing
-    }
-
+    /// Ruler + lanes + playhead in ONE horizontal scroller (TimelineScrubArea)
+    /// so the ticks stay aligned with the clips and the playhead is draggable
+    /// across the full lane height. The ruler doubles as a scrub strip.
     @ViewBuilder
-    private var tracksRegion: some View {
+    private var scrubRegion: some View {
         let tracks: [CompactTrack] = isExpanded ? hoistedAllTracks : hoistedCompactTracks
         if tracks.isEmpty {
             ProTimelineEmptyState(isDark: colorScheme == .dark)
@@ -253,32 +260,83 @@ public struct QuickTimelineView: View {
                 .padding(.horizontal, 16)
         } else {
             let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
-            let laneWidth = max(geometry.width(for: viewModel.project.slideDuration), 200)
-            ScrollView([.horizontal, isExpanded ? .vertical : []], showsIndicators: isExpanded) {
-                VStack(spacing: 4) {
-                    ForEach(tracks, id: \.id) { track in
-                        TrackBarView(
-                            title: track.title,
-                            isLocked: false,
-                            isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
-                            tintHex: tint(for: track.kind),
-                            isDark: colorScheme == .dark,
-                            laneWidth: laneWidth,
+            TimelineScrubArea(
+                totalDuration: viewModel.project.slideDuration,
+                geometry: geometry,
+                currentTime: viewModel.currentTime,
+                isDark: colorScheme == .dark,
+                minLaneWidth: 200,
+                rulerHeight: 22,               // unified with ProTimelineView
+                isPlaying: viewModel.isPlaying,
+                onZoomScaleChanged: { viewModel.zoomScale = $0 },
+                onSlideDurationChanged: { viewModel.setSlideDuration($0) },
+                snapGuideTime: viewModel.selection.activeDrag.flatMap {
+                    $0.snappedTo != nil ? $0.currentStartTime : nil
+                },
+                onScrub: { viewModel.scrub(to: $0) },
+                onScrubBegan: { viewModel.beginScrub() },
+                onScrubEnded: { viewModel.endScrub() }
+            ) { laneWidth in
+                trackRows(tracks: tracks, laneWidth: laneWidth, geometry: geometry)
+            }
+            .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 40 + 8 + 22)
+            .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
+        }
+    }
+
+    @ViewBuilder
+    private func trackRows(tracks: [CompactTrack], laneWidth: CGFloat,
+                           geometry: TimelineGeometry) -> some View {
+        let rows = VStack(spacing: 4) {
+            ForEach(tracks, id: \.id) { track in
+                TrackBarView(
+                    title: track.title,
+                    isLocked: false,
+                    isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
+                    tintHex: tint(for: track.kind),
+                    isDark: colorScheme == .dark,
+                    laneWidth: laneWidth,
+                    laneHeight: 36,
+                    iconName: Self.iconName(for: track.kind)
+                ) {
+                    ZStack(alignment: .leading) {
+                        ForEach(track.clipIds, id: \.self) { clipId in
+                            clipBar(for: clipId, geometry: geometry, laneHeight: 36)
+                        }
+                        LaneKeyframeOverlays(
+                            markers: KeyframeMarkerResolver.markers(
+                                for: track.clipIds, in: hoistedKeyframeMarkers),
+                            selectedId: viewModel.selection.selectedClipId,
+                            geometry: geometry,
                             laneHeight: 36,
-                            iconName: Self.iconName(for: track.kind)
-                        ) {
-                            ZStack(alignment: .leading) {
-                                ForEach(track.clipIds, id: \.self) { clipId in
-                                    clipBar(for: clipId, geometry: geometry, laneHeight: 36)
+                            onSelect: { viewModel.selectClip(id: $0) }
+                        )
+                        LaneTransitionOverlays(
+                            junctions: TransitionJunctionResolver.junctions(
+                                for: track.clipIds, in: hoistedJunctions),
+                            selectedId: viewModel.selection.selectedClipId,
+                            isDark: colorScheme == .dark,
+                            geometry: geometry,
+                            laneHeight: 36,
+                            onSelect: { viewModel.selectClip(id: $0) },
+                            onCreate: { junction in
+                                if let id = viewModel.addTransition(
+                                    fromClipId: junction.fromClipId,
+                                    toClipId: junction.toClipId,
+                                    kind: .crossfade,
+                                    duration: 0.5) {
+                                    viewModel.selectClip(id: id)
                                 }
                             }
-                        }
+                        )
                     }
                 }
-                .padding(.horizontal, 12)
             }
-            .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 40 + 8)
-            .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
+        }
+        if isExpanded {
+            ScrollView(.vertical, showsIndicators: true) { rows }
+        } else {
+            rows
         }
     }
 
@@ -350,6 +408,12 @@ public struct QuickTimelineView: View {
     private func clipBar(for clipId: String, geometry: TimelineGeometry, laneHeight: CGFloat) -> some View {
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == clipId }) {
             let isSynthetic = StoryComposerViewModel.isSyntheticTimelineClipId(media.id)
+            // Un FOND couvre toute la slide : sa fenêtre début/durée est
+            // ignorée en lecture. Le verrouiller sur la timeline évite le
+            // mensonge « je déplace le début mais rien ne change » (retour
+            // user 2026-07-11) — l'inspecteur permet de désactiver « Fond »
+            // pour rendre la fenêtre effective.
+            let isImmovableBackground = isSynthetic || media.isBackground == true
             let mediaFrames: [UIImage] = {
                 if media.kind == .image, let img = viewModel.loadedImage(for: media.id) {
                     return [img]
@@ -360,15 +424,19 @@ public struct QuickTimelineView: View {
                 clipId: media.id,
                 title: Self.clipTitle(for: media, isSynthetic: isSynthetic),
                 startTime: Float(media.startTime ?? 0),
-                duration: Float(media.duration ?? 0),
+                duration: TimelineGeometry.effectiveClipDuration(
+                    startTime: Float(media.startTime ?? 0),
+                    duration: media.duration.map { Float($0) },
+                    slideDuration: viewModel.project.slideDuration),
                 fadeIn: Float(media.fadeIn ?? 0),
                 fadeOut: Float(media.fadeOut ?? 0),
                 isSelected: viewModel.selection.selectedClipId == media.id,
-                isLocked: isSynthetic,
+                isLocked: isImmovableBackground,
                 isDark: colorScheme == .dark,
                 geometry: geometry,
                 laneHeight: laneHeight,
                 frames: mediaFrames,
+                videoURL: media.kind == .video ? viewModel.loadedURL(for: media.id) : nil,
                 onTap: { viewModel.selectClip(id: media.id) },
                 onDoubleTap: {
                     viewModel.selectClip(id: media.id)
@@ -412,7 +480,10 @@ public struct QuickTimelineView: View {
                 title: String(localized: "story.timeline.clip.audio",
                               defaultValue: "Audio", bundle: .module),
                 startTime: audio.startTime ?? 0,
-                duration: audio.duration ?? 0,
+                duration: TimelineGeometry.effectiveClipDuration(
+                    startTime: audio.startTime ?? 0,
+                    duration: audio.duration,
+                    slideDuration: viewModel.project.slideDuration),
                 volume: audio.volume,
                 isMuted: ProTimelineView.isMutedForAudio(globalMute: viewModel.isMuted, audio: audio),
                 isSelected: viewModel.selection.selectedClipId == audio.id,
@@ -442,6 +513,14 @@ public struct QuickTimelineView: View {
                 },
                 onMoveEnded: {
                     viewModel.endClipDrag()
+                },
+                onTrimStartDelta: { delta in
+                    viewModel.trimClipStart(id: audio.id,
+                                            deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onTrimEndDelta: { delta in
+                    viewModel.trimClipEnd(id: audio.id,
+                                          deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
                 }
             )
             .equatable()
@@ -450,7 +529,10 @@ public struct QuickTimelineView: View {
                 clipId: text.id,
                 content: text.text,
                 startTime: Float(text.startTime ?? 0),
-                duration: Float(text.duration ?? 0),
+                duration: TimelineGeometry.effectiveClipDuration(
+                    startTime: Float(text.startTime ?? 0),
+                    duration: text.duration.map { Float($0) },
+                    slideDuration: viewModel.project.slideDuration),
                 isSelected: viewModel.selection.selectedClipId == text.id,
                 isLocked: false,
                 isDark: colorScheme == .dark,
@@ -477,6 +559,14 @@ public struct QuickTimelineView: View {
                 },
                 onMoveEnded: {
                     viewModel.endClipDrag()
+                },
+                onTrimStartDelta: { delta in
+                    viewModel.trimClipStart(id: text.id,
+                                            deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onTrimEndDelta: { delta in
+                    viewModel.trimClipEnd(id: text.id,
+                                          deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
                 }
             )
             .equatable()

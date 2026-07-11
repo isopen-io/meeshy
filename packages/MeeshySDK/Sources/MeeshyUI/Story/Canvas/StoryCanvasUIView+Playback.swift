@@ -134,7 +134,9 @@ extension StoryCanvasUIView {
     /// `rebuildLayers()` (les layers `.edit` sont reconstruits à neuf à chaque
     /// mutation) et au flip du drapeau.
     func applyEditPlayback() {
-        guard mode == .edit, playsVideoInEditMode else { return }
+        // Preview timeline active → l'engine possède audio ET transport ;
+        // les boucles vidéo libres de l'édition reprennent à la sortie.
+        guard mode == .edit, playsVideoInEditMode, !isTimelinePreviewActive else { return }
         // Éditeur sonore (choix produit) : pose la session `.playback` pour que
         // l'audio des vidéos qui bouclent soit audible même silent-switch ON.
         // Idempotent / call-aware via la source unique.
@@ -250,6 +252,13 @@ extension StoryCanvasUIView {
         // `clamped >= effectiveDuration` qui fire `onCompletion`.
         onPlaybackTime?(clamped)
         rebuildLayers()
+        // Closing de slide piloté par le playhead : l'état de sortie est
+        // re-dérivé à chaque tick depuis `clamped` (aucune CAAnimation
+        // autonome), donc pause / stall / seek restent frame-exacts.
+        StoryRenderer.applyClosing(slide.effects.closing,
+                                   rootLayer: rootLayer,
+                                   elapsed: clamped,
+                                   totalDuration: effectiveDuration)
         if clamped >= effectiveDuration {
             stopPlayback()
             if !completionFired {
@@ -419,6 +428,10 @@ extension StoryCanvasUIView {
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
         onPlaybackTime?(clamped)
         rebuildLayers()
+        StoryRenderer.applyClosing(slide.effects.closing,
+                                   rootLayer: rootLayer,
+                                   elapsed: clamped,
+                                   totalDuration: effectiveDuration)
         if !completionFired,
            mode == .play,
            currentTime.seconds >= effectiveDuration {

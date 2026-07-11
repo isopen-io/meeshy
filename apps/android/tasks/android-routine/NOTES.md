@@ -3,6 +3,52 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-11 (`settings-media-auto-download`): a per-field settings write must read its base INSIDE the
+  `viewModelScope.launch`, never outside.** First cut of `MediaDownloadViewModel.setPolicy` captured `val current =
+  store.preferences.value` synchronously before the launch; three back-to-back edits on different kinds (image,
+  audio, audioTranslation) each captured the *same* stale default base, so the last write clobbered the first two.
+  The VM test `setPolicy_routesEachKindToItsOwnField` caught it. Fix = mirror the established `updateNotifications`
+  idiom: read the base inside the launch so writes serialize through the single-threaded `viewModelScope` and each
+  read sees the previous write. Read-modify-write of a shared block is only safe when the read is serialized with
+  the write.
+- **2026-07-11 (`settings-media-auto-download`): adding a DataStore-backed store test worsens the pre-existing
+  parallel-load flake — give the new one a generous timeout, and present retry/isolation evidence.** The full
+  `:sdk-core:testDebugUnitTest` (528 tests) intermittently times out `ThemeStoreTest`/`InterfaceLanguageStoreTest`
+  (real DataStore + `Dispatchers.IO`, documented flake). A new `MediaDownloadPreferencesStoreTest` bumps the
+  contention, so at 5s *my own* hydrate test flaked too; a 15s `withTimeout` made it robust even under full-suite
+  load while the pre-existing 5s ones still flake. Evidence pattern for the gate (Android has no CI): full suite
+  green on retry (528/528), the flaky trio green in isolation, my new tests green under load. Don't "fix" the
+  pre-existing tests — that's out of the slice's `apps/android`-only diff scope.
+- **2026-07-11: SDK bootstrap works; build with system Gradle.** `sdkmanager "platforms;android-35"
+  "build-tools;35.0.0" "platform-tools"` + `local.properties` sdk.dir, then `export ANDROID_HOME=$HOME/android-sdk;
+  /opt/gradle/bin/gradle :app:assembleDebug <module>:testDebugUnitTest` (the wrapper's 8.11.1 zip still 403s — see
+  the wrapper note below). First `assembleDebug` ~2.5–3 min.
+- **2026-07-11 (`settings-change-password`): not every account write reuses the optimistic outbox — a
+  server-verified action must stay online, and its wrong-input signal is the HTTP status, not the envelope.**
+  Regional language / notification prefs went through `enqueueProfileEdit`/`enqueueSync` (optimistic + durable)
+  because the client already holds the truth and the PATCH is idempotent. Change-password is the opposite: the
+  gateway must compare the *current* password against the stored bcrypt hash, so an offline/optimistic path is
+  meaningless (there's nothing to paint, and a queued wrong password would just fail later). It's a plain
+  `apiCall` returning `NetworkResult`. Retrofit throws `HttpException` for a 4xx (the `ApiResponse` body is
+  never parsed), so `apiCall` folds a wrong-current-password 400 into `ApiError(httpStatus = 400)` — map on
+  `httpStatus == 400`, NOT on the envelope `error` string (which is empty on the exception path). Mirror iOS's
+  `.serverError(400, _)` branch. Keep the failure kind an enum the *screen* localizes (`ChangePasswordError`),
+  never a raw string in the VM — keeps the VM pure-testable and the strings i18n-clean.
+- **2026-07-11 (`feed-post-language-switch`): a pure rule engine used by two features belongs in `:sdk-ui`, not
+  in the first feature that happened to need it.** `LanguageFlagTapResolver` was born in `:feature:chat`
+  (`me.meeshy.app.chat.translation`); when feed needed the same switch/revert decision, `:feature:feed` could not
+  import it (features don't depend on each other). The right move is **relocation to `:sdk-ui`**, not duplication:
+  it takes opaque params (tappedCode, activeCode, originalLanguage, translations), reads no Meeshy singleton, and
+  decides no "when" — it is a stateless building block by the grain test, exactly like `MessageLanguageStrip`
+  beside it. Relocation is mechanical (move file + `public` + update the one chat import + move its test) and keeps
+  the diff inside `apps/android`. Pattern for next time: before copying a `:feature:*` pure helper into a second
+  feature, promote it to `:sdk-core`/`:sdk-ui` so both features share the one SSOT.
+- **2026-07-11 (`feed-post-language-switch`): a per-item view override must live OUTSIDE the cache stream or it
+  resets on every refresh.** The per-post active-language choice is a `MutableStateFlow<Map<postId,code>>` folded
+  into the feed `combine`, not derived from the `CacheResult`. A background sync re-emits the same posts; because
+  the override is an independent combine input (not recomputed from the payload), the viewer's switched language
+  survives the re-projection. Test it explicitly: tap → switch, push a fresh `CacheResult` for the same id, assert
+  the choice held. Same shape as `ChatViewModel.activeLanguageOverride`.
 - **2026-07-10 (`feed-post-language-strip`): the Gradle *wrapper* distribution download is policy-blocked in
   the web container — use the pre-installed system Gradle directly.** `./gradlew` (or `meeshy.sh check`) tries to
   fetch `gradle-8.11.1-bin.zip`; `services.gradle.org` 307-redirects to `github.com/gradle/gradle-distributions/...`

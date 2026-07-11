@@ -59,6 +59,9 @@ extension StoryComposerView {
             // thumbHashes). Sans ça, `publishTask != nil` reste true et le
             // bouton publier reste disabled si l'utilisateur réessaye.
             defer { publishTask = nil }
+            // Publier avec la sheet timeline OUVERTE ne doit pas perdre les
+            // édits en vol — même flush que l'autosave de draft.
+            flushOpenTimelineIntoSlide()
             syncCurrentSlideEffects()
             let snapshot = await snapshotAllSlides()
             guard !Task.isCancelled else { return }

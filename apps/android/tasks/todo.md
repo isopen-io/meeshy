@@ -4,7 +4,35 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Translation §D) — slice `feed-post-language-strip` ✅
+## This loop (Phase: Settings §L) — slice `settings-media-auto-download` ✅
+**Media auto-download preferences** — port of iOS `MediaDownloadSettingsView` + the
+`MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor` trio. Pure `:core:model` SSOTs:
+`AutoDownloadPolicy` × `MediaKind` → `MediaDownloadPreferences` (per-kind policy, `policy`/`withPolicy` lenses,
+iOS defaults) + corruption-safe JSON codec + `MediaDownloadPolicyEngine.shouldAutoDownload(kind, condition, prefs)`
+(4×4 truth table + offline gate) + `NetworkConditionResolver.resolveFromFlags(...)` (flag→condition; iOS's dead
+`isExpensive` dropped). Durable `MediaDownloadPreferencesStore` (`:sdk-core`, hydrate + self-heal). `MediaDownload-
+ViewModel` mirrors the store → immutable UI state, writes per-kind through the store — base read **inside** the
+launch so concurrent kind-edits never clobber, re-select = no-op. `MediaDownloadScreen`: accent-coherent per-kind
+`RadioButton` sections, reached from Settings → Data "Auto-download" (`Routes.MEDIA_DOWNLOAD`). +37 tests
+(engine 6, resolver 9, prefs/codec 10, store 7, VM 5); `:app:assembleDebug` + touched-module `testDebugUnitTest`
+green (sdk-core DataStore flake green on retry/isolation), diff = `apps/android` only, EN/FR/ES/PT.
+Next: live `ConnectivityManager` monitor over `NetworkConditionResolver` + first pipeline consumer of the engine,
+or avatar/banner upload (§K), or another §L row (Privacy, media cache, GDPR export).
+
+## Prior loop (Phase: Translation §D) — slice `feed-post-language-switch` ✅
+**Interactive per-post language switch** — the read-only feed flag strip is now **tappable** (tap a chip →
+switch the post's displayed language; tap the active chip → revert to the default Prisme resolution), mirroring
+the chat bubble. SSOT: the pure `LanguageFlagTapResolver` was **relocated `:feature:chat` → `:sdk-ui`** so chat
++ feed share one flag-tap rule. `FeedPostBuilder` gained override-aware `build(..., activeLanguageCode)` +
+`resolveActiveCode(post, prefs, override)` (pure, tested) driving content + strip highlight; `FeedViewModel`
+holds a per-post `activeLanguageOverride` StateFlow kept **outside** the cache stream (choice survives every
+refresh — instant-app) + `onPostFlagTap`; `FeedScreen` chips are `.clickable`. +19 tests (+8 `FeedPostBuilderTest`,
++5 `FeedViewModelTest`, 10 relocated `LanguageFlagTapResolverTest`); `:sdk-ui`+`:feature:feed`+`:feature:chat`
+`testDebugUnitTest` + `:app:assembleDebug` green, diff = `apps/android` only.
+Next: interactive `includeTranslatable` arm for posts (tap absent language → on-demand request, needs a
+post-translation path), the per-story timeline strip, or persisted translations across cold start (§D offline Prisme).
+
+## Prior loop (Phase: Translation §D) — slice `feed-post-language-strip` ✅
 **Per-post Prisme language flag strip** — the feed sibling of the chat `MessageLanguageStrip`. New pure
 `:sdk-ui` `PostLanguageStrip.build(...) → List<LanguageChip>` adapts a post's language-keyed
 `Map<code, ApiPostTranslationEntry>` into `LanguageResolver.TranslationLike` rows and **delegates to

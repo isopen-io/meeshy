@@ -44,8 +44,28 @@ public final class TimelineViewModel: ObservableObject {
     // MARK: - State observable by Views
 
     @Published public internal(set) var project: TimelineProject
-    @Published public private(set) var currentTime: Float = 0
-    @Published public private(set) var isPlaying: Bool = false
+    @Published public private(set) var currentTime: Float = 0 {
+        didSet { onPlayheadChanged?(currentTime) }
+    }
+    @Published public private(set) var isPlaying: Bool = false {
+        didSet {
+            guard oldValue != isPlaying else { return }
+            onPlaybackStateChanged?(isPlaying)
+        }
+    }
+
+    // MARK: - Preview bridge (Lot B — living preview)
+
+    /// Fired on EVERY playhead move — scrub frames and engine playback ticks
+    /// alike. The composer wires this to the canvas behind the timeline sheet
+    /// (via `StoryCanvasTimelineBridge`) so the canvas renders the slide at
+    /// the playhead, at UIKit level, without re-evaluating the composer's
+    /// SwiftUI body 60 times per second.
+    public var onPlayheadChanged: ((Float) -> Void)?
+    /// Fired when playback starts/stops (transport toggle, playback end).
+    /// The canvas uses it to switch between seek-paused (scrub) and
+    /// play-muted-in-sync (engine owns the audio) preview strategies.
+    public var onPlaybackStateChanged: ((Bool) -> Void)?
     /// Mirror of `engine.isMuted` so SwiftUI views (TransportBar mute button)
     /// re-render on toggle. The engine remains the audio-routing source of
     /// truth — this stored property is the @Published view-state seam that
@@ -405,9 +425,14 @@ public final class TimelineViewModel: ObservableObject {
 
     /// Marks the end of a continuous playhead drag. Subsequent `scrub(to:)`
     /// calls go back to frame-accurate seeking. Safe to call when no scrub is
-    /// in flight (idempotent).
+    /// in flight (idempotent). When a scrub WAS in flight, the release
+    /// position is re-seeked with frame accuracy — every drag frame used
+    /// sub-50ms tolerance, so without this anchor the frame on screen can be
+    /// up to 50ms away from where the user released.
     public func endScrub() {
+        guard isScrubbing else { return }
         isScrubbing = false
+        engine.seek(to: currentTime, precise: true)
     }
 
     /// Seeks the engine to `time`. Precision is auto-selected from
@@ -467,11 +492,14 @@ public final class TimelineViewModel: ObservableObject {
 
     // MARK: - Transitions
 
-    public func addTransition(fromClipId: String, toClipId: String, kind: StoryTransitionKind, duration: Float) {
-        guard fromClipId != toClipId else { return }
+    /// Returns the created transition's id (for routing the selection to the
+    /// TransitionInspector right after creation), or nil when rejected.
+    @discardableResult
+    public func addTransition(fromClipId: String, toClipId: String, kind: StoryTransitionKind, duration: Float) -> String? {
+        guard fromClipId != toClipId else { return nil }
         let mediaIds = project.mediaObjects.map(\.id)
-        guard mediaIds.contains(fromClipId), mediaIds.contains(toClipId) else { return }
-        guard duration.isFinite, duration > 0 else { return }
+        guard mediaIds.contains(fromClipId), mediaIds.contains(toClipId) else { return nil }
+        guard duration.isFinite, duration > 0 else { return nil }
         let transition = StoryClipTransition(
             fromClipId: fromClipId,
             toClipId: toClipId,
@@ -484,8 +512,10 @@ public final class TimelineViewModel: ObservableObject {
             try cmd.apply(to: &project)
             commandStack.push(.addTransition(cmd))
             scheduleEngineReconfigure()
+            return transition.id
         } catch {
             errorMessage = error.localizedDescription
+            return nil
         }
     }
 

@@ -1235,8 +1235,24 @@ final class CallManager: ObservableObject {
     /// otherwise the system kills the app and revokes the token. When a push
     /// arrives without a valid call payload (malformed or stale), report a
     /// phantom call and immediately end it so the user never sees the call UI.
-    func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate) {
-        callProvider.reportNewIncomingCall(with: uuid, update: update) { _ in }
+    ///
+    /// Audit finding — `callId` is passed for the dedup-hit phantom path (a
+    /// duplicate push for a callId already recorded in `VoIPDedupRing`) so
+    /// that if CallKit refuses this synthetic report (e.g.
+    /// `maximumCallGroups` already saturated), the dedup entry is evicted —
+    /// otherwise a genuine APNs retry for the same callId within the dedup
+    /// TTL would be silently phantom-acked again with no CallKit UI ever
+    /// actually surfacing (mirrors the failure handling in
+    /// `reportIncomingVoIPCall`). Nil for the malformed-payload path, which
+    /// never touched the dedup ring in the first place.
+    func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate, callId: String? = nil) {
+        callProvider.reportNewIncomingCall(with: uuid, update: update) { error in
+            guard let error, let callId else { return }
+            Logger.calls.error("CallKit phantom-call report failed (callId=\(callId)): \(error.localizedDescription)")
+            Task { @MainActor in
+                VoIPPushManager.shared.clearDedup(callId: callId)
+            }
+        }
         // Audit P3 — was `.failed` which Recents shows as a "Failed call"
         // entry. `.unanswered` is the documented phantom-call idiom on
         // iOS 17+ — the lock-screen flash is suppressed and Recents shows
@@ -1573,15 +1589,12 @@ final class CallManager: ObservableObject {
 
         if let remoteOffer = pendingRemoteOffer {
             // SDP offer already received while ringing — create answer immediately.
-            //
-            // Audit finding — this used to spawn an untracked `Task` here,
-            // unserialized against videoToggleTask/holdVideoTask/survivalVideoTask/
-            // iceRestartTask: a `CXSetHeldCallAction` (e.g. a cellular call
-            // pre-empting a still-ringing Meeshy video call) can drive
-            // `holdVideoTask` while the user simultaneously accepts this call,
-            // racing two actuations on the same RTCPeerConnection. Chained onto
-            // `signalOfferAnswerTask` like every other WebRTC-actuating site —
-            // see the doc-comment on `survivalVideoTask`.
+            // Audit finding — this called webRTCService.createAnswer() directly,
+            // unserialized against the videoToggleTask/holdVideoTask/survivalVideoTask/
+            // iceRestartTask family: a foreground answer landing while a local
+            // hold/toggle/ICE-restart is mid-createOffer() could run createAnswer()
+            // concurrently on the same RTCPeerConnection. Chained onto
+            // `signalOfferAnswerTask` — see the doc-comment on `survivalVideoTask`.
             let previousToggle = videoToggleTask
             let previousHold = holdVideoTask
             let previousSurvival = survivalVideoTask
@@ -1660,19 +1673,20 @@ final class CallManager: ObservableObject {
 
         if let remoteOffer = pendingRemoteOffer {
             self.pendingRemoteOffer = nil
-            // Audit finding — this used to call createAnswer() directly here,
-            // unserialized against videoToggleTask/holdVideoTask/survivalVideoTask/
-            // iceRestartTask: a `CXSetHeldCallAction` racing this CallKit answer
-            // could drive `holdVideoTask` concurrently with this createAnswer()
-            // on the same RTCPeerConnection. Chained onto `signalOfferAnswerTask`
-            // like every other WebRTC-actuating site — see the doc-comment on
-            // `survivalVideoTask`.
+            // Audit finding — this called webRTCService.createAnswer() directly,
+            // unserialized against the videoToggleTask/holdVideoTask/survivalVideoTask/
+            // iceRestartTask family: a CallKit answer landing while a local
+            // hold/toggle/ICE-restart is mid-createOffer() could run createAnswer()
+            // concurrently on the same RTCPeerConnection — a race that can bake a
+            // wrong transceiver direction into the SDP answer, producing a
+            // one-way/silent-video call. Chained onto `signalOfferAnswerTask` —
+            // see the doc-comment on `survivalVideoTask`.
             let previousToggle = videoToggleTask
             let previousHold = holdVideoTask
             let previousSurvival = survivalVideoTask
             let previousICERestart = iceRestartTask
             let previousAnswer = signalOfferAnswerTask
-            let task = Task { [weak self] in
+            let answerTask = Task { [weak self] in
                 await previousToggle?.value
                 await previousHold?.value
                 _ = await previousSurvival?.value
@@ -1702,8 +1716,8 @@ final class CallManager: ObservableObject {
                 await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
                 Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
             }
-            signalOfferAnswerTask = task
-            await task.value
+            signalOfferAnswerTask = answerTask
+            await answerTask.value
         } else {
             Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
             scheduleSdpOfferTimeout(callId: callId)
@@ -3547,6 +3561,28 @@ final class CallManager: ObservableObject {
 
     // MARK: - Socket.IO Signaling
 
+    /// Maps a gateway-translated segment into the local `TranscriptionSegment` model.
+    /// `text` ALWAYS carries the ORIGINAL (untranslated) text — never overwritten by
+    /// `translatedText` — so the UI can offer an original/translated toggle
+    /// (`docs/superpowers/specs/2026-07-11-call-captions-multispeaker-design.md`).
+    /// `static` and pure (no captured state) so it's directly unit-testable without
+    /// standing up a full `CallManager` + mock socket.
+    static func makeTranscriptionSegment(from event: CallTranslatedSegmentData) -> TranscriptionSegment {
+        let seg = event.segment
+        return TranscriptionSegment(
+            id: UUID(),
+            text: seg.text,
+            speakerId: seg.speakerId,
+            startTime: Double(seg.startMs) / 1000,
+            endTime: Double(seg.endMs) / 1000,
+            isFinal: seg.isFinal,
+            confidence: seg.confidence,
+            language: seg.targetLanguage,
+            translatedText: seg.translatedText,
+            translatedLanguage: seg.translatedText != nil ? seg.targetLanguage : nil
+        )
+    }
+
     private func setupSocketListeners() {
         let socket = MessageSocketManager.shared
 
@@ -3610,19 +3646,7 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, self.currentCallId == event.callId else { return }
-                let seg = event.segment
-                let segment = TranscriptionSegment(
-                    id: UUID(),
-                    text: seg.translatedText ?? seg.text,
-                    speakerId: seg.speakerId,
-                    startTime: Double(seg.startMs) / 1000,
-                    endTime: Double(seg.endMs) / 1000,
-                    isFinal: seg.isFinal,
-                    confidence: seg.confidence,
-                    language: seg.targetLanguage,
-                    translatedText: seg.translatedText,
-                    translatedLanguage: seg.translatedText != nil ? seg.targetLanguage : nil
-                )
+                let segment = CallManager.makeTranscriptionSegment(from: event)
                 self.transcriptionService.receiveTranslatedSegment(segment)
             }
             .store(in: &cancellables)

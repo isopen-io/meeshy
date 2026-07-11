@@ -75,6 +75,17 @@ public final class StoryCanvasUIView: UIView {
     public internal(set) var mode: RenderMode
     public internal(set) var currentTime: CMTime = .zero
 
+    /// Timeline preview (« preview vivante ») : non-nil tant que la sheet
+    /// timeline pilote ce canvas comme moniteur de preview. Le canvas reste
+    /// en `.edit` pour la plomberie gestes/overlays mais REND en sémantique
+    /// `.play` à ce temps-là (fenêtres temporelles, keyframes, transitions).
+    /// L'audio appartient au StoryTimelineEngine pendant toute la preview —
+    /// les AVPlayer du canvas sont re-stampés muets via `effectiveAudioMuted`.
+    public internal(set) var timelinePreviewSeconds: Double?
+    /// Transport timeline en lecture pendant la preview : bascule la
+    /// stratégie vidéo entre seek-en-pause (scrub) et lecture muette calée.
+    var timelinePreviewPlaying: Bool = false
+
     /// Corner radius (in this view's own coordinate space) applied to the
     /// backing layer so the rounded « card » clips the actual CALayer story
     /// content (background image/video + items). A SwiftUI `.clipShape` wrapped

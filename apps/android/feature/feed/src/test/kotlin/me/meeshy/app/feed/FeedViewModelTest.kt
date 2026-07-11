@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.post.PostRepository
@@ -159,5 +161,89 @@ class FeedViewModelTest {
         vm.loadMoreIfNeeded("6")
 
         coVerify(exactly = 0) { repository.loadMore() }
+    }
+
+    // --- Prisme language switch (onPostFlagTap) ---
+
+    private val bilingualUser = MeeshyUser(
+        id = "me",
+        username = "me",
+        systemLanguage = "en",
+        regionalLanguage = "es",
+    )
+
+    private fun translatedPost(id: String) = ApiPost(
+        id = id,
+        content = "Bonjour",
+        originalLanguage = "fr",
+        translations = mapOf(
+            "en" to ApiPostTranslationEntry(text = "Hello"),
+            "es" to ApiPostTranslationEntry(text = "Hola"),
+        ),
+    )
+
+    private fun viewModel(
+        user: MeeshyUser?,
+        stream: Flow<CacheResult<List<ApiPost>>>,
+    ): FeedViewModel {
+        every { session.currentUser } returns MutableStateFlow(user)
+        every { repository.feedHasMore } returns MutableStateFlow(true)
+        every { repository.feedStream(any(), any()) } returns stream
+        return FeedViewModel(repository, session, config)
+    }
+
+    @Test
+    fun `onPostFlagTap switches the post's displayed language`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
+
+        vm.onPostFlagTap("1", "es")
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `onPostFlagTap on the active language reverts to the default resolution`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostFlagTap("1", "es")
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+
+        vm.onPostFlagTap("1", "es")
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `onPostFlagTap on an unknown post is inert`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostFlagTap("does-not-exist", "es")
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `onPostFlagTap with a blank code is inert`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(translatedPost("1")), 0L)))
+
+        vm.onPostFlagTap("1", "   ")
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `an active language override survives a feed stream re-emission`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Stale(listOf(translatedPost("1")), 0L),
+        )
+        val vm = viewModel(bilingualUser, stream)
+
+        vm.onPostFlagTap("1", "es")
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+
+        // A background refresh delivers the same post afresh — the viewer's choice holds.
+        stream.value = CacheResult.Fresh(listOf(translatedPost("1")), 0L)
+
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
     }
 }

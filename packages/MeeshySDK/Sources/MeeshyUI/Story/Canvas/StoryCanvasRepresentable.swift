@@ -78,6 +78,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// UIKit CALayer tree, so the radius is plumbed down to the UIView. The
     /// composer passes a scale-compensated value (see `canvasComposerLayer`).
     public var canvasCornerRadius: CGFloat = 0
+    /// Preview vivante : le bridge (owné par le composer VM) reçoit une
+    /// référence faible vers le `StoryCanvasUIView` créé, pour que les
+    /// callbacks playhead du timeline VM poussent directement dans la vue
+    /// (aucun body SwiftUI re-évalué à 60 Hz).
+    public var timelineBridge: StoryCanvasTimelineBridge?
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -95,7 +100,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 isDrawingOverlayActive: Bool = false,
                 loadedImages: [String: UIImage] = [:],
                 loadedImagesVersion: UInt64 = 0,
-                canvasCornerRadius: CGFloat = 0) {
+                canvasCornerRadius: CGFloat = 0,
+                timelineBridge: StoryCanvasTimelineBridge? = nil) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -113,6 +119,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.loadedImages = loadedImages
         self.loadedImagesVersion = loadedImagesVersion
         self.canvasCornerRadius = canvasCornerRadius
+        self.timelineBridge = timelineBridge
     }
 
     public final class Coordinator {
@@ -151,6 +158,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
         view.setReaderContext(StoryReaderContext(imageCache: reader))
         context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
+        timelineBridge?.canvas = view
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
         // une frame pour que le chip indicator reflète bien la couche

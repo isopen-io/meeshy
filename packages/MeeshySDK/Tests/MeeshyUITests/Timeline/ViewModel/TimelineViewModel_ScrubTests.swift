@@ -93,12 +93,30 @@ final class TimelineViewModel_ScrubTests: XCTestCase {
     // MARK: - endScrub idempotency
 
     func test_endScrub_withoutBeginScrub_isNoop() async {
-        let (sut, _) = makeSUT()
+        let (sut, engine) = makeSUT()
         await sut.awaitConfigured()
 
         sut.endScrub()
 
         XCTAssertFalse(sut.isScrubbing,
                        "endScrub() must be safe to call when no scrub is in flight (gesture teardown)")
+        XCTAssertEqual(engine.seekCallCount, 0,
+                       "endScrub() outside a scrub must not issue any seek — hosts tear gestures down blindly")
+    }
+
+    // MARK: - endScrub anchors the release frame
+
+    func test_endScrub_afterActiveScrub_issuesFinalPreciseSeekAtCurrentTime() async {
+        let (sut, engine) = makeSUT()
+        await sut.awaitConfigured()
+
+        sut.beginScrub()
+        sut.scrub(to: 3.2)
+        sut.endScrub()
+
+        XCTAssertEqual(engine.lastSeekTime, 3.2,
+                       "Releasing a scrub must re-seek the release position so the frame shown is exact")
+        XCTAssertEqual(engine.lastSeekPrecise, true,
+                       "The release seek must be frame-accurate — every drag frame was sub-50ms tolerant")
     }
 }

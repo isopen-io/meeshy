@@ -14,6 +14,18 @@ extension StoryComposerViewModel {
         let stack = CommandStack()
         let snap = SnapEngine(toleranceSeconds: 0.06)
         let vm = TimelineViewModel(engine: engine, commandStack: stack, snapEngine: snap)
+        // Preview vivante : le canvas derrière la sheet suit le playhead
+        // (scrub + ticks engine) et l'état du transport. Gaté sur
+        // `isTimelineVisible` — un tick tardif après fermeture ne doit pas
+        // ré-armer la preview sur un canvas rendu à l'édition.
+        vm.onPlayheadChanged = { [weak self] time in
+            guard let self, self.isTimelineVisible else { return }
+            self.canvasTimelineBridge.scrub(seconds: Double(time))
+        }
+        vm.onPlaybackStateChanged = { [weak self] playing in
+            guard let self, self.isTimelineVisible else { return }
+            self.canvasTimelineBridge.setPlaying(playing)
+        }
         _timelineViewModel = vm
         return vm
     }
@@ -79,9 +91,9 @@ extension StoryComposerViewModel {
     /// image represented on the timeline as a locked, full-duration clip.
     /// Synthetic clips are stripped before persisting back to the slide via
     /// `commitTimelineToCurrentSlide()`.
-    public static let syntheticTimelineClipIdPrefix = "_synthetic_bg_image_"
+    public nonisolated static let syntheticTimelineClipIdPrefix = "_synthetic_bg_image_"
 
-    public static func isSyntheticTimelineClipId(_ id: String) -> Bool {
+    public nonisolated static func isSyntheticTimelineClipId(_ id: String) -> Bool {
         id.hasPrefix(syntheticTimelineClipIdPrefix)
     }
 

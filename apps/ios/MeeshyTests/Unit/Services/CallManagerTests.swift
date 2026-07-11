@@ -6030,23 +6030,20 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
         )
     }
 
-    // MARK: - answerCall()/answerCallReady() buffered-offer paths must join the chain
+    // MARK: - answerCall/answerCallReady must join the renegotiation-serialization chain
 
-    /// Audit finding — both `answerCall()`'s and `answerCallReady()`'s
-    /// buffered-offer branches called `webRTCService.createAnswer()` from an
-    /// untracked (answerCall) or bare inline (answerCallReady) code path,
-    /// unserialized against the videoToggleTask/holdVideoTask/survivalVideoTask/
-    /// iceRestartTask/signalOfferAnswerTask family. A `CXSetHeldCallAction`
-    /// (a cellular call pre-empting a still-ringing Meeshy video call) can drive
-    /// `holdVideoTask` concurrently with the user accepting the call, racing two
-    /// actuations on the same RTCPeerConnection — exactly the hazard every other
-    /// site in this family already guards against.
+    /// Audit finding: `answerCall()` and `answerCallReady()`'s buffered-offer
+    /// branches called `webRTCService.createAnswer()` directly, unserialized
+    /// against the `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/
+    /// `iceRestartTask`/`signalOfferAnswerTask` family — the only two
+    /// `createAnswer()` call sites left out of the chain that `handleSignalOffer`
+    /// already joined. A CallKit hold firing on a ringing video call (e.g. a
+    /// GSM call pre-empting it) starts `holdVideoTask` mutating the video
+    /// transceiver; if the user answers before that settles, the untracked
+    /// answer Task races it on the same `RTCPeerConnection`, which can bake a
+    /// wrong transceiver direction into the SDP answer (one-way/silent video).
     func test_answerCall_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
-        let body = try body(
-            from: "func answerCall() {",
-            to: "private func scheduleSdpOfferTimeout(callId: String) {",
-            in: try callManagerSource()
-        )
+        let branch = try body(from: "func answerCall() {", to: "private func scheduleSdpOfferTimeout(callId: String) {", in: try callManagerSource())
         for expected in [
             "await previousToggle?.value",
             "await previousHold?.value",
@@ -6055,24 +6052,20 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             "await previousAnswer?.value",
         ] {
             XCTAssertTrue(
-                body.contains(expected),
-                "answerCall()'s buffered-offer branch must \(expected) before calling createAnswer() — " +
-                "a concurrent hold/toggle/ICE-restart must not race it on the same RTCPeerConnection."
+                branch.contains(expected),
+                "answerCall's buffered-offer branch must \(expected) before calling createAnswer() — " +
+                "otherwise it can race a concurrent local renegotiation on the same RTCPeerConnection."
             )
         }
         XCTAssertTrue(
-            body.contains("signalOfferAnswerTask = Task"),
-            "answerCall()'s buffered-offer branch must track its createAnswer() Task in " +
-            "signalOfferAnswerTask so later renegotiations/actuations chain onto it."
+            branch.contains("signalOfferAnswerTask = Task"),
+            "answerCall's buffered-offer branch must track its createAnswer() Task in " +
+            "signalOfferAnswerTask so later renegotiations can chain onto it."
         )
     }
 
     func test_answerCallReady_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
-        let body = try body(
-            from: "func answerCallReady() async {",
-            to: "// MARK: - Reject Call",
-            in: try callManagerSource()
-        )
+        let branch = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: try callManagerSource())
         for expected in [
             "await previousToggle?.value",
             "await previousHold?.value",
@@ -6081,16 +6074,76 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             "await previousAnswer?.value",
         ] {
             XCTAssertTrue(
-                body.contains(expected),
-                "answerCallReady()'s buffered-offer branch must \(expected) before calling createAnswer() — " +
-                "a concurrent hold/toggle/ICE-restart must not race it on the same RTCPeerConnection."
+                branch.contains(expected),
+                "answerCallReady's buffered-offer branch must \(expected) before calling createAnswer() — " +
+                "otherwise it can race a concurrent local renegotiation on the same RTCPeerConnection."
             )
         }
         XCTAssertTrue(
-            body.contains("signalOfferAnswerTask = task") && body.contains("await task.value"),
-            "answerCallReady()'s buffered-offer branch must track its createAnswer() Task in " +
-            "signalOfferAnswerTask (so later actuations chain onto it) and await its completion before " +
-            "returning, preserving the CXAnswerCallAction settlement ordering documented on this method."
+            branch.contains("signalOfferAnswerTask = answerTask") && branch.contains("await answerTask.value"),
+            "answerCallReady's buffered-offer branch must track its createAnswer() work in " +
+            "signalOfferAnswerTask (so later renegotiations can chain onto it) and await it before returning."
         )
+    }
+}
+
+@MainActor
+final class CallManagerTranscriptionMappingTests: XCTestCase {
+
+    func test_makeTranscriptionSegment_keepsOriginalText_separateFromTranslation() throws {
+        let json = """
+        {
+            "callId": "call-1",
+            "segment": {
+                "text": "Bonjour",
+                "translatedText": "Hello",
+                "speakerId": "user-1",
+                "startMs": 0,
+                "endMs": 1500,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "en",
+                "confidence": 0.95
+            }
+        }
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(CallTranslatedSegmentData.self, from: json)
+
+        let segment = CallManager.makeTranscriptionSegment(from: event)
+
+        XCTAssertEqual(segment.text, "Bonjour", "text must stay the ORIGINAL — never overwritten by the translation")
+        XCTAssertEqual(segment.translatedText, "Hello")
+        XCTAssertEqual(segment.translatedLanguage, "en")
+        XCTAssertEqual(segment.speakerId, "user-1")
+        XCTAssertEqual(segment.startTime, 0)
+        XCTAssertEqual(segment.endTime, 1.5)
+        XCTAssertTrue(segment.isFinal)
+        XCTAssertEqual(segment.confidence, 0.95, accuracy: 0.001)
+        XCTAssertEqual(segment.language, "en")
+    }
+
+    func test_makeTranscriptionSegment_withoutTranslation_translatedFieldsAreNil() throws {
+        let json = """
+        {
+            "callId": "call-1",
+            "segment": {
+                "text": "Bonjour",
+                "speakerId": "user-1",
+                "startMs": 0,
+                "endMs": 1000,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "fr",
+                "confidence": 0.9
+            }
+        }
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(CallTranslatedSegmentData.self, from: json)
+
+        let segment = CallManager.makeTranscriptionSegment(from: event)
+
+        XCTAssertEqual(segment.text, "Bonjour")
+        XCTAssertNil(segment.translatedText)
+        XCTAssertNil(segment.translatedLanguage)
     }
 }

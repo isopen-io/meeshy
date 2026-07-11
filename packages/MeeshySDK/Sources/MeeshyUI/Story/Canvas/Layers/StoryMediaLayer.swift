@@ -662,6 +662,21 @@ public final class StoryMediaLayer: CALayer {
         alignToTimelineThenPlay()
     }
 
+    /// Scrub de preview timeline : pause puis cale le player sur le playhead
+    /// unifié (`max(0, slidePlayheadSeconds − startTime)`) avec une tolérance
+    /// large — un seek frame-accurate à la cadence du scrub gèle sur la
+    /// décompression GOP. Le seek fire à chaque appel (pas de seuil de
+    /// dérive) : en pause, la frame affichée DOIT suivre le doigt.
+    @MainActor
+    public func alignPausedToSlidePlayhead() {
+        guard let player = avPlayer else { return }
+        player.pause()
+        let target = max(0, slidePlayheadSeconds - (media?.startTime ?? 0))
+        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: tolerance, toleranceAfter: tolerance)
+    }
+
     @MainActor
     private func alignToTimelineThenPlay() {
         guard let player = avPlayer else { return }

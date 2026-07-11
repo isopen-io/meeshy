@@ -157,6 +157,59 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
+    /// CAUSE RACINE des « icônes absentes sur iOS 26 » (élucidée 2026-07-11) :
+    /// `MeeshyRefreshableScroll` posait `.tint(.clear)` sur TOUT le ScrollView
+    /// pour masquer le spinner natif du `.refreshable`. L'environnement tint
+    /// se propage au contenu, et sur iOS 26 les icônes des menus contextuels
+    /// (rendu Liquid Glass) suivent le tint → icônes transparentes, app-wide.
+    /// Le spinner est masqué par le proxy `UIRefreshControl.appearance()`
+    /// (AppDelegate — mécanisme documenté comme le seul efficace iOS 17+) ;
+    /// AUCUN wrapper de scroll ne doit re-poser un tint clear d'environnement.
+    func test_refreshableScrollWrapper_neverTintsContentClear() throws {
+        let wrapperSource = try source("../../packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyRefreshableScroll.swift")
+        // CODE seulement — le fichier documente l'interdit dans ses
+        // commentaires, qui contiennent donc la chaîne cherchée.
+        let codeLines = wrapperSource
+            .components(separatedBy: .newlines)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        XCTAssertFalse(
+            codeLines.contains(".tint(.clear)") || codeLines.contains(".tint(Color.clear)"),
+            "MeeshyRefreshableScroll ne doit pas appliquer .tint(.clear) à son contenu : " +
+            "le tint d'environnement rend invisibles les icônes des menus contextuels " +
+            "natifs iOS 26. Le spinner natif est masqué par UIRefreshControl.appearance() " +
+            "dans AppDelegate."
+        )
+    }
+
+    /// iOS 26 (menu natif) : le déplacement par GLISSER doit exister via le
+    /// `.onDrag` natif (il coexiste avec le `.contextMenu` système — c'était
+    /// le long-press CUSTOM du fallback qu'il cassait), et la décision du
+    /// drop doit passer par `ChipDropResolver` — le MÊME résolveur que le
+    /// drop de la chip du morph custom (SSOT : pin par drop, « other » → "",
+    /// no-op même section).
+    func test_nativeDragToSection_existsAndRoutesThroughChipDropResolver() throws {
+        let rowsSource = try source("Meeshy/Features/Main/Views/ConversationListView+Rows.swift")
+        XCTAssertTrue(
+            rowsSource.contains(".onDrag"),
+            "Le chemin natif iOS 26 doit exposer .onDrag sur la ligne " +
+            "(source du drag-to-section, coexiste avec le contextMenu système)."
+        )
+
+        let listSource = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
+        guard let dropRange = listSource.range(of: "func handleDrop(") else {
+            XCTFail("ConversationListView doit garder handleDrop (cible du SectionDropDelegate)")
+            return
+        }
+        let end = listSource.index(dropRange.lowerBound, offsetBy: 1600, limitedBy: listSource.endIndex) ?? listSource.endIndex
+        let dropBlock = String(listSource[dropRange.lowerBound ..< end])
+        XCTAssertTrue(
+            dropBlock.contains("ChipDropResolver.action("),
+            "handleDrop doit décider via ChipDropResolver — même sémantique que " +
+            "le drop de la chip (pin par drop, other→\"\", no-op même section)."
+        )
+    }
+
     /// Le builder du menu natif doit exister et garder la parité d'actions
     /// avec le menu custom — dont Renommer, la divergence historique qui
     /// avait justifié la suppression du premier builder (#1811).

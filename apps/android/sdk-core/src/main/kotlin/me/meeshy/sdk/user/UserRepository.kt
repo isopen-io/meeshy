@@ -2,6 +2,8 @@ package me.meeshy.sdk.user
 
 import me.meeshy.sdk.model.ChangeEmailRequest
 import me.meeshy.sdk.model.ChangeEmailResponse
+import me.meeshy.sdk.model.ChangePasswordRequest
+import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
 import me.meeshy.sdk.model.MeeshyUser
@@ -103,6 +105,20 @@ class UserRepository @Inject constructor(
 
     suspend fun resendEmailChangeVerification(): NetworkResult<ChangeEmailResponse> =
         apiCall { userApi.resendEmailChangeVerification() }
+
+    /**
+     * Changes the signed-in user's password (`PATCH /users/me/password`). This is an
+     * inherently *online* action — the gateway must verify the current password against
+     * the stored hash, so it cannot be optimistic or offline-queued (unlike a profile
+     * edit). A wrong current password comes back as an HTTP 400 in the folded
+     * [NetworkResult.Failure] (`httpStatus == 400`), which the caller maps to a targeted
+     * "incorrect current password" message; transport failures surface as `code == "NETWORK"`.
+     */
+    suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+    ): NetworkResult<ChangePasswordResponse> =
+        apiCall { userApi.changePassword(ChangePasswordRequest(currentPassword, newPassword)) }
 
     suspend fun changePhone(newPhoneNumber: String): NetworkResult<ChangePhoneResponse> =
         apiCall { userApi.changePhone(ChangePhoneRequest(newPhoneNumber)) }

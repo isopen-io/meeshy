@@ -2,7 +2,107 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs)** → rest`
+
+> On 2026-07-11 **media auto-download preferences** landed (slice `settings-media-auto-download`,
+> feature-parity §L — "Auto-download settings for media by type and connection"). Port of iOS
+> `MediaDownloadSettingsView` + the `MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor`
+> SDK trio. **(1) Pure `:core:model` SSOTs** — `AutoDownloadPolicy` (always / wifiAndGoodCellular / wifiOnly /
+> never) × `MediaKind` (image / audio / audioTranslation / video) → `MediaDownloadPreferences` (one policy per
+> kind, iOS defaults [images+audio ride good cellular, audio-translations+video stay Wi-Fi], `policy(kind)` read
+> lens + `withPolicy(kind, policy)` copy-lens), a corruption-safe JSON codec (`storageValue` /
+> `mediaDownloadPreferencesFromStorage` — blank/absent/malformed/unknown-enum → defaults, partial fills missing
+> kinds, unknown keys ignored), `MediaDownloadPolicyEngine.shouldAutoDownload(kind, condition, prefs)` (the 4×4
+> policy×condition truth table + the offline gate, reading the per-kind policy), and
+> `NetworkConditionResolver.resolveFromFlags(isSatisfied, isConstrained, usesWifi, usesCellular)` (the pure
+> connectivity-flag → `NetworkCondition` resolver; iOS's carried-but-unused `isExpensive` arg intentionally
+> **dropped** — a dead param isn't "better"). **(2) Durable store** — `MediaDownloadPreferencesStore`
+> (`:sdk-core`, interface + `InMemory` + `DataStore`-backed), mirroring the notification store: hydrates the
+> persisted block on cold start, decodes through the pure codec so a corrupt value self-heals to defaults; Hilt
+> provider added. **(3) VM** — `MediaDownloadViewModel` (`:feature:settings`) mirrors the store into an immutable
+> `MediaDownloadUiState` and writes a per-kind change through the store — the base is read **inside** the
+> `viewModelScope.launch` so back-to-back different-kind edits serialize and never clobber each other's write (a
+> genuine read-modify-write race the VM test caught when the base was read outside the launch), and a re-selection
+> of the kind's current policy is an inert no-op. **(4) Screen + wiring** (glue, coverage-exempt) —
+> `MediaDownloadScreen` renders one accent-coherent section per kind with a single-choice `RadioButton` policy
+> list, reached from a new "Auto-download" row in Settings → Data (`Routes.MEDIA_DOWNLOAD`). **+37 tests**
+> (engine 6, resolver 9, prefs/codec 10, store 7, VM 5), all green; `:app:assembleDebug` BUILD SUCCESSFUL; my
+> touched-module `testDebugUnitTest` green (the `:sdk-core` full-suite `ThemeStoreTest`/`InterfaceLanguageStoreTest`
+> DataStore timeouts are the known parallel-load flake — green on retry [528/528] and in isolation; my new store
+> test is green even under full-suite load after a 15s timeout). Reviewer **PASS** (diff `apps/android` only —
+> `:core:model` model+engine+codec, `:sdk-core` store+DI, `:feature:settings` VM+screen, `:app` nav; no production
+> logic outside; **SDK purity** — pure opaque-param building blocks in `:core:model`, durable store in `:sdk-core`,
+> "which policy / when to write" orchestration in the VM; **SSOT** — one preference block + one decision engine,
+> no re-implementation; **UDF/instant-app** — immutable `StateFlow<UiState>`, cold-start hydration, no spinner;
+> **colour/UX coherence** — accent-coherent per-kind sections, natural single-choice taps, back returns to Settings;
+> **no coverage floor lowered, no test weakened**). **Next:** the live `ConnectivityManager`-backed
+> `NetworkConditionMonitor` (thin glue over `NetworkConditionResolver`) + the first media-pipeline consumer of
+> `MediaDownloadPolicyEngine.shouldAutoDownload` (attachment auto-DL gate), or avatar/banner upload for §K profile
+> edit, or another §L row (Privacy settings, media cache management, GDPR export).
+
+> On 2026-07-11 **change password with strength meter + validation** landed (slice
+> `settings-change-password`, feature-parity §L). Port of iOS `ChangePasswordView` +
+> `PasswordStrengthIndicator`, surpassing it with a SOTA gate iOS lacks (new password must differ from
+> current). **(1) Pure `:core:model` SSOTs** — `PasswordStrength.evaluate(password) →
+> PasswordStrengthLevel` (the 6-band meter, each of 6 heuristics +1, `min(score,5)`, empty → TOO_WEAK,
+> a verbatim port of iOS's char-set/length scoring) and `ChangePasswordForm.validate(current, new,
+> confirm) → ChangePasswordValidation` (per-rule flags + composite `canSubmit`). **(2) Online network
+> path** — change-password can't be optimistic/offline (the gateway verifies the current password
+> against the stored bcrypt hash), so it's a straight `apiCall`: `ChangePasswordRequest`/`Response`
+> (`:core:model`), `UserApi.changePassword` (`PATCH /users/me/password`), `UserRepository.changePassword`.
+> **(3) VM** — `ChangePasswordViewModel` (`:feature:settings`) derives the live strength + validation off
+> the pure SSOTs, submits with a synchronous double-tap guard (`isSaving` set before the launch), clears
+> the plaintext buffers on success, and maps failure → a targeted `ChangePasswordError` the screen
+> localizes (HTTP 400 → INCORRECT_CURRENT, transport → NETWORK, else GENERIC). **(4) Screen + wiring**
+> (glue, coverage-exempt) — `ChangePasswordScreen` (visibility toggles, 5-bar accent-coherent meter,
+> per-rule hint rows, gated submit), reachable from a new "Change password" row in Settings → Privacy
+> (`Routes.CHANGE_PASSWORD`). **+32 tests** (PasswordStrength 14, ChangePasswordForm 9,
+> ChangePasswordViewModel 9), all green; `:app:assembleDebug` + all touched-module `testDebugUnitTest`
+> BUILD SUCCESSFUL. Reviewer **PASS**. **Next:** avatar/banner upload (media pipeline) for §K profile
+> edit, or another §L row — Privacy settings, auto-download preferences, or media cache management.
+
+> On 2026-07-11 **interactive per-post language switching** landed (slice `feed-post-language-switch`,
+> Translation §D — feature-parity.md "Per-post and per-story translation" interactive-switch arm now shipped).
+> The 2026-07-10 `feed-post-language-strip` slice rendered a **read-only** flag strip under feed cards; the chat
+> bubble's strip was already tappable (switch/revert the displayed language). This slice brings that gesture to
+> posts. **(1) SSOT relocation** — the pure `LanguageFlagTapResolver` moved `:feature:chat`
+> (`me.meeshy.app.chat.translation`) → `:sdk-ui` (`me.meeshy.ui.component.bubble`), made `public`: it is a
+> stateless rule engine (opaque params, no shared singletons) and belongs beside `MessageLanguageStrip` as a
+> building block shared by every language-strip surface — so chat **and** feed decode one flag-tap rule, zero
+> re-implementation. `ChatViewModel`'s import updated; its resolver test moved to `:sdk-ui` (10 tests, still
+> green). **(2) Pure core** — `FeedPostBuilder.build` gained `activeLanguageCode: String?` and a shared
+> `resolveActiveCode(post, prefs, override) → String?` (the post sibling of the chat bubble's active-code
+> computation): the override wins when it names a language the post carries (a translation or the original),
+> else the default Prisme resolution (preferred translation, or original when none). The builder projects both
+> the displayed `content` and the strip's `activeCodeOverride`/`showingOriginal` off that one code, so the text
+> and the highlighted chip can never disagree. Read-only strip (`includeTranslatable = false`) → every visible
+> chip has content → a tap is always Activate/Revert, never RequestTranslation. **(3) Wiring** — `FeedViewModel`
+> holds a per-post `activeLanguageOverride: MutableStateFlow<Map<postId,code>>` folded into the feed `combine`
+> (4-arg now) so a switch re-projects live; it is kept **outside** the cache stream so the viewer's choice
+> **survives every background refresh / re-emit** (instant-app: no reset on sync). `onPostFlagTap(postId, code)`
+> resolves against `latestPosts` + the shared resolver and applies Activate → set / Revert → clear on the
+> override map; unknown post or blank code is inert. **(4) UI** (glue, coverage-exempt) — `FeedScreen`'s
+> `PostLanguageStripRow` chips are now `.clickable { onChipTap(chip.code) }`, threaded through `PostCard` to
+> `viewModel::onPostFlagTap`. **+19 tests**: `FeedPostBuilderTest` +8 (null-override → default / override
+> switches content+strip to another configured language / override → original shows original & highlights
+> original chip / override without content falls back to default / case-insensitive+trim override /
+> `resolveActiveCode` override-with-content-wins / falls-back-to-preferred / null → preferred / null-no-preferred
+> → original), `FeedViewModelTest` +5 (tap switches displayed language / tap active reverts / unknown post inert
+> / blank code inert / override survives a stream re-emission), `LanguageFlagTapResolverTest` 10 relocated
+> (unchanged, still green). **RED verified**: the new tests reference `activeLanguageCode`/`resolveActiveCode`/
+> `onPostFlagTap` absent on `main` (compile-RED); the switch/revert assertions fail against the read-only
+> pre-slice builder. `:sdk-ui` + `:feature:feed` + `:feature:chat` `testDebugUnitTest` → **BUILD SUCCESSFUL**;
+> `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer: **PASS** (diff `apps/android` only — a `:sdk-ui` resolver
+> relocation + `:feature:feed` builder/VM/screen, `:feature:chat` import-only, no production logic outside;
+> **SDK purity** — the resolver is a stateless building block with opaque params now correctly homed in `:sdk-ui`,
+> the *when-to-switch* orchestration (override map, "survive re-emit") stays in the feed VM; **SSOT** — one
+> `LanguageFlagTapResolver` + `resolveActiveCode` shared by chat & feed, reuses `PostLanguageStrip`/
+> `LanguageResolver`, no re-implementation; **UDF/instant-app** — immutable per-post override in state, cache-first
+> re-projection, choice survives refresh, no spinner; **colour/UX coherence** — accent-coherent tappable chips,
+> one coherent primary-language view (surpasses iOS's two-tier secondary panel), natural tap-to-switch/tap-to-revert
+> gesture; **no coverage floor lowered, no existing test weakened**). **Next:** the interactive `includeTranslatable`
+> arm for posts (tap a configured-but-absent language → on-demand request; needs a post-translation request path),
+> the per-story timeline language strip, or persisted translations across cold start (§D "offline Prisme").
 
 > On 2026-07-10 **the per-post Prisme language flag strip** landed (slice `feed-post-language-strip`,
 > Translation §D — feature-parity.md "Per-post and per-story translation" read-only flag-strip arm now
@@ -2108,6 +2208,48 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-11 — slice `settings-change-password` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/settings-change-password` (off latest `main`).
+- **What:** feature-parity §L "Change password with strength meter + validation" — port of iOS
+  `ChangePasswordView` + `PasswordStrengthIndicator`, surpassing it with the "new must differ from current"
+  gate iOS lacks.
+- **Added (production):**
+  - `:core:model` `PasswordStrength.evaluate(password) → PasswordStrengthLevel` — the 6-band strength meter
+    (length≥8, length≥12, upper, lower, digit, symbol; `min(score,5)`; empty → TOO_WEAK). Verbatim port of the
+    iOS char-set/length scoring; `MAX_SCORE = 5` bars.
+  - `:core:model` `ChangePasswordForm.validate(current, new, confirm) → ChangePasswordValidation` — per-rule
+    flags (`isCurrentPresent`/`isNewLongEnough`/`passwordsMatch`/`isNewDifferent`) + composite `canSubmit`;
+    `MIN_LENGTH = 8` matches the gateway contract.
+  - `:core:model` `ChangePasswordRequest`/`ChangePasswordResponse`; `:core:network` `UserApi.changePassword`
+    (`PATCH /users/me/password`); `:sdk-core` `UserRepository.changePassword` (online-only `apiCall` — the
+    gateway verifies the current password against the stored bcrypt hash, so it cannot be optimistic/offline).
+  - `:feature:settings` `ChangePasswordViewModel` (+ `ChangePasswordUiState`, `ChangePasswordError`) — derives
+    the live strength + validation off the pure SSOTs, submits with a synchronous double-tap guard, clears the
+    plaintext buffers on success, maps failure → HTTP 400 = INCORRECT_CURRENT / transport = NETWORK / else GENERIC.
+  - `:feature:settings` `ChangePasswordScreen` (glue, coverage-exempt) — per-field visibility toggles, 5-bar
+    accent-coherent strength meter, per-rule hint rows, gated submit; reached via a new "Change password" row in
+    Settings → Privacy. `app` `Routes.CHANGE_PASSWORD` + composable + `SettingsScreen.onOpenChangePassword`.
+  - EN/FR/ES/PT strings (22 keys ×4 locales).
+- **Tests (RED→GREEN):** +32 — `PasswordStrengthTest` 14 (each band boundary + each char-class contribution +
+  cap + hyphen/bracket-as-symbol + space-not-symbol + ordinal scores), `ChangePasswordFormTest` 9 (each rule +
+  MIN_LENGTH boundary + differ-gate + empty-new inert), `ChangePasswordViewModelTest` 9 (buffer→strength,
+  validation, invalid-submit inert, success clears buffers, 400/network/generic mapping, edit clears error,
+  in-flight double-tap guard). All 0 failures. RED-verified: the tests reference symbols absent on `main`
+  (compile-RED).
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model` + `:feature:settings` + `:core:network`
+  + `:sdk-core` `testDebugUnitTest` green (the lone `:sdk-core ThemeStoreTest.dataStore_setThemeMode_…` failure
+  under the parallel run is the known DataStore IO-contention flake — NOTES.md 2026-07-05/06; my diff never
+  touches `:sdk-core`; green on isolated `--rerun-tasks`). `UserRepositoryTest` (4/4) confirms the new
+  `UserApi.changePassword` interface method broke no existing fake (it's a relaxed mockk).
+- **Reviewer:** **PASS** — diff is `apps/android` only (2 pure `:core:model` SSOTs + interface/repo method +
+  feature VM/screen/strings + one `app` route); **SDK purity** — strength/validation are stateless building
+  blocks in `:core:model`, the online change-password is a low-level repo service, the "when to submit / how to
+  map errors" orchestration stays in the feature VM; **SSOT** — one `PasswordStrength` + one `ChangePasswordForm`
+  reused by VM & screen, the request mirrors the gateway Zod contract; **UDF** — immutable `StateFlow<UiState>`
+  with pure derived `strength`/`validation`/`canSubmit`; **UX coherence** — accent-coherent meter (Indigo submit,
+  semantic Success/Warning/Error), natural row→screen→back gesture, no dead end (success pops back), plaintext
+  never retained; **no coverage floor lowered, no existing test weakened**.
 
 ### 2026-07-09 — slice `chat-bubble-audio` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/chat-bubble-audio` (off latest `main`, `#1776` gateway realtime merged).

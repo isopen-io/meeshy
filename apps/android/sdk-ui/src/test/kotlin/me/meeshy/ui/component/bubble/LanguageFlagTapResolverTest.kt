@@ -1,8 +1,7 @@
-package me.meeshy.app.chat
+package me.meeshy.ui.component.bubble
 
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.app.chat.translation.LanguageFlagTapResolver
-import me.meeshy.app.chat.translation.LanguageFlagTapResolver.Result
+import me.meeshy.ui.component.bubble.LanguageFlagTapResolver.Result
 import me.meeshy.sdk.lang.LanguageResolver
 import org.junit.Test
 

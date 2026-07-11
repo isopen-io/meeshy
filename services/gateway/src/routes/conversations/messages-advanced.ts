@@ -490,7 +490,7 @@ export function registerMessagesAdvancedRoutes(
           // Refresh the last-message preview for list-screen participants —
           // parity with the WS edit path and broadcastNewMessage.
           await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), conversationId,
+            prisma, socketIOManager.getIO(), conversationId, userId,
             (err) => logger.warn('conversation preview fanout (advanced edit) failed', err as Error)
           );
         }
@@ -664,7 +664,7 @@ export function registerMessagesAdvancedRoutes(
           // deleting the latest message changes their row, which
           // MESSAGE_DELETED (conversation room only) never tells them.
           await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), conversationId,
+            prisma, socketIOManager.getIO(), conversationId, userId,
             (err) => logger.warn('conversation preview fanout (advanced delete) failed', err as Error)
           );
         }
@@ -840,7 +840,7 @@ export function registerMessagesAdvancedRoutes(
           // Refresh the last-message preview for list-screen participants —
           // parity with the WS edit path and broadcastNewMessage.
           await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), message.conversationId,
+            prisma, socketIOManager.getIO(), message.conversationId, userId,
             (err) => logger.warn('conversation preview fanout (advanced edit alt) failed', err as Error)
           );
         }

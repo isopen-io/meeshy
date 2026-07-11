@@ -23,6 +23,12 @@ public struct DurationHandle: View {
         Swift.max(minV, Swift.min(value, maxV))
     }
 
+    /// Ancre du drag en cours : la durée est capturée UNE fois au premier
+    /// `onChanged` — la translation de DragGesture est CUMULÉE, la rajouter à
+    /// la prop `duration` (déjà mutée à chaque frame) composait
+    /// quadratiquement (pattern boule-de-neige des drags de clips).
+    @State private var dragAnchor: Float?
+
     public var body: some View {
         let x = geometry.x(for: duration)
         DiamondShape()
@@ -35,9 +41,12 @@ public struct DurationHandle: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in
-                        let newDur = duration + Float(v.translation.width / geometry.pixelsPerSecond)
+                        let anchor = dragAnchor ?? duration
+                        if dragAnchor == nil { dragAnchor = anchor }
+                        let newDur = anchor + Float(v.translation.width / geometry.pixelsPerSecond)
                         onChange(Self.clamp(newDur, min: minDuration, max: maxDuration))
                     }
+                    .onEnded { _ in dragAnchor = nil }
             )
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "story.timeline.a11y.durationHandle", bundle: .module))

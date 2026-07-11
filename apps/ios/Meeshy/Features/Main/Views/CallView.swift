@@ -36,6 +36,7 @@ struct CallView: View {
     @State private var pulseScale: CGFloat = 1.0
     @State private var showControls = true
     @State private var showTranscript = false
+    @State private var showOriginalText = false
     @State private var showEffectsToolbar = false
     // §7.2 — PiP placement is corner-anchored (snap-to-nearest-corner) and
     // computed from a GeometryReader, not a hardcoded point. `pipDragOffset`
@@ -699,11 +700,26 @@ struct CallView: View {
 
             VStack(spacing: 0) {
                 if !callManager.isVideoUIActive {
+                    if showTranscript {
+                        // Captions active on an audio call: compact header at
+                        // the top, structural transcript panel filling the
+                        // freed space — replaces the old vertically-centered
+                        // avatar layout while captions are on.
+                        compactAudioCallHeader
+                            .padding(.top, 16)
+                        transcriptPanel
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 12)
+                            .frame(maxHeight: .infinity)
+                    } else {
+                        Spacer()
+                        audioCallLayout
+                        Spacer()
+                    }
+                } else {
                     Spacer()
-                    audioCallLayout
                 }
-
-                Spacer()
 
                 // §7.3 — auto-hiding control bar on iPhone video calls; always
                 // visible for audio and on Mac (and while the effects tray is
@@ -729,7 +745,12 @@ struct CallView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    transcriptionToggleButton
+                    VStack(spacing: 12) {
+                        if transcriptionService.isTranscribing {
+                            translationToggleButton
+                        }
+                        transcriptionToggleButton
+                    }
                 }
             }
             .padding(.trailing, 16)
@@ -867,6 +888,52 @@ struct CallView: View {
         }
     }
 
+    /// Compacted header shown INSTEAD of `audioCallLayout` while captions are
+    /// active — avatar shrunk (120 → 56), status pills dropped, no longer
+    /// vertically centered (sits at the top) so `transcriptPanel` gets the
+    /// freed vertical space. User-requested 2026-07-11.
+    private var compactAudioCallHeader: some View {
+        HStack(spacing: 12) {
+            callAvatarPair(size: 56)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
+                    .font(.system(.headline, design: .rounded).weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                HStack(spacing: 6) {
+                    TransientCallSignalGlyph(strength: signalStrength)
+                    Text(callManager.formattedDuration)
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundColor(durationColor)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.updatesFrequently)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// Audio-call captions surface — a real layout element (NOT a floating
+    /// overlay) occupying the space between `compactAudioCallHeader` and
+    /// `controlBar`. Video calls use `transcriptOverlay` instead (a bottom
+    /// glass banner that doesn't shrink the video) — see that property's doc
+    /// comment. User-requested 2026-07-11: "la zone de transcription ne doit
+    /// pas être en overlay des autres points d'action".
+    private var transcriptPanel: some View {
+        ScrollView {
+            transcriptSegmentsList
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
     // MARK: - Connection Quality (P2-iOS-10 → glyphe signal 2026-07-04)
 
     /// Niveau du glyphe signal — priorité aux stats RTT+perte (mises à jour
@@ -877,6 +944,26 @@ struct CallView: View {
             level: callManager.liveVideoQualityLevel,
             connection: callManager.connectionQuality
         )
+    }
+
+    /// The video duration badge (unlike the audio layout's separate
+    /// `statusPill` rows) is the ONLY place signal quality / peer-network state
+    /// surfaces in the video call chrome — so its composed VoiceOver label must
+    /// carry everything the badge visually shows (glyph + wifi-exclamation),
+    /// not just the duration. Applying `.accessibilityLabel`/`.accessibilityValue`
+    /// directly to the badge's `HStack` implicitly makes it one opaque
+    /// accessibility element (`children: .ignore`) that silently discards every
+    /// child's own `.accessibilityLabel` — this composes what would otherwise be
+    /// swallowed, mirroring exactly what the sighted layout renders.
+    private var videoDurationBadgeAccessibilityLabel: String {
+        var parts = [String(localized: "call.duration.a11y.label")]
+        if signalStrength.isDegraded {
+            parts.append(signalStrength.accessibilityLabel)
+        }
+        if callManager.isRemoteQualityDegraded {
+            parts.append(String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
     }
 
     /// §4.3 — reconnecting banner shown over the frozen call layout while an
@@ -1010,9 +1097,16 @@ struct CallView: View {
                             Image(systemName: "wifi.exclamationmark")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(MeeshyColors.warning)
-                                .accessibilityLabel(String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main))
                         }
                     }
+                    // The parent's own .accessibilityLabel below already makes this
+                    // whole badge one opaque VoiceOver element (children: .ignore) —
+                    // every child label is discarded regardless, so hiding them here
+                    // is a no-op today. Kept explicit so a future removal of the
+                    // parent label doesn't silently re-expose fragmented per-child
+                    // announcements (glyph, then digits, then icon) instead of the
+                    // single composed sentence `videoDurationBadgeAccessibilityLabel`.
+                    .accessibilityElement(children: .ignore)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     // iOS 26 Liquid Glass — floating duration badge over the
@@ -1026,7 +1120,7 @@ struct CallView: View {
                     // rendait DERRIÈRE eux en top-leading). Le PiP par défaut
                     // (top-trailing) se pose dessous via `pipTopClearance`.
                     .frame(height: 44)
-                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
                     .accessibilityValue(callManager.formattedDuration)
                     .accessibilityAddTraits(.updatesFrequently)
                 }
@@ -1340,48 +1434,64 @@ struct CallView: View {
 
     // MARK: - Transcript Overlay
 
+    /// Video calls only — floating glass banner over the bottom of the video,
+    /// like traditional subtitles. Audio calls use `transcriptPanel` (structural,
+    /// non-overlay) instead — see that property's doc comment.
     private var transcriptOverlay: some View {
-        let localUserId = AuthManager.shared.currentUser?.id ?? ""
-        let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
-        return VStack(alignment: .leading, spacing: 6) {
+        transcriptSegmentsList
+            .padding(12)
+            // iOS 26 Liquid Glass — floating live-transcript panel over the video
+            // stream (same chrome-over-content family as the duration badge / effects
+            // toolbar). SDK Compatibility wrapper gates native effect / fallback.
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 100)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .opacity(showTranscript ? 1 : 0)
+            .accessibilityHidden(!showTranscript)
+            .animation(.easeInOut(duration: 0.2), value: showTranscript)
+    }
+
+    /// Shared, reused by both the video banner (`transcriptOverlay`) and the
+    /// audio structural panel (`transcriptPanel`).
+    private var transcriptSegmentsList: some View {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(transcriptionService.displayedSegments) { segment in
-                let isLocal = segment.speakerId == localUserId
-                HStack(alignment: .top, spacing: 8) {
-                    Circle()
-                        .fill(isLocal ? MeeshyColors.indigo400 : MeeshyColors.success)
-                        .frame(width: 8, height: 8)
-                        .padding(.top, 6)
-                        .accessibilityHidden(true)
-                    Text(segment.text)
-                        .font(.callout.weight(segment.isFinal ? .regular : .light))
-                        .foregroundColor(.white)
-                        .opacity(segment.isFinal ? 1.0 : 0.7)
-                        .accessibilityLabel("\(isLocal ? localName : remoteName) : \(segment.text)")
-                }
-                .accessibilityElement(children: .combine)
+                transcriptSegmentRow(segment)
             }
         }
-        .padding(12)
-        // iOS 26 Liquid Glass — floating live-transcript panel over the video
-        // stream (same chrome-over-content family as the duration badge / effects
-        // toolbar). SDK Compatibility wrapper gates native effect / fallback.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 100)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .opacity(showTranscript ? 1 : 0)
-        .accessibilityHidden(!showTranscript)
-        .animation(.easeInOut(duration: 0.2), value: showTranscript)
-        // PERF-005: tell the transcription service when the panel is visible
-        // so it can skip per-frame partial-result work while hidden.
-        .adaptiveOnChange(of: showTranscript) { _, newValue in
-            transcriptionService.isShowingOverlay = newValue
+    }
+
+    /// One transcript line: visible speaker name (colored) + text. `<Moi>` in
+    /// `MeeshyColors.indigo400` (this codebase's established "secondary
+    /// elements" tone), the interlocutor's name in `MeeshyColors.brandPrimary`
+    /// (the signature brand color) — user-requested 2026-07-11, replaces the
+    /// previous colored-dot-only distinction.
+    /// My own speech is never translated for myself (`text` is already in my
+    /// language); the interlocutor's speech shows `translatedText ?? text` by
+    /// default, or `text` (original) when `showOriginalText` is on.
+    @ViewBuilder
+    private func transcriptSegmentRow(_ segment: TranscriptionSegment) -> some View {
+        let localUserId = AuthManager.shared.currentUser?.id ?? ""
+        let isLocal = segment.speakerId == localUserId
+        let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
+        let speakerName = isLocal ? localName : remoteName
+        let speakerColor = isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
+        let displayText = isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
+
+        VStack(alignment: .leading, spacing: 2) {
+            Text(speakerName)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(speakerColor)
+            Text(displayText)
+                .font(.callout.weight(segment.isFinal ? .regular : .light))
+                .foregroundColor(.white)
+                .opacity(segment.isFinal ? 1.0 : 0.7)
         }
-        .onAppear {
-            transcriptionService.isShowingOverlay = showTranscript
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(speakerName) : \(displayText)")
     }
 
     // MARK: - Ended
@@ -1779,7 +1889,32 @@ struct CallView: View {
             // wrong. Reading it before, at tap time, is always accurate.
             let willStart = !transcriptionService.isTranscribing
             showTranscript = willStart
+            // PERF-005: single authoritative place that flips this — the
+            // audio structural transcript panel and the video floating
+            // banner both key off it, so it must not depend on either
+            // view's own lifecycle (onAppear/onChange copies would drift).
+            transcriptionService.isShowingOverlay = willStart
             callManager.toggleTranscription()
+        }
+    }
+
+    /// Global original/translated toggle for the interlocutor's captions —
+    /// my own speech never needs this (already in my language). Visible only
+    /// while transcription is active, matching the transcript panel's own
+    /// visibility condition.
+    private var translationToggleButton: some View {
+        callControlButton(
+            icon: showOriginalText ? "character.bubble.fill" : "character.bubble",
+            color: showOriginalText ? MeeshyColors.indigo400 : .white,
+            bgColor: showOriginalText ? MeeshyColors.indigo400 : .white,
+            isActive: showOriginalText,
+            caption: String(localized: "call.control.translation.caption", defaultValue: "Traduction", bundle: .main),
+            label: showOriginalText
+                ? String(localized: "call.control.translation.showTranslated", defaultValue: "Afficher la traduction", bundle: .main)
+                : String(localized: "call.control.translation.showOriginal", defaultValue: "Afficher le texte original", bundle: .main),
+            isToggle: true
+        ) {
+            showOriginalText.toggle()
         }
     }
 

@@ -755,9 +755,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`languageStrip` field, pure/testable) and rendered in `FeedScreen` as an accent-coherent chip
       strip (flag + active native name in the language accent colour) replacing the old binary
       "Translated" label. +15 tests (13 `PostLanguageStripTest`, +2 `FeedPostBuilderTest`). Full
-      `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL. **Follow-up:** the interactive
-      `includeTranslatable` arm (tap a configured-but-absent language on a post to request it on demand),
-      inline secondary/original toggle, and the per-story timeline strip.
+      `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL.
+      **Interactive language switch shipped** (slice `feed-post-language-switch`, 2026-07-11): the strip
+      chips are now **tappable** — tap a chip to switch the post's displayed language, tap the active chip
+      to revert to the default Prisme resolution (mirrors the chat bubble's single-primary switch, keyed
+      per post). SSOT: the pure `LanguageFlagTapResolver` was **relocated `:feature:chat` → `:sdk-ui`**
+      (`me.meeshy.ui.component.bubble`) so chat + feed share one flag-tap rule; `FeedPostBuilder` gained an
+      override-aware `build(..., activeLanguageCode)` + `resolveActiveCode(post, prefs, override)` (both
+      pure, unit-tested) driving content + strip highlight; `FeedViewModel` holds a per-post
+      `activeLanguageOverride` StateFlow (kept outside the cache stream so the choice survives every
+      refresh/re-emit — instant-app) + `onPostFlagTap`. +19 tests (+8 `FeedPostBuilderTest`, +5
+      `FeedViewModelTest`, 10 relocated `LanguageFlagTapResolverTest` still green). `:sdk-ui` + `:feature:feed`
+      + `:feature:chat` `testDebugUnitTest` + `:app:assembleDebug` → BUILD SUCCESSFUL.
+      **Follow-up:** the interactive `includeTranslatable` arm (tap a configured-but-absent language on a
+      post to request it on demand — needs a post on-demand translation path), and the per-story timeline strip.
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`
@@ -1772,9 +1783,41 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       so a delivery retry is harmless (no rollback needed). +15 tests. Surpasses iOS, whose preference write is
       online-only. **Still open:** the email channel toggle wiring (the field syncs, the UI row is pending).
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
-- [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
+- [x] Auto-download settings for media by type and connection (Wi-Fi/cellular) — **shipped** (slice
+      `settings-media-auto-download`, 2026-07-11). Port of iOS `MediaDownloadSettingsView` +
+      `MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor`. Pure `:core:model`
+      SSOTs: `AutoDownloadPolicy` (always / wifiAndGoodCellular / wifiOnly / never) × `MediaKind` (image /
+      audio / audioTranslation / video) → `MediaDownloadPreferences` (per-kind policy, iOS defaults, `policy(kind)`
+      + `withPolicy(kind, policy)` lens), the corruption-safe JSON codec (`storageValue` /
+      `mediaDownloadPreferencesFromStorage`), `MediaDownloadPolicyEngine.shouldAutoDownload(kind, condition, prefs)`
+      (the 4×4 truth table + offline gate), and `NetworkConditionResolver.resolveFromFlags(...)` (the pure
+      connectivity-flag → `NetworkCondition` resolver; iOS's unused `isExpensive` arg dropped). Durable
+      DataStore-backed `MediaDownloadPreferencesStore` (`:sdk-core`, hydrates on cold start, corrupt value →
+      defaults). `MediaDownloadViewModel` (`:feature:settings`) mirrors the store into an immutable UI state and
+      writes a per-kind policy through the store SSOT — the base is read **inside** the `viewModelScope.launch`
+      so back-to-back edits on different kinds serialize and never clobber, and a re-selection of the current
+      policy is an inert no-op. `MediaDownloadScreen` (glue): one accent-coherent section per kind with a
+      single-choice `RadioButton` list, reached from a new "Auto-download" row in Settings → Data
+      (`Routes.MEDIA_DOWNLOAD`). +37 tests (engine 6, resolver 9, prefs/codec 10, store 7, VM 5). EN/FR/ES/PT
+      strings. NB: the live `ConnectivityManager` monitor + the media-pipeline consumer of the decision are the
+      next slice — this ships the fully-tested decision SSOT + the persisted preference surface.
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync
-- [ ] Change password with strength meter + validation
+- [x] Change password with strength meter + validation — **shipped** (slice `settings-change-password`,
+      2026-07-11). Port of iOS `ChangePasswordView` + `PasswordStrengthIndicator`, surpassing it with one SOTA
+      gate iOS lacks (the new password must differ from the current one). Two pure `:core:model` SSOTs:
+      `PasswordStrength.evaluate(password) → PasswordStrengthLevel` (the 6-band meter — length≥8, length≥12,
+      upper, lower, digit, symbol; capped at 5, empty → TOO_WEAK) and `ChangePasswordForm.validate(current, new,
+      confirm) → ChangePasswordValidation` (per-rule flags `isCurrentPresent`/`isNewLongEnough`/`passwordsMatch`/
+      `isNewDifferent` + composite `canSubmit`). Online-only network path (the gateway must verify the current
+      password against the stored hash — cannot be optimistic/offline): `ChangePasswordRequest`/`ChangePasswordResponse`
+      (`:core:model`), `UserApi.changePassword` (`PATCH /users/me/password`), `UserRepository.changePassword`.
+      `ChangePasswordViewModel` (`:feature:settings`) holds the three buffers, derives the live strength + validation
+      off the pure SSOTs, submits with a synchronous double-tap guard, clears the plaintext buffers on success, and
+      maps the failure to a targeted `ChangePasswordError` (HTTP 400 → INCORRECT_CURRENT, transport → NETWORK, else
+      GENERIC). `ChangePasswordScreen` (glue, coverage-exempt): current/new/confirm fields with per-field visibility
+      toggles, a 5-bar accent-coherent strength meter, per-rule hint rows, submit gated on `canSubmit`, reachable via
+      a new "Change password" row in the Settings → Privacy section (`Routes.CHANGE_PASSWORD`). +32 tests
+      (PasswordStrength 14, ChangePasswordForm 9, ChangePasswordViewModel 9). EN/FR/ES/PT strings.
 - [ ] GDPR data export (JSON/CSV, selectable scope, share/save file)
 - [ ] Account deletion (typed-phrase confirmation + email-confirmation flow)
 - [ ] Media cache management (clear cached images/audio/video/thumbnails)

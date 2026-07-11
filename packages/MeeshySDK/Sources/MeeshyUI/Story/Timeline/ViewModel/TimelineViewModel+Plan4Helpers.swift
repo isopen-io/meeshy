@@ -30,8 +30,14 @@ extension TimelineViewModel {
     public func trimClipStart(id: String, deltaTimeSeconds: Float) {
         guard deltaTimeSeconds.isFinite else { return }
         guard let kind = clipKind(forId: id),
-              let currentStart = clipStartTime(id: id),
-              let currentDuration = clipDuration(id: id) else { return }
+              let currentStart = clipStartTime(id: id) else { return }
+        // Clip « permanent » (duration nil — tout texte fraîchement posé) :
+        // le trim MATÉRIALISE sa fenêtre effective (start → slideDuration)
+        // puis l'ajuste — sans ça les poignées étaient inertes sur ces clips.
+        let currentDuration = clipDuration(id: id)
+            ?? TimelineGeometry.effectiveClipDuration(startTime: currentStart,
+                                                      duration: nil,
+                                                      slideDuration: project.slideDuration)
         let newStart = max(0, currentStart + deltaTimeSeconds)
         let actualDelta = newStart - currentStart
         let newDuration = max(0.05, currentDuration - actualDelta)
@@ -52,9 +58,15 @@ extension TimelineViewModel {
     /// Trim the end handle of a clip by `deltaTimeSeconds` (positive = extend right).
     /// Clamps to `mediaDurationLimit` when provided (source media length).
     public func trimClipEnd(id: String, deltaTimeSeconds: Float, mediaDurationLimit: Float? = nil) {
+        guard deltaTimeSeconds.isFinite else { return }
         guard let kind = clipKind(forId: id),
-              let currentStart = clipStartTime(id: id),
-              let currentDuration = clipDuration(id: id) else { return }
+              let currentStart = clipStartTime(id: id) else { return }
+        // Même matérialisation de fenêtre que trimClipStart pour les clips
+        // permanents (duration nil).
+        let currentDuration = clipDuration(id: id)
+            ?? TimelineGeometry.effectiveClipDuration(startTime: currentStart,
+                                                      duration: nil,
+                                                      slideDuration: project.slideDuration)
         var newDuration = max(0.05, currentDuration + deltaTimeSeconds)
         if let limit = mediaDurationLimit {
             newDuration = min(newDuration, limit)
@@ -110,6 +122,24 @@ extension TimelineViewModel {
     /// Wraps `trimClipEnd` with a semantic name used by transition drag creation.
     public func didExtendClip(id: String, overlapWithNextSeconds: Float) {
         trimClipEnd(id: id, deltaTimeSeconds: overlapWithNextSeconds)
+    }
+
+    // MARK: - Slide duration pin (DurationHandle)
+
+    /// Pin direct de la durée de la slide (poignée en fin de ruler). Mutation
+    /// directe du projet, comme `extendSlideDurationIfNeeded` (le set de
+    /// commandes Plan 1 n'a pas de commande slide-duration) — le pin devient
+    /// `effects.timelineDuration` au commit (Option A : peut ÉTENDRE la slide
+    /// au-delà du contenu ou la ROGNER en deçà).
+    public func setSlideDuration(_ duration: Float) {
+        guard duration.isFinite else { return }
+        let clamped = max(1, min(600, duration))
+        guard abs(clamped - project.slideDuration) > 0.001 else { return }
+        project.slideDuration = clamped
+        if currentTime > clamped {
+            scrub(to: clamped, precise: true)
+        }
+        scheduleEngineReconfigure()
     }
 
     // MARK: - Snap disabled toggle (two-finger drag override)
@@ -383,7 +413,8 @@ extension TimelineViewModel {
 
     // MARK: - Transition mutations
 
-    public func changeTransition(transitionId: String, kind: StoryTransitionKind, duration: Float) {
+    public func changeTransition(transitionId: String, kind: StoryTransitionKind, duration: Float,
+                                 easing: StoryEasing? = nil) {
         guard let idx = project.clipTransitions.firstIndex(where: { $0.id == transitionId }) else { return }
         let previous = project.clipTransitions[idx]
         let updated = StoryClipTransition(id: previous.id,
@@ -391,7 +422,7 @@ extension TimelineViewModel {
                                           toClipId: previous.toClipId,
                                           kind: kind,
                                           duration: duration,
-                                          easing: previous.easing)
+                                          easing: easing ?? previous.easing)
         let cmd = ChangeTransitionCommand(transitionId: transitionId, previous: previous, updated: updated)
         do {
             try cmd.apply(to: &project)
