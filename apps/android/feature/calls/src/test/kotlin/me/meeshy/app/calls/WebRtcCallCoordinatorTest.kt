@@ -217,4 +217,23 @@ class WebRtcCallCoordinatorTest {
         verify(exactly = 1) { signals.emitReconnecting("call-9", "me", attempt = 2) }
         coordinator.end()
     }
+
+    @Test
+    fun `the wire attempt is clamped at the gateway schema bound of 10`() =
+        runTest(UnconfinedTestDispatcher()) {
+            startAsCaller()
+            iceState.value = IceConnectionState.CONNECTED
+
+            // 11 cycles stall→recover : au-delà de 10 le schéma gateway (Zod)
+            // rejetterait le signal en silence — le fil doit rester à 10.
+            repeat(11) {
+                iceState.value = IceConnectionState.DISCONNECTED
+                iceState.value = IceConnectionState.CONNECTED
+            }
+
+            verify(exactly = 1) { signals.emitReconnecting("call-9", "me", attempt = 9) }
+            verify(exactly = 2) { signals.emitReconnecting("call-9", "me", attempt = 10) }
+            verify(exactly = 0) { signals.emitReconnecting("call-9", "me", attempt = 11) }
+            coordinator.end()
+        }
 }

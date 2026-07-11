@@ -218,7 +218,10 @@ class WebRtcCallCoordinator @Inject constructor(
         if (!connected) return
         if (!stalled) {
             stalled = true
-            reconnectAttempt += 1
+            // Clampé à la borne du schéma gateway (attempt ≤ 10, Zod) : au-delà
+            // la validation rejetterait le signal en silence (fire-and-forget)
+            // et le serveur ne saurait plus que l'appel se reconnecte encore.
+            reconnectAttempt = minOf(reconnectAttempt + 1, MAX_WIRE_ATTEMPT)
             signals.emitReconnecting(callId, selfId, attempt = reconnectAttempt)
             onMediaStalled?.invoke()
         }
@@ -281,5 +284,10 @@ class WebRtcCallCoordinator @Inject constructor(
 
     private fun restoreAudio() {
         audioManager.mode = AudioManager.MODE_NORMAL
+    }
+
+    private companion object {
+        /** Borne du schéma gateway `socketReconnectingSchema` (`attempt ≤ 10`). */
+        const val MAX_WIRE_ATTEMPT = 10
     }
 }
