@@ -4,6 +4,27 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-11, `settings-media-cache`)
+- **Kotlin block comments NEST — a `/*` inside a KDoc opens a nested comment that must be
+  closed.** A doc comment mentioning a path like `media/*` (or any `/*` glob) makes the whole
+  file fail to compile with `Unclosed comment`. KSP surfaces this as a cascade of
+  `error.NonExistentClass` on the module's Hilt `@Binds` before you even see the real cause —
+  read to the LAST `e:` line (`Unclosed comment`), not the first. Fix: write `media` sub-folders
+  or `media/{audio,video}` instead of `media/*` in prose.
+- **`java.io.File` logic is JVM-testable without Robolectric.** A pure `MediaCacheScanner`
+  (`sizeOf(File)` recursive `walkTopDown` sum, `clear(File)` content-wipe) runs against JUnit4
+  `TemporaryFolder` in a plain unit test — real coverage of recursion, missing-dir, and
+  keep-the-dir behaviours with no Android runtime. Keep the app-specific dir *layout* in the
+  exempt Context-bound store; keep the size/delete arithmetic pure and opaque-`File`.
+- **Surpass-iOS pattern paid off again**: iOS `DataStorageView` shows no sizes / single clear-all;
+  its own audit flagged `estimatedDiskBytes()` as an unused future TODO. Porting *the intent* (a
+  cache screen) while adding the readout + per-category clear is a clean, honest improvement — no
+  fabricated behaviour, just wiring the size primitive iOS left dormant.
+- **Coil 2 default disk cache = `context.cacheDir/image_cache`.** No custom `ImageLoader` is
+  configured in this app, so the singleton uses that path — the honest "images" cache dir to scan
+  today. audio/video/thumbnail dirs don't exist yet (media pipeline is future); scanning/clearing a
+  missing dir is a graceful 0/no-op, so declaring them now is forward-compatible, not dead code.
+
 ## Lesson (2026-07-11, `settings-data-export`)
 - **The Gradle wrapper distribution download is blocked by the egress proxy (403 from
   `github.com/gradle/gradle-distributions/releases`).** `./gradlew` / `./apps/android/meeshy.sh` fail at

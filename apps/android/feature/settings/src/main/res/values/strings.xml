@@ -169,4 +169,22 @@
     <string name="data_export_share">Share</string>
     <string name="data_export_error_network">No connection. Check your network and try again.</string>
     <string name="data_export_error_generic">Something went wrong. Please try again.</string>
+
+    <!-- Media cache management -->
+    <string name="media_cache_title">Media cache</string>
+    <string name="media_cache_info_title">Cached media</string>
+    <string name="media_cache_info_body">Caching lets media load faster and saves data. Clearing it is safe — files are re-downloaded when needed.</string>
+    <string name="media_cache_total_label">Total cache used</string>
+    <string name="media_cache_category_images">Images</string>
+    <string name="media_cache_category_audio">Audio</string>
+    <string name="media_cache_category_video">Video</string>
+    <string name="media_cache_category_thumbnails">Thumbnails</string>
+    <string name="media_cache_clear_category">Clear</string>
+    <string name="media_cache_clear_all">Clear cache</string>
+    <string name="media_cache_confirm_title">Clear cache</string>
+    <string name="media_cache_confirm_message">This removes all locally cached media. They will be re-downloaded if needed.</string>
+    <string name="media_cache_confirm_clear">Clear</string>
+    <string name="media_cache_confirm_cancel">Cancel</string>
+    <string name="media_cache_error_scan">Couldn\'t read the cache size. Pull to refresh.</string>
+    <string name="media_cache_error_clear">Couldn\'t clear the cache. Please try again.</string>
 </resources>

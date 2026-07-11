@@ -99,6 +99,7 @@ fun SettingsScreen(
     onOpenStarred: () -> Unit = {},
     onOpenChangePassword: () -> Unit = {},
     onOpenAutoDownload: () -> Unit = {},
+    onOpenMediaCache: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
     onOpenDataExport: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
@@ -300,9 +301,9 @@ fun SettingsScreen(
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_export_data), detail = null, onClick = onOpenDataExport)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_clear_media_cache), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_clear_media_cache), detail = null, onClick = onOpenMediaCache)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_storage_used), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_storage_used), detail = null, onClick = onOpenMediaCache)
             }
 
             SettingsSection(

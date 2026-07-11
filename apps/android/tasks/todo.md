@@ -4,7 +4,25 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-data-export` ✅
+## This loop (Phase: Settings §L) — slice `settings-media-cache` ✅
+**Media cache management** — port of iOS `DataStorageView` + `CacheCoordinator.clearAll`, **surpassing iOS**: iOS
+shows **no sizes** and offers only a single "clear all" (its own audit flags a size readout as a future TODO;
+`estimatedDiskBytes()` is unused); Android shows the **total + every per-category size** and clears **per-category
+or all**. Two pure `:core:model` SSOTs: `ByteSizeFormatter` (binary KB/MB/GB, adaptive 1-decimal, negatives→0,
+sub-KB still in KB — ports the shared iOS `ByteCountFormatter` convention) + `MediaCacheReport`/`MediaCacheCategory`
+(per-category bytes, `of` normalisation + clamp, derived `totalBytes`/`isEmpty`/`nonEmptyCategories`, optimistic
+`withCleared`). `:feature:settings` pure `MediaCacheScanner` (recursive `walkTopDown` size + content-wipe-keep-dir,
+missing-dir = 0/no-op, tested on real temp dirs), `MediaCacheStore`/`AndroidMediaCacheStore` (4 categories →
+`cacheDir/image_cache` [Coil default, populated today] + `cacheDir/media/{audio,video,thumbnails}` [pipeline-ready];
+`Dispatchers.IO`), `MediaCacheViewModel` (init scan, SWR refresh, optimistic per-/all-category clear with snapshot
+rollback, single-flight guard, SCAN/CLEAR mapping, cancellation-safe) + `MediaCacheScreen` (amber info card, Indigo
+total card, per-category rows with inline clear, destructive clear-all behind an `AlertDialog`). Wired the two
+previously no-op Settings → Data rows ("Clear media cache" + "Storage used") to `Routes.MEDIA_CACHE`. +43 tests
+(ByteSizeFormatter 15, MediaCacheReport 10, MediaCacheScanner 6, VM 12); full `assembleDebug` + all-module tests for
+verification, diff = `apps/android` only, EN/FR/ES/PT. Next: live `ConnectivityManager` monitor + first pipeline
+consumer of the media policy engine; avatar/banner upload (§K); or another §L row (crash diagnostics, static pages).
+
+## Prior loop (Phase: Settings §L) — slice `settings-data-export` ✅
 **GDPR data export** — port of iOS `DataExportView` + `DataExportService`, surpassing iOS twice: iOS shared only
 the summary counts (dropping the real payload) and shared truncatable text — Android shares the **full** payload
 as a real **file** via FileProvider. Three pure `:core:model` SSOTs: `DataExportRequestBuilder` (always-on

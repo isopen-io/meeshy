@@ -169,4 +169,22 @@
     <string name="data_export_share">Partager</string>
     <string name="data_export_error_network">Pas de connexion. Vérifiez votre réseau et réessayez.</string>
     <string name="data_export_error_generic">Une erreur est survenue. Veuillez réessayer.</string>
+
+    <!-- Media cache management -->
+    <string name="media_cache_title">Cache média</string>
+    <string name="media_cache_info_title">Média mis en cache</string>
+    <string name="media_cache_info_body">Le cache accélère le chargement des médias et réduit la consommation de données. Le vider est sans risque : les fichiers sont retéléchargés si nécessaire.</string>
+    <string name="media_cache_total_label">Cache total utilisé</string>
+    <string name="media_cache_category_images">Images</string>
+    <string name="media_cache_category_audio">Audio</string>
+    <string name="media_cache_category_video">Vidéo</string>
+    <string name="media_cache_category_thumbnails">Miniatures</string>
+    <string name="media_cache_clear_category">Vider</string>
+    <string name="media_cache_clear_all">Vider le cache</string>
+    <string name="media_cache_confirm_title">Vider le cache</string>
+    <string name="media_cache_confirm_message">Cela supprimera tous les médias mis en cache localement. Ils seront retéléchargés si nécessaire.</string>
+    <string name="media_cache_confirm_clear">Vider</string>
+    <string name="media_cache_confirm_cancel">Annuler</string>
+    <string name="media_cache_error_scan">Impossible de lire la taille du cache. Tirez pour actualiser.</string>
+    <string name="media_cache_error_clear">Impossible de vider le cache. Veuillez réessayer.</string>
 </resources>

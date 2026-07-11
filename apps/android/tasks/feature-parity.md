@@ -1928,7 +1928,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       account" row in Settings → Danger zone (`Routes.DELETE_ACCOUNT`). +18 tests (AccountDeletionConfirmation 8,
       AccountDeletionViewModel 10). EN/FR/ES/PT strings. Surpasses iOS with the distinct `ALREADY_PENDING` (409)
       error state iOS folds into a single generic message.
-- [ ] Media cache management (clear cached images/audio/video/thumbnails)
+- [x] Media cache management (clear cached images/audio/video/thumbnails) — slice `settings-media-cache`
+      (2026-07-11). **Surpasses iOS**: iOS `DataStorageView` shows **no sizes** and offers only a single
+      "clear all" (its own audit flags the size readout as a future TODO, `estimatedDiskBytes()` unused);
+      Android shows the **total + every per-category size** and clears **per-category or all**. Pure
+      `:core:model` SSOTs: `ByteSizeFormatter` (binary KB/MB/GB, adaptive 1-decimal, negatives→0 — ports the
+      shared iOS `ByteCountFormatter` convention) + `MediaCacheReport`/`MediaCacheCategory` (per-category
+      bytes, derived total/`isEmpty`/`nonEmptyCategories`, optimistic `withCleared`). `:feature:settings`
+      pure `MediaCacheScanner` (recursive dir size + content wipe, missing-dir = 0/no-op, tested on temp
+      dirs), `MediaCacheStore`/`AndroidMediaCacheStore` (maps the 4 categories to `cacheDir/image_cache`
+      [Coil default, populated today] + `cacheDir/media/{audio,video,thumbnails}` [pipeline-ready]),
+      `MediaCacheViewModel` (init scan, SWR refresh, optimistic per-/all-category clear with rollback,
+      in-flight guard, SCAN/CLEAR error mapping, cancellation-safe) + `MediaCacheScreen` (total card,
+      per-category rows with size + inline clear, destructive clear-all with confirmation dialog). Wired the
+      two previously no-op Settings → Data rows ("Clear media cache" + "Storage used") to `Routes.MEDIA_CACHE`.
+      +43 tests (ByteSizeFormatter 15, MediaCacheReport 10, MediaCacheScanner 6, MediaCacheViewModel 12).
+      EN/FR/ES/PT strings.
 - [ ] Crash-report diagnostics viewer with share
 - [ ] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
       open-source licenses (auto-generated), About
