@@ -269,10 +269,13 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     expect(drained[0].messageId).toBe('drain-fallback');
   });
 
-  test('peek — queries lrange(0, limit-1) when limit specified', async () => {
+  test('peek — full-reads then sorts before applying the limit (fast path)', async () => {
+    // A bounded lrange(0, limit-1) is unsafe: an in-place superseded entry keeps
+    // its original slot but carries a newer enqueuedAt, so the fast path must read
+    // the whole slice and sort by enqueuedAt (like drain()) before slicing.
     const entries = [
-      makePayload({ messageId: 'p1' }),
-      makePayload({ messageId: 'p2' }),
+      makePayload({ messageId: 'p1', enqueuedAt: new Date(1000).toISOString() }),
+      makePayload({ messageId: 'p2', enqueuedAt: new Date(2000).toISOString() }),
     ];
     const redis = makeMockRedis();
     redis.lrange.mockResolvedValue(entries.map(e => JSON.stringify(e)));
@@ -280,9 +283,40 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
 
     const peeked = await queue.peek('user-r', 2);
 
-    expect(redis.lrange).toHaveBeenCalledWith('delivery:queue:user-r', 0, 1);
+    expect(redis.lrange).toHaveBeenCalledWith('delivery:queue:user-r', 0, -1);
     expect(peeked).toHaveLength(2);
     expect(peeked[0].messageId).toBe('p1');
+  });
+
+  test('peek — fast path orders a superseded Redis entry by enqueuedAt, matching drain()', async () => {
+    // ENQUEUE_DEDUP_LUA supersedes a mutable event in place: it keeps the entry's
+    // ORIGINAL FIFO slot but stamps a NEWER enqueuedAt. So the raw Redis list
+    // (slot) order can disagree with chronological order. drain() re-sorts by
+    // enqueuedAt; peek()'s preview must do the same or it reports a replay order
+    // the reconnecting client will never actually see.
+    const editedM = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(3000).toISOString(), payload: { content: 'v2' } });
+    const newN = makePayload({ messageId: 'N', enqueuedAt: new Date(2000).toISOString(), payload: { content: 'N' } });
+    // Raw list order = slot order: M superseded in slot 0 (older slot, newer ts),
+    // N in slot 1 (newer slot, older ts).
+    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(editedM), JSON.stringify(newN)]) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const peeked = await queue.peek('user-super');
+
+    expect(peeked.map(p => p.messageId)).toEqual(['N', 'M']);
+  });
+
+  test('peek — fast path limit picks the chronologically-earliest, not the first slot', async () => {
+    const editedM = makePayload({ messageId: 'M', eventType: 'edited', enqueuedAt: new Date(3000).toISOString() });
+    const newN = makePayload({ messageId: 'N', enqueuedAt: new Date(2000).toISOString() });
+    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([JSON.stringify(editedM), JSON.stringify(newN)]) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    // limit=1 must preview N (t2000) — the first entry drain() replays — not M,
+    // which merely occupies slot 0.
+    const peeked = await queue.peek('user-super', 1);
+
+    expect(peeked.map(p => p.messageId)).toEqual(['N']);
   });
 
   test('peek — queries lrange(0, -1) when no limit specified', async () => {
@@ -824,9 +858,12 @@ describe('RedisDeliveryQueue (Redis path)', () => {
     expect(redis.eval).toHaveBeenCalledTimes(2);
   });
 
-  test('peek with limit calls lrange(key, 0, limit-1)', async () => {
-    const e1 = makePayload({ messageId: 'p-1' });
-    const e2 = makePayload({ messageId: 'p-2' });
+  test('peek with limit full-reads lrange(key, 0, -1) then sorts before slicing', async () => {
+    // The fast path can no longer use a bounded lrange: an in-place superseded
+    // entry keeps its slot but carries a newer enqueuedAt, so peek must read the
+    // whole slice and sort by enqueuedAt (like drain()) before applying the limit.
+    const e1 = makePayload({ messageId: 'p-1', enqueuedAt: new Date(1000).toISOString() });
+    const e2 = makePayload({ messageId: 'p-2', enqueuedAt: new Date(2000).toISOString() });
     const redis = makeMockRedis({
       lrange: jest.fn().mockResolvedValue([JSON.stringify(e1), JSON.stringify(e2)]),
     });
@@ -834,7 +871,7 @@ describe('RedisDeliveryQueue (Redis path)', () => {
 
     const result = await queue.peek('user-peek', 2);
 
-    expect(redis.lrange).toHaveBeenCalledWith(expect.any(String), 0, 1);
+    expect(redis.lrange).toHaveBeenCalledWith(expect.any(String), 0, -1);
     expect(result).toHaveLength(2);
     expect(result[0].messageId).toBe('p-1');
   });
