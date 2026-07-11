@@ -144,11 +144,21 @@ layer de dessin non nommée zPos 9999 avalait tout hit) + RÈGLE PRODUIT : plus
 de fallback bg en couche Foreground (bg mouvable UNIQUEMENT via chip
 Background). Tests pin : StoryCanvasHitTestRoutingTests.
 
+VAGUE MEDIA VISUELS + BG LIVE (2026-07-11, `24a237e01`) : les 3 demandes user
+livrées. (a) Background tool LIVE : didSet sur StoryComposerViewModel
+.backgroundColor → applyBackgroundColorToCurrentSlide() écrit immédiatement
+currentSlide.effects.background (hex sans '#', gradient passthrough, guard
+anti-churn) — avant, la valeur n'atteignait la slide qu'au sync différé.
+(b) Waveform audio réelle : AudioWaveform (Timeline/Util/) — AVAudioFile lu
+par chunks 64k off-main → 80 buckets RMS → normalize pic (silence reste plat),
+NSCache ; AudioClipBar self-extrait via `.task(id: audioURL)` quand
+waveformSamples est vide (draft restauré/repost). (c) Thumbnails images hors
+session : ImageStill (CGImageSource downsamplé, NSCache) ; VideoClipBar résout
+CacheCoordinator.imageLocalFileURL(postMediaId) quand loadedImages est vide.
+Tests : AudioWaveformTests (CAF silence→fort), StoryComposerBackgroundLive-
+ApplyTests (3 comportements). Suite 1825/1825, build app vert.
+
 RESTES (différés, par priorité) :
-0. Demandes user en attente : Background tool = application LIVE de la couleur
-   pendant la sélection ; waveform audio réelle sur AudioClipBar (extraction
-   RMS + cache, waveformSamples souvent vide) ; thumbnails d'images robustes
-   hors session (résolution par postMediaId via cache).
 1. Boucle audio bg dans la PREVIEW engine (AudioMixer ne re-arme pas ; reader OK).
 2. F4 saisie ms clavier au ClipInspector (steppers ±0,1 s livrés ; port branche
    amazing-bell par contenu si besoin plus fin).
