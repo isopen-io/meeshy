@@ -492,11 +492,14 @@ public final class TimelineViewModel: ObservableObject {
 
     // MARK: - Transitions
 
-    public func addTransition(fromClipId: String, toClipId: String, kind: StoryTransitionKind, duration: Float) {
-        guard fromClipId != toClipId else { return }
+    /// Returns the created transition's id (for routing the selection to the
+    /// TransitionInspector right after creation), or nil when rejected.
+    @discardableResult
+    public func addTransition(fromClipId: String, toClipId: String, kind: StoryTransitionKind, duration: Float) -> String? {
+        guard fromClipId != toClipId else { return nil }
         let mediaIds = project.mediaObjects.map(\.id)
-        guard mediaIds.contains(fromClipId), mediaIds.contains(toClipId) else { return }
-        guard duration.isFinite, duration > 0 else { return }
+        guard mediaIds.contains(fromClipId), mediaIds.contains(toClipId) else { return nil }
+        guard duration.isFinite, duration > 0 else { return nil }
         let transition = StoryClipTransition(
             fromClipId: fromClipId,
             toClipId: toClipId,
@@ -509,8 +512,10 @@ public final class TimelineViewModel: ObservableObject {
             try cmd.apply(to: &project)
             commandStack.push(.addTransition(cmd))
             scheduleEngineReconfigure()
+            return transition.id
         } catch {
             errorMessage = error.localizedDescription
+            return nil
         }
     }
 

@@ -91,9 +91,9 @@ extension StoryComposerViewModel {
     /// image represented on the timeline as a locked, full-duration clip.
     /// Synthetic clips are stripped before persisting back to the slide via
     /// `commitTimelineToCurrentSlide()`.
-    public static let syntheticTimelineClipIdPrefix = "_synthetic_bg_image_"
+    public nonisolated static let syntheticTimelineClipIdPrefix = "_synthetic_bg_image_"
 
-    public static func isSyntheticTimelineClipId(_ id: String) -> Bool {
+    public nonisolated static func isSyntheticTimelineClipId(_ id: String) -> Bool {
         id.hasPrefix(syntheticTimelineClipIdPrefix)
     }
 

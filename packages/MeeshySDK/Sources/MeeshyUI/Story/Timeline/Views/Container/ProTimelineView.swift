@@ -257,6 +257,13 @@ public struct ProTimelineView: View {
         Self.resolveTrackGroups(project: viewModel.project)
     }
 
+    private var hoistedJunctions: [TransitionJunction] {
+        TransitionJunctionResolver.resolve(
+            project: viewModel.project,
+            slideDuration: viewModel.project.slideDuration
+        )
+    }
+
     // MARK: - Body
 
     /// True when the host environment is a portrait phone (or any compact
@@ -385,6 +392,24 @@ public struct ProTimelineView: View {
                                             ForEach(track.clipIds, id: \.self) { clipId in
                                                 clipBar(for: clipId, geometry: geometry, laneHeight: 40)
                                             }
+                                            LaneTransitionOverlays(
+                                                junctions: TransitionJunctionResolver.junctions(
+                                                    for: track.clipIds, in: hoistedJunctions),
+                                                selectedId: viewModel.selection.selectedClipId,
+                                                isDark: colorScheme == .dark,
+                                                geometry: geometry,
+                                                laneHeight: 40,
+                                                onSelect: { viewModel.selectClip(id: $0) },
+                                                onCreate: { junction in
+                                                    if let id = viewModel.addTransition(
+                                                        fromClipId: junction.fromClipId,
+                                                        toClipId: junction.toClipId,
+                                                        kind: .crossfade,
+                                                        duration: 0.5) {
+                                                        viewModel.selectClip(id: id)
+                                                    }
+                                                }
+                                            )
                                         }
                                     }
                                 }

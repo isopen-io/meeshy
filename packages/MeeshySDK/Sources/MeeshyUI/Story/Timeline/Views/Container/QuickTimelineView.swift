@@ -184,6 +184,13 @@ public struct QuickTimelineView: View {
         )
     }
 
+    private var hoistedJunctions: [TransitionJunction] {
+        TransitionJunctionResolver.resolve(
+            project: viewModel.project,
+            slideDuration: viewModel.project.slideDuration
+        )
+    }
+
     // MARK: - Body
 
     public var body: some View {
@@ -280,6 +287,24 @@ public struct QuickTimelineView: View {
                         ForEach(track.clipIds, id: \.self) { clipId in
                             clipBar(for: clipId, geometry: geometry, laneHeight: 36)
                         }
+                        LaneTransitionOverlays(
+                            junctions: TransitionJunctionResolver.junctions(
+                                for: track.clipIds, in: hoistedJunctions),
+                            selectedId: viewModel.selection.selectedClipId,
+                            isDark: colorScheme == .dark,
+                            geometry: geometry,
+                            laneHeight: 36,
+                            onSelect: { viewModel.selectClip(id: $0) },
+                            onCreate: { junction in
+                                if let id = viewModel.addTransition(
+                                    fromClipId: junction.fromClipId,
+                                    toClipId: junction.toClipId,
+                                    kind: .crossfade,
+                                    duration: 0.5) {
+                                    viewModel.selectClip(id: id)
+                                }
+                            }
+                        )
                     }
                 }
             }
