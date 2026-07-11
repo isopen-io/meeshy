@@ -100,4 +100,15 @@
     <string name="change_password_strength_3">Buena</string>
     <string name="change_password_strength_4">Fuerte</string>
     <string name="change_password_strength_5">Excelente</string>
+    <string name="settings_media_download">Descarga automática</string>
+    <string name="media_download_title">Descarga automática</string>
+    <string name="media_download_info">Elige cuándo se descarga automáticamente cada tipo de medio según tu conexión.</string>
+    <string name="media_download_images">Imágenes</string>
+    <string name="media_download_audio">Audio</string>
+    <string name="media_download_audio_translation">Traducciones de audio</string>
+    <string name="media_download_video">Vídeo</string>
+    <string name="media_policy_always">Siempre</string>
+    <string name="media_policy_wifi_good_cellular">Wi-Fi y buena red móvil</string>
+    <string name="media_policy_wifi_only">Solo Wi-Fi</string>
+    <string name="media_policy_never">Nunca</string>
 </resources>

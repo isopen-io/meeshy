@@ -2,7 +2,43 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs)** → rest`
+
+> On 2026-07-11 **media auto-download preferences** landed (slice `settings-media-auto-download`,
+> feature-parity §L — "Auto-download settings for media by type and connection"). Port of iOS
+> `MediaDownloadSettingsView` + the `MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor`
+> SDK trio. **(1) Pure `:core:model` SSOTs** — `AutoDownloadPolicy` (always / wifiAndGoodCellular / wifiOnly /
+> never) × `MediaKind` (image / audio / audioTranslation / video) → `MediaDownloadPreferences` (one policy per
+> kind, iOS defaults [images+audio ride good cellular, audio-translations+video stay Wi-Fi], `policy(kind)` read
+> lens + `withPolicy(kind, policy)` copy-lens), a corruption-safe JSON codec (`storageValue` /
+> `mediaDownloadPreferencesFromStorage` — blank/absent/malformed/unknown-enum → defaults, partial fills missing
+> kinds, unknown keys ignored), `MediaDownloadPolicyEngine.shouldAutoDownload(kind, condition, prefs)` (the 4×4
+> policy×condition truth table + the offline gate, reading the per-kind policy), and
+> `NetworkConditionResolver.resolveFromFlags(isSatisfied, isConstrained, usesWifi, usesCellular)` (the pure
+> connectivity-flag → `NetworkCondition` resolver; iOS's carried-but-unused `isExpensive` arg intentionally
+> **dropped** — a dead param isn't "better"). **(2) Durable store** — `MediaDownloadPreferencesStore`
+> (`:sdk-core`, interface + `InMemory` + `DataStore`-backed), mirroring the notification store: hydrates the
+> persisted block on cold start, decodes through the pure codec so a corrupt value self-heals to defaults; Hilt
+> provider added. **(3) VM** — `MediaDownloadViewModel` (`:feature:settings`) mirrors the store into an immutable
+> `MediaDownloadUiState` and writes a per-kind change through the store — the base is read **inside** the
+> `viewModelScope.launch` so back-to-back different-kind edits serialize and never clobber each other's write (a
+> genuine read-modify-write race the VM test caught when the base was read outside the launch), and a re-selection
+> of the kind's current policy is an inert no-op. **(4) Screen + wiring** (glue, coverage-exempt) —
+> `MediaDownloadScreen` renders one accent-coherent section per kind with a single-choice `RadioButton` policy
+> list, reached from a new "Auto-download" row in Settings → Data (`Routes.MEDIA_DOWNLOAD`). **+37 tests**
+> (engine 6, resolver 9, prefs/codec 10, store 7, VM 5), all green; `:app:assembleDebug` BUILD SUCCESSFUL; my
+> touched-module `testDebugUnitTest` green (the `:sdk-core` full-suite `ThemeStoreTest`/`InterfaceLanguageStoreTest`
+> DataStore timeouts are the known parallel-load flake — green on retry [528/528] and in isolation; my new store
+> test is green even under full-suite load after a 15s timeout). Reviewer **PASS** (diff `apps/android` only —
+> `:core:model` model+engine+codec, `:sdk-core` store+DI, `:feature:settings` VM+screen, `:app` nav; no production
+> logic outside; **SDK purity** — pure opaque-param building blocks in `:core:model`, durable store in `:sdk-core`,
+> "which policy / when to write" orchestration in the VM; **SSOT** — one preference block + one decision engine,
+> no re-implementation; **UDF/instant-app** — immutable `StateFlow<UiState>`, cold-start hydration, no spinner;
+> **colour/UX coherence** — accent-coherent per-kind sections, natural single-choice taps, back returns to Settings;
+> **no coverage floor lowered, no test weakened**). **Next:** the live `ConnectivityManager`-backed
+> `NetworkConditionMonitor` (thin glue over `NetworkConditionResolver`) + the first media-pipeline consumer of
+> `MediaDownloadPolicyEngine.shouldAutoDownload` (attachment auto-DL gate), or avatar/banner upload for §K profile
+> edit, or another §L row (Privacy settings, media cache management, GDPR export).
 
 > On 2026-07-11 **change password with strength meter + validation** landed (slice
 > `settings-change-password`, feature-parity §L). Port of iOS `ChangePasswordView` +

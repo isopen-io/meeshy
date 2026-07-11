@@ -1783,7 +1783,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       so a delivery retry is harmless (no rollback needed). +15 tests. Surpasses iOS, whose preference write is
       online-only. **Still open:** the email channel toggle wiring (the field syncs, the UI row is pending).
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
-- [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
+- [x] Auto-download settings for media by type and connection (Wi-Fi/cellular) — **shipped** (slice
+      `settings-media-auto-download`, 2026-07-11). Port of iOS `MediaDownloadSettingsView` +
+      `MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor`. Pure `:core:model`
+      SSOTs: `AutoDownloadPolicy` (always / wifiAndGoodCellular / wifiOnly / never) × `MediaKind` (image /
+      audio / audioTranslation / video) → `MediaDownloadPreferences` (per-kind policy, iOS defaults, `policy(kind)`
+      + `withPolicy(kind, policy)` lens), the corruption-safe JSON codec (`storageValue` /
+      `mediaDownloadPreferencesFromStorage`), `MediaDownloadPolicyEngine.shouldAutoDownload(kind, condition, prefs)`
+      (the 4×4 truth table + offline gate), and `NetworkConditionResolver.resolveFromFlags(...)` (the pure
+      connectivity-flag → `NetworkCondition` resolver; iOS's unused `isExpensive` arg dropped). Durable
+      DataStore-backed `MediaDownloadPreferencesStore` (`:sdk-core`, hydrates on cold start, corrupt value →
+      defaults). `MediaDownloadViewModel` (`:feature:settings`) mirrors the store into an immutable UI state and
+      writes a per-kind policy through the store SSOT — the base is read **inside** the `viewModelScope.launch`
+      so back-to-back edits on different kinds serialize and never clobber, and a re-selection of the current
+      policy is an inert no-op. `MediaDownloadScreen` (glue): one accent-coherent section per kind with a
+      single-choice `RadioButton` list, reached from a new "Auto-download" row in Settings → Data
+      (`Routes.MEDIA_DOWNLOAD`). +37 tests (engine 6, resolver 9, prefs/codec 10, store 7, VM 5). EN/FR/ES/PT
+      strings. NB: the live `ConnectivityManager` monitor + the media-pipeline consumer of the decision are the
+      next slice — this ships the fully-tested decision SSOT + the persisted preference surface.
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync
 - [x] Change password with strength meter + validation — **shipped** (slice `settings-change-password`,
       2026-07-11). Port of iOS `ChangePasswordView` + `PasswordStrengthIndicator`, surpassing it with one SOTA

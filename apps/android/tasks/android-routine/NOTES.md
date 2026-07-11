@@ -3,6 +3,26 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-11 (`settings-media-auto-download`): a per-field settings write must read its base INSIDE the
+  `viewModelScope.launch`, never outside.** First cut of `MediaDownloadViewModel.setPolicy` captured `val current =
+  store.preferences.value` synchronously before the launch; three back-to-back edits on different kinds (image,
+  audio, audioTranslation) each captured the *same* stale default base, so the last write clobbered the first two.
+  The VM test `setPolicy_routesEachKindToItsOwnField` caught it. Fix = mirror the established `updateNotifications`
+  idiom: read the base inside the launch so writes serialize through the single-threaded `viewModelScope` and each
+  read sees the previous write. Read-modify-write of a shared block is only safe when the read is serialized with
+  the write.
+- **2026-07-11 (`settings-media-auto-download`): adding a DataStore-backed store test worsens the pre-existing
+  parallel-load flake — give the new one a generous timeout, and present retry/isolation evidence.** The full
+  `:sdk-core:testDebugUnitTest` (528 tests) intermittently times out `ThemeStoreTest`/`InterfaceLanguageStoreTest`
+  (real DataStore + `Dispatchers.IO`, documented flake). A new `MediaDownloadPreferencesStoreTest` bumps the
+  contention, so at 5s *my own* hydrate test flaked too; a 15s `withTimeout` made it robust even under full-suite
+  load while the pre-existing 5s ones still flake. Evidence pattern for the gate (Android has no CI): full suite
+  green on retry (528/528), the flaky trio green in isolation, my new tests green under load. Don't "fix" the
+  pre-existing tests — that's out of the slice's `apps/android`-only diff scope.
+- **2026-07-11: SDK bootstrap works; build with system Gradle.** `sdkmanager "platforms;android-35"
+  "build-tools;35.0.0" "platform-tools"` + `local.properties` sdk.dir, then `export ANDROID_HOME=$HOME/android-sdk;
+  /opt/gradle/bin/gradle :app:assembleDebug <module>:testDebugUnitTest` (the wrapper's 8.11.1 zip still 403s — see
+  the wrapper note below). First `assembleDebug` ~2.5–3 min.
 - **2026-07-11 (`settings-change-password`): not every account write reuses the optimistic outbox — a
   server-verified action must stay online, and its wrong-input signal is the HTTP status, not the envelope.**
   Regional language / notification prefs went through `enqueueProfileEdit`/`enqueueSync` (optimistic + durable)
