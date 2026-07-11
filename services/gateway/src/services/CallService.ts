@@ -1324,6 +1324,14 @@ export class CallService {
             endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
             endedAt: idemNow,
             duration: idemDuration,
+            // Mirror endCall(): record WHO ended the call in the metadata
+            // blob. A pre-answer leave by the initiator is how the summary
+            // distinguishes "Appel annulé" (cancelled by caller) from a plain
+            // "Appel manqué" (endedByInitiator, see createCallSummaryMessage).
+            metadata: {
+              ...(existing.metadata as Record<string, unknown>),
+              endedBy: userId
+            },
             version: { increment: 1 }
           }
         });
@@ -1473,6 +1481,13 @@ export class CallService {
             endReason: targetEndReason,
             endedAt: leftAt,
             duration,
+            // Mirror endCall(): record WHO ended the call. The callee's
+            // decline and the caller's cancel both land here — the summary
+            // uses initiator equality to render "Appel annulé" per-viewer.
+            metadata: {
+              ...(call.metadata as Record<string, unknown>),
+              endedBy: userId
+            },
             version: { increment: 1 }
           }
         });
