@@ -841,7 +841,6 @@ export const CALL_EVENTS = {
   SIGNAL: 'call:signal',
   TOGGLE_AUDIO: 'call:toggle-audio',
   TOGGLE_VIDEO: 'call:toggle-video',
-  TOGGLE_SCREEN_SHARE: 'call:toggle-screen-share',
   END: 'call:end',
 
   // Client → Server (fire-and-forget)

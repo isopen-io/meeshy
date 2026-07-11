@@ -1944,7 +1944,14 @@ export class CallService {
 
     // Mettre à jour le statut de l'appel
     const now = new Date();
-    const duration = Math.floor((now.getTime() - callSession.startedAt.getTime()) / 1000);
+    // Anchor on answeredAt (talk time), mirroring every sibling terminal
+    // writer (endCall/leaveCall/forceEndCall/the phantom+zombie cleanup
+    // sweeps — Vague 25/27/30). The guard above only lets `initiated`/
+    // `ringing` calls reach here, and `answeredAt` is stamped exclusively on
+    // the transition to `active`, so a call resolved `missed` here was NEVER
+    // answered — its duration must be 0, not `now - startedAt` (ring time),
+    // else call history shows a phantom "Manqué · N:NN" instead of "Manqué".
+    const duration = 0;
 
     // Version/status-scoped write, mirroring updateCallStatus()'s optimistic
     // lock — a concurrent terminal writer (call:end, call:leave, the ringing
