@@ -216,6 +216,24 @@ fun CallScreen(
                         textAlign = TextAlign.Center,
                     )
                 }
+                if (state.isPeerMuted) {
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    Text(
+                        text = stringResource(R.string.call_peer_muted, state.peerName),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textSecondary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                if (state.isPeerCameraOff) {
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    Text(
+                        text = stringResource(R.string.call_peer_camera_off, state.peerName),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textSecondary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
 
             state.captionText?.let { caption ->

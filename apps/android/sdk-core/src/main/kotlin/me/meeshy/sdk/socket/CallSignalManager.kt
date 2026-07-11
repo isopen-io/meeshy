@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinAckParser
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualityReport
@@ -133,6 +134,15 @@ class CallSignalManager @Inject constructor(
      */
     private val _translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(replay = 0, extraBufferCapacity = 128)
     val translatedSegments: SharedFlow<CallTranslatedSegmentPayload> = _translatedSegments.asSharedFlow()
+
+    /**
+     * The remote peer muted/unmuted the mic or turned the camera off/on
+     * (`call:media-toggled`). Inert to the FSM; feeds the "peer is muted /
+     * camera off" indicators — iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
+     * parity. Hot, no replay.
+     */
+    private val _mediaToggles = MutableSharedFlow<CallMediaTogglePayload>(replay = 0, extraBufferCapacity = 16)
+    val mediaToggles: SharedFlow<CallMediaTogglePayload> = _mediaToggles.asSharedFlow()
 
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
@@ -377,6 +387,9 @@ class CallSignalManager @Inject constructor(
             if (event == TRANSLATED_SEGMENT_EVENT) {
                 CallSignalMapper.translatedSegment(raw)?.let(_translatedSegments::tryEmit)
             }
+            if (event == MEDIA_TOGGLED_EVENT) {
+                CallSignalMapper.mediaToggle(raw)?.let(_mediaToggles::tryEmit)
+            }
             CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::tryEmit)
         }
     }
@@ -409,6 +422,9 @@ class CallSignalManager @Inject constructor(
         /** A live (optionally translated) caption segment from the remote speaker. */
         const val TRANSLATED_SEGMENT_EVENT = "call:translated-segment"
 
+        /** The remote peer muted/unmuted the mic or toggled the camera. */
+        const val MEDIA_TOGGLED_EVENT = "call:media-toggled"
+
         // `call:force-leave` is deliberately ABSENT: the gateway never emits it
         // (audit appels 2026-07-11 — verified dead; subscribing would be a
         // silent no-op inviting drift).
@@ -420,10 +436,10 @@ class CallSignalManager @Inject constructor(
             QUALITY_ALERT_EVENT,
             SCREEN_CAPTURE_ALERT_EVENT,
             TRANSLATED_SEGMENT_EVENT,
+            MEDIA_TOGGLED_EVENT,
             "call:participant-joined",
             "call:ended",
             "call:missed",
-            "call:media-toggled",
             "call:error",
             "call:already-answered",
         )

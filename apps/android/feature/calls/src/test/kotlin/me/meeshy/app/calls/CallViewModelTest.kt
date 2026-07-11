@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualitySample
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
@@ -104,6 +105,9 @@ class CallViewModelTest {
         override fun nowMs(): Long = clockNowMs
     }
 
+    /** Test-driven peer mute/camera toggles (gateway `call:media-toggled`). */
+    private val mediaToggles = MutableSharedFlow<CallMediaTogglePayload>(extraBufferCapacity = 16)
+
     private val outgoingVideo =
         CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val incomingAudio =
@@ -141,6 +145,7 @@ class CallViewModelTest {
         every { signalManager.qualityAlerts } returns qualityAlerts
         every { signalManager.screenCaptureAlerts } returns screenCaptureAlerts
         every { signalManager.translatedSegments } returns translatedSegments
+        every { signalManager.mediaToggles } returns mediaToggles
         every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
@@ -708,6 +713,99 @@ class CallViewModelTest {
 
         assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
         verify(exactly = 0) { signalManager.emitAnalytics(any(), any()) }
+    }
+
+    // --- Peer mute/camera indicators: call:media-toggled (parité iOS/web) ---
+
+    private fun audioToggle(enabled: Boolean, callId: String = "call-9") =
+        CallMediaTogglePayload(callId = callId, mediaType = "audio", enabled = enabled)
+
+    private fun videoToggle(enabled: Boolean, callId: String = "call-9") =
+        CallMediaTogglePayload(callId = callId, mediaType = "video", enabled = enabled)
+
+    @Test
+    fun `a peer audio mute raises the muted indicator`() = runTest {
+        val vm = connectedIncoming()
+
+        mediaToggles.emit(audioToggle(enabled = false))
+
+        assertThat(vm.state.value.isPeerMuted).isTrue()
+    }
+
+    @Test
+    fun `a peer unmute lowers the muted indicator`() = runTest {
+        val vm = connectedIncoming()
+        mediaToggles.emit(audioToggle(enabled = false))
+
+        mediaToggles.emit(audioToggle(enabled = true))
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
+    }
+
+    @Test
+    fun `a toggle keyed by another call is ignored`() = runTest {
+        val vm = connectedIncoming()
+
+        mediaToggles.emit(audioToggle(enabled = false, callId = "other-call"))
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
+    }
+
+    @Test
+    fun `an unknown media type is inert rather than a blind flip`() = runTest {
+        val vm = connectedIncoming()
+
+        mediaToggles.emit(
+            CallMediaTogglePayload(callId = "call-9", mediaType = "hologram", enabled = false),
+        )
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
+        assertThat(vm.state.value.isPeerCameraOff).isFalse()
+    }
+
+    @Test
+    fun `a peer camera-off during a video call raises the camera indicator`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio.copy(isVideo = true))
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+
+        mediaToggles.emit(videoToggle(enabled = false))
+
+        assertThat(vm.state.value.isPeerCameraOff).isTrue()
+    }
+
+    @Test
+    fun `a peer camera-off during an audio call never raises the camera indicator`() = runTest {
+        val vm = connectedIncoming()
+
+        mediaToggles.emit(videoToggle(enabled = false))
+
+        assertThat(vm.state.value.isPeerCameraOff).isFalse()
+    }
+
+    @Test
+    fun `peer media indicators die with the call`() = runTest {
+        val vm = connectedIncoming()
+        mediaToggles.emit(audioToggle(enabled = false))
+
+        vm.hangUp()
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
+    }
+
+    @Test
+    fun `a fresh call never inherits the previous peer mute state`() = runTest {
+        val vm = connectedIncoming()
+        mediaToggles.emit(audioToggle(enabled = false))
+        vm.hangUp()
+        vm.dismiss()
+
+        vm.start(incomingAudio.copy(callId = "call-10"))
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
     }
 
     @Test

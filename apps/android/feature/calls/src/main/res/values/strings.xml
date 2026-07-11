@@ -41,4 +41,6 @@
     <string name="call_waiting_answer_a11y">End current call and answer %1$s</string>
     <string name="call_peer_quality_degraded">%1$s\'s connection is unstable</string>
     <string name="call_peer_screen_capturing">%1$s is capturing the screen</string>
+    <string name="call_peer_muted">%1$s\'s microphone is off</string>
+    <string name="call_peer_camera_off">%1$s\'s camera is off</string>
 </resources>

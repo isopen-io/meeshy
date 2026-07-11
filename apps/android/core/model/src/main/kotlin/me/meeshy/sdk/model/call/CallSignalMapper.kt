@@ -158,6 +158,18 @@ object CallSignalMapper {
     }.getOrNull()
 
     /**
+     * Decode a `call:media-toggled` frame — the remote peer muting/unmuting the
+     * mic or turning the camera off/on. Inert to the FSM ([map] keeps returning
+     * `null`); this parallel, total, side-effect-free decode feeds the "peer is
+     * muted / camera off" indicators (iOS parity: `callMediaToggled` →
+     * `isRemoteAudioEnabled`/`isRemoteVideoEnabled`). `null` on a malformed
+     * frame or a blank call id.
+     */
+    fun mediaToggle(rawJson: String): CallMediaTogglePayload? = runCatching {
+        json.decodeFromString<CallMediaTogglePayload>(rawJson).takeIf { it.callId.isNotBlank() }
+    }.getOrNull()
+
+    /**
      * Only the callee's SDP `answer` advances the FSM (Offering → Connecting).
      * Renegotiation `offer`s and `ice-candidate`s are WebRTC plumbing — inert to
      * the phase machine.

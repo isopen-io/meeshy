@@ -392,4 +392,40 @@ class CallSignalMapperTest {
     fun `translatedSegment is inert on malformed JSON rather than crashing`() {
         assertThat(CallSignalMapper.translatedSegment("not-json-at-all")).isNull()
     }
+
+    // --- mediaToggle: peer mute/camera indicator decode ------------------------
+
+    @Test
+    fun `mediaToggle decodes an audio mute keyed by its call id`() {
+        val json = """{"callId":"c1","participantId":"p2","mediaType":"audio","enabled":false}"""
+
+        assertThat(CallSignalMapper.mediaToggle(json)).isEqualTo(
+            CallMediaTogglePayload(callId = "c1", participantId = "p2", mediaType = "audio", enabled = false),
+        )
+    }
+
+    @Test
+    fun `mediaToggle decodes a camera re-enable without a participant id`() {
+        val json = """{"callId":"c1","mediaType":"video","enabled":true}"""
+
+        assertThat(CallSignalMapper.mediaToggle(json)).isEqualTo(
+            CallMediaTogglePayload(callId = "c1", mediaType = "video", enabled = true),
+        )
+    }
+
+    @Test
+    fun `mediaToggle returns null for a frame carrying a blank call id`() {
+        assertThat(CallSignalMapper.mediaToggle("""{"callId":"","mediaType":"audio","enabled":false}"""))
+            .isNull()
+    }
+
+    @Test
+    fun `mediaToggle returns null for a frame missing the enabled flag`() {
+        assertThat(CallSignalMapper.mediaToggle("""{"callId":"c1","mediaType":"audio"}""")).isNull()
+    }
+
+    @Test
+    fun `mediaToggle is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.mediaToggle("not-json-at-all")).isNull()
+    }
 }

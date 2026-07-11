@@ -62,6 +62,12 @@
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
 > gated au callId + cluster CallQualityOverlay, i18n 4 locales. Les 3
 > plateformes affichent les mêmes alertes distantes.
+> Indicateurs mute/caméra du pair Android : `call:media-toggled` n'est plus
+> jeté — décodage pur `mediaToggle` + flux `mediaToggles`, VM
+> peerAudioEnabled/peerVideoEnabled gatés au callId (mediaType inconnu =
+> inerte), presenter isPeerMuted / isPeerCameraOff (caméra = appels vidéo
+> seulement), indicateurs CallScreen + 4 locales. Parité
+> isRemoteAudioEnabled/isRemoteVideoEnabled iOS et VideoStream web.
 > Émission Android (post-audit) : `call:screen-capture-detected` relayé —
 > seam `ScreenRecordingDetector` (Android 15 `addScreenRecordingCallback`,
 > permission normale DETECT_SCREEN_RECORDING, silencieux < API 35), collecte

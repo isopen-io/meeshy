@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityReport
 import me.meeshy.sdk.model.call.ConnectionQuality
 import org.json.JSONObject
@@ -138,6 +139,31 @@ class CallSignalManagerTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
             deliver(handlers, "call:media-toggled", """{"callId":"c1","mediaType":"audio","enabled":false}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a media-toggled frame republishes the decoded toggle on mediaToggles`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.mediaToggles.test {
+            deliver(
+                handlers,
+                "call:media-toggled",
+                """{"callId":"c1","participantId":"p2","mediaType":"audio","enabled":false}""",
+            )
+            assertThat(awaitItem()).isEqualTo(
+                CallMediaTogglePayload(callId = "c1", participantId = "p2", mediaType = "audio", enabled = false),
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a malformed media-toggled frame emits nothing on mediaToggles`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.mediaToggles.test {
+            deliver(handlers, "call:media-toggled", """{"callId":"c1","mediaType":"audio"}""")
             expectNoEvents()
         }
     }

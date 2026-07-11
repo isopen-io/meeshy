@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
@@ -128,6 +129,12 @@ class CallViewModel @Inject constructor(
     /** The latest live caption from the remote speaker (`call:translated-segment`). */
     private var caption: String? = null
 
+    /** The remote peer's mic state (`call:media-toggled` audio); `true` until told otherwise. */
+    private var peerAudioEnabled: Boolean = true
+
+    /** The remote peer's camera state (`call:media-toggled` video); `true` until told otherwise. */
+    private var peerVideoEnabled: Boolean = true
+
     /**
      * The pure once-per-call telemetry accumulator behind `call:analytics`,
      * created by [start] and folded on FSM edges + quality samples; `null`
@@ -172,6 +179,9 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             signalManager.translatedSegments.collect(::onTranslatedSegment)
         }
+        viewModelScope.launch {
+            signalManager.mediaToggles.collect(::onMediaToggle)
+        }
     }
 
     // --- Peer indicators: quality / screen-capture / captions (audit #5) ----
@@ -203,6 +213,22 @@ class CallViewModel @Inject constructor(
         publish()
     }
 
+    /**
+     * The remote peer muted/unmuted the mic or toggled the camera — flip the
+     * matching indicator (iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
+     * parity). Gated on the active call's id; an unknown `mediaType` is inert
+     * (never a blind flip).
+     */
+    private fun onMediaToggle(toggle: CallMediaTogglePayload) {
+        if (callId.isBlank() || toggle.callId != callId) return
+        when (toggle.mediaType) {
+            "audio" -> peerAudioEnabled = toggle.enabled
+            "video" -> peerVideoEnabled = toggle.enabled
+            else -> return
+        }
+        publish()
+    }
+
     private fun restartQualityResetWindow() {
         qualityResetJob?.cancel()
         qualityResetJob = viewModelScope.launch {
@@ -220,6 +246,8 @@ class CallViewModel @Inject constructor(
         peerQualityDegraded = false
         peerScreenCapturing = false
         caption = null
+        peerAudioEnabled = true
+        peerVideoEnabled = true
     }
 
     /**
@@ -699,6 +727,7 @@ class CallViewModel @Inject constructor(
         _state.value = CallPresenter.present(
             callState, config, media, elapsedSeconds, connectionQuality, waiting,
             peerQualityDegraded, peerScreenCapturing, caption,
+            peerAudioEnabled, peerVideoEnabled,
         )
     }
 
