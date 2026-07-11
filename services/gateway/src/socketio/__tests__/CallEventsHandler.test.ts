@@ -665,6 +665,37 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
     });
 
+    // Scoping par appel (contrat CallError.callId, packages/shared/types/video-call.ts) —
+    // un client avec un appel actif DOIT ignorer un call:error qui nomme un AUTRE
+    // appel ; sans callId, le garde iOS (CallManager, audit 2026-07-08) ne peut pas
+    // s'appliquer et l'erreur est traitée comme non-scopée. Chemin prod réel
+    // (incident 2026-07-03) : call:join arrivé après la fin → CALL_ENDED.
+    it('scopes the join-failure call:error to the callId (dead-call rejoin path)', async () => {
+      mockCallServiceJoinCall.mockRejectedValue(new Error('CALL_ENDED: This call has already ended'));
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      const ack = jest.fn();
+      await socket._trigger('call:join', validData, ack);
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'CALL_ENDED',
+        callId: CALL_ID,
+      }));
+    });
+
+    it('scopes the not-a-participant join error to the callId', async () => {
+      const { socket } = setupWithSocket({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+      await socket._trigger('call:join', validData);
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'NOT_A_PARTICIPANT',
+        callId: CALL_ID,
+      }));
+    });
+
     it('joins call, ACKs, broadcasts participant-joined, notifies other devices', async () => {
       const participant = makeParticipant();
       const callSession = makeCallSession({ participants: [participant] });

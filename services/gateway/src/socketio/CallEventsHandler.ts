@@ -1631,7 +1631,8 @@ export class CallEventsHandler {
           ack?.({ success: false, error: 'User not authenticated' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated'
+            message: 'User not authenticated',
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -1662,7 +1663,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined
+            details: validationDetails ? { issues: validationDetails } : undefined,
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -1679,7 +1681,8 @@ export class CallEventsHandler {
           ack?.({ success: false, error: 'You are not a participant in this conversation' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this conversation'
+            message: 'You are not a participant in this conversation',
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -1866,9 +1869,13 @@ export class CallEventsHandler {
           : errorMessage;
 
         ack?.({ success: false, error: message } as unknown as CallJoinAck);
+        // callId systématique : sans lui, le garde de scoping par appel côté
+        // client (CallError.callId, audit iOS 2026-07-08) ne peut pas
+        // s'appliquer — un CALL_ENDED de rejoin tardif doit nommer SON appel.
         socket.emit(CALL_EVENTS.ERROR, {
           code: errorCode,
-          message
+          message,
+          callId: data?.callId
         } as CallError);
       }
       // Item F follow-up (chaos-2 re-test) — the join deliberately does NOT
