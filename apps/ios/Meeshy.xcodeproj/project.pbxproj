@@ -611,7 +611,6 @@
 		E3EE7E279CFECD265A0D939E /* CallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8643AE5BE359B30610A23812 /* CallView.swift */; };
 		E4A4724D86933186E23940FE /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = 2D4BD86B5E825E53F2008016 /* MeeshySDK */; };
 		E4D6B9AEBA0AB792A397387C /* MessageEffectModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7340F5BC661E5C42E38B2668 /* MessageEffectModifiers.swift */; };
-		E4E235EDC705E586C3F31E67 /* BubbleCallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A6224DA15762BC5FE47CA7 /* BubbleCallbacks.swift */; };
 		E6FE2C3D727974248A5E37C7 /* CameraModelSwitchDuringRecordingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F52653091B1EC66D1FF596 /* CameraModelSwitchDuringRecordingTests.swift */; };
 		E768B86DEC0FE988692E6E76 /* ThemedBackButtonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD04554E079BCF486746DF23 /* ThemedBackButtonTests.swift */; };
 		E7905D40A4F0D0E43483A712 /* ReportUserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E27D2A01C79DD5B45F3051B /* ReportUserView.swift */; };
@@ -837,7 +836,6 @@
 		2F7955FEE33A52D416DD73C3 /* ConversationLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLanguagePreferences.swift; sourceTree = "<group>"; };
 		303C8A844B0F98A92CE2CE52 /* IncomingCallViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallViewTests.swift; sourceTree = "<group>"; };
 		306276D89CA204981399861F /* MessageEditsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageEditsDetailView.swift; sourceTree = "<group>"; };
-		30A6224DA15762BC5FE47CA7 /* BubbleCallbacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleCallbacks.swift; sourceTree = "<group>"; };
 		30BD0F8F4D9194A8CE0C6E34 /* StoryViewerLanguageOverrideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerLanguageOverrideTests.swift; sourceTree = "<group>"; };
 		31417CF82678240975477FB6 /* AttachmentSendServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentSendServiceTests.swift; sourceTree = "<group>"; };
 		31834DA2A1FFFED8438D86DF /* CommentDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentDraftStore.swift; sourceTree = "<group>"; };
@@ -2445,7 +2443,6 @@
 				C53F0A5069E0FC64C23F67C6 /* BubbleAttachmentView.swift */,
 				A16D49F6EB8943E2809113E5 /* BubbleBackground.swift */,
 				807FBFB5D86D33C91AF92446 /* BubbleBlurRevealLifecycle.swift */,
-				30A6224DA15762BC5FE47CA7 /* BubbleCallbacks.swift */,
 				855DA44038B4A4DA1F9C4232 /* BubbleCallNoticeView.swift */,
 				1B3C4C3E8D5E51DE7A6D64B0 /* BubbleContent.swift */,
 				756FB30B02F898EF3B26230B /* BubbleContentBuilder.swift */,
@@ -2780,7 +2777,6 @@
 				1093ADB38A7768B801B7DB9D /* BubbleBackground.swift in Sources */,
 				B3E659CB3DB6966432519D8F /* BubbleBlurRevealLifecycle.swift in Sources */,
 				DA5CEE0981F9857B0816F0BF /* BubbleCallNoticeView.swift in Sources */,
-				E4E235EDC705E586C3F31E67 /* BubbleCallbacks.swift in Sources */,
 				674E1B105810F73AEC64F5D3 /* BubbleContent.swift in Sources */,
 				0335BB1D30C208CDF3B1786D /* BubbleContentBuilder.swift in Sources */,
 				A526080C290DAA4A4D9C4A85 /* BubbleDeliveryCheck.swift in Sources */,
