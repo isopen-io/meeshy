@@ -220,21 +220,30 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_transcriptionToggleButton_wiresToCallManager() throws {
-        // Floats on the trailing edge (user feedback 2026-07-10) rather than
-        // living inside controlButtonsRow, to keep the main horizontal row
-        // uncrowded — see transcriptionToggleButton's own doc comment.
+    func test_captionsCycleButton_actionIsAdvanceCaptionsMode() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "private var transcriptionToggleButton: some View {") else {
-            XCTFail("CallView must define transcriptionToggleButton")
+        guard let range = view.range(of: "private var captionsCycleButton: some View {") else {
+            XCTFail("CallView must define captionsCycleButton")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
+        let end = view.index(range.lowerBound, offsetBy: 2200, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("callManager.toggleTranscription()"),
-            "transcriptionToggleButton must call callManager.toggleTranscription() " +
-            "— this is the UI entry point that was missing before this feature was rebuilt."
+            body.contains("Button(action: advanceCaptionsMode)"),
+            "captionsCycleButton must drive its 3-state cycle via advanceCaptionsMode() — " +
+            "replaces the old transcriptionToggleButton/translationToggleButton pair."
+        )
+        // The button's own doc comment (Step 3) NAMES .callToggleAccessibility(isToggle:
+        // true, ...) to explain why it's deliberately NOT used — strip comment lines
+        // before asserting, or that comment's own text trips a false positive here.
+        let code = body
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        XCTAssertFalse(
+            code.contains(".callToggleAccessibility(isToggle: true"),
+            "captionsCycleButton is a 3-state cycle, not a binary toggle — it must not use " +
+            "the .isToggle accessibility trait (that implies exactly 2 states)."
         )
     }
 
@@ -273,33 +282,41 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_translationToggleButton_togglesShowOriginalText() throws {
+    func test_advanceCaptionsMode_off_startsTranscriptionAndLandsOnTranslated() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "private var translationToggleButton: some View {") else {
-            XCTFail("CallView must define translationToggleButton")
+        guard let range = view.range(of: "private func advanceCaptionsMode() {") else {
+            XCTFail("CallView must define advanceCaptionsMode()")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 1500, limitedBy: view.endIndex) ?? view.endIndex
+        let end = view.index(range.lowerBound, offsetBy: 900, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("showOriginalText.toggle()"),
-            "translationToggleButton must toggle showOriginalText on tap."
+            body.contains("case .translated:") && body.contains("callManager.toggleTranscription()"),
+            "advanceCaptionsMode's .translated branch must call callManager.toggleTranscription() " +
+            "— this is the entry point that actually starts transcription."
+        )
+        XCTAssertTrue(
+            body.contains("case .original:") && body.contains("showOriginalText = true"),
+            "advanceCaptionsMode's .original branch must flip showOriginalText without " +
+            "calling toggleTranscription() again — transcription keeps running, only the " +
+            "display flag changes."
         )
     }
 
-    func test_connectedView_showsTranslationButton_nextToTranscriptionToggle() throws {
+    func test_connectedView_floatingStack_wrapsCaptionsCycleButtonInAdaptiveGlassContainer() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "transcriptionToggleButton") else {
-            XCTFail("CallView must reference transcriptionToggleButton")
+        guard let range = view.range(of: "captionsCycleButton") else {
+            XCTFail("CallView must reference captionsCycleButton")
             return
         }
-        // Search backward up to 500 chars from the reference for translationToggleButton,
-        // confirming both buttons live in the same floating stack.
-        let searchStart = view.index(range.lowerBound, offsetBy: -500, limitedBy: view.startIndex) ?? view.startIndex
+        // Search backward up to 200 chars from the reference for AdaptiveGlassContainer,
+        // confirming the floating stack shares a glass container (glass can't sample glass).
+        let searchStart = view.index(range.lowerBound, offsetBy: -200, limitedBy: view.startIndex) ?? view.startIndex
         let body = String(view[searchStart ..< range.lowerBound])
         XCTAssertTrue(
-            body.contains("translationToggleButton"),
-            "translationToggleButton must be wired into the same floating trailing-edge stack as transcriptionToggleButton."
+            body.contains("AdaptiveGlassContainer"),
+            "The floating trailing-edge stack must wrap captionsCycleButton in " +
+            "AdaptiveGlassContainer, matching controlBar's own pattern."
         )
     }
 

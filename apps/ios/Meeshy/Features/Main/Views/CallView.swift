@@ -738,11 +738,10 @@ struct CallView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    VStack(spacing: 12) {
-                        if transcriptionService.isTranscribing {
-                            translationToggleButton
+                    AdaptiveGlassContainer(spacing: 12) {
+                        VStack(spacing: 12) {
+                            captionsCycleButton
                         }
-                        transcriptionToggleButton
                     }
                 }
             }
@@ -1864,57 +1863,88 @@ struct CallView: View {
         .callToggleAccessibility(isToggle: isToggle, isActive: isActive)
     }
 
-    /// Live captions — toggle local transcription + translated captions of
-    /// the other participant. Manual, per spec decision (never auto-
-    /// activates): the speaker controls when their voice is transcribed and
-    /// sent to the gateway. Floats on the trailing edge, not in
-    /// controlButtonsRow — see the call site's comment.
-    private var transcriptionToggleButton: some View {
-        callControlButton(
-            icon: transcriptionService.isTranscribing ? "captions.bubble.fill" : "captions.bubble",
-            color: transcriptionService.isTranscribing ? MeeshyColors.indigo400 : .white,
-            bgColor: transcriptionService.isTranscribing ? MeeshyColors.indigo400 : .white,
-            isActive: transcriptionService.isTranscribing,
-            caption: String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main),
-            label: transcriptionService.isTranscribing
-                ? String(localized: "call.control.transcript.off", defaultValue: "Désactiver les sous-titres", bundle: .main)
-                : String(localized: "call.control.transcript.on", defaultValue: "Activer les sous-titres", bundle: .main),
-            isToggle: true
-        ) {
-            // Read isTranscribing BEFORE calling toggleTranscription(): the
-            // start path is async (permission request awaited inside a
-            // Task), so isTranscribing is still false right after the call
-            // returns — reading it after would always compute willStart
-            // wrong. Reading it before, at tap time, is always accurate.
+    /// Derived from `transcriptionService.isTranscribing` (authoritative on/off) and
+    /// `showOriginalText` (local display flag) — see CaptionsMode's own doc comment.
+    private var captionsMode: CaptionsMode {
+        CaptionsMode(isTranscribing: transcriptionService.isTranscribing, showOriginalText: showOriginalText)
+    }
+
+    /// Advances the 3-state cycle. `.translated`'s start path mirrors the old
+    /// transcriptionToggleButton exactly (read isTranscribing BEFORE calling
+    /// toggleTranscription(), since the start path is async — permission request
+    /// awaited inside a Task — so isTranscribing is still false right after the call
+    /// returns; reading it before, at tap time, is always accurate).
+    private func advanceCaptionsMode() {
+        switch captionsMode.next {
+        case .translated:
+            showOriginalText = false
             let willStart = !transcriptionService.isTranscribing
             showTranscript = willStart
-            // PERF-005: single authoritative place that flips this — the
-            // audio structural transcript panel and the video floating
-            // banner both key off it, so it must not depend on either
-            // view's own lifecycle (onAppear/onChange copies would drift).
+            // PERF-005: single authoritative place that flips this — the audio
+            // structural transcript panel and the video floating banner both key
+            // off it, so it must not depend on either view's own lifecycle
+            // (onAppear/onChange copies would drift).
             transcriptionService.isShowingOverlay = willStart
+            callManager.toggleTranscription()
+        case .original:
+            showOriginalText = true
+        case .off:
+            showOriginalText = false
+            showTranscript = false
+            transcriptionService.isShowingOverlay = false
             callManager.toggleTranscription()
         }
     }
 
-    /// Global original/translated toggle for the interlocutor's captions —
-    /// my own speech never needs this (already in my language). Visible only
-    /// while transcription is active, matching the transcript panel's own
-    /// visibility condition.
-    private var translationToggleButton: some View {
-        callControlButton(
-            icon: showOriginalText ? "character.bubble.fill" : "character.bubble",
-            color: showOriginalText ? MeeshyColors.indigo400 : .white,
-            bgColor: showOriginalText ? MeeshyColors.indigo400 : .white,
-            isActive: showOriginalText,
-            caption: String(localized: "call.control.translation.caption", defaultValue: "Traduction", bundle: .main),
-            label: showOriginalText
-                ? String(localized: "call.control.translation.showTranslated", defaultValue: "Afficher la traduction", bundle: .main)
-                : String(localized: "call.control.translation.showOriginal", defaultValue: "Afficher le texte original", bundle: .main),
-            isToggle: true
-        ) {
-            showOriginalText.toggle()
+    /// Live captions — cycles off → captions (translated) → captions (original) → off
+    /// on tap. Replaces the old transcriptionToggleButton + translationToggleButton pair
+    /// (2 buttons collapsed into 1 — task #17). Manual, per spec decision (never
+    /// auto-activates): the speaker controls when their voice is transcribed and sent
+    /// to the gateway. Floats on the trailing edge, not in controlButtonsRow — see the
+    /// call site's comment.
+    private var captionsCycleButton: some View {
+        let mode = captionsMode
+        let (icon, tint): (String, Color) = {
+            switch mode {
+            case .off: return ("captions.bubble", .white)
+            case .translated: return ("captions.bubble.fill", MeeshyColors.indigo400)
+            case .original: return ("character.bubble.fill", MeeshyColors.indigo400)
+            }
+        }()
+        let valueLabel: String = {
+            switch mode {
+            case .off: return String(localized: "call.control.captions.state.off", defaultValue: "Désactivés", bundle: .main)
+            case .translated: return String(localized: "call.control.captions.state.translated", defaultValue: "Traduction", bundle: .main)
+            case .original: return String(localized: "call.control.captions.state.original", defaultValue: "Texte original", bundle: .main)
+            }
+        }()
+
+        return Button(action: advanceCaptionsMode) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(mode == .off ? .white.opacity(0.9) : tint)
+                    .callControlGlass(diameter: 56, isActive: mode != .off, tint: tint)
+                Text(String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main))
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 68)
         }
+        .pressable()
+        // Constant label (the feature's name) + a live value (its current state) — NOT
+        // .callToggleAccessibility(isToggle: true, ...): that helper's .isToggle trait +
+        // on/off value is for binary toggles. This is a 3-state cycle, so VoiceOver hears
+        // "Sous-titres, Traduction" today and "Sous-titres, Texte original" after the next
+        // double-tap — the default Button action already IS the cycle-forward gesture, so
+        // no .accessibilityAdjustableAction is added: a 3-state cycle has no natural
+        // "backward", and mapping both increment AND decrement to the same forward step
+        // would teach a VoiceOver user that swiping down also advances — worse than not
+        // offering the swipe gesture at all.
+        .accessibilityLabel(String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main))
+        .accessibilityValue(valueLabel)
     }
 
     private var effectsToggleButton: some View {
