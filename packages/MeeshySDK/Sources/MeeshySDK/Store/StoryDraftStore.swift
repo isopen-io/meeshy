@@ -138,9 +138,12 @@ public final class StoryDraftStore: @unchecked Sendable {
         for (id, image) in images {
             let fileName = "\(id).jpg"
             let dest = mediaDir.appendingPathComponent(fileName)
-            if let data = image.jpegData(compressionQuality: 0.85) {
-                try? data.write(to: dest)
+            guard let data = image.jpegData(compressionQuality: 0.85) else { continue }
+            do {
+                try data.write(to: dest)
                 entries.append((id, "image", fileName))
+            } catch {
+                Logger.cache.error("[StoryDraftStore] Écriture image échouée (\(fileName)): \(error.localizedDescription)")
             }
         }
 
@@ -148,18 +151,18 @@ public final class StoryDraftStore: @unchecked Sendable {
             let ext = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
             let fileName = "\(id).\(ext)"
             let dest = mediaDir.appendingPathComponent(fileName)
-            try? fm.removeItem(at: dest)
-            try? fm.copyItem(at: url, to: dest)
-            entries.append((id, "video", fileName))
+            if persistCopy(from: url, to: dest) {
+                entries.append((id, "video", fileName))
+            }
         }
 
         for (id, url) in audioURLs {
             let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
             let fileName = "\(id).\(ext)"
             let dest = mediaDir.appendingPathComponent(fileName)
-            try? fm.removeItem(at: dest)
-            try? fm.copyItem(at: url, to: dest)
-            entries.append((id, "audio", fileName))
+            if persistCopy(from: url, to: dest) {
+                entries.append((id, "audio", fileName))
+            }
         }
 
         do {
@@ -173,6 +176,30 @@ public final class StoryDraftStore: @unchecked Sendable {
             }
         } catch {
             Logger.cache.error("[StoryDraftStore] Erreur saveMedia: \(error.localizedDescription)")
+        }
+    }
+    /// Copies `source` into the store at `dest`. Returns `true` when `dest`
+    /// holds a valid file afterwards (only then may the caller register the
+    /// DB row — a row without file becomes a « média perdu » at next resume).
+    ///
+    /// Après `restoreDraft()`, les URLs re-sauvées par l'autosave pointent
+    /// DÉJÀ dans le media dir : supprimer `dest` avant copie détruisait la
+    /// source (source == dest) et le média était perdu au resume suivant.
+    private func persistCopy(from source: URL, to dest: URL) -> Bool {
+        let fm = FileManager.default
+        if source.standardizedFileURL.path == dest.standardizedFileURL.path {
+            return fm.fileExists(atPath: dest.path)
+        }
+        guard fm.fileExists(atPath: source.path) else {
+            return fm.fileExists(atPath: dest.path)
+        }
+        try? fm.removeItem(at: dest)
+        do {
+            try fm.copyItem(at: source, to: dest)
+            return true
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Copie média échouée (\(source.lastPathComponent)): \(error.localizedDescription)")
+            return fm.fileExists(atPath: dest.path)
         }
     }
     #endif

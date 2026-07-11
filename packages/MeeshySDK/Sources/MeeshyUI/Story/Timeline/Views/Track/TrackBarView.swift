@@ -88,6 +88,11 @@ public struct TrackBarView<Content: View>: View {
                 .font(.caption2.weight(isSelected ? .semibold : .regular))
                 .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo900)
                 .lineLimit(1)
+                // 72 pt de colonne − icône 18 pt − paddings : « VIDÉO 1 » ne
+                // tient pas à taille nominale et s'affichait « VID… ». On
+                // resserre puis réduit (plancher 0.7) avant de tronquer.
+                .allowsTightening(true)
+                .minimumScaleFactor(0.7)
                 .truncationMode(.tail)
             Spacer(minLength: 0)
         }
