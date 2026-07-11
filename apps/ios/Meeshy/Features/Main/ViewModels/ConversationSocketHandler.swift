@@ -580,16 +580,38 @@ final class ConversationSocketHandler {
                     // Write through persistence; store observation surfaces the edit.
                     let msgId = apiMsg.id
                     let content = apiMsg.content ?? ""
-                    // Use the server's editedAt, not the device clock: markEdited
-                    // compares this against the stored editedAt to reject stale,
-                    // out-of-order edit events, which only works if every device
-                    // is comparing the same (server) clock.
-                    let editedAt = apiMsg.editedAt ?? Date()
-                    Task {
-                        do {
-                            try await persistence.markEdited(localId: msgId, newContent: content, editedAt: editedAt)
-                        } catch {
-                            Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    if let callSummary = apiMsg.callSummary {
+                        // Message d'appel : l'édition serveur est la transition
+                        // live → terminal (« en cours » → « Appel · 04:32 »).
+                        // markEdited ne ré-applique JAMAIS la métadonnée et
+                        // poserait isEdited — applyCallNoticeUpdate met à jour
+                        // content + callSummaryJson sans flags d'édition.
+                        let callSummaryJson = try? JSONEncoder().encode(callSummary)
+                        let serverUpdatedAt = apiMsg.updatedAt ?? apiMsg.editedAt ?? Date()
+                        Task {
+                            do {
+                                try await persistence.applyCallNoticeUpdate(
+                                    localId: msgId,
+                                    content: content,
+                                    callSummaryJson: callSummaryJson,
+                                    serverUpdatedAt: serverUpdatedAt
+                                )
+                            } catch {
+                                Logger.messages.warning("[ConversationSocket] applyCallNoticeUpdate failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                            }
+                        }
+                    } else {
+                        // Use the server's editedAt, not the device clock: markEdited
+                        // compares this against the stored editedAt to reject stale,
+                        // out-of-order edit events, which only works if every device
+                        // is comparing the same (server) clock.
+                        let editedAt = apiMsg.editedAt ?? Date()
+                        Task {
+                            do {
+                                try await persistence.markEdited(localId: msgId, newContent: content, editedAt: editedAt)
+                            } catch {
+                                Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                            }
                         }
                     }
                 }

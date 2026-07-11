@@ -449,6 +449,78 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertNotNil(updated?.editedAt)
     }
 
+    /// Message d'appel (metadata call) : l'édition serveur est la transition
+    /// live → terminal. Elle doit ré-appliquer content ET callSummaryJson via
+    /// `applyCallNoticeUpdate`, SANS poser isEdited/editedAt — une transition
+    /// d'état n'est pas une édition utilisateur (pas de badge « modifié »).
+    func test_messageEdited_withCallSummary_reappliesMetadata_withoutEditFlags() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+
+        var record = MessageRecord(
+            localId: "msg-call", serverId: nil,
+            conversationId: conversationId, senderId: otherUserId,
+            content: "Appel audio en cours", originalLanguage: "fr",
+            messageType: "system", messageSource: "system", contentType: "text",
+            state: .delivered, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        record.callSummaryJson = try JSONSerialization.data(withJSONObject: [
+            "kind": "call-live", "callId": "call_1", "initiatorId": otherUserId,
+            "callType": "audio", "outcome": "completed", "durationSeconds": 0,
+            "bytesEstimated": false,
+        ])
+        try await actor.insertOptimistic(record)
+
+        let editedApiMsg: APIMessage = JSONStub.decode("""
+        {
+            "id":"msg-call",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(otherUserId)",
+            "content":"Appel audio · 04:32",
+            "createdAt":"2026-03-06T12:00:00.000Z",
+            "updatedAt":"2026-03-06T12:05:00.000Z",
+            "metadata":{"kind":"call","callId":"call_1","initiatorId":"\(otherUserId)","callType":"audio","outcome":"completed","durationSeconds":272,"bytesEstimated":false}
+        }
+        """)
+        socket.simulateMessageEdited(editedApiMsg)
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let updated = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg-call")
+        }
+        XCTAssertEqual(updated?.content, "Appel audio · 04:32")
+        XCTAssertFalse(updated?.isEdited ?? true, "une transition d'état n'est pas une édition utilisateur")
+        XCTAssertNil(updated?.editedAt)
+        let stored = try XCTUnwrap(updated?.callSummaryJson)
+        let decoded = try JSONDecoder().decode(CallSummaryMetadata.self, from: stored)
+        XCTAssertFalse(decoded.isLive, "la métadonnée stockée doit être passée au terminal")
+        XCTAssertEqual(decoded.durationSeconds, 272)
+    }
+
     func test_messageEdited_unknownMessage_noEffect() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
