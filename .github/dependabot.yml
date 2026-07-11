@@ -152,6 +152,11 @@ updates:
       # Docker translator (cf. #1539 → CI Docker #2074). Rester sur 202412.
       - dependency-name: "espnet"
       - dependency-name: "espnet-model-zoo"
+      # pyannote-audio>=4.0 → pyannote-core>=6.0.1 → numpy>=2.0 + torch>=2.8.0,
+      # incompatibles avec numpy<1.24.0 et torch==2.6.0 (Dockerfile). Le bump
+      # Dependabot #1674 (3.4.0→4.0.7) a cassé le build Docker translator
+      # ("requirements are unsatisfiable"). Rester sur 3.4.0.
+      - dependency-name: "pyannote-audio"
 
   # Package Shared (Prisma/Types)
   - package-ecosystem: "npm"
