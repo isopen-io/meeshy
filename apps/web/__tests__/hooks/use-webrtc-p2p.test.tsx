@@ -765,6 +765,66 @@ describe('useWebRTCP2P', () => {
       );
     });
 
+    // --- call:reconnecting / call:reconnected — le serveur suit le restart ---
+    // (parité iOS/Android : sans ces emits, un restart ICE web laissait le
+    // statut serveur `active` et l'analytics aveugle à la reconnexion)
+
+    const driveIce = async (states: string[]) => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockEmit.mockClear();
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        for (const state of states) lastCallOptions.onIceConnectionStateChange(state);
+      });
+    };
+
+    it('émet call:reconnecting une seule fois par stall mid-call', async () => {
+      await driveIce(['connected', 'disconnected', 'disconnected', 'failed']);
+
+      const reconnecting = mockEmit.mock.calls.filter(
+        ([event]) => event === CLIENT_EVENTS.CALL_RECONNECTING
+      );
+      expect(reconnecting).toHaveLength(1);
+      expect(reconnecting[0][1]).toEqual({
+        callId: mockCallId,
+        participantId: mockUserId,
+        attempt: 1,
+      });
+    });
+
+    it('émet call:reconnected quand le média revient après un stall', async () => {
+      await driveIce(['connected', 'disconnected', 'connected']);
+
+      expect(mockEmit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_RECONNECTED, {
+        callId: mockCallId,
+        participantId: mockUserId,
+      });
+    });
+
+    it('un flottement ICE pré-connexion n’est jamais un stall', async () => {
+      await driveIce(['checking', 'disconnected']);
+
+      const reconnectEvents = mockEmit.mock.calls.filter(
+        ([event]) =>
+          event === CLIENT_EVENTS.CALL_RECONNECTING || event === CLIENT_EVENTS.CALL_RECONNECTED
+      );
+      expect(reconnectEvents).toHaveLength(0);
+    });
+
+    it('chaque cycle de stall porte une tentative incrémentée', async () => {
+      await driveIce(['connected', 'disconnected', 'connected', 'failed']);
+
+      const attempts = mockEmit.mock.calls
+        .filter(([event]) => event === CLIENT_EVENTS.CALL_RECONNECTING)
+        .map(([, payload]) => (payload as { attempt: number }).attempt);
+      expect(attempts).toEqual([1, 2]);
+    });
+
     it('applies a refreshed ICE server list to the store and every existing peer connection, then reschedules using the real TTL', async () => {
       jest.useFakeTimers();
       const { result } = renderHook(() =>

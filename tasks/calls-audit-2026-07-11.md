@@ -79,6 +79,13 @@
 > Ended(connectionLost) + emitEnd + teardown coordinator, même devoir que
 > hangUp : sans ça le pair restait en appel zombie). Fenêtre totale bornée
 > ~30 s au lieu de « Reconnexion… » à vie.
+> Signaux de reconnexion web : le web AVAIT le restart SOTA (grace timer +
+> restartIce dans webrtc-service) mais n'émettait JAMAIS
+> call:reconnecting/reconnected — le serveur ignorait le restart (statut
+> `active` pendant le stall, analytics aveugle, cleanup non suspendu).
+> use-webrtc-p2p émet désormais aux vrais edges mid-call (jamais en
+> pré-connexion), attempt incrémenté par cycle, reset au cleanup. Les 3
+> plateformes tiennent le serveur informé de leurs reconnexions.
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
