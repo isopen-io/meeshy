@@ -26,8 +26,9 @@ class IncomingCallRingStore @Inject constructor() {
 
     /**
      * Route one FCM `data` map against the live ring. On [IncomingCallPushRoute.Ring]
-     * the returned ring is adopted as the new live ring; every other outcome leaves
-     * it untouched.
+     * and [IncomingCallPushRoute.StopRing] the returned ring is adopted as the new
+     * live ring (a stop records the dead id so a late-delivered original ring push
+     * stays silent); every other outcome leaves it untouched.
      */
     fun route(
         data: Map<String, String>,
@@ -41,11 +42,11 @@ class IncomingCallRingStore @Inject constructor() {
             seen = seen,
             selfUserId = selfUserId,
         )
-        val route = IncomingCallPushRouter.route(data, context)
-        if (route is IncomingCallPushRoute.Ring) {
-            seen = route.updatedSeen
+        when (val route = IncomingCallPushRouter.route(data, context)) {
+            is IncomingCallPushRoute.Ring -> route.also { seen = it.updatedSeen }
+            is IncomingCallPushRoute.StopRing -> route.also { seen = it.updatedSeen }
+            else -> route
         }
-        route
     }
 
     /**
