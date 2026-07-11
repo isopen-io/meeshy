@@ -124,6 +124,13 @@ FOND VERROUILLÉS sur les lanes (badge cadenas, un fond couvre toute la slide
 — hint dans l'inspecteur, désactiver « Fond » libère la fenêtre) ; filmstrip
 vidéo auto-extrait (VideoFilmstrip, cache).
 
+VAGUE INSPECTORS 2 (2026-07-11, `d7f132a6d`, retours user) : fades → CHIPS
+d'animation entrée/sortie (off/0.3/0.5/1/2 s, icônes) ; TransitionInspector
+refait (titre lisible au lieu des UUID, X, durée avec valeur vive, easing
+ÉDITABLE 4 courbes via changeTransition(easing:)) ; RÈGLE PRODUIT câblée :
+loop = BACKGROUND UNIQUEMENT (supportsLoop(kind:isBackground:), Fond off ⇒
+loop off). Préview engine : AudioMixer ne boucle pas encore (reader OK) — noté.
+
 RESTES (différés, par priorité) :
 1. SnapGuideView visuel pendant drags (l'aimant + haptique marchent déjà).
 2. F4 édition ms start/durée au ClipInspector (port branche amazing-bell par contenu).
