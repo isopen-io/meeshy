@@ -4168,6 +4168,117 @@ final class CallManagerBusyFeedbackTests: XCTestCase {
     }
 }
 
+// MARK: - Rejoin Active Call (crash/reconnect recovery, user-requested 2026-07-11)
+
+/// Source-level guards for `rejoinActiveCall` — silently resuming a call the
+/// server still considers active after this device's own `CallManager`
+/// session was lost (app relaunch, crash). Not instantiable end-to-end in a
+/// unit test host (real WebRTC/CallKit dependencies), same constraint as
+/// `startCall`/`handleIncomingCallNotification` elsewhere in this file.
+@MainActor
+final class CallManagerRejoinActiveCallTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func rejoinBody(_ source: String) -> String? {
+        guard let start = source.range(of: "func rejoinActiveCall(callId: String") else { return nil }
+        let end = source.range(of: "\n    // MARK: - VoIP Push Incoming Call", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_rejoinActiveCall_isDiscardableResultReturningBool() throws {
+        let source = try callManagerSource()
+        guard let declRange = source.range(of: "func rejoinActiveCall(callId: String") else {
+            XCTFail("rejoinActiveCall not found in CallManager.swift"); return
+        }
+        let precedingDistance = min(80, source.distance(from: source.startIndex, to: declRange.lowerBound))
+        let precedingStart = source.index(declRange.lowerBound, offsetBy: -precedingDistance)
+        let precedingLines = source[precedingStart..<declRange.lowerBound]
+        XCTAssertTrue(
+            precedingLines.contains("@discardableResult"),
+            "rejoinActiveCall must be @discardableResult, matching startCall's convention."
+        )
+    }
+
+    func test_rejoinActiveCall_guardsOnIdleState() throws {
+        let source = try callManagerSource()
+        guard let body = rejoinBody(source) else {
+            XCTFail("rejoinActiveCall body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard callState == .idle else {"),
+            "rejoinActiveCall must only proceed from .idle — a device already in a call " +
+            "(including one already rejoining) must not be knocked into a new negotiation."
+        )
+        XCTAssertTrue(
+            body.contains("return false"),
+            "rejoinActiveCall must return false when the idle guard rejects the call."
+        )
+    }
+
+    func test_rejoinActiveCall_setsConnectingState_notRinging() throws {
+        // The call was already accepted once (by this device or the peer)
+        // before the session was lost — there's nothing left to ring/accept,
+        // only media to resume. Going through .ringing would show the wrong
+        // UI (incoming-call accept/reject) for a call already in progress.
+        let source = try callManagerSource()
+        guard let body = rejoinBody(source) else {
+            XCTFail("rejoinActiveCall body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("callState = .connecting"),
+            "rejoinActiveCall must set callState directly to .connecting."
+        )
+        XCTAssertFalse(
+            body.contains("callState = .ringing"),
+            "rejoinActiveCall must never set .ringing — this isn't a new incoming call to accept."
+        )
+    }
+
+    func test_rejoinActiveCall_neverTouchesCallKit() throws {
+        // This isn't a new system-level call event (CallKit already knows
+        // about this call from whenever it was originally answered) — no
+        // reportNewIncomingCall/CXStartCallAction transaction.
+        let source = try callManagerSource()
+        guard let body = rejoinBody(source) else {
+            XCTFail("rejoinActiveCall body not found"); return
+        }
+        XCTAssertFalse(
+            body.contains("callProvider.report") || body.contains("CXStartCallAction") || body.contains("callController.request"),
+            "rejoinActiveCall must not start any CallKit transaction."
+        )
+    }
+
+    func test_rejoinActiveCall_reusesExistingJoinAndMediaPipeline() throws {
+        let source = try callManagerSource()
+        guard let body = rejoinBody(source) else {
+            XCTFail("rejoinActiveCall body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("joinCallRoomReliably(callId: callId)"),
+            "rejoinActiveCall must reuse joinCallRoomReliably — the same ACK-aware call:join " +
+            "path already used for incoming calls and VoIP cold starts."
+        )
+        XCTAssertTrue(
+            body.contains("performLocalMediaStart(isVideo: isVideo, callId: callId)"),
+            "rejoinActiveCall must reuse performLocalMediaStart to bring local media up."
+        )
+        XCTAssertTrue(
+            body.contains("applyNegotiationRole()"),
+            "rejoinActiveCall must call applyNegotiationRole() to reset the negotiation epoch."
+        )
+    }
+}
+
 // MARK: - Socket Reconnect Media Re-Sync (§P1-30 / audit P1-30)
 
 /// Source-level guards verifying that after a Socket.IO reconnect, the

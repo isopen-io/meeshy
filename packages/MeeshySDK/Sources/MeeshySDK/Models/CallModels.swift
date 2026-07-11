@@ -147,3 +147,65 @@ public extension APICallRecord {
         return formatter.string(fromByteCount: Int64(total))
     }
 }
+
+// MARK: - Active Call (crash/reconnect recovery)
+
+/// Minimal user reference embedded in `ActiveCallParticipant`. Mirrors the
+/// gateway's `userMinimalSchema` (packages/shared/types/api-schemas.ts) —
+/// intentionally narrower than `CallHistoryPeer` (no phoneNumber/isOnline,
+/// which the call-history route's own serializer adds but the raw call
+/// session schema does not).
+public struct ActiveCallParticipantUser: Codable, Sendable, Equatable {
+    public let id: String
+    public let username: String
+    public let displayName: String?
+    public let avatar: String?
+
+    public init(id: String, username: String, displayName: String? = nil, avatar: String? = nil) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+    }
+}
+
+public struct ActiveCallParticipant: Codable, Sendable, Equatable {
+    public let userId: String
+    public let user: ActiveCallParticipantUser?
+
+    public init(userId: String, user: ActiveCallParticipantUser? = nil) {
+        self.userId = userId
+        self.user = user
+    }
+}
+
+/// A currently-active (not yet ended) call session, as returned by
+/// `GET /conversations/:conversationId/active-call` and `GET /calls/active`
+/// (mirrors `callSessionSchema`, packages/shared/types/api-schemas.ts). Used
+/// to reconcile a device's local call state with the server's after the
+/// device's own `CallManager` session was lost (app relaunch, crash) while
+/// the call itself is still ongoing — see `ActiveCallService`.
+public struct ActiveCallSession: Codable, Identifiable, Sendable, Equatable {
+    public let id: String
+    public let conversationId: String
+    public let mode: String
+    public let status: String
+    public let participants: [ActiveCallParticipant]
+
+    public init(id: String, conversationId: String, mode: String, status: String, participants: [ActiveCallParticipant]) {
+        self.id = id
+        self.conversationId = conversationId
+        self.mode = mode
+        self.status = status
+        self.participants = participants
+    }
+
+    public var isVideo: Bool { mode == "video" }
+
+    /// The other participant in a direct call — the first entry whose
+    /// `userId` isn't `currentUserId`. `nil` for group calls or if the
+    /// participant list hasn't been populated.
+    public func remoteParticipant(currentUserId: String) -> ActiveCallParticipant? {
+        participants.first { $0.userId != currentUserId }
+    }
+}

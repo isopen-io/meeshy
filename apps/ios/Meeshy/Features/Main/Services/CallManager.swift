@@ -986,6 +986,67 @@ final class CallManager: ObservableObject {
         return true
     }
 
+    // MARK: - Rejoin Active Call (crash/reconnect recovery)
+
+    /// Silently rejoins a call the SERVER still considers active but this
+    /// device's own `CallManager` session lost track of (app relaunch after
+    /// a crash, force-quit, etc.) — see `ActiveCallService` (SDK) and
+    /// `ConversationView+Header.swift`, which detects this via
+    /// `GET /conversations/:id/active-call` and drives this method when the
+    /// user taps the header's "rejoin" indicator.
+    ///
+    /// Unlike `startCall`/`handleIncomingCallNotification` this NEVER touches
+    /// CallKit and never shows a ringing UI — the call was already accepted
+    /// once (by this device or the peer) before the session was lost, so
+    /// there's nothing left to ring/accept, only WebRTC media to resume.
+    /// Goes straight to `.connecting` and reuses the SAME `call:join` +
+    /// buffered-offer/rehydrate path the gateway already serves for
+    /// reconnects (`CallEventsHandler-join-buffered-offer`/`-rehydrate`
+    /// server-side tests) — no new signaling contract needed.
+    @discardableResult
+    func rejoinActiveCall(callId: String, conversationId: String, remoteUserId: String, remoteUsername: String, isVideo: Bool) -> Bool {
+        resetEndedStateForNewCall()
+        guard callState == .idle else {
+            Logger.calls.warning("Cannot rejoin call: already in state \(String(describing: self.callState))")
+            return false
+        }
+
+        analyticsCallInitiatedDate = Date()
+        currentCallId = callId
+        self.remoteUserId = remoteUserId
+        self.remoteUsername = remoteUsername
+        self.conversationId = conversationId
+        isVideoEnabled = isVideo
+        isMuted = false
+        isSpeaker = isVideo
+        displayMode = .fullScreen
+        callState = .connecting
+
+        // iceServers: nil — a rejoin has no incoming push/ACK payload to source
+        // them from. armTurnCredentialsAfterConfigure detects the empty case
+        // and fetches real TURN credentials over the socket on its own
+        // (requestFreshTurnCredentials → emitRequestIceServers), same as every
+        // other path that lacks a payload-embedded ICE server list.
+        webRTCService.configure(isVideo: isVideo, iceServers: nil)
+        armTurnCredentialsAfterConfigure(callId: callId, iceServers: nil)
+        applyNegotiationRole()
+        configureAudioSession()
+        startReliabilityMonitor()
+
+        joinCallRoomReliably(callId: callId)
+        Logger.calls.info("Rejoining active call — reliable call:join dispatched: \(callId)")
+
+        localMediaTask?.cancel()
+        localMediaTask = Task { [weak self] in
+            guard let self else { return }
+            await self.performLocalMediaStart(isVideo: isVideo, callId: callId)
+            Logger.calls.info("Rejoin — local media ready: \(callId)")
+        }
+
+        HapticFeedback.medium()
+        return true
+    }
+
     // MARK: - VoIP Push Incoming Call
 
     func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
