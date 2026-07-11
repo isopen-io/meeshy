@@ -29,13 +29,15 @@ export type ResolveUserLanguageOpts = {
  *   4. deviceLocale             (locale appareil — Prisme étendu 2026-05-26)
  *   5. 'fr'                     (fallback ultime)
  *
- * Les préférences in-app sont lowercased à la lecture — parité stricte avec
- * {@link resolveUserLanguagesOrdered}. `isSupportedLanguage` valide les codes de
- * manière insensible à la casse (il lowercase avant lookup) mais ne les
- * transforme pas : un `systemLanguage: 'EN'` est donc accepté et persisté
- * verbatim. Sans ce lowercase, `meta.userLanguage` renverrait `'EN'` alors que
- * le pipeline de traduction stocke ses cibles en minuscules (`'en'`) — le client
- * manquerait la traduction et retomberait sur l'original (violation du Prisme).
+ * Les préférences in-app sont normalisées à la lecture via
+ * {@link normalizeInAppLanguage} — parité stricte avec le niveau `deviceLocale`
+ * et avec {@link resolveUserLanguagesOrdered}. Les prefs sont persistées verbatim
+ * (`z.string().optional()`, aucune normalisation à l'écriture) : un
+ * `systemLanguage: 'EN'` devient `'en'`, et un `'pt-BR'` (produit par le web ou
+ * iOS) devient `'pt'`. Sans cette normalisation, `meta.userLanguage` renverrait
+ * `'EN'`/`'pt-br'` alors que le pipeline de traduction stocke ses cibles en
+ * minuscules 2-lettres (`'en'`, `'pt'`) — le client manquerait la traduction et
+ * retomberait sur l'original (violation du Prisme).
  *
  * L'option `deviceLocale` est facultative — les call sites legacy qui passent
  * un seul argument restent valides. `normalizeLanguageCode` retourne déjà un
@@ -51,12 +53,32 @@ export function resolveUserLanguage(
   },
   opts: ResolveUserLanguageOpts = {}
 ): string {
-  if (user.systemLanguage) return user.systemLanguage.toLowerCase();
-  if (user.regionalLanguage) return user.regionalLanguage.toLowerCase();
-  if (user.customDestinationLanguage) return user.customDestinationLanguage.toLowerCase();
+  if (user.systemLanguage) return normalizeInAppLanguage(user.systemLanguage);
+  if (user.regionalLanguage) return normalizeInAppLanguage(user.regionalLanguage);
+  if (user.customDestinationLanguage) return normalizeInAppLanguage(user.customDestinationLanguage);
   const normalized = normalizeLanguageCode(opts.deviceLocale);
   if (normalized) return normalized;
   return 'fr';
+}
+
+/**
+ * Normalise un niveau de préférence in-app avec parité stricte vis-à-vis du
+ * niveau `deviceLocale`. Les prefs in-app sont persistées verbatim
+ * (`z.string().optional()`, aucune normalisation à l'écriture), donc une valeur
+ * BCP-47 (`'pt-BR'`, `'en-US'`, `'fr_FR'`) produite par le web
+ * (`Accept-Language`) ou iOS (`Locale.current.identifier`) peut atteindre le
+ * resolver. Un simple `.toLowerCase()` donnerait `'pt-br'`, qui ne matche jamais
+ * les clés de traduction 2-lettres lowercase (`'pt'`) — violation du Prisme,
+ * exactement le bug que {@link normalizeLanguageCode} corrige déjà côté
+ * deviceLocale.
+ *
+ * Fallback `.toLowerCase()` : zéro régression pour les codes que
+ * `normalizeLanguageCode` ne sait pas canoniser (ISO 639-3 inconnu irréductible)
+ * — ils restent lowercased comme avant plutôt que d'être perdus (`undefined`
+ * ferait chuter au niveau suivant, changement de comportement non désiré).
+ */
+function normalizeInAppLanguage(code: string): string {
+  return normalizeLanguageCode(code) ?? code.toLowerCase();
 }
 
 /**
@@ -80,9 +102,9 @@ export function resolveUserLanguagesOrdered(
   opts: ResolveUserLanguageOpts = {}
 ): string[] {
   const candidates: Array<string | null | undefined> = [
-    user.systemLanguage,
-    user.regionalLanguage,
-    user.customDestinationLanguage,
+    user.systemLanguage ? normalizeInAppLanguage(user.systemLanguage) : undefined,
+    user.regionalLanguage ? normalizeInAppLanguage(user.regionalLanguage) : undefined,
+    user.customDestinationLanguage ? normalizeInAppLanguage(user.customDestinationLanguage) : undefined,
     normalizeLanguageCode(opts.deviceLocale),
   ];
   const seen = new Set<string>();

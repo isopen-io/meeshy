@@ -71,6 +71,37 @@ describe('resolveUserLanguage', () => {
   it('should lowercase a mixed-case customDestinationLanguage', () => {
     expect(resolveUserLanguage({ customDestinationLanguage: 'De' })).toBe('de');
   });
+
+  // In-app prefs persist verbatim (`z.string().optional()`, no normalization on
+  // write), so a BCP-47 value like 'pt-BR' or 'en-US' — which the web
+  // Accept-Language / iOS locale paths can produce — reaches the resolver. A
+  // bare `.toLowerCase()` yields 'pt-br'/'en-us', which never matches the
+  // lowercase 2-letter translation keys ('pt'/'en') → Prisme violation. In-app
+  // tiers MUST normalize identically to the deviceLocale tier.
+  it('should normalize a BCP-47 systemLanguage (pt-BR → pt)', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'pt-BR' })).toBe('pt');
+  });
+
+  it('should normalize a BCP-47 regionalLanguage (en-US → en)', () => {
+    expect(resolveUserLanguage({ regionalLanguage: 'en-US' })).toBe('en');
+  });
+
+  it('should normalize an underscore-form customDestinationLanguage (fr_FR → fr)', () => {
+    expect(resolveUserLanguage({ customDestinationLanguage: 'fr_FR' })).toBe('fr');
+  });
+
+  it('resolves a BCP-47 in-app pref identically to the same value as deviceLocale', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'pt-BR' })).toBe(
+      resolveUserLanguage({}, { deviceLocale: 'pt-BR' })
+    );
+  });
+
+  // Zero-regression guard: a value normalizeLanguageCode cannot canonicalize
+  // (unknown irreducible ISO 639-3) must still fall back to lowercase, exactly
+  // as before — never dropped to the next tier.
+  it('should preserve an unnormalizable in-app pref via lowercase fallback', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'ZZZ' })).toBe('zzz');
+  });
 });
 
 describe('generateConversationIdentifier', () => {
