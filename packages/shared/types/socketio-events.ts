@@ -407,6 +407,13 @@ export const CLIENT_EVENTS = {
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
   USER_STATUS: 'user:status',
+  /**
+   * Transition foreground/background du device — le gateway s'en sert pour
+   * router la sonnerie d'appel (socket au premier plan = event socket,
+   * backgroundé = push). Émis par iOS (MessageSocketManager) et écouté dans
+   * CallEventsHandler ; était un literal hors contrat (audit 2026-07-11 #6).
+   */
+  PRESENCE_APP_STATE: 'presence:app-state',
   AUTHENTICATE: 'authenticate',
   REQUEST_TRANSLATION: 'translation:request',
   REACTION_ADD: 'reaction:add',
@@ -1648,6 +1655,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveClientEvent) => void;
   [CLIENT_EVENTS.CALL_CHECK_ACTIVE]: () => void;
   [CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS]: (data: CallRequestIceServersEvent) => void;
+  [CLIENT_EVENTS.PRESENCE_APP_STATE]: (data: { foreground?: boolean }) => void;
 
   // Location sharing
   [CLIENT_EVENTS.LOCATION_SHARE]: (data: LocationShareData, callback?: (response: SocketIOResponse<LocationSharedEventData>) => void) => void;

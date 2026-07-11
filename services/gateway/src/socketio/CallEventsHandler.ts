@@ -17,7 +17,7 @@ import { NotificationService } from '../services/notifications/NotificationServi
 import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
-import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { ROOMS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
@@ -1242,7 +1242,7 @@ export class CallEventsHandler {
     // event does). Impact per-event is minimal (flips a socket-local flag, no
     // DB write, no broadcast) but a flooding client should still be bounded
     // like every other handler here, not left as the one exception.
-    socket.on('presence:app-state', async (data: { foreground?: boolean }) => {
+    socket.on(CLIENT_EVENTS.PRESENCE_APP_STATE, async (data: { foreground?: boolean }) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
@@ -1275,7 +1275,7 @@ export class CallEventsHandler {
     // it"; "I open the Mac app → the banner shows"). Scoped to the user's
     // conversations, the ringing window (<60s), calls they did NOT initiate, and only
     // if they haven't already left. The client dedups by callId.
-    socket.on('call:check-active', async () => {
+    socket.on(CLIENT_EVENTS.CALL_CHECK_ACTIVE, async () => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
@@ -2102,7 +2102,7 @@ export class CallEventsHandler {
      * call:force-leave - Force cleanup of any active calls in a conversation
      * This is used when "call already active" error occurs to cleanup stale calls
      */
-    socket.on('call:force-leave', async (data: { conversationId: string }) => {
+    socket.on(CLIENT_EVENTS.CALL_FORCE_LEAVE, async (data: { conversationId: string }) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
