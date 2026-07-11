@@ -159,7 +159,12 @@ ffmpeg-python==0.2.0
 # SPEAKER DIARIZATION - Identification des locuteurs
 # ─────────────────────────────────────────────────────────────────────────────────
 # Priorité 1: pyannote.audio (précision ~95%, nécessite HF_TOKEN)
-pyannote.audio==4.0.7  # ✅ ACTIVÉ - Compatible torch 2.6.0 (4.0+ exige torch>=2.8.0)
+# NE PAS BUMPER vers 4.x : pyannote-audio>=4.0 → pyannote-core>=6.0.1 → numpy>=2.0
+# et torch>=2.8.0, incompatibles avec les pins numpy<1.24 (ESPnet 202412) et
+# torch==2.6.0 (Dockerfile). Le bump Dependabot #1674 (4.0.7) a rendu le build
+# Docker translator insoluble ("your requirements are unsatisfiable") — revalider
+# via `uv pip compile requirements.txt --python-version 3.11` avant tout bump.
+pyannote.audio==3.4.0  # ✅ ACTIVÉ - Compatible torch 2.6.0 (4.0+ exige torch>=2.8.0)
 
 # Priorité 2: SpeechBrain - Alternative à pyannote (SANS token HuggingFace requis)
 speechbrain==1.1.0  # ✅ ACTIVÉ - Fallback si pyannote indisponible
