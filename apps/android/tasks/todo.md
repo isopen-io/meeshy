@@ -4,7 +4,20 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Translation §D) — slice `feed-post-language-strip` ✅
+## This loop (Phase: Translation §D) — slice `feed-post-language-switch` ✅
+**Interactive per-post language switch** — the read-only feed flag strip is now **tappable** (tap a chip →
+switch the post's displayed language; tap the active chip → revert to the default Prisme resolution), mirroring
+the chat bubble. SSOT: the pure `LanguageFlagTapResolver` was **relocated `:feature:chat` → `:sdk-ui`** so chat
++ feed share one flag-tap rule. `FeedPostBuilder` gained override-aware `build(..., activeLanguageCode)` +
+`resolveActiveCode(post, prefs, override)` (pure, tested) driving content + strip highlight; `FeedViewModel`
+holds a per-post `activeLanguageOverride` StateFlow kept **outside** the cache stream (choice survives every
+refresh — instant-app) + `onPostFlagTap`; `FeedScreen` chips are `.clickable`. +19 tests (+8 `FeedPostBuilderTest`,
++5 `FeedViewModelTest`, 10 relocated `LanguageFlagTapResolverTest`); `:sdk-ui`+`:feature:feed`+`:feature:chat`
+`testDebugUnitTest` + `:app:assembleDebug` green, diff = `apps/android` only.
+Next: interactive `includeTranslatable` arm for posts (tap absent language → on-demand request, needs a
+post-translation path), the per-story timeline strip, or persisted translations across cold start (§D offline Prisme).
+
+## Prior loop (Phase: Translation §D) — slice `feed-post-language-strip` ✅
 **Per-post Prisme language flag strip** — the feed sibling of the chat `MessageLanguageStrip`. New pure
 `:sdk-ui` `PostLanguageStrip.build(...) → List<LanguageChip>` adapts a post's language-keyed
 `Map<code, ApiPostTranslationEntry>` into `LanguageResolver.TranslationLike` rows and **delegates to

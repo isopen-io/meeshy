@@ -2,7 +2,50 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+
+> On 2026-07-11 **interactive per-post language switching** landed (slice `feed-post-language-switch`,
+> Translation §D — feature-parity.md "Per-post and per-story translation" interactive-switch arm now shipped).
+> The 2026-07-10 `feed-post-language-strip` slice rendered a **read-only** flag strip under feed cards; the chat
+> bubble's strip was already tappable (switch/revert the displayed language). This slice brings that gesture to
+> posts. **(1) SSOT relocation** — the pure `LanguageFlagTapResolver` moved `:feature:chat`
+> (`me.meeshy.app.chat.translation`) → `:sdk-ui` (`me.meeshy.ui.component.bubble`), made `public`: it is a
+> stateless rule engine (opaque params, no shared singletons) and belongs beside `MessageLanguageStrip` as a
+> building block shared by every language-strip surface — so chat **and** feed decode one flag-tap rule, zero
+> re-implementation. `ChatViewModel`'s import updated; its resolver test moved to `:sdk-ui` (10 tests, still
+> green). **(2) Pure core** — `FeedPostBuilder.build` gained `activeLanguageCode: String?` and a shared
+> `resolveActiveCode(post, prefs, override) → String?` (the post sibling of the chat bubble's active-code
+> computation): the override wins when it names a language the post carries (a translation or the original),
+> else the default Prisme resolution (preferred translation, or original when none). The builder projects both
+> the displayed `content` and the strip's `activeCodeOverride`/`showingOriginal` off that one code, so the text
+> and the highlighted chip can never disagree. Read-only strip (`includeTranslatable = false`) → every visible
+> chip has content → a tap is always Activate/Revert, never RequestTranslation. **(3) Wiring** — `FeedViewModel`
+> holds a per-post `activeLanguageOverride: MutableStateFlow<Map<postId,code>>` folded into the feed `combine`
+> (4-arg now) so a switch re-projects live; it is kept **outside** the cache stream so the viewer's choice
+> **survives every background refresh / re-emit** (instant-app: no reset on sync). `onPostFlagTap(postId, code)`
+> resolves against `latestPosts` + the shared resolver and applies Activate → set / Revert → clear on the
+> override map; unknown post or blank code is inert. **(4) UI** (glue, coverage-exempt) — `FeedScreen`'s
+> `PostLanguageStripRow` chips are now `.clickable { onChipTap(chip.code) }`, threaded through `PostCard` to
+> `viewModel::onPostFlagTap`. **+19 tests**: `FeedPostBuilderTest` +8 (null-override → default / override
+> switches content+strip to another configured language / override → original shows original & highlights
+> original chip / override without content falls back to default / case-insensitive+trim override /
+> `resolveActiveCode` override-with-content-wins / falls-back-to-preferred / null → preferred / null-no-preferred
+> → original), `FeedViewModelTest` +5 (tap switches displayed language / tap active reverts / unknown post inert
+> / blank code inert / override survives a stream re-emission), `LanguageFlagTapResolverTest` 10 relocated
+> (unchanged, still green). **RED verified**: the new tests reference `activeLanguageCode`/`resolveActiveCode`/
+> `onPostFlagTap` absent on `main` (compile-RED); the switch/revert assertions fail against the read-only
+> pre-slice builder. `:sdk-ui` + `:feature:feed` + `:feature:chat` `testDebugUnitTest` → **BUILD SUCCESSFUL**;
+> `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer: **PASS** (diff `apps/android` only — a `:sdk-ui` resolver
+> relocation + `:feature:feed` builder/VM/screen, `:feature:chat` import-only, no production logic outside;
+> **SDK purity** — the resolver is a stateless building block with opaque params now correctly homed in `:sdk-ui`,
+> the *when-to-switch* orchestration (override map, "survive re-emit") stays in the feed VM; **SSOT** — one
+> `LanguageFlagTapResolver` + `resolveActiveCode` shared by chat & feed, reuses `PostLanguageStrip`/
+> `LanguageResolver`, no re-implementation; **UDF/instant-app** — immutable per-post override in state, cache-first
+> re-projection, choice survives refresh, no spinner; **colour/UX coherence** — accent-coherent tappable chips,
+> one coherent primary-language view (surpasses iOS's two-tier secondary panel), natural tap-to-switch/tap-to-revert
+> gesture; **no coverage floor lowered, no existing test weakened**). **Next:** the interactive `includeTranslatable`
+> arm for posts (tap a configured-but-absent language → on-demand request; needs a post-translation request path),
+> the per-story timeline language strip, or persisted translations across cold start (§D "offline Prisme").
 
 > On 2026-07-10 **the per-post Prisme language flag strip** landed (slice `feed-post-language-strip`,
 > Translation §D — feature-parity.md "Per-post and per-story translation" read-only flag-strip arm now

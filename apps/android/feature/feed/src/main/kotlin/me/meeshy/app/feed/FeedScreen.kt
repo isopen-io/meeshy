@@ -132,6 +132,7 @@ fun FeedScreen(
                         PostCard(
                             post = post,
                             onLike = { viewModel.toggleLike(post.id) },
+                            onFlagTap = { code -> viewModel.onPostFlagTap(post.id, code) },
                             // Only reels open the full-screen reel overlay; regular
                             // posts have no detail screen yet, so tapping is inert.
                             onClick = { if (post.isReel) onPostClick(post.id) },
@@ -164,6 +165,7 @@ fun FeedScreen(
 private fun PostCard(
     post: FeedPostPresentation,
     onLike: () -> Unit,
+    onFlagTap: (String) -> Unit,
     onClick: () -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
@@ -229,7 +231,7 @@ private fun PostCard(
 
             if (post.languageStrip.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.xs))
-                PostLanguageStripRow(chips = post.languageStrip)
+                PostLanguageStripRow(chips = post.languageStrip, onChipTap = onFlagTap)
             }
 
             if (post.images.isNotEmpty()) {
@@ -280,7 +282,10 @@ private fun PostCard(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PostLanguageStripRow(chips: List<LanguageChip>) {
+private fun PostLanguageStripRow(
+    chips: List<LanguageChip>,
+    onChipTap: (String) -> Unit,
+) {
     FlowRow(
         verticalArrangement = Arrangement.Center,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
@@ -306,6 +311,7 @@ private fun PostLanguageStripRow(chips: List<LanguageChip>) {
                     .background(
                         if (chip.isActive) accent.copy(alpha = 0.16f) else Color.Transparent,
                     )
+                    .clickable { onChipTap(chip.code) }
                     .padding(horizontal = 6.dp, vertical = 2.dp)
                     .semantics(mergeDescendants = true) { contentDescription = label },
             ) {
