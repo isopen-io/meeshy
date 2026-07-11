@@ -177,6 +177,12 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
 }));
 
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
+  // Spread the real contract so CLIENT_EVENTS/SERVER_EVENTS stay in sync with the
+  // handler: once presence:app-state migrated from a string literal to
+  // CLIENT_EVENTS.PRESENCE_APP_STATE, a ROOMS-only mock left CLIENT_EVENTS
+  // undefined and setupCallEvents threw for every test under the full-suite run
+  // (the mock only applied when a sibling suite primed the module resolution).
+  ...(jest.requireActual('@meeshy/shared/types/socketio-events') as Record<string, unknown>),
   ROOMS: {
     call: (id: string) => `call:${id}`,
     conversation: (id: string) => `conversation:${id}`,
@@ -1273,8 +1279,8 @@ describe('CallEventsHandler', () => {
         expect(pushService.sendToUser).toHaveBeenCalledWith(
           expect.objectContaining({
             userId: USER_ID,
-            types: ['apns'],
-            platforms: ['ios'],
+            types: ['apns', 'fcm'],
+            platforms: ['ios', 'android'],
             payload: expect.objectContaining({
               silent: true,
               data: expect.objectContaining({ type: 'call_answered_elsewhere', callId: CALL_ID }),
@@ -1746,8 +1752,8 @@ describe('CallEventsHandler', () => {
         expect(pushService.sendToUser).toHaveBeenCalledWith(
           expect.objectContaining({
             userId: 'ringing-callee-id',
-            types: ['apns'],
-            platforms: ['ios'],
+            types: ['apns', 'fcm'],
+            platforms: ['ios', 'android'],
             payload: expect.objectContaining({
               silent: true,
               data: expect.objectContaining({ type: 'call_cancel', callId: CALL_ID }),
