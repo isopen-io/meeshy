@@ -241,8 +241,15 @@ Open `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`. Replac
             "captionsCycleButton must drive its 3-state cycle via advanceCaptionsMode() — " +
             "replaces the old transcriptionToggleButton/translationToggleButton pair."
         )
+        // The button's own doc comment (Step 3) NAMES .callToggleAccessibility(isToggle:
+        // true, ...) to explain why it's deliberately NOT used — strip comment lines
+        // before asserting, or that comment's own text trips a false positive here.
+        let code = body
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
         XCTAssertFalse(
-            body.contains(".callToggleAccessibility(isToggle: true"),
+            code.contains(".callToggleAccessibility(isToggle: true"),
             "captionsCycleButton is a 3-state cycle, not a binary toggle — it must not use " +
             "the .isToggle accessibility trait (that implies exactly 2 states)."
         )
@@ -260,7 +267,7 @@ with:
             XCTFail("CallView must define advanceCaptionsMode()")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 700, limitedBy: view.endIndex) ?? view.endIndex
+        let end = view.index(range.lowerBound, offsetBy: 900, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("case .translated:") && body.contains("callManager.toggleTranscription()"),
@@ -299,14 +306,25 @@ Replace `test_connectedView_showsTranslationButton_nextToTranscriptionToggle` wi
 
 - [ ] **Step 2: Run to verify it fails**
 
+Unlike Task 1 (a real compile-time failure), these 3 tests are **source-pattern** tests — they
+pass `"captionsCycleButton"`/`"advanceCaptionsMode"` as plain **strings** to `view.range(of:)`,
+not as Swift symbols. The app and test bundle compile fine either way; the failure is a
+**runtime test failure** (`guard let range = ... else { XCTFail }` fires), not a build failure:
+
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
-  -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build 2>&1 | tail -30
+  -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build 2>&1 | tail -10
+SIM=$(cat /private/tmp/claude-504/-Users-smpceo-Documents-v2-meeshy/c355ca3e-ed99-4888-959f-df7d0c24f3a5/scratchpad/tmp182_udid.txt)
+xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
+  -destination "platform=iOS Simulator,id=$SIM" \
+  -only-testing:MeeshyTests/CallHangupFastPathTests \
+  -derivedDataPath apps/ios/Build 2>&1 | tail -40
 ```
 
-Expected: **BUILD FAILED** — the test file now references `captionsCycleButton` and
-`advanceCaptionsMode()`, which don't exist in `CallView.swift` yet.
+Expected: **BUILD SUCCEEDED**, then the 3 rewritten tests **FAIL** (`captionsCycleButton` and
+`advanceCaptionsMode()` don't exist in `CallView.swift` yet, so each test's `range(of:)` guard
+hits its `XCTFail`).
 
 - [ ] **Step 3: Delete the old properties, add `captionsMode` + `advanceCaptionsMode()` + `captionsCycleButton`**
 
@@ -837,11 +855,32 @@ touched (any file outside the list in Tasks 1-4's commits, `project.pbxproj`, or
 in-progress work in this shared worktree; do not commit or modify it, per this session's
 standing git-safety rule.
 
+`apps/ios/CLAUDE.md` is explicit that `xcodegen generate`'s pbxproj churn from a local repro
+must never be committed wholesale — but Task 1 genuinely adds 2 real files to the project, so
+*some* pbxproj diff here is legitimate, unlike a pure verification repro. Check the diff's
+*content*, not just the file list, before staging it:
+
+```bash
+cd /Users/smpceo/Documents/v2_meeshy
+git diff apps/ios/Meeshy.xcodeproj/project.pbxproj
+```
+
+Expected: the diff contains **only** the new `CaptionsMode.swift` / `CaptionsModeTests.swift`
+file references (build file entries, group entries, source-list entries) plus the
+`CURRENT_PROJECT_VERSION` build-number bump. If it contains anything else — file references
+you don't recognize from Tasks 1-4, or a large-scale UUID/ordering reshuffle — **do not commit
+it**: another parallel session's in-progress files may have been swept in by the full
+regeneration. In that case, revert the pbxproj (`git checkout -- apps/ios/Meeshy.xcodeproj/project.pbxproj`)
+and skip staging it in Step 5 below — CI's own `xcodegen generate` (which runs before every
+iOS build, per `apps/ios/CLAUDE.md`) will pick up the 2 new files from `project.yml`'s glob
+without needing the committed pbxproj to already list them.
+
 - [ ] **Step 5: Commit (only the version-bump artifacts, if any)**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
-# Only run this if Step 4 showed pbxproj/Info.plist changes AND nothing else unexpected.
+# Only run this if Step 4's content check passed (pbxproj diff is clean) or if only the
+# Info.plist build-number bump is present with no pbxproj changes worth keeping.
 git add apps/ios/Meeshy.xcodeproj/project.pbxproj \
         apps/ios/Meeshy/Info.plist \
         apps/ios/MeeshyNotificationExtension/Info.plist \
