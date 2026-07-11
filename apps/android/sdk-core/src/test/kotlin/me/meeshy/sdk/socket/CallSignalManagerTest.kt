@@ -285,6 +285,18 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `emitScreenCaptureDetected sends callId, self participant id and capture flag`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitScreenCaptureDetected("call-9", participantId = "me", isCapturing = true)
+        verify { socket.emit("call:screen-capture-detected", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("me")
+        assertThat(payload.captured.getBoolean("isCapturing")).isTrue()
+    }
+
+    @Test
     fun `emitToggleAudio sends callId and enabled flag`() {
         val (managerAndSocket, _) = managerWithHandlers()
         val (manager, socket) = managerAndSocket

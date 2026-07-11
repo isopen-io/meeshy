@@ -55,14 +55,19 @@
 > fin de la fenêtre morte « setConfiguration sans re-gather » jusqu'à
 > l'escalation du watchdog. Hors `.reconnecting` le refresh reste inerte par
 > construction (#8).
-> **L'audit est CLOS.** Dettes mineures hors audit : emits Android
-> `call:screen-capture-detected`/`call:analytics` ; device-test 2 appareils
-> réels jamais fait.
+> **L'audit est CLOS.** Dettes mineures hors audit : emit Android
+> `call:analytics` ; device-test 2 appareils réels jamais fait.
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
 > gated au callId + cluster CallQualityOverlay, i18n 4 locales. Les 3
 > plateformes affichent les mêmes alertes distantes.
+> Émission Android (post-audit) : `call:screen-capture-detected` relayé —
+> seam `ScreenRecordingDetector` (Android 15 `addScreenRecordingCallback`,
+> permission normale DETECT_SCREEN_RECORDING, silencieux < API 35), collecte
+> dans la fenêtre média du VM, edge-only (le « not capturing » initial reste
+> muet, un stop n'est émis qu'après un start rapporté). Un Android 15 qui
+> screen-record alerte désormais son pair comme iOS.
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,

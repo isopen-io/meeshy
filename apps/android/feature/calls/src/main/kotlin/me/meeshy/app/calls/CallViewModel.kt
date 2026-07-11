@@ -63,6 +63,7 @@ class CallViewModel @Inject constructor(
     private val heartbeatTicker: CallHeartbeatTicker,
     private val appStatePresence: AppStatePresenceReporter,
     private val qualityResetTimer: CallQualityResetTimer,
+    private val screenRecordingDetector: ScreenRecordingDetector,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -95,6 +96,16 @@ class CallViewModel @Inject constructor(
 
     /** Emits `call:heartbeat` each [CallHeartbeatTicker] beat; alive only while media is flowing. */
     private var heartbeatJob: Job? = null
+
+    /** Relays local screen-recording edges to the gateway; alive only while media is flowing. */
+    private var screenCaptureReportJob: Job? = null
+
+    /**
+     * The last capture state actually SENT this call, or `null` when none was.
+     * Dedupes the detector's re-emissions AND keeps the initial "not capturing"
+     * silent — the peer assumes no capture by default, only edges are news.
+     */
+    private var lastReportedCapture: Boolean? = null
 
     /** At most one second incoming call awaiting an accept-swap / reject decision. */
     private var waiting: CallWaitingState = CallWaitingState.EMPTY
@@ -468,6 +479,7 @@ class CallViewModel @Inject constructor(
         syncTicker()
         syncQuality()
         syncHeartbeat()
+        syncScreenCaptureReport()
         syncPeerIndicators()
         publish()
     }
@@ -586,6 +598,47 @@ class CallViewModel @Inject constructor(
     private fun stopHeartbeat() {
         heartbeatJob?.cancel()
         heartbeatJob = null
+    }
+
+    /**
+     * Relays the OS "this app's screen is being recorded" signal to the gateway
+     * (`call:screen-capture-detected` → privacy alert on the peer) exactly while
+     * media is (or is being re-)established — the same window as the heartbeat.
+     * iOS parity: `UIScreen.capturedDidChangeNotification` relay.
+     */
+    private fun syncScreenCaptureReport() {
+        val clockRunning = callState is CallState.Connected || callState is CallState.Reconnecting
+        if (clockRunning) startScreenCaptureReportIfNeeded() else stopScreenCaptureReport()
+    }
+
+    private fun startScreenCaptureReportIfNeeded() {
+        if (screenCaptureReportJob != null) return
+        screenCaptureReportJob = viewModelScope.launch {
+            screenRecordingDetector.states.collect(::reportScreenCapture)
+        }
+    }
+
+    /**
+     * Edge-only relay: the initial "not capturing" is the peer's default
+     * assumption (nothing to say), a repeat changes nothing, and a stop is only
+     * news after a reported start. Inert before identification or without a
+     * session — the gateway schema requires a non-empty participantId (it
+     * resolves the real one server-side, anti-spoofing).
+     */
+    private fun reportScreenCapture(isCapturing: Boolean) {
+        if (isCapturing == lastReportedCapture) return
+        if (!isCapturing && lastReportedCapture == null) return
+        if (callId.isBlank()) return
+        val self = selfId
+        if (self.isBlank()) return
+        lastReportedCapture = isCapturing
+        signalManager.emitScreenCaptureDetected(callId, self, isCapturing)
+    }
+
+    private fun stopScreenCaptureReport() {
+        screenCaptureReportJob?.cancel()
+        screenCaptureReportJob = null
+        lastReportedCapture = null
     }
 
     private fun publish() {

@@ -281,6 +281,23 @@ class CallSignalManager @Inject constructor(
         )
 
     /**
+     * CET appareil a commencé/arrêté de capturer l'écran de l'appel — le gateway
+     * relaie `call:screen-capture-alert` au pair (signal privacy que les 3
+     * plateformes affichent désormais). Parité iOS `emitCallScreenCaptureDetected` :
+     * le schéma gateway exige un `participantId` non vide mais le serveur résout
+     * le SIEN depuis la socket authentifiée (anti-usurpation, fix 2026-07-03) —
+     * le userId local suffit.
+     */
+    fun emitScreenCaptureDetected(callId: String, participantId: String, isCapturing: Boolean) =
+        socketManager.emit(
+            "call:screen-capture-detected",
+            JSONObject()
+                .put("callId", callId)
+                .put("participantId", participantId)
+                .put("isCapturing", isCapturing),
+        )
+
+    /**
      * Liveness beat the gateway uses to detect a dead peer (heartbeat timeout →
      * zombie-call cleanup) instead of waiting for the multi-hour GC. Parity with
      * iOS `emitCallHeartbeat` — the gateway resolves the participant from the

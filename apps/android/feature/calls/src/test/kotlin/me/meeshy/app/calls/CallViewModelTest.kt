@@ -91,6 +91,12 @@ class CallViewModelTest {
         every { foreground } returns appForeground
     }
 
+    /** Test-driven local screen-recording signal: emit an edge the VM should relay. */
+    private val screenRecordingFlow = MutableSharedFlow<Boolean>(extraBufferCapacity = 16)
+    private val screenRecordingDetector = object : ScreenRecordingDetector {
+        override val states: Flow<Boolean> = screenRecordingFlow
+    }
+
     private val outgoingVideo =
         CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val incomingAudio =
@@ -142,7 +148,7 @@ class CallViewModelTest {
 
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence, qualityResetTimer,
+        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector,
     )
 
     @Test
@@ -530,6 +536,82 @@ class CallViewModelTest {
 
         verify(exactly = 0) { signalManager.emitBackgrounded(any(), any()) }
         verify(exactly = 0) { signalManager.emitForegrounded(any(), any()) }
+    }
+
+    // --- Local screen-recording relay: call:screen-capture-detected (dette audit) ---
+
+    private fun connectedIncomingAs(userId: String): CallViewModel {
+        every { sessionRepository.currentUser } returns MutableStateFlow(mockk { every { id } returns userId })
+        return connectedIncoming()
+    }
+
+    @Test
+    fun `a capture start during a connected call is relayed to the gateway`() = runTest {
+        connectedIncomingAs("me")
+
+        screenRecordingFlow.emit(true)
+
+        verify(exactly = 1) { signalManager.emitScreenCaptureDetected("call-9", "me", true) }
+    }
+
+    @Test
+    fun `the initial not-capturing state is never reported`() = runTest {
+        connectedIncomingAs("me")
+
+        screenRecordingFlow.emit(false)
+
+        verify(exactly = 0) { signalManager.emitScreenCaptureDetected(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a repeated capture state is edge-only and never re-emits`() = runTest {
+        connectedIncomingAs("me")
+
+        screenRecordingFlow.emit(true)
+        screenRecordingFlow.emit(true)
+
+        verify(exactly = 1) { signalManager.emitScreenCaptureDetected("call-9", "me", true) }
+    }
+
+    @Test
+    fun `a capture stop after a reported start is relayed`() = runTest {
+        connectedIncomingAs("me")
+        screenRecordingFlow.emit(true)
+
+        screenRecordingFlow.emit(false)
+
+        verify(exactly = 1) { signalManager.emitScreenCaptureDetected("call-9", "me", false) }
+    }
+
+    @Test
+    fun `a capture edge while still ringing reports nothing`() = runTest {
+        every { sessionRepository.currentUser } returns MutableStateFlow(mockk { every { id } returns "me" })
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        screenRecordingFlow.emit(true)
+
+        verify(exactly = 0) { signalManager.emitScreenCaptureDetected(any(), any(), any()) }
+    }
+
+    @Test
+    fun `capture edges stop being relayed once the call ends`() = runTest {
+        val vm = connectedIncomingAs("me")
+        screenRecordingFlow.emit(true)
+
+        vm.hangUp()
+        screenRecordingFlow.emit(false)
+
+        verify(exactly = 1) { signalManager.emitScreenCaptureDetected(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a capture edge without a signed-in user reports nothing`() = runTest {
+        connectedIncoming()
+
+        screenRecordingFlow.emit(true)
+
+        verify(exactly = 0) { signalManager.emitScreenCaptureDetected(any(), any(), any()) }
     }
 
     @Test
