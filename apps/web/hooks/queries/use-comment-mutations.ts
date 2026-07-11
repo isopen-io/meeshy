@@ -8,6 +8,7 @@ import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Post, PostComment } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData, InfiniteCommentsData } from './types';
 import { useAuthStore } from '@/stores/auth-store';
+import { decrementReactionSummary } from '@/lib/reaction-summary';
 
 const HEART_EMOJI = '❤️';
 const SOCKET_ACK_TIMEOUT_MS = 10_000;
@@ -274,10 +275,7 @@ export function useUnlikeCommentMutation() {
                 ? {
                     ...c,
                     likeCount: Math.max(0, c.likeCount - 1),
-                    reactionSummary: {
-                      ...c.reactionSummary,
-                      [emoji]: Math.max(0, ((c.reactionSummary ?? {})[emoji] ?? 1) - 1),
-                    },
+                    reactionSummary: decrementReactionSummary(c.reactionSummary, emoji),
                     currentUserReactions: (c.currentUserReactions ?? []).filter((e) => e !== emoji),
                   }
                 : c,

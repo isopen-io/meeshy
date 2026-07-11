@@ -358,6 +358,35 @@ describe('useUnlikePostMutation', () => {
       expect(data?.pages[0].data[0].likeCount).toBe(4);
     });
   });
+
+  it('removes the emoji from reactionSummary when its count drops to zero (no residual "0" chip)', async () => {
+    const qc = createQueryClient();
+    qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+      pages: [{
+        data: [{
+          ...mockPost,
+          likeCount: 1,
+          reactionSummary: { '❤️': 1 } as Record<string, number>,
+          currentUserReactions: ['❤️'] as string[],
+        }],
+        meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+      }],
+      pageParams: [undefined],
+    });
+    mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
+    });
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => { result.current.mutate({ postId: 'post-1', emoji: '❤️' }); });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: { reactionSummary: Record<string, number> }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].reactionSummary).toEqual({});
+      expect(data?.pages[0].data[0].reactionSummary['❤️']).toBeUndefined();
+    });
+  });
 });
 
 describe('useBookmarkPostMutation', () => {
