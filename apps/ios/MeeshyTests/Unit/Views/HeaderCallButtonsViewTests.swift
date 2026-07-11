@@ -109,6 +109,32 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         )
     }
 
+    func test_callGlyph_appliesAdaptiveGlassBeforeMeeshyTapTarget() throws {
+        // Regression guard (2026-07-11, user-reported "la taille du bouton
+        // d'appel doit être de la taille du bouton loupe de recherche"):
+        // `.adaptiveGlass(in: Circle(), ...)` sizes its Circle to the CURRENT
+        // view bounds — applying it AFTER `.meeshyTapTarget()` (which grows
+        // the frame to a 44×44 minimum) drew the glass circle at 44pt instead
+        // of the declared 28×28, even though both header buttons declared
+        // identical frame/font numbers. `.adaptiveGlass` must come first.
+        let source = try headerSource()
+        guard let range = source.range(of: "private func callGlyph(") else {
+            XCTFail("callGlyph not found"); return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+        guard let glassRange = body.range(of: ".adaptiveGlass(in: Circle()"),
+              let tapTargetRange = body.range(of: ".meeshyTapTarget()") else {
+            XCTFail("callGlyph must apply both .adaptiveGlass and .meeshyTapTarget"); return
+        }
+        XCTAssertTrue(
+            glassRange.lowerBound < tapTargetRange.lowerBound,
+            "callGlyph must apply .adaptiveGlass BEFORE .meeshyTapTarget — matching " +
+            "expandedHeaderSearchButton's order — so the visible glass circle stays 28×28 " +
+            "instead of ballooning to meeshyTapTarget's 44×44 minimum hit area."
+        )
+    }
+
     func test_body_reconcilesOnConversationChange() throws {
         let source = try headerSource()
         guard let range = source.range(of: "var body: some View {") else {
