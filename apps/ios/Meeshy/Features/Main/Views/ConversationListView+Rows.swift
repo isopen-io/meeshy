@@ -98,6 +98,18 @@ struct ConversationRowItem: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
+                    // Drag-to-section natif : press-and-hold = menu, press-and-
+                    // move = drag — la coordination est SYSTÈME avec le
+                    // `.contextMenu` natif. C'est le long-press CUSTOM du
+                    // fallback que `.onDrag` cassait (raison de son retrait,
+                    // 135af8f2) — il ne doit donc JAMAIS être attaché sur la
+                    // branche < iOS 26. La source ne publie que l'id ; les
+                    // headers (`SectionDropDelegate` → `handleDrop`) décident
+                    // via `ChipDropResolver`, même sémantique que le drop de
+                    // la chip du morph custom.
+                    .onDrag {
+                        NSItemProvider(object: conversation.id as NSString)
+                    }
                     .contextMenu {
                         nativeContextMenu
                     } preview: {

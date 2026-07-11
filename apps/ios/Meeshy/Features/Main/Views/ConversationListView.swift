@@ -17,17 +17,27 @@ final class SectionFrameRegistry {
 
 // MARK: - Section Drop Delegate
 
+/// Cible de drop d'un header de section pour le drag NATIF des lignes
+/// (`.onDrag`, chemin iOS 26). Le delegate ne fait que l'affordance et le
+/// forwarding — la DÉCISION (pin par drop sur « Épingles », « other » → "",
+/// no-op même section) appartient à `handleDrop` via `ChipDropResolver`,
+/// même sémantique que le drop de la chip du morph custom < iOS 26.
+/// « Épingles » est une cible VALIDE (parité chip : drop = épingler ; le
+/// retrait reste l'action dédiée du menu — jamais de dés-épinglage par drop).
 struct SectionDropDelegate: DropDelegate {
     let sectionId: String
     @Binding var dropTargetSection: String?
-    @Binding var draggingConversation: Conversation?
     let onDrop: ([NSItemProvider]) -> Bool
 
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.text])
+    }
+
     func dropEntered(info: DropInfo) {
-        guard sectionId != "pinned" else { return }
         withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
             dropTargetSection = sectionId
         }
+        HapticFeedback.light()
     }
 
     func dropExited(info: DropInfo) {
@@ -39,20 +49,11 @@ struct SectionDropDelegate: DropDelegate {
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        guard sectionId != "pinned" else {
-            return DropProposal(operation: .forbidden)
-        }
-        return DropProposal(operation: .move)
+        DropProposal(operation: .move)
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        guard sectionId != "pinned" else { return false }
-        let result = onDrop(info.itemProviders(for: [.text]))
-        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-            dropTargetSection = nil
-            draggingConversation = nil
-        }
-        return result
+        onDrop(info.itemProviders(for: [.text]))
     }
 }
 
@@ -202,12 +203,14 @@ struct ConversationListView: View {
     @State var renameTarget: Conversation? = nil
     @State var renameText: String = ""
 
-    // Drag & Drop state — infra DORMANTE depuis le retrait de `.onDrag`
-    // (135af8f2 : il capturait le long-press du menu custom). Conservée comme
-    // point de reconnexion (poignée dédiée / mode édition futur) : le
-    // `SectionDropDelegate` + `handleDrop` restent câblés sur les sections,
-    // coût runtime nul tant que rien ne pose `draggingConversation`.
-    // Le déplacement utilisateur passe par « Déplacer vers » dans le menu.
+    // Drag & Drop : le `.onDrag` natif est RÉACTIVÉ sur le chemin iOS 26
+    // (2026-07-11) — il coexiste avec le `.contextMenu` système ; c'était le
+    // long-press CUSTOM du fallback qu'il cassait (135af8f2), il reste donc
+    // absent de la branche < iOS 26 (qui garde le morph chip de l'overlay).
+    // L'id voyage dans le NSItemProvider : `draggingConversation` n'est plus
+    // posé par personne (un drag annulé ne laisse aucun état) — conservé
+    // uniquement pour le plumbing `isDragging` des rows (poignée dédiée /
+    // mode édition futur).
     @State private var draggingConversation: Conversation? = nil
     /// Section surlignée comme cible de drop. Alimenté par le morph drag de
     /// l'overlay (chip sous le doigt — voir `previewCollapseGesture`,
@@ -308,7 +311,6 @@ struct ConversationListView: View {
             .onDrop(of: [.text], delegate: SectionDropDelegate(
                 sectionId: group.section.id,
                 dropTargetSection: $dropTargetSection,
-                draggingConversation: $draggingConversation,
                 onDrop: { handleDrop(to: group.section.id, providers: $0) }
             ))
         }
@@ -1033,18 +1035,39 @@ struct ConversationListView: View {
     // See ConversationListView+Overlays.swift for conversationContextMenuOverlay
 
     // MARK: - Handle Drop
+    /// Drop du drag NATIF (`.onDrag`, chemin iOS 26) sur un header de
+    /// section. L'id de la conversation voyage dans le NSItemProvider (pas
+    /// d'état de drag à poser/purger : un drag annulé ne laisse rien
+    /// derrière). Décision via `ChipDropResolver` — MÊME sémantique que le
+    /// drop de la chip du morph custom : « Épingles » épingle (jamais de
+    /// dés-épinglage par drop), « other » → sectionId vide, no-op même
+    /// section.
     private func handleDrop(to sectionId: String, providers: [NSItemProvider]) -> Bool {
-        guard sectionId != "pinned" else { return false }
-        guard let dragging = draggingConversation else { return false }
-
-        conversationViewModel.moveToSection(conversationId: dragging.id, sectionId: sectionId)
-        HapticFeedback.success()
-
+        guard let provider = providers.first else { return false }
+        _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+            guard let conversationId = object as? String else { return }
+            Task { @MainActor in
+                guard let conversation = conversationViewModel.conversations
+                    .first(where: { $0.id == conversationId }) else { return }
+                switch ChipDropResolver.action(
+                    droppedOn: sectionId,
+                    isPinned: conversation.userState.isPinned,
+                    currentSectionId: conversation.userState.sectionId ?? ""
+                ) {
+                case .none:
+                    return
+                case .pin:
+                    HapticFeedback.success()
+                    await conversationViewModel.togglePin(for: conversation.id)
+                case .move(let targetId):
+                    HapticFeedback.success()
+                    conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: targetId)
+                }
+            }
+        }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            draggingConversation = nil
             dropTargetSection = nil
         }
-
         return true
     }
 

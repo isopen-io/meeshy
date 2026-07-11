@@ -182,6 +182,34 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
+    /// iOS 26 (menu natif) : le déplacement par GLISSER doit exister via le
+    /// `.onDrag` natif (il coexiste avec le `.contextMenu` système — c'était
+    /// le long-press CUSTOM du fallback qu'il cassait), et la décision du
+    /// drop doit passer par `ChipDropResolver` — le MÊME résolveur que le
+    /// drop de la chip du morph custom (SSOT : pin par drop, « other » → "",
+    /// no-op même section).
+    func test_nativeDragToSection_existsAndRoutesThroughChipDropResolver() throws {
+        let rowsSource = try source("Meeshy/Features/Main/Views/ConversationListView+Rows.swift")
+        XCTAssertTrue(
+            rowsSource.contains(".onDrag"),
+            "Le chemin natif iOS 26 doit exposer .onDrag sur la ligne " +
+            "(source du drag-to-section, coexiste avec le contextMenu système)."
+        )
+
+        let listSource = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
+        guard let dropRange = listSource.range(of: "func handleDrop(") else {
+            XCTFail("ConversationListView doit garder handleDrop (cible du SectionDropDelegate)")
+            return
+        }
+        let end = listSource.index(dropRange.lowerBound, offsetBy: 1600, limitedBy: listSource.endIndex) ?? listSource.endIndex
+        let dropBlock = String(listSource[dropRange.lowerBound ..< end])
+        XCTAssertTrue(
+            dropBlock.contains("ChipDropResolver.action("),
+            "handleDrop doit décider via ChipDropResolver — même sémantique que " +
+            "le drop de la chip (pin par drop, other→\"\", no-op même section)."
+        )
+    }
+
     /// Le builder du menu natif doit exister et garder la parité d'actions
     /// avec le menu custom — dont Renommer, la divergence historique qui
     /// avait justifié la suppression du premier builder (#1811).
