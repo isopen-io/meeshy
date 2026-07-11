@@ -223,6 +223,41 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    // MARK: - Remote camera-off placeholder accessibility
+
+    func test_remoteCameraOffPlaceholder_hidesAvatarAndCombinesStatusRow() throws {
+        // P0-3: shown full-area when the peer has a video track but turned
+        // its camera off. The avatar is decorative (the status text already
+        // conveys the state), and the icon+text row must read as one
+        // VoiceOver stop, not two disjoint announcements.
+        let source = try callViewSource()
+        guard let range = source.range(of: "private var remoteCameraOffPlaceholder: some View {") else {
+            XCTFail("CallView must define remoteCameraOffPlaceholder")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("avatarCircle(size: 96)"),
+            "remoteCameraOffPlaceholder must show the peer's avatar in place of a frozen last frame."
+        )
+        XCTAssertTrue(
+            body.contains(".accessibilityHidden(true)"),
+            "The decorative avatar in remoteCameraOffPlaceholder must be hidden from VoiceOver — " +
+            "the icon+text row below it already conveys the camera-off state."
+        )
+        XCTAssertTrue(
+            body.contains("call.video.remoteOff"),
+            "remoteCameraOffPlaceholder must carry the call.video.remoteOff localization key " +
+            "so VoiceOver announces why the peer's video is absent."
+        )
+        XCTAssertTrue(
+            body.contains(".accessibilityElement(children: .combine)"),
+            "The icon+text status row in remoteCameraOffPlaceholder must combine into a single " +
+            "VoiceOver element, not read the icon and text as two disjoint stops."
+        )
+    }
+
     // MARK: - callToggleAccessibility compound modifier
 
     func test_callControlButton_usesCallToggleAccessibilityModifier() throws {
