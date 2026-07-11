@@ -133,6 +133,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     private enum Constants {
         static let segmentRetentionLimit = 50
+        /// Safety ceiling for the PERSISTENCE accumulator (`persistedSegments`)
+        /// — never hit in normal use (a multi-hour call at continuous speech
+        /// is still well under this), just a memory guard against pathological
+        /// growth. NOT the live display cap, which stays 50 — see
+        /// docs/superpowers/specs/2026-07-11-call-transcript-history-design.md §2.
+        static let persistedSegmentCeiling = 2000
     }
 
     @Published private(set) var segments: [TranscriptionSegment] = []
@@ -158,6 +164,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var callId: String?
     private var localUserId = ""
     private var allSegments: [TranscriptionSegment] = []
+    /// Full-call accumulator for local persistence at call end — append-only,
+    /// NOT re-sorted per append (unlike `allSegments`/`segments`, which drive
+    /// the live UI and must stay cheap to re-render), bounded only by
+    /// `Constants.persistedSegmentCeiling`.
+    private var persistedSegments: [TranscriptionSegment] = []
 
     private let audioEngine = AVAudioEngine()
     private var recognizer: SFSpeechRecognizer?
@@ -179,6 +190,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     func setTranscribingForTesting(_ value: Bool) {
         isTranscribing = value
     }
+
+    var persistedSegmentsForTesting: [TranscriptionSegment] { persistedSegments }
     #endif
 
     // MARK: - Permission
@@ -263,6 +276,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         recognizer = nil
 
         allSegments.removeAll()
+        persistedSegments.removeAll()
         segments.removeAll()
         isTranscribing = false
         lastError = nil
@@ -610,6 +624,13 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // rotation, which would scramble the order of a local speaker's own
         // consecutive utterances once more than one final segment has fired.
         segments = allSegments.sorted { $0.capturedAt < $1.capturedAt }
+
+        if segment.isFinal {
+            persistedSegments.append(segment)
+            if persistedSegments.count > Constants.persistedSegmentCeiling {
+                persistedSegments = Array(persistedSegments.suffix(Constants.persistedSegmentCeiling))
+            }
+        }
     }
 
     private func mapAuthorizationStatus(_ status: SFSpeechRecognizerAuthorizationStatus) -> TranscriptionPermission {

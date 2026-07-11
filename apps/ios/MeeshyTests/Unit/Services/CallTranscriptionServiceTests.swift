@@ -77,6 +77,17 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertTrue(sut.segments.isEmpty)
     }
 
+    func test_persistedSegments_retainsBeyondLiveDisplayCap() {
+        let (sut, _) = makeSUT()
+        for i in 0..<60 {
+            sut.receiveTranslatedSegment(
+                makeSegment(text: "segment \(i)", isFinal: true, capturedAt: Date(timeIntervalSince1970: TimeInterval(i)))
+            )
+        }
+        XCTAssertEqual(sut.displayedSegments.count, 50, "Live display stays capped at 50, unchanged.")
+        XCTAssertEqual(sut.persistedSegmentsForTesting.count, 60, "The persistence accumulator must retain all 60, not just the last 50.")
+    }
+
     func test_displayedSegments_doesNotTruncateBeyondFive() {
         // Regression guard for the 2026-07-11 fix: displayedSegments used to
         // cap at the last 5 (`maxDisplayedSegments`), which made older lines
