@@ -334,7 +334,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           // screen (in user:<id> but not conversation:<id>) — parity with the
           // WS edit path and broadcastNewMessage.
           await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), message.conversationId,
+            prisma, socketIOManager.getIO(), message.conversationId, userId,
             (err) => logger.warn('conversation preview fanout (REST edit) failed', err as Error)
           );
         }
@@ -481,7 +481,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           // screen: deleting the latest message changes their row, which
           // MESSAGE_DELETED (conversation room only) never tells them.
           await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), message.conversationId,
+            prisma, socketIOManager.getIO(), message.conversationId, userId,
             (err) => logger.warn('conversation preview fanout (REST delete) failed', err as Error)
           );
         }
