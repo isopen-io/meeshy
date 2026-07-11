@@ -700,11 +700,26 @@ struct CallView: View {
 
             VStack(spacing: 0) {
                 if !callManager.isVideoUIActive {
+                    if showTranscript {
+                        // Captions active on an audio call: compact header at
+                        // the top, structural transcript panel filling the
+                        // freed space — replaces the old vertically-centered
+                        // avatar layout while captions are on.
+                        compactAudioCallHeader
+                            .padding(.top, 16)
+                        transcriptPanel
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 12)
+                            .frame(maxHeight: .infinity)
+                    } else {
+                        Spacer()
+                        audioCallLayout
+                        Spacer()
+                    }
+                } else {
                     Spacer()
-                    audioCallLayout
                 }
-
-                Spacer()
 
                 // §7.3 — auto-hiding control bar on iPhone video calls; always
                 // visible for audio and on Mac (and while the effects tray is
@@ -871,6 +886,52 @@ struct CallView: View {
                 }
             }
         }
+    }
+
+    /// Compacted header shown INSTEAD of `audioCallLayout` while captions are
+    /// active — avatar shrunk (120 → 56), status pills dropped, no longer
+    /// vertically centered (sits at the top) so `transcriptPanel` gets the
+    /// freed vertical space. User-requested 2026-07-11.
+    private var compactAudioCallHeader: some View {
+        HStack(spacing: 12) {
+            callAvatarPair(size: 56)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
+                    .font(.system(.headline, design: .rounded).weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                HStack(spacing: 6) {
+                    TransientCallSignalGlyph(strength: signalStrength)
+                    Text(callManager.formattedDuration)
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundColor(durationColor)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.updatesFrequently)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// Audio-call captions surface — a real layout element (NOT a floating
+    /// overlay) occupying the space between `compactAudioCallHeader` and
+    /// `controlBar`. Video calls use `transcriptOverlay` instead (a bottom
+    /// glass banner that doesn't shrink the video) — see that property's doc
+    /// comment. User-requested 2026-07-11: "la zone de transcription ne doit
+    /// pas être en overlay des autres points d'action".
+    private var transcriptPanel: some View {
+        ScrollView {
+            transcriptSegmentsList
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Connection Quality (P2-iOS-10 → glyphe signal 2026-07-04)

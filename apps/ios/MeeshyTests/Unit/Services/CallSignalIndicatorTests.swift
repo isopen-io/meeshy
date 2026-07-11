@@ -261,6 +261,39 @@ final class CallHangupFastPathTests: XCTestCase {
             "translationToggleButton must be wired into the same floating trailing-edge stack as transcriptionToggleButton."
         )
     }
+
+    func test_connectedView_audioPath_usesStructuralTranscriptPanel_notFloatingOverlay() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "private var connectedView: some View {") else {
+            XCTFail("CallView must define connectedView")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 4000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("compactAudioCallHeader"),
+            "connectedView must show a compacted header (avatar + name, no status pills) " +
+            "when captions are active on an audio call — user-requested 2026-07-11."
+        )
+        XCTAssertTrue(
+            body.contains("transcriptPanel"),
+            "connectedView must show the structural (non-overlay) transcriptPanel " +
+            "for the audio-call captions layout."
+        )
+    }
+
+    func test_connectedView_stillReferencesUnmovedElements() throws {
+        // Regression guard: the layout restructuring must not drop or relocate
+        // pipView / reconnectingBanner / showEffectsToolbar's trigger — spec risk table.
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "private var connectedView: some View {") else {
+            XCTFail("CallView must define connectedView")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 6000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
+    }
 }
 
 // MARK: - CallSignalGlyph Reduce Motion (source inspection)
