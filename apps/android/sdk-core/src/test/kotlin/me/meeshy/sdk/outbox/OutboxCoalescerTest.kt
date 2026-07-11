@@ -267,4 +267,24 @@ class OutboxCoalescerTest {
         assertThat(OutboxCoalescer.decide(theirs, listOf(mine)))
             .isEqualTo(CoalesceDecision.Enqueue(theirs))
     }
+
+    @Test
+    fun `a repeated privacy settings update keeps only the latest snapshot`() {
+        val first = row("v1", OutboxKind.UPDATE_PRIVACY_SETTINGS, "me")
+        val second = row("v2", OutboxKind.UPDATE_PRIVACY_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("v1"), second))
+    }
+
+    @Test
+    fun `a privacy settings update never coalesces with a pending notification settings update`() {
+        // Both share the settings lane and the same target user, but they are distinct kinds:
+        // a privacy sync must NOT supersede a pending notification sync (independent coalescing).
+        val notification = row("s1", OutboxKind.UPDATE_SETTINGS, "me")
+        val privacy = row("v1", OutboxKind.UPDATE_PRIVACY_SETTINGS, "me")
+
+        assertThat(OutboxCoalescer.decide(privacy, listOf(notification)))
+            .isEqualTo(CoalesceDecision.Enqueue(privacy))
+    }
 }
