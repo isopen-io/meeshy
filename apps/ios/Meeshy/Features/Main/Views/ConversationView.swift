@@ -1479,8 +1479,13 @@ struct ConversationView: View {
         if composerState.showOptions {
             expandedHeaderTitleAndTags
         } else {
+            // Call button stays next to the search icon in BOTH states
+            // (user-requested 2026-07-11) — collapsing/expanding the header
+            // only toggles the name/category/tags/favorite-emoji area
+            // (expandedHeaderTitleAndTags), never the call button's presence.
             HStack {
                 Spacer()
+                headerCallButtons.layoutPriority(1)
                 expandedHeaderSearchButton
             }
         }
