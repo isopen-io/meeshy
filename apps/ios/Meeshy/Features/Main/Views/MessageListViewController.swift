@@ -134,6 +134,9 @@ final class MessageListViewController: UIViewController {
     /// Tap on a call-summary notice → re-initiate (call back) the same media
     /// type with the conversation peer.
     var onCallBack: ((CallSummaryMetadata) -> Void)?
+    /// Long-press on a call-summary notice → request the shared call-detail
+    /// sheet (transcript-aware) for that message, via `ConversationView`.
+    var onCallDetailRequest: ((String) -> Void)?
     /// Live source of dynamic per-message data (translations, transcriptions,
     /// audio translations, last-message gating). Held weakly: the cell
     /// registration closure runs on the main runloop alongside the VM, but
@@ -518,6 +521,7 @@ final class MessageListViewController: UIViewController {
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
             let callBackHandler = self.onCallBack
+            let callDetailHandler = self.onCallDetailRequest
             let mediaTapHandler = self.onMediaTap
             let consumeViewOnceHandler = self.onConsumeViewOnce
             let requestTranslationHandler = self.onRequestTranslation
@@ -600,6 +604,7 @@ final class MessageListViewController: UIViewController {
                         allAudioItems: allAudioItems,
                         onScrollToMessage: scrollHandler,
                         onCallBack: callBackHandler,
+                        onLongPressCallDetail: { callDetailHandler?(messageId) },
                         isLastInGroup: true,
                         isLastReceivedMessage: isLastReceived,
                         isLastSentMessage: isLastSent,

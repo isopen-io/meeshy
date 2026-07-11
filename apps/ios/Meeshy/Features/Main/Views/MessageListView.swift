@@ -288,6 +288,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Long-press on a bubble — opens the contextual options menu for that
     /// message (reply, forward, react, copy, delete, …).
     var onLongPress: ((String) -> Void)?
+    /// Long-press on a call-summary notice → request the shared call-detail
+    /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
+    var onCallDetailRequest: ((String) -> Void)?
     /// User-initiated reaction add. Carries the message id and the tapped
     /// bubble cell's on-screen frame (window coords, `nil` when the cell is
     /// not realized) so the quick-reaction bar can anchor to the bubble.
@@ -367,6 +370,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onCallBack = { [weak conversationViewModel] summary in
             conversationViewModel?.callBack(for: summary)
         }
+        vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
         vc.applyBottomInset(bottomInset)
         return vc
@@ -419,6 +423,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onCallBack = { [weak conversationViewModel] summary in
             conversationViewModel?.callBack(for: summary)
         }
+        vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
         vc.applyBottomInset(bottomInset)
     }

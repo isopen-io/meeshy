@@ -38,6 +38,10 @@ struct ConversationOverlayState {
     var showOverlayMenu = false
     var longPressEnabled = false
     var detailSheetMessage: Message? = nil
+    /// Message whose call-detail sheet (transcript-aware, `CallSummaryDetailSheet`)
+    /// is presented — separate from `detailSheetMessage`, which stays wired to
+    /// `MessageMoreSheet` for regular messages.
+    var callDetailMessage: Message? = nil
     var moreSheetInitialItem: MoreItem? = nil
     /// Message dont le picker d'emoji complet (réaction) est présenté.
     var fullReactionPickerMessage: Message? = nil
@@ -713,6 +717,17 @@ struct ConversationView: View {
                     }
                 )
             }
+            .sheet(item: $overlayState.callDetailMessage) { msg in
+                if let summary = msg.callSummary {
+                    CallSummaryDetailSheet(
+                        summary: summary,
+                        isOutgoing: summary.initiatorId == viewModel.currentUserIdForView,
+                        accentHex: accentColor,
+                        timestamp: msg.createdAt,
+                        onCallBack: { s in viewModel.callBack(for: s) }
+                    )
+                }
+            }
             .sheet(item: $overlayState.fullReactionPickerMessage) { msg in
                 EmojiPickerSheet(
                     quickReactions: ["❤️", "😂", "👍", "🔥", "😍", "😮", "😢", "👏", "🎉"],
@@ -1091,12 +1106,16 @@ struct ConversationView: View {
                     // du menu existant (sans remplacer le menu lui-même).
                     guard overlayState.longPressEnabled else { return }
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    // Bulles système (journal d'appel, notices) : réactions,
-                    // édition, traduction, épinglage… n'ont aucun sens dessus.
-                    // Le call-notice garde son propre long-press (sheet détails).
-                    guard msg.messageSource != .system else { return }
-                    overlayState.overlayMessage = msg
-                    overlayState.showOverlayMenu = true
+                    if msg.callSummary != nil {
+                        overlayState.callDetailMessage = msg
+                    } else if msg.messageSource != .system {
+                        overlayState.overlayMessage = msg
+                        overlayState.showOverlayMenu = true
+                    }
+                },
+                onCallDetailRequest: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.callDetailMessage = msg
                 },
                 onAddReaction: { messageId, bubbleFrame in
                     // Spring-open the emoji bar anchored to the tapped bubble

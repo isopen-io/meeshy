@@ -86,6 +86,7 @@ struct ThemedMessageBubble: View {
     /// type with the conversation peer. Routed by the conversation layer to
     /// `CallManager.startCall`.
     var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
+    var onLongPressCallDetail: (() -> Void)? = nil
     var activeAudioLanguage: String? = nil
     var isLastInGroup: Bool = true
     /// Vrai uniquement pour le dernier message reçu (non envoyé par moi) — limite l'icône réaction
@@ -197,7 +198,7 @@ struct ThemedMessageBubble: View {
         switch content.kind {
         case .system:
             if let callNotice = content.callNotice {
-                BubbleCallNoticeView(notice: callNotice, accentHex: contactColor, isDark: isDark, onCallBack: onCallBack)
+                BubbleCallNoticeView(notice: callNotice, accentHex: contactColor, isDark: isDark, onCallBack: onCallBack, onLongPress: onLongPressCallDetail)
             } else {
                 BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark)
             }

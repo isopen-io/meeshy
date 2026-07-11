@@ -32,8 +32,7 @@ struct BubbleCallNoticeView: View, Equatable {
     let accentHex: String
     let isDark: Bool
     var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
-
-    @State private var showDetails = false
+    var onLongPress: (() -> Void)? = nil
 
     static func == (lhs: BubbleCallNoticeView, rhs: BubbleCallNoticeView) -> Bool {
         lhs.notice == rhs.notice && lhs.accentHex == rhs.accentHex && lhs.isDark == rhs.isDark
@@ -64,7 +63,7 @@ struct BubbleCallNoticeView: View, Equatable {
             .highPriorityGesture(
                 LongPressGesture(minimumDuration: 0.35).onEnded { _ in
                     HapticFeedback.medium()
-                    showDetails = true
+                    onLongPress?()
                 }
             )
             .accessibilityElement(children: .ignore)
@@ -72,21 +71,12 @@ struct BubbleCallNoticeView: View, Equatable {
             .accessibilityHint(Text(String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
-                showDetails = true
+                onLongPress?()
             }
             if !isOutgoing { Spacer(minLength: 48) }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
-        .sheet(isPresented: $showDetails) {
-            CallSummaryDetailSheet(
-                summary: summary,
-                isOutgoing: isOutgoing,
-                accentHex: accentHex,
-                timestamp: notice.timestamp,
-                onCallBack: onCallBack
-            )
-        }
     }
 
     private var card: some View {
