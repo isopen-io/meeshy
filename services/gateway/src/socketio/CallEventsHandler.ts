@@ -598,6 +598,13 @@ export class CallEventsHandler {
             });
           });
         }
+
+        // Room-membership leak fix — mirrors the same fix on call:end/
+        // call:leave/call:force-leave: this only evicted THIS socket via
+        // leaveCall(), leaving every other still-joined socket (e.g. a
+        // second device/tab) a member of the now-dead room until its own
+        // disconnect.
+        await this.evictCallRoomSockets(io, participation.callSessionId);
       }
 
       logger.info('✅ Socket: Auto-left call on disconnect', {
@@ -681,6 +688,11 @@ export class CallEventsHandler {
                 });
               });
             }
+
+            // Room-membership leak fix — same reasoning as the happy path
+            // above: this force-cleanup branch also terminates the call
+            // session and must evict every remaining socket from its room.
+            await this.evictCallRoomSockets(io, participation.callSessionId);
           }
         }
 
@@ -826,9 +838,29 @@ export class CallEventsHandler {
           logger.error('❌ handleMissedCall failed after force-end orphaned call', { callId, err });
         });
       }
+
+      // Room-membership leak fix — mirrors the identical fix on the
+      // call:end/call:leave/call:force-leave happy paths: this recovery path
+      // is reached from every one of their catch blocks, so leaving it out
+      // here left every OTHER socket still joined to the room (not just the
+      // acting user's) stuck as a member of a now-permanently-dead room
+      // until its own unrelated disconnect.
+      await this.evictCallRoomSockets(io, callId);
     } catch (err) {
       logger.error('❌ Failed to force-end orphaned call after call:end failure', { callId, error: err });
     }
+  }
+
+  /**
+   * Evict every socket from a call's room. Sibling of the identical inline
+   * `fetchSockets()` + `leave()` pattern already run on call:end/call:leave/
+   * call:force-leave's happy paths — without it, a still-joined socket (e.g.
+   * a second device/tab) keeps a stale Socket.IO room membership for the
+   * rest of its connection lifetime once the call ends via this path.
+   */
+  private async evictCallRoomSockets(io: SocketIOServer, callId: string): Promise<void> {
+    const socketsInCallRoom = await io.in(ROOMS.call(callId)).fetchSockets();
+    await Promise.all(socketsInCallRoom.map((s) => s.leave(ROOMS.call(callId))));
   }
 
   private async resolveParticipantId(userId: string, conversationId: string): Promise<string | null> {
