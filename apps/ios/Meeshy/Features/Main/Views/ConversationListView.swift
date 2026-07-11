@@ -436,11 +436,13 @@ struct ConversationListView: View {
                     // resterait invisible (contextMenuAppeared bloqué à false).
                     runContextMenuEmergence()
                 }
-            }
-        ) {
-            // iOS 26+ : items du menu contextuel NATIF (Liquid Glass).
-            conversationContextMenu(for: conversation)
-        }
+            },
+            // iOS 26+ : items du menu contextuel NATIF (Liquid Glass),
+            // résolus UNE fois ici (valeur stable boxée — voir le doc de
+            // `nativeContextMenu` dans ConversationRowItem : le builder
+            // re-exécuté à chaque body pass crashait au lancement).
+            nativeContextMenu: nativeContextMenuView(for: conversation)
+        )
         .equatable()
     }
 

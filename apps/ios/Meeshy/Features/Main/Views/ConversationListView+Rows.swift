@@ -26,7 +26,7 @@ import MeeshyUI
 ///   builder `conversationContextMenu(for:)` (+Overlays) via `nativeContextMenu`.
 /// - < iOS 26 : overlay custom (`RowPressBounceModifier` → `onLongPress` →
 ///   `ConversationContextMenuView`), avec émergence/morph maison.
-struct ConversationRowItem<MenuContent: View>: View {
+struct ConversationRowItem: View {
     let conversation: Conversation
     let community: MeeshyCommunity?
     let rowWidth: CGFloat
@@ -60,9 +60,21 @@ struct ConversationRowItem<MenuContent: View>: View {
     /// zoom centré 0.7 → 1.0. Jamais appelé sur iOS 26+ (menu natif).
     let onLongPress: (CGRect) -> Void
     /// Chemin iOS 26+ : items du `.contextMenu` NATIF (rendu Liquid Glass
-    /// système). Évalué à l'OUVERTURE du menu seulement — jamais invoqué sur
-    /// le chemin fallback.
-    @ViewBuilder let nativeContextMenu: () -> MenuContent
+    /// système), résolus UNE fois à la construction de la row et stockés en
+    /// AnyView — précédent MeeshyAvatar (« single, stable array »). Deux
+    /// raisons, toutes deux vécues :
+    /// 1. Un `@ViewBuilder () -> MenuContent` générique re-exécutait le
+    ///    builder à CHAQUE body pass (mesures LazyVStack comprises) et
+    ///    matérialisait un tuple géant (9 items + sous-menus) copié en pleine
+    ///    récursion de layout → EXC_BAD_ACCESS `initializeWithCopy for
+    ///    Button` au LANCEMENT sur iOS 26 (crash 2026-07-11, PAC failure).
+    /// 2. Le paramètre générique regonflait le type de la row — la famille
+    ///    de crash type-metadata que l'extraction en structs nominales avait
+    ///    éliminée (voir l'en-tête du fichier). AnyView est ACCEPTABLE ici,
+    ///    contrairement aux rows : un contenu de menu n'a pas d'identité
+    ///    structurelle à préserver (reconstruit à l'ouverture du menu).
+    /// `EmptyView` boxé sur le chemin fallback < iOS 26 (jamais rendu).
+    let nativeContextMenu: AnyView
 
     var body: some View {
         SwipeableRow(
@@ -87,7 +99,7 @@ struct ConversationRowItem<MenuContent: View>: View {
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
                     .contextMenu {
-                        nativeContextMenu()
+                        nativeContextMenu
                     } preview: {
                         // Preview statique (non interactive dans un contextMenu
                         // natif) — mêmes inputs que l'overlay custom, sans
