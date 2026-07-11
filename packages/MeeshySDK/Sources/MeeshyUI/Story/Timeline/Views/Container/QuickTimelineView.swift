@@ -197,8 +197,7 @@ public struct QuickTimelineView: View {
                 .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
             }
             transport
-            rulerStrip
-            tracksRegion
+            scrubRegion
             footerTrigger
         }
         // Parent TimelineContainerSwitcher already paints the sheet with
@@ -232,20 +231,11 @@ public struct QuickTimelineView: View {
         )
     }
 
-    private var rulerStrip: some View {
-        let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
-        return RulerView(
-            totalDuration: viewModel.project.slideDuration,
-            geometry: geometry,
-            isDark: colorScheme == .dark,
-            height: 22,                     // unified with ProTimelineView
-            onTapTime: { _ in }
-        )
-        .equatable() // HIGH 3: short-circuit body re-evaluation during playhead scrubbing
-    }
-
+    /// Ruler + lanes + playhead in ONE horizontal scroller (TimelineScrubArea)
+    /// so the ticks stay aligned with the clips and the playhead is draggable
+    /// across the full lane height. The ruler doubles as a scrub strip.
     @ViewBuilder
-    private var tracksRegion: some View {
+    private var scrubRegion: some View {
         let tracks: [CompactTrack] = isExpanded ? hoistedAllTracks : hoistedCompactTracks
         if tracks.isEmpty {
             ProTimelineEmptyState(isDark: colorScheme == .dark)
@@ -253,32 +243,51 @@ public struct QuickTimelineView: View {
                 .padding(.horizontal, 16)
         } else {
             let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
-            let laneWidth = max(geometry.width(for: viewModel.project.slideDuration), 200)
-            ScrollView([.horizontal, isExpanded ? .vertical : []], showsIndicators: isExpanded) {
-                VStack(spacing: 4) {
-                    ForEach(tracks, id: \.id) { track in
-                        TrackBarView(
-                            title: track.title,
-                            isLocked: false,
-                            isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
-                            tintHex: tint(for: track.kind),
-                            isDark: colorScheme == .dark,
-                            laneWidth: laneWidth,
-                            laneHeight: 36,
-                            iconName: Self.iconName(for: track.kind)
-                        ) {
-                            ZStack(alignment: .leading) {
-                                ForEach(track.clipIds, id: \.self) { clipId in
-                                    clipBar(for: clipId, geometry: geometry, laneHeight: 36)
-                                }
-                            }
+            TimelineScrubArea(
+                totalDuration: viewModel.project.slideDuration,
+                geometry: geometry,
+                currentTime: viewModel.currentTime,
+                isDark: colorScheme == .dark,
+                minLaneWidth: 200,
+                rulerHeight: 22,               // unified with ProTimelineView
+                onScrub: { viewModel.scrub(to: $0) },
+                onScrubBegan: { viewModel.beginScrub() },
+                onScrubEnded: { viewModel.endScrub() }
+            ) { laneWidth in
+                trackRows(tracks: tracks, laneWidth: laneWidth, geometry: geometry)
+            }
+            .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 40 + 8 + 22)
+            .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
+        }
+    }
+
+    @ViewBuilder
+    private func trackRows(tracks: [CompactTrack], laneWidth: CGFloat,
+                           geometry: TimelineGeometry) -> some View {
+        let rows = VStack(spacing: 4) {
+            ForEach(tracks, id: \.id) { track in
+                TrackBarView(
+                    title: track.title,
+                    isLocked: false,
+                    isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
+                    tintHex: tint(for: track.kind),
+                    isDark: colorScheme == .dark,
+                    laneWidth: laneWidth,
+                    laneHeight: 36,
+                    iconName: Self.iconName(for: track.kind)
+                ) {
+                    ZStack(alignment: .leading) {
+                        ForEach(track.clipIds, id: \.self) { clipId in
+                            clipBar(for: clipId, geometry: geometry, laneHeight: 36)
                         }
                     }
                 }
-                .padding(.horizontal, 12)
             }
-            .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 40 + 8)
-            .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
+        }
+        if isExpanded {
+            ScrollView(.vertical, showsIndicators: true) { rows }
+        } else {
+            rows
         }
     }
 

@@ -294,7 +294,6 @@ public struct ProTimelineView: View {
         VStack(spacing: 0) {
             proToolbarRow
             transportRow
-            rulerRow
             tracksScroll
         }
         .overlay(alignment: .bottomTrailing) { inspectorOverlay }
@@ -344,54 +343,56 @@ public struct ProTimelineView: View {
         )
     }
 
-    private var rulerRow: some View {
-        let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
-        return RulerView(
-            totalDuration: viewModel.project.slideDuration,
-            geometry: geometry,
-            isDark: colorScheme == .dark,
-            height: 22,
-            onTapTime: { _ in }
-        )
-        .equatable() // HIGH 3: short-circuit body re-evaluation during playhead scrubbing
-    }
-
+    /// Ruler + grouped lanes + playhead in ONE horizontal scroller
+    /// (TimelineScrubArea) so ticks stay aligned with clips and the playhead
+    /// is draggable across the full lane height. Vertical overflow scrolls
+    /// inside the area (under the pinned ruler).
     @ViewBuilder
     private var tracksScroll: some View {
-        let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
-        let laneWidth = max(geometry.width(for: viewModel.project.slideDuration), 320)
         if hoistedTrackGroups.allSatisfy({ $0.tracks.isEmpty }) {
             ProTimelineEmptyState(isDark: colorScheme == .dark)
                 .padding(.vertical, 24)
         } else {
-            ScrollView([.horizontal, .vertical]) {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(hoistedTrackGroups, id: \.section) { group in
-                        if !group.tracks.isEmpty {
-                            groupHeader(key: group.titleKey)
-                            ForEach(group.tracks, id: \.id) { track in
-                                TrackBarView(
-                                    title: track.title,
-                                    isLocked: false,
-                                    isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
-                                    tintHex: tint(for: track.kind),
-                                    isDark: colorScheme == .dark,
-                                    laneWidth: laneWidth,
-                                    laneHeight: 40,
-                                    iconName: QuickTimelineView.iconName(for: track.kind)
-                                ) {
-                                    ZStack(alignment: .leading) {
-                                        ForEach(track.clipIds, id: \.self) { clipId in
-                                            clipBar(for: clipId, geometry: geometry, laneHeight: 40)
+            let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
+            TimelineScrubArea(
+                totalDuration: viewModel.project.slideDuration,
+                geometry: geometry,
+                currentTime: viewModel.currentTime,
+                isDark: colorScheme == .dark,
+                minLaneWidth: 320,
+                rulerHeight: 22,
+                onScrub: { viewModel.scrub(to: $0) },
+                onScrubBegan: { viewModel.beginScrub() },
+                onScrubEnded: { viewModel.endScrub() }
+            ) { laneWidth in
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(hoistedTrackGroups, id: \.section) { group in
+                            if !group.tracks.isEmpty {
+                                groupHeader(key: group.titleKey)
+                                ForEach(group.tracks, id: \.id) { track in
+                                    TrackBarView(
+                                        title: track.title,
+                                        isLocked: false,
+                                        isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
+                                        tintHex: tint(for: track.kind),
+                                        isDark: colorScheme == .dark,
+                                        laneWidth: laneWidth,
+                                        laneHeight: 40,
+                                        iconName: QuickTimelineView.iconName(for: track.kind)
+                                    ) {
+                                        ZStack(alignment: .leading) {
+                                            ForEach(track.clipIds, id: \.self) { clipId in
+                                                clipBar(for: clipId, geometry: geometry, laneHeight: 40)
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                    .padding(.vertical, 8)
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
             }
         }
     }
@@ -415,7 +416,6 @@ public struct ProTimelineView: View {
     private var regularTimelineColumn: some View {
         VStack(spacing: 0) {
             proToolbarRow
-            rulerRow
             tracksScroll
         }
     }

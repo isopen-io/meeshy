@@ -405,9 +405,14 @@ public final class TimelineViewModel: ObservableObject {
 
     /// Marks the end of a continuous playhead drag. Subsequent `scrub(to:)`
     /// calls go back to frame-accurate seeking. Safe to call when no scrub is
-    /// in flight (idempotent).
+    /// in flight (idempotent). When a scrub WAS in flight, the release
+    /// position is re-seeked with frame accuracy — every drag frame used
+    /// sub-50ms tolerance, so without this anchor the frame on screen can be
+    /// up to 50ms away from where the user released.
     public func endScrub() {
+        guard isScrubbing else { return }
         isScrubbing = false
+        engine.seek(to: currentTime, precise: true)
     }
 
     /// Seeks the engine to `time`. Precision is auto-selected from
