@@ -39,7 +39,7 @@ describe('emitConversationPreviewUpdate', () => {
       latest,
     );
 
-    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1');
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
     expect(emitted.map((e) => e.room).sort()).toEqual(['user:user-A', 'user:user-B', 'user:user-C']);
     for (const e of emitted) {
@@ -48,6 +48,9 @@ describe('emitConversationPreviewUpdate', () => {
       expect(e.payload.lastMessageId).toBe('msg-latest');
       expect(e.payload.lastMessagePreview).toBe('the current last message');
       expect(e.payload.senderId).toBe('participant-A');
+      // ConversationUpdatedEventData requires `updatedBy` — the User.id of whoever
+      // triggered the edit/delete, NOT the (participant) senderId of the preview.
+      expect(e.payload.updatedBy).toEqual({ id: 'user-editor' });
     }
     // Recompute must scope to non-deleted messages.
     expect((prisma.message.findFirst as jest.Mock).mock.calls[0][0]).toMatchObject({
@@ -63,7 +66,7 @@ describe('emitConversationPreviewUpdate', () => {
       latest,
     );
 
-    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1');
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].room).toBe('user:user-A');
@@ -73,16 +76,19 @@ describe('emitConversationPreviewUpdate', () => {
     const emitted: Emitted[] = [];
     const prisma = makePrisma([{ userId: 'user-A' }], null);
 
-    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1');
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
     expect(emitted).toHaveLength(1);
     expect(emitted[0].payload.lastMessageId).toBeNull();
     expect(emitted[0].payload.lastMessagePreview).toBeNull();
+    // Deleting the last message still carries the actor so clients can attribute
+    // the change even when there is no surviving message to fall back on.
+    expect(emitted[0].payload.updatedBy).toEqual({ id: 'user-editor' });
   });
 
   it('is a no-op when the Socket.IO layer is unavailable', async () => {
     const prisma = makePrisma([{ userId: 'user-A' }], latest);
-    await expect(emitConversationPreviewUpdate(prisma, null, 'conv-1')).resolves.toBeUndefined();
+    await expect(emitConversationPreviewUpdate(prisma, null, 'conv-1', 'user-editor')).resolves.toBeUndefined();
     expect(prisma.participant.findMany).not.toHaveBeenCalled();
   });
 
@@ -95,7 +101,7 @@ describe('emitConversationPreviewUpdate', () => {
     const onError = jest.fn();
 
     await expect(
-      emitConversationPreviewUpdate(prisma, makeIo([]), 'conv-1', onError),
+      emitConversationPreviewUpdate(prisma, makeIo([]), 'conv-1', 'user-editor', onError),
     ).resolves.toBeUndefined();
     expect(onError).toHaveBeenCalledWith(err);
   });

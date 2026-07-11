@@ -40,6 +40,7 @@ export async function emitConversationPreviewUpdate(
   prisma: PreviewPrisma,
   io: PreviewEmitIO | null | undefined,
   conversationId: string,
+  updatedByUserId: string,
   onError?: (error: unknown) => void,
 ): Promise<void> {
   if (!io) return;
@@ -58,6 +59,13 @@ export async function emitConversationPreviewUpdate(
 
     const payload = {
       conversationId,
+      // `updatedBy` is REQUIRED by ConversationUpdatedEventData — the User.id of
+      // whoever triggered this edit/delete. Distinct from `senderId` (the
+      // Participant.id of the current latest message's author): the actor and
+      // the last-message author differ whenever a non-latest message is edited,
+      // or the latest message is deleted leaving an earlier one on top. Mirrors
+      // the send path in MeeshySocketIOManager, which always fills this field.
+      updatedBy: { id: updatedByUserId },
       lastMessageAt: latest?.createdAt ?? null,
       lastMessageId: latest?.id ?? null,
       lastMessagePreview: latest?.content ?? null,

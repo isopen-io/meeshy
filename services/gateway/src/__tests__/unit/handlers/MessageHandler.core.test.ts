@@ -1281,6 +1281,35 @@ describe('MessageHandler.broadcastNewMessage', () => {
     const toArgs = io._to.mock.calls.map((c: any[]) => c[0]);
     expect(toArgs).toContain('user:user-a');
     expect(toArgs).toContain('user:user-b');
+
+    // ConversationUpdatedEventData requires `updatedBy`. With no sender user
+    // (anonymous), the payload falls back to the participant senderId — never
+    // omitting the field (a client reading updatedBy.id would otherwise crash).
+    const updated = io._emit.mock.calls.find(
+      (c: any[]) => c[0] === 'conversation:updated',
+    );
+    expect(updated).toBeDefined();
+    expect(updated![1]).toMatchObject({ updatedBy: { id: 'participant-1' } });
+  });
+
+  it('CONVERSATION_UPDATED carries updatedBy = sender User.id when present', async () => {
+    const io = makeMockIo();
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => [{ userId: 'user-a' }]) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+    const readStatusService = makeMockReadStatusService();
+    const connectedUsers = new Map<string, SocketUser>();
+    const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any, readStatusService });
+
+    const msg = makeMessage();
+    await handler.broadcastNewMessage(msg, 'conv-abc');
+
+    const updated = io._emit.mock.calls.find(
+      (c: any[]) => c[0] === 'conversation:updated',
+    );
+    expect(updated).toBeDefined();
+    expect(updated![1]).toMatchObject({ updatedBy: { id: 'user-sender' } });
   });
 
   it('catches error in CONVERSATION_UPDATED silently', async () => {
