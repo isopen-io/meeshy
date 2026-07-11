@@ -41,8 +41,15 @@
 > re-implementation; **UDF/instant-app** — immutable `StateFlow<UiState>`, pure transitions; **colour/UX
 > coherence** — Indigo brand card + accent-neutral toggles, Success-green ready card, natural row→screen→back,
 > Share only shown once an artifact exists so no dead end; **no coverage floor lowered, no test weakened**).
-> **Next:** media cache management (§L — clear cached images/audio/video/thumbnails), the live
-> `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of
+> **Merge status (2026-07-11):** slice code-complete and pushed; **PR #1870** open against `main` with CI
+> triggered. The GitHub MCP token **expired mid-run** and REST fell back to "GitHub access is not enabled for
+> this session", so this run could **not** observe CI status nor perform the squash-merge — the merge is left
+> **⚠ pending** (not blocked on the code: local `:app:assembleDebug` + all touched-module tests are green, diff
+> is `apps/android` only, reviewer PASS). **Next run: re-check PR #1870 — once CI is green, squash-merge to
+> `main`, then advance.** Do NOT force-merge via `git push origin HEAD:main` (bypasses the CI gate). The code
+> below is done and needs no rework.
+> **Next slice (after the merge):** media cache management (§L — clear cached images/audio/video/thumbnails),
+> the live `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of
 > `MediaDownloadPolicyEngine`, or avatar/banner upload (media pipeline) for §K profile edit.
 
 > On 2026-07-11 **account deletion** landed (slice `settings-account-deletion`, feature-parity §L — "Account
