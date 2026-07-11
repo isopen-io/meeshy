@@ -105,7 +105,11 @@ public struct VideoClipBar: View, Equatable {
             titleLabel
             if isLocked { lockBadge }
             if isSelected { selectionHalo }
-            if !isLocked { trimHandles }
+            if !isLocked {
+                ClipTrimHandles(laneHeight: laneHeight,
+                                onTrimStartDelta: onTrimStartDelta,
+                                onTrimEndDelta: onTrimEndDelta)
+            }
         }
         .frame(width: width, height: laneHeight - 4)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -223,31 +227,4 @@ public struct VideoClipBar: View, Equatable {
             .allowsHitTesting(false)
     }
 
-    private var trimHandles: some View {
-        HStack {
-            trimHandle(leading: true)
-            Spacer(minLength: 0)
-            trimHandle(leading: false)
-        }
-    }
-
-    private func trimHandle(leading: Bool) -> some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.95))
-            .frame(width: 4, height: laneHeight - 14)
-            .padding(leading ? .leading : .trailing, 4)
-            .contentShape(Rectangle().inset(by: -10))
-            .gesture(
-                DragGesture(minimumDistance: 2)
-                    .onChanged { v in
-                        leading ? onTrimStartDelta(v.translation.width)
-                                : onTrimEndDelta(v.translation.width)
-                    }
-            )
-            .accessibilityLabel(
-                leading
-                    ? String(localized: "story.timeline.clip.tooltip.start", bundle: .module)
-                    : String(localized: "story.timeline.clip.tooltip.duration", bundle: .module)
-            )
-    }
 }

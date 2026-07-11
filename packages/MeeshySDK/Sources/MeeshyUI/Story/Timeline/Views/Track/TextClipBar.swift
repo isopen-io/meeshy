@@ -33,6 +33,11 @@ public struct TextClipBar: View, Equatable {
     /// the drift snowballs across frames because each `onChanged` re-reads
     /// the (already-mutated) clip start. Mirrors `VideoClipBar.onMoveEnded`.
     public let onMoveEnded: () -> Void
+    /// Poignées de trim — la fenêtre temporelle d'un texte se règle au doigt
+    /// comme celle d'une vidéo (affichées à la sélection). Défauts no-op pour
+    /// les call sites existants.
+    public let onTrimStartDelta: (CGFloat) -> Void
+    public let onTrimEndDelta: (CGFloat) -> Void
 
     public init(
         clipId: String, content: String, startTime: Float, duration: Float,
@@ -42,7 +47,9 @@ public struct TextClipBar: View, Equatable {
         onDoubleTap: @escaping () -> Void,
         onLongPress: @escaping () -> Void,
         onMoveDelta: @escaping (CGFloat) -> Void,
-        onMoveEnded: @escaping () -> Void = {}
+        onMoveEnded: @escaping () -> Void = {},
+        onTrimStartDelta: @escaping (CGFloat) -> Void = { _ in },
+        onTrimEndDelta: @escaping (CGFloat) -> Void = { _ in }
     ) {
         self.clipId = clipId; self.content = content
         self.startTime = startTime; self.duration = duration
@@ -52,6 +59,8 @@ public struct TextClipBar: View, Equatable {
         self.onTap = onTap; self.onDoubleTap = onDoubleTap
         self.onLongPress = onLongPress; self.onMoveDelta = onMoveDelta
         self.onMoveEnded = onMoveEnded
+        self.onTrimStartDelta = onTrimStartDelta
+        self.onTrimEndDelta = onTrimEndDelta
     }
 
     public static func previewSnippet(_ s: String, maxLength: Int) -> String {
@@ -81,6 +90,11 @@ public struct TextClipBar: View, Equatable {
             if isSelected {
                 RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
                     .allowsHitTesting(false)
+            }
+            if isSelected, !isLocked {
+                ClipTrimHandles(laneHeight: laneHeight,
+                                onTrimStartDelta: onTrimStartDelta,
+                                onTrimEndDelta: onTrimEndDelta)
             }
         }
         .frame(width: geometry.width(for: duration), height: laneHeight - 4)

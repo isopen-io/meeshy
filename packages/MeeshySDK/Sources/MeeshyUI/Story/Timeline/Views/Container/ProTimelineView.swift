@@ -373,6 +373,7 @@ public struct ProTimelineView: View {
                 minLaneWidth: 320,
                 rulerHeight: 22,
                 isPlaying: viewModel.isPlaying,
+                onZoomScaleChanged: { viewModel.zoomScale = $0 },
                 onScrub: { viewModel.scrub(to: $0) },
                 onScrubBegan: { viewModel.beginScrub() },
                 onScrubEnded: { viewModel.endScrub() }
@@ -717,6 +718,14 @@ public struct ProTimelineView: View {
                 },
                 onMoveEnded: {
                     viewModel.endClipDrag()
+                },
+                onTrimStartDelta: { delta in
+                    viewModel.trimClipStart(id: audio.id,
+                                            deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onTrimEndDelta: { delta in
+                    viewModel.trimClipEnd(id: audio.id,
+                                          deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
                 }
             )
             .equatable()
@@ -755,6 +764,14 @@ public struct ProTimelineView: View {
                 },
                 onMoveEnded: {
                     viewModel.endClipDrag()
+                },
+                onTrimStartDelta: { delta in
+                    viewModel.trimClipStart(id: text.id,
+                                            deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onTrimEndDelta: { delta in
+                    viewModel.trimClipEnd(id: text.id,
+                                          deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
                 }
             )
             .equatable()

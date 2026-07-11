@@ -30,8 +30,14 @@ extension TimelineViewModel {
     public func trimClipStart(id: String, deltaTimeSeconds: Float) {
         guard deltaTimeSeconds.isFinite else { return }
         guard let kind = clipKind(forId: id),
-              let currentStart = clipStartTime(id: id),
-              let currentDuration = clipDuration(id: id) else { return }
+              let currentStart = clipStartTime(id: id) else { return }
+        // Clip « permanent » (duration nil — tout texte fraîchement posé) :
+        // le trim MATÉRIALISE sa fenêtre effective (start → slideDuration)
+        // puis l'ajuste — sans ça les poignées étaient inertes sur ces clips.
+        let currentDuration = clipDuration(id: id)
+            ?? TimelineGeometry.effectiveClipDuration(startTime: currentStart,
+                                                      duration: nil,
+                                                      slideDuration: project.slideDuration)
         let newStart = max(0, currentStart + deltaTimeSeconds)
         let actualDelta = newStart - currentStart
         let newDuration = max(0.05, currentDuration - actualDelta)
@@ -52,9 +58,15 @@ extension TimelineViewModel {
     /// Trim the end handle of a clip by `deltaTimeSeconds` (positive = extend right).
     /// Clamps to `mediaDurationLimit` when provided (source media length).
     public func trimClipEnd(id: String, deltaTimeSeconds: Float, mediaDurationLimit: Float? = nil) {
+        guard deltaTimeSeconds.isFinite else { return }
         guard let kind = clipKind(forId: id),
-              let currentStart = clipStartTime(id: id),
-              let currentDuration = clipDuration(id: id) else { return }
+              let currentStart = clipStartTime(id: id) else { return }
+        // Même matérialisation de fenêtre que trimClipStart pour les clips
+        // permanents (duration nil).
+        let currentDuration = clipDuration(id: id)
+            ?? TimelineGeometry.effectiveClipDuration(startTime: currentStart,
+                                                      duration: nil,
+                                                      slideDuration: project.slideDuration)
         var newDuration = max(0.05, currentDuration + deltaTimeSeconds)
         if let limit = mediaDurationLimit {
             newDuration = min(newDuration, limit)

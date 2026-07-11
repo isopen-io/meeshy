@@ -25,6 +25,14 @@ final class TimelineScrubAreaTests: XCTestCase {
                        "Above the minimum, lane width must follow the geometry so clips and ruler agree")
     }
 
+    func test_pinchZoom_scalesFromGestureAnchor_andClampsToRange() {
+        XCTAssertEqual(TimelineScrubArea<EmptyView>.pinchZoom(anchor: 1.0, magnification: 2.0), 2.0)
+        XCTAssertEqual(TimelineScrubArea<EmptyView>.pinchZoom(anchor: 2.0, magnification: 4.0), 4.0,
+                       "Clamp haut à ×4 — même borne que les boutons du transport")
+        XCTAssertEqual(TimelineScrubArea<EmptyView>.pinchZoom(anchor: 1.0, magnification: 0.1), 0.25,
+                       "Clamp bas à ×0.25")
+    }
+
     func test_playheadLeadingInset_isLabelColumnPlusContentPadding() {
         XCTAssertEqual(
             TimelineScrubArea<EmptyView>.playheadLeadingInset,

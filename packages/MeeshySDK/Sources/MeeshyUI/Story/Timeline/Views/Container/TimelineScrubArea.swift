@@ -38,6 +38,9 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// True pendant la lecture — active le suivi automatique du playhead
     /// (auto-scroll) pour qu'il ne sorte jamais du viewport à droite.
     public let isPlaying: Bool
+    /// Pinch-to-zoom : reçoit le zoomScale cible (clampé [0.25, 4]). nil =
+    /// pas de pinch (les boutons +/− du transport restent la seule entrée).
+    public let onZoomScaleChanged: ((CGFloat) -> Void)?
     public let onScrub: (Float) -> Void
     public let onScrubBegan: () -> Void
     public let onScrubEnded: () -> Void
@@ -46,6 +49,9 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// Dernier temps sur lequel l'auto-follow a scrollé — throttle pour ne
     /// pas émettre un scrollTo par frame (60 Hz).
     @State private var lastFollowedTime: Float = -1
+    /// Ancre du pinch en cours — le zoom cible = ancre × magnification (une
+    /// lecture par geste, jamais re-lue mid-geste : anti boule-de-neige).
+    @State private var magnifyAnchor: CGFloat?
 
     /// `tracks` receives the resolved lane width so every `TrackBarView` row
     /// spans exactly the same horizontal extent as the ruler above it.
@@ -57,6 +63,7 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         minLaneWidth: CGFloat,
         rulerHeight: CGFloat = 22,
         isPlaying: Bool = false,
+        onZoomScaleChanged: ((CGFloat) -> Void)? = nil,
         onScrub: @escaping (Float) -> Void,
         onScrubBegan: @escaping () -> Void = {},
         onScrubEnded: @escaping () -> Void = {},
@@ -69,10 +76,20 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         self.minLaneWidth = minLaneWidth
         self.rulerHeight = rulerHeight
         self.isPlaying = isPlaying
+        self.onZoomScaleChanged = onZoomScaleChanged
         self.onScrub = onScrub
         self.onScrubBegan = onScrubBegan
         self.onScrubEnded = onScrubEnded
         self.tracks = tracks
+    }
+
+    /// Bornes de zoom partagées avec les boutons du transport.
+    public nonisolated static var zoomRange: ClosedRange<CGFloat> { 0.25...4.0 }
+
+    /// Zoom cible d'un pinch : ancre capturée au début du geste × facteur de
+    /// magnification, clampé aux bornes. Pure — testable sans geste SwiftUI.
+    public nonisolated static func pinchZoom(anchor: CGFloat, magnification: CGFloat) -> CGFloat {
+        min(zoomRange.upperBound, max(zoomRange.lowerBound, anchor * magnification))
     }
 
     private nonisolated static var playheadAnchorId: String { "timeline-playhead-anchor" }
@@ -105,7 +122,21 @@ public struct TimelineScrubArea<TracksContent: View>: View {
             .adaptiveOnChange(of: currentTime) { _, time in
                 followPlayheadIfPlaying(time: time, proxy: proxy)
             }
+            .simultaneousGesture(pinchZoomGesture)
         }
+    }
+
+    /// Pinch-to-zoom de la densité temporelle — simultané avec le scroll
+    /// horizontal (deux doigts = zoom, un doigt = pan, aucun conflit).
+    private var pinchZoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                guard let onZoomScaleChanged else { return }
+                let anchor = magnifyAnchor ?? geometry.zoomScale
+                if magnifyAnchor == nil { magnifyAnchor = anchor }
+                onZoomScaleChanged(Self.pinchZoom(anchor: anchor, magnification: value))
+            }
+            .onEnded { _ in magnifyAnchor = nil }
     }
 
     /// Ancre invisible qui suit le playhead dans l'espace du contenu —
