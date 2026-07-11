@@ -65,6 +65,10 @@ Create `apps/ios/MeeshyTests/Unit/Models/CaptionsModeTests.swift`:
 import XCTest
 @testable import Meeshy
 
+// The app target defaults to MainActor isolation (Swift 6.2) — an unmarked
+// enum like CaptionsMode infers @MainActor, so the test class needs it too
+// (same pattern as ConversationLoadingPhaseTests).
+@MainActor
 final class CaptionsModeTests: XCTestCase {
 
     // MARK: - next (the cycle)
