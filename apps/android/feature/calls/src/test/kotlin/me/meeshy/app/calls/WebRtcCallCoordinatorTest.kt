@@ -178,6 +178,33 @@ class WebRtcCallCoordinatorTest {
         }
 
     @Test
+    fun `retryIceRestart while stalled restarts ICE and the caller renegotiates again`() =
+        runTest(UnconfinedTestDispatcher()) {
+            startAsCaller()
+            iceState.value = IceConnectionState.CONNECTED
+            iceState.value = IceConnectionState.FAILED
+
+            coordinator.retryIceRestart()
+
+            verify(exactly = 2) { engine.restartIce() }
+            verify(exactly = 1) {
+                signals.emitOffer("call-9", "v=0-restart", to = "peer", from = "me", negotiationId = 2)
+            }
+            coordinator.end()
+        }
+
+    @Test
+    fun `retryIceRestart outside a stall is inert`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller()
+        iceState.value = IceConnectionState.CONNECTED
+
+        coordinator.retryIceRestart()
+
+        verify(exactly = 0) { engine.restartIce() }
+        coordinator.end()
+    }
+
+    @Test
     fun `each stall cycle carries an incremented attempt`() = runTest(UnconfinedTestDispatcher()) {
         startAsCaller()
         iceState.value = IceConnectionState.CONNECTED

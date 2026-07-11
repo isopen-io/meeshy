@@ -225,6 +225,17 @@ class WebRtcCallCoordinator @Inject constructor(
         if (restart) restartIceAndRenegotiate()
     }
 
+    /**
+     * Le budget d'une tentative de reconnexion a expiré (escalade du VM) :
+     * force un restart ICE frais — couvre le stall DISCONNECTED qui ne dégénère
+     * jamais en FAILED (donc jamais restarté spontanément) et l'offre de
+     * restart perdue en route. Inerte hors stall.
+     */
+    fun retryIceRestart() {
+        if (!stalled) return
+        restartIceAndRenegotiate()
+    }
+
     private fun restartIceAndRenegotiate() {
         engine.restartIce()
         if (!isCaller) return

@@ -108,6 +108,12 @@ class CallViewModelTest {
     /** Test-driven peer mute/camera toggles (gateway `call:media-toggled`). */
     private val mediaToggles = MutableSharedFlow<CallMediaTogglePayload>(extraBufferCapacity = 16)
 
+    /** Test-driven per-attempt reconnect window: emit once to expire the armed budget. */
+    private val reconnectBudgetFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    private val reconnectBudget = object : CallReconnectBudget {
+        override fun countdown(): Flow<Unit> = reconnectBudgetFlow
+    }
+
     private val outgoingVideo =
         CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val incomingAudio =
@@ -160,7 +166,7 @@ class CallViewModelTest {
 
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock,
+        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock, reconnectBudget,
     )
 
     @Test
@@ -713,6 +719,74 @@ class CallViewModelTest {
 
         assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
         verify(exactly = 0) { signalManager.emitAnalytics(any(), any()) }
+    }
+
+    // --- Reconnect budget watchdog: ReconnectFailed enfin tiré (parité iOS) ---
+
+    private fun reconnecting(): CallViewModel {
+        val vm = connectedIncoming()
+        vm.onSignal(CallEvent.ConnectionStalled)
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
+        return vm
+    }
+
+    @Test
+    fun `an expired budget escalates to the next attempt and nudges an ICE restart`() = runTest {
+        val vm = reconnecting()
+
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
+        assertThat(vm.state.value.reconnectAttempt).isEqualTo(2)
+        verify(exactly = 1) { coordinator.retryIceRestart() }
+        verify(exactly = 0) { signalManager.emitEnd(any()) }
+    }
+
+    @Test
+    fun `a recovery before expiry disarms the budget`() = runTest {
+        val vm = reconnecting()
+        vm.onSignal(CallEvent.MediaConnected)
+
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+        verify(exactly = 0) { coordinator.retryIceRestart() }
+    }
+
+    @Test
+    fun `exhausting every attempt ends the call as connectionLost on the wire too`() = runTest {
+        val vm = reconnecting()
+
+        reconnectBudgetFlow.emit(Unit)
+        reconnectBudgetFlow.emit(Unit)
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+        assertThat(vm.state.value.endReason).isEqualTo(CallEndReason.ConnectionLost)
+        verify(exactly = 1) { signalManager.emitEnd("call-9") }
+        verify(exactly = 1) { coordinator.end() }
+    }
+
+    @Test
+    fun `the terminal escalation reports connectionLost analytics`() = runTest {
+        reconnecting()
+
+        reconnectBudgetFlow.emit(Unit)
+        reconnectBudgetFlow.emit(Unit)
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(analyticsFields()["endReason"]).isEqualTo("connectionLost")
+        assertThat(analyticsFields()["reconnectionCount"]).isEqualTo(3)
+    }
+
+    @Test
+    fun `no budget is armed outside the reconnecting phase`() = runTest {
+        val vm = connectedIncoming()
+
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+        verify(exactly = 0) { coordinator.retryIceRestart() }
     }
 
     // --- Peer mute/camera indicators: call:media-toggled (parité iOS/web) ---

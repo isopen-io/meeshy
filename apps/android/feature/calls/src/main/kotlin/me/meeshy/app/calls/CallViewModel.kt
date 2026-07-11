@@ -68,6 +68,7 @@ class CallViewModel @Inject constructor(
     private val qualityResetTimer: CallQualityResetTimer,
     private val screenRecordingDetector: ScreenRecordingDetector,
     private val clock: CallClock,
+    private val reconnectBudget: CallReconnectBudget,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -103,6 +104,12 @@ class CallViewModel @Inject constructor(
 
     /** Relays local screen-recording edges to the gateway; alive only while media is flowing. */
     private var screenCaptureReportJob: Job? = null
+
+    /** The armed per-attempt reconnection window; escalates ReconnectFailed on expiry. */
+    private var reconnectBudgetJob: Job? = null
+
+    /** The exact Reconnecting state the window was armed for — an attempt bump re-arms. */
+    private var reconnectBudgetArmedFor: CallState? = null
 
     /**
      * The last capture state actually SENT this call, or `null` when none was.
@@ -312,6 +319,7 @@ class CallViewModel @Inject constructor(
         stopTicker()
         stopQuality()
         stopWaitingTimer()
+        stopReconnectBudget()
         clearPeerIndicators()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
@@ -525,6 +533,7 @@ class CallViewModel @Inject constructor(
         syncQuality()
         syncHeartbeat()
         syncScreenCaptureReport()
+        syncReconnectBudget()
         syncPeerIndicators()
         publish()
     }
@@ -726,6 +735,54 @@ class CallViewModel @Inject constructor(
         screenCaptureReportJob?.cancel()
         screenCaptureReportJob = null
         lastReportedCapture = null
+    }
+
+    /**
+     * Arms one [CallReconnectBudget] window per DISTINCT Reconnecting state —
+     * an attempt bump is a fresh window — and tears it down on any other phase.
+     * Without this watchdog nothing ever fired [CallEvent.ReconnectFailed]: a
+     * stall that never recovered left the user on « Reconnexion… » forever,
+     * the server never cleaning up because the socket heartbeats survive the
+     * dead media (iOS parity: the `.reconnecting` watchdog, 10 s × 3 attempts
+     * ≈ 30 s bounded before `connectionLost`).
+     */
+    private fun syncReconnectBudget() {
+        val state = callState
+        if (state !is CallState.Reconnecting) {
+            stopReconnectBudget()
+            return
+        }
+        if (state == reconnectBudgetArmedFor) return
+        reconnectBudgetArmedFor = state
+        reconnectBudgetJob?.cancel()
+        reconnectBudgetJob = viewModelScope.launch {
+            reconnectBudget.countdown().collect {
+                onReconnectBudgetExpired()
+            }
+        }
+    }
+
+    /**
+     * Escalate: the FSM either bumps to the next attempt — nudged by a fresh
+     * ICE restart, covering the DISCONNECTED-forever stall that never turns
+     * FAILED — or ends the call `connectionLost`, which must ALSO reach the
+     * wire and tear the media down (the peer would otherwise stay in a
+     * zombie call; same duty as [hangUp]).
+     */
+    private fun onReconnectBudgetExpired() {
+        dispatch(CallEvent.ReconnectFailed)
+        if (callState is CallState.Ended) {
+            emitIfIdentified(signalManager::emitEnd)
+            coordinator.end()
+        } else {
+            coordinator.retryIceRestart()
+        }
+    }
+
+    private fun stopReconnectBudget() {
+        reconnectBudgetJob?.cancel()
+        reconnectBudgetJob = null
+        reconnectBudgetArmedFor = null
     }
 
     private fun publish() {

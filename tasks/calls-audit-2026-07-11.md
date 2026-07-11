@@ -72,6 +72,13 @@
 > retour CONNECTED = call:reconnected + MediaConnected. Les reconnexions
 > alimentent l'analytics (foldAnalytics comptait déjà les entrées en
 > Reconnecting). Pré-connexion jamais un stall (= phase Connecting FSM).
+> Watchdog budget : CallReconnectBudget (10 s/tentative, parité iOS
+> reconnectAttemptBudgetSeconds) armé par état Reconnecting DISTINCT —
+> expiry = ReconnectFailed (FSM : tentative+1, nudge retryIceRestart —
+> couvre le DISCONNECTED éternel jamais FAILED — puis, budget épuisé à 3,
+> Ended(connectionLost) + emitEnd + teardown coordinator, même devoir que
+> hangUp : sans ça le pair restait en appel zombie). Fenêtre totale bornée
+> ~30 s au lieu de « Reconnexion… » à vie.
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
