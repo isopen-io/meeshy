@@ -9,6 +9,7 @@ import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Post } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData } from './types';
 import { useAuthStore } from '@/stores/auth-store';
+import { decrementReactionSummary } from '@/lib/reaction-summary';
 
 const HEART_EMOJI = '❤️';
 const SOCKET_ACK_TIMEOUT_MS = 10_000;
@@ -369,10 +370,7 @@ export function useUnlikePostMutation() {
       const patcher = (p: Post): Post => ({
         ...p,
         likeCount: Math.max(0, p.likeCount - 1),
-        reactionSummary: {
-          ...p.reactionSummary,
-          [emoji]: Math.max(0, ((p.reactionSummary ?? {})[emoji] ?? 1) - 1),
-        },
+        reactionSummary: decrementReactionSummary(p.reactionSummary, emoji),
         currentUserReactions: (p.currentUserReactions ?? []).filter((e) => e !== emoji),
       });
 
