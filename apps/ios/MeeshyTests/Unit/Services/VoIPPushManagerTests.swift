@@ -321,4 +321,81 @@ final class VoIPPushManagerTests: XCTestCase {
         XCTAssertEqual(store.clearCallCount, 1)
         XCTAssertNil(sut.debug_lastRegisteredRecord)
     }
+
+    // MARK: - Phantom-call dedup eviction on CallKit rejection (audit finding)
+
+    /// Audit finding: the dedup-hit phantom path (a duplicate VoIP push for a
+    /// callId already recorded in `VoIPDedupRing`) called
+    /// `reportPhantomVoIPCall(uuid:update:)` without the callId, so if CallKit
+    /// refused the synthetic report (e.g. `maximumCallGroups` already
+    /// saturated), the dedup ring still marked the callId "reported" — a
+    /// genuine APNs retry for that same callId within the dedup TTL would be
+    /// silently phantom-acked again with no CallKit UI ever surfacing. These
+    /// are source-level guards (same technique as `CallManagerTests`):
+    /// `pushRegistry(didReceiveIncomingPushWith:)` cannot be driven from a
+    /// unit test without a synthesizable `PKPushPayload`.
+    private func voipPushManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/VoIPPushManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_duplicatePushPhantomPath_passesCallIdToReportPhantomVoIPCall() throws {
+        let source = try voipPushManagerSource()
+        guard let dedupRange = source.range(of: "VoIP push duplicate detected") else {
+            XCTFail("Expected the dedup-hit log line in VoIPPushManager")
+            return
+        }
+        let followingBody = String(source[dedupRange.upperBound...].prefix(400))
+        XCTAssertTrue(
+            followingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)"),
+            "The dedup-hit phantom-call path must pass `callId` to reportPhantomVoIPCall so a CallKit " +
+            "rejection can evict the dedup entry — otherwise a genuine retry is silently swallowed."
+        )
+    }
+
+    func test_malformedPayloadPhantomPath_doesNotClaimADedupCallId() throws {
+        let source = try voipPushManagerSource()
+        guard let malformedRange = source.range(of: "VoIP push without valid call payload") else {
+            XCTFail("Expected the malformed-payload log line in VoIPPushManager")
+            return
+        }
+        let precedingBody = String(source[..<malformedRange.lowerBound].suffix(400))
+        XCTAssertTrue(
+            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update)") &&
+            !precedingBody.contains("callId: callId"),
+            "The malformed-payload path never inserted into the dedup ring, so it must not pass a callId " +
+            "(there's nothing to evict)."
+        )
+    }
+
+    func test_reportPhantomVoIPCall_clearsDedupOnCallKitFailure() throws {
+        let source = try callManagerSource()
+        guard let start = source.range(of: "func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate, callId: String? = nil) {"),
+              let end = source.range(of: "callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)", range: start.upperBound..<source.endIndex) else {
+            XCTFail("Expected reportPhantomVoIPCall(uuid:update:callId:) in CallManager.swift")
+            return
+        }
+        let body = String(source[start.lowerBound..<end.upperBound])
+        XCTAssertTrue(
+            body.contains("guard let error, let callId else { return }") &&
+            body.contains("VoIPPushManager.shared.clearDedup(callId: callId)"),
+            "reportPhantomVoIPCall must clear the dedup ring entry when CallKit refuses the synthetic report, " +
+            "mirroring the failure handling in reportIncomingVoIPCall."
+        )
+    }
 }
