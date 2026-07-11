@@ -20,6 +20,12 @@ export interface CallQualityOverlayProps {
   videoSuspended?: boolean;
   /** The user's camera intent — the pill only shows when they actually want video. */
   userWantsVideo?: boolean;
+  /** The PEER's link is degraded (`call:quality-alert` — never the local link). */
+  remoteQualityDegraded?: boolean;
+  /** The peer is capturing the call screen (`call:screen-capture-alert`). */
+  remoteScreenCapturing?: boolean;
+  /** Interpolated into the remote-alert labels ({name} placeholder). */
+  participantName?: string;
 }
 
 export const CallQualityOverlay = memo(function CallQualityOverlay({
@@ -27,6 +33,9 @@ export const CallQualityOverlay = memo(function CallQualityOverlay({
   showStats = false,
   videoSuspended = false,
   userWantsVideo = false,
+  remoteQualityDegraded = false,
+  remoteScreenCapturing = false,
+  participantName = '',
 }: CallQualityOverlayProps) {
   const { t } = useI18n('calls');
 
@@ -40,6 +49,24 @@ export const CallQualityOverlay = memo(function CallQualityOverlay({
           className="rounded-full bg-amber-500/90 px-3 py-1 text-xs font-medium text-white shadow"
         >
           {t('calls.toasts.videoSuspendedPoorConnection')}
+        </div>
+      )}
+      {remoteQualityDegraded && (
+        <div
+          role="status"
+          data-testid="remote-quality-pill"
+          className="rounded-full bg-slate-800/90 px-3 py-1 text-xs font-medium text-white shadow"
+        >
+          {t('calls.remoteAlerts.qualityDegraded').replace('{name}', participantName)}
+        </div>
+      )}
+      {remoteScreenCapturing && (
+        <div
+          role="status"
+          data-testid="screen-capture-pill"
+          className="rounded-full bg-red-600/90 px-3 py-1 text-xs font-medium text-white shadow"
+        >
+          {t('calls.remoteAlerts.screenCapturing').replace('{name}', participantName)}
         </div>
       )}
     </div>

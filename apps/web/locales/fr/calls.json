@@ -64,6 +64,10 @@
       "videoBitrate": "Débit vidéo :",
       "updated": "Mis à jour :"
     },
+    "remoteAlerts": {
+      "qualityDegraded": "La connexion de {name} est instable",
+      "screenCapturing": "{name} enregistre peut-être l'écran"
+    },
     "stream": {
       "disconnected": "Déconnecté",
       "participantLeft": "{name} a quitté l'appel",

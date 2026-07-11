@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
+import { useRemoteCallAlerts } from '@/hooks/use-remote-call-alerts';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
 import {
   useAdaptiveDegradation,
@@ -108,6 +109,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     callId,
     updateInterval: 2000,
   });
+
+  // Remote-peer alerts relayed by the gateway (iOS/Android parity): the PEER's
+  // sustained degradation (transient pill, 15 s auto-clear) and the privacy
+  // signal when the peer captures the call screen.
+  const { remoteQualityDegraded, remoteScreenCapturing } = useRemoteCallAlerts(callId);
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -536,12 +542,15 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         participantName={remoteParticipant?.username || 'Unknown'}
       />
 
-      {/* Connection quality + discreet survival pill */}
+      {/* Connection quality + discreet survival pill + remote-peer alerts */}
       <CallQualityOverlay
         stats={qualityStats}
         showStats={showStats}
         videoSuspended={videoSuspended}
         userWantsVideo={controls.videoEnabled}
+        remoteQualityDegraded={remoteQualityDegraded}
+        remoteScreenCapturing={remoteScreenCapturing}
+        participantName={remoteParticipant?.username || ''}
       />
 
       {/* Audio Effects Panel (Sliding from bottom) */}

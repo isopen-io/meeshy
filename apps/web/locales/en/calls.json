@@ -64,6 +64,10 @@
       "videoBitrate": "Video Bitrate:",
       "updated": "Updated:"
     },
+    "remoteAlerts": {
+      "qualityDegraded": "{name}'s connection is unstable",
+      "screenCapturing": "{name} may be recording the screen"
+    },
     "stream": {
       "disconnected": "Disconnected",
       "participantLeft": "{name} has left",

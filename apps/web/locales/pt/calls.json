@@ -64,6 +64,10 @@
       "videoBitrate": "Taxa de bits de vídeo:",
       "updated": "Atualizado:"
     },
+    "remoteAlerts": {
+      "qualityDegraded": "A conexão de {name} está instável",
+      "screenCapturing": "{name} pode estar gravando a tela"
+    },
     "stream": {
       "disconnected": "Desconectado",
       "participantLeft": "{name} saiu",
