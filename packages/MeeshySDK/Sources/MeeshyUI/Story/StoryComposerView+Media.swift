@@ -78,7 +78,7 @@ extension StoryComposerView {
                    viewModel.canvasTimelineBridge.end()
                    viewModel.commitTimelineToCurrentSlide()
                }) {
-            TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
+            TimelineSheetContent(composer: viewModel)
                 .presentationDetents([.fraction(0.45), .large])
                 .presentationDragIndicator(.visible)
                 .modifier(StoryTimelinePresentationStyle())

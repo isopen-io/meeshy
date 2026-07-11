@@ -1129,7 +1129,7 @@ extension StoryComposerView {
     var timelineSection: some View {
         // V2 timeline editor is the product — no feature-flag gating since the
         // app has not yet shipped to a userbase that requires backwards-compat.
-        TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
+        TimelineSheetContent(composer: viewModel)
     }
 
     var safeAreaBottomInset: CGFloat {

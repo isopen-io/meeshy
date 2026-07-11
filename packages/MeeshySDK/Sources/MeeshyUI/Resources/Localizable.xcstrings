@@ -22009,6 +22009,54 @@
         }
       }
     },
+    "story.timeline.export.exporting" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporting video…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export de la vidéo…"
+          }
+        }
+      }
+    },
+    "story.timeline.export.failedTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export failed"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export impossible"
+          }
+        }
+      }
+    },
+    "story.timeline.export.previewTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export preview"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aperçu de l'export"
+          }
+        }
+      }
+    },
     "story.timeline.image" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -22945,6 +22993,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dissolution"
+          }
+        }
+      }
+    },
+    "story.timeline.transport.export" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export as MP4 video"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter en vidéo MP4"
           }
         }
       }
