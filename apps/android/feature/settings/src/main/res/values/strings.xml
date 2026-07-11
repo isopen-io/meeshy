@@ -100,4 +100,15 @@
     <string name="change_password_strength_3">Good</string>
     <string name="change_password_strength_4">Strong</string>
     <string name="change_password_strength_5">Excellent</string>
+    <string name="settings_media_download">Auto-download</string>
+    <string name="media_download_title">Auto-download</string>
+    <string name="media_download_info">Choose when each media type downloads automatically based on your connection.</string>
+    <string name="media_download_images">Images</string>
+    <string name="media_download_audio">Audio</string>
+    <string name="media_download_audio_translation">Audio translations</string>
+    <string name="media_download_video">Video</string>
+    <string name="media_policy_always">Always</string>
+    <string name="media_policy_wifi_good_cellular">Wi-Fi &amp; good cellular</string>
+    <string name="media_policy_wifi_only">Wi-Fi only</string>
+    <string name="media_policy_never">Never</string>
 </resources>
