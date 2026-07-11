@@ -11,9 +11,7 @@ import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinAckParser
 import me.meeshy.sdk.model.call.CallJoinResult
-import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualityReport
-import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalMapper
 import me.meeshy.sdk.model.call.SocketIceServer
@@ -97,23 +95,6 @@ class CallSignalManager @Inject constructor(
      */
     private val _iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(replay = 0, extraBufferCapacity = 8)
     val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.asSharedFlow()
-
-    /**
-     * The REMOTE peer's link degraded (`call:quality-alert` — the gateway excludes
-     * the reporter from the fanout, so this is never about the local link). Inert
-     * to the FSM; feeds the transient "your contact's connection is unstable"
-     * indicator (iOS parity: `callQualityAlert`, 15 s auto-clear). Hot, no replay.
-     */
-    private val _qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(replay = 0, extraBufferCapacity = 16)
-    val qualityAlerts: SharedFlow<CallQualityAlertPayload> = _qualityAlerts.asSharedFlow()
-
-    /**
-     * The remote peer started/stopped capturing the call screen
-     * (`call:screen-capture-alert`). Inert to the FSM; feeds the privacy
-     * indicator (iOS parity: `callScreenCaptureAlert`). Hot, no replay.
-     */
-    private val _screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(replay = 0, extraBufferCapacity = 16)
-    val screenCaptureAlerts: SharedFlow<CallScreenCaptureAlertPayload> = _screenCaptureAlerts.asSharedFlow()
 
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
@@ -319,12 +300,6 @@ class CallSignalManager @Inject constructor(
             if (event == ICE_SERVERS_REFRESHED_EVENT) {
                 CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::tryEmit)
             }
-            if (event == QUALITY_ALERT_EVENT) {
-                CallSignalMapper.qualityAlert(raw)?.let(_qualityAlerts::tryEmit)
-            }
-            if (event == SCREEN_CAPTURE_ALERT_EVENT) {
-                CallSignalMapper.screenCaptureAlert(raw)?.let(_screenCaptureAlerts::tryEmit)
-            }
             CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::tryEmit)
         }
     }
@@ -345,20 +320,11 @@ class CallSignalManager @Inject constructor(
         /** The gateway's reply to [emitRequestIceServers], carrying fresh TURN/STUN. */
         const val ICE_SERVERS_REFRESHED_EVENT = "call:ice-servers-refreshed"
 
-        /** The remote peer's sustained-degradation alert (never about the local link). */
-        const val QUALITY_ALERT_EVENT = "call:quality-alert"
-
-        /** The remote peer's screen-recording privacy signal. */
-        const val SCREEN_CAPTURE_ALERT_EVENT = "call:screen-capture-alert"
-
         val INBOUND_EVENTS = listOf(
             INITIATED_EVENT,
             SIGNAL_EVENT,
             ICE_SERVERS_REFRESHED_EVENT,
-            QUALITY_ALERT_EVENT,
-            SCREEN_CAPTURE_ALERT_EVENT,
             "call:participant-joined",
-            "call:participant-left",
             "call:ended",
             "call:missed",
             "call:media-toggled",

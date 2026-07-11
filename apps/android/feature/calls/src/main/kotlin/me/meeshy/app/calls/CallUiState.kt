@@ -112,19 +112,6 @@ data class CallUiState(
      * independent of [status]; the user may reject it or end-this-and-answer it.
      */
     val waitingBanner: WaitingBannerUi? = null,
-    /**
-     * The REMOTE peer's link is sustaining degraded stats (`call:quality-alert` —
-     * never about the local link, whose tier is [connectionQuality]). Lit while
-     * alerts keep arriving, auto-cleared 15 s after the last one; surfaced only
-     * for the connected/reconnecting phases (iOS parity: FaceTime-style "your
-     * contact is experiencing network issues").
-     */
-    val remoteQualityDegraded: Boolean = false,
-    /**
-     * The remote peer is capturing the call screen (`call:screen-capture-alert`).
-     * A privacy signal, not a call-phase one — surfaced only while media flows.
-     */
-    val remoteScreenCapturing: Boolean = false,
 ) {
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -173,8 +160,6 @@ object CallPresenter {
         elapsedSeconds: Long = 0,
         connectionQuality: ConnectionQuality? = null,
         waiting: CallWaitingState = CallWaitingState.EMPTY,
-        remoteQualityDegraded: Boolean = false,
-        remoteScreenCapturing: Boolean = false,
     ): CallUiState {
         val status = statusOf(state)
         return CallUiState(
@@ -188,18 +173,7 @@ object CallPresenter {
             durationLabel = durationLabelFor(status, elapsedSeconds),
             connectionQuality = connectionQualityFor(status, connectionQuality),
             waitingBanner = waiting.pending?.let { WaitingBannerUi(it.callerName, it.isVideo) },
-            remoteQualityDegraded = alertFor(status, remoteQualityDegraded),
-            remoteScreenCapturing = alertFor(status, remoteScreenCapturing),
         )
-    }
-
-    /**
-     * Remote-peer alerts describe the live media link; like [connectionQualityFor]
-     * they never leak onto a ringing, connecting, or ended screen.
-     */
-    private fun alertFor(status: CallStatus, raised: Boolean): Boolean = when (status) {
-        CallStatus.CONNECTED, CallStatus.RECONNECTING -> raised
-        else -> false
     }
 
     /**

@@ -216,51 +216,6 @@ class CallPresenterTest {
         assertThat(presentQuality(CallState.Connected, null)).isNull()
     }
 
-    // --- remote alerts (call:quality-alert / call:screen-capture-alert) ------
-
-    private fun presentAlerts(state: CallState, degraded: Boolean = false, capturing: Boolean = false) =
-        CallPresenter.present(
-            state,
-            config,
-            media,
-            remoteQualityDegraded = degraded,
-            remoteScreenCapturing = capturing,
-        )
-
-    @Test
-    fun `remote alerts surface while connected and reconnecting`() {
-        val connected = presentAlerts(CallState.Connected, degraded = true, capturing = true)
-        assertThat(connected.remoteQualityDegraded).isTrue()
-        assertThat(connected.remoteScreenCapturing).isTrue()
-
-        val reconnecting = presentAlerts(CallState.Reconnecting(attempt = 1), degraded = true, capturing = true)
-        assertThat(reconnecting.remoteQualityDegraded).isTrue()
-        assertThat(reconnecting.remoteScreenCapturing).isTrue()
-    }
-
-    @Test
-    fun `remote alerts are suppressed off the media phases`() {
-        listOf(
-            CallState.Ringing(isOutgoing = true),
-            CallState.Ringing(isOutgoing = false),
-            CallState.Offering,
-            CallState.Connecting,
-            CallState.Idle,
-            CallState.Ended(CallEndReason.Remote),
-        ).forEach { state ->
-            val ui = presentAlerts(state, degraded = true, capturing = true)
-            assertThat(ui.remoteQualityDegraded).isFalse()
-            assertThat(ui.remoteScreenCapturing).isFalse()
-        }
-    }
-
-    @Test
-    fun `remote alerts default to absent`() {
-        val ui = presentAlerts(CallState.Connected)
-        assertThat(ui.remoteQualityDegraded).isFalse()
-        assertThat(ui.remoteScreenCapturing).isFalse()
-    }
-
     // --- waiting banner derivation -----------------------------------------
 
     private fun presentWaiting(waiting: CallWaitingState) =

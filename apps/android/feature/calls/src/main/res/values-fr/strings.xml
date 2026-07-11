@@ -35,8 +35,6 @@
     <string name="call_quality_good">Bonne connexion</string>
     <string name="call_quality_fair">Connexion moyenne</string>
     <string name="call_quality_poor">Connexion faible</string>
-    <string name="call_remote_quality_degraded">La connexion de %1$s est instable</string>
-    <string name="call_remote_screen_capturing">%1$s enregistre peut-être l\'écran</string>
     <string name="call_waiting_subtitle">Appel entrant…</string>
     <string name="call_waiting_banner_a11y">Appel entrant de %1$s</string>
     <string name="call_waiting_reject_a11y">Refuser l\'appel de %1$s</string>

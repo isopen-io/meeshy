@@ -10,9 +10,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
-import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualityReport
-import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.ConnectionQuality
 import org.json.JSONObject
 import org.junit.Test
@@ -228,83 +226,6 @@ class CallSignalManagerTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.endedCalls.test {
             deliver(handlers, "call:ended", """{"callId":"","reason":"completed"}""")
-            expectNoEvents()
-        }
-    }
-
-    // --- Inbound: remote-peer alert frames republish on their parallel streams ---
-
-    @Test
-    fun `a quality-alert frame republishes the decoded alert on qualityAlerts`() = runTest {
-        val (managerAndSocket, handlers) = managerWithHandlers()
-        managerAndSocket.first.qualityAlerts.test {
-            deliver(
-                handlers,
-                "call:quality-alert",
-                """{"callId":"c1","participantId":"p2","metric":"rtt","value":412,"threshold":300}""",
-            )
-            assertThat(awaitItem()).isEqualTo(
-                CallQualityAlertPayload(
-                    callId = "c1",
-                    participantId = "p2",
-                    metric = "rtt",
-                    value = 412.0,
-                    threshold = 300.0,
-                ),
-            )
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `a quality-alert frame is inert to the FSM-facing events stream`() = runTest {
-        val (managerAndSocket, handlers) = managerWithHandlers()
-        managerAndSocket.first.events.test {
-            deliver(
-                handlers,
-                "call:quality-alert",
-                """{"callId":"c1","metric":"packetLoss","value":9,"threshold":5}""",
-            )
-            expectNoEvents()
-        }
-    }
-
-    @Test
-    fun `a malformed quality-alert frame emits nothing on qualityAlerts`() = runTest {
-        val (managerAndSocket, handlers) = managerWithHandlers()
-        managerAndSocket.first.qualityAlerts.test {
-            deliver(handlers, "call:quality-alert", """{"callId":"c1"}""")
-            expectNoEvents()
-        }
-    }
-
-    @Test
-    fun `a screen-capture-alert frame republishes the decoded alert on screenCaptureAlerts`() = runTest {
-        val (managerAndSocket, handlers) = managerWithHandlers()
-        managerAndSocket.first.screenCaptureAlerts.test {
-            deliver(handlers, "call:screen-capture-alert", """{"callId":"c1","participantId":"p2","isCapturing":true}""")
-            assertThat(awaitItem()).isEqualTo(
-                CallScreenCaptureAlertPayload(callId = "c1", participantId = "p2", isCapturing = true),
-            )
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `a screen-capture-alert frame is inert to the FSM-facing events stream`() = runTest {
-        val (managerAndSocket, handlers) = managerWithHandlers()
-        managerAndSocket.first.events.test {
-            deliver(handlers, "call:screen-capture-alert", """{"callId":"c1","isCapturing":false}""")
-            expectNoEvents()
-        }
-    }
-
-    @Test
-    fun `a participant-left frame is subscribed and inert to the FSM-facing events stream`() = runTest {
-        val (managerAndSocket, handlers) = managerWithHandlers()
-        managerAndSocket.first.events.test {
-            // getValue throws if the manager never subscribed to the event.
-            deliver(handlers, "call:participant-left", """{"callId":"c1","participantId":"p2","mode":"p2p"}""")
             expectNoEvents()
         }
     }

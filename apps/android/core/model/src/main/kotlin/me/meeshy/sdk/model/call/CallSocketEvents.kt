@@ -117,37 +117,3 @@ data class CallErrorPayload(
 data class CallAlreadyAnsweredPayload(
     val callId: String,
 )
-
-/**
- * `call:participant-left` — a peer left the room without ending the call. Inert
- * to the 1:1 FSM (teardown always rides `call:ended`); decoded for wire-contract
- * validation now, and the group-call roster later.
- */
-@Serializable
-data class CallParticipantLeftPayload(
-    val callId: String,
-    val participantId: String? = null,
-    val mode: String? = null,
-)
-
-/**
- * `call:quality-alert` — the gateway observed the REMOTE peer's link sustaining
- * degraded stats (`metric` ∈ `rtt`|`packetLoss`, with the crossed [threshold]).
- * Never describes the local link — the reporter is excluded from the fanout.
- */
-@Serializable
-data class CallQualityAlertPayload(
-    val callId: String,
-    val participantId: String? = null,
-    val metric: String,
-    val value: Double,
-    val threshold: Double,
-)
-
-/** `call:screen-capture-alert` — the remote peer started/stopped capturing the call screen. */
-@Serializable
-data class CallScreenCaptureAlertPayload(
-    val callId: String,
-    val participantId: String? = null,
-    val isCapturing: Boolean,
-)

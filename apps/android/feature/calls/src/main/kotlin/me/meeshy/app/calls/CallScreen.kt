@@ -198,20 +198,6 @@ fun CallScreen(
                     Spacer(Modifier.height(MeeshySpacing.sm))
                     ConnectionQualityBars(quality = quality, accent = accent)
                 }
-                if (state.remoteQualityDegraded) {
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    RemoteAlertChip(
-                        text = stringResource(R.string.call_remote_quality_degraded, state.peerName),
-                        tint = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-                if (state.remoteScreenCapturing) {
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    RemoteAlertChip(
-                        text = stringResource(R.string.call_remote_screen_capturing, state.peerName),
-                        tint = MaterialTheme.colorScheme.error,
-                    )
-                }
             }
 
             CallControls(
@@ -259,26 +245,6 @@ fun CallScreen(
             }
         }
     }
-}
-
-/**
- * A transient remote-peer alert chip under the call status: the peer's link is
- * unstable (`call:quality-alert`, auto-cleared by the ViewModel 15 s after the
- * last alert) or the peer is capturing the call screen (privacy, semantic error
- * hue). Pure glue — presence is decided by [CallUiState].
- */
-@Composable
-private fun RemoteAlertChip(text: String, tint: Color) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = tint,
-        textAlign = TextAlign.Center,
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(MeeshyTheme.tokens.backgroundSecondary)
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-    )
 }
 
 /**

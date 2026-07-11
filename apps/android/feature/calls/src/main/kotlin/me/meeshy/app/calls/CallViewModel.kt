@@ -12,8 +12,6 @@ import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
-import me.meeshy.sdk.model.call.CallQualityAlertPayload
-import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
@@ -61,7 +59,6 @@ class CallViewModel @Inject constructor(
     private val waitingTimer: CallWaitingTimer,
     private val heartbeatTicker: CallHeartbeatTicker,
     private val appStatePresence: AppStatePresenceReporter,
-    private val qualityAlertTimer: CallQualityAlertTimer,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -101,15 +98,6 @@ class CallViewModel @Inject constructor(
     /** The 15 s auto-dismiss timer for the current banner; cancelled on any resolution. */
     private var waitingTimerJob: Job? = null
 
-    /** The REMOTE peer's link is degraded (`call:quality-alert`); auto-cleared 15 s after the last alert. */
-    private var remoteQualityDegraded: Boolean = false
-
-    /** The auto-clear window for [remoteQualityDegraded]; re-armed by each alert. */
-    private var qualityAlertResetJob: Job? = null
-
-    /** The remote peer is capturing the call screen (`call:screen-capture-alert`). */
-    private var remoteScreenCapturing: Boolean = false
-
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
@@ -138,52 +126,6 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             appStatePresence.foreground.collect(::onAppStateChanged)
         }
-        viewModelScope.launch {
-            signalManager.qualityAlerts.collect(::onQualityAlert)
-        }
-        viewModelScope.launch {
-            signalManager.screenCaptureAlerts.collect(::onScreenCaptureAlert)
-        }
-    }
-
-    /**
-     * The gateway observed the REMOTE peer's link sustaining degraded stats.
-     * Keyed strictly to the active call — an alert for any other id is inert.
-     * Each alert (re-)arms the 15 s auto-clear window, so the indicator stays
-     * lit exactly while the link stays bad (the gateway re-emits on every
-     * sustained report) and clears on its own once it recovers (iOS parity:
-     * `scheduleRemoteQualityReset`).
-     */
-    private fun onQualityAlert(alert: CallQualityAlertPayload) {
-        if (callId.isBlank() || alert.callId != callId) return
-        remoteQualityDegraded = true
-        publish()
-        qualityAlertResetJob?.cancel()
-        qualityAlertResetJob = viewModelScope.launch {
-            qualityAlertTimer.window().collect {
-                qualityAlertResetJob = null
-                remoteQualityDegraded = false
-                publish()
-            }
-        }
-    }
-
-    /**
-     * The remote peer started/stopped capturing the call screen — a privacy
-     * signal held (not auto-cleared) until the peer stops or the call ends.
-     * Keyed strictly to the active call, like [onQualityAlert].
-     */
-    private fun onScreenCaptureAlert(alert: CallScreenCaptureAlertPayload) {
-        if (callId.isBlank() || alert.callId != callId) return
-        remoteScreenCapturing = alert.isCapturing
-        publish()
-    }
-
-    private fun resetRemoteAlerts() {
-        qualityAlertResetJob?.cancel()
-        qualityAlertResetJob = null
-        remoteQualityDegraded = false
-        remoteScreenCapturing = false
     }
 
     /**
@@ -243,7 +185,6 @@ class CallViewModel @Inject constructor(
         stopTicker()
         stopQuality()
         stopWaitingTimer()
-        resetRemoteAlerts()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
 
@@ -563,10 +504,7 @@ class CallViewModel @Inject constructor(
     }
 
     private fun publish() {
-        _state.value = CallPresenter.present(
-            callState, config, media, elapsedSeconds, connectionQuality, waiting,
-            remoteQualityDegraded, remoteScreenCapturing,
-        )
+        _state.value = CallPresenter.present(callState, config, media, elapsedSeconds, connectionQuality, waiting)
     }
 
     private companion object {
