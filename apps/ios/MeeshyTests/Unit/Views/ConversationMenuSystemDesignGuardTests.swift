@@ -3,17 +3,21 @@ import XCTest
 
 /// Source-analysis guards for the conversation long-press menu.
 ///
-/// Deux invariants produit (2026-07-10) :
+/// Trois invariants produit (2026-07-10, étendus 2026-07-11) :
 /// 1. **Tout callback destructif passe par une confirmation système** : la
-///    suppression d'une conversation (menu custom ET swipe « hide ») ne doit
-///    JAMAIS appeler `deleteConversation` directement — elle arme
-///    `deleteTargetConversation`, consommé par l'unique `confirmationDialog`
-///    de `ConversationListView` (rendu natif de l'OS courant, Liquid Glass
-///    sur iOS 26).
+///    suppression d'une conversation (menu natif, menu custom ET swipe
+///    « hide ») ne doit JAMAIS appeler `deleteConversation` directement —
+///    elle arme `deleteTargetConversation`, consommé par l'unique
+///    `confirmationDialog` de `ConversationListView` (rendu natif de l'OS
+///    courant, Liquid Glass sur iOS 26).
 /// 2. **Le menu custom rend le design système de la version d'iOS courante**
 ///    via les wrappers `Compatibility/` du SDK : conteneur `adaptiveGlass`
 ///    (vrai `glassEffect` iOS 26, fallback material avant), rows avec
 ///    highlight au press (parité UIMenu) et métriques Dynamic Type.
+/// 3. **Le long-press préfère le menu NATIF quand Liquid Glass existe** :
+///    sur iOS 26+ la ligne attache le `.contextMenu` système (rendu Liquid
+///    Glass natif) ; les iOS antérieurs retombent sur l'overlay custom
+///    (`RowPressBounceModifier` → `ConversationContextMenuView`).
 @MainActor
 final class ConversationMenuSystemDesignGuardTests: XCTestCase {
 
@@ -125,6 +129,62 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             menuSource.contains("@ScaledMetric(relativeTo: .body) private var rowMinHeight"),
             "La hauteur de row doit scaler avec Dynamic Type (@ScaledMetric), " +
             "comme MessageActionsMenu et les menus natifs."
+        )
+    }
+
+    // MARK: - Menu natif Liquid Glass (iOS 26) + fallback custom
+
+    /// La ligne doit préférer le `.contextMenu` NATIF (rendu Liquid Glass
+    /// système) quand l'OS le fournit, et garder l'overlay custom
+    /// (`RowPressBounceModifier` → `onLongPress`) comme fallback < iOS 26.
+    func test_conversationRow_prefersNativeMenu_oniOS26_withCustomFallback() throws {
+        let rowsSource = try source("Meeshy/Features/Main/Views/ConversationListView+Rows.swift")
+
+        XCTAssertTrue(
+            rowsSource.contains("if #available(iOS 26.0, *)"),
+            "ConversationRowItem doit gater le menu natif Liquid Glass derrière " +
+            "#available(iOS 26.0, *) — jamais de détection runtime maison."
+        )
+        XCTAssertTrue(
+            rowsSource.contains(".contextMenu {"),
+            "Le chemin iOS 26 doit attacher le .contextMenu NATIF " +
+            "(rendu Liquid Glass système, preview comprise)."
+        )
+        XCTAssertTrue(
+            rowsSource.contains("RowPressBounceModifier(onTap:"),
+            "Le fallback < iOS 26 doit rester l'overlay custom " +
+            "(RowPressBounceModifier → ConversationContextMenuView)."
+        )
+    }
+
+    /// Le builder du menu natif doit exister et garder la parité d'actions
+    /// avec le menu custom — dont Renommer, la divergence historique qui
+    /// avait justifié la suppression du premier builder (#1811).
+    func test_nativeContextMenuBuilder_exists_withRenameParity() throws {
+        let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+
+        guard let builderRange = overlaysSource.range(of: "func conversationContextMenu(for") else {
+            XCTFail(
+                "ConversationListView+Overlays doit exposer le builder natif " +
+                "conversationContextMenu(for:) — chemin iOS 26 du long-press."
+            )
+            return
+        }
+        // Fenêtre large : le builder fait ~10 500 caractères (le Delete est
+        // tout en bas) — borné par le MARK de l'overlay custom qui le suit.
+        let blockEnd = overlaysSource.range(
+            of: "// MARK: - Custom Context Menu Overlay",
+            range: builderRange.lowerBound ..< overlaysSource.endIndex
+        )?.lowerBound ?? overlaysSource.endIndex
+        let builderBlock = String(overlaysSource[builderRange.lowerBound ..< blockEnd])
+        XCTAssertTrue(
+            builderBlock.contains("context.rename"),
+            "Le builder natif doit offrir Renommer (parité menu custom)."
+        )
+        XCTAssertTrue(
+            builderBlock.contains("deleteTargetConversation = conversation"),
+            "Le Delete du builder natif doit armer deleteTargetConversation " +
+            "(confirmation système) — jamais de suppression directe."
         )
     }
 }

@@ -437,7 +437,10 @@ struct ConversationListView: View {
                     runContextMenuEmergence()
                 }
             }
-        )
+        ) {
+            // iOS 26+ : items du menu contextuel NATIF (Liquid Glass).
+            conversationContextMenu(for: conversation)
+        }
         .equatable()
     }
 

@@ -6,13 +6,273 @@ import MeeshyUI
 
 extension ConversationListView {
 
-    // MARK: - Custom Context Menu Overlay (icônes garanties iOS 26)
+    // MARK: - Menu d'appui long — deux chemins par version d'OS
     //
-    // Chemin UNIQUE du menu d'appui long des conversations : l'overlay custom
-    // ci-dessous (ConversationContextMenuView, Liquid Glass natif iOS 26 via
-    // les wrappers Compatibility du SDK). L'ancien builder `.contextMenu`
-    // natif — jamais appelé depuis la migration vers l'overlay — a été
-    // supprimé pour éviter deux implémentations divergentes du même menu.
+    // iOS 26+ : menu contextuel NATIF `.contextMenu(menuItems:preview:)`
+    // (rendu Liquid Glass système) — builder ci-dessous, attaché par
+    // `ConversationRowItem`. < iOS 26 : overlay custom
+    // (`ConversationContextMenuView`, déclenché par `RowPressBounceModifier`
+    // → `onLongPress`). Les DEUX chemins doivent rester en parité d'actions ;
+    // la suppression arme toujours `deleteTargetConversation` (confirmation
+    // système — invariants `ConversationMenuSystemDesignGuardTests`).
+
+    // MARK: - Native Context Menu (iOS 26 Liquid Glass)
+
+    @ViewBuilder
+    func conversationContextMenu(for conversation: Conversation) -> some View {
+        // Pin/Unpin
+        Button {
+            HapticFeedback.medium()
+            Task { await conversationViewModel.togglePin(for: conversation.id) }
+        } label: {
+            Label(
+                conversation.userState.isPinned
+                    ? String(localized: "context.unpin", defaultValue: "Désépingler", bundle: .main)
+                    : String(localized: "context.pin", defaultValue: "Épingler", bundle: .main),
+                systemImage: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill"
+            )
+        }
+
+        // Mute/Unmute
+        Button {
+            HapticFeedback.light()
+            Task { await conversationViewModel.toggleMute(for: conversation.id) }
+        } label: {
+            Label(
+                conversation.userState.isMuted
+                    ? String(localized: "context.unmute", defaultValue: "Réactiver les notifications", bundle: .main)
+                    : String(localized: "context.mute", defaultValue: "Mettre en silence", bundle: .main),
+                systemImage: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill"
+            )
+        }
+
+        Divider()
+
+        // Marquer lu / non lu
+        if conversation.userState.unreadCount > 0 {
+            Button {
+                HapticFeedback.light()
+                Task { await conversationViewModel.markAsRead(conversationId: conversation.id) }
+            } label: {
+                Label(
+                    String(localized: "context.mark_read", defaultValue: "Marquer comme lu", bundle: .main),
+                    systemImage: "envelope.open.fill"
+                )
+            }
+        } else {
+            Button {
+                HapticFeedback.light()
+                Task { await conversationViewModel.markAsUnread(conversationId: conversation.id) }
+            } label: {
+                Label(
+                    String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu", bundle: .main),
+                    systemImage: "envelope.badge.fill"
+                )
+            }
+        }
+
+        // Détails
+        Button {
+            HapticFeedback.light()
+            conversationInfoConversation = conversation
+        } label: {
+            Label(
+                String(localized: "context.details", defaultValue: "Détails", bundle: .main),
+                systemImage: "info.circle.fill"
+            )
+        }
+
+        // Renommer — groupes/communautés uniquement (parité menu custom)
+        if conversation.type != .direct {
+            Button {
+                HapticFeedback.light()
+                renameText = conversation.name
+                renameTarget = conversation
+            } label: {
+                Label(
+                    String(localized: "context.rename", defaultValue: "Renommer", bundle: .main),
+                    systemImage: "pencil"
+                )
+            }
+        }
+
+        // Favori (emoji)
+        Menu {
+            ForEach(["⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡"], id: \.self) { emoji in
+                Button {
+                    HapticFeedback.light()
+                    Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
+                } label: {
+                    Text(emoji)
+                }
+            }
+            if conversation.userState.reaction != nil {
+                Divider()
+                Button(role: .destructive) {
+                    HapticFeedback.light()
+                    Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
+                } label: {
+                    Label(
+                        String(localized: "context.remove_favorite", defaultValue: "Retirer le favori", bundle: .main),
+                        systemImage: "star.slash"
+                    )
+                }
+            }
+        } label: {
+            Label(
+                String(localized: "context.favorite", defaultValue: "Favori", bundle: .main),
+                systemImage: conversation.userState.reaction != nil ? "star.fill" : "star"
+            )
+        }
+
+        // Déplacer vers une catégorie
+        Menu {
+            ForEach(conversationViewModel.userCategories) { category in
+                let isCurrentCategory = conversation.userState.sectionId == category.id
+                Button {
+                    HapticFeedback.light()
+                    conversationViewModel.moveToSection(
+                        conversationId: conversation.id,
+                        sectionId: isCurrentCategory ? "" : category.id
+                    )
+                } label: {
+                    if isCurrentCategory {
+                        Label("\(category.name) \u{2713}", systemImage: category.icon)
+                    } else {
+                        Label(category.name, systemImage: category.icon)
+                    }
+                }
+            }
+            if !conversationViewModel.userCategories.isEmpty {
+                Divider()
+            }
+            Button {
+                HapticFeedback.light()
+                conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: "")
+            } label: {
+                Label(
+                    String(localized: "context.my_conversations", defaultValue: "Mes conversations", bundle: .main),
+                    systemImage: "tray.fill"
+                )
+            }
+        } label: {
+            Label(
+                String(localized: "context.move_to", defaultValue: "Déplacer vers...", bundle: .main),
+                systemImage: "folder.fill"
+            )
+        }
+
+        Divider()
+
+        // Actions secondaires — groupées pour garder ≤8 items top-level
+        // (au-delà, iOS bascule sur le style liste où les icônes disparaissent).
+        Menu {
+            if canCreateShareLink(for: conversation) {
+                Button {
+                    HapticFeedback.medium()
+                    inviteSheetConversation = conversation
+                } label: {
+                    Label(
+                        String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main),
+                        systemImage: "person.badge.plus"
+                    )
+                }
+            }
+
+            // Verrouiller / Déverrouiller
+            let isLockedCtx = ConversationLockManager.shared.isLocked(conversation.id)
+            Button {
+                HapticFeedback.medium()
+                if isLockedCtx {
+                    lockSheetMode = .unlockConversation
+                    lockSheetConversation = conversation
+                } else if ConversationLockManager.shared.masterPinConfigured {
+                    lockSheetMode = .lockConversation
+                    lockSheetConversation = conversation
+                } else {
+                    showNoMasterPinAlert = true
+                }
+            } label: {
+                Label(
+                    isLockedCtx
+                        ? String(localized: "context.unlock", defaultValue: "Déverrouiller", bundle: .main)
+                        : String(localized: "context.lock", defaultValue: "Verrouiller", bundle: .main),
+                    systemImage: isLockedCtx ? "lock.open.fill" : "lock.fill"
+                )
+            }
+
+            // Archiver / Désarchiver — état PAR UTILISATEUR (userState), même
+            // source que le filtre `.archived` ; jamais `conversation.isActive`
+            // (flag de cycle de vie serveur, indépendant de l'archivage).
+            let isArchivedConv = conversation.userState.isArchived
+            Button {
+                HapticFeedback.medium()
+                if isArchivedConv {
+                    Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
+                } else {
+                    Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
+                }
+            } label: {
+                Label(
+                    isArchivedConv
+                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
+                        : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main),
+                    systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
+                )
+            }
+
+            // Bloquer / Débloquer (DM uniquement)
+            if conversation.type == .direct, let userId = conversation.participantUserId {
+                let isBlockedCtx = BlockService.shared.isBlocked(userId: userId)
+                Divider()
+                if isBlockedCtx {
+                    Button {
+                        HapticFeedback.heavy()
+                        Task {
+                            await BlockActionCoordinator.shared.unblock(userId: userId)
+                            await MainActor.run { HapticFeedback.success() }
+                        }
+                    } label: {
+                        Label(
+                            String(localized: "context.unblock", defaultValue: "Débloquer", bundle: .main),
+                            systemImage: "hand.raised.slash.fill"
+                        )
+                    }
+                } else {
+                    Button(role: .destructive) {
+                        HapticFeedback.heavy()
+                        blockTargetConversation = conversation
+                        showBlockConfirmation = true
+                    } label: {
+                        Label(
+                            String(localized: "context.block", defaultValue: "Bloquer", bundle: .main),
+                            systemImage: "hand.raised.fill"
+                        )
+                    }
+                }
+            }
+        } label: {
+            Label(
+                String(localized: "context.more_options", defaultValue: "Plus d'options", bundle: .main),
+                systemImage: "ellipsis.circle.fill"
+            )
+        }
+
+        Divider()
+
+        // Supprimer — arme la confirmation système (jamais de delete direct).
+        Button(role: .destructive) {
+            HapticFeedback.heavy()
+            deleteTargetConversation = conversation
+        } label: {
+            Label(
+                String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main),
+                systemImage: "trash"
+            )
+        }
+    }
+
+    // MARK: - Custom Context Menu Overlay (fallback < iOS 26)
 
     func dismissContextMenu() {
         // Zoom-out : anime la sortie (aperçu rétrécit, menu redescend) puis
