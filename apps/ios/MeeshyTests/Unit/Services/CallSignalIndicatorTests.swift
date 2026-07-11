@@ -196,6 +196,41 @@ final class CallHangupFastPathTests: XCTestCase {
             "— this is the UI entry point that was missing before this feature was rebuilt."
         )
     }
+
+    func test_transcriptSegmentRow_usesPrimarySecondaryColorsPerSpeaker() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+            XCTFail("CallView must define transcriptSegmentRow(_:)")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("MeeshyColors.indigo400"),
+            "transcriptSegmentRow must color the local speaker (\"Moi\") with MeeshyColors.indigo400 " +
+            "— the codebase's established \"secondary elements\" tone."
+        )
+        XCTAssertTrue(
+            body.contains("MeeshyColors.brandPrimary"),
+            "transcriptSegmentRow must color the remote speaker with MeeshyColors.brandPrimary " +
+            "— the signature brand color, used for the interlocutor."
+        )
+    }
+
+    func test_transcriptSegmentRow_showsSpeakerNameAsVisibleText() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+            XCTFail("CallView must define transcriptSegmentRow(_:)")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("Text(speakerName)"),
+            "transcriptSegmentRow must render the speaker's name as its own visible Text, " +
+            "not just a colored dot — user-requested 2026-07-11."
+        )
+    }
 }
 
 // MARK: - CallSignalGlyph Reduce Motion (source inspection)

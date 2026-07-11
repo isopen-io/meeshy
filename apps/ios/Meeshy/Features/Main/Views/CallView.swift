@@ -36,6 +36,7 @@ struct CallView: View {
     @State private var pulseScale: CGFloat = 1.0
     @State private var showControls = true
     @State private var showTranscript = false
+    @State private var showOriginalText = false
     @State private var showEffectsToolbar = false
     // §7.2 — PiP placement is corner-anchored (snap-to-nearest-corner) and
     // computed from a GeometryReader, not a hardcoded point. `pipDragOffset`
@@ -1340,48 +1341,64 @@ struct CallView: View {
 
     // MARK: - Transcript Overlay
 
+    /// Video calls only — floating glass banner over the bottom of the video,
+    /// like traditional subtitles. Audio calls use `transcriptPanel` (structural,
+    /// non-overlay) instead — see that property's doc comment.
     private var transcriptOverlay: some View {
-        let localUserId = AuthManager.shared.currentUser?.id ?? ""
-        let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
-        return VStack(alignment: .leading, spacing: 6) {
+        transcriptSegmentsList
+            .padding(12)
+            // iOS 26 Liquid Glass — floating live-transcript panel over the video
+            // stream (same chrome-over-content family as the duration badge / effects
+            // toolbar). SDK Compatibility wrapper gates native effect / fallback.
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 100)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .opacity(showTranscript ? 1 : 0)
+            .accessibilityHidden(!showTranscript)
+            .animation(.easeInOut(duration: 0.2), value: showTranscript)
+    }
+
+    /// Shared, reused by both the video banner (`transcriptOverlay`) and the
+    /// audio structural panel (`transcriptPanel`).
+    private var transcriptSegmentsList: some View {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(transcriptionService.displayedSegments) { segment in
-                let isLocal = segment.speakerId == localUserId
-                HStack(alignment: .top, spacing: 8) {
-                    Circle()
-                        .fill(isLocal ? MeeshyColors.indigo400 : MeeshyColors.success)
-                        .frame(width: 8, height: 8)
-                        .padding(.top, 6)
-                        .accessibilityHidden(true)
-                    Text(segment.text)
-                        .font(.callout.weight(segment.isFinal ? .regular : .light))
-                        .foregroundColor(.white)
-                        .opacity(segment.isFinal ? 1.0 : 0.7)
-                        .accessibilityLabel("\(isLocal ? localName : remoteName) : \(segment.text)")
-                }
-                .accessibilityElement(children: .combine)
+                transcriptSegmentRow(segment)
             }
         }
-        .padding(12)
-        // iOS 26 Liquid Glass — floating live-transcript panel over the video
-        // stream (same chrome-over-content family as the duration badge / effects
-        // toolbar). SDK Compatibility wrapper gates native effect / fallback.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 100)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .opacity(showTranscript ? 1 : 0)
-        .accessibilityHidden(!showTranscript)
-        .animation(.easeInOut(duration: 0.2), value: showTranscript)
-        // PERF-005: tell the transcription service when the panel is visible
-        // so it can skip per-frame partial-result work while hidden.
-        .adaptiveOnChange(of: showTranscript) { _, newValue in
-            transcriptionService.isShowingOverlay = newValue
+    }
+
+    /// One transcript line: visible speaker name (colored) + text. `<Moi>` in
+    /// `MeeshyColors.indigo400` (this codebase's established "secondary
+    /// elements" tone), the interlocutor's name in `MeeshyColors.brandPrimary`
+    /// (the signature brand color) — user-requested 2026-07-11, replaces the
+    /// previous colored-dot-only distinction.
+    /// My own speech is never translated for myself (`text` is already in my
+    /// language); the interlocutor's speech shows `translatedText ?? text` by
+    /// default, or `text` (original) when `showOriginalText` is on.
+    @ViewBuilder
+    private func transcriptSegmentRow(_ segment: TranscriptionSegment) -> some View {
+        let localUserId = AuthManager.shared.currentUser?.id ?? ""
+        let isLocal = segment.speakerId == localUserId
+        let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
+        let speakerName = isLocal ? localName : remoteName
+        let speakerColor = isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
+        let displayText = isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
+
+        VStack(alignment: .leading, spacing: 2) {
+            Text(speakerName)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(speakerColor)
+            Text(displayText)
+                .font(.callout.weight(segment.isFinal ? .regular : .light))
+                .foregroundColor(.white)
+                .opacity(segment.isFinal ? 1.0 : 0.7)
         }
-        .onAppear {
-            transcriptionService.isShowingOverlay = showTranscript
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(speakerName) : \(displayText)")
     }
 
     // MARK: - Ended
