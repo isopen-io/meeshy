@@ -208,6 +208,12 @@ export class CallService {
   // on CallCleanupService, which already type-imports CallService.
   private readonly PHANTOM_CONNECTING_GRACE_MS = 90 * 1000;
   private readonly PHANTOM_HEARTBEAT_GRACE_MS = 120 * 1000;
+  // Live-call message — initiateCall's own GC sweeps (phantom/zombie) end
+  // calls with `garbageCollected` WITHOUT going through any summary path: an
+  // already-posted live message would read "en cours" forever. The socket
+  // layer wires this to `postCallSummaryForTerminatedCall`, which converts
+  // an orphaned live message to `failed`. Fire-and-forget, never blocking.
+  private reapedCallCallback: ((callId: string) => Promise<void> | void) | null = null;
 
   constructor(
     private prisma: PrismaClient,
@@ -221,6 +227,31 @@ export class CallService {
     private readonly bootedAt: Date = new Date()
   ) {
     this.turnCredentialService = new TURNCredentialService();
+  }
+
+  /**
+   * Register the callback notified with every callId force-ended by
+   * `initiateCall`'s own GC sweeps (phantom stale participations + zombie
+   * active call). Pattern mirrors CallCleanupService's
+   * `setPostSummaryCallback`; wired in server.ts.
+   */
+  setReapedCallCallback(callback: (callId: string) => Promise<void> | void): void {
+    this.reapedCallCallback = callback;
+  }
+
+  /** Fire-and-forget notification — a failing callback never affects initiate. */
+  private notifyReapedCall(callId: string): void {
+    const callback = this.reapedCallCallback;
+    if (!callback) {
+      return;
+    }
+    try {
+      Promise.resolve(callback(callId)).catch((error) => {
+        logger.warn('reaped-call callback failed', { callId, error });
+      });
+    } catch (error) {
+      logger.warn('reaped-call callback failed synchronously', { callId, error });
+    }
   }
 
   /**
@@ -854,6 +885,7 @@ export class CallService {
           this.clearHeartbeats(staleCallId);
           this.clearRingingTimeout(staleCallId);
           await this.releaseActiveCallClaim(staleSession?.conversationId ?? conversationId, staleCallId);
+          this.notifyReapedCall(staleCallId);
         } catch (cleanupErr) {
           logger.error('phantom-cleanup failed for stale call', { staleCallId, error: cleanupErr });
         }
@@ -915,6 +947,7 @@ export class CallService {
         this.clearHeartbeats(activeCall.id);
         this.clearRingingTimeout(activeCall.id);
         await this.releaseActiveCallClaim(conversationId, activeCall.id);
+        this.notifyReapedCall(activeCall.id);
 
         logger.info('Zombie call cleaned up', { zombieCallId: activeCall.id });
       } else {

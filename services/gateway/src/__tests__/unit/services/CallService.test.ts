@@ -2634,6 +2634,128 @@ describe('CallService - updateCallStatus', () => {
   });
 });
 
+describe('CallService - setReapedCallCallback (sweeps GC d\'initiateCall)', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  const validInitiateData = {
+    conversationId: 'conv-123',
+    initiatorId: 'user-123',
+    participantId: 'participant-123',
+    type: 'video' as const,
+    settings: { audioEnabled: true, videoEnabled: true }
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any, new Date(Date.now() - 24 * 60 * 60 * 1000));
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const setupZombieSweep = () => {
+    const zombieCall = createMockCallSession({
+      status: CallStatus.active,
+      participants: [createMockParticipant({ leftAt: new Date() })]
+    });
+    const newCall = createMockCallSession({
+      id: 'call-new',
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'member-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(zombieCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.$transaction.mockResolvedValue(newCall);
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+    return zombieCall;
+  };
+
+  it('notifie le callId moissonné par le sweep phantom', async () => {
+    const staleCallId = 'stale-call-reaped';
+    const staleStartedAt = new Date(Date.now() - 5 * 60_000);
+    mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([{
+      id: 'stale-part-1',
+      callSessionId: staleCallId,
+      leftAt: null,
+      callSession: {
+        id: staleCallId,
+        startedAt: staleStartedAt,
+        conversationId: 'conv-other',
+        status: CallStatus.active,
+        answeredAt: staleStartedAt
+      }
+    }]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+    mockPrisma.$transaction
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        };
+        return cb(tx);
+      })
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callSession: { create: jest.fn().mockResolvedValue({ id: 'call-123' }) },
+          callParticipant: { create: jest.fn().mockResolvedValue({}) }
+        };
+        return cb(tx);
+      });
+    mockPrisma.callSession.findUnique.mockResolvedValue(createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    }));
+
+    const reaped: string[] = [];
+    callService.setReapedCallCallback((callId) => { reaped.push(callId); });
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(reaped).toContain(staleCallId);
+  });
+
+  it('notifie le callId moissonné par le sweep zombie', async () => {
+    const zombieCall = setupZombieSweep();
+    const reaped: string[] = [];
+    callService.setReapedCallCallback((callId) => { reaped.push(callId); });
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(reaped).toContain(zombieCall.id);
+  });
+
+  it('un callback qui rejette ne bloque JAMAIS initiateCall', async () => {
+    setupZombieSweep();
+    callService.setReapedCallCallback(() => Promise.reject(new Error('boom')));
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-new');
+  });
+
+  it('sans callback câblé, les sweeps restent silencieux (comportement actuel)', async () => {
+    setupZombieSweep();
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-new');
+  });
+});
+
 describe('CallService - initiateCall phantom cleanup & transaction', () => {
   let callService: CallService;
   let mockPrisma: ReturnType<typeof createMockPrisma>;

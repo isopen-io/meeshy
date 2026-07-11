@@ -1317,6 +1317,13 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         this.callCleanupService.setPostSummaryCallback(
           (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
         );
+        // Live-call message — initiateCall's OWN GC sweeps (phantom stale
+        // participations, zombie active call) end calls with garbageCollected
+        // without any summary hook: an already-posted live "en cours" message
+        // would stay frozen forever. Same conversion path as the GC tiers.
+        cleanupManager.getCallService().setReapedCallCallback(
+          (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
+        );
         // Sibling-drift fix (2026-07-05) — GC-ended calls (the 4th terminal
         // path) also release their qualityDegradedStreaks entries, matching
         // the three paths CallEventsHandler already hooks into itself.
