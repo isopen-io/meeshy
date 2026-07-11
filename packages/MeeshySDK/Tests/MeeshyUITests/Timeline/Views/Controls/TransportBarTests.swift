@@ -67,4 +67,32 @@ final class TransportBarTests: XCTestCase {
             "to meet Apple HIG 44pt minimum touch target"
         )
     }
+
+    // MARK: - Time readout gating (vue simple sans timer, retour user 2026-07-11)
+
+    func test_init_withoutTimeReadout_doesNotCrash() {
+        let bar = TransportBar(
+            isPlaying: false, currentTime: 4.25, duration: 10,
+            zoomScale: 1.0, isMuted: false,
+            showsTimeReadout: false,
+            onPlayToggle: {}, onMuteToggle: {},
+            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}
+        )
+        XCTAssertFalse(bar.showsTimeReadout)
+        _ = bar.body
+    }
+
+    func test_init_defaultsToShowingTimeReadout() {
+        XCTAssertTrue(makeSUT().showsTimeReadout)
+    }
+
+    func test_quickTimeline_transportHidesTimeReadout() {
+        XCTAssertFalse(QuickTimelineView.transportShowsTimeReadout,
+                       "La vue simple (Quick) n'affiche pas le timer dans le transport")
+    }
+
+    func test_proTimeline_transportKeepsTimeReadout() {
+        XCTAssertTrue(ProTimelineView.transportShowsTimeReadout,
+                      "Le mode Pro conserve le readout temps courant / durée")
+    }
 }

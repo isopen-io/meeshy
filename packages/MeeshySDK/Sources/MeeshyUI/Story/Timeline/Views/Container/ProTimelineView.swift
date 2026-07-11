@@ -331,6 +331,10 @@ public struct ProTimelineView: View {
 
     // MARK: - Shared rows
 
+    /// Contrepartie du pin Quick : le Pro conserve le readout chiffré,
+    /// indispensable au calage précis des clips.
+    public static let transportShowsTimeReadout = true
+
     private var transportRow: some View {
         TransportBar(
             isPlaying: viewModel.isPlaying,
@@ -338,6 +342,7 @@ public struct ProTimelineView: View {
             duration: viewModel.project.slideDuration,
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
+            showsTimeReadout: Self.transportShowsTimeReadout,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
             onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },

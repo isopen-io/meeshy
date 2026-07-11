@@ -227,6 +227,11 @@ public struct QuickTimelineView: View {
 
     // MARK: - Sub-views
 
+    /// La vue simple ne montre pas le timer : la position se lit sur le
+    /// playhead et la règle — le readout chiffré est un artefact Pro
+    /// (retour user 2026-07-11).
+    public static let transportShowsTimeReadout = false
+
     private var transport: some View {
         TransportBar(
             isPlaying: viewModel.isPlaying,
@@ -234,6 +239,7 @@ public struct QuickTimelineView: View {
             duration: viewModel.project.slideDuration,
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
+            showsTimeReadout: Self.transportShowsTimeReadout,
             // Quick n'a pas de TimelineToolbar — l'undo/redo vit dans le
             // transport (le Pro passe nil et garde sa toolbar dédiée).
             canUndo: viewModel.canUndo,

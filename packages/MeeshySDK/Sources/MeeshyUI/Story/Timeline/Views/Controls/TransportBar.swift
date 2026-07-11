@@ -10,6 +10,10 @@ public struct TransportBar: View {
     public let duration: Float
     public let zoomScale: CGFloat
     public let isMuted: Bool
+    /// Le readout `courant / durée`. La vue simple (Quick) le masque — la
+    /// position se lit sur le playhead et la règle (retour user 2026-07-11) ;
+    /// le Pro le conserve pour le calage précis.
+    public let showsTimeReadout: Bool
     /// Undo/redo compacts pour le mode Quick (pas de TimelineToolbar dédiée).
     /// nil = masqués — le Pro garde sa toolbar et passe nil ici.
     public let canUndo: Bool?
@@ -24,6 +28,7 @@ public struct TransportBar: View {
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,
                 zoomScale: CGFloat, isMuted: Bool,
+                showsTimeReadout: Bool = true,
                 canUndo: Bool? = nil, canRedo: Bool? = nil,
                 onPlayToggle: @escaping () -> Void,
                 onMuteToggle: @escaping () -> Void,
@@ -34,6 +39,7 @@ public struct TransportBar: View {
                 onRedo: @escaping () -> Void = {}) {
         self.isPlaying = isPlaying; self.currentTime = currentTime; self.duration = duration
         self.zoomScale = zoomScale; self.isMuted = isMuted
+        self.showsTimeReadout = showsTimeReadout
         self.canUndo = canUndo; self.canRedo = canRedo
         self.onPlayToggle = onPlayToggle; self.onMuteToggle = onMuteToggle
         self.onZoomIn = onZoomIn; self.onZoomOut = onZoomOut; self.onZoomReset = onZoomReset
@@ -80,7 +86,9 @@ public struct TransportBar: View {
         // horizontal space and avoids duplicate affordances.
         HStack(spacing: 10) {
             playButton
-            timeReadout
+            if showsTimeReadout {
+                timeReadout
+            }
             Spacer(minLength: 4)
             undoRedoCluster
             zoomCluster
