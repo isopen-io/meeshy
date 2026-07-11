@@ -8,6 +8,10 @@ import AVFoundation
 /// background video. Les assets sont référencés par `postMediaId`, donc
 /// l'appelant injecte un resolver opaque `(StoryAudioPlayerObject) -> URL?`
 /// (le composer branche `resolveMediaURL`, le viewer le cache disque).
+///
+/// @MainActor : MeeshyUI est compilé en defaultIsolation MainActor —
+/// `composeAudioLanes` retourne des types AVFoundation non-Sendable.
+@MainActor
 final class StoryExporter_AudioLanesTests: XCTestCase {
 
     func test_composeAudioLanes_foregroundAudio_insertsWindowedTrack() async throws {
