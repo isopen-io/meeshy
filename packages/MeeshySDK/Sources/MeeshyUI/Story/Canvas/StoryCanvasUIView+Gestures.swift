@@ -421,14 +421,21 @@ extension StoryCanvasUIView {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             layer.position = renderPosition(x: text.x, y: text.y)
-            // Text scale is baked into the rendered `fontSize` at configure-time
-            // (see `StoryTextLayer.configure`: `text.fontSize * text.scale`).
-            // Applying scale again on the CATextLayer.transform would
-            // double-scale the glyphs during the gesture and snap back to the
-            // correct size only at .ended → user-perceived "text grows then
-            // shrinks while dragging" (regression report 2026-05-27).
-            let rotation = CGFloat(text.rotation * .pi / 180)
-            layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
+            // Échelle LIVE pendant le pinch (user 2026-07-11 « le zoom/dézoom
+            // de texte doit être rendu en temps réel ») : le scale d'un texte
+            // est CUIT dans `fontSize` au configure (`text.fontSize ×
+            // text.scale`, cf. StoryTextLayer) — la layer restait donc FIGÉE à
+            // sa taille d'avant-geste, seul le rebuild `.ended` montrait la
+            // nouvelle taille. On applique un ratio transitoire (scale modèle
+            // courant / scale cuit lu sur `StoryTextLayer.textObject`) par-
+            // dessus la rotation ; hors geste le ratio vaut 1 (pas de
+            // double-scale — régression 2026-05-27 toujours couverte) et le
+            // rebuild de fin de geste re-rend les glyphes NETS à la taille
+            // finale.
+            let bakedScale = (layer as? StoryTextLayer)?.textObject?.scale ?? text.scale
+            layer.transform = Self.liveTextGestureTransform(rotationDegrees: text.rotation,
+                                                            modelScale: text.scale,
+                                                            bakedScale: bakedScale)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
             // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
@@ -448,6 +455,21 @@ extension StoryCanvasUIView {
             layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
         }
+    }
+
+    /// Transform de geste LIVE d'un texte : rotation modèle + ratio d'échelle
+    /// transitoire (scale modèle courant ÷ scale cuit dans le rendu au dernier
+    /// configure). L'échelle uniforme commute avec la rotation 2D — l'ordre de
+    /// composition est donc indifférent. `bakedScale` ≤ 0 (layer jamais
+    /// configurée, données corrompues) → rotation seule, jamais de division
+    /// invalide. Pure et `nonisolated` pour être testable sans monter de vue.
+    nonisolated static func liveTextGestureTransform(rotationDegrees: Double,
+                                                     modelScale: Double,
+                                                     bakedScale: Double) -> CATransform3D {
+        let rotation = CATransform3DMakeRotation(CGFloat(rotationDegrees * .pi / 180), 0, 0, 1)
+        guard bakedScale > 0, modelScale > 0 else { return rotation }
+        let ratio = CGFloat(modelScale / bakedScale)
+        return CATransform3DScale(rotation, ratio, ratio, 1)
     }
 
     func hitTestItem(at point: CGPoint) -> String? {

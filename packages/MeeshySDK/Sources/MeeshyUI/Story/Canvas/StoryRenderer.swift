@@ -128,7 +128,37 @@ public enum StoryRenderer {
                 // defaultIsolation), and `cache.layer(for:...)` is itself
                 // MainActor — no actor hop, no Sendable requirement on the
                 // CALayer return.
-                layer = cache.layer(for: item, at: time.seconds, languages: languages) { rebuiltItem in
+                //
+                // Mode `.edit` (canvas composer live) : deux extensions rendent
+                // le cache SÛR et CONTINU en édition (impératif user 2026-07-11
+                // « manipuler un élément ne doit pas faire sauter les vidéos ») :
+                // 1. `contentHash` — empreinte JSON exhaustive de l'élément :
+                //    toute mutation à id constant (fontSize, textColor, volume…)
+                //    invalide SA layer et elle seule ; les éléments intouchés
+                //    (vidéos en lecture !) gardent la leur, AVPlayer compris.
+                // 2. `reconfigure` — un changement de GÉOMÉTRIE sur un média
+                //    réutilise la `StoryMediaLayer` existante via `configure`
+                //    (idempotent côté playback : `attachPlayer` conserve le
+                //    player à URL constante) au lieu de la rebâtir.
+                // En `.play` (compositor export / reader) les deux restent
+                // désactivés — comportement historique, items figés.
+                let contentHash: Int? = (mode == .edit) ? editContentHash(for: item) : nil
+                let mediaReconfigure: ((any RenderableItem, CALayer) -> CALayer?)? =
+                    (mode == .edit)
+                    ? { rebuiltItem, existing in
+                        guard let media = rebuiltItem as? StoryMediaObject,
+                              let mediaLayer = existing as? StoryMediaLayer else { return nil }
+                        mediaLayer.configure(with: media,
+                                             geometry: geometry,
+                                             mode: mode,
+                                             resolver: resolver,
+                                             imageCache: imageCache)
+                        return mediaLayer
+                    }
+                    : nil
+                layer = cache.layer(for: item, at: time.seconds, languages: languages,
+                                    contentHash: contentHash,
+                                    reconfigure: mediaReconfigure) { rebuiltItem in
                     renderItem(rebuiltItem,
                                into: geometry,
                                at: time,
@@ -227,6 +257,37 @@ public enum StoryRenderer {
     }
 
     // MARK: - Private
+
+    /// Empreinte de contenu exhaustive d'un élément pour le cache de layers en
+    /// mode `.edit` : hash de l'encodage JSON stable (`.sortedKeys`) du type
+    /// concret. Capture TOUT champ Codable — y compris ceux que l'ancienne
+    /// `ItemSignature` ignorait par contrat (fontSize, textColor,
+    /// backgroundStyle, volume, zIndex…). Un échec d'encodage (impossible en
+    /// pratique pour ces structs Codable) retourne un hash unique par appel
+    /// pour forcer le rebuild plutôt que servir une layer périmée.
+    @MainActor
+    private static func editContentHash(for item: any RenderableItem) -> Int {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data: Data?
+        if let text = item as? StoryTextObject {
+            data = try? encoder.encode(text)
+        } else if let media = item as? StoryMediaObject {
+            data = try? encoder.encode(media)
+        } else if let sticker = item as? StorySticker {
+            data = try? encoder.encode(sticker)
+        } else {
+            data = nil
+        }
+        guard let data else {
+            var fallback = Hasher()
+            fallback.combine(UUID())
+            return fallback.finalize()
+        }
+        var hasher = Hasher()
+        hasher.combine(data)
+        return hasher.finalize()
+    }
 
     /// Bake du dessin d'un slide en image (espace design 1080×1920). Privilégie
     /// `drawingStrokes` (moderne, rasterisé) ; fallback `drawingData` (legacy PKDrawing).

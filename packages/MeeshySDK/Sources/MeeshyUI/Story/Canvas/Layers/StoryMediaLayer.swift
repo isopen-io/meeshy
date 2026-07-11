@@ -146,6 +146,14 @@ public final class StoryMediaLayer: CALayer {
     /// vidéo. Retiré avec un fade out 200 ms quand l'AVPlayer est prêt.
     private nonisolated(unsafe) var placeholderLayer: CALayer?
 
+    /// URL actuellement attachée au player. Garde d'idempotence
+    /// d'`attachPlayer` : reconfigurer la layer avec la MÊME URL (cache `.edit`
+    /// qui réutilise la layer sur un changement de géométrie, rebuild du
+    /// canvas composer) ne doit PAS `replaceCurrentItem` ni re-seek — la
+    /// lecture en cours continue sans coupure (impératif user 2026-07-11 :
+    /// manipuler un élément ne fait pas sauter les vidéos qui jouent).
+    private nonisolated(unsafe) var attachedURL: URL?
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -438,8 +446,16 @@ public final class StoryMediaLayer: CALayer {
             return
         }
 
-        // Cache miss → ThumbHash placeholder pendant le fetch async.
-        applyThumbHashPlaceholder(media.thumbHash)
+        // Cache miss → ThumbHash placeholder pendant le fetch async — SAUF si
+        // ce player joue déjà cette URL distante (reconfiguration in-place du
+        // cache `.edit` sur changement de géométrie) : re-poser le placeholder
+        // recouvrirait la vidéo en cours de lecture, et `attachPlayer`
+        // (idempotent) ne le fadera jamais.
+        let isReconfiguringAttachedURL = attachedURL == remoteURL
+            && avPlayerLayer?.player?.currentItem != nil
+        if !isReconfiguringAttachedURL {
+            applyThumbHashPlaceholder(media.thumbHash)
+        }
 
         // Annule le load précédent : un layer recyclé pour un autre média
         // ne doit pas stamp l'ancienne URL une fois résolue.
@@ -491,6 +507,18 @@ public final class StoryMediaLayer: CALayer {
     /// la spec § 2.2 (A.1).
     @MainActor
     private func attachPlayer(url: URL, mode: RenderMode, loop: Bool) {
+        // Idempotence à URL constante : un player vivant qui joue déjà CETTE
+        // URL est laissé strictement intact — pas de `replaceCurrentItem`
+        // (la lecture repartirait de zéro), pas de seek, pas de ré-armement
+        // du loop observer. On re-stampe seulement mute/volume, seuls états
+        // susceptibles d'avoir changé entre deux configure d'un même média.
+        if attachedURL == url, let existing = avPlayerLayer?.player, existing.currentItem != nil {
+            existing.isMuted = isMuted
+            existing.volume = media?.volume ?? 1.0
+            return
+        }
+        attachedURL = url
+
         let item = AVPlayerItem(url: url)
         // Buffer modéré : 2 s suffit pour la plupart des vidéos courtes sans
         // gaspiller la RAM. Sur 3G/4G lent, peut être ajusté à 4 s.
@@ -738,6 +766,7 @@ public final class StoryMediaLayer: CALayer {
         }
         avPlayerLayer?.player = nil
         avPlayer = nil
+        attachedURL = nil
         placeholderLayer?.removeFromSuperlayer()
         placeholderLayer = nil
     }

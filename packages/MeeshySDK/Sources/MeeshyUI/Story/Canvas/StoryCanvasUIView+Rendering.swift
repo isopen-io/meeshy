@@ -28,6 +28,12 @@ extension StoryCanvasUIView {
         // the same media id. Distinct from `slideContentRevision` (which bumps on
         // every edit incl. text keystrokes) to avoid needless bg re-fetches.
         composerImageRevision &+= 1
+        // Le cache de layers `.edit` fingerprinte le MODÈLE (JSON de l'élément) ;
+        // un bitmap édité in-place vit dans `loadedImages` à modèle constant et
+        // serait donc servi périmé sur cache hit. Flush complet — événement
+        // rare (retour de l'éditeur d'image plein écran), le re-build est
+        // imperceptible à cet instant-là.
+        rendererCache.invalidate()
         rebuildLayers()
     }
 
@@ -126,19 +132,23 @@ extension StoryCanvasUIView {
                                                   mode: mode,
                                                   languages: readerContext.preferredLanguages)
 
-        // Cache CALayer : utilisé uniquement en `.play` où `displayLinkTick`
-        // rebuild à 60 Hz sans mutation du modèle (seul `currentTime` avance).
-        // En `.edit`, `rebuildLayers()` ne se déclenche que sur `slide.didSet`
-        // — i.e. après mutation du modèle — et le fingerprint actuel
-        // (position/scale/rotation/opacity/visible/languages/postMediaId/text/emoji)
-        // ne capture pas toutes les mutations possibles (fontSize, textColor,
-        // backgroundStyle, etc.). Passer `cache: nil` en `.edit` garantit
-        // une frame correcte après n'importe quelle mutation.
-        let cacheForRender: StoryRendererCache? = (mode == .play) ? rendererCache : nil
+        // Cache CALayer : actif dans LES DEUX modes depuis 2026-07-11.
+        // - `.play` : `displayLinkTick` rebuild à 60 Hz sans mutation du modèle
+        //   (seul `currentTime` avance) — fingerprint historique inchangé.
+        // - `.edit` : `StoryRenderer.render` fournit un `contentHash` JSON
+        //   exhaustif par élément, qui capture TOUTES les mutations possibles
+        //   (fontSize, textColor, backgroundStyle…) — l'ancienne raison de
+        //   passer `cache: nil` ici. Résultat : muter un élément ne recrée que
+        //   SA layer ; les vidéos intouchées gardent la leur (AVPlayer compris)
+        //   et continuent de jouer sans coupure, et un changement de géométrie
+        //   sur un média RECONFIGURE sa layer in-place (impératif user
+        //   2026-07-11 « la manipulation ne fait pas sauter les vidéos »).
+        let cacheForRender: StoryRendererCache? = rendererCache
         if let cacheForRender {
             cacheForRender.invalidateIfNeeded(slideId: slide.id,
                                               languages: readerContext.preferredLanguages,
-                                              mode: mode)
+                                              mode: mode,
+                                              renderSize: geometry.renderSize)
         }
 
         let rendered = StoryRenderer.render(slide: slide,
