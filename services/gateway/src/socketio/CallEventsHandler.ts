@@ -18,6 +18,8 @@ import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
@@ -1501,11 +1503,32 @@ export class CallEventsHandler {
             userId: { not: null }
           },
           select: {
-            userId: true
+            userId: true,
+            user: {
+              select: {
+                systemLanguage: true,
+                regionalLanguage: true,
+                customDestinationLanguage: true,
+                deviceLocale: true
+              }
+            }
           }
         });
 
         const memberUserIds = conversationParticipants.map(p => p.userId!).filter(Boolean);
+        // Audit 2026-07-11 #11 — le push VoIP de sonnerie était codé en dur en
+        // français ("{callerName} vous appelle" / "Appel vidéo"), en violation
+        // du Prisme Linguistique (résolution via resolveUserLanguage, jamais de
+        // texte figé). Résolu ici via le même SSOT que le reste des pushes
+        // (NotificationService.resolveRecipientLangs).
+        const memberLangById = new Map<string, string>();
+        for (const p of conversationParticipants) {
+          if (!p.userId || !p.user) continue;
+          memberLangById.set(
+            p.userId,
+            resolveUserLanguage(p.user, { deviceLocale: p.user.deviceLocale ?? undefined })
+          );
+        }
         logger.info('📋 Conversation members to notify', {
           conversationId: data.conversationId,
           memberUserIds
@@ -1590,17 +1613,21 @@ export class CallEventsHandler {
             uid => uid !== userId && !foregroundUserIds.has(uid)
           );
 
+          const callType = data.type === 'video' ? 'video' : 'audio';
           for (const offlineUserId of offlineUserIds) {
             // Per-user TURN credentials so the answerer's RTCPeerConnection has
             // TURN at construction time (VoIPPushManager.didReceiveIncomingPush
             // configures WebRTC immediately, before any socket reconnect).
             // Serialized as JSON string because APNs `data` is Record<string,string>.
             const memberIceServers = this.callService.generateIceServers(offlineUserId);
+            // Audit 2026-07-11 #11 — texte VoIP résolu à la langue du callee
+            // (Prisme), plus jamais figé en français.
+            const recipientLang = memberLangById.get(offlineUserId) ?? 'fr';
             this.pushService.sendToUser({
               userId: offlineUserId,
               payload: {
-                title: `${callerName} vous appelle`,
-                body: data.type === 'video' ? 'Appel vidéo' : 'Appel audio',
+                title: notificationString(recipientLang, 'call.incoming.title', { actor: callerName }),
+                body: notificationString(recipientLang, 'call.incoming.body', { callType }),
                 callId: callSession.id,
                 callerName,
                 callerAvatar,

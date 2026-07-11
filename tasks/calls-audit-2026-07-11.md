@@ -6,7 +6,29 @@
 > pushes stop-ring apns+fcm/ios+android, mirror answered-elsewhere aussi
 > dans la branche TARGET_NOT_FOUND). Reste côté client Android : handler
 > FCM des data-pushes `call_cancel`/`call_answered_elsewhere` (le gateway
-> les délivre désormais aux tokens fcm). Findings #4-#11 ouverts.
+> les délivre désormais aux tokens fcm).
+>
+> **#4+#6 CORRIGÉS** (`a7280bcf9` — contrat d'events gelé, literals migrés,
+> events morts dépréciés).
+>
+> **#11 CORRIGÉ** (cette itération) — le push VoIP de sonnerie
+> (`call:initiate` → membres offline) était codé en dur en français
+> (`"{callerName} vous appelle"` / `"Appel vidéo"`/`"Appel audio"`), en
+> violation directe du Prisme Linguistique. Résolu via
+> `resolveUserLanguage()` (SSOT, `conversation-helpers.ts`) par membre —
+> query `participant.findMany` étendue pour inclure les 4 niveaux de langue
+> du `user` relié — puis rendu via deux nouvelles clés du catalogue partagé
+> `packages/shared/utils/notification-strings.ts` :
+> `call.incoming.title` (`"{actor} vous appelle"` / `"{actor} is calling
+> you"` / …) et `call.incoming.body` (`"Appel vidéo"` / `"Video call"` / …,
+> via une nouvelle map `CALL_TYPE_BODY` distincte de `CALL_LABEL` — l'ordre
+> des mots et la casse d'un corps de notification autonome diffèrent du
+> gabarit mid-phrase `"Missed {callLabel} call"`). Fallback `'fr'` si le
+> membre n'a aucune langue résolvable (parité avec `resolveRecipientLangs`
+> de `NotificationService`). Tests : `notification-strings.test.ts` (RED→GREEN,
+> 2 nouveaux cas + complétude 8 langues) et nouveau
+> `CallEventsHandler-voip-push-i18n.test.ts` (en/es/fallback-fr, 3 cas).
+> Findings #5, #7, #8, #9, #10 ouverts.
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,

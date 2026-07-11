@@ -16,7 +16,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
   'friend.story', 'friend.post', 'friend.mood', 'friend.subtitleNew',
-  'call.missed',
+  'call.missed', 'call.incoming.title', 'call.incoming.body',
   'contact.request', 'contact.accepted',
   'repost',
   'invitation.group', 'invitation.direct',
@@ -68,6 +68,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'a publié une nouvelle humeur',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Appel {callLabel} manqué',
+    'call.incoming.title': '{actor} vous appelle',
+    'call.incoming.body': '{callTypeBody}',
     'contact.request': 'Nouvelle demande de contact',
     'contact.accepted': 'Demande de contact acceptée',
     'repost': 'a partagé {possObj}',
@@ -103,6 +105,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'shared a new mood',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Missed {callLabel} call',
+    'call.incoming.title': '{actor} is calling you',
+    'call.incoming.body': '{callTypeBody}',
     'contact.request': 'New contact request',
     'contact.accepted': 'Contact request accepted',
     'repost': 'shared {possObj}',
@@ -138,6 +142,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'publicó un nuevo estado de ánimo',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Llamada {callLabel} perdida',
+    'call.incoming.title': '{actor} te está llamando',
+    'call.incoming.body': '{callTypeBody}',
     'contact.request': 'Nueva solicitud de contacto',
     'contact.accepted': 'Solicitud de contacto aceptada',
     'repost': 'compartió {possObj}',
@@ -173,6 +179,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'publicou um novo humor',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chamada {callLabel} perdida',
+    'call.incoming.title': '{actor} está ligando para você',
+    'call.incoming.body': '{callTypeBody}',
     'contact.request': 'Novo pedido de contato',
     'contact.accepted': 'Pedido de contato aceito',
     'repost': 'compartilhou {possObj}',
@@ -208,6 +216,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'hat eine neue Stimmung geteilt',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Verpasster {callLabel}',
+    'call.incoming.title': '{actor} ruft dich an',
+    'call.incoming.body': '{callTypeBody}',
     'contact.request': 'Neue Kontaktanfrage',
     'contact.accepted': 'Kontaktanfrage angenommen',
     'repost': 'hat {possObj} geteilt',
@@ -243,6 +253,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'ha pubblicato un nuovo stato d’animo',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chiamata {callLabel} persa',
+    'call.incoming.title': '{actor} ti sta chiamando',
+    'call.incoming.body': '{callTypeBody}',
     'contact.request': 'Nuova richiesta di contatto',
     'contact.accepted': 'Richiesta di contatto accettata',
     'repost': 'ha condiviso {possObj}',
@@ -278,6 +290,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'شارك مزاجًا جديدًا',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} مكالمة {callLabel} فائتة',
+    'call.incoming.title': '{actor} يتصل بك',
+    'call.incoming.body': '{callTypeBody}',
     'contact.request': 'طلب تواصل جديد',
     'contact.accepted': 'تم قبول طلب التواصل',
     'repost': 'شارك {possObj}',
@@ -313,6 +327,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': '分享了新心情',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} 未接{callLabel}',
+    'call.incoming.title': '{actor}正在呼叫你',
+    'call.incoming.body': '{callTypeBody}',
     'contact.request': '新的联系人请求',
     'contact.accepted': '联系人请求已接受',
     'repost': '分享了{possObj}',
@@ -424,6 +440,21 @@ const CALL_LABEL: Record<NotificationLanguage, CallMap> = {
   'zh-Hans': { audio: '语音通话', video: '视频通话' },
 };
 
+// Corps de la notification VoIP entrante ("Appel vidéo" / "Video call") —
+// phrase complète et non un simple label mid-phrase (contrairement à
+// CALL_LABEL ci-dessus, dont l'ordre des mots et la casse ne conviennent
+// qu'au gabarit "Missed {callLabel} call" / "Appel {callLabel} manqué").
+const CALL_TYPE_BODY: Record<NotificationLanguage, CallMap> = {
+  fr: { audio: 'Appel audio', video: 'Appel vidéo' },
+  en: { audio: 'Audio call', video: 'Video call' },
+  es: { audio: 'Llamada de voz', video: 'Llamada de video' },
+  pt: { audio: 'Chamada de voz', video: 'Chamada de vídeo' },
+  de: { audio: 'Sprachanruf', video: 'Videoanruf' },
+  it: { audio: 'Chiamata vocale', video: 'Chiamata video' },
+  ar: { audio: 'مكالمة صوتية', video: 'مكالمة فيديو' },
+  'zh-Hans': { audio: '语音通话', video: '视频通话' },
+};
+
 // Contexte de reaction.commentVerbose : " sur le <entité> de {author}", entité-conscient.
 // Couvre les 5 NotificationPostKind — une réaction à un commentaire sur un REEL/STATUS
 // ne s'effondre plus vers « post » (symétrie avec reaction.post qui porte déjà le postType).
@@ -483,7 +514,10 @@ export function notificationString(
     tokens.ownerSubtitle = SUBTITLE_OWNER[L][params.postType];
     tokens.friendSubtitle = FRIEND_SUBTITLE[L][params.postType];
   }
-  if (params.callType) tokens.callLabel = CALL_LABEL[L][params.callType];
+  if (params.callType) {
+    tokens.callLabel = CALL_LABEL[L][params.callType];
+    tokens.callTypeBody = CALL_TYPE_BODY[L][params.callType];
+  }
 
   if (key === 'reaction.commentVerbose') {
     // postType (entité réelle) prime ; `isStory` reste un repli legacy binaire.

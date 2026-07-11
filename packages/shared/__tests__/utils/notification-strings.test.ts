@@ -73,6 +73,22 @@ describe('notificationString — interpolation', () => {
     expect(notificationString('de', 'call.missed', { callIcon: '📹', callType: 'video' }))
       .toBe('📹 Verpasster Videoanruf');
   });
+  it('localise le titre VoIP call.incoming.title avec le nom de l’appelant (Prisme, pas de FR codé en dur)', () => {
+    expect(notificationString('fr', 'call.incoming.title', { actor: 'Alice' }))
+      .toBe('Alice vous appelle');
+    expect(notificationString('en', 'call.incoming.title', { actor: 'Alice' }))
+      .toBe('Alice is calling you');
+    expect(notificationString('es', 'call.incoming.title', { actor: 'Alice' }))
+      .toBe('Alice te está llamando');
+    expect(notificationString('de', 'call.incoming.title', { actor: 'Alice' }))
+      .toBe('Alice ruft dich an');
+  });
+  it('localise le corps VoIP call.incoming.body selon le type d’appel', () => {
+    expect(notificationString('fr', 'call.incoming.body', { callType: 'video' })).toBe('Appel vidéo');
+    expect(notificationString('fr', 'call.incoming.body', { callType: 'audio' })).toBe('Appel audio');
+    expect(notificationString('en', 'call.incoming.body', { callType: 'video' })).toBe('Video call');
+    expect(notificationString('en', 'call.incoming.body', { callType: 'audio' })).toBe('Audio call');
+  });
   it('retombe sur fr pour une langue hors catalogue', () => {
     expect(notificationString('ja', 'mention')).toBe('vous a mentionné');
   });
