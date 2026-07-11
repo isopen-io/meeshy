@@ -4,6 +4,31 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-11, `profile-share`)
+- **A "share/QR" feature is really a link-SSOT feature — build the deep-link contract first, and reuse
+  the app's existing `DeepLinkParser` shape, don't invent a URL.** iOS `DeepLinkParser`
+  (apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift) already defines the profile URL shape:
+  web `https://meeshy.me/u/{username}` and custom-scheme `meeshy://u/{username}` (`u` is the AASA-claimed
+  segment). The QR, the copied link and the shared text must **all** encode that one shape, so the whole
+  slice bottoms out in a single pure `:core:model` `ProfileShareLink` (canonicalize handle + percent-encode
+  as an RFC 3986 path segment); the presentation builder and the QR just consume it. Percent-encoding is
+  genuine branch-rich pure logic worth testing through the public `webLink`/`appLink` (unreserved
+  passthrough, space→`%20`, non-ASCII→UTF-8 `%XX`, reserved delimiters) — assert via the emitted URL, not
+  a private helper. iOS having **no** such feature is not a reason to skip it: "parity" means the feature
+  set, and a share/QR affordance is table-stakes messaging UX → this slice surpasses iOS.
+- **QR rendering is glue, not core — add `com.google.zxing:core` (pure-Java) and draw the `BitMatrix`.**
+  A hand-rolled QR encoder (Reed–Solomon + masking) is ~600 lines and error-prone; the SOTA move is the
+  zxing core encoder. The tested value is the *payload* (`ProfileShareLink`), not the matrix. Render on a
+  fixed **white** card (never theme-tinted) so the code stays scannable in dark mode; encode the module
+  colour as **fixed black** (NOT the theme's `textPrimary`, which is light in dark mode → an unscannable
+  light-on-white QR — caught in self-review), transparent quiet zone. Adding a Maven-Central dep resolves fine
+  through the agent proxy (only the Gradle *wrapper* github zip is blocked). Version-catalog entry +
+  one `implementation(libs.zxing.core)` in `:feature:profile` — an `apps/android`-only diff.
+- **`MeeshyTheme` exposes `tokens` (colours) but NOT `typography`** — text styles come from
+  `MaterialTheme.typography.*` (as `ProfileScreen` already does). `MeeshyTheme.typography.titleMedium`
+  does not compile. And there is no `Color.toArgb()` member — import the extension
+  `androidx.compose.ui.graphics.toArgb`. Both are one-line traps that only surface at `compileDebugKotlin`.
+
 ## Lesson (2026-07-11, `report-user`)
 - **iOS raw enum values are NOT automatically the gateway wire contract — verify against the zod
   schema.** iOS `ReportUserView.ReportReason` uses UPPERCASE `rawValue` (`"SPAM"`,

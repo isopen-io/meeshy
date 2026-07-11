@@ -2,7 +2,38 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR)** → rest`
+
+> On 2026-07-11 **profile share + QR code** landed (slice `profile-share`, feature-parity §K —
+> "Profile QR code display + save/share; share profile via message/email/copy link"). This one
+> **surpasses iOS**, which has no profile-share affordance at all. **(1) Pure `:core:model`
+> `ProfileShareLink`** — the cross-platform link SSOT, mirroring the iOS `DeepLinkParser` contract
+> (`https://meeshy.me/u/{username}` Universal Link + `meeshy://u/{username}` custom scheme, `u` = the
+> AASA-claimed user segment) so a QR/link produced on Android resolves in every Meeshy client.
+> `canonicalUsername` trims + strips a display-only leading `@` + blank/lone-`@` → `null`; `webLink`/
+> `appLink` percent-encode the handle as an RFC 3986 path segment (unreserved passthrough, space→`%20`,
+> non-ASCII→uppercase UTF-8 bytes, reserved delimiters→`%XX`) so an unusual handle can never emit a
+> malformed URL. **(2) Pure `:feature:profile` `ProfileShareBuilder.build(user) →
+> ProfileSharePresentation?`** (precedent `ProfileHeaderBuilder`) — projects `effectiveDisplayName`,
+> `@handle` (from the same `canonicalUsername` SSOT, so handle ⇄ link never diverge), and both links;
+> `null` when the username yields no shareable handle (share affordance stays hidden, no dead URL).
+> **(3) Glue (coverage-exempt)** — `ProfileShareSheet` (ModalBottomSheet: zxing-rendered QR of the web
+> link on a white card + `@handle` + link text + Copy-link/Share-chooser buttons), a **Share** app-bar
+> action shown on both own and other profiles when a shareable link exists, EN/FR/ES/PT strings. Added
+> the `com.google.zxing:core` dep (pure-Java QR encoder) to the profile module + version catalog.
+> **+22 tests** (ProfileShareLink 16, ProfileShareBuilder 6), all green; `:app:assembleDebug` BUILD
+> SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — `:core:model` link SSOT, `:feature:profile`
+> builder+sheet+nav, version catalog + profile `build.gradle`, EN/FR/ES/PT strings; no production logic
+> outside; **SDK purity** — pure opaque-string link primitive in `:core:model`, `MeeshyUser`-shaped
+> projection in `:feature:profile`, QR/clipboard/intent orchestration in the exempt Compose glue;
+> **SSOT** — one `canonicalUsername` drives handle + both links, link shape matches the iOS deep-link
+> contract, no re-implementation; **UDF** — the sheet is derived from `state.user`, no VM change;
+> **colour/UX coherence** — QR on a fixed-white card (scannability), accent-neutral outlined action
+> buttons, natural bottom-sheet dismiss returns to the profile, Share shown wherever a profile is
+> viewable so no dead end; **no coverage floor lowered, no test weakened**). **Next:** avatar/banner
+> upload (media pipeline) for §K profile edit, or another §L row (media cache management, GDPR export),
+> or the live `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of
+> `MediaDownloadPolicyEngine`.
 
 > On 2026-07-11 **report a user** landed (slice `report-user`, feature-parity §K — "Block / unblock
 > users; report a user (reason + details)", closing that box: block/unblock shipped earlier). Port of
