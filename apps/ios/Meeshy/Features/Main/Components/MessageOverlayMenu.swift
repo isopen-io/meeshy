@@ -55,7 +55,11 @@ struct MessageOverlayMenu: View {
     @State private var isEmojiPickerOpen = false
     /// Offset vertical du cluster native-lean pendant le drag (suivi du doigt,
     /// amorti au-delà des seuils par `MessageOverlayDragLaw.displayOffset`).
-    @State private var clusterDragOffset: CGFloat = 0
+    /// `@GestureState` : reset automatique (spring) au release ET à
+    /// l'annulation système du geste (appel entrant, background) — le cluster
+    /// ne reste jamais figé hors position.
+    @GestureState(resetTransaction: Transaction(animation: .spring(response: 0.35, dampingFraction: 0.75)))
+    private var clusterDragOffset: CGFloat = 0
     /// Haptic d'armement émis une seule fois par geste ; réarmé au release.
     @State private var dragHapticArmed = false
 
@@ -305,7 +309,12 @@ struct MessageOverlayMenu: View {
                     .offset(y: clusterDragOffset)
                     .opacity(isVisible ? 1 : 0)
                     .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
-                    .gesture(clusterDragGesture)
+                    // highPriorityGesture : en `.gesture` simple, les Button
+                    // des rows gagnent les drags lents (vérifié simulateur —
+                    // un swipe faible amorcé sur « Pin » épinglait au lieu de
+                    // snap back). Le seuil minimumDistance 12 laisse les taps
+                    // simples aux rows.
+                    .highPriorityGesture(clusterDragGesture)
 
                     // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
                     // paramètres que la cellule live de la liste : rendu
@@ -442,9 +451,12 @@ struct MessageOverlayMenu: View {
 
     private var clusterDragGesture: some Gesture {
         DragGesture(minimumDistance: 12)
+            .updating($clusterDragOffset) { value, state, _ in
+                guard isVisible else { return }
+                state = MessageOverlayDragLaw.displayOffset(for: value.translation.height)
+            }
             .onChanged { value in
                 guard isVisible else { return }
-                clusterDragOffset = MessageOverlayDragLaw.displayOffset(for: value.translation.height)
                 if MessageOverlayDragLaw.isArmed(translation: value.translation.height),
                    !dragHapticArmed {
                     dragHapticArmed = true
@@ -463,9 +475,7 @@ struct MessageOverlayMenu: View {
                 case .dismiss:
                     dismiss()
                 case .snapBack:
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                        clusterDragOffset = 0
-                    }
+                    break // reset auto du @GestureState (spring resetTransaction)
                 }
             }
     }

@@ -18,6 +18,7 @@ final class MessageOverlayDragLawTests: XCTestCase {
 
     func test_outcome_upVelocityInDragDirection_opensMore() {
         XCTAssertEqual(MessageOverlayDragLaw.outcome(translation: -30, predicted: -200), .openMore)
+        XCTAssertEqual(MessageOverlayDragLaw.outcome(translation: -30, predicted: -160), .openMore)
     }
 
     func test_outcome_upVelocityAgainstDragDirection_ignored() {
@@ -41,6 +42,7 @@ final class MessageOverlayDragLawTests: XCTestCase {
 
     func test_outcome_downVelocityInDragDirection_dismisses() {
         XCTAssertEqual(MessageOverlayDragLaw.outcome(translation: 30, predicted: 200), .dismiss)
+        XCTAssertEqual(MessageOverlayDragLaw.outcome(translation: 30, predicted: 160), .dismiss)
     }
 
     func test_outcome_downVelocityAgainstDragDirection_ignored() {
