@@ -63,6 +63,11 @@ struct MessageOverlayMenu: View {
     @State private var dragOffset: CGFloat = 0
     @State private var forceTab: DetailTab? = nil
     @State private var isEmojiPickerOpen = false
+    /// Offset vertical du cluster native-lean pendant le drag (suivi du doigt,
+    /// amorti au-delà des seuils par `MessageOverlayDragLaw.displayOffset`).
+    @State private var clusterDragOffset: CGFloat = 0
+    /// Haptic d'armement émis une seule fois par geste ; réarmé au release.
+    @State private var dragHapticArmed = false
 
     private let previewCharLimit = 500
     // Expanded emoji set — far more than fits in the viewport, so the
@@ -430,8 +435,10 @@ struct MessageOverlayMenu: View {
                         x: nlMenuX,
                         y: isVisible ? nlMenuY : (bubbleRect.maxY + 8)
                     )
+                    .offset(y: clusterDragOffset)
                     .opacity(isVisible ? 1 : 0)
                     .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
+                    .gesture(clusterDragGesture)
 
                     // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
                     // paramètres que la cellule live de la liste : rendu
@@ -475,6 +482,7 @@ struct MessageOverlayMenu: View {
                         x: nlAnchorX,
                         y: isVisible ? nlBubbleMidY : bubbleRect.midY
                     )
+                    .offset(y: clusterDragOffset)
                     .opacity(isVisible ? 1 : 0)
                     .allowsHitTesting(false)
 
@@ -484,6 +492,7 @@ struct MessageOverlayMenu: View {
                             x: nlEmojiX,
                             y: isVisible ? nlEmojiY : bubbleRect.minY
                         )
+                        .offset(y: clusterDragOffset)
                         .opacity(isVisible ? 1 : 0)
                         .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
                         .allowsHitTesting(true)
@@ -562,6 +571,38 @@ struct MessageOverlayMenu: View {
         }
         .animation(.easeOut(duration: 0.26), value: isVisible)
         .onTapGesture { dismiss() }
+    }
+
+    // MARK: - Cluster Drag (swipe-up → Menu 2, swipe-down → fermeture)
+
+    private var clusterDragGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard isVisible else { return }
+                clusterDragOffset = MessageOverlayDragLaw.displayOffset(for: value.translation.height)
+                if MessageOverlayDragLaw.isArmed(translation: value.translation.height),
+                   !dragHapticArmed {
+                    dragHapticArmed = true
+                    HapticFeedback.medium()
+                }
+            }
+            .onEnded { value in
+                defer { dragHapticArmed = false }
+                guard isVisible else { return }
+                switch MessageOverlayDragLaw.outcome(
+                    translation: value.translation.height,
+                    predicted: value.predictedEndTranslation.height
+                ) {
+                case .openMore:
+                    handlePrimaryAction(.more)
+                case .dismiss:
+                    dismiss()
+                case .snapBack:
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        clusterDragOffset = 0
+                    }
+                }
+            }
     }
 
     // MARK: - Message Preview (aligned left/right)
