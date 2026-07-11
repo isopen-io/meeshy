@@ -233,6 +233,10 @@ public struct ClipInspector: View {
             }
         }
         .padding(presentation == .popover ? 14 : 18)
+        // Surface volontairement en MATÉRIAU, pas en glassEffect : les
+        // contrôles de la rangée d'actions portent le Liquid Glass et le
+        // verre ne peut pas échantillonner du verre (artefacts iOS 26).
+        // Matériau sous glass = composition canonique Apple.
         .background(
             RoundedRectangle(cornerRadius: presentation == .popover ? 14 : 0)
                 .fill(.ultraThinMaterial)
@@ -537,49 +541,66 @@ public struct ClipInspector: View {
     /// Deux icônes, deux intentions : le losange déplie la configuration
     /// d'animation PAR-DESSOUS (il n'anime rien lui-même), la corbeille
     /// demande confirmation avant la suppression définitive.
+    ///
+    /// Composition Liquid Glass (iOS 26 via `Compatibility/AdaptiveGlass`) :
+    /// la SURFACE de la modale reste en matériau (le verre ne peut pas
+    /// échantillonner du verre), seuls les CONTRÔLES flottants prennent le
+    /// glass — groupés dans un `AdaptiveGlassContainer` pour que les formes
+    /// adjacentes se fondent correctement. Fallback < 26 : matériau teinté
+    /// + liseré, géré par le wrapper.
     private var actionsRow: some View {
-        HStack(spacing: 12) {
-            Button {
-                withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
-                    isAnimationExpanded.toggle()
+        AdaptiveGlassContainer(spacing: 12) {
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
+                        isAnimationExpanded.toggle()
+                    }
+                } label: {
+                    animationToggleLabel
                 }
-            } label: {
-                Image(systemName: "diamond.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(isAnimationExpanded ? .white : MeeshyColors.indigo500)
-                    .frame(width: 36, height: 36)
-                    .background(
-                        Circle().fill(isAnimationExpanded
-                            ? AnyShapeStyle(MeeshyColors.indigo500)
-                            : AnyShapeStyle(MeeshyColors.indigo500.opacity(0.14)))
-                    )
-                    .contentShape(Rectangle().inset(by: -4))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "story.timeline.inspector.animation",
-                                       defaultValue: "Animation", bundle: .module))
-            .accessibilityHint(String(localized: "story.timeline.inspector.animation.hint",
-                                      defaultValue: "Affiche les réglages d'animation du clip",
-                                      bundle: .module))
-            .accessibilityAddTraits(isAnimationExpanded ? [.isSelected] : [])
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "story.timeline.inspector.animation",
+                                           defaultValue: "Animation", bundle: .module))
+                .accessibilityHint(String(localized: "story.timeline.inspector.animation.hint",
+                                          defaultValue: "Affiche les réglages d'animation du clip",
+                                          bundle: .module))
+                .accessibilityAddTraits(isAnimationExpanded ? [.isSelected] : [])
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
 
-            Button {
-                deleteConfirmation.request()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.error)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(MeeshyColors.error.opacity(0.12)))
-                    .contentShape(Rectangle().inset(by: -4))
+                Button {
+                    deleteConfirmation.request()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(MeeshyColors.error)
+                        .frame(width: 36, height: 36)
+                        .adaptiveGlass(in: Circle(), tint: MeeshyColors.error, interactive: true)
+                        .contentShape(Rectangle().inset(by: -4))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "story.timeline.clip.delete", bundle: .module))
+                .accessibilityHint(String(localized: "story.timeline.inspector.delete.hint",
+                                          defaultValue: "Demande une confirmation avant la suppression",
+                                          bundle: .module))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "story.timeline.clip.delete", bundle: .module))
-            .accessibilityHint(String(localized: "story.timeline.inspector.delete.hint",
-                                      defaultValue: "Demande une confirmation avant la suppression",
-                                      bundle: .module))
+        }
+    }
+
+    /// État replié = glass régulier teinté ; déplié = glass prominent (le
+    /// contrôle actif se détache, blanc sur indigo — parité avec le fallback).
+    @ViewBuilder
+    private var animationToggleLabel: some View {
+        let icon = Image(systemName: "diamond.fill")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(isAnimationExpanded ? .white : MeeshyColors.indigo500)
+            .frame(width: 36, height: 36)
+        if isAnimationExpanded {
+            icon.adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.indigo500)
+                .contentShape(Rectangle().inset(by: -4))
+        } else {
+            icon.adaptiveGlass(in: Circle(), tint: MeeshyColors.indigo500, interactive: true)
+                .contentShape(Rectangle().inset(by: -4))
         }
     }
 
