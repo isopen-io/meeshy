@@ -6029,6 +6029,62 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             "renegotiation tasks."
         )
     }
+
+    // MARK: - answerCall/answerCallReady must join the renegotiation-serialization chain
+
+    /// Audit finding: `answerCall()` and `answerCallReady()`'s buffered-offer
+    /// branches called `webRTCService.createAnswer()` directly, unserialized
+    /// against the `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/
+    /// `iceRestartTask`/`signalOfferAnswerTask` family — the only two
+    /// `createAnswer()` call sites left out of the chain that `handleSignalOffer`
+    /// already joined. A CallKit hold firing on a ringing video call (e.g. a
+    /// GSM call pre-empting it) starts `holdVideoTask` mutating the video
+    /// transceiver; if the user answers before that settles, the untracked
+    /// answer Task races it on the same `RTCPeerConnection`, which can bake a
+    /// wrong transceiver direction into the SDP answer (one-way/silent video).
+    func test_answerCall_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
+        let branch = try body(from: "func answerCall() {", to: "private func scheduleSdpOfferTimeout(callId: String) {", in: try callManagerSource())
+        for expected in [
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "answerCall's buffered-offer branch must \(expected) before calling createAnswer() — " +
+                "otherwise it can race a concurrent local renegotiation on the same RTCPeerConnection."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("signalOfferAnswerTask = Task"),
+            "answerCall's buffered-offer branch must track its createAnswer() Task in " +
+            "signalOfferAnswerTask so later renegotiations can chain onto it."
+        )
+    }
+
+    func test_answerCallReady_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
+        let branch = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: try callManagerSource())
+        for expected in [
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                branch.contains(expected),
+                "answerCallReady's buffered-offer branch must \(expected) before calling createAnswer() — " +
+                "otherwise it can race a concurrent local renegotiation on the same RTCPeerConnection."
+            )
+        }
+        XCTAssertTrue(
+            branch.contains("signalOfferAnswerTask = answerTask") && branch.contains("await answerTask.value"),
+            "answerCallReady's buffered-offer branch must track its createAnswer() work in " +
+            "signalOfferAnswerTask (so later renegotiations can chain onto it) and await it before returning."
+        )
+    }
 }
 
 @MainActor

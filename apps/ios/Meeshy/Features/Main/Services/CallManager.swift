@@ -1235,8 +1235,24 @@ final class CallManager: ObservableObject {
     /// otherwise the system kills the app and revokes the token. When a push
     /// arrives without a valid call payload (malformed or stale), report a
     /// phantom call and immediately end it so the user never sees the call UI.
-    func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate) {
-        callProvider.reportNewIncomingCall(with: uuid, update: update) { _ in }
+    ///
+    /// Audit finding — `callId` is passed for the dedup-hit phantom path (a
+    /// duplicate push for a callId already recorded in `VoIPDedupRing`) so
+    /// that if CallKit refuses this synthetic report (e.g.
+    /// `maximumCallGroups` already saturated), the dedup entry is evicted —
+    /// otherwise a genuine APNs retry for the same callId within the dedup
+    /// TTL would be silently phantom-acked again with no CallKit UI ever
+    /// actually surfacing (mirrors the failure handling in
+    /// `reportIncomingVoIPCall`). Nil for the malformed-payload path, which
+    /// never touched the dedup ring in the first place.
+    func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate, callId: String? = nil) {
+        callProvider.reportNewIncomingCall(with: uuid, update: update) { error in
+            guard let error, let callId else { return }
+            Logger.calls.error("CallKit phantom-call report failed (callId=\(callId)): \(error.localizedDescription)")
+            Task { @MainActor in
+                VoIPPushManager.shared.clearDedup(callId: callId)
+            }
+        }
         // Audit P3 — was `.failed` which Recents shows as a "Failed call"
         // entry. `.unanswered` is the documented phantom-call idiom on
         // iOS 17+ — the lock-screen flash is suppressed and Recents shows
@@ -1572,8 +1588,24 @@ final class CallManager: ObservableObject {
         }
 
         if let remoteOffer = pendingRemoteOffer {
-            // SDP offer already received while ringing — create answer immediately
-            Task { [weak self] in
+            // SDP offer already received while ringing — create answer immediately.
+            // Audit finding — this called webRTCService.createAnswer() directly,
+            // unserialized against the videoToggleTask/holdVideoTask/survivalVideoTask/
+            // iceRestartTask family: a foreground answer landing while a local
+            // hold/toggle/ICE-restart is mid-createOffer() could run createAnswer()
+            // concurrently on the same RTCPeerConnection. Chained onto
+            // `signalOfferAnswerTask` — see the doc-comment on `survivalVideoTask`.
+            let previousToggle = videoToggleTask
+            let previousHold = holdVideoTask
+            let previousSurvival = survivalVideoTask
+            let previousICERestart = iceRestartTask
+            let previousAnswer = signalOfferAnswerTask
+            signalOfferAnswerTask = Task { [weak self] in
+                await previousToggle?.value
+                await previousHold?.value
+                _ = await previousSurvival?.value
+                await previousICERestart?.value
+                await previousAnswer?.value
                 guard let self else { return }
                 // Phase 2 fix — Bug 2: wait for local media transceivers
                 // (emitCallJoin is now decoupled from startLocalMedia).
@@ -1641,28 +1673,51 @@ final class CallManager: ObservableObject {
 
         if let remoteOffer = pendingRemoteOffer {
             self.pendingRemoteOffer = nil
-            // Phase 2 fix — Bug 2: wait for local media transceivers before
-            // createAnswer. CallKit gives ample time for CXAnswerCallAction
-            // (10s+), so awaiting camera/mic warmup here is safe.
-            await self.localMediaTask?.value
-            guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
-                guard self.currentCallId == callId else { return }
-                // Local SDP generation failure is invisible to the peer — without
-                // this signal the caller sits in .connecting/.ringing until the
-                // gateway's CallCleanupService cron reaps the zombie (~60s).
-                MessageSocketManager.shared.emitCallEnd(callId: callId)
-                self.failCall("Failed to create SDP answer")
-                return
+            // Audit finding — this called webRTCService.createAnswer() directly,
+            // unserialized against the videoToggleTask/holdVideoTask/survivalVideoTask/
+            // iceRestartTask family: a CallKit answer landing while a local
+            // hold/toggle/ICE-restart is mid-createOffer() could run createAnswer()
+            // concurrently on the same RTCPeerConnection — a race that can bake a
+            // wrong transceiver direction into the SDP answer, producing a
+            // one-way/silent-video call. Chained onto `signalOfferAnswerTask` —
+            // see the doc-comment on `survivalVideoTask`.
+            let previousToggle = videoToggleTask
+            let previousHold = holdVideoTask
+            let previousSurvival = survivalVideoTask
+            let previousICERestart = iceRestartTask
+            let previousAnswer = signalOfferAnswerTask
+            let answerTask = Task { [weak self] in
+                await previousToggle?.value
+                await previousHold?.value
+                _ = await previousSurvival?.value
+                await previousICERestart?.value
+                await previousAnswer?.value
+                guard let self else { return }
+                // Phase 2 fix — Bug 2: wait for local media transceivers before
+                // createAnswer. CallKit gives ample time for CXAnswerCallAction
+                // (10s+), so awaiting camera/mic warmup here is safe.
+                await self.localMediaTask?.value
+                guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
+                    guard self.currentCallId == callId else { return }
+                    // Local SDP generation failure is invisible to the peer — without
+                    // this signal the caller sits in .connecting/.ringing until the
+                    // gateway's CallCleanupService cron reaps the zombie (~60s).
+                    MessageSocketManager.shared.emitCallEnd(callId: callId)
+                    self.failCall("Failed to create SDP answer")
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] CallKit answer discarded: call ended during createAnswer")
+                    return
+                }
+                // PERF-004: await the gateway ACK (3s) so when answerCallReady
+                // returns, the CXAnswerCallAction fulfill is paired with an SDP
+                // answer that has actually been relayed to the peer.
+                await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+                Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
             }
-            guard self.currentCallId == callId else {
-                Logger.calls.info("[CALL] CallKit answer discarded: call ended during createAnswer")
-                return
-            }
-            // PERF-004: await the gateway ACK (3s) so when answerCallReady
-            // returns, the CXAnswerCallAction fulfill is paired with an SDP
-            // answer that has actually been relayed to the peer.
-            await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
-            Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
+            signalOfferAnswerTask = answerTask
+            await answerTask.value
         } else {
             Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
             scheduleSdpOfferTimeout(callId: callId)

@@ -210,7 +210,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             update.localizedCallerName = ""
             update.hasVideo = false
             MainActor.assumeIsolated {
-                CallManager.shared.reportPhantomVoIPCall(uuid: phantomUUID, update: update)
+                CallManager.shared.reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)
             }
             completion()
             return
