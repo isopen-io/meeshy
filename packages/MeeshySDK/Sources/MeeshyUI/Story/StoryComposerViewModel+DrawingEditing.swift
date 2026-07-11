@@ -86,9 +86,15 @@ extension StoryComposerViewModel {
         drawingEditingMode = .active(strokeId: nil, expandedTool: initialTool)
     }
 
-    /// Sort du mode édition de dessin.
+    /// Sort du mode édition de dessin. Le zoom d'inspection posé PENDANT le
+    /// dessin (pinch 2 doigts sur la couche de capture) est ramené à l'échelle
+    /// 1 : « lorsqu'on quitte on revient au système initial » (user
+    /// 2026-07-11). Guardé sur `isActive` pour qu'un exit no-op (appelé à
+    /// chaque changement d'outil) n'écrase pas un zoom posé HORS dessin.
     func exitDrawingEditingMode() {
+        guard drawingEditingMode.isActive else { return }
         drawingEditingMode = .inactive
+        if isCanvasZoomed { resetCanvasZoom() }
     }
 
     /// Déplie / replie le panneau d'options d'un outil. No-op si pas en édition.

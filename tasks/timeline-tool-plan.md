@@ -234,6 +234,21 @@ TimelineExportPreviewTests 4/4 + non-régression export 11/11. Build app
 local INTERROMPU par contention (session parallèle build-for-testing même
 DerivedData) — SDK compile-prouvé par la passe de tests ; app target → CI.
 
+VAGUE DESSIN IMMERSIF (2026-07-11, demande user) : activer le dessin =
+canvas PLEIN ÉCRAN dessinable jusqu'aux angles (isCarded ignore
+drawingActive — remplace la spec 2026-06-02), bulles flottantes SEULES en
+bas (effectiveBandState ne force plus .toolPanel(.drawing), band replié à
+l'entrée, isFloatingEditorActive masque bottomRegion, tuile empty-state
+gatée) ; pinch 2 doigts sur StrokeCaptureView = zoom+pan viewport pendant
+le dessin (multi-touch + activeTouch mono-doigt, reconnaissance du pinch
+annule le trait en cours via touchesCancelled, centroïde en espace fenêtre,
+mapping traits déjà invariant à l'échelle) ; sortie = retour au système
+initial (exitDrawingEditingMode guardé + resetCanvasZoom, FABs restaurés).
+DrawingStrokeList du band devient inatteignable en dessin (édition par-trait
+via sélection canvas + îlot DrawingEditToolOptions) — retrait différé.
+Code mort canvasIsInset/drawingDrawerHeight supprimé. Suites 65/65 vertes ;
+build app laissé à la CI (contention DerivedData session parallèle).
+
 RESTES (différés, par priorité) — constats hors timeline + export TOUS réglés
 par la vague export MP4 (draft saveMedia, labels lane, xcstrings filters,
 script snapshot, export MP4+watermark+audio lanes) :

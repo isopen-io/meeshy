@@ -62,21 +62,14 @@ public struct ComposerControlsLayer: View {
     /// se cacher entièrement sur chaque outil, comme le dessin (2026-06-02).
     private var isBandResizable: Bool { effectiveBandState.allowsCollapsibleDrawer }
 
-    /// État effectif du band : le dessin utilise le band PARTAGÉ comme tous les
-    /// outils (`drawingPanel` = liste éditable des traits). On force donc l'affichage
-    /// du panneau dessin dès que l'outil dessin est actif, même si la machine d'état
-    /// est restée `.hidden` (chemin d'entrée FAB, état restauré…). Sans ça le band
-    /// partagé ne s'affichait pas pour le dessin (bug user 2026-06-01 « dessin devrait
-    /// afficher le ComposerBottomBand aussi »).
+    /// État effectif du band. Mode dessin IMMERSIF (user 2026-07-11) : le
+    /// dessin n'ouvre PLUS le band partagé — canvas plein écran, bulles
+    /// flottantes seules, réglages via l'îlot `DrawingEditToolOptions`
+    /// (sélection-aware pour l'édition par-trait). Remplace le forçage
+    /// `.toolPanel(.drawing)` de la spec 2026-06-01 « dessin devrait afficher
+    /// le ComposerBottomBand aussi ».
     private var effectiveBandState: BandState {
-        // On se cale sur `drawingEditingMode.isActive` (et non `activeTool`) car
-        // c'est lui qui pilote l'affichage des contrôleurs flottants : tant que les
-        // bulles de dessin sont à l'écran, le band partagé doit l'être aussi —
-        // les deux états peuvent diverger selon le chemin d'entrée.
-        if viewModel.drawingEditingMode.isActive, bandStateMachine.state == .hidden {
-            return .toolPanel(.drawing)
-        }
-        return bandStateMachine.state
+        bandStateMachine.state
     }
 
     /// C-DIR2 (d) : FABs et header partagent la MÊME règle (ComposerChromePolicy)
