@@ -107,10 +107,17 @@ VALIDÉ SIMULATEUR (atabeth, prod gateway) : composer → média+texte → timel
 canvas à t=0) → publish « Story published » → READER : texte ABSENT à t<2s,
 PRÉSENT à t≥2s. Round-trip timeline→publish→reader prouvé par captures.
 
+VAGUE ERGONOMIE (2026-07-11, `14e97795b` + `bbc9e8bab`) : trim au doigt de TOUS
+les clips (texte/audio via ClipTrimHandles partagé, clips permanents matérialisés),
+drags de trim ANCRÉS (fix dérive boule-de-neige, vidéo incluse), pinch-to-zoom
+(simultané au scroll, clamp 0.25–4), texte serif plus jamais rogné (fontes
+optiques — mesure au format rendu + encre CTLine, contrat cross-device amendé).
+Tap-ruler scrub RE-VÉRIFIÉ OK (l'« inertie » était un tap mal visé sur le bord
+du transport). Total suite : 1813 verts.
+
 RESTES (différés, par priorité) :
-1. Tap-ruler scrub inerte via idb (drag playhead OK) — revérifier au doigt/device.
-2. SnapGuideView visuel pendant drags (l'aimant + haptique marchent déjà).
-3. F4 édition ms start/durée au ClipInspector (port branche amazing-bell par contenu).
+1. SnapGuideView visuel pendant drags (l'aimant + haptique marchent déjà).
+2. F4 édition ms start/durée au ClipInspector (port branche amazing-bell par contenu).
 4. F5 DurationHandle (pin direct durée slide) ; drag temporel des keyframes/durée
    badge transition (nécessite drag ancré anti-drift).
 5. Vignettes filmstrip clips vidéo (frames: []) ; G1 rotation keyframes ;
