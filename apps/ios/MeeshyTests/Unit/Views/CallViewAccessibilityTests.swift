@@ -340,6 +340,27 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    func test_pipFrameButton_usesAdaptiveGlass_notFlatDarkCircle() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "private func pipFrameButton") else {
+            XCTFail("pipFrameButton must exist")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains(".callControlGlass(diameter: 28, isActive: false, tint: .white)"),
+            "pipFrameButton must use the same adaptiveGlass-backed callControlGlass wrapper " +
+            "as every other circular call control (task #17) — not a hand-rolled " +
+            "Color.black.opacity(0.45) circle."
+        )
+        XCTAssertFalse(
+            body.contains("Color.black.opacity(0.45)"),
+            "pipFrameButton's old flat dark-circle background must be fully removed, not left " +
+            "as dead code alongside the new glass treatment."
+        )
+    }
+
     func test_minimizeChevron_hitTargetMeetsHIGMinimum() throws {
         let source = try callViewSource()
         guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: false, tint: .white)") else {

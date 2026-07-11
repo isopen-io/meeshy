@@ -147,4 +147,30 @@ final class StoryComposerViewModel_DrawingEditingTests: XCTestCase {
         vm.drawingStrokes = []
         XCTAssertNil(vm.currentEffects.drawingStrokes)
     }
+
+    // MARK: - Viewport zoom (mode dessin immersif, user 2026-07-11)
+    // « Zoomer et dézoomer le canvas si nécessaire… lorsqu'on quitte on
+    // revient au système initial » : le zoom d'inspection posé PENDANT le
+    // dessin ne doit pas fuir hors du mode.
+
+    func test_exitDrawingEditingMode_resetsViewportZoom() {
+        let vm = makeSubject()
+        vm.enterDrawingEditingMode()
+        vm.canvasScale = 2.4
+        vm.canvasOffset = CGSize(width: 80, height: -40)
+        vm.exitDrawingEditingMode()
+        XCTAssertEqual(vm.drawingEditingMode, .inactive)
+        XCTAssertEqual(vm.canvasScale, 1.0)
+        XCTAssertEqual(vm.canvasOffset, .zero)
+    }
+
+    func test_exitDrawingEditingMode_whenNotActive_keepsViewportZoom() {
+        // Un zoom posé HORS dessin (pinch 3 doigts) appartient au viewport
+        // libre — un exit no-op (appelé à chaque changement d'outil) ne doit
+        // pas l'écraser.
+        let vm = makeSubject()
+        vm.canvasScale = 1.8
+        vm.exitDrawingEditingMode()
+        XCTAssertEqual(vm.canvasScale, 1.8)
+    }
 }

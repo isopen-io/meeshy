@@ -122,25 +122,24 @@ extension StoryComposerView {
                    value: viewModel.textEditingMode)
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.drawingEditingMode)
-        .adaptiveOnChange(of: viewModel.activeTool) { _, newTool in
-            // Le mode dessin flottant suit l'outil actif : entrer expose les
-            // contrôleurs flottants (bulles) ; quitter les masque. La liste des
-            // traits vit dans le band PARTAGÉ (`ComposerBottomBand.drawingPanel`)
-            // — comme tous les outils. On garantit donc que le band affiche le
-            // panneau dessin quand on entre (peu importe le chemin d'entrée :
-            // FAB, tuile, restauration), et qu'il se referme quand on sort
-            // (sinon une sheet dessin vide resterait / réapparaîtrait à la
-            // fermeture — bug user 2026-06-01).
+        .adaptiveOnChange(of: viewModel.activeTool) { oldTool, newTool in
+            // Mode dessin IMMERSIF (user 2026-07-11) : entrer = canvas plein
+            // écran + bulles flottantes SEULES — on replie tout band ouvert
+            // (aucune sheet pendant le dessin ; remplace l'ouverture forcée
+            // du drawingPanel, spec 2026-06-01). Quitter = restauration du
+            // système initial : chrome/FABs de retour, band dessin refermé.
             if newTool == .drawing {
                 viewModel.enterDrawingEditingMode()
-                if bandStateMachine.state.activeCategory != .drawing {
-                    bandStateMachine.tapTile(.drawing)
+                if bandStateMachine.state != .hidden {
+                    bandStateMachine.reset()
                 }
-                areFabsVisible = true
             } else {
                 viewModel.exitDrawingEditingMode()
                 if bandStateMachine.state.activeCategory == .drawing {
                     bandStateMachine.reset()
+                }
+                if oldTool == .drawing {
+                    areFabsVisible = true
                 }
             }
         }
@@ -269,14 +268,14 @@ extension StoryComposerView {
     /// set therefore tells us nothing about user intent — only explicit
     /// content additions (text / media / sticker / drawing) flip the slide
     /// out of empty state.
-    /// L'éditeur de TEXTE flottant occupe tout le bas de l'écran → le band compact
-    /// standard est alors masqué et non-interactif. Le DESSIN, lui, utilise le band
-    /// PARTAGÉ (`ComposerBottomBand` → `drawingPanel` = liste des traits) comme tous
-    /// les autres outils + des bulles flottantes au-dessus : on NE masque donc PAS
-    /// le band pendant le dessin (correctif user 2026-06-01 « dessin devrait afficher
-    /// le ComposerBottomBand aussi » ; plus de bande dédiée `DrawingBand`).
+    /// Un éditeur flottant plein-canvas est ouvert → le band compact standard
+    /// est masqué et non-interactif. TEXTE : depuis toujours. DESSIN : mode
+    /// IMMERSIF (user 2026-07-11) — canvas plein écran, bulles flottantes
+    /// seules, plus aucune sheet (remplace le correctif 2026-06-01 « dessin
+    /// devrait afficher le ComposerBottomBand aussi »).
     var isFloatingEditorActive: Bool {
         viewModel.textEditingMode != .inactive
+            || viewModel.drawingEditingMode.isActive
     }
 
     var isComposerEmpty: Bool {
@@ -509,8 +508,12 @@ extension StoryComposerView {
                 // so controls appear immediately when the empty-state picker
                 // transitions out. Without this, the band stayed .hidden and
                 // the user had to manually tap a FAB to reveal controls.
-                bandStateMachine.tapFAB(specialCategory ?? tool.bandCategory)
-                bandStateMachine.tapTile(tool)
+                // EXCEPTION dessin : mode immersif (user 2026-07-11) — aucune
+                // sheet, les bulles flottantes suffisent.
+                if tool != .drawing {
+                    bandStateMachine.tapFAB(specialCategory ?? tool.bandCategory)
+                    bandStateMachine.tapTile(tool)
+                }
                 pickerSelectedTool = nil
             }
         } label: {
@@ -621,7 +624,8 @@ extension StoryComposerView {
                 bottomInset: bottomInset,
                 // Marge latérale : la carte canvas reste toujours détachée des bords du
                 // viewport (spec user 2026-06-02 « une marge suffisante pour être distingué
-                // du viewport »), pour tous les outils (dessin inclus).
+                // du viewport »). Le DESSIN n'est plus concerné : il ne carde plus
+                // (mode immersif 2026-07-11, canvas plein écran).
                 sideInset: 14,
                 state: canvasIsCarded ? .carded : .free,
                 cardedCornerRadius: 22,
@@ -636,8 +640,10 @@ extension StoryComposerView {
                 .frame(width: fit.width, height: fit.height)
                 .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
                 .offset(
-                    x: viewModel.canvasOffset.width + viewportDragDelta.width,
+                    x: viewModel.canvasOffset.width + viewportDragDelta.width
+                        + drawingViewportPanDelta.width,
                     y: viewModel.canvasOffset.height + viewportDragDelta.height
+                        + drawingViewportPanDelta.height
                 )
                 // Le pinch viewport (zoom canvas) est maintenant un pinch 3 doigts
                 // géré par `ThreeFingerPinchGestureRecognizer` côté UIKit, routé
@@ -690,25 +696,6 @@ extension StoryComposerView {
                 .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
         }
         .ignoresSafeArea()
-    }
-
-    /// Le mode DESSIN est actif (contrôleurs flottants OU machine d'état sur dessin).
-    /// En dessin (Option A, spec user 2026-06-01) le canvas reste PLEIN et seul un
-    /// top reserve + l'arrondi s'appliquent (le drawer flotte par-dessus le bas du
-    /// canvas — il ne le rétrécit plus). C'est ce qui rend le dessin WYSIWYG avec la
-    /// preview/le reader (le drawing remplit tout le viewport).
-    var canvasIsInset: Bool {
-        viewModel.drawingEditingMode.isActive
-            || bandStateMachine.state.activeCategory == .drawing
-    }
-
-    /// Hauteur visible du drawer dessin (band partagé) — sert UNIQUEMENT à lever les
-    /// contrôleurs flottants (`StoryDrawingToolbar`) juste au-dessus du drawer.
-    /// (Le repli « poignée seule » a été retiré — C-DIR2 (b) : grabber sous le
-    /// min = fermeture du band + retour des FABs.)
-    var drawingDrawerHeight: CGFloat {
-        guard canvasIsInset else { return 0 }
-        return composerBandHeight + 40
     }
 
     /// Vrai dès qu'un panneau (band partagé, mode dessin, ou éditeur texte) est
@@ -930,6 +917,40 @@ extension StoryComposerView {
                         onEraseGesture: { points in
                             eraseStrokes(near: points)
                             viewModel.activeStrokePreview = nil
+                        },
+                        onViewportPinch: { scale, translation, state in
+                            // Zoom/pan d'inspection PENDANT le dessin (pinch
+                            // 2 doigts sur la couche de capture) — même
+                            // pipeline que le pinch 3 doigts hors dessin
+                            // (`onCanvasZoomScaleChanged` ci-dessus). Le zoom
+                            // est ramené à 1 en sortant du mode
+                            // (`exitDrawingEditingMode`).
+                            switch state {
+                            case .began, .changed:
+                                viewportPinchDelta = scale
+                                drawingViewportPanDelta = translation
+                            case .ended:
+                                let newScale = CanvasViewportZoomPolicy.settledScale(
+                                    current: viewModel.canvasScale,
+                                    gestureScale: scale
+                                )
+                                withAnimation(.spring(response: 0.2)) {
+                                    viewModel.canvasScale = newScale
+                                    if newScale <= 1.0 {
+                                        viewModel.canvasOffset = .zero
+                                    } else {
+                                        viewModel.canvasOffset = CGSize(
+                                            width: viewModel.canvasOffset.width + translation.width,
+                                            height: viewModel.canvasOffset.height + translation.height
+                                        )
+                                    }
+                                }
+                                viewportPinchDelta = 1.0
+                                drawingViewportPanDelta = .zero
+                            default:
+                                viewportPinchDelta = 1.0
+                                drawingViewportPanDelta = .zero
+                            }
                         }
                     )
                 }
