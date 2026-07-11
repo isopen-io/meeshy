@@ -3,19 +3,20 @@ import AVKit
 
 // MARK: - Shared Video Transport Controls
 //
-// Composant PUBLIC réutilisable des contrôles de transport vidéo (play/pause,
-// skip ±10s, seek bar scrubbable haute-priorité, timecodes, vitesse, mini-toolbar
-// mute/loop/pip/airplay). Piloté par `SharedAVPlayerManager` + une `ControlSet`
-// + une couleur d'accent.
+// Composant PUBLIC réutilisable des contrôles de transport vidéo. Piloté par
+// `SharedAVPlayerManager` + une `ControlSet` + une couleur d'accent.
 //
-// Utilisé par la galerie média conversation (`ConversationMediaGalleryView`) qui,
-// avant ce composant, rendait une couche `AVPlayerLayer` BRUTE sans aucun contrôle
-// de transport ("AUCUN CONTROLEUR" en plein écran). La galerie possède déjà sa
-// propre chrome (close/save/métadonnées/dismiss) → ce composant n'apporte QUE le
-// transport, sans scrim ni top bar (l'hôte fournit son fond + ses actions fichier).
+// Lifting Liquid Glass 2026-07-11 (spec docs/superpowers/specs/
+// 2026-07-11-video-player-liquid-glass-lifting-design.md) : centre
+// ⏪10 · ▶︎/⏸ · ⏩10 en `.adaptiveGlass` dans un `AdaptiveGlassContainer`,
+// et UNE seule barre capsule en bas (temps · scrubber · durée · mute ·
+// AirPlay · menu ⋯). Le menu ⋯ regroupe vitesse / boucle / PiP — la
+// répartition barre/menu est la fonction pure `TransportLayout`. Avant :
+// 4 rangées empilées (mini-toolbar, seek, timecodes, chips vitesse).
 //
-// `_FullscreenOverlayControls` compose désormais ce transport ; seul
-// `_InlineOverlayControls` (variante compacte distincte) garde sa propre copie.
+// Utilisé par la galerie média conversation (`ConversationMediaGalleryView`)
+// et par `_FullscreenOverlayControls` ; seul `_InlineOverlayControls`
+// (variante compacte distincte) garde sa propre copie.
 public struct VideoTransportControls: View {
     @ObservedObject private var manager: SharedAVPlayerManager
     private let accentColor: String
@@ -43,21 +44,33 @@ public struct VideoTransportControls: View {
         return isSeeking ? seekValue : manager.currentTime / manager.duration
     }
 
+    private var hasBottomBar: Bool {
+        controls.contains(.scrubber) || controls.contains(.duration)
+            || !TransportLayout.barItems(for: controls).isEmpty
+            || TransportLayout.showsMenuButton(for: controls)
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             Spacer()
             centerControls
             Spacer()
-            bottomStack
+            if hasBottomBar {
+                bottomBar.padding(.horizontal, 16)
+            }
         }
         .buttonStyle(BouncyTransportButtonStyle())
     }
 
+    // MARK: - Centre (⏪10 · ▶︎/⏸ · ⏩10) — Liquid Glass
+
     private var centerControls: some View {
-        HStack(spacing: 40) {
-            if controls.contains(.scrubber) { skipButton(systemName: "gobackward.10", seconds: -10) }
-            if controls.contains(.playPause) { playPauseButton }
-            if controls.contains(.scrubber) { skipButton(systemName: "goforward.10", seconds: 10) }
+        AdaptiveGlassContainer(spacing: 32) {
+            HStack(spacing: 32) {
+                if controls.contains(.scrubber) { skipButton(systemName: "gobackward.10", seconds: -10) }
+                if controls.contains(.playPause) { playPauseButton }
+                if controls.contains(.scrubber) { skipButton(systemName: "goforward.10", seconds: 10) }
+            }
         }
     }
 
@@ -66,18 +79,15 @@ public struct VideoTransportControls: View {
             manager.skip(seconds: seconds)
             HapticFeedback.light()
         } label: {
+            // Glyphe figé : contrôle circulaire de taille fixe (52pt).
+            // Glass appliqué APRÈS le sizing (règle AdaptiveGlass).
             Image(systemName: systemName)
-                .font(.system(size: 26, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundColor(.white)
-                .frame(width: 56, height: 56)
-                .background(
-                    ZStack {
-                        Circle().fill(.ultraThinMaterial)
-                        Circle().fill(Color.white.opacity(0.10))
-                    }
-                )
-                .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+                .frame(width: 52, height: 52)
+                .adaptiveGlass(in: Circle(), interactive: true)
         }
+        .accessibilityLabel(seconds < 0 ? "Reculer de 10 secondes" : "Avancer de 10 secondes")
     }
 
     private var playPauseButton: some View {
@@ -85,56 +95,47 @@ public struct VideoTransportControls: View {
             manager.togglePlayPause()
             HapticFeedback.light()
         } label: {
-            ZStack {
-                Circle().fill(.ultraThinMaterial)
-                Circle().fill(accent.opacity(0.55))
-                Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(.white)
-                    .offset(x: manager.isPlaying ? 0 : 3)
-                    .adaptiveSymbolReplace(id: manager.isPlaying)
-            }
-            .frame(width: 72, height: 72)
-            .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.8))
-            .shadow(color: accent.opacity(0.4), radius: 14, y: 4)
+            Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+                .offset(x: manager.isPlaying ? 0 : 2)
+                .adaptiveSymbolReplace(id: manager.isPlaying)
+                .frame(width: 64, height: 64)
+                .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))
         }
         .accessibilityLabel(manager.isPlaying ? "Pause" : "Play")
     }
 
-    private var bottomStack: some View {
-        VStack(spacing: 8) {
-            miniToolbar.padding(.horizontal, 16)
-            if controls.contains(.scrubber) { seekBar.padding(.horizontal, 16) }
+    // MARK: - Barre unique bas : temps · scrubber · durée · mute · airplay · ⋯
+
+    private var bottomBar: some View {
+        HStack(spacing: 10) {
             if controls.contains(.duration) {
-                HStack {
-                    Text(formatMediaDuration(isSeeking ? seekValue * manager.duration : manager.currentTime))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.75))
-                    Spacer()
-                    Text(formatMediaDuration(manager.duration))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.75))
-                }
-                .padding(.horizontal, 16)
+                timeLabel(isSeeking ? seekValue * manager.duration : manager.currentTime)
             }
-            if controls.contains(.speed) { speedRow.padding(.horizontal, 16) }
+            if controls.contains(.scrubber) { seekBar }
+            if controls.contains(.duration) {
+                timeLabel(manager.duration)
+            }
+            ForEach(TransportLayout.barItems(for: controls), id: \.self) { item in
+                switch item {
+                case .mute: muteButton
+                case .airplay: airplayButton
+                }
+            }
+            if TransportLayout.showsMenuButton(for: controls) { moreMenu }
         }
+        .padding(.horizontal, 14)
+        .frame(height: 48)
+        .adaptiveGlass(in: Capsule())
     }
 
-    @ViewBuilder
-    private var miniToolbar: some View {
-        let hasAny = controls.contains(.mute) || controls.contains(.loop)
-            || controls.contains(.pip) || controls.contains(.airplay)
-        if hasAny {
-            HStack(spacing: 16) {
-                Spacer()
-                if controls.contains(.mute) { muteButton }
-                if controls.contains(.loop) { loopButton }
-                if controls.contains(.pip) { pipButton }
-                if controls.contains(.airplay) { airplayButton }
-                Spacer()
-            }
-        }
+    private func timeLabel(_ seconds: Double) -> some View {
+        Text(formatMediaDuration(seconds))
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .foregroundColor(.white.opacity(0.85))
+            .lineLimit(1)
+            .fixedSize()
     }
 
     private var muteButton: some View {
@@ -142,60 +143,60 @@ public struct VideoTransportControls: View {
             manager.isMuted.toggle()
             HapticFeedback.light()
         } label: {
-            toolbarIcon(systemName: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", isActive: manager.isMuted)
+            Image(systemName: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(manager.isMuted ? accent : .white)
+                .frame(width: 32, height: 32)
+                .contentShape(Circle())
         }
-        .accessibilityLabel(manager.isMuted ? "Reactiver le son" : "Couper le son")
-    }
-
-    private var loopButton: some View {
-        Button {
-            manager.shouldLoop.toggle()
-            HapticFeedback.light()
-        } label: {
-            toolbarIcon(systemName: "repeat", isActive: manager.shouldLoop)
-        }
-        .accessibilityLabel(manager.shouldLoop ? "Desactiver lecture en boucle" : "Activer lecture en boucle")
-    }
-
-    private var pipButton: some View {
-        let supported = AVPictureInPictureController.isPictureInPictureSupported()
-        return Button {
-            if manager.isPipActive { manager.stopPip() } else { manager.startPip() }
-            HapticFeedback.light()
-        } label: {
-            toolbarIcon(systemName: manager.isPipActive ? "pip.exit" : "pip.enter", isActive: manager.isPipActive)
-                .opacity(supported ? 1.0 : 0.4)
-        }
-        .disabled(!supported)
-        .accessibilityLabel(manager.isPipActive ? "Sortir du picture in picture" : "Activer picture in picture")
+        .accessibilityLabel(manager.isMuted ? "Réactiver le son" : "Couper le son")
     }
 
     private var airplayButton: some View {
         AirPlayRoutePicker(tintColor: .white)
-            .frame(width: 36, height: 36)
-            .background(
-                ZStack {
-                    Circle().fill(.ultraThinMaterial)
-                    Circle().fill(Color.white.opacity(0.10))
-                }
-            )
-            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+            .frame(width: 32, height: 32)
             .accessibilityLabel("AirPlay")
     }
 
-    private func toolbarIcon(systemName: String, isActive: Bool) -> some View {
-        Image(systemName: systemName)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(.white)
-            .frame(width: 36, height: 36)
-            .background(
-                ZStack {
-                    Circle().fill(.ultraThinMaterial)
-                    Circle().fill(isActive ? accent : Color.white.opacity(0.10))
+    private var moreMenu: some View {
+        Menu {
+            if TransportLayout.menuItems(for: controls).contains(.speed) {
+                Picker("Vitesse", selection: Binding(
+                    get: { manager.playbackSpeed },
+                    set: { manager.setSpeed($0) }
+                )) {
+                    ForEach(speeds, id: \.rawValue) { speed in
+                        Text(speed.label).tag(speed)
+                    }
                 }
-            )
-            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+            }
+            if TransportLayout.menuItems(for: controls).contains(.loop) {
+                Toggle(isOn: $manager.shouldLoop) {
+                    Label("Boucle", systemImage: "repeat")
+                }
+            }
+            if TransportLayout.menuItems(for: controls).contains(.pip) {
+                Button {
+                    if manager.isPipActive { manager.stopPip() } else { manager.startPip() }
+                } label: {
+                    Label(
+                        manager.isPipActive ? "Quitter le Picture in Picture" : "Picture in Picture",
+                        systemImage: manager.isPipActive ? "pip.exit" : "pip.enter"
+                    )
+                }
+                .disabled(!AVPictureInPictureController.isPictureInPictureSupported())
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+                .contentShape(Circle())
+        }
+        .accessibilityLabel("Plus d'options")
     }
+
+    // MARK: - Seek bar (highPriorityGesture conservé — fix pager historique)
 
     private var seekBar: some View {
         GeometryReader { geo in
@@ -210,9 +211,9 @@ public struct VideoTransportControls: View {
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                     .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
             }
-            // Cible 32pt + highPriorityGesture : le scrub gagne sur le pan du
-            // pager de la galerie (sinon le glissement gauche-droite ne bouge
-            // pas la barre — cf. bug user).
+            // Cible pleine hauteur + highPriorityGesture : le scrub gagne sur
+            // le pan du pager de la galerie (sinon le glissement gauche-droite
+            // ne bouge pas la barre — cf. bug user).
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
             .highPriorityGesture(
@@ -230,31 +231,7 @@ public struct VideoTransportControls: View {
             )
         }
         .frame(height: 32)
-    }
-
-    private var speedRow: some View {
-        HStack(spacing: 8) {
-            ForEach(speeds, id: \.rawValue) { speed in speedChip(speed) }
-        }
-        .animation(.spring(response: 0.32, dampingFraction: 0.7), value: manager.playbackSpeed)
-    }
-
-    private func speedChip(_ speed: PlaybackSpeed) -> some View {
-        let isActive = manager.playbackSpeed == speed
-        return Button {
-            manager.setSpeed(speed)
-            HapticFeedback.light()
-        } label: {
-            Text(speed.label)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundColor(isActive ? .white : .white.opacity(0.7))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(isActive ? accent : Color.white.opacity(0.15)))
-                .overlay(Capsule().stroke(isActive ? Color.white.opacity(0.35) : Color.clear, lineWidth: 0.8))
-                .shadow(color: isActive ? accent.opacity(0.5) : .clear, radius: 8, y: 2)
-                .scaleEffect(isActive ? 1.08 : 1.0)
-        }
+        .frame(maxWidth: .infinity)
     }
 }
 
