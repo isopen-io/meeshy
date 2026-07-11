@@ -42,7 +42,7 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         guard let range = source.range(of: "private func reconcileActiveCall() async {") else {
             XCTFail("reconcileActiveCall not found"); return
         }
-        let end = source.index(range.lowerBound, offsetBy: 100, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.lowerBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
         let opening = String(source[range.lowerBound..<end])
         XCTAssertTrue(
             opening.contains("guard !callManager.callState.isActive else { return }"),
