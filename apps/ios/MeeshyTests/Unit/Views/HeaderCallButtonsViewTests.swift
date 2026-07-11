@@ -121,8 +121,16 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         guard let range = source.range(of: "private func callGlyph(") else {
             XCTFail("callGlyph not found"); return
         }
-        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[range.lowerBound..<end])
+        let end = source.index(range.lowerBound, offsetBy: 1400, limitedBy: source.endIndex) ?? source.endIndex
+        let rawBody = String(source[range.lowerBound..<end])
+        // The doc comment itself mentions both modifiers by name (explaining
+        // WHY the order matters) — strip comment lines first so those
+        // mentions can't satisfy the range(of:) search in place of the real
+        // modifier applications.
+        let body = rawBody
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
         guard let glassRange = body.range(of: ".adaptiveGlass(in: Circle()"),
               let tapTargetRange = body.range(of: ".meeshyTapTarget()") else {
             XCTFail("callGlyph must apply both .adaptiveGlass and .meeshyTapTarget"); return
