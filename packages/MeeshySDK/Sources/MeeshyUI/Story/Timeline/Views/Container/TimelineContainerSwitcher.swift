@@ -12,15 +12,20 @@ public struct TimelineContainerSwitcher: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private let previewSlot: (() -> AnyView)?
+    private let onExport: (() -> Void)?
 
     public init(viewModel: TimelineViewModel,
+                onExport: (() -> Void)? = nil,
                 @ViewBuilder previewSlot: @escaping () -> some View) {
         self.viewModel = viewModel
+        self.onExport = onExport
         self.previewSlot = { AnyView(previewSlot()) }
     }
 
-    public init(viewModel: TimelineViewModel) {
+    public init(viewModel: TimelineViewModel,
+                onExport: (() -> Void)? = nil) {
         self.viewModel = viewModel
+        self.onExport = onExport
         self.previewSlot = nil
     }
 
@@ -55,15 +60,15 @@ public struct TimelineContainerSwitcher: View {
         switch viewModel.mode {
         case .quick:
             if let previewSlot {
-                QuickTimelineView(viewModel: viewModel, previewSlot: previewSlot)
+                QuickTimelineView(viewModel: viewModel, onExport: onExport, previewSlot: previewSlot)
             } else {
-                QuickTimelineView(viewModel: viewModel)
+                QuickTimelineView(viewModel: viewModel, onExport: onExport)
             }
         case .pro:
             if let previewSlot {
-                ProTimelineView(viewModel: viewModel, previewSlot: previewSlot)
+                ProTimelineView(viewModel: viewModel, onExport: onExport, previewSlot: previewSlot)
             } else {
-                ProTimelineView(viewModel: viewModel)
+                ProTimelineView(viewModel: viewModel, onExport: onExport)
             }
         }
     }

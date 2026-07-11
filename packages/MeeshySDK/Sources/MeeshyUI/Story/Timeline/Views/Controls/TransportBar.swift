@@ -21,6 +21,9 @@ public struct TransportBar: View {
     public let onZoomReset: () -> Void
     public let onUndo: () -> Void
     public let onRedo: () -> Void
+    /// Export MP4 de la timeline (watermark Meeshy). nil = bouton masqué —
+    /// les hôtes hors composer (previews, tests) gardent le transport nu.
+    public let onExport: (() -> Void)?
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,
                 zoomScale: CGFloat, isMuted: Bool,
@@ -31,13 +34,15 @@ public struct TransportBar: View {
                 onZoomOut: @escaping () -> Void,
                 onZoomReset: @escaping () -> Void,
                 onUndo: @escaping () -> Void = {},
-                onRedo: @escaping () -> Void = {}) {
+                onRedo: @escaping () -> Void = {},
+                onExport: (() -> Void)? = nil) {
         self.isPlaying = isPlaying; self.currentTime = currentTime; self.duration = duration
         self.zoomScale = zoomScale; self.isMuted = isMuted
         self.canUndo = canUndo; self.canRedo = canRedo
         self.onPlayToggle = onPlayToggle; self.onMuteToggle = onMuteToggle
         self.onZoomIn = onZoomIn; self.onZoomOut = onZoomOut; self.onZoomReset = onZoomReset
         self.onUndo = onUndo; self.onRedo = onRedo
+        self.onExport = onExport
     }
 
     public static func formatTime(seconds: Float) -> String {
@@ -85,6 +90,7 @@ public struct TransportBar: View {
             undoRedoCluster
             zoomCluster
             muteButton
+            exportButton
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -238,6 +244,22 @@ public struct TransportBar: View {
             ? "story.timeline.transport.unmute"
             : "story.timeline.transport.mute",
             bundle: .module))
+    }
+
+    @ViewBuilder
+    private var exportButton: some View {
+        if let onExport {
+            Button(action: onExport) {
+                Image(systemName: "square.and.arrow.up")
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle().inset(by: -7))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(MeeshyColors.indigo600)
+            .accessibilityLabel(String(localized: "story.timeline.transport.export",
+                                       defaultValue: "Exporter en vidéo MP4",
+                                       bundle: .module))
+        }
     }
 
 }

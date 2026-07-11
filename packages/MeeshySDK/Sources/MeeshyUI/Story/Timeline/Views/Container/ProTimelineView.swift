@@ -33,15 +33,20 @@ public struct ProTimelineView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let previewSlot: (() -> AnyView)?
+    private let onExport: (() -> Void)?
 
     public init(viewModel: TimelineViewModel,
+                onExport: (() -> Void)? = nil,
                 @ViewBuilder previewSlot: @escaping () -> some View) {
         self.viewModel = viewModel
+        self.onExport = onExport
         self.previewSlot = { AnyView(previewSlot()) }
     }
 
-    public init(viewModel: TimelineViewModel) {
+    public init(viewModel: TimelineViewModel,
+                onExport: (() -> Void)? = nil) {
         self.viewModel = viewModel
+        self.onExport = onExport
         self.previewSlot = nil
     }
 
@@ -342,7 +347,8 @@ public struct ProTimelineView: View {
             onMuteToggle: { viewModel.toggleMute() },
             onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
             onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
-            onZoomReset: { viewModel.zoomScale = 1.0 }
+            onZoomReset: { viewModel.zoomScale = 1.0 },
+            onExport: onExport
         )
     }
 
