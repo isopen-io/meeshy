@@ -143,9 +143,12 @@ public struct ClipInspector: View {
         }
     }
 
-    /// True when looping a clip makes sense. Audio + video can loop; still
-    /// images and text overlays cannot (no playback to wrap around).
-    public static func supportsLoop(kind: ClipSnapshot.Kind) -> Bool {
+    /// True when looping a clip makes sense. RÈGLE PRODUIT : la boucle est
+    /// réservée au FOND (un fond couvre toute la slide et boucle pour la
+    /// remplir) — un clip foreground a une fenêtre début/durée, il ne boucle
+    /// jamais. Audio + vidéo uniquement (image/texte : rien à boucler).
+    public static func supportsLoop(kind: ClipSnapshot.Kind, isBackground: Bool) -> Bool {
+        guard isBackground else { return false }
         switch kind {
         case .video, .audio: return true
         case .image, .text:  return false
@@ -280,54 +283,83 @@ public struct ClipInspector: View {
         }
     }
 
-    /// Effets d'APPARITION / DISPARITION de l'élément (fondu d'entrée et de
-    /// sortie, en secondes). Les anciens labels réutilisaient les clés de
-    /// TOOLTIP (« FADE IN %@ ») — le format brut s'affichait tel quel et rien
-    /// n'indiquait qu'il s'agissait des effets d'apparition (retour user).
+    /// Durées proposées pour les animations d'entrée/sortie (fondu). `0` = off.
+    public static let fadePresets: [Float] = [0, 0.3, 0.5, 1.0, 2.0]
+
+    /// Rattache une valeur legacy arbitraire (ex. 0.4 s posée au slider
+    /// d'avant) au preset le plus proche pour l'état sélectionné des chips.
+    public nonisolated static func nearestFadePreset(to value: Float) -> Float {
+        fadePresets.min(by: { abs($0 - value) < abs($1 - value) }) ?? 0
+    }
+
+    /// Animations d'APPARITION / DISPARITION de l'élément — chips de durée
+    /// (Off / 0,3 / 0,5 / 1 / 2 s) au lieu des deux sliders anonymes « FADE
+    /// IN %@ » (format brut + réglage au pixel peu premium, retours user).
     private var fadeSliders: some View {
-        HStack(spacing: 12) {
-            fadeSlider(
+        VStack(alignment: .leading, spacing: 8) {
+            fadeChipRow(
                 title: String(localized: "story.timeline.inspector.fadeIn",
                               defaultValue: "Apparition (fondu)", bundle: .module),
+                systemImage: "arrow.down.right.circle",
                 value: $fadeIn,
                 onCommit: { onFadeInChanged(fadeIn) }
             )
-            fadeSlider(
+            fadeChipRow(
                 title: String(localized: "story.timeline.inspector.fadeOut",
                               defaultValue: "Disparition (fondu)", bundle: .module),
+                systemImage: "arrow.up.right.circle",
                 value: $fadeOut,
                 onCommit: { onFadeOutChanged(fadeOut) }
             )
         }
     }
 
-    private func fadeSlider(title: String, value: Binding<Float>, onCommit: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func fadeChipRow(title: String, systemImage: String,
+                             value: Binding<Float>, onCommit: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.indigo400)
+                    .accessibilityHidden(true)
                 Text(title.uppercased())
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-                Text(value.wrappedValue > 0
-                     ? String(format: "%.2f s", value.wrappedValue)
-                     : String(localized: "story.timeline.inspector.fade.off",
-                              defaultValue: "off", bundle: .module))
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(value.wrappedValue > 0 ? MeeshyColors.indigo400 : .secondary)
             }
-            Slider(value: value, in: Self.fadeRange, step: 0.05) { editing in
-                if !editing { onCommit() }
+            HStack(spacing: 6) {
+                ForEach(Self.fadePresets, id: \.self) { preset in
+                    let isOn = Self.nearestFadePreset(to: value.wrappedValue) == preset
+                    Button {
+                        value.wrappedValue = preset
+                        onCommit()
+                    } label: {
+                        Text(preset == 0
+                             ? String(localized: "story.timeline.inspector.fade.off",
+                                      defaultValue: "off", bundle: .module)
+                             : (preset < 1 ? String(format: "%.1f s", preset)
+                                           : String(format: "%.0f s", preset)))
+                            .font(.caption2.weight(.semibold))
+                            .monospacedDigit()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(
+                                isOn ? MeeshyColors.indigo500 : MeeshyColors.indigo500.opacity(0.14)))
+                            .foregroundStyle(isOn ? .white : MeeshyColors.indigo400)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(title) \(preset)s")
+                    .accessibilityAddTraits(isOn ? [.isSelected] : [])
+                }
             }
-            .tint(MeeshyColors.indigo400)
-            .accessibilityValue(String(format: "%.2fs", value.wrappedValue))
         }
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder
     private var togglesRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 24) {
-                if Self.supportsLoop(kind: clip.kind) {
+                if Self.supportsLoop(kind: clip.kind, isBackground: background) {
                     Toggle(isOn: Binding(
                         get: { loop },
                         set: { loop = $0; onLoopToggled($0) }
@@ -341,7 +373,16 @@ public struct ClipInspector: View {
 
                 Toggle(isOn: Binding(
                     get: { background },
-                    set: { background = $0; onBackgroundToggled($0) }
+                    set: { newValue in
+                        background = newValue
+                        onBackgroundToggled(newValue)
+                        // Règle produit : la boucle n'existe QUE pour le fond.
+                        // Un clip qui redevient foreground perd sa boucle.
+                        if !newValue, loop {
+                            loop = false
+                            onLoopToggled(false)
+                        }
+                    }
                 )) {
                     Text(String(localized: "story.timeline.inspector.background",
                                 defaultValue: "Fond", bundle: .module))

@@ -564,9 +564,11 @@ public struct ProTimelineView: View {
     @ViewBuilder
     private func transitionInspectorOverlay(snapshot: TransitionInspector.TransitionSnapshot) -> some View {
         let transitionId = snapshot.id
+        let currentEasing = viewModel.project.clipTransitions
+            .first(where: { $0.id == transitionId })?.easing ?? .linear
         TransitionInspector(
             transition: snapshot,
-            isAdvancedEnabled: false,
+            isAdvancedEnabled: true,
             onKindChanged: { [viewModel] kind in
                 viewModel.changeTransition(transitionId: transitionId,
                                            kind: kind,
@@ -579,7 +581,15 @@ public struct ProTimelineView: View {
             },
             onDelete: { [viewModel] in
                 viewModel.removeTransition(transitionId: transitionId)
-            }
+            },
+            onClose: { viewModel.selectClip(id: nil) },
+            onEasingChanged: { [viewModel] easing in
+                viewModel.changeTransition(transitionId: transitionId,
+                                           kind: snapshot.kind,
+                                           duration: snapshot.duration,
+                                           easing: easing)
+            },
+            easing: currentEasing
         )
         .padding(12)
         .transition(.opacity)

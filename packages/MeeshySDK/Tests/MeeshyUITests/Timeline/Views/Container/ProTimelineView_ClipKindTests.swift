@@ -112,22 +112,25 @@ final class ProTimelineViewClipKindTests: XCTestCase {
     }
 
     func test_inspector_imageKind_hidesLoopToggle() {
-        XCTAssertFalse(ClipInspector.supportsLoop(kind: .image))
+        XCTAssertFalse(ClipInspector.supportsLoop(kind: .image, isBackground: true))
     }
 
-    func test_inspector_videoKind_keepsVolumeAndLoop() {
+    func test_inspector_videoKind_loopOnlyWhenBackground() {
         XCTAssertTrue(ClipInspector.hasAudioAffordances(kind: .video))
-        XCTAssertTrue(ClipInspector.supportsLoop(kind: .video))
+        XCTAssertTrue(ClipInspector.supportsLoop(kind: .video, isBackground: true))
+        XCTAssertFalse(ClipInspector.supportsLoop(kind: .video, isBackground: false),
+                       "Règle produit : la boucle est réservée au FOND — un clip foreground a une fenêtre, il ne boucle pas")
     }
 
-    func test_inspector_audioKind_keepsVolumeAndLoop() {
+    func test_inspector_audioKind_loopOnlyWhenBackground() {
         XCTAssertTrue(ClipInspector.hasAudioAffordances(kind: .audio))
-        XCTAssertTrue(ClipInspector.supportsLoop(kind: .audio))
+        XCTAssertTrue(ClipInspector.supportsLoop(kind: .audio, isBackground: true))
+        XCTAssertFalse(ClipInspector.supportsLoop(kind: .audio, isBackground: false))
     }
 
     func test_inspector_textKind_hidesVolumeAndLoop() {
         XCTAssertFalse(ClipInspector.hasAudioAffordances(kind: .text))
-        XCTAssertFalse(ClipInspector.supportsLoop(kind: .text))
+        XCTAssertFalse(ClipInspector.supportsLoop(kind: .text, isBackground: true))
     }
 
     // MARK: - End-to-end body rendering

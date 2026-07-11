@@ -395,7 +395,8 @@ extension TimelineViewModel {
 
     // MARK: - Transition mutations
 
-    public func changeTransition(transitionId: String, kind: StoryTransitionKind, duration: Float) {
+    public func changeTransition(transitionId: String, kind: StoryTransitionKind, duration: Float,
+                                 easing: StoryEasing? = nil) {
         guard let idx = project.clipTransitions.firstIndex(where: { $0.id == transitionId }) else { return }
         let previous = project.clipTransitions[idx]
         let updated = StoryClipTransition(id: previous.id,
@@ -403,7 +404,7 @@ extension TimelineViewModel {
                                           toClipId: previous.toClipId,
                                           kind: kind,
                                           duration: duration,
-                                          easing: previous.easing)
+                                          easing: easing ?? previous.easing)
         let cmd = ChangeTransitionCommand(transitionId: transitionId, previous: previous, updated: updated)
         do {
             try cmd.apply(to: &project)
