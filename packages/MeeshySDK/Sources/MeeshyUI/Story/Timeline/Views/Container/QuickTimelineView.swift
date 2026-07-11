@@ -269,6 +269,10 @@ public struct QuickTimelineView: View {
                 rulerHeight: 22,               // unified with ProTimelineView
                 isPlaying: viewModel.isPlaying,
                 onZoomScaleChanged: { viewModel.zoomScale = $0 },
+                onSlideDurationChanged: { viewModel.setSlideDuration($0) },
+                snapGuideTime: viewModel.selection.activeDrag.flatMap {
+                    $0.snappedTo != nil ? $0.currentStartTime : nil
+                },
                 onScrub: { viewModel.scrub(to: $0) },
                 onScrubBegan: { viewModel.beginScrub() },
                 onScrubEnded: { viewModel.endScrub() }

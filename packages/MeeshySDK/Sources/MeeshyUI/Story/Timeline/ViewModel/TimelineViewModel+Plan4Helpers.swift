@@ -124,6 +124,24 @@ extension TimelineViewModel {
         trimClipEnd(id: id, deltaTimeSeconds: overlapWithNextSeconds)
     }
 
+    // MARK: - Slide duration pin (DurationHandle)
+
+    /// Pin direct de la durée de la slide (poignée en fin de ruler). Mutation
+    /// directe du projet, comme `extendSlideDurationIfNeeded` (le set de
+    /// commandes Plan 1 n'a pas de commande slide-duration) — le pin devient
+    /// `effects.timelineDuration` au commit (Option A : peut ÉTENDRE la slide
+    /// au-delà du contenu ou la ROGNER en deçà).
+    public func setSlideDuration(_ duration: Float) {
+        guard duration.isFinite else { return }
+        let clamped = max(1, min(600, duration))
+        guard abs(clamped - project.slideDuration) > 0.001 else { return }
+        project.slideDuration = clamped
+        if currentTime > clamped {
+            scrub(to: clamped, precise: true)
+        }
+        scheduleEngineReconfigure()
+    }
+
     // MARK: - Snap disabled toggle (two-finger drag override)
 
     /// Programmatically disable or enable snap — used when a two-finger drag

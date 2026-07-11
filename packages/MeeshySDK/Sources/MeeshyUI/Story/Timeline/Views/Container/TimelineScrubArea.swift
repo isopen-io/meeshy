@@ -41,10 +41,18 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// Pinch-to-zoom : reçoit le zoomScale cible (clampé [0.25, 4]). nil =
     /// pas de pinch (les boutons +/− du transport restent la seule entrée).
     public let onZoomScaleChanged: ((CGFloat) -> Void)?
+    /// Pin direct de la durée de slide — monte la `DurationHandle` (losange
+    /// indigo) en fin de ruler. nil = pas de poignée.
+    public let onSlideDurationChanged: ((Float) -> Void)?
+    /// Temps aimanté du drag de clip en cours (non-nil UNIQUEMENT quand
+    /// l'aimant a accroché) — affiche le guide vertical magenta.
+    public let snapGuideTime: Float?
     public let onScrub: (Float) -> Void
     public let onScrubBegan: () -> Void
     public let onScrubEnded: () -> Void
     private let tracks: (CGFloat) -> TracksContent
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Dernier temps sur lequel l'auto-follow a scrollé — throttle pour ne
     /// pas émettre un scrollTo par frame (60 Hz).
@@ -64,6 +72,8 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         rulerHeight: CGFloat = 22,
         isPlaying: Bool = false,
         onZoomScaleChanged: ((CGFloat) -> Void)? = nil,
+        onSlideDurationChanged: ((Float) -> Void)? = nil,
+        snapGuideTime: Float? = nil,
         onScrub: @escaping (Float) -> Void,
         onScrubBegan: @escaping () -> Void = {},
         onScrubEnded: @escaping () -> Void = {},
@@ -77,6 +87,8 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         self.rulerHeight = rulerHeight
         self.isPlaying = isPlaying
         self.onZoomScaleChanged = onZoomScaleChanged
+        self.onSlideDurationChanged = onSlideDurationChanged
+        self.snapGuideTime = snapGuideTime
         self.onScrub = onScrub
         self.onScrubBegan = onScrubBegan
         self.onScrubEnded = onScrubEnded
@@ -116,7 +128,9 @@ public struct TimelineScrubArea<TracksContent: View>: View {
                     tracks(laneWidth)
                 }
                 .padding(.horizontal, Self.horizontalPadding)
+                .overlay(alignment: .topLeading) { snapGuideOverlay }
                 .overlay(alignment: .topLeading) { playheadOverlay }
+                .overlay(alignment: .topLeading) { durationHandleOverlay }
                 .background(alignment: .topLeading) { playheadAnchor }
             }
             .adaptiveOnChange(of: currentTime) { _, time in
@@ -160,6 +174,40 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         guard abs(time - lastFollowedTime) > 0.5 else { return }
         lastFollowedTime = time
         proxy.scrollTo(Self.playheadAnchorId, anchor: UnitPoint(x: 0.35, y: 0))
+    }
+
+    /// Losange indigo en fin de ruler — étire ou rogne la durée de la slide
+    /// au doigt (le pin devient `effects.timelineDuration` au commit).
+    @ViewBuilder
+    private var durationHandleOverlay: some View {
+        if let onSlideDurationChanged {
+            DurationHandle(
+                duration: totalDuration,
+                geometry: geometry,
+                laneHeight: rulerHeight,
+                isDark: isDark,
+                onChange: onSlideDurationChanged
+            )
+            .offset(x: Self.playheadLeadingInset)
+        }
+    }
+
+    /// Guide vertical magenta au temps aimanté du drag en cours.
+    @ViewBuilder
+    private var snapGuideOverlay: some View {
+        if let snapGuideTime {
+            GeometryReader { proxy in
+                SnapGuideView(
+                    x: geometry.x(for: snapGuideTime),
+                    height: max(0, proxy.size.height - 18),
+                    label: String(format: "%.2f s", snapGuideTime),
+                    isVisible: true,
+                    reducedMotion: reduceMotion
+                )
+                .offset(x: Self.playheadLeadingInset)
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     private var playheadOverlay: some View {

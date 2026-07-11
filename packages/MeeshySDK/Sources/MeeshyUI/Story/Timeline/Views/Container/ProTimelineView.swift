@@ -378,6 +378,10 @@ public struct ProTimelineView: View {
                 rulerHeight: 22,
                 isPlaying: viewModel.isPlaying,
                 onZoomScaleChanged: { viewModel.zoomScale = $0 },
+                onSlideDurationChanged: { viewModel.setSlideDuration($0) },
+                snapGuideTime: viewModel.selection.activeDrag.flatMap {
+                    $0.snappedTo != nil ? $0.currentStartTime : nil
+                },
                 onScrub: { viewModel.scrub(to: $0) },
                 onScrubBegan: { viewModel.beginScrub() },
                 onScrubEnded: { viewModel.endScrub() }
