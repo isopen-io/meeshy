@@ -108,7 +108,7 @@ resampy==0.4.3
 s3tokenizer==0.3.0
 diffusers==0.29.0
 resemble-perth==1.0.1
-omegaconf==2.3.0
+omegaconf==2.3.1
 conformer==0.3.2
 spacy==3.8.14
 einops==0.8.2
