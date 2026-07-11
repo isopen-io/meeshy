@@ -275,17 +275,17 @@ public actor CallTranscriptStore {
     public func invalidate(for callId: String) async {
         await cache.callTranscripts.invalidate(for: callId)
     }
-
-    /// Every call this device has a local transcript for, in this conversation
-    /// — used to sweep on conversation delete/leave (see below). Whether this
-    /// is a real GRDB column query against `conversationId` or a second small
-    /// index store (`conversationId -> [callId]`) maintained alongside
-    /// `saveMerging`/`invalidate` is a planning-time decision — `GRDBCacheStore`'s
-    /// query surface needs a fresh read at that point; both are viable and the
-    /// choice doesn't change this design's contract.
-    public func callIds(inConversation conversationId: String) async -> [String] { … }
 }
 ```
+
+**Resolved during planning (user direction) — no secondary index needed.** Every `CallTranscript`
+corresponds to exactly one call-summary system message (`Message.callSummary`, already carrying
+`callId`), and that message is already present in the existing local messages cache
+(`CacheCoordinator.shared.messages`, keyed by `conversationId`). That cache *is* the join from "a
+conversation" to "its calls" — no new `conversationId -> [callId]` index store or GRDB column
+query is needed. The conversation-delete sweep (below) simply loads
+`cache.messages.load(for: conversationId)`, maps `.compactMap(\.callSummary?.callId)`, and
+invalidates each.
 
 **Correction (privacy review, blocking) — a single `invalidate(for:)` on message delete is not
 enough.** Three separate erasure paths must all sweep this store, not just one:
@@ -296,11 +296,12 @@ enough.** Three separate erasure paths must all sweep this store, not just one:
    in next on a shared device. `callTranscripts` must be added to this enumeration. This is the
    single most important sweep — it's the one the codebase already has a named mechanism for and
    a documented reason to use it.
-2. **Conversation delete/leave.** Today's `deleteConversation` (`ConversationListViewModel.swift`)
-   is a server-side soft-delete and doesn't even purge the local message cache — but a user who
-   deletes/leaves a conversation reasonably expects its local call transcripts gone too, since
-   they have no other way to reach them (the message they'd long-press is gone). Sweep via
-   `CallTranscriptStore.callIds(inConversation:)` (above) → `invalidate` each.
+2. **Conversation delete/leave.** `deleteConversation` (`ConversationListViewModel.swift:1473`) is
+   an optimistic, rollback-capable soft delete (`.deleteForUser`) — sweeping on its optimistic
+   apply carries a small, accepted, low-severity risk (a rolled-back delete doesn't un-sweep
+   already-invalidated transcripts). Sweep by loading the conversation's local messages cache,
+   extracting every `callSummary?.callId`, and invalidating each (see the resolved note above —
+   no new index required).
 3. **Message delete — authoritative path only.** `deleteMessage` has three call sites, only one of
    which is safe to bind to: the socket-confirmed `message:deleted` event
    (`MessageSocketManager.swift`/`ConversationSyncEngine.swift`), which fires once a deletion is
