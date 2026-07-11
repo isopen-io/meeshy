@@ -223,19 +223,17 @@ scalaire en plusieurs arguments — un run xcodebuild avec les filtres dans
 $TESTS a « réussi » en exécutant 0 test ; toujours valider sur
 « Executed N tests » avec N attendu.
 
-RESTES (différés, par priorité) :
-1. Boucle audio bg dans la PREVIEW engine (AudioMixer ne re-arme pas ; reader OK).
+RESTES (différés, par priorité) — constats hors timeline + export TOUS réglés
+par la vague export MP4 (draft saveMedia, labels lane, xcstrings filters,
+script snapshot, export MP4+watermark+audio lanes) :
+1. Boucle audio bg dans la PREVIEW engine (AudioMixer ne re-arme pas ; reader OK
+   — et l'EXPORT boucle correctement lui aussi via composeAudioLanes).
 2. F4 saisie ms clavier au ClipInspector (steppers ±0,1 s livrés ; port branche
    amazing-bell par contenu si besoin plus fin).
 3. Filmstrip perdu sur les moitiés d'un SPLIT (nouveaux ids sans URL de session
    — remapper loadedVideoURLs dans SplitClipCommand ou résoudre par postMediaId).
-4. F5 DurationHandle (pin direct durée slide) ; drag temporel des keyframes/durée
-   badge transition (nécessite drag ancré anti-drift).
-5. Vignettes filmstrip clips vidéo (frames: []) ; G1 rotation keyframes ;
-   G3 transitions push/wipe (CustomTransitionCompositor stub).
-6. Hors timeline, constaté : draft resume perd le FICHIER média (alerte « Media
-   unavailable » ; le modèle survit) ; clé xcstrings
-   story.composer.empty.tile.filters sans variante en ; labels de lane tronqués
-   (« VID… ») ; scripts/record-snapshot-baselines.sh réparé de facto par
-   destination id (le script avale les erreurs avec `|| true` + destination
-   ambiguë → il listait des PNG PÉRIMÉS comme « recorded »).
+4. Drag temporel des keyframes/durée badge transition (drag ancré anti-drift) ;
+   G1 rotation keyframes ; G3 transitions push/wipe (CustomTransitionCompositor
+   stub — l'export bake crossfade réel, push/wipe fallback crossfade).
+5. UX draft : proposer un re-pick quand un média du brouillon est perdu
+   (le fix racine saveMedia évite désormais la perte auto-infligée).
