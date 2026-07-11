@@ -73,6 +73,20 @@ describe('notificationString — interpolation', () => {
     expect(notificationString('de', 'call.missed', { callIcon: '📹', callType: 'video' }))
       .toBe('📹 Verpasster Videoanruf');
   });
+  it('localise le push d’appel entrant à la langue résolue du callee (Prisme)', () => {
+    expect(notificationString('fr', 'call.incoming.title', { actor: 'Alice' }))
+      .toBe('Alice vous appelle');
+    expect(notificationString('en', 'call.incoming.title', { actor: 'Alice' }))
+      .toBe('Alice is calling you');
+    expect(notificationString('zh-Hans', 'call.incoming.title', { actor: '小明' }))
+      .toBe('小明 来电');
+    expect(notificationString('fr', 'call.incoming.body', { callType: 'video' }))
+      .toBe('Appel vidéo');
+    expect(notificationString('en', 'call.incoming.body', { callType: 'audio' }))
+      .toBe('Audio call');
+    expect(notificationString('de', 'call.incoming.body', { callType: 'video' }))
+      .toBe('Videoanruf');
+  });
   it('retombe sur fr pour une langue hors catalogue', () => {
     expect(notificationString('ja', 'mention')).toBe('vous a mentionné');
   });

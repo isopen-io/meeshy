@@ -864,6 +864,11 @@ export const CALL_EVENTS = {
   PARTICIPANT_JOINED: 'call:participant-joined',
   PARTICIPANT_LEFT: 'call:participant-left',
   SIGNAL_RECEIVED: 'call:signal',
+  /**
+   * @deprecated Jamais émis par le gateway (audit appels 2026-07-11 #4) —
+   * le mode `sfu` est renvoyé dans les ACKs sans média SFU derrière. Ne pas
+   * s'y abonner ; sera supprimé si le mode SFU est formellement abandonné.
+   */
   MODE_CHANGED: 'call:mode-changed',
   MEDIA_TOGGLED: 'call:media-toggled',
   ENDED: 'call:ended',
@@ -876,11 +881,20 @@ export const CALL_EVENTS = {
   ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
 
   // Transcription & Translation (Phase 2/3)
+  // Seuls TRANSCRIPTION_SEGMENT (client → serveur) et TRANSLATED_SEGMENT
+  // (serveur → clients) sont câblés dans CallEventsHandler. Les 4 autres
+  // sont un contrat déclaré jamais émis (audit appels 2026-07-11 #4) —
+  // conservés uniquement parce que le design leader/follower est suspendu,
+  // pas abandonné. Ne pas s'y abonner tant qu'un émetteur n'existe pas.
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION: 'call:transcription',
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSLATION: 'call:translation',
   TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
   TRANSLATED_SEGMENT: 'call:translated-segment',
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION_ROLE: 'call:transcription-role',
 } as const;
 

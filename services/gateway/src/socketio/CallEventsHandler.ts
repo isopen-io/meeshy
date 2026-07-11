@@ -17,9 +17,11 @@ import { NotificationService } from '../services/notifications/NotificationServi
 import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
-import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { ROOMS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
+import { notificationString } from '@meeshy/shared/utils/notification-strings';
+import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
   socketInitiateCallSchema,
@@ -180,6 +182,34 @@ export class CallEventsHandler {
         }
       }
     }, 60_000).unref();
+  }
+
+  /**
+   * Langue de notification résolue (Prisme-first) pour chaque callee d'un
+   * push d'appel. Un seul findMany ; toute erreur retourne une Map vide —
+   * notificationString(undefined) retombe sur 'fr', le push part toujours.
+   */
+  private async resolveNotificationLangs(userIds: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (userIds.length === 0) return out;
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: {
+          id: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          deviceLocale: true,
+        },
+      });
+      for (const u of users) {
+        out.set(u.id, resolveUserLanguage(u, { deviceLocale: u.deviceLocale ?? undefined }));
+      }
+    } catch (error) {
+      logger.error('Notification language resolution failed — falling back to fr', { error });
+    }
+    return out;
   }
 
   /** Release the periodic cleanup interval. Call when shutting down the handler. */
@@ -1242,7 +1272,7 @@ export class CallEventsHandler {
     // event does). Impact per-event is minimal (flips a socket-local flag, no
     // DB write, no broadcast) but a flooding client should still be bounded
     // like every other handler here, not left as the one exception.
-    socket.on('presence:app-state', async (data: { foreground?: boolean }) => {
+    socket.on(CLIENT_EVENTS.PRESENCE_APP_STATE, async (data: { foreground?: boolean }) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
@@ -1275,7 +1305,7 @@ export class CallEventsHandler {
     // it"; "I open the Mac app → the banner shows"). Scoped to the user's
     // conversations, the ringing window (<60s), calls they did NOT initiate, and only
     // if they haven't already left. The client dedups by callId.
-    socket.on('call:check-active', async () => {
+    socket.on(CLIENT_EVENTS.CALL_CHECK_ACTIVE, async () => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
@@ -1590,6 +1620,11 @@ export class CallEventsHandler {
             uid => uid !== userId && !foregroundUserIds.has(uid)
           );
 
+          // Prisme linguistique (audit 2026-07-11 #11) : titre/corps du push
+          // VoIP à la langue résolue de CHAQUE callee, plus de français codé
+          // en dur. La résolution ne bloque jamais le push (fallback 'fr').
+          const offlineLangs = await this.resolveNotificationLangs(offlineUserIds);
+
           for (const offlineUserId of offlineUserIds) {
             // Per-user TURN credentials so the answerer's RTCPeerConnection has
             // TURN at construction time (VoIPPushManager.didReceiveIncomingPush
@@ -1599,8 +1634,10 @@ export class CallEventsHandler {
             this.pushService.sendToUser({
               userId: offlineUserId,
               payload: {
-                title: `${callerName} vous appelle`,
-                body: data.type === 'video' ? 'Appel vidéo' : 'Appel audio',
+                title: notificationString(offlineLangs.get(offlineUserId), 'call.incoming.title', { actor: callerName }),
+                body: notificationString(offlineLangs.get(offlineUserId), 'call.incoming.body', {
+                  callType: data.type === 'video' ? 'video' : 'audio',
+                }),
                 callId: callSession.id,
                 callerName,
                 callerAvatar,
@@ -2102,7 +2139,7 @@ export class CallEventsHandler {
      * call:force-leave - Force cleanup of any active calls in a conversation
      * This is used when "call already active" error occurs to cleanup stale calls
      */
-    socket.on('call:force-leave', async (data: { conversationId: string }) => {
+    socket.on(CLIENT_EVENTS.CALL_FORCE_LEAVE, async (data: { conversationId: string }) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {

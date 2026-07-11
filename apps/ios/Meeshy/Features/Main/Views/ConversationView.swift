@@ -952,15 +952,15 @@ struct ConversationView: View {
     /// `SkeletonMessageBubble` so the column reads like a real
     /// conversation thread while the first network/cache pass runs.
     private var messageSkeletonOverlay: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             ForEach(0..<6, id: \.self) { index in
                 SkeletonMessageBubble(index: index)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MeeshySpacing.md + 2)
         .padding(.top, 96)
-        .padding(.bottom, composerHeight + 24)
+        .padding(.bottom, composerHeight + MeeshySpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(String(localized: "conversation.view.loading_messages", bundle: .main)))
@@ -1321,7 +1321,7 @@ struct ConversationView: View {
                     Button {
                         composerText.text = viewModel.insertMention(candidate, into: composerText.text)
                     } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: MeeshySpacing.sm + 2) {
                             MeeshyAvatar(
                                 name: candidate.displayName,
                                 context: .userListItem,
@@ -1338,8 +1338,8 @@ struct ConversationView: View {
                             }
                             Spacer()
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.sm)
                     }
                     .accessibilityLabel(String(localized: "conversation.view.mention", bundle: .main))
                     if candidate.id != viewModel.mentionSuggestions.last?.id {
@@ -1364,7 +1364,7 @@ struct ConversationView: View {
             if isAnonymous {
                 anonymousHeaderBar
             } else if isTyping {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                     Spacer()
                     ThemedAvatarButton(
@@ -1378,7 +1378,8 @@ struct ConversationView: View {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 8)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.sm)
                 .transition(.opacity)
             } else {
                 expandedHeaderBand
@@ -1438,17 +1439,17 @@ struct ConversationView: View {
     @ViewBuilder
     private var expandedHeaderBandBody: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ThemedBackButton(color: accentColor, compactMode: composerState.showOptions, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                 expandedHeaderMidContent
                 headerAvatarView
             }
         }
-        .padding(.horizontal, composerState.showOptions ? 10 : 0)
-        .padding(.vertical, composerState.showOptions ? 6 : 0)
+        .padding(.horizontal, composerState.showOptions ? MeeshySpacing.sm + 2 : 0)
+        .padding(.vertical, composerState.showOptions ? MeeshySpacing.sm - 2 : 0)
         .background(expandedHeaderBackground)
-        .padding(.horizontal, composerState.showOptions ? 8 : 16)
-        .padding(.top, 8)
+        .padding(.horizontal, composerState.showOptions ? MeeshySpacing.sm : MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     /// Middle slot of the header band (between back button and avatar).
@@ -1491,8 +1492,8 @@ struct ConversationView: View {
     /// Title + tags column shown when the composer-options drawer is open.
     @ViewBuilder
     private var expandedHeaderTitleAndTags: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .top, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
+            HStack(alignment: .top, spacing: MeeshySpacing.xs) {
                 Button { composerState.showConversationInfo = true } label: {
                     expandedHeaderTitleLabel
                         .meeshyTapTarget()
@@ -1523,7 +1524,7 @@ struct ConversationView: View {
     /// SwiftUI from baking it into the parent's already-complex type tree.
     @ViewBuilder
     private var expandedHeaderTitleLabel: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xs + 2) {
             ConversationTitleLabel(
                 name: conversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
