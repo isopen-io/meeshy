@@ -51,4 +51,11 @@
     <string name="report_reason_inappropriate">Inappropriate content</string>
     <string name="report_reason_impersonation">Impersonation</string>
     <string name="report_reason_other">Other</string>
+    <string name="profile_share_action">Share profile</string>
+    <string name="profile_share_title">Share profile</string>
+    <string name="profile_share_qr_cd">QR code for %1$s</string>
+    <string name="profile_share_copy">Copy link</string>
+    <string name="profile_share_send">Share</string>
+    <string name="profile_share_via">Share profile via</string>
+    <string name="profile_share_message">%1$s on Meeshy: %2$s</string>
 </resources>

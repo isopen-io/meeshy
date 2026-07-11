@@ -1701,7 +1701,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
       `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
       over/under-fills the ring), plus a "Profile N% complete" label. 22 `ProfileHeaderBuilderTest` cases.
-- [ ] Profile QR code display + save/share; share profile via message/email/copy link
+- [x] Profile QR code display + save/share; share profile via message/email/copy link —
+      **shipped** (slice `profile-share`, 2026-07-11), and it **surpasses iOS**, which has no
+      profile-share affordance. Pure `:core:model` `ProfileShareLink` is the cross-platform link SSOT:
+      `https://meeshy.me/u/{username}` Universal Link + `meeshy://u/{username}` custom scheme, mirroring
+      the iOS `DeepLinkParser` contract (`u` = the AASA-claimed user segment) so a QR/link made on
+      Android resolves in every client. `canonicalUsername` trims + strips a display-only leading `@`
+      (blank / lone-`@` → `null`); `webLink`/`appLink` percent-encode the handle as an RFC 3986 path
+      segment (unreserved passthrough, space→`%20`, non-ASCII→uppercase UTF-8 bytes, reserved→`%XX`).
+      Pure `:feature:profile` `ProfileShareBuilder.build(user) → ProfileSharePresentation?` (precedent
+      `ProfileHeaderBuilder`) projects `effectiveDisplayName`, `@handle` (same `canonicalUsername` SSOT
+      so handle ⇄ link never diverge) and both links; `null` when the handle is blank so the affordance
+      hides instead of emitting a dead URL. Glue (exempt): `ProfileShareSheet` (ModalBottomSheet with a
+      zxing-rendered QR of the web link on a white card + Copy-link + system Share-chooser), a **Share**
+      app-bar action on both own and other profiles, EN/FR/ES/PT strings; added `com.google.zxing:core`.
+      +22 tests (ProfileShareLink 16, ProfileShareBuilder 6). **Pending:** save the QR image to a file.
 - [x] Block / unblock users; report a user (reason + details) — **complete**. Block/unblock shipped
       earlier (durable `BlockRepository` + `BlockedTab`). **Report a user shipped** (slice `report-user`,
       2026-07-11): port of iOS `ReportUserView`, corrected to the gateway contract. Pure `:core:model`
