@@ -1,5 +1,15 @@
 # @meeshy/web
 
+## 1.10.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - CallTranscriptStore actor — merge-on-save, real CacheResult handling
+  - encrypted callTranscripts store, swept on logout/account-deletion
+  - add CallTranscript/CallTranscriptSegment pure models
+
 ## 1.9.6
 
 ### Patch Changes
