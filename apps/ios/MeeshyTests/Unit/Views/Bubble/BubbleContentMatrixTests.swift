@@ -555,6 +555,89 @@ final class BubbleContentMatrixTests: XCTestCase {
         )
     }
 
+    // MARK: - Call notice presentation (bulle vivante + annulé par-spectateur)
+
+    private let accentHex = "#6366F1"
+
+    private func makeLiveSummary(callType: CallSummaryMetadata.MediaType = .audio) -> CallSummaryMetadata {
+        CallSummaryMetadata(
+            callId: "call1",
+            initiatorId: "peer",
+            callType: callType,
+            outcome: .completed,
+            durationSeconds: 0,
+            bytesTotal: nil,
+            bytesEstimated: false,
+            networkQuality: nil,
+            isLive: true
+        )
+    }
+
+    func test_liveCallPresentation_showsOngoingTitleAndJoinHint() {
+        let presentation = CallNoticePresentation(summary: makeLiveSummary(), isOutgoing: false, accentHex: accentHex)
+
+        XCTAssertEqual(presentation.title, "Appel audio en cours")
+        XCTAssertEqual(presentation.liveSubtitle, "Toucher pour rejoindre")
+    }
+
+    func test_liveVideoCallPresentation_titleIsVideoOngoing() {
+        let presentation = CallNoticePresentation(summary: makeLiveSummary(callType: .video), isOutgoing: true, accentHex: accentHex)
+
+        XCTAssertEqual(presentation.title, "Appel vidéo en cours")
+    }
+
+    func test_liveCallPresentation_readsKindBeforeOutcome_placeholderNeverRendersTerminal() {
+        // Le live porte outcome:'completed' comme placeholder neutre — il ne
+        // doit JAMAIS produire le rendu terminal (« Appel audio sortant »).
+        let presentation = CallNoticePresentation(summary: makeLiveSummary(), isOutgoing: true, accentHex: accentHex)
+
+        XCTAssertEqual(presentation.title, "Appel audio en cours")
+        XCTAssertFalse(presentation.title.contains("sortant"))
+    }
+
+    func test_terminalCallPresentation_hasNoLiveSubtitle() {
+        let terminal = makeCallSummary(initiatorId: "u1", callType: .audio, outcome: .completed, durationSeconds: 30)
+        let presentation = CallNoticePresentation(summary: terminal, isOutgoing: true, accentHex: accentHex)
+
+        XCTAssertNil(presentation.liveSubtitle)
+        XCTAssertEqual(presentation.title, "Appel audio sortant")
+    }
+
+    func test_cancelledCallPresentation_titleIsPerViewer() {
+        let cancelled = CallSummaryMetadata(
+            callId: "call1", initiatorId: "u1", callType: .audio, outcome: .missed,
+            durationSeconds: 0, bytesTotal: nil, bytesEstimated: false, networkQuality: nil,
+            endedByInitiator: true
+        )
+
+        let initiatorView = CallNoticePresentation(summary: cancelled, isOutgoing: true, accentHex: accentHex)
+        XCTAssertEqual(initiatorView.title, "Appel annulé")
+
+        let calleeView = CallNoticePresentation(summary: cancelled, isOutgoing: false, accentHex: accentHex)
+        XCTAssertEqual(calleeView.title, "Appel audio manqué")
+    }
+
+    func test_missedWithoutEndedByInitiator_staysMissedForBothViewers() {
+        let missed = makeCallSummary(initiatorId: "u1", callType: .audio, outcome: .missed, durationSeconds: 0)
+
+        XCTAssertEqual(CallNoticePresentation(summary: missed, isOutgoing: true, accentHex: accentHex).title, "Appel audio manqué")
+        XCTAssertEqual(CallNoticePresentation(summary: missed, isOutgoing: false, accentHex: accentHex).title, "Appel audio manqué")
+    }
+
+    func test_liveCallSummary_stillBuildsACallNotice() {
+        // Le routage BubbleContent existant (messageSource system + callSummary
+        // non-nil) doit accepter le kind 'call-live' — la bulle riche vivante.
+        let msg = makeMessage(
+            content: "Appel audio en cours",
+            messageSource: .system,
+            callSummary: makeLiveSummary()
+        )
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertNotNil(content.callNotice)
+        XCTAssertEqual(content.callNotice?.summary.isLive, true)
+    }
+
     // MARK: - Helpers
 
     private func makeMessage(
