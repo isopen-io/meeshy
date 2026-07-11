@@ -63,16 +63,19 @@ export function validateSchema<T>(
  * Schémas de validation réutilisables
  */
 export const CommonSchemas = {
-  // Pagination
+  // Pagination — coerce defensively: the `|| default` must be applied AFTER
+  // parseInt so non-numeric ('abc' → NaN) and negative ('-5') query strings fall
+  // back to safe bounds instead of leaking into Prisma `take`/`skip`. Mirrors the
+  // gateway's validatePagination (services/gateway/src/utils/pagination.ts).
   pagination: z.object({
-    limit: z.string().optional().transform((val) => parseInt(val || '20', 10)),
-    offset: z.string().optional().transform((val) => parseInt(val || '0', 10)),
+    limit: z.string().optional().transform((val) => Math.min(Math.max(1, parseInt(val ?? '', 10) || 20), 100)),
+    offset: z.string().optional().transform((val) => Math.max(0, parseInt(val ?? '', 10) || 0)),
   }),
-  
+
   // Message pagination
   messagePagination: z.object({
-    limit: z.string().optional().transform((val) => parseInt(val || '20', 10)),
-    offset: z.string().optional().transform((val) => parseInt(val || '0', 10)),
+    limit: z.string().optional().transform((val) => Math.min(Math.max(1, parseInt(val ?? '', 10) || 20), 100)),
+    offset: z.string().optional().transform((val) => Math.max(0, parseInt(val ?? '', 10) || 0)),
     before: z.string().optional(),
   }),
   
