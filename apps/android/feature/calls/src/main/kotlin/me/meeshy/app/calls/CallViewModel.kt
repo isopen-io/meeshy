@@ -12,6 +12,9 @@ import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallQualityAlertPayload
+import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
+import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
@@ -59,6 +62,7 @@ class CallViewModel @Inject constructor(
     private val waitingTimer: CallWaitingTimer,
     private val heartbeatTicker: CallHeartbeatTicker,
     private val appStatePresence: AppStatePresenceReporter,
+    private val qualityResetTimer: CallQualityResetTimer,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -98,6 +102,18 @@ class CallViewModel @Inject constructor(
     /** The 15 s auto-dismiss timer for the current banner; cancelled on any resolution. */
     private var waitingTimerJob: Job? = null
 
+    /** The REMOTE peer's sustained-bad-network flag (`call:quality-alert`). */
+    private var peerQualityDegraded: Boolean = false
+
+    /** The 15 s silence window that auto-clears [peerQualityDegraded]; restarted per alert. */
+    private var qualityResetJob: Job? = null
+
+    /** The remote peer's live screen-capture flag (`call:screen-capture-alert`). */
+    private var peerScreenCapturing: Boolean = false
+
+    /** The latest live caption from the remote speaker (`call:translated-segment`). */
+    private var caption: String? = null
+
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
@@ -126,6 +142,63 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             appStatePresence.foreground.collect(::onAppStateChanged)
         }
+        viewModelScope.launch {
+            signalManager.qualityAlerts.collect(::onQualityAlert)
+        }
+        viewModelScope.launch {
+            signalManager.screenCaptureAlerts.collect(::onScreenCaptureAlert)
+        }
+        viewModelScope.launch {
+            signalManager.translatedSegments.collect(::onTranslatedSegment)
+        }
+    }
+
+    // --- Peer indicators: quality / screen-capture / captions (audit #5) ----
+
+    /**
+     * The gateway flags the REMOTE peer's sustained bad network. Gated on the
+     * active call's id (a fan-out for another call is inert); each fresh alert
+     * restarts the 15 s silence window, so the indicator stays up exactly as
+     * long as alerts keep arriving — iOS `isRemoteQualityDegraded` parity.
+     */
+    private fun onQualityAlert(alert: CallQualityAlertPayload) {
+        if (callId.isBlank() || alert.callId != callId) return
+        peerQualityDegraded = true
+        publish()
+        restartQualityResetWindow()
+    }
+
+    /** The remote peer started/stopped capturing the call — flip the privacy banner. */
+    private fun onScreenCaptureAlert(alert: CallScreenCaptureAlertPayload) {
+        if (callId.isBlank() || alert.callId != callId) return
+        peerScreenCapturing = alert.isCapturing
+        publish()
+    }
+
+    /** A live caption landed — prefer the server-side translation over the original. */
+    private fun onTranslatedSegment(segment: CallTranslatedSegmentPayload) {
+        if (callId.isBlank() || segment.callId != callId) return
+        caption = segment.segment.translatedText ?: segment.segment.text
+        publish()
+    }
+
+    private fun restartQualityResetWindow() {
+        qualityResetJob?.cancel()
+        qualityResetJob = viewModelScope.launch {
+            qualityResetTimer.countdown().collect {
+                qualityResetJob = null
+                peerQualityDegraded = false
+                publish()
+            }
+        }
+    }
+
+    private fun clearPeerIndicators() {
+        qualityResetJob?.cancel()
+        qualityResetJob = null
+        peerQualityDegraded = false
+        peerScreenCapturing = false
+        caption = null
     }
 
     /**
@@ -185,6 +258,7 @@ class CallViewModel @Inject constructor(
         stopTicker()
         stopQuality()
         stopWaitingTimer()
+        clearPeerIndicators()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
 
@@ -394,7 +468,18 @@ class CallViewModel @Inject constructor(
         syncTicker()
         syncQuality()
         syncHeartbeat()
+        syncPeerIndicators()
         publish()
+    }
+
+    /**
+     * Peer indicators (quality/capture/caption) die with the call: a terminal or
+     * idle phase drops them and the pending reset window, so a banner from one
+     * call can never leak onto the ended screen or a subsequent call (parity with
+     * iOS, which resets `isRemoteScreenCapturing` on call end).
+     */
+    private fun syncPeerIndicators() {
+        if (callState is CallState.Ended || callState is CallState.Idle) clearPeerIndicators()
     }
 
     /**
@@ -504,7 +589,10 @@ class CallViewModel @Inject constructor(
     }
 
     private fun publish() {
-        _state.value = CallPresenter.present(callState, config, media, elapsedSeconds, connectionQuality, waiting)
+        _state.value = CallPresenter.present(
+            callState, config, media, elapsedSeconds, connectionQuality, waiting,
+            peerQualityDegraded, peerScreenCapturing, caption,
+        )
     }
 
     private companion object {

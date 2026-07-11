@@ -250,4 +250,146 @@ class CallSignalMapperTest {
     fun `endedSignal is inert on malformed JSON rather than crashing`() {
         assertThat(CallSignalMapper.endedSignal("call:ended", "not-json-at-all")).isNull()
     }
+
+    // --- group/UX side-channels are inert to the 1:1 FSM map -----------------
+
+    @Test
+    fun `a participant-left frame is inert to the FSM map`() {
+        assertThat(map("call:participant-left", """{"callId":"c1","participantId":"p2","mode":"p2p"}"""))
+            .isNull()
+    }
+
+    @Test
+    fun `a quality-alert frame is inert to the FSM map`() {
+        assertThat(map("call:quality-alert", """{"callId":"c1","participantId":"p2","metric":"rtt","value":900,"threshold":500}"""))
+            .isNull()
+    }
+
+    @Test
+    fun `a screen-capture-alert frame is inert to the FSM map`() {
+        assertThat(map("call:screen-capture-alert", """{"callId":"c1","participantId":"p2","isCapturing":true}"""))
+            .isNull()
+    }
+
+    @Test
+    fun `a translated-segment frame is inert to the FSM map`() {
+        assertThat(map("call:translated-segment", """{"callId":"c1","segment":{"text":"hello","speakerId":"u2"}}"""))
+            .isNull()
+    }
+
+    // --- participantLeft: group-roster decode --------------------------------
+
+    @Test
+    fun `participantLeft decodes the leaver identity and the surviving mode`() {
+        val json = """{"callId":"c1","participantId":"p2","userId":"u2","mode":"p2p"}"""
+        assertThat(CallSignalMapper.participantLeft(json))
+            .isEqualTo(CallParticipantLeftPayload(callId = "c1", participantId = "p2", userId = "u2", mode = "p2p"))
+    }
+
+    @Test
+    fun `participantLeft tolerates a frame without the optional userId`() {
+        assertThat(CallSignalMapper.participantLeft("""{"callId":"c1","participantId":"p2","mode":"sfu"}"""))
+            .isEqualTo(CallParticipantLeftPayload(callId = "c1", participantId = "p2", mode = "sfu"))
+    }
+
+    @Test
+    fun `participantLeft returns null for a frame carrying a blank call id`() {
+        assertThat(CallSignalMapper.participantLeft("""{"callId":"","participantId":"p2"}""")).isNull()
+    }
+
+    @Test
+    fun `participantLeft is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.participantLeft("not-json-at-all")).isNull()
+    }
+
+    // --- qualityAlert: the REMOTE peer's sustained bad network ---------------
+
+    @Test
+    fun `qualityAlert decodes the flagged metric and its threshold`() {
+        val json = """{"callId":"c1","participantId":"p2","metric":"packetLoss","value":12.5,"threshold":8}"""
+        assertThat(CallSignalMapper.qualityAlert(json)).isEqualTo(
+            CallQualityAlertPayload(
+                callId = "c1", participantId = "p2", metric = "packetLoss", value = 12.5, threshold = 8.0,
+            ),
+        )
+    }
+
+    @Test
+    fun `qualityAlert returns null for a frame carrying no call id`() {
+        assertThat(CallSignalMapper.qualityAlert("""{"metric":"rtt","value":900}""")).isNull()
+    }
+
+    @Test
+    fun `qualityAlert is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.qualityAlert("not-json-at-all")).isNull()
+    }
+
+    // --- screenCaptureAlert: the peer's capture privacy signal ---------------
+
+    @Test
+    fun `screenCaptureAlert decodes a capture-started frame`() {
+        assertThat(CallSignalMapper.screenCaptureAlert("""{"callId":"c1","participantId":"p2","isCapturing":true}"""))
+            .isEqualTo(CallScreenCaptureAlertPayload(callId = "c1", participantId = "p2", isCapturing = true))
+    }
+
+    @Test
+    fun `screenCaptureAlert decodes a capture-stopped frame`() {
+        assertThat(CallSignalMapper.screenCaptureAlert("""{"callId":"c1","isCapturing":false}"""))
+            .isEqualTo(CallScreenCaptureAlertPayload(callId = "c1", isCapturing = false))
+    }
+
+    @Test
+    fun `screenCaptureAlert returns null for a frame missing the capture flag`() {
+        assertThat(CallSignalMapper.screenCaptureAlert("""{"callId":"c1","participantId":"p2"}""")).isNull()
+    }
+
+    @Test
+    fun `screenCaptureAlert is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.screenCaptureAlert("not-json-at-all")).isNull()
+    }
+
+    // --- translatedSegment: live caption decode -------------------------------
+
+    @Test
+    fun `translatedSegment decodes a translated caption segment`() {
+        val json = """
+            {"callId":"c1","segment":{"text":"bonjour","translatedText":"hello","speakerId":"u2",
+             "startMs":1200,"endMs":2400,"isFinal":true,"sourceLanguage":"fr","targetLanguage":"en",
+             "confidence":0.92}}
+        """.trimIndent()
+        assertThat(CallSignalMapper.translatedSegment(json)).isEqualTo(
+            CallTranslatedSegmentPayload(
+                callId = "c1",
+                segment = CallTranslatedSegmentRef(
+                    text = "bonjour", translatedText = "hello", speakerId = "u2",
+                    startMs = 1200.0, endMs = 2400.0, isFinal = true,
+                    sourceLanguage = "fr", targetLanguage = "en", confidence = 0.92,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `translatedSegment tolerates an untranslated relay carrying only the original text`() {
+        val json = """{"callId":"c1","segment":{"text":"bonjour","speakerId":"u2","isFinal":false}}"""
+        val decoded = CallSignalMapper.translatedSegment(json)
+        assertThat(decoded?.segment?.text).isEqualTo("bonjour")
+        assertThat(decoded?.segment?.translatedText).isNull()
+        assertThat(decoded?.segment?.isFinal).isFalse()
+    }
+
+    @Test
+    fun `translatedSegment returns null for a frame missing the segment`() {
+        assertThat(CallSignalMapper.translatedSegment("""{"callId":"c1"}""")).isNull()
+    }
+
+    @Test
+    fun `translatedSegment returns null for a segment missing its text`() {
+        assertThat(CallSignalMapper.translatedSegment("""{"callId":"c1","segment":{"speakerId":"u2"}}""")).isNull()
+    }
+
+    @Test
+    fun `translatedSegment is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.translatedSegment("not-json-at-all")).isNull()
+    }
 }

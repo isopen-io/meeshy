@@ -198,6 +198,38 @@ fun CallScreen(
                     Spacer(Modifier.height(MeeshySpacing.sm))
                     ConnectionQualityBars(quality = quality, accent = accent)
                 }
+                if (state.isPeerQualityDegraded) {
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    Text(
+                        text = stringResource(R.string.call_peer_quality_degraded, state.peerName),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.warning,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                if (state.isPeerScreenCapturing) {
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    Text(
+                        text = stringResource(R.string.call_peer_screen_capturing, state.peerName),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.error,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            state.captionText?.let { caption ->
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .padding(horizontal = MeeshySpacing.lg)
+                        .clip(RoundedCornerShape(MeeshyRadius.md))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                )
             }
 
             CallControls(

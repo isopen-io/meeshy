@@ -11,7 +11,11 @@ import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinAckParser
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallParticipantLeftPayload
+import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualityReport
+import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
+import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalMapper
 import me.meeshy.sdk.model.call.SocketIceServer
@@ -95,6 +99,40 @@ class CallSignalManager @Inject constructor(
      */
     private val _iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(replay = 0, extraBufferCapacity = 8)
     val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.asSharedFlow()
+
+    /**
+     * A participant left the room WITHOUT ending the call (`call:participant-left`
+     * — group calls; a 1:1 teardown rides [endedCalls] instead). Inert to the
+     * FSM-facing [events]; the consumer prunes the leaver's media by identity.
+     * Hot, no replay — like [events]. (Audit appels 2026-07-11 #5.)
+     */
+    private val _participantLeft = MutableSharedFlow<CallParticipantLeftPayload>(replay = 0, extraBufferCapacity = 16)
+    val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.asSharedFlow()
+
+    /**
+     * The gateway flagging the REMOTE peer's sustained bad network
+     * (`call:quality-alert`). Drives the transient "your contact's connection is
+     * unstable" indicator — iOS `isRemoteQualityDegraded` parity. Hot, no replay.
+     */
+    private val _qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(replay = 0, extraBufferCapacity = 16)
+    val qualityAlerts: SharedFlow<CallQualityAlertPayload> = _qualityAlerts.asSharedFlow()
+
+    /**
+     * The remote peer started/stopped capturing the call screen
+     * (`call:screen-capture-alert`). Drives the privacy warning banner — iOS
+     * `isRemoteScreenCapturing` parity. Hot, no replay.
+     */
+    private val _screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(replay = 0, extraBufferCapacity = 16)
+    val screenCaptureAlerts: SharedFlow<CallScreenCaptureAlertPayload> = _screenCaptureAlerts.asSharedFlow()
+
+    /**
+     * Live caption segments from the remote speaker (`call:translated-segment`),
+     * translated server-side when available (`translatedText == null` → display
+     * the original `text`). Dense during speech — buffered like [incomingSignals].
+     * Hot, no replay.
+     */
+    private val _translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(replay = 0, extraBufferCapacity = 128)
+    val translatedSegments: SharedFlow<CallTranslatedSegmentPayload> = _translatedSegments.asSharedFlow()
 
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
@@ -300,6 +338,18 @@ class CallSignalManager @Inject constructor(
             if (event == ICE_SERVERS_REFRESHED_EVENT) {
                 CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::tryEmit)
             }
+            if (event == PARTICIPANT_LEFT_EVENT) {
+                CallSignalMapper.participantLeft(raw)?.let(_participantLeft::tryEmit)
+            }
+            if (event == QUALITY_ALERT_EVENT) {
+                CallSignalMapper.qualityAlert(raw)?.let(_qualityAlerts::tryEmit)
+            }
+            if (event == SCREEN_CAPTURE_ALERT_EVENT) {
+                CallSignalMapper.screenCaptureAlert(raw)?.let(_screenCaptureAlerts::tryEmit)
+            }
+            if (event == TRANSLATED_SEGMENT_EVENT) {
+                CallSignalMapper.translatedSegment(raw)?.let(_translatedSegments::tryEmit)
+            }
             CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::tryEmit)
         }
     }
@@ -320,10 +370,29 @@ class CallSignalManager @Inject constructor(
         /** The gateway's reply to [emitRequestIceServers], carrying fresh TURN/STUN. */
         const val ICE_SERVERS_REFRESHED_EVENT = "call:ice-servers-refreshed"
 
+        /** A participant left the room without ending the call (group calls). */
+        const val PARTICIPANT_LEFT_EVENT = "call:participant-left"
+
+        /** The gateway flagging the REMOTE peer's sustained bad network. */
+        const val QUALITY_ALERT_EVENT = "call:quality-alert"
+
+        /** The remote peer started/stopped a screen capture of the call. */
+        const val SCREEN_CAPTURE_ALERT_EVENT = "call:screen-capture-alert"
+
+        /** A live (optionally translated) caption segment from the remote speaker. */
+        const val TRANSLATED_SEGMENT_EVENT = "call:translated-segment"
+
+        // `call:force-leave` is deliberately ABSENT: the gateway never emits it
+        // (audit appels 2026-07-11 — verified dead; subscribing would be a
+        // silent no-op inviting drift).
         val INBOUND_EVENTS = listOf(
             INITIATED_EVENT,
             SIGNAL_EVENT,
             ICE_SERVERS_REFRESHED_EVENT,
+            PARTICIPANT_LEFT_EVENT,
+            QUALITY_ALERT_EVENT,
+            SCREEN_CAPTURE_ALERT_EVENT,
+            TRANSLATED_SEGMENT_EVENT,
             "call:participant-joined",
             "call:ended",
             "call:missed",

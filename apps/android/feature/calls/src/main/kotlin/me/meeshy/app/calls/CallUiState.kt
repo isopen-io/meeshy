@@ -112,6 +112,25 @@ data class CallUiState(
      * independent of [status]; the user may reject it or end-this-and-answer it.
      */
     val waitingBanner: WaitingBannerUi? = null,
+    /**
+     * `true` while the gateway flags the REMOTE peer's sustained bad network
+     * (`call:quality-alert`) — "your contact's connection is unstable". Auto-clears
+     * after 15 s without a fresh alert (iOS `isRemoteQualityDegraded` parity) and is
+     * only surfaced on the media phases.
+     */
+    val isPeerQualityDegraded: Boolean = false,
+    /**
+     * `true` while the remote peer is actively screen-capturing this call
+     * (`call:screen-capture-alert`) — drives the privacy warning banner (iOS
+     * `isRemoteScreenCapturing` parity). Never leaks past the call's media phases.
+     */
+    val isPeerScreenCapturing: Boolean = false,
+    /**
+     * The latest live caption from the remote speaker (`call:translated-segment`),
+     * preferring the server-side translation over the original text — `null` when
+     * captions are quiet or off the media phases.
+     */
+    val captionText: String? = null,
 ) {
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -160,8 +179,12 @@ object CallPresenter {
         elapsedSeconds: Long = 0,
         connectionQuality: ConnectionQuality? = null,
         waiting: CallWaitingState = CallWaitingState.EMPTY,
+        peerQualityDegraded: Boolean = false,
+        peerScreenCapturing: Boolean = false,
+        caption: String? = null,
     ): CallUiState {
         val status = statusOf(state)
+        val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
         return CallUiState(
             status = status,
             peerName = config.peerName,
@@ -173,6 +196,11 @@ object CallPresenter {
             durationLabel = durationLabelFor(status, elapsedSeconds),
             connectionQuality = connectionQualityFor(status, connectionQuality),
             waitingBanner = waiting.pending?.let { WaitingBannerUi(it.callerName, it.isVideo) },
+            // Same suppression rule as the quality indicator: a stale peer
+            // alert/caption never leaks onto a ringing or ended screen.
+            isPeerQualityDegraded = onMediaPhase && peerQualityDegraded,
+            isPeerScreenCapturing = onMediaPhase && peerScreenCapturing,
+            captionText = caption.takeIf { onMediaPhase },
         )
     }
 

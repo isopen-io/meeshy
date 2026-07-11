@@ -24,7 +24,11 @@ import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualitySample
+import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
+import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
+import me.meeshy.sdk.model.call.CallTranslatedSegmentRef
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.sdk.model.call.TelecomConnectionState
@@ -44,6 +48,9 @@ class CallViewModelTest {
     private val incomingOffers = MutableSharedFlow<WaitingCall>(extraBufferCapacity = 16)
     private val endedCalls = MutableSharedFlow<CallEndedSignal>(extraBufferCapacity = 16)
     private val iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(extraBufferCapacity = 8)
+    private val qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(extraBufferCapacity = 16)
+    private val screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(extraBufferCapacity = 16)
+    private val translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(extraBufferCapacity = 64)
     private val signalManager: CallSignalManager = mockk(relaxed = true)
     private val coordinator: WebRtcCallCoordinator = mockk(relaxed = true)
     private val sessionRepository: SessionRepository = mockk(relaxed = true)
@@ -52,6 +59,12 @@ class CallViewModelTest {
     private val waitingTimerFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     private val waitingTimer = object : CallWaitingTimer {
         override fun countdown(): Flow<Unit> = waitingTimerFlow
+    }
+
+    /** Test-driven quality-indicator reset: emit once to fire the 15 s silence window. */
+    private val qualityResetFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    private val qualityResetTimer = object : CallQualityResetTimer {
+        override fun countdown(): Flow<Unit> = qualityResetFlow
     }
 
     /** Test-driven 1-Hz clock: emit a `Unit` per second the timer should advance. */
@@ -112,6 +125,9 @@ class CallViewModelTest {
         every { signalManager.incomingOffers } returns incomingOffers
         every { signalManager.endedCalls } returns endedCalls
         every { signalManager.iceServersRefreshed } returns iceServersRefreshed
+        every { signalManager.qualityAlerts } returns qualityAlerts
+        every { signalManager.screenCaptureAlerts } returns screenCaptureAlerts
+        every { signalManager.translatedSegments } returns translatedSegments
         every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
@@ -126,7 +142,7 @@ class CallViewModelTest {
 
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence,
+        heartbeatTicker, appStatePresence, qualityResetTimer,
     )
 
     @Test
@@ -1058,5 +1074,123 @@ class CallViewModelTest {
         vm.start(outgoingVideo)
 
         assertThat(vm.state.value.waitingBanner).isNull()
+    }
+
+    // --- peer indicators: quality-alert / screen-capture-alert / captions (audit #5) ---
+
+    private fun qualityAlert(callId: String = "call-9") =
+        CallQualityAlertPayload(callId = callId, participantId = "p2", metric = "rtt", value = 900.0, threshold = 500.0)
+
+    private fun captureAlert(callId: String = "call-9", capturing: Boolean = true) =
+        CallScreenCaptureAlertPayload(callId = callId, participantId = "p2", isCapturing = capturing)
+
+    private fun segment(callId: String = "call-9", text: String = "bonjour", translated: String? = "hello") =
+        CallTranslatedSegmentPayload(
+            callId = callId,
+            segment = CallTranslatedSegmentRef(text = text, translatedText = translated, speakerId = "u2", isFinal = true),
+        )
+
+    @Test
+    fun `a quality alert for the active call lights the peer-degraded indicator`() = runTest {
+        val vm = vm().connect()
+        qualityAlerts.emit(qualityAlert())
+
+        assertThat(vm.state.value.isPeerQualityDegraded).isTrue()
+    }
+
+    @Test
+    fun `a quality alert for another call never lights the indicator`() = runTest {
+        val vm = vm().connect()
+        qualityAlerts.emit(qualityAlert(callId = "call-77"))
+
+        assertThat(vm.state.value.isPeerQualityDegraded).isFalse()
+    }
+
+    @Test
+    fun `the peer-degraded indicator auto-clears after the silence window`() = runTest {
+        val vm = vm().connect()
+        qualityAlerts.emit(qualityAlert())
+        assertThat(vm.state.value.isPeerQualityDegraded).isTrue()
+
+        qualityResetFlow.emit(Unit)
+
+        assertThat(vm.state.value.isPeerQualityDegraded).isFalse()
+    }
+
+    @Test
+    fun `a screen-capture alert flips the privacy banner on and off`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(captureAlert(capturing = true))
+        assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
+
+        screenCaptureAlerts.emit(captureAlert(capturing = false))
+        assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a screen-capture alert for another call is inert`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(captureAlert(callId = "call-77", capturing = true))
+
+        assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a translated segment surfaces the translation as the live caption`() = runTest {
+        val vm = vm().connect()
+        translatedSegments.emit(segment(text = "bonjour", translated = "hello"))
+
+        assertThat(vm.state.value.captionText).isEqualTo("hello")
+    }
+
+    @Test
+    fun `an untranslated segment falls back to the original text`() = runTest {
+        val vm = vm().connect()
+        translatedSegments.emit(segment(text = "bonjour", translated = null))
+
+        assertThat(vm.state.value.captionText).isEqualTo("bonjour")
+    }
+
+    @Test
+    fun `a segment for another call never leaks onto the caption`() = runTest {
+        val vm = vm().connect()
+        translatedSegments.emit(segment(callId = "call-77"))
+
+        assertThat(vm.state.value.captionText).isNull()
+    }
+
+    @Test
+    fun `ending the call clears every peer indicator`() = runTest {
+        val vm = vm().connect()
+        qualityAlerts.emit(qualityAlert())
+        screenCaptureAlerts.emit(captureAlert(capturing = true))
+        translatedSegments.emit(segment())
+
+        vm.onSignal(CallEvent.RemoteHangUp)
+
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.ENDED)
+        assertThat(s.isPeerQualityDegraded).isFalse()
+        assertThat(s.isPeerScreenCapturing).isFalse()
+        assertThat(s.captionText).isNull()
+    }
+
+    @Test
+    fun `peer indicators never leak into a subsequent call`() = runTest {
+        val vm = vm().connect()
+        qualityAlerts.emit(qualityAlert())
+        screenCaptureAlerts.emit(captureAlert(capturing = true))
+        translatedSegments.emit(segment())
+        vm.onSignal(CallEvent.RemoteHangUp)
+        vm.dismiss()
+
+        vm.start(incomingAudio)
+        vm.accept()
+        vm.onSignal(CallEvent.MediaConnected)
+
+        val s = vm.state.value
+        assertThat(s.isPeerQualityDegraded).isFalse()
+        assertThat(s.isPeerScreenCapturing).isFalse()
+        assertThat(s.captionText).isNull()
     }
 }

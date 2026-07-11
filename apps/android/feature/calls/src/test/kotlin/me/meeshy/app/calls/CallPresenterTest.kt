@@ -236,4 +236,45 @@ class CallPresenterTest {
 
         assertThat(banner).isEqualTo(WaitingBannerUi(callerName = "Carol", isVideo = true))
     }
+
+    // --- peer indicators derivation (audit #5) ------------------------------
+
+    private fun presentPeer(
+        state: CallState,
+        degraded: Boolean = false,
+        capturing: Boolean = false,
+        caption: String? = null,
+    ) = CallPresenter.present(
+        state, config, media,
+        peerQualityDegraded = degraded, peerScreenCapturing = capturing, caption = caption,
+    )
+
+    @Test
+    fun `peer indicators surface on the media phases`() {
+        val connected = presentPeer(CallState.Connected, degraded = true, capturing = true, caption = "hello")
+        assertThat(connected.isPeerQualityDegraded).isTrue()
+        assertThat(connected.isPeerScreenCapturing).isTrue()
+        assertThat(connected.captionText).isEqualTo("hello")
+
+        val reconnecting = presentPeer(CallState.Reconnecting(attempt = 1), degraded = true, capturing = true, caption = "hello")
+        assertThat(reconnecting.isPeerQualityDegraded).isTrue()
+        assertThat(reconnecting.isPeerScreenCapturing).isTrue()
+        assertThat(reconnecting.captionText).isEqualTo("hello")
+    }
+
+    @Test
+    fun `peer indicators are suppressed off the media phases`() {
+        for (state in listOf(
+            CallState.Ringing(isOutgoing = true),
+            CallState.Offering,
+            CallState.Connecting,
+            CallState.Idle,
+            CallState.Ended(CallEndReason.Remote),
+        )) {
+            val ui = presentPeer(state, degraded = true, capturing = true, caption = "hello")
+            assertThat(ui.isPeerQualityDegraded).isFalse()
+            assertThat(ui.isPeerScreenCapturing).isFalse()
+            assertThat(ui.captionText).isNull()
+        }
+    }
 }

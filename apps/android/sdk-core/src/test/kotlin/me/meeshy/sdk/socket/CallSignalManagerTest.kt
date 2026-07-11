@@ -485,4 +485,85 @@ class CallSignalManagerTest {
         assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
         assertThat(payload.captured.getString("participantId")).isEqualTo("p-1")
     }
+
+    // --- Inbound: group/UX side-channels ride their own flows, inert to the FSM ---
+
+    @Test
+    fun `a participant-left frame republishes the leaver on participantLeft`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.participantLeft.test {
+            deliver(handlers, "call:participant-left", """{"callId":"c1","participantId":"p2","userId":"u2","mode":"p2p"}""")
+            val left = awaitItem()
+            assertThat(left.callId).isEqualTo("c1")
+            assertThat(left.userId).isEqualTo("u2")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a participant-left frame emits nothing on the FSM events flow`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.events.test {
+            deliver(handlers, "call:participant-left", """{"callId":"c1","participantId":"p2"}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a quality-alert frame republishes the flagged metric on qualityAlerts`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.qualityAlerts.test {
+            deliver(handlers, "call:quality-alert", """{"callId":"c1","participantId":"p2","metric":"rtt","value":900,"threshold":500}""")
+            val alert = awaitItem()
+            assertThat(alert.callId).isEqualTo("c1")
+            assertThat(alert.metric).isEqualTo("rtt")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a malformed quality-alert frame emits nothing on qualityAlerts`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.qualityAlerts.test {
+            deliver(handlers, "call:quality-alert", """{"metric":"rtt"}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a screen-capture-alert frame republishes the capture flag on screenCaptureAlerts`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.screenCaptureAlerts.test {
+            deliver(handlers, "call:screen-capture-alert", """{"callId":"c1","participantId":"p2","isCapturing":true}""")
+            val alert = awaitItem()
+            assertThat(alert.callId).isEqualTo("c1")
+            assertThat(alert.isCapturing).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a translated-segment frame republishes the caption on translatedSegments`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.translatedSegments.test {
+            deliver(
+                handlers,
+                "call:translated-segment",
+                """{"callId":"c1","segment":{"text":"bonjour","translatedText":"hello","speakerId":"u2","isFinal":true}}""",
+            )
+            val caption = awaitItem()
+            assertThat(caption.callId).isEqualTo("c1")
+            assertThat(caption.segment.translatedText).isEqualTo("hello")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a translated-segment frame emits nothing on the FSM events flow`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.events.test {
+            deliver(handlers, "call:translated-segment", """{"callId":"c1","segment":{"text":"bonjour"}}""")
+            expectNoEvents()
+        }
+    }
 }
