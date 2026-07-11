@@ -1,5 +1,13 @@
 # @meeshy/web
 
+## 1.9.5
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - contrat d'events gelé — literals migrés, events morts dépréciés (audit #4/#6)
+
 ## 1.9.4
 
 ### Patch Changes

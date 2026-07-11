@@ -1,5 +1,13 @@
 # @meeshy/gateway
 
+## 1.9.8
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - contrat d'events gelé — literals migrés, events morts dépréciés (audit #4/#6)
+
 ## 1.9.7
 
 ### Patch Changes
