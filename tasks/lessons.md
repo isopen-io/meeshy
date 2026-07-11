@@ -1614,3 +1614,20 @@ test ne matche → exit 0. Les baselines snapshot supprimées n'avaient PAS ét�
   sur « TEST SUCCEEDED » seul (même famille que meeshy.sh exit 0 malgré FAILED, et que le script
   record-snapshot qui listait des PNG périmés).
 - Après un record de baselines : compter les PNG frais (`-newermt`), pas les messages du log.
+
+## 2026-07-11 — Mock jest PARTIEL d'un module partagé = régression silencieuse quand la prod consomme un nouvel export
+
+La migration des literals `socket.on('presence:app-state')` vers `CLIENT_EVENTS.PRESENCE_APP_STATE`
+a cassé 227 tests en CI (`a7280bcf9`) : la suite legacy `src/socketio/__tests__/CallEventsHandler.test.ts`
+mockait `@meeshy/shared/types/socketio-events` en n'exportant QUE `ROOMS` → `CLIENT_EVENTS` undefined
+→ `setupCallEvents` crashait au premier `socket.on`. Vérification locale faite uniquement sur
+`src/__tests__/unit/socketio/` + tsc : la suite fautive vit dans `src/socketio/__tests__/` (autre dossier).
+
+**Règles** :
+- Avant de pousser un changement gateway qui touche un module PARTAGÉ (shared types/utils) : grep
+  `jest.mock('@meeshy/shared/...')` sur les deux arbres de tests (`src/__tests__/` ET `src/*/__tests__/`)
+  — tout mock partiel du module modifié doit exposer les nouveaux exports (ou `jest.requireActual`).
+- « Suite socketio verte » ≠ « gateway vert » : les tests CallEventsHandler existent dans DEUX dossiers.
+  Le gate pré-push d'un changement handler = `bun run jest Call` minimum, suite complète si le diff
+  touche packages/shared.
+- tsc ne voit RIEN ici : le mock est un objet runtime. Seule l'exécution des suites attrape ce trou.

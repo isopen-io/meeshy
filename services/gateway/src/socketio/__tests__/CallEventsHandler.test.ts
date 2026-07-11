@@ -176,20 +176,6 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  // Spread the real contract so CLIENT_EVENTS/SERVER_EVENTS stay in sync with the
-  // handler: once presence:app-state migrated from a string literal to
-  // CLIENT_EVENTS.PRESENCE_APP_STATE, a ROOMS-only mock left CLIENT_EVENTS
-  // undefined and setupCallEvents threw for every test under the full-suite run
-  // (the mock only applied when a sibling suite primed the module resolution).
-  ...(jest.requireActual('@meeshy/shared/types/socketio-events') as Record<string, unknown>),
-  ROOMS: {
-    call: (id: string) => `call:${id}`,
-    conversation: (id: string) => `conversation:${id}`,
-    user: (id: string) => `user:${id}`,
-  },
-}));
-
 import { CallEventsHandler } from '../CallEventsHandler';
 import { logger } from '../../utils/logger';
 
