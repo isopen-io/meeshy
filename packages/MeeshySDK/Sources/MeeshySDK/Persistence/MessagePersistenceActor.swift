@@ -704,6 +704,56 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// In-place update of a call system message when its state changes on the
+    /// server — the live "Appel … en cours" bubble becoming the terminal
+    /// summary ("Appel audio · 04:32", "Appel manqué", …) via a
+    /// `message:edited` carrying call metadata. Applies content +
+    /// `callSummaryJson` + `updatedAt` + `changeVersion` WITHOUT touching
+    /// `isEdited`/`editedAt`: this is a server-authored state transition, not
+    /// a user edit, and must not brand the bubble "modifié".
+    public func applyCallNoticeUpdate(
+        localId: String,
+        content: String,
+        callSummaryJson: Data?,
+        serverUpdatedAt: Date
+    ) throws {
+        var affectedConversationId: String?
+        var didApply = false
+        try dbWriter.write { db in
+            guard let existing = try MessageRecord
+                .filter(Column("localId") == localId || Column("serverId") == localId)
+                .fetchOne(db)
+            else { return }
+            affectedConversationId = existing.conversationId
+            try db.execute(
+                sql: """
+                    UPDATE messages SET content = ?, callSummaryJson = ?,
+                    updatedAt = ?, changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
+                    """,
+                arguments: [content, callSummaryJson, serverUpdatedAt, localId, localId]
+            )
+            didApply = true
+        }
+        if didApply, let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
+    /// `true` when `incoming` decodes as a LIVE call summary (`kind:
+    /// 'call-live'`) for the SAME call whose stored summary is already
+    /// TERMINAL — i.e. a REST snapshot serialized while the call was still
+    /// ongoing that landed AFTER the terminal edit. Applying it would regress
+    /// the bubble to "en cours" forever. Any other combination returns `false`.
+    static func isStaleLiveCallSnapshot(existing: Data?, incoming: Data?) -> Bool {
+        guard
+            let existing, let incoming,
+            let stored = try? JSONDecoder().decode(CallSummaryMetadata.self, from: existing),
+            let candidate = try? JSONDecoder().decode(CallSummaryMetadata.self, from: incoming)
+        else { return false }
+        return candidate.isLive && !stored.isLive && candidate.callId == stored.callId
+    }
+
     public func markDeleted(localId: String, deletedAt: Date) throws {
         var affectedConversationId: String?
         try dbWriter.write { db in
@@ -1596,8 +1646,17 @@ public actor MessagePersistenceActor {
                     // un-delete the row.
                     let pendingEdit = pendingEditMessageIds.contains(api.id)
                     let pendingDelete = pendingDeleteMessageIds.contains(api.id)
+                    // Live-call anti-régression : un snapshot REST sérialisé
+                    // PENDANT l'appel peut être appliqué APRÈS l'édition
+                    // terminale reçue par socket. Un résumé TERMINAL stocké
+                    // n'est jamais régressé vers le live du même appel —
+                    // ni sa métadonnée ni son content « en cours ».
+                    let staleLiveCallSnapshot = Self.isStaleLiveCallSnapshot(
+                        existing: existing.callSummaryJson,
+                        incoming: callSummaryJson
+                    )
                     // Update mutable fields; preserve layout cache.
-                    if !keepLocalPlaintext && !pendingEdit && !pendingDelete {
+                    if !keepLocalPlaintext && !pendingEdit && !pendingDelete && !staleLiveCallSnapshot {
                         existing.content = api.content
                     }
                     // Backfill the server id so future reconciliations can find
@@ -1695,7 +1754,9 @@ public actor MessagePersistenceActor {
                     existing.replyToId = api.replyToId ?? existing.replyToId
                     existing.storyReplyToId = api.storyReplyToId ?? existing.storyReplyToId
                     existing.mentionedUsersJson = mentionedUsersJson
-                    existing.callSummaryJson = callSummaryJson ?? existing.callSummaryJson
+                    existing.callSummaryJson = staleLiveCallSnapshot
+                        ? existing.callSummaryJson
+                        : (callSummaryJson ?? existing.callSummaryJson)
                     existing.effectFlags = effectFlags
                     // Write ONLY when something actually changed: either a
                     // mirrored field differs from the pre-mutation snapshot,
