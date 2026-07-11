@@ -82,5 +82,42 @@ Trous CONFIRMÉS (grep : références uniquement en commentaires) :
 - SDK purity : tout reste dans MeeshyUI/Story (éditeur+canvas+bridge déjà SDK-side).
 - Ne PAS toucher : export MP4 (stub assumé), OfflinePublish mort (E7 — décision produit).
 
-## Review
-(complété au fil de l'eau)
+## Review (2026-07-11, session complète)
+
+LIVRÉ sur main (7 commits, chaque lot vert CI locale 1807 tests + build app) :
+- `4d9b1bfcc` Lot A — playhead monté + scrub (TimelineScrubArea : ruler ALIGNÉ aux
+  lanes dans UN scroll horizontal partagé), endScrub seek précis final.
+- `5242003c1` Lot C (merge, agent worktree) — fades médias live, applyClosing
+  (fade/reveal/zoom/slide), opening zoom/slide, dissolve visible live.
+- `bea6d3072` Lot B — preview vivante : canvas derrière la sheet = moniteur
+  (renderMode .play au playhead, engine = seule source audio, bridge UIKit
+  sans re-render SwiftUI 60 Hz).
+- `70830c30d` D0 (constats simulateur) — horloge interne engine (composition
+  vide = slide sans vidéo fg : transport était MORT) + clips permanents
+  (duration nil) largeur effective → slideDuration (étaient invisibles).
+- `c160bc330` Lot D — transitions créables/visibles (TransitionJunctionResolver,
+  badge « + » → crossfade 0.5s undo-able → TransitionInspector).
+- `55d1a81f8` Lot E — keyframes visibles/re-sélectionnables (KeyframeMarkerResolver).
+- `ecca34af0` Lot F — auto-follow playhead en lecture, undo/redo Quick,
+  publish flush timeline ouverte. (Aimantation magnétique : déjà câblée
+  VM-side avec haptique — découvert, rien à faire.)
+
+VALIDÉ SIMULATEUR (atabeth, prod gateway) : composer → média+texte → timeline
+(Simple) → drag texte à t=2s (undo actif, preview vivante : texte disparu du
+canvas à t=0) → publish « Story published » → READER : texte ABSENT à t<2s,
+PRÉSENT à t≥2s. Round-trip timeline→publish→reader prouvé par captures.
+
+RESTES (différés, par priorité) :
+1. Tap-ruler scrub inerte via idb (drag playhead OK) — revérifier au doigt/device.
+2. SnapGuideView visuel pendant drags (l'aimant + haptique marchent déjà).
+3. F4 édition ms start/durée au ClipInspector (port branche amazing-bell par contenu).
+4. F5 DurationHandle (pin direct durée slide) ; drag temporel des keyframes/durée
+   badge transition (nécessite drag ancré anti-drift).
+5. Vignettes filmstrip clips vidéo (frames: []) ; G1 rotation keyframes ;
+   G3 transitions push/wipe (CustomTransitionCompositor stub).
+6. Hors timeline, constaté : draft resume perd le FICHIER média (alerte « Media
+   unavailable » ; le modèle survit) ; clé xcstrings
+   story.composer.empty.tile.filters sans variante en ; labels de lane tronqués
+   (« VID… ») ; scripts/record-snapshot-baselines.sh réparé de facto par
+   destination id (le script avale les erreurs avec `|| true` + destination
+   ambiguë → il listait des PNG PÉRIMÉS comme « recorded »).
