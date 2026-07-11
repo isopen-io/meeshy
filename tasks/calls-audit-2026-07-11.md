@@ -58,6 +58,11 @@
 > **L'audit est CLOS.** Dettes mineures hors audit : emits Android
 > `call:screen-capture-detected`/`call:analytics` ; device-test 2 appareils
 > réels jamais fait.
+> Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
+> `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
+> et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
+> gated au callId + cluster CallQualityOverlay, i18n 4 locales. Les 3
+> plateformes affichent les mêmes alertes distantes.
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,
