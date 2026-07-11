@@ -10,6 +10,7 @@ import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.socket.AppStatePresenceReporter
+import me.meeshy.sdk.socket.CallSignalManager
 import me.meeshy.sdk.socket.SocketManager
 import timber.log.Timber
 import javax.inject.Inject
@@ -25,6 +26,9 @@ class MeeshyApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var socketManager: SocketManager
+
+    @Inject
+    lateinit var callSignalManager: CallSignalManager
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -59,7 +63,13 @@ class MeeshyApplication : Application(), Configuration.Provider {
             },
         )
         processOwner.lifecycleScope.launch {
-            socketManager.connected.collect { presenceReporter.onSocketConnected() }
+            socketManager.connected.collect {
+                presenceReporter.onSocketConnected()
+                // Replay de sonnerie (parité iOS/web) : une socket qui (re)naît
+                // mid-ring a manqué le call:initiated live — le gateway rejoue
+                // les appels encore sonnants (< 60 s), le client dédoublonne.
+                callSignalManager.emitCheckActive()
+            }
         }
     }
 }

@@ -333,6 +333,14 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `emitCheckActive asks the gateway to replay any in-progress ring`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        manager.emitCheckActive()
+        verify { socket.emit("call:check-active", any<JSONObject>()) }
+    }
+
+    @Test
     fun `emitScreenCaptureDetected sends callId, self participant id and capture flag`() {
         val (managerAndSocket, _) = managerWithHandlers()
         val (manager, socket) = managerAndSocket

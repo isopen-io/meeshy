@@ -308,6 +308,18 @@ class CallSignalManager @Inject constructor(
         )
 
     /**
+     * Demande au gateway de REJOUER tout appel encore en train de sonner que
+     * cette socket a manqué — un ring parti pendant que l'app était fermée, un
+     * blip réseau mid-ring, une reconnexion. Le serveur re-émet
+     * `call:initiated` (fenêtre sonnerie < 60 s, jamais l'initiateur, jamais un
+     * appel déjà quitté) ; le client dédoublonne par callId. À émettre à CHAQUE
+     * connexion, parité iOS `MessageSocketManager` / web `checkForActiveCall` —
+     * sans lui, un callee Android qui (re)connecte mid-ring laisse l'appel
+     * sonner dans le vide jusqu'au missed.
+     */
+    fun emitCheckActive() = socketManager.emit("call:check-active", JSONObject())
+
+    /**
      * Télémétrie de cycle de vie émise UNE fois à la fin de l'appel (parité iOS
      * `emitCallAnalytics`, fire-and-forget — le gateway log/persiste pour les
      * dashboards qualité). Le payload est décidé une seule fois par le pur

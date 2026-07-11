@@ -57,6 +57,12 @@
 > construction (#8).
 > **L'audit est CLOS.** Dette restante : device-test 2 appareils réels
 > jamais fait.
+> Replay de sonnerie Android : `call:check-active` émis à CHAQUE connexion
+> socket (même collect que la re-déclaration presence) — un callee Android
+> qui (re)connecte mid-ring voit enfin l'appel au lieu de le laisser sonner
+> vers missed. Parité iOS MessageSocketManager / web checkForActiveCall ;
+> dédup par callId déjà en place (start() inerte en appel, offre du callId
+> actif ignorée).
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
