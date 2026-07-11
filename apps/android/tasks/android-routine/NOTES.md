@@ -4,6 +4,27 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-11, `report-user`)
+- **iOS raw enum values are NOT automatically the gateway wire contract — verify against the zod
+  schema.** iOS `ReportUserView.ReportReason` uses UPPERCASE `rawValue` (`"SPAM"`,
+  `"INAPPROPRIATE_CONTENT"`…) and sends it as `reportType`, but the gateway `createReportSchema`
+  enum is lowercase (`spam|inappropriate|harassment|violence|hate_speech|fake_profile|impersonation|
+  other`, see `services/gateway/src/routes/admin/reports.ts`). So the iOS user report is silently a
+  `400`. When porting, map each reason to the **gateway** token (`ReportReason.wireValue`), don't
+  copy the iOS raw string. "Parity with iOS" means parity with the *feature*, not with an iOS bug.
+- **Not every write should be a durable outbox action.** Block/unblock is durable (offline-safe,
+  fire-and-forget). A **report** is deliberately an *online* action: the user expects an explicit
+  "Report sent"/error, and a report delivered silently minutes later from the queue is worse UX, not
+  better. Rule of thumb: durable-outbox for state the user sets once and forgets (prefs, block);
+  online-with-feedback for one-shot decisions that want a confirmation. Session-gate the online call
+  (`sessionRepository.currentUserId` → `null` = inert) so a signed-out caller can't fire a
+  guaranteed `401` and the VM can surface a real state.
+- **A literal `*/` inside a KDoc block closes the comment early.** Writing `*listing*/*review*` in a
+  `/** … */` doc comment terminates it at the `*/`, and the compiler then chokes with "Expecting a
+  top level declaration" on the following lines. `assembleDebug`/KSP surfaces it as a cryptic
+  `kspDebugKotlin` failure, not an obvious comment error. Avoid bare `*/` (and `/*`) sequences in doc
+  prose — reword (`listing and review`).
+
 ## Lesson (2026-07-11, `settings-privacy-preferences-sync`)
 - **A gateway `PATCH /me/preferences/{category}` is a *partial merge* — so the sync body should carry
   only the fields this platform authoritatively edits, never the whole block.** The factory does

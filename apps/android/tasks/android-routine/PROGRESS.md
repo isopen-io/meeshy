@@ -2,7 +2,39 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user)** → rest`
+
+> On 2026-07-11 **report a user** landed (slice `report-user`, feature-parity §K — "Block / unblock
+> users; report a user (reason + details)", closing that box: block/unblock shipped earlier). Port of
+> iOS `ReportUserView`, **corrected to the gateway contract**: iOS sends UPPERCASE `reportType` raw
+> values (`"SPAM"`, `"HARASSMENT"`, `"INAPPROPRIATE_CONTENT"`…) that the gateway `createReportSchema`
+> zod enum (`spam|harassment|inappropriate|…`) rejects — so an iOS user report is silently a `400`.
+> Android's pure `:core:model` `ReportReason` carries the correct **lowercase** wire token per case;
+> the pure `ReportRequestBuilder.forUser` SSOT projects (userId + reason + details) into the
+> `POST /admin/reports` body — blank id → `null` (inert), details trimmed / blank→null / capped at 500
+> (iOS editor-cap parity), null note omitted from the wire (`explicitNulls=false`). `:core:network`
+> `ReportApi`; `:sdk-core` `ReportRepository.reportUser` is **deliberately online** (not a durable
+> outbox action like block — a report expects an explicit "sent"/error, a silently-deferred one is
+> worse UX), **session-gated** so a signed-out caller can't fire a guaranteed `401` (inert `null`).
+> `:feature:profile` `ReportUserViewModel` (UDF immutable `ReportUserUiState`; `canSubmit` blocks a
+> double-tap and a re-submit after success; failure/inert → retryable error; details cap enforced on
+> input so field + wire agree) + `ReportUserScreen` (error-red reason radios + details field + live
+> counter), reached from a **Report** app-bar action shown only on **another** user's profile (own
+> profile keeps Edit). **+28 tests** (ReportReason 6, ReportRequestBuilder 9, ReportRepository 5,
+> ReportUserViewModel 8), all green; `:app:assembleDebug` BUILD SUCCESSFUL; the two `:sdk-core`
+> DataStore-store tests that flaked under full-suite parallel load are the **documented** pre-existing
+> flake (NOTES §DataStore-under-parallel-load) — each green in isolation, rotating victim between runs,
+> and untouched by this slice. Reviewer **PASS** (diff `apps/android` only — `:core:model`,
+> `:core:network`, `:sdk-core`, `:feature:profile`, `:app` nav, EN/FR/ES/PT strings; no production
+> logic outside; **SDK purity** — pure opaque-param builder in `:core:model`, online repository in
+> `:sdk-core`, "when to submit / retryable" orchestration in the VM; **SSOT** — one `ReportReason`
+> wire-token map + one `ReportRequestBuilder`, no re-implementation; **UDF** — immutable
+> `StateFlow<UiState>`, pure transitions; **colour/UX coherence** — error-red destructive action,
+> natural back/dismiss returns to the profile, Report only on foreign profiles so no dead end; **no
+> coverage floor lowered, no test weakened**). **Next:** avatar/banner upload (media pipeline) for §K
+> profile edit, or Profile QR code / share-profile (§K), or another §L row (media cache management,
+> GDPR export), or the live `ConnectivityManager`-backed `NetworkConditionMonitor` + first
+> media-pipeline consumer of `MediaDownloadPolicyEngine`.
 
 > On 2026-07-11 **privacy-preferences backend sync** landed (slice `settings-privacy-preferences-sync`,
 > feature-parity §L). Follow-up to `settings-privacy-preferences`: the device-local privacy block now
