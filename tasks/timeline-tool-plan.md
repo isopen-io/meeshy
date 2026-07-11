@@ -158,6 +158,30 @@ CacheCoordinator.imageLocalFileURL(postMediaId) quand loadedImages est vide.
 Tests : AudioWaveformTests (CAF silence→fort), StoryComposerBackgroundLive-
 ApplyTests (3 comportements). Suite 1825/1825, build app vert.
 
+VAGUE EXPORT MP4 + CONSTATS HORS TIMELINE (2026-07-11, en cours) :
+(a) Bouton export dans le transport timeline (Quick+Pro, square.and.arrow.up,
+masqué si onExport nil) → TimelineSheetContent (wrapper des 2 mount sites) →
+TimelineExportController : commit timeline → exportableCurrentSlide() (mediaURL
+vidéos patchés session, bg image composer injecté en media object éphémère
+tmp jpg) → StoryExporter.export(watermark:audioResolver:) → overlay progression
+(annulable) → TimelineExportPreviewSheet (AVKit VideoPlayer boucle + ShareLink),
+MP4 tmp purgé au dismiss. (b) Watermark : StoryExportWatermark (spec opaque
+image+widthFraction+margin+opacity, frame() pure) dessiné par StoryAVCompositor
+en DERNIÈRE passe ; MeeshyExportWatermark.make() = dashes canoniques
+MeeshyDashesShape + wordmark « meeshy » SF rounded + ombre. (c) Audio lanes :
+StoryExporter.composeAudioLanes (fenêtre startTime/duration, volume, ramps
+fadeIn/fadeOut, LOOP BG UNIQUEMENT — règle produit pinée par test) fusionné au
+mix bg video ; resolver = collectMediaURLs (dict Sendable précalculé).
+(d) Constats : StoryDraftStore.saveMedia détruisait le média au resave
+post-restore (source==dest : remove puis copy échoué silencieux → « Médias
+indisponibles » au resume suivant) — persistCopy + row DB seulement si fichier
+valide ; lane labels « VID… » → minimumScaleFactor(0.7)+allowsTightening ;
+xcstrings filters/filters.sub complétés en/de/es ; 4 clés export ajoutées
+(fr+en) ; record-snapshot-baselines.sh durci (échec compile ≠ record attendu,
+SNAPSHOT_SIMULATOR_ID, listing PNG -newer stamp, exit 1 si 0 PNG frais).
+Piège rencontré : trailing closure des appels export existants matchait le
+nouveau param audioResolver (forward-scan) → appels étiquetés progress:.
+
 RESTES (différés, par priorité) :
 1. Boucle audio bg dans la PREVIEW engine (AudioMixer ne re-arme pas ; reader OK).
 2. F4 saisie ms clavier au ClipInspector (steppers ±0,1 s livrés ; port branche
