@@ -6030,3 +6030,64 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
         )
     }
 }
+
+@MainActor
+final class CallManagerTranscriptionMappingTests: XCTestCase {
+
+    func test_makeTranscriptionSegment_keepsOriginalText_separateFromTranslation() throws {
+        let json = """
+        {
+            "callId": "call-1",
+            "segment": {
+                "text": "Bonjour",
+                "translatedText": "Hello",
+                "speakerId": "user-1",
+                "startMs": 0,
+                "endMs": 1500,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "en",
+                "confidence": 0.95
+            }
+        }
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(CallTranslatedSegmentData.self, from: json)
+
+        let segment = CallManager.makeTranscriptionSegment(from: event)
+
+        XCTAssertEqual(segment.text, "Bonjour", "text must stay the ORIGINAL — never overwritten by the translation")
+        XCTAssertEqual(segment.translatedText, "Hello")
+        XCTAssertEqual(segment.translatedLanguage, "en")
+        XCTAssertEqual(segment.speakerId, "user-1")
+        XCTAssertEqual(segment.startTime, 0)
+        XCTAssertEqual(segment.endTime, 1.5)
+        XCTAssertTrue(segment.isFinal)
+        XCTAssertEqual(segment.confidence, 0.95, accuracy: 0.001)
+        XCTAssertEqual(segment.language, "en")
+    }
+
+    func test_makeTranscriptionSegment_withoutTranslation_translatedFieldsAreNil() throws {
+        let json = """
+        {
+            "callId": "call-1",
+            "segment": {
+                "text": "Bonjour",
+                "speakerId": "user-1",
+                "startMs": 0,
+                "endMs": 1000,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "fr",
+                "confidence": 0.9
+            }
+        }
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(CallTranslatedSegmentData.self, from: json)
+
+        let segment = CallManager.makeTranscriptionSegment(from: event)
+
+        XCTAssertEqual(segment.text, "Bonjour")
+        XCTAssertNil(segment.translatedText)
+        XCTAssertNil(segment.translatedLanguage)
+    }
+}

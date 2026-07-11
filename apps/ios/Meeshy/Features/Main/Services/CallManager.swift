@@ -3506,6 +3506,28 @@ final class CallManager: ObservableObject {
 
     // MARK: - Socket.IO Signaling
 
+    /// Maps a gateway-translated segment into the local `TranscriptionSegment` model.
+    /// `text` ALWAYS carries the ORIGINAL (untranslated) text — never overwritten by
+    /// `translatedText` — so the UI can offer an original/translated toggle
+    /// (`docs/superpowers/specs/2026-07-11-call-captions-multispeaker-design.md`).
+    /// `static` and pure (no captured state) so it's directly unit-testable without
+    /// standing up a full `CallManager` + mock socket.
+    static func makeTranscriptionSegment(from event: CallTranslatedSegmentData) -> TranscriptionSegment {
+        let seg = event.segment
+        return TranscriptionSegment(
+            id: UUID(),
+            text: seg.text,
+            speakerId: seg.speakerId,
+            startTime: Double(seg.startMs) / 1000,
+            endTime: Double(seg.endMs) / 1000,
+            isFinal: seg.isFinal,
+            confidence: seg.confidence,
+            language: seg.targetLanguage,
+            translatedText: seg.translatedText,
+            translatedLanguage: seg.translatedText != nil ? seg.targetLanguage : nil
+        )
+    }
+
     private func setupSocketListeners() {
         let socket = MessageSocketManager.shared
 
@@ -3569,19 +3591,7 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, self.currentCallId == event.callId else { return }
-                let seg = event.segment
-                let segment = TranscriptionSegment(
-                    id: UUID(),
-                    text: seg.translatedText ?? seg.text,
-                    speakerId: seg.speakerId,
-                    startTime: Double(seg.startMs) / 1000,
-                    endTime: Double(seg.endMs) / 1000,
-                    isFinal: seg.isFinal,
-                    confidence: seg.confidence,
-                    language: seg.targetLanguage,
-                    translatedText: seg.translatedText,
-                    translatedLanguage: seg.translatedText != nil ? seg.targetLanguage : nil
-                )
+                let segment = CallManager.makeTranscriptionSegment(from: event)
                 self.transcriptionService.receiveTranslatedSegment(segment)
             }
             .store(in: &cancellables)
