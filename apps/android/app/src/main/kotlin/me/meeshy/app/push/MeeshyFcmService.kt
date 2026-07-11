@@ -11,6 +11,7 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
 import me.meeshy.app.MainActivity
+import me.meeshy.sdk.model.call.CallStopPush
 import me.meeshy.sdk.model.call.IncomingCallPush
 import me.meeshy.sdk.model.call.IncomingCallPushRoute
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -25,6 +26,9 @@ import javax.inject.Inject
  *  - a **call** data push ([IncomingCallPushRoute.Ring]) fires a full-screen,
  *    CATEGORY_CALL notification so a backgrounded/killed device rings; duplicates
  *    are suppressed by [IncomingCallRingStore].
+ *  - a **stop-ring** data push ([IncomingCallPushRoute.StopRing] —
+ *    `call_cancel` / `call_answered_elsewhere`) cancels that notification so the
+ *    device stops ringing for a call that ended or was answered on another device.
  *  - any other push shows the rich message notification + triggers an outbox flush.
  */
 @AndroidEntryPoint
@@ -49,9 +53,16 @@ class MeeshyFcmService : FirebaseMessagingService() {
 
         when (val route = ringStore.route(message.data, System.currentTimeMillis(), selfUserId = session.currentUserId)) {
             is IncomingCallPushRoute.Ring -> showIncomingCallNotification(route.push)
+            is IncomingCallPushRoute.StopRing -> cancelIncomingCallNotification(route.push)
             is IncomingCallPushRoute.Suppress -> Timber.d("Suppressed call push: ${route.reason}")
             IncomingCallPushRoute.NotACallPush -> handleMessagePush(message)
         }
+    }
+
+    private fun cancelIncomingCallNotification(push: CallStopPush) {
+        Timber.d("Stop-ring push (${push.type}) for call ${push.callId}")
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(push.callId.hashCode())
     }
 
     private fun handleMessagePush(message: RemoteMessage) {

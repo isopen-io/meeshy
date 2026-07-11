@@ -136,6 +136,13 @@ export class StoryTextObjectTranslationService {
       return [...recipients];
     }
 
+    // PRIVATE = draft / author-only. Mirrors `SocialEventsHandler.getVisibilityFilteredRecipients`
+    // (`case 'PRIVATE': return []`). Without this guard the story falls through to the friend
+    // fan-out below and leaks the translated overlay text to every friend of the author.
+    if (visibility === 'PRIVATE') {
+      return [...recipients];
+    }
+
     try {
       const friendRequests = await this.prisma.friendRequest.findMany({
         where: { status: 'accepted', OR: [{ senderId: authorId }, { receiverId: authorId }] },

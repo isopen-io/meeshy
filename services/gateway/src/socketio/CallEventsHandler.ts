@@ -19,6 +19,7 @@ import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
+import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
   socketInitiateCallSchema,
@@ -321,19 +322,13 @@ export class CallEventsHandler {
         .filter((uid): uid is string => !!uid && !excluded.has(uid));
       if (targets.length === 0) return;
 
+      // Cross-platform mobile (audit 2026-07-11 #2) — le hardcode
+      // apns/ios laissait un Android backgrounded (socket mort) sonner
+      // dans le vide après un missed/rejected.
       await Promise.all(targets.map((uid) =>
-        this.pushService!.sendToUser({
-          userId: uid,
-          payload: {
-            title: '',
-            body: '',
-            silent: true,
-            data: { type: 'call_cancel', callId }
-          },
-          types: ['apns'],
-          platforms: ['ios'],
-          bypassDnd: true
-        }).catch((error) => {
+        this.pushService!.sendToUser(
+          buildCallSilentPush({ userId: uid, type: 'call_cancel', callId })
+        ).catch((error) => {
           logger.error('call_cancel push failed', { callId, userId: uid, error });
         })
       ));
@@ -2456,6 +2451,26 @@ export class CallEventsHandler {
             callId: data.callId,
             targetUserId
           });
+          // Audit 2026-07-11 #3 — le mirror answered-elsewhere doit partir
+          // MÊME quand l'appelant n'a aucun socket à l'instant de l'answer
+          // (churn socket mid-answer) : ce return sautait le bloc push du
+          // chemin relais, et les autres devices du callee sonnaient
+          // jusqu'à leur timeout local alors que l'appel était décroché.
+          // Même prédicat pur que la branche relais ; best-effort.
+          if (this.pushService && shouldMirrorAnsweredElsewhere({
+            signalType: data.signal.type,
+            answererUserId: userId,
+            initiatorId: callSession.initiatorId,
+            alreadyAnswered: !!callSession.answeredAt
+          })) {
+            this.pushService.sendToUser(
+              buildCallSilentPush({ userId, type: 'call_answered_elsewhere', callId: data.callId })
+            ).catch((error) => {
+              logger.error('call_answered_elsewhere push failed (no-socket branch)', {
+                callId: data.callId, userId, error
+              });
+            });
+          }
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
             message: 'Target participant has no active connection',
@@ -2509,19 +2524,15 @@ export class CallEventsHandler {
           // guard. Never for the initiator's own answer, never for a later
           // renegotiation answer. Best-effort: a push failure must never
           // fail the signal relay.
-          if (this.pushService && userId !== callSession.initiatorId && isFirstAnswer) {
-            this.pushService.sendToUser({
-              userId,
-              payload: {
-                title: '',
-                body: '',
-                silent: true,
-                data: { type: 'call_answered_elsewhere', callId: data.callId }
-              },
-              types: ['apns'],
-              platforms: ['ios'],
-              bypassDnd: true
-            }).catch((error) => {
+          if (this.pushService && shouldMirrorAnsweredElsewhere({
+            signalType: data.signal.type,
+            answererUserId: userId,
+            initiatorId: callSession.initiatorId,
+            alreadyAnswered: !isFirstAnswer
+          })) {
+            this.pushService.sendToUser(
+              buildCallSilentPush({ userId, type: 'call_answered_elsewhere', callId: data.callId })
+            ).catch((error) => {
               logger.error('call_answered_elsewhere push failed (signal unaffected)', {
                 callId: data.callId, userId, error
               });
