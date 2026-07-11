@@ -2,7 +2,45 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles)** → rest`
+
+> On 2026-07-11 **privacy & visibility settings** landed (slice `settings-privacy-preferences`,
+> feature-parity §L — "Privacy settings (visibility, contacts, media/data, encryption preference)").
+> Port of iOS `PrivacySettingsView` + the editable legs of `PrivacyPreferences`. **Key SSOT call:
+> the `PrivacyPreferences` data class already existed** in `:core:model` `Preferences.kt` (the full
+> 16-field iOS port, part of the un-persisted `UserPreferences` tree — this slice is its **first**
+> persistence consumer, so I built around it rather than redeclaring it; a naive parallel model
+> would have collided and re-implemented the SSOT). **(1) Pure `:core:model` catalog + codec** —
+> `PrivacyCatalog` (`PrivacyToggle` × `PrivacyCategory` = Visibility [5] / Contacts & groups [3] /
+> Media & data [4]) with a per-toggle get/set lens (`isEnabled`/`set` edit exactly one boolean,
+> never clobber) + a `sections()` grouped/ordered projection, and a corruption-safe JSON codec
+> (`storageValue` / `privacyPreferencesFromStorage` — blank/absent/malformed → defaults, partial
+> fills missing fields, unknown keys ignored). The iOS encryption leg is **deliberately not
+> catalogued** — those model fields round-trip untouched but stay non-editable (iOS greys the
+> section out, product decision 2026-06-14). **(2) Durable store** — `PrivacyPreferencesStore`
+> (`:sdk-core`, interface + `InMemory` + `DataStore`-backed, hydrates on cold start, decodes through
+> the pure codec so a corrupt value self-heals; Hilt provider on file `meeshy_privacy`). **(3) VM** —
+> `PrivacySettingsViewModel` (`:feature:settings`) mirrors the store into an immutable
+> `PrivacyUiState` and writes a per-toggle change through the catalog lens — the base is read
+> **inside** the `viewModelScope.launch` so back-to-back different-toggle edits serialize and never
+> clobber, and a re-set of a toggle's current value is an inert no-op. **(4) Screen + wiring** (glue,
+> coverage-exempt) — `PrivacySettingsScreen` renders one accent-coherent section per category with
+> Material `Switch` rows + a non-interactive coming-soon Encryption section, reached from a new
+> "Privacy & visibility" row at the top of Settings → Privacy (`Routes.PRIVACY`). **+28 tests**
+> (catalog/codec 16, store 7, VM 5), all green; `:app:assembleDebug` BUILD SUCCESSFUL; full
+> `:core:model`, `:sdk-core`, `:feature:settings` `testDebugUnitTest` suites all green. Reviewer
+> **PASS** (diff `apps/android` only — `:core:model` catalog+codec, `:sdk-core` store+DI,
+> `:feature:settings` VM+screen, `:app` nav, EN/FR/ES/PT strings; no production logic outside; **SDK
+> purity** — pure opaque-param building blocks in `:core:model`, durable store in `:sdk-core`,
+> "which toggle / when to write" orchestration in the VM; **SSOT** — reuses the existing
+> `PrivacyPreferences`, one catalog shared by screen+VM, no re-implementation; **UDF/instant-app** —
+> immutable `StateFlow<UiState>`, cold-start hydration, no spinner; **colour/UX coherence** —
+> accent-coherent per-category sections, natural switch taps, back returns to Settings; **no coverage
+> floor lowered, no test weakened**). **Next:** a backend-sync path for the server-authoritative
+> visibility prefs (analogous to `settings-notification-prefs-sync` — pure sync-body projection +
+> `PATCH` + outbox `UPDATE_SETTINGS`-style lane), or the live `ConnectivityManager`-backed
+> `NetworkConditionMonitor` + first media-pipeline consumer of `MediaDownloadPolicyEngine`, or
+> avatar/banner upload for §K profile edit, or another §L row (media cache management, GDPR export).
 
 > On 2026-07-11 **media auto-download preferences** landed (slice `settings-media-auto-download`,
 > feature-parity §L — "Auto-download settings for media by type and connection"). Port of iOS

@@ -1782,7 +1782,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       instantly (UI SSOT) **then** enqueues the sync + wakes the worker on a real `cmid`. The PATCH is idempotent,
       so a delivery retry is harmless (no rollback needed). +15 tests. Surpasses iOS, whose preference write is
       online-only. **Still open:** the email channel toggle wiring (the field syncs, the UI row is pending).
-- [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
+- [x] Privacy settings (visibility, contacts, media/data, encryption preference) — **shipped**
+      (slice `settings-privacy-preferences`, 2026-07-11). Port of iOS `PrivacySettingsView` +
+      the visibility/contacts/media legs of `PrivacyPreferences`. **Reuses the existing**
+      `PrivacyPreferences` SSOT (`:core:model` `Preferences.kt`, the full 16-field iOS port — this
+      slice is its first persistence consumer), building around it: a pure `:core:model`
+      `PrivacyCatalog` (`PrivacyToggle` × `PrivacyCategory` — Visibility / Contacts & groups /
+      Media & data — with a get/set lens per toggle so an edit read-modify-writes exactly one boolean
+      and never clobbers the rest, plus a `sections()` grouped projection) and a corruption-safe JSON
+      codec (`storageValue` / `privacyPreferencesFromStorage` — blank/absent/malformed → defaults,
+      partial fills missing fields, unknown keys ignored). Durable DataStore-backed
+      `PrivacyPreferencesStore` (`:sdk-core`, hydrates on cold start, corrupt value → defaults; Hilt
+      provider). `PrivacySettingsViewModel` (`:feature:settings`) mirrors the store into an immutable
+      `PrivacyUiState` and writes a per-toggle change through the catalog lens — the base is read
+      **inside** the `viewModelScope.launch` so back-to-back edits serialize and never clobber, and a
+      re-set of a toggle's current value is an inert no-op. `PrivacySettingsScreen` (glue): one
+      accent-coherent section per category with Material switch rows, plus a non-interactive
+      **coming-soon Encryption section** mirroring iOS's greyed-out block (the model's encryption
+      fields round-trip untouched but stay non-editable — product decision 2026-06-14). Reached from a
+      new "Privacy & visibility" row at the top of Settings → Privacy (`Routes.PRIVACY`). +28 tests
+      (catalog/codec 16, store 7, VM 5). EN/FR/ES/PT strings. This ships the fully-tested visibility/
+      contacts/media toggle surface + durable device-local persistence; a backend-sync path for the
+      server-authoritative visibility prefs (analogous to notification-prefs sync) is a follow-up.
 - [x] Auto-download settings for media by type and connection (Wi-Fi/cellular) — **shipped** (slice
       `settings-media-auto-download`, 2026-07-11). Port of iOS `MediaDownloadSettingsView` +
       `MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor`. Pure `:core:model`

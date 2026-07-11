@@ -3,6 +3,30 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+
+## Lesson (2026-07-11, `settings-privacy-preferences`)
+- **Before modelling a "new" preference block, grep `:core:model` for it — the iOS ports may already
+  be there un-persisted.** `PrivacyPreferences` was already a full 16-field `@Serializable` data class
+  in `core/model/.../Preferences.kt` (part of the whole `UserPreferences` tree ported from
+  `PreferenceModels.swift`, but with **no store/consumer** yet). My first draft redeclared it in a new
+  `Privacy.kt` → `compileDebugKotlin` failed with `Redeclaration: data class PrivacyPreferences`. Fix:
+  **reuse the existing SSOT**, and add only the *new* value around it — the `PrivacyCatalog` (toggle
+  enum + get/set lens + `sections()`) and the codec (`storageValue`/`fromStorage`). This is also the
+  correct SSOT call (the reviewer's "no re-implementation"): the un-persisted `UserPreferences` tree
+  (`Audio/Message/Notification/Privacy…Preferences`) is a **reservoir of ready-made models** waiting
+  for their first store — future settings slices should mine it, not re-declare.
+- **The toggle-catalog-with-lens pattern (`NotificationTypeCatalog`) generalises perfectly to any
+  multi-boolean settings block.** A `<Thing>Toggle` enum + `<Thing>ToggleDescriptor(toggle, category,
+  get, set)` list + `isEnabled`/`set`/`sections` gives near-total branch coverage cheaply: fold `set`
+  over `entries` to build an all-on / all-off block and assert every getter, and assert `set(target)`
+  leaves every *other* toggle equal to the base — one loop covers all N lenses without N hand-written
+  cases. Excludes the coming-soon/non-editable fields from the catalog (they still round-trip via the
+  reused data class) so there's no orphan UI.
+- **A per-block device-local store is one DI provider + one DataStore file.** Copy the
+  `providesMediaDownloadPreferencesStore` block verbatim, change the type + the
+  `preferencesDataStoreFile("meeshy_privacy")` name. No new outbox/network needed for a purely
+  device-local preference (iOS stores privacy prefs client-side via `UserPreferencesManager` too; the
+  backend-authoritative visibility sync is a separate, later slice).
 - **2026-07-11 (`settings-media-auto-download`): a per-field settings write must read its base INSIDE the
   `viewModelScope.launch`, never outside.** First cut of `MediaDownloadViewModel.setPolicy` captured `val current =
   store.preferences.value` synchronously before the launch; three back-to-back edits on different kinds (image,
