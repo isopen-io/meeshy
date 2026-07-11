@@ -1702,7 +1702,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
       over/under-fills the ring), plus a "Profile N% complete" label. 22 `ProfileHeaderBuilderTest` cases.
 - [ ] Profile QR code display + save/share; share profile via message/email/copy link
-- [ ] Block / unblock users; report a user (reason + details)
+- [x] Block / unblock users; report a user (reason + details) — **complete**. Block/unblock shipped
+      earlier (durable `BlockRepository` + `BlockedTab`). **Report a user shipped** (slice `report-user`,
+      2026-07-11): port of iOS `ReportUserView`, corrected to the gateway contract. Pure `:core:model`
+      `ReportReason` (5 reasons, each carrying the **lowercase** gateway `reportType` token —
+      spam/harassment/inappropriate/impersonation/other) fixes an iOS bug where `ReportReason.rawValue`
+      is UPPERCASE (`"SPAM"`…), values the gateway `createReportSchema` zod enum rejects (an iOS user
+      report is silently a `400`). Pure `ReportRequestBuilder.forUser(userId, reason, details) →
+      CreateReportRequest?` SSOT: blank id → `null` (inert), details trimmed + blank→null + capped at 500
+      (iOS editor-cap parity), `explicitNulls=false` so a null note is omitted from the wire body.
+      `:core:network` `ReportApi` (`POST admin/reports`, any authenticated user). `:sdk-core`
+      `ReportRepository.reportUser` — **deliberately online** (not a durable outbox action like block: a
+      report expects explicit confirmation/error, a silently-deferred report is worse UX), session-gated
+      so a signed-out caller can't fire a guaranteed `401` (inert `null`). `:feature:profile`
+      `ReportUserViewModel` (UDF immutable `ReportUserUiState`, `canSubmit` guards a double-tap / re-submit
+      after success, error is retryable, details cap enforced on input) + `ReportUserScreen` (accent/error
+      red reason radios + details field + counter) reached from a **Report** action in the other-user
+      profile's app bar (own profile shows Edit instead). +28 tests (ReportReason 6, ReportRequestBuilder 9,
+      ReportRepository 5, ReportUserViewModel 8). EN/FR/ES/PT strings. Surpasses iOS (correct wire token +
+      testable UDF + retryable error state).
 - [ ] Change email / phone (two-step verification)
 - [ ] Two-factor auth: QR enrollment, code verification, backup codes (view + regenerate), disable
 - [ ] Active device sessions: list, revoke one, revoke all others

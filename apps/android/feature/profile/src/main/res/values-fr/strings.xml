@@ -37,4 +37,18 @@
     <string name="profile_activity_title">Activité</string>
     <string name="profile_activity_average">%1$d / jour</string>
     <string name="profile_activity_empty">Aucune activité ces 30 derniers jours</string>
+    <string name="profile_report">Signaler l\'utilisateur</string>
+    <string name="report_title">Signaler @%1$s</string>
+    <string name="report_title_generic">Signaler</string>
+    <string name="report_close">Fermer</string>
+    <string name="report_reason_header">Motif du signalement</string>
+    <string name="report_details_header">Détails (facultatif)</string>
+    <string name="report_details_placeholder">Ajoutez un contexte…</string>
+    <string name="report_submit">Envoyer le signalement</string>
+    <string name="report_error">Erreur lors de l\'envoi du signalement. Veuillez réessayer.</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_harassment">Harcèlement</string>
+    <string name="report_reason_inappropriate">Contenu inapproprié</string>
+    <string name="report_reason_impersonation">Usurpation d\'identité</string>
+    <string name="report_reason_other">Autre</string>
 </resources>

@@ -58,6 +58,8 @@ import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
+import me.meeshy.app.profile.ReportUserScreen
+import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.settings.ChangePasswordScreen
 import me.meeshy.app.settings.MediaDownloadScreen
 import me.meeshy.app.settings.PrivacySettingsScreen
@@ -88,6 +90,7 @@ object Routes {
     const val STARRED = "starred"
     const val PROFILE_USER = "profile/{userId}"
     const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
+    const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
     const val STORY_COMPOSER = "story_composer"
@@ -97,6 +100,8 @@ object Routes {
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
+    fun reportUser(userId: String, username: String): String =
+        "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
     fun story(userId: String): String = "story/$userId"
     fun call(conversationId: String, peerName: String, isVideo: Boolean): String =
         CallRoute.path(conversationId, peerName, isVideo)
@@ -352,7 +357,25 @@ fun MeeshyApp(
                     navDeepLink { uriPattern = Routes.PROFILE_DEEP_LINK },
                 ),
             ) {
-                ProfileScreen(onBack = { navController.popBackStack() })
+                ProfileScreen(
+                    onBack = { navController.popBackStack() },
+                    onReport = { userId, username ->
+                        navController.navigate(Routes.reportUser(userId, username))
+                    },
+                )
+            }
+            composable(
+                route = Routes.REPORT_USER,
+                arguments = listOf(
+                    navArgument(ReportUserViewModel.USER_ID_ARG) { type = NavType.StringType },
+                    navArgument(ReportUserViewModel.USERNAME_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) {
+                ReportUserScreen(onDone = { navController.popBackStack() })
             }
             composable(
                 route = Routes.STORY_VIEWER,

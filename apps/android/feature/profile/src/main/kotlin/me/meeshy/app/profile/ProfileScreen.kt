@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,6 +78,7 @@ import java.util.Date
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit,
+    onReport: (userId: String, username: String) -> Unit = { _, _ -> },
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -105,9 +107,19 @@ fun ProfileScreen(
                     }
                 },
                 actions = {
-                    if (!state.isEditing) {
-                        IconButton(onClick = viewModel::startEditing) {
-                            Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_edit))
+                    when {
+                        state.isEditing -> Unit
+                        state.isOwnProfile -> {
+                            IconButton(onClick = viewModel::startEditing) {
+                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_edit))
+                            }
+                        }
+                        else -> {
+                            state.user?.let { user ->
+                                IconButton(onClick = { onReport(user.id, user.username) }) {
+                                    Icon(Icons.Default.Flag, contentDescription = stringResource(R.string.profile_report))
+                                }
+                            }
                         }
                     }
                 },
