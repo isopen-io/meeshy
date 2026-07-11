@@ -24,7 +24,9 @@ import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualitySample
+import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.sdk.model.call.TelecomConnectionState
@@ -78,6 +80,16 @@ class CallViewModelTest {
         every { foreground } returns appForeground
     }
 
+    /** Test-driven remote-alert frames (gateway `call:quality-alert` / screen-capture). */
+    private val qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(extraBufferCapacity = 16)
+    private val screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(extraBufferCapacity = 16)
+
+    /** Test-driven 15 s auto-clear window: emit once to elapse it. */
+    private val qualityResetFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    private val qualityAlertTimer = object : CallQualityAlertTimer {
+        override fun window(): Flow<Unit> = qualityResetFlow
+    }
+
     private val outgoingVideo =
         CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val incomingAudio =
@@ -112,6 +124,8 @@ class CallViewModelTest {
         every { signalManager.incomingOffers } returns incomingOffers
         every { signalManager.endedCalls } returns endedCalls
         every { signalManager.iceServersRefreshed } returns iceServersRefreshed
+        every { signalManager.qualityAlerts } returns qualityAlerts
+        every { signalManager.screenCaptureAlerts } returns screenCaptureAlerts
         every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
@@ -126,7 +140,7 @@ class CallViewModelTest {
 
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence,
+        heartbeatTicker, appStatePresence, qualityAlertTimer,
     )
 
     @Test
@@ -514,6 +528,128 @@ class CallViewModelTest {
 
         verify(exactly = 0) { signalManager.emitBackgrounded(any(), any()) }
         verify(exactly = 0) { signalManager.emitForegrounded(any(), any()) }
+    }
+
+    // --- Remote alerts: call:quality-alert / call:screen-capture-alert (audit #5) ---
+
+    private fun rttAlert(callId: String) =
+        CallQualityAlertPayload(callId = callId, metric = "rtt", value = 400.0, threshold = 300.0)
+
+    @Test
+    fun `a quality alert for the active call lights the degraded indicator`() = runTest {
+        val vm = connectedIncoming()
+
+        qualityAlerts.emit(rttAlert("call-9"))
+
+        assertThat(vm.state.value.remoteQualityDegraded).isTrue()
+    }
+
+    @Test
+    fun `a quality alert keyed by another call is ignored`() = runTest {
+        val vm = connectedIncoming()
+
+        qualityAlerts.emit(rttAlert("other-call"))
+
+        assertThat(vm.state.value.remoteQualityDegraded).isFalse()
+    }
+
+    @Test
+    fun `the degraded indicator auto-clears once the reset window elapses`() = runTest {
+        val vm = connectedIncoming()
+        qualityAlerts.emit(rttAlert("call-9"))
+
+        qualityResetFlow.emit(Unit)
+
+        assertThat(vm.state.value.remoteQualityDegraded).isFalse()
+    }
+
+    @Test
+    fun `a sustained alert keeps the indicator lit until its own window elapses`() = runTest {
+        val vm = connectedIncoming()
+        qualityAlerts.emit(rttAlert("call-9"))
+        qualityResetFlow.emit(Unit)
+
+        qualityAlerts.emit(rttAlert("call-9"))
+
+        assertThat(vm.state.value.remoteQualityDegraded).isTrue()
+    }
+
+    @Test
+    fun `a quality alert while still ringing shows nothing`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        qualityAlerts.emit(rttAlert("call-9"))
+
+        assertThat(vm.state.value.remoteQualityDegraded).isFalse()
+    }
+
+    @Test
+    fun `ending the call hides the degraded indicator`() = runTest {
+        val vm = connectedIncoming()
+        qualityAlerts.emit(rttAlert("call-9"))
+
+        vm.hangUp()
+
+        assertThat(vm.state.value.remoteQualityDegraded).isFalse()
+    }
+
+    @Test
+    fun `a fresh call never inherits the previous call's degraded indicator`() = runTest {
+        val vm = connectedIncoming()
+        qualityAlerts.emit(rttAlert("call-9"))
+        vm.hangUp()
+        vm.dismiss()
+
+        vm.start(incomingAudio.copy(callId = "call-10"))
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+
+        assertThat(vm.state.value.remoteQualityDegraded).isFalse()
+    }
+
+    @Test
+    fun `a screen capture alert for the active call raises the privacy flag`() = runTest {
+        val vm = connectedIncoming()
+
+        screenCaptureAlerts.emit(
+            CallScreenCaptureAlertPayload(callId = "call-9", isCapturing = true),
+        )
+
+        assertThat(vm.state.value.remoteScreenCapturing).isTrue()
+    }
+
+    @Test
+    fun `a capture-stopped alert lowers the privacy flag`() = runTest {
+        val vm = connectedIncoming()
+        screenCaptureAlerts.emit(CallScreenCaptureAlertPayload(callId = "call-9", isCapturing = true))
+
+        screenCaptureAlerts.emit(CallScreenCaptureAlertPayload(callId = "call-9", isCapturing = false))
+
+        assertThat(vm.state.value.remoteScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a screen capture alert keyed by another call is ignored`() = runTest {
+        val vm = connectedIncoming()
+
+        screenCaptureAlerts.emit(CallScreenCaptureAlertPayload(callId = "other-call", isCapturing = true))
+
+        assertThat(vm.state.value.remoteScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a fresh call never inherits the previous call's capture flag`() = runTest {
+        val vm = connectedIncoming()
+        screenCaptureAlerts.emit(CallScreenCaptureAlertPayload(callId = "call-9", isCapturing = true))
+        vm.hangUp()
+        vm.dismiss()
+
+        vm.start(incomingAudio.copy(callId = "call-10"))
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+
+        assertThat(vm.state.value.remoteScreenCapturing).isFalse()
     }
 
     @Test

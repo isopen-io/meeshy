@@ -250,4 +250,79 @@ class CallSignalMapperTest {
     fun `endedSignal is inert on malformed JSON rather than crashing`() {
         assertThat(CallSignalMapper.endedSignal("call:ended", "not-json-at-all")).isNull()
     }
+
+    // --- call:participant-left (inert to the 1:1 FSM; teardown rides call:ended) --
+
+    @Test
+    fun `a participant-left frame is inert to the FSM`() {
+        assertThat(map("call:participant-left", """{"callId":"c1","participantId":"p2","mode":"p2p"}"""))
+            .isNull()
+    }
+
+    // --- qualityAlert: the remote peer's link degraded (call:quality-alert) --
+
+    @Test
+    fun `qualityAlert decodes an rtt alert keyed by its call id`() {
+        val json = """{"callId":"c1","participantId":"p2","metric":"rtt","value":412.5,"threshold":300}"""
+
+        assertThat(CallSignalMapper.qualityAlert(json)).isEqualTo(
+            CallQualityAlertPayload(
+                callId = "c1",
+                participantId = "p2",
+                metric = "rtt",
+                value = 412.5,
+                threshold = 300.0,
+            ),
+        )
+    }
+
+    @Test
+    fun `qualityAlert decodes a packet-loss alert without a participant id`() {
+        val json = """{"callId":"c1","metric":"packetLoss","value":9,"threshold":5}"""
+
+        assertThat(CallSignalMapper.qualityAlert(json)).isEqualTo(
+            CallQualityAlertPayload(callId = "c1", metric = "packetLoss", value = 9.0, threshold = 5.0),
+        )
+    }
+
+    @Test
+    fun `qualityAlert returns null for a frame carrying a blank call id`() {
+        assertThat(CallSignalMapper.qualityAlert("""{"callId":"","metric":"rtt","value":400,"threshold":300}"""))
+            .isNull()
+    }
+
+    @Test
+    fun `qualityAlert is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.qualityAlert("not-json-at-all")).isNull()
+    }
+
+    // --- screenCaptureAlert: remote screen-recording privacy signal ----------
+
+    @Test
+    fun `screenCaptureAlert decodes a capture-started frame keyed by its call id`() {
+        val json = """{"callId":"c1","participantId":"p2","isCapturing":true}"""
+
+        assertThat(CallSignalMapper.screenCaptureAlert(json)).isEqualTo(
+            CallScreenCaptureAlertPayload(callId = "c1", participantId = "p2", isCapturing = true),
+        )
+    }
+
+    @Test
+    fun `screenCaptureAlert decodes a capture-stopped frame`() {
+        val json = """{"callId":"c1","isCapturing":false}"""
+
+        assertThat(CallSignalMapper.screenCaptureAlert(json)).isEqualTo(
+            CallScreenCaptureAlertPayload(callId = "c1", isCapturing = false),
+        )
+    }
+
+    @Test
+    fun `screenCaptureAlert returns null for a frame carrying a blank call id`() {
+        assertThat(CallSignalMapper.screenCaptureAlert("""{"callId":"","isCapturing":true}""")).isNull()
+    }
+
+    @Test
+    fun `screenCaptureAlert is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.screenCaptureAlert("not-json-at-all")).isNull()
+    }
 }

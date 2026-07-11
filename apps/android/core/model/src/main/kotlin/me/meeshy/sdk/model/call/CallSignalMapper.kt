@@ -42,6 +42,13 @@ object CallSignalMapper {
                 json.decodeFromString<CallMediaTogglePayload>(rawJson)
                 null
             }
+            // Inert to the 1:1 FSM: a peer leaving without ending the call never
+            // tears anything down (teardown always rides `call:ended`). Decoded so
+            // a malformed frame is caught, ready for the group-call roster later.
+            "call:participant-left" -> {
+                json.decodeFromString<CallParticipantLeftPayload>(rawJson)
+                null
+            }
             "call:error" -> mapError(json.decodeFromString<CallErrorPayload>(rawJson))
             "call:already-answered" -> {
                 json.decodeFromString<CallAlreadyAnsweredPayload>(rawJson)
@@ -81,6 +88,31 @@ object CallSignalMapper {
      */
     fun iceServersRefreshed(rawJson: String): List<SocketIceServer>? = runCatching {
         json.decodeFromString<IceServersRefreshedPayload>(rawJson).iceServers
+    }.getOrNull()
+
+    /**
+     * Decode a `call:quality-alert` frame — the gateway telling THIS side that the
+     * REMOTE peer's link is sustaining degraded stats (the reporter itself is
+     * excluded from the fanout). The FSM never reacts to quality; this parallel,
+     * total, side-effect-free decode feeds the transient "your contact's
+     * connection is unstable" indicator (iOS parity: `callQualityAlert` →
+     * `isRemoteQualityDegraded`, 15 s auto-clear). `null` on a malformed frame or
+     * a blank call id — an untargetable alert is dropped.
+     */
+    fun qualityAlert(rawJson: String): CallQualityAlertPayload? = runCatching {
+        json.decodeFromString<CallQualityAlertPayload>(rawJson)
+            .takeIf { it.callId.isNotBlank() }
+    }.getOrNull()
+
+    /**
+     * Decode a `call:screen-capture-alert` frame — the remote peer started or
+     * stopped capturing the call screen. Feeds the privacy indicator (iOS parity:
+     * `callScreenCaptureAlert` → `isRemoteScreenCapturing`). `null` on a malformed
+     * frame or a blank call id.
+     */
+    fun screenCaptureAlert(rawJson: String): CallScreenCaptureAlertPayload? = runCatching {
+        json.decodeFromString<CallScreenCaptureAlertPayload>(rawJson)
+            .takeIf { it.callId.isNotBlank() }
     }.getOrNull()
 
     /**
