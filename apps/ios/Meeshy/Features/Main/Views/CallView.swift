@@ -1326,7 +1326,10 @@ struct CallView: View {
 
     /// Small circular control pinned to the local self-view frame (flip
     /// camera, filters). Buttons win the hit-test over the frame's tap-to-swap
-    /// and drag gestures, so they stay usable on the 100×140 tile.
+    /// and drag gestures, so they stay usable on the 100×140 tile. Uses the
+    /// same adaptiveGlass-backed callControlGlass as every other circular call
+    /// control (task #17) instead of a bespoke flat dark circle — diameter
+    /// stays 28 (unchanged), only the visual TREATMENT changes.
     private func pipFrameButton(icon: String, label: String, hint: String? = nil, action: @escaping () -> Void) -> some View {
         Button {
             action()
@@ -1335,9 +1338,7 @@ struct CallView: View {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.95))
-                .frame(width: 28, height: 28)
-                .background(Color.black.opacity(0.45), in: Circle())
-                .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                .callControlGlass(diameter: 28, isActive: false, tint: .white)
                 // Visual glyph stays a compact 28pt (the 100×140 tile has no
                 // room for a 44pt circle), but the hit target itself must meet
                 // the HIG 44×44 minimum — expand invisibly via contentShape.
