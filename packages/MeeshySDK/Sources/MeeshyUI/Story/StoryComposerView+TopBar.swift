@@ -42,11 +42,12 @@ extension StoryComposerView {
             // Bande de slides — entre le bouton de fermeture et le choix de la
             // cible d'audience. Le rail scrolle horizontalement et occupe tout
             // l'interstice ; sur un composer vierge (empty-state picker), il
-            // disparaît et laisse l'espace vide.
+            // disparaît et laisse l'espace vide. PAS de surface de verre :
+            // les vignettes flottent nues par-dessus le canvas, comme les
+            // icônes du header (directive user 2026-07-10).
             if shouldShowFloatingSlideStrip {
                 slideStrip
                     .padding(.vertical, 5)
-                    .adaptiveGlass(in: Capsule())
                     .padding(.horizontal, 8)
                     .transition(.opacity)
             } else {
