@@ -1525,6 +1525,31 @@ describe('PostCommentService', () => {
         }),
       );
     });
+
+    it('enforces one reaction per user (parité socket): a different emoji replaces the previous one', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.commentReaction.upsert.mockResolvedValue({});
+      prisma.commentReaction.groupBy.mockResolvedValue([{ emoji: '🔥', _count: { emoji: 1 } }]);
+      prisma.postComment.update.mockResolvedValue(makeComment({ likeCount: 1, reactionCount: 1, reactionSummary: { '🔥': 1 } }));
+
+      await service.likeComment('comment-1', 'user-1', '🔥');
+
+      // Toute réaction préexistante de ce user avec un AUTRE emoji est supprimée
+      // AVANT l'upsert → au plus une ligne (commentId,userId) : pas de cumul
+      // ❤️+🔥 comme le chemin socket (MAX_REACTIONS_PER_USER = 1) l'interdit.
+      expect(prisma.commentReaction.deleteMany).toHaveBeenCalledWith({
+        where: { commentId: 'comment-1', userId: 'user-1', emoji: { not: '🔥' } },
+      });
+      expect(prisma.commentReaction.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { comment_user_reaction_unique: { commentId: 'comment-1', userId: 'user-1', emoji: '🔥' } },
+        }),
+      );
+      const deleteOrder = prisma.commentReaction.deleteMany.mock.invocationCallOrder[0];
+      const upsertOrder = prisma.commentReaction.upsert.mock.invocationCallOrder[0];
+      expect(deleteOrder).toBeLessThan(upsertOrder);
+    });
   });
 
   // -----------------------------------------------------------------------
