@@ -13333,6 +13333,41 @@
         }
       }
     },
+    "call.quality.fair" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mäßiges Signal"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fair signal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Señal regular"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signal moyen"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sinal razoável"
+          }
+        }
+      }
+    },
     "call.quality.good" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13409,66 +13444,66 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verbindung verloren"
+            "value" : "Sehr schwaches Signal"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connection lost"
+            "value" : "Very weak signal"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Conexión perdida"
+            "value" : "Señal muy débil"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connexion perdue"
+            "value" : "Signal très faible"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Conexão perdida"
+            "value" : "Sinal muito fraco"
           }
         }
       }
     },
-    "call.quality.reconnecting" : {
+    "call.quality.poor" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verbindung wird wiederhergestellt"
+            "value" : "Schwaches Signal"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reconnecting"
+            "value" : "Weak signal"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reconectando"
+            "value" : "Señal débil"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reconnexion"
+            "value" : "Signal faible"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reconectando"
+            "value" : "Sinal fraco"
           }
         }
       }

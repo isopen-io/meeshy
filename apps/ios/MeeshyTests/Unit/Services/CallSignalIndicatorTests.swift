@@ -81,6 +81,47 @@ final class CallSignalStrengthTests: XCTestCase {
         // 30 s puis disparaît — assez long pour rassurer, pas permanent.
         XCTAssertEqual(TransientCallSignalGlyph.recoveryLingerSeconds, 30)
     }
+
+    // MARK: - Accessibility label must describe signal QUALITY, never a connection EVENT
+
+    /// `.fair`/`.poor`/`.lost` are reachable both via a live, fully `.connected`
+    /// link (real-time RTT/loss stats) AND via the pre-first-sample ICE fallback
+    /// — the case alone cannot tell which. A VoiceOver label claiming
+    /// "Reconnecting"/"Connection lost" on a healthy-but-degraded `.connected`
+    /// call is actively false; only signal-strength wording is honest in both
+    /// branches. Asserted on the resolved live property (not source text) —
+    /// none of the 5 locale translations for these keys contain the old
+    /// connection-event wording, so this holds regardless of test-runtime locale.
+    func test_accessibilityLabel_fairOnHealthyConnection_doesNotClaimReconnecting() {
+        let strength = CallSignalStrength.from(level: .fair, connection: .connected)
+        XCTAssertEqual(strength, .fair)
+        XCTAssertFalse(
+            strength.accessibilityLabel.localizedCaseInsensitiveContains("reconnec"),
+            "`.fair` on a `.connected` link is a live quality metric, not a reconnection " +
+            "event — the label must describe signal strength, e.g. \"Fair signal\"."
+        )
+    }
+
+    func test_accessibilityLabel_poorOnHealthyConnection_doesNotClaimConnectionLost() {
+        let strength = CallSignalStrength.from(level: .poor, connection: .connected)
+        XCTAssertEqual(strength, .poor)
+        XCTAssertFalse(
+            strength.accessibilityLabel.localizedCaseInsensitiveContains("lost")
+                && !strength.accessibilityLabel.localizedCaseInsensitiveContains("signal"),
+            "`.poor` on a `.connected` link must not be announced as \"Connection lost\"."
+        )
+        XCTAssertFalse(strength.accessibilityLabel.localizedCaseInsensitiveContains("perdu"))
+    }
+
+    func test_accessibilityLabel_poorAndLost_areDistinctStrings() {
+        // Before this fix both cases shared the single "Connexion perdue"/
+        // "Connection lost" label — a VoiceOver user could not tell mild
+        // degradation (`.poor`) from a near-total loss (`.lost`) apart.
+        XCTAssertNotEqual(
+            CallSignalStrength.poor.accessibilityLabel,
+            CallSignalStrength.lost.accessibilityLabel
+        )
+    }
 }
 
 // MARK: - DataChannel inbound routing
