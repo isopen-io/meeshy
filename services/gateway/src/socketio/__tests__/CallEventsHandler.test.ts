@@ -1654,7 +1654,7 @@ describe('CallEventsHandler', () => {
         endReason: 'completed',
       });
       const summaryMessage = { id: 'msg-2', conversationId: CONV_ID };
-      mockCallServiceCreateCallSummaryMessage.mockResolvedValue(summaryMessage);
+      mockCallServiceCreateCallSummaryMessage.mockResolvedValue({ kind: 'created', message: summaryMessage });
       const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
 
       const { handler, socket, io } = setupWithSocket({
@@ -2345,7 +2345,7 @@ describe('CallEventsHandler', () => {
     it('broadcasts summary message when messageBroadcaster is set', async () => {
       const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
       const summaryMessage = { id: 'msg-1', conversationId: CONV_ID };
-      mockCallServiceCreateCallSummaryMessage.mockResolvedValue(summaryMessage);
+      mockCallServiceCreateCallSummaryMessage.mockResolvedValue({ kind: 'created', message: summaryMessage });
       mockCallServiceEndCall.mockResolvedValue(makeCallSession({ status: 'ended' }));
 
       const { handler, socket, io } = setupWithSocket();

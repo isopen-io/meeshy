@@ -122,7 +122,11 @@ const createMockPrisma = () => {
       updateMany: jest.fn() as MockFn
     },
     message: {
-      create: jest.fn() as MockFn
+      create: jest.fn() as MockFn,
+      // Upsert lookup of the live call message — defaults to "absent" so the
+      // pre-existing create-path tests keep exercising the create branch.
+      findFirst: (jest.fn() as MockFn).mockResolvedValue(null),
+      update: jest.fn() as MockFn
     },
     $transaction: jest.fn() as MockFn
   };
@@ -4816,7 +4820,7 @@ describe('CallService - createCallSummaryMessage', () => {
 
     const result = await callService.createCallSummaryMessage('call-123');
 
-    expect(result).toBe(mockMessage);
+    expect(result).toEqual({ kind: 'created', message: mockMessage });
     expect(mockPrisma.message.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -4852,7 +4856,7 @@ describe('CallService - createCallSummaryMessage', () => {
 
     const result = await callService.createCallSummaryMessage('call-123');
 
-    expect(result).toBe(mockMessage);
+    expect(result).toEqual({ kind: 'created', message: mockMessage });
     // metadata should be undefined in the create call
     const createCall = (mockPrisma.message.create as jest.MockedFunction<any>).mock.calls[0][0];
     expect(createCall.data.metadata).toBeUndefined();

@@ -174,11 +174,11 @@ describe('CallEventsHandler — postCallSummary retry', () => {
 
   it('retries on transient failure and eventually broadcasts the summary', async () => {
     const fakeMessage = { id: 'msg-1', conversationId: CONV_ID };
-    // Fail twice, then succeed on the third attempt
+    // Fail twice, then succeed on the third attempt (discriminated upsert result)
     mockCreateCallSummaryMessage
       .mockRejectedValueOnce(new Error('transient DB error'))
       .mockRejectedValueOnce(new Error('transient DB error'))
-      .mockResolvedValueOnce(fakeMessage);
+      .mockResolvedValueOnce({ kind: 'created', message: fakeMessage });
 
     const messageBroadcaster = jest.fn<any>().mockResolvedValue(undefined);
     const prisma = makePrisma();

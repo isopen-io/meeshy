@@ -1265,11 +1265,20 @@ export class CallEventsHandler {
     const MAX_ATTEMPTS = 3;
     const BASE_DELAY_MS = 1000;
     try {
-      const message = await this.callService.createCallSummaryMessage(callId);
-      if (!message || !this.messageBroadcaster) {
+      const result = await this.callService.createCallSummaryMessage(callId);
+      if (!result) {
         return;
       }
-      await this.messageBroadcaster(message, message.conversationId);
+      // `created` → the summary is a brand-new message (message:new fanout);
+      // `updated` → the live "en cours" message was edited in-place to its
+      // terminal state (message:edited full-payload fanout).
+      const broadcaster = result.kind === 'updated'
+        ? this.messageUpdateBroadcaster
+        : this.messageBroadcaster;
+      if (!broadcaster) {
+        return;
+      }
+      await broadcaster(result.message, result.message.conversationId);
     } catch (error) {
       logger.error('[CallEventsHandler] Failed to post call summary message', {
         callId,

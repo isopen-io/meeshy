@@ -13,7 +13,12 @@
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
-import { buildCallSummaryWithMetadata, buildLiveCallMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
+import {
+  buildCallSummaryWithMetadata,
+  buildGarbageCollectedConversion,
+  buildLiveCallMetadata,
+  callSummaryClientMessageId
+} from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
 import {
   buildCallHistoryItem,
@@ -2129,27 +2134,32 @@ export class CallService {
   }
 
   /**
-   * P3 — post the call-summary system message into the conversation when a
-   * call reaches a terminal state ("Appel vidéo · 04:32", "Appel audio
-   * manqué", "Appel refusé").
+   * P3 — post (or now UPDATE) the call-summary system message when a call
+   * reaches a terminal state ("Appel vidéo · 04:32", "Appel audio manqué",
+   * "Appel refusé").
    *
-   * Idempotent by construction: the message's `clientMessageId` is derived
-   * deterministically from the callId, and the partial unique index on
-   * `Message(conversationId, clientMessageId)` guarantees exactly one summary
-   * per call even though several gateway terminal paths (ringing timeout,
-   * participant leave, force cleanup) may all call this. A duplicate insert
-   * raises Prisma P2002 and is swallowed as a no-op.
+   * Upsert semantics (live-call message): `call:initiate` may already have
+   * posted the live "Appel … en cours" message under the SAME deterministic
+   * `clientMessageId`. Every terminal path therefore:
+   *   1. looks the message up with `findFirst(conversationId, clientMessageId)`
+   *      (the composite `findUnique` selector does NOT exist in the generated
+   *      client — the schema comment is misleading);
+   *   2. live found → edits it in-place to the canonical terminal state
+   *      (`kind: 'call'`) → `{ kind: 'updated' }`;
+   *   3. terminal found → `null` (all 7 terminal paths stay idempotent);
+   *   4. absent → creates it → `{ kind: 'created' }`; on P2002 it RE-READS:
+   *      a live message that committed mid-race is updated (anti-freeze —
+   *      otherwise the bubble stays "en cours" forever), an already-terminal
+   *      one is left alone (`null`).
+   * `garbageCollected` stays silent when no message exists (housekeeping),
+   * but converts an orphaned live message to `failed` ("Appel … interrompu").
    *
-   * Returns the created `Message` (with sender populated for Socket.IO
-   * broadcast) or `null` when nothing should be posted: the call is not
-   * terminal, the end reason is housekeeping (garbage collection), the message
-   * already exists, or the initiator has no participant row to attribute it to.
-   * The pure status/reason → label mapping lives in
-   * `@meeshy/shared/utils/call-summary`.
+   * The caller routes the result: `created` → `message:new` broadcast,
+   * `updated` → `message:edited` broadcast.
    */
   async createCallSummaryMessage(
     callId: string
-  ): Promise<Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> | null> {
+  ): Promise<{ kind: 'created' | 'updated'; message: Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> } | null> {
     const call = await this.prisma.callSession.findUnique({
       where: { id: callId },
       select: {
@@ -2159,6 +2169,7 @@ export class CallService {
         status: true,
         endReason: true,
         duration: true,
+        answeredAt: true,
         metadata: true,
         bytesSent: true,
         bytesReceived: true,
@@ -2169,8 +2180,41 @@ export class CallService {
       return null;
     }
 
-    const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
+    const sessionMetadata = call.metadata as Record<string, unknown> | null;
+    const metadataType = sessionMetadata?.type;
     const callType = typeof metadataType === 'string' ? metadataType : null;
+    const endedBy = sessionMetadata?.endedBy;
+    const endedById = typeof endedBy === 'string' ? endedBy : null;
+
+    const findExisting = () => this.prisma.message.findFirst({
+      where: {
+        conversationId: call.conversationId,
+        clientMessageId: callSummaryClientMessageId(call.id)
+      },
+      select: { id: true, metadata: true }
+    });
+    const isLiveMessage = (existing: { metadata: unknown } | null): boolean =>
+      (existing?.metadata as Record<string, unknown> | null)?.kind === 'call-live';
+    const applyUpdate = async (
+      messageId: string,
+      content: string,
+      metadata: unknown
+    ): Promise<{ kind: 'updated'; message: Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> }> => {
+      const message = await this.prisma.message.update({
+        where: { id: messageId },
+        data: {
+          content,
+          metadata: metadata as Prisma.InputJsonValue
+        },
+        include: CALL_SUMMARY_MESSAGE_INCLUDE
+      });
+      logger.info('Live call message updated to terminal state', {
+        callId,
+        conversationId: call.conversationId
+      });
+      return { kind: 'updated', message };
+    };
+
     // Compute the human-readable label AND the structured call facts the client
     // renders into a rich, actionable bubble (direction resolved per-viewer from
     // initiatorId, media glyph, outcome tint, and the "duration · data · quality"
@@ -2185,12 +2229,38 @@ export class CallService {
       initiatorId: call.initiatorId,
       bytesSent: call.bytesSent,
       bytesReceived: call.bytesReceived,
-      networkQuality: call.networkQuality
+      networkQuality: call.networkQuality,
+      answeredAt: call.answeredAt,
+      endedById
     });
     if (!built) {
-      return null;
+      // Non-terminal → nothing to do. GC housekeeping stays silent UNLESS a
+      // live message was already posted: that bubble would read "en cours"
+      // forever, so it converts to the failed terminal state.
+      if (call.endReason !== 'garbageCollected') {
+        return null;
+      }
+      const existing = await findExisting();
+      if (!existing || !isLiveMessage(existing)) {
+        return null;
+      }
+      const conversion = buildGarbageCollectedConversion({
+        callId: call.id,
+        initiatorId: call.initiatorId,
+        callType
+      });
+      return applyUpdate(existing.id, conversion.summary.content, conversion.metadata);
     }
     const { summary, metadata: callMetadata } = built;
+
+    const existing = await findExisting();
+    if (existing) {
+      if (!isLiveMessage(existing)) {
+        // A concurrent terminal path already posted the final summary.
+        return null;
+      }
+      return applyUpdate(existing.id, summary.content, callMetadata);
+    }
 
     // `Message.senderId` references a Participant (not a User); resolve the
     // initiator's participant row in this conversation to attribute the
@@ -2229,10 +2299,17 @@ export class CallService {
         outcome: summary.outcome,
         callType: summary.callType
       });
-      return message;
+      return { kind: 'created', message };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        // A concurrent terminal path already posted the summary — idempotent.
+        // Anti-freeze: the losing side of the race MUST re-read. If the
+        // live-create committed between our lookup and this insert, nobody
+        // else will ever edit that message — convert it here. If the winner
+        // was another terminal path, stay idempotent.
+        const raced = await findExisting();
+        if (raced && isLiveMessage(raced)) {
+          return applyUpdate(raced.id, summary.content, callMetadata);
+        }
         return null;
       }
       throw error;
