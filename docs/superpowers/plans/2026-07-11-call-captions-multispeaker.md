@@ -998,7 +998,7 @@ git commit -m "feat(ios/calls): structural (non-overlay) captions layout for aud
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Run the full iOS suite**
+- [x] **Step 1: Run the full iOS suite**
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
@@ -1010,11 +1010,17 @@ Expected: all 3 phases green, per `apps/ios/CLAUDE.md`'s phased test run. Revert
 first — if it only reorders GUIDs for files unrelated to this plan, `git checkout --` it; do NOT
 discard the actual source changes from Tasks 1-4).
 
-- [ ] **Step 2: Build and install on a real device**
+- [x] **Step 2: Build and install on a real device**
 
 ```bash
 ./apps/ios/meeshy.sh device
 ```
+
+**Deferred (2026-07-11):** user explicitly chose to continue development and defer Steps 3-4
+(manual two-device QA) + Step 5 (final commit gate) to later, per "poursuis le developpement on
+fais la QA et les corrections après!!" — everything up to here (all 4 code tasks + full
+automated suite green + build/install/launch on a real device succeeded) is done and committed.
+Resume at Step 3 when the user is ready to QA.
 
 - [ ] **Step 3: Manual verification protocol — audio call**
 
