@@ -18,8 +18,12 @@
 > #10 `3061b1f89` : cache TTL 2 s de la session dans le hot-path call:signal —
 > answer lit toujours frais (isFirstAnswer), re-lecture avant tout rejet si
 > participant absent du cache (join tout frais).
-> Restent : #5 (parité Android socket), #7 (budgets sonnerie), #8 (doc TURN),
-> #9 (restartIce), harnais e2e 2-sockets.
+> #7+#8 : cascades documentées aux sites gateway — les budgets 45/60/120 s
+> sont une cascade VOLONTAIRE (client < serveur < GC, ordre à préserver) et
+> le refresh TURN est quasi-inerte par construction (TTL clampé ≥ cap d'appel
+> 2 h) — filet à garder, pas à « réparer ».
+> Restent : #5 (parité Android socket), #9 (restartIce iOS), harnais e2e
+> 2-sockets.
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,

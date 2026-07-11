@@ -181,6 +181,13 @@ export class CallService {
   // Participants that signalled call:backgrounded; they receive an extended
   // heartbeat grace period so CallKit audio calls survive iOS socket suspension.
   private backgroundedParticipants: Map<string, Set<string>> = new Map();
+  // Étage 2 de la cascade de budgets de sonnerie (audit 2026-07-11 #7) — les
+  // trois valeurs sont VOLONTAIREMENT distinctes, chaque étage rattrape le
+  // précédent s'il ne se déclenche pas :
+  //   45s  client iOS (WebRTCTypes.outgoingRingTimeoutSeconds — fail rapide UX)
+  //   60s  serveur missed (ICI — autorité : marque l'appel missed + push)
+  //  120s  GC (CallCleanupService.MAX_INITIATED_RINGING_MS — filet VoIP lent)
+  // Toute évolution doit préserver l'ordre strict 45 < 60 < 120.
   private readonly RINGING_TIMEOUT_MS = 60_000;   // Phase 1 fix P2 — FaceTime parity
   private readonly RINGING_REHYDRATE_FLOOR_MS = 5_000; // item H — min budget after boot rehydration
   private readonly HEARTBEAT_DB_DEBOUNCE_MS = 30_000; // Write at most every 30s per participant

@@ -3322,6 +3322,14 @@ export class CallEventsHandler {
      * call:request-ice-servers — refresh TURN credentials before TTL expiry.
      * The client requests this at ~80% of the credential TTL so long calls (>10 min)
      * always have valid TURN credentials for ICE restart.
+     *
+     * Quasi-inerte PAR CONSTRUCTION avec les valeurs par défaut (audit
+     * 2026-07-11 #8) : le TTL est clampé ≥ CallCleanupService.MAX_ACTIVE_MS
+     * (2 h, TURNCredentialService) et les appels sont capés à cette même durée
+     * — les credentials survivent donc toujours à l'appel et le seuil des 80 %
+     * n'est jamais atteint. Garder ce chemin : c'est le filet si un opérateur
+     * relève MAX_ACTIVE_MS ou si un client garde une session au-delà du cap ;
+     * ne pas s'étonner qu'il ne fire jamais en prod, ne pas le « réparer ».
      */
     socket.on(CALL_EVENTS.REQUEST_ICE_SERVERS, async (data: { callId: string }) => {
       try {

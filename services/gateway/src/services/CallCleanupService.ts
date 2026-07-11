@@ -36,6 +36,8 @@ export class CallCleanupService {
   // wake the device + show the incoming call UI, then the user needs time to
   // swipe/tap answer. 60s was routinely too short on slow networks, causing
   // valid incoming calls to be force-MISSed before the user could answer.
+  // Étage 3 (dernier filet) de la cascade 45s client / 60s serveur / 120s GC —
+  // voir CallService.RINGING_TIMEOUT_MS (audit 2026-07-11 #7).
   private readonly MAX_INITIATED_RINGING_MS = 120 * 1000;
   // CALL-FIX 2026-06-25 — 60s→120s: heartbeat interval is 10s on the iOS
   // client; a device with moderate network latency may miss 5-6 beats before
