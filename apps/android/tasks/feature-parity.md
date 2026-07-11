@@ -1886,7 +1886,29 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       toggles, a 5-bar accent-coherent strength meter, per-rule hint rows, submit gated on `canSubmit`, reachable via
       a new "Change password" row in the Settings → Privacy section (`Routes.CHANGE_PASSWORD`). +32 tests
       (PasswordStrength 14, ChangePasswordForm 9, ChangePasswordViewModel 9). EN/FR/ES/PT strings.
-- [ ] GDPR data export (JSON/CSV, selectable scope, share/save file)
+- [x] GDPR data export (JSON/CSV, selectable scope, share/save file) — **shipped** (slice
+      `settings-data-export`, 2026-07-11). Port of iOS `DataExportView` + `DataExportService`,
+      **surpassing iOS** on two counts: (1) iOS's share wrapper dropped the actual profile/messages/
+      contacts payload and shared only the summary counts — Android shares the **full** payload; (2)
+      the export is shared as a real **file** via FileProvider, not truncatable `EXTRA_TEXT`. Three
+      pure `:core:model` SSOTs: `DataExportRequestBuilder.build(selection) → DataExportQuery` (the
+      always-on `profile` rule + `types` order `profile,messages,contacts` + `format` token, mirroring
+      the gateway `parseTypes`), `DataExportData` (the full response model — timestamps kept as raw
+      ISO strings so the payload round-trips losslessly to a JSON file), and
+      `DataExportFileBuilder.build(data) → ExportArtifact` (fileName from a filesystem-safe stamp of
+      the ISO `exportDate`; `text/csv` when the server returned a non-empty `csv` map, else an
+      `application/json` re-encoding of the whole payload — so a CSV request with no sections is never
+      an empty file). `:core:network` `DataExportApi` (`GET me/export`); `:sdk-core`
+      `DataExportRepository` is **deliberately online** + session-gated (the gateway builds the export
+      on demand from a live DB read — nothing to defer; a signed-out caller can't fire a guaranteed
+      `401`, inert `null`). `:feature:settings` `DataExportViewModel` (UDF immutable state; double-tap
+      guard; any selection change invalidates a stale artifact so the user never shares a file that
+      doesn't match the current scope; re-selecting the current value is inert; failure → NETWORK/
+      GENERIC) + `DataExportScreen` (format picker + content toggles + summary card whose Share action
+      writes the artifact to `cacheDir/exports` and launches the chooser). Added a FileProvider
+      (`${applicationId}.fileprovider` + `res/xml/file_paths.xml`) to the app module, wired the
+      previously no-op Settings → Data "Export my data" row (`Routes.DATA_EXPORT`). +34 tests
+      (RequestBuilder 7, FileBuilder 8, DataDecode 3, Repository 4, ViewModel 12). EN/FR/ES/PT strings.
 - [x] Account deletion (typed-phrase confirmation + email-confirmation flow) — **shipped** (slice
       `settings-account-deletion`, 2026-07-11). Port of iOS `DeleteAccountView` + `AccountService.deleteAccount`.
       Pure `:core:model` `AccountDeletionConfirmation` SSOT: `REQUIRED_PHRASE = "SUPPRIMER MON COMPTE"` (the gateway

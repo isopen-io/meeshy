@@ -150,4 +150,23 @@
     <string name="delete_account_email_title">A confirmation email is on its way</string>
     <string name="delete_account_email_body">Check your inbox to confirm the deletion of your account.</string>
     <string name="delete_account_email_ok">Got it</string>
+
+    <!-- Data export (GDPR) -->
+    <string name="data_export_title">Export my data</string>
+    <string name="data_export_info_title">Your data, your control</string>
+    <string name="data_export_info_body">Under GDPR, you can export all of your personal data.</string>
+    <string name="data_export_section_format">Format</string>
+    <string name="data_export_format_json">JSON</string>
+    <string name="data_export_format_csv">CSV</string>
+    <string name="data_export_section_content">Content</string>
+    <string name="data_export_content_profile">Profile (always included)</string>
+    <string name="data_export_content_messages">Messages</string>
+    <string name="data_export_content_contacts">Contacts</string>
+    <string name="data_export_button">Export my data</string>
+    <string name="data_export_ready_title">Export ready</string>
+    <string name="data_export_ready_messages">%1$d messages included</string>
+    <string name="data_export_ready_contacts">%1$d contacts included</string>
+    <string name="data_export_share">Share</string>
+    <string name="data_export_error_network">No connection. Check your network and try again.</string>
+    <string name="data_export_error_generic">Something went wrong. Please try again.</string>
 </resources>

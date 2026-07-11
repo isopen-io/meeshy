@@ -4,7 +4,24 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-media-auto-download` ✅
+## This loop (Phase: Settings §L) — slice `settings-data-export` ✅
+**GDPR data export** — port of iOS `DataExportView` + `DataExportService`, surpassing iOS twice: iOS shared only
+the summary counts (dropping the real payload) and shared truncatable text — Android shares the **full** payload
+as a real **file** via FileProvider. Three pure `:core:model` SSOTs: `DataExportRequestBuilder` (always-on
+`profile` + `types` order + format token, mirrors gateway `parseTypes`), `DataExportData` (full response model,
+timestamps as raw ISO strings → lossless round-trip), `DataExportFileBuilder` (safe fileName from the ISO
+`exportDate`; `text/csv` on a non-empty server `csv` map else a JSON re-encode of the whole payload). `:core:network`
+`DataExportApi` (`GET me/export`); `:sdk-core` `DataExportRepository` online + session-gated. `DataExportViewModel`
+(double-tap guard; any selection change invalidates a stale artifact; re-select = inert; NETWORK/GENERIC mapping) +
+`DataExportScreen` (format picker + content toggles + success card whose Share writes to `cacheDir/exports` and
+launches the chooser). Added an app-module FileProvider (`${applicationId}.fileprovider` + `file_paths.xml`), wired
+Settings → Data "Export my data" (`Routes.DATA_EXPORT`). +34 tests (RequestBuilder 7, FileBuilder 8, DataDecode 3,
+Repository 4, VM 12); `:app:assembleDebug` + touched-module tests green (the 2 sdk-core DataStore-store failures are
+the documented parallel-load flake — green in isolation, untouched here), diff = `apps/android` only, EN/FR/ES/PT.
+Next: media cache management (§L), live `ConnectivityManager` monitor + first pipeline consumer of the media policy
+engine, or avatar/banner upload (§K).
+
+## Prior loop (Phase: Settings §L) — slice `settings-media-auto-download` ✅
 **Media auto-download preferences** — port of iOS `MediaDownloadSettingsView` + the
 `MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor` trio. Pure `:core:model` SSOTs:
 `AutoDownloadPolicy` × `MediaKind` → `MediaDownloadPreferences` (per-kind policy, `policy`/`withPolicy` lenses,

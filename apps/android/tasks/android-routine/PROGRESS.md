@@ -2,7 +2,48 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export)** → rest`
+
+> On 2026-07-11 **GDPR data export** landed (slice `settings-data-export`, feature-parity §L — "GDPR data
+> export (JSON/CSV, selectable scope, share/save file)"). Port of iOS `DataExportView` + `DataExportService`,
+> **surpassing iOS twice**: iOS's share wrapper dropped the actual profile/messages/contacts payload (shared
+> only the summary counts) — Android shares the **full** payload; and it shares a real **file** via
+> FileProvider, not truncatable `EXTRA_TEXT`. Three pure `:core:model` SSOTs — (1)
+> `DataExportRequestBuilder.build(selection) → DataExportQuery`: the always-on `profile` rule +
+> `types` order `profile,messages,contacts` + `format` token, mirroring the gateway `parseTypes`
+> (routes/me/export.ts); (2) `DataExportData` (+ `ExportedProfile`/`ExportedMessage`/`ExportedContact`): the
+> full response model, timestamps kept as raw ISO strings so the payload re-serialises losslessly to the
+> export file; (3) `DataExportFileBuilder.build(data) → ExportArtifact`: fileName from a filesystem-safe stamp
+> of the ISO `exportDate` (date part before `T`, `[0-9A-Za-z-]` only, blank/all-illegal → plain base name),
+> `text/csv` when the server returned a non-empty `csv` map else an `application/json` re-encoding of the whole
+> payload (so a CSV request that came back with no sections is never an empty file). `:core:network`
+> `DataExportApi` (`GET me/export`, registered in `MeeshyApi` + `NetworkModule`); `:sdk-core`
+> `DataExportRepository` is **deliberately online** + session-gated (the gateway builds the export on demand
+> from a live DB read — nothing to defer; no session → inert `null`, never a guaranteed `401`).
+> `:feature:settings` `DataExportViewModel` (UDF immutable `DataExportUiState`; `canSubmit` blocks a double-tap;
+> `setFormat`/`toggleMessages`/`toggleContacts` **invalidate a stale artifact** so the user can never share a
+> file that doesn't match the current scope; re-selecting the current format is inert and keeps a ready artifact;
+> failure → NETWORK/GENERIC, no-session → GENERIC defensively) + `DataExportScreen` (glue: Indigo info card,
+> format picker, content toggles with profile pinned-on-and-disabled, an export button, and a success summary
+> card whose Share action writes the artifact to `cacheDir/exports` and launches the chooser). Added a
+> FileProvider (`${applicationId}.fileprovider` + `res/xml/file_paths.xml`) to the app module and wired the
+> previously no-op Settings → Data "Export my data" row (`Routes.DATA_EXPORT`). **+34 tests** (RequestBuilder 7,
+> FileBuilder 8, DataDecode 3, Repository 4, ViewModel 12), all green; `:app:assembleDebug` BUILD SUCCESSFUL.
+> The two `:sdk-core` DataStore-store tests that failed under full-suite parallel load
+> (`MediaDownloadPreferencesStoreTest`/`ThemeStoreTest`) are the **documented** pre-existing flake
+> (NOTES §DataStore-under-parallel-load, lines 127/283/528) — green in isolation, rotating victim between runs,
+> untouched by this slice (it adds no DataStore store). Reviewer **PASS** (diff `apps/android` only —
+> `:core:model`, `:core:network`, `:sdk-core`, `:feature:settings`, `:app` nav + manifest FileProvider +
+> file_paths.xml, EN/FR/ES/PT strings; no production logic outside; **SDK purity** — pure opaque-param builders
+> + response model + file builder in `:core:model`, online session-gated repo in `:sdk-core`, "when to export /
+> invalidate" orchestration in the VM, file-write + share intent in the exempt Compose glue; **SSOT** — one
+> `DataExportRequestBuilder` drives the query, one `DataExportFileBuilder` drives the artifact, no
+> re-implementation; **UDF/instant-app** — immutable `StateFlow<UiState>`, pure transitions; **colour/UX
+> coherence** — Indigo brand card + accent-neutral toggles, Success-green ready card, natural row→screen→back,
+> Share only shown once an artifact exists so no dead end; **no coverage floor lowered, no test weakened**).
+> **Next:** media cache management (§L — clear cached images/audio/video/thumbnails), the live
+> `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of
+> `MediaDownloadPolicyEngine`, or avatar/banner upload (media pipeline) for §K profile edit.
 
 > On 2026-07-11 **account deletion** landed (slice `settings-account-deletion`, feature-parity §L — "Account
 > deletion (typed-phrase confirmation + email-confirmation flow)"). Port of iOS `DeleteAccountView` +

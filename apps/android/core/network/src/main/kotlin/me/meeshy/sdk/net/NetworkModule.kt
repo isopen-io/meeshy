@@ -12,6 +12,7 @@ import me.meeshy.sdk.net.api.BlockApi
 import me.meeshy.sdk.net.api.CallHistoryApi
 import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.DataExportApi
 import me.meeshy.sdk.net.api.FriendApi
 import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.api.MessageApi
@@ -95,4 +96,7 @@ internal object NetworkModule {
 
     @Provides
     fun providesReportApi(api: MeeshyApi): ReportApi = api.reports
+
+    @Provides
+    fun providesDataExportApi(api: MeeshyApi): DataExportApi = api.dataExport
 }
