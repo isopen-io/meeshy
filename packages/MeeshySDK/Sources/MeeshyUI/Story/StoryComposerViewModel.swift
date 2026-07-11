@@ -159,7 +159,28 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Background
 
-    @Published var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())"
+    /// Couleur/dégradé de fond sélectionné au Background tool. Appliqué EN
+    /// DIRECT à `currentSlide.effects.background` — avant, la valeur ne
+    /// rejoignait la slide qu'au prochain sync (publish/autosave) et le
+    /// canvas ne re-rendait pas à la sélection (retour user 2026-07-11).
+    @Published var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())" {
+        didSet {
+            guard oldValue != backgroundColor else { return }
+            applyBackgroundColorToCurrentSlide()
+        }
+    }
+
+    /// Format `effects.background` : hex SANS « # » ou `gradient:HEX1:HEX2`
+    /// (cf. le restore SyncRestore qui re-préfixe le hex nu).
+    func applyBackgroundColorToCurrentSlide() {
+        let value = backgroundColor.hasPrefix("#")
+            ? String(backgroundColor.dropFirst())
+            : backgroundColor
+        var slide = currentSlide
+        guard slide.effects.background != value else { return }
+        slide.effects.background = value
+        currentSlide = slide
+    }
 
     // MARK: - Transitions du slide courant
     //

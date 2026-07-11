@@ -20,6 +20,7 @@ public struct VideoClipBar: View, Equatable {
             && lhs.laneHeight == rhs.laneHeight
             && lhs.frames.count == rhs.frames.count
             && lhs.videoURL == rhs.videoURL
+            && lhs.imageURL == rhs.imageURL
     }
 
     public let clipId: String
@@ -39,6 +40,10 @@ public struct VideoClipBar: View, Equatable {
     /// vignettes manquantes rendaient les clips vidéo illisibles (retour
     /// user 2026-07-11 : « je ne vois pas les thumbnails »).
     public let videoURL: URL?
+    /// URL locale de l'IMAGE — fallback quand le bitmap de session
+    /// (`loadedImages`) n'existe plus (draft restauré, repost) : la barre
+    /// charge sa vignette depuis le cache disque (ImageStill, downsamplée).
+    public let imageURL: URL?
     public let onTap: () -> Void
     public let onDoubleTap: () -> Void
     public let onLongPress: () -> Void
@@ -83,6 +88,7 @@ public struct VideoClipBar: View, Equatable {
         laneHeight: CGFloat,
         frames: [UIImage],
         videoURL: URL? = nil,
+        imageURL: URL? = nil,
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
         onLongPress: @escaping () -> Void,
@@ -104,6 +110,7 @@ public struct VideoClipBar: View, Equatable {
         self.laneHeight = laneHeight
         self.frames = frames
         self.videoURL = videoURL
+        self.imageURL = imageURL
         self.onTap = onTap
         self.onDoubleTap = onDoubleTap
         self.onLongPress = onLongPress
@@ -146,10 +153,16 @@ public struct VideoClipBar: View, Equatable {
             startTime, duration
         ))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-        .task(id: videoURL) {
-            guard frames.isEmpty, let videoURL else { return }
-            loadedFrames = await VideoFilmstrip.frames(url: videoURL, count: 6,
-                                                       maxHeight: laneHeight)
+        .task(id: videoURL ?? imageURL) {
+            guard frames.isEmpty else { return }
+            if let videoURL {
+                loadedFrames = await VideoFilmstrip.frames(url: videoURL, count: 6,
+                                                           maxHeight: laneHeight)
+            } else if let imageURL,
+                      let still = await ImageStill.thumbnail(url: imageURL,
+                                                             maxHeight: laneHeight) {
+                loadedFrames = [still]
+            }
         }
     }
 

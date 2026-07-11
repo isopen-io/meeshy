@@ -437,6 +437,9 @@ public struct QuickTimelineView: View {
                 laneHeight: laneHeight,
                 frames: mediaFrames,
                 videoURL: media.kind == .video ? viewModel.loadedURL(for: media.id) : nil,
+                imageURL: (media.kind == .image && mediaFrames.isEmpty)
+                    ? CacheCoordinator.imageLocalFileURL(for: media.postMediaId)
+                    : nil,
                 onTap: { viewModel.selectClip(id: media.id) },
                 onDoubleTap: {
                     viewModel.selectClip(id: media.id)
@@ -492,6 +495,7 @@ public struct QuickTimelineView: View {
                 geometry: geometry,
                 laneHeight: laneHeight,
                 waveformSamples: audio.waveformSamples,
+                audioURL: viewModel.loadedURL(for: audio.id),
                 onTap: { viewModel.selectClip(id: audio.id) },
                 onDoubleTap: { viewModel.selectClip(id: audio.id) },
                 onLongPress: { viewModel.selectClip(id: audio.id) },
