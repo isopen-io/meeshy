@@ -15,8 +15,11 @@
 > test de symétrie source-scan (CallEventsHandler-event-contract.test.ts).
 > #11 `2c4fed90c` : push VoIP localisé à la langue résolue du callee
 > (call.incoming.title/body, 8 langues, fallback fr).
+> #10 `3061b1f89` : cache TTL 2 s de la session dans le hot-path call:signal —
+> answer lit toujours frais (isFirstAnswer), re-lecture avant tout rejet si
+> participant absent du cache (join tout frais).
 > Restent : #5 (parité Android socket), #7 (budgets sonnerie), #8 (doc TURN),
-> #9 (restartIce), #10 (hot-path DB par signal), harnais e2e 2-sockets.
+> #9 (restartIce), harnais e2e 2-sockets.
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,
