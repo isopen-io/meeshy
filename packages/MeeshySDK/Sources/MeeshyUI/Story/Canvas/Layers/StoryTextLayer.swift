@@ -124,9 +124,39 @@ public final class StoryTextLayer: CATextLayer {
         let oGlyphWidth = isFramed
             ? ceil(("o" as NSString).size(withAttributes: [.font: designFont]).width)
             : 0
+        // Les bounds doivent couvrir ce que CATextLayer POSE réellement, pas
+        // seulement la projection linéaire de la mesure design (repro user
+        // 2026-07-11 : « La timeline vit » serif centré rendu « vi1 ») :
+        // 1. Fontes OPTIQUES (New York = system serif) : les métriques ne sont
+        //    PAS linéaires en taille — à 36 pt la ligne pose ~7 % plus large
+        //    que 96 px design × scaleFactor. On mesure donc AUSSI à la taille
+        //    rendue et on garde le max reconverti en design.
+        // 2. L'ENCRE des glyphes (empattements, terminaisons) déborde des
+        //    avances typographiques — marge d'encre par côté.
+        // Conséquence contractuelle : la TAILLE d'un texte est « ≥ la
+        // projection linéaire » (le CENTRE, lui, reste strictement linéaire) —
+        // cf. CrossDeviceEquivalenceTests, assertions texte assouplies.
+        let renderedProbeFont = StoryTextFontResolver.resolveFont(
+            forTextObject: text, size: geometry.render(designFontSize))
+        let renderedProbe = NSAttributedString(string: text.text, attributes: [
+            .font: renderedProbeFont,
+            .paragraphStyle: para
+        ].merging(strokeAttrs) { _, new in new })
+        let renderedNeed = renderedProbe.boundingRect(
+            with: CGSize(width: maxDesignWidth * geometry.scaleFactor,
+                         height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        ).size
+        let scaleFactor = max(geometry.scaleFactor, 0.0001)
+        let inkPad = Self.maxInkOverhangPerSide(of: designAttr, wrappedTo: maxDesignWidth)
+        let effectiveDesignSize = CGSize(
+            width: max(designSize.width, renderedNeed.width / scaleFactor) + inkPad * 2,
+            height: max(designSize.height, renderedNeed.height / scaleFactor)
+        )
         let metrics = Self.frameMetrics(shape: frameShape,
                                         isFramed: isFramed,
-                                        textSize: designSize,
+                                        textSize: effectiveDesignSize,
                                         oGlyphWidth: oGlyphWidth)
 
         // Render-space bounds is the linear projection of the design bounds.
@@ -373,6 +403,30 @@ public final class StoryTextLayer: CATextLayer {
     /// - nuage : bosses tout autour + bande basse pour les bulles de pensée.
     ///
     /// `nonisolated static` pour être testable sans instancier de calque.
+    /// Débord d'encre maximal (design px) d'un côté ou de l'autre des lignes
+    /// wrappées : différence entre les bounds de TRACÉ des glyphes
+    /// (`.useGlyphPathBounds` — l'encre réellement peinte) et la largeur
+    /// typographique (somme des avances) que mesure `boundingRect`. Les
+    /// empattements/terminaisons serif dépassent l'avance ; sans cette marge,
+    /// CATextLayer rogne le premier/dernier glyphe.
+    nonisolated static func maxInkOverhangPerSide(of attributed: NSAttributedString,
+                                                  wrappedTo maxWidth: CGFloat) -> CGFloat {
+        guard attributed.length > 0 else { return 0 }
+        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
+        let path = CGPath(rect: CGRect(x: 0, y: 0, width: maxWidth, height: 1_000_000),
+                          transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter,
+                                             CFRange(location: 0, length: 0), path, nil)
+        guard let lines = CTFrameGetLines(frame) as? [CTLine], !lines.isEmpty else { return 0 }
+        var overhang: CGFloat = 0
+        for line in lines {
+            let typographic = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+            let ink = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
+            overhang = max(overhang, ink.maxX - typographic, -ink.minX)
+        }
+        return max(0, ceil(overhang))
+    }
+
     nonisolated static func frameMetrics(shape: StoryTextFrameShape,
                                          isFramed: Bool,
                                          textSize: CGSize,
