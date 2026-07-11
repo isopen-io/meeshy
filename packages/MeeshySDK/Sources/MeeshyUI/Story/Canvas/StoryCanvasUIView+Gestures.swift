@@ -473,15 +473,21 @@ extension StoryCanvasUIView {
     }
 
     func hitTestItem(at point: CGPoint) -> String? {
-        guard let hit = itemsContainer.hitTest(point) else { return nil }
-        var current: CALayer? = hit
-        while let c = current {
-            if let id = c.name,
-               !id.isEmpty,
-               c.superlayer === itemsContainer || c === itemsContainer {
-                return id
+        // Itération manuelle des layers NOMMÉES par zPosition décroissant :
+        // `CALayer.hitTest` natif ignore les zPosition ET se fait avaler par
+        // les overlays pleine-toile sans nom (layer de DESSIN, zPosition
+        // 9999) — dès qu'un dessin existait, plus AUCUN item n'était
+        // touchable et le pan retombait sur le fond (bug user 2026-07-11).
+        let named = (itemsContainer.sublayers ?? []).enumerated()
+            .filter { !($0.element.name ?? "").isEmpty }
+            .sorted {
+                if $0.element.zPosition != $1.element.zPosition {
+                    return $0.element.zPosition > $1.element.zPosition
+                }
+                return $0.offset > $1.offset
             }
-            current = c.superlayer
+        for (_, layer) in named where layer.hitTest(point) != nil {
+            return layer.name
         }
         return nil
     }
