@@ -946,6 +946,26 @@ struct CallView: View {
         )
     }
 
+    /// The video duration badge (unlike the audio layout's separate
+    /// `statusPill` rows) is the ONLY place signal quality / peer-network state
+    /// surfaces in the video call chrome — so its composed VoiceOver label must
+    /// carry everything the badge visually shows (glyph + wifi-exclamation),
+    /// not just the duration. Applying `.accessibilityLabel`/`.accessibilityValue`
+    /// directly to the badge's `HStack` implicitly makes it one opaque
+    /// accessibility element (`children: .ignore`) that silently discards every
+    /// child's own `.accessibilityLabel` — this composes what would otherwise be
+    /// swallowed, mirroring exactly what the sighted layout renders.
+    private var videoDurationBadgeAccessibilityLabel: String {
+        var parts = [String(localized: "call.duration.a11y.label")]
+        if signalStrength.isDegraded {
+            parts.append(signalStrength.accessibilityLabel)
+        }
+        if callManager.isRemoteQualityDegraded {
+            parts.append(String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
+    }
+
     /// §4.3 — reconnecting banner shown over the frozen call layout while an
     /// ICE restart recovers a dropped connection (warning-tinted capsule with a
     /// spinner). The call is NOT torn down; the peer's last frame stays visible.
@@ -1077,9 +1097,16 @@ struct CallView: View {
                             Image(systemName: "wifi.exclamationmark")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(MeeshyColors.warning)
-                                .accessibilityLabel(String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main))
                         }
                     }
+                    // The parent's own .accessibilityLabel below already makes this
+                    // whole badge one opaque VoiceOver element (children: .ignore) —
+                    // every child label is discarded regardless, so hiding them here
+                    // is a no-op today. Kept explicit so a future removal of the
+                    // parent label doesn't silently re-expose fragmented per-child
+                    // announcements (glyph, then digits, then icon) instead of the
+                    // single composed sentence `videoDurationBadgeAccessibilityLabel`.
+                    .accessibilityElement(children: .ignore)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     // iOS 26 Liquid Glass — floating duration badge over the
@@ -1093,7 +1120,7 @@ struct CallView: View {
                     // rendait DERRIÈRE eux en top-leading). Le PiP par défaut
                     // (top-trailing) se pose dessous via `pipTopClearance`.
                     .frame(height: 44)
-                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
                     .accessibilityValue(callManager.formattedDuration)
                     .accessibilityAddTraits(.updatesFrequently)
                 }

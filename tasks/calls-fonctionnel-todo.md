@@ -2681,3 +2681,71 @@ candidat contre ce fichier + `lessons.md` avant de rapporter.
   camera-flag rollback + `CXProviding` iOS (Vague 31/32), `call:end` fast-path `duration:0` (non
   atteignable, valeur cosmétique seulement — distinct du bug d'autorisation corrigé cette vague), speaker
   toggle no-op web (nécessite design dédié).
+
+## Vague 36 — accessibilité VoiceOver iOS : glyphe signal + badge durée vidéo (2026-07-11)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). `git fetch
+origin main` : HEAD à jour (`c358be9`). PR ouverte trouvée AVANT de commencer : **#1825**
+(`claude/loving-thompson-1jf9pj`, TURN TTL floor + buffered-offer answer race iOS — audit fiabilité/
+sécurité complet du même mandat, ouvert quelques heures plus tôt le même jour) — diff lu intégralement,
+aucun recouvrement (fichiers distincts : `TURNCredentialService.ts`/`CallManager.swift` vs les deux fichiers
+ci-dessous). Vu que 35 vagues antérieures avaient déjà largement épuisé les bugs de fiabilité/race gateway+web
+et que #1825 venait de repasser tout le pipeline iOS reliability/CallKit/PushKit, cette vague a délibérément
+choisi un angle neuf jamais couvert par les vagues précédentes : accessibilité VoiceOver / conformité HIG de
+l'UI d'appel iOS (lecture seule, pas de toolchain Swift dans ce sandbox — CI `iOS Tests` est le seul juge
+définitif). Un agent d'exploration dédié a lu tout `tasks/calls-fonctionnel-todo.md` (a11y/VoiceOver/Dynamic
+Type/landscape) + `lessons.md` pour écarter les faux positifs déjà tranchés (label avatar `IncomingCallView`
+mort mais inoffensif, "leak" `NotificationCenter` de `CallManager`, "race" `remoteVideoTrack` — les trois
+confirmés faux) avant de rapporter.
+
+- **[BUG RÉEL, iOS, CONFIRMÉ + CORRIGÉ, HAUTE confiance] `CallSignalStrength.accessibilityLabel` annonçait
+  un ÉVÉNEMENT de connexion (reconnexion/perte) alors que le cas peut aussi représenter une MÉTRIQUE de
+  qualité temps réel sur un lien pleinement connecté.** `CallSignalGlyph.swift` — `.fair`/`.poor`/`.lost`
+  sont produits par `from(level:connection:)` de DEUX sources distinctes que l'enum ne peut pas discriminer
+  après coup : (1) repli ICE binaire avant le 1er échantillon de stats (`connection: .reconnecting/.checking/
+  .new` → `.fair` ; `.disconnected/.failed/.closed` → `.lost`) — ici "Reconnexion"/"Connexion perdue" sont
+  vraies — OU (2) des stats RTT/perte temps réel sur un lien `.connected` sain (test préexistant
+  `test_from_fairLevel_returnsFair` : `.from(level: .fair, connection: .connected)` → `.fair`) — ici le
+  lien n'a JAMAIS bougé, seule sa qualité est moyenne/faible. L'ancien libellé confondait les deux : un
+  utilisateur VoiceOver sur un appel à bande passante médiocre mais jamais interrompu entendait "Reconnexion"
+  à chaque effleurement du glyphe, et "Connexion perdue" pour un lien juste dégradé (`.poor`) — fausse alerte
+  répétée sur un appel qui va bien. **Fix** : les libellés décrivent désormais UNIQUEMENT la force du signal
+  (jamais un événement de connexion), honnête dans les deux branches — `.fair` → "Signal moyen" (nouvelle clé
+  `call.quality.fair`), `.poor` → "Signal faible" (nouvelle clé `call.quality.poor`, séparée de `.lost` qui
+  partageait jusqu'ici le même libellé), `.lost` → "Signal très faible" (clé `call.quality.lost` réutilisée,
+  valeur changée). Les vrais événements de reconnexion/perte restent annoncés séparément par les bannières
+  `isSignalingDegraded`/`isRemoteQualityDegraded` de `CallView` (déjà en place, vagues antérieures) — ce
+  glyphe n'a jamais été leur canal. L'ancienne clé `call.quality.reconnecting` est supprimée (usage exclusif
+  confirmé : aucun autre call-site dans `apps/ios`). 5 locales mises à jour (de/en/es/fr/pt-BR),
+  `call.quality.good`/`call.quality.inProgress` inchangées (non ambiguës). Tests TDD
+  (`CallSignalIndicatorTests.swift`) : `.fair` sur `connection: .connected` ne doit pas contenir "reconnec" ;
+  `.poor` sur `connection: .connected` ne doit pas dire "lost"/"perdu" ; `.poor` et `.lost` doivent maintenant
+  produire des libellés distincts (avant : identiques).
+- **[BUG RÉEL, iOS, CONFIRMÉ + CORRIGÉ, HAUTE confiance] Le badge durée du layout vidéo avalait le libellé
+  d'accessibilité de ses enfants (glyphe signal + icône réseau-faible-contact) via `children: .ignore`
+  implicite.** `CallView.swift` (`videoCallLayout`, badge durée ~l.1004-1057) — appliquer `.accessibilityLabel`/
+  `.accessibilityValue` directement sur le `HStack` conteneur le transforme implicitement en UN SEUL élément
+  VoiceOver opaque : le `.accessibilityLabel("Réseau faible (contact)")` posé sur l'icône `wifi.exclamationmark`
+  (et, transitivement, le libellé du glyphe signal ci-dessus) n'atteignait donc JAMAIS VoiceOver — seul
+  "Durée de l'appel, MM:SS" sortait, peu importe l'état réseau. Contrairement au layout audio (qui a des
+  `statusPill` séparées pour porter cet état), le commentaire du fichier confirme que **le layout vidéo n'a
+  aucune autre surface** pour cette information — le badge est le SEUL endroit où elle existe en appel vidéo.
+  Même famille de bug que le swallow déjà corrigé une fois dans `CallsTab` (Vague 29, `CallRowDialButton`),
+  réapparu ici sans être détecté. **Fix** : nouvelle propriété calculée `videoDurationBadgeAccessibilityLabel`
+  compose "Durée de l'appel" + (si `signalStrength.isDegraded`) le libellé du glyphe + (si
+  `isRemoteQualityDegraded`) "Réseau faible (contact)" — parité stricte avec ce que montre visuellement le
+  badge (le glyphe transitoire n'apparaît QUE dégradé, l'icône QUE si le pair est dégradé). Les libellés
+  individuels de l'icône/du glyphe sont retirés du corps (morts, swallowed) ; `.accessibilityElement(children:
+  .ignore)` posé explicitement sur le `HStack` interne (au lieu de compter sur le comportement implicite) pour
+  qu'un futur retrait du label parent ne réexpose pas silencieusement des annonces fragmentées. Tests TDD
+  (`CallViewAccessibilityTests.swift`, source-pattern par cohérence avec le reste du fichier — pas de toolchain
+  Swift pour instancier la vue) : le badge utilise la propriété composée (pas la clé brute) ; `children:
+  .ignore` explicite présent ; l'icône wifi n'a plus de libellé orphelin ; la propriété composée référence bien
+  `isRemoteQualityDegraded` ET `signalStrength.isDegraded`/`signalStrength.accessibilityLabel`.
+- **Non implémenté cette vague** : reste de l'audit a11y (WebRTCVideoView, CallBubbleView, FloatingCallPillView,
+  CallsTab, CallDetailSheet, BubbleCallNoticeView) confirmé déjà conforme (tap targets, traits/values des
+  toggles, polices Dynamic-Type) par les corrections des vagues précédentes — aucun nouveau candidat.
+- **Reste ouvert (inchangé + additions)** : tout ce qui précède, plus — CI `iOS Tests` reste la seule
+  vérification réelle des deux fixes ci-dessus (aucun Xcode/Swift dans ce sandbox, comme 36 vagues
+  consécutives) ; PR #1825 (autre session, même mandat) à suivre séparément, aucun recouvrement avec cette
+  vague.
