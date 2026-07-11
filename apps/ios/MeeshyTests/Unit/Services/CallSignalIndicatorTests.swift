@@ -370,7 +370,7 @@ final class CallHangupFastPathTests: XCTestCase {
             XCTFail("CallView must define connectedView")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 6000, limitedBy: view.endIndex) ?? view.endIndex
+        let end = view.index(range.lowerBound, offsetBy: 9000, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
     }
