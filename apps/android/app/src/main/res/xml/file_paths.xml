@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Exported GDPR data files written to context.cacheDir/exports for the share sheet. -->
+    <cache-path
+        name="exports"
+        path="exports/" />
+</paths>

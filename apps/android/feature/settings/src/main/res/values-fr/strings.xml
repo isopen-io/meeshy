@@ -150,4 +150,23 @@
     <string name="delete_account_email_title">Un email de confirmation vous a été envoyé</string>
     <string name="delete_account_email_body">Vérifiez votre boîte de réception pour confirmer la suppression de votre compte.</string>
     <string name="delete_account_email_ok">Compris</string>
+
+    <!-- Export de données (RGPD) -->
+    <string name="data_export_title">Exporter mes données</string>
+    <string name="data_export_info_title">Vos données, votre contrôle</string>
+    <string name="data_export_info_body">Conformément au RGPD, vous pouvez exporter toutes vos données personnelles.</string>
+    <string name="data_export_section_format">Format</string>
+    <string name="data_export_format_json">JSON</string>
+    <string name="data_export_format_csv">CSV</string>
+    <string name="data_export_section_content">Contenu</string>
+    <string name="data_export_content_profile">Profil (toujours inclus)</string>
+    <string name="data_export_content_messages">Messages</string>
+    <string name="data_export_content_contacts">Contacts</string>
+    <string name="data_export_button">Exporter mes données</string>
+    <string name="data_export_ready_title">Export prêt</string>
+    <string name="data_export_ready_messages">%1$d messages inclus</string>
+    <string name="data_export_ready_contacts">%1$d contacts inclus</string>
+    <string name="data_export_share">Partager</string>
+    <string name="data_export_error_network">Pas de connexion. Vérifiez votre réseau et réessayez.</string>
+    <string name="data_export_error_generic">Une erreur est survenue. Veuillez réessayer.</string>
 </resources>

@@ -4,6 +4,32 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-11, `settings-data-export`)
+- **The Gradle wrapper distribution download is blocked by the egress proxy (403 from
+  `github.com/gradle/gradle-distributions/releases`).** `./gradlew` / `./apps/android/meeshy.sh` fail at
+  bootstrap ("Server returned HTTP 403 … gradle-8.11.1-bin.zip"). **Fix: use the preinstalled system Gradle at
+  `/opt/gradle/bin/gradle` (8.14.3)** — it runs the build fine (AGP is compatible; Maven Central + Google Maven
+  are reachable through the proxy). First run downloads deps (~3 min for `:core:model`, ~5 min for a run that
+  also does `:app:assembleDebug`); subsequent runs reuse the warm daemon/caches. `local.properties` still needs
+  `sdk.dir=$HOME/android-sdk` after the SDK bootstrap.
+- **GDPR export: the pure builders are where the parity wins live, and iOS had a real bug to surpass.** iOS
+  `DataExportView.ExportWrapper` only encoded `exportDate/format/requestedTypes/messagesCount/contactsCount` —
+  it **dropped** the actual `profile`/`messages`/`contacts` payload from the shared file. Modelling the full
+  `DataExportData` (timestamps as raw ISO `String`s, not `Instant`) lets `DataExportFileBuilder` re-serialise the
+  whole payload losslessly, so the Android export file actually contains the user's data.
+- **Key the export file's format on what the server returned, not the request.** The gateway only populates the
+  `csv` map when `format=csv`; a `csv` request that comes back with an empty/absent map must fall back to a JSON
+  file (never an empty `.csv`). Deriving `isCsv = data.format == "csv" && !csv.isNullOrEmpty()` covers that.
+- **Filesystem-safe file names from server timestamps: sanitise, don't format.** The ISO `exportDate` carries
+  `:` (illegal-ish) and a `T`. Taking the part before `T` and keeping only `[0-9A-Za-z-]` yields a clean
+  `YYYY-MM-DD` stamp with a pure, deterministic function (no clock injection needed — the stamp comes from the
+  response), and an all-illegal/blank date degrades to the plain base name.
+- **Sharing a file needs a FileProvider; the app had none (only ProfileShareSheet, which shares text).** Added
+  `<provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider">`
+  + `res/xml/file_paths.xml` (`<cache-path name="exports" path="exports/"/>`) to the **app** module (still
+  apps/android-only). The screen resolves the authority as `"${context.packageName}.fileprovider"` — `packageName`
+  == `applicationId` (incl. the debug `.debug` suffix), so it matches the manifest placeholder in every variant.
+
 ## Lesson (2026-07-11, `settings-account-deletion`)
 - **Retrofit cannot attach a body to `@DELETE` — use `@HTTP(method="DELETE", path="…", hasBody=true)`.** The
   gateway `DELETE /api/v1/me/delete-account` takes a JSON body (`{ confirmationPhrase }`). `@DELETE("…")` +
