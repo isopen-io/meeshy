@@ -97,6 +97,12 @@ export class CallEventsHandler {
    * summary path.
    */
   private messageBroadcaster: ((message: unknown, conversationId: string) => Promise<void>) | null = null;
+  /**
+   * Live-call message — the manager's `broadcastMessageEdited`, used when a
+   * terminal path UPDATES an existing live message instead of creating one.
+   * Stays null in unit tests that don't exercise the live-message path.
+   */
+  private messageUpdateBroadcaster: ((message: unknown, conversationId: string) => Promise<void>) | null = null;
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -1026,6 +1032,15 @@ export class CallEventsHandler {
    */
   setMessageBroadcaster(broadcaster: (message: unknown, conversationId: string) => Promise<void>): void {
     this.messageBroadcaster = broadcaster;
+  }
+
+  /**
+   * Live-call message — inject the manager's `broadcastMessageEdited` so the
+   * terminal upsert can fan the live→terminal transition (`message:edited`
+   * full payload + conversation preview + offline enqueue) to clients.
+   */
+  setMessageUpdateBroadcaster(broadcaster: (message: unknown, conversationId: string) => Promise<void>): void {
+    this.messageUpdateBroadcaster = broadcaster;
   }
 
   /**

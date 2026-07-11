@@ -162,6 +162,7 @@ jest.mock('../CallEventsHandler', () => ({
   CallEventsHandler: jest.fn().mockImplementation(() => {
     mockCallEventsHandlerInstance = {
       setMessageBroadcaster: jest.fn(),
+      setMessageUpdateBroadcaster: jest.fn(),
       setNotificationService: jest.fn(),
       setPushNotificationService: jest.fn(),
       setZmqClient: jest.fn(),
@@ -425,7 +426,7 @@ function makePrisma(): any {
   const fn = () => jest.fn() as any;
   return {
     conversation: { findUnique: fn() },
-    message: { findUnique: fn() },
+    message: { findUnique: fn(), findFirst: fn() },
     messageAttachment: { findUnique: fn() },
     participant: {
       findMany: fn().mockResolvedValue([]),
@@ -2591,6 +2592,127 @@ describe('MeeshySocketIOManager', () => {
       const msg = makeMessage({ conversationId: 'conv-123456789012' });
       await broadcastCb(msg, 'conv-123456789012');
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 32b. broadcastMessageEdited — édition serveur d'un message d'appel
+  // (transition live → terminal), fan-out complet + preview + offline
+  // -------------------------------------------------------------------------
+
+  describe('broadcastMessageEdited (call system message live→terminal)', () => {
+    const terminalCallMetadata = {
+      kind: 'call',
+      callId: 'call-123456789012',
+      initiatorId: 'user-init',
+      callType: 'audio',
+      outcome: 'completed',
+      durationSeconds: 30,
+      bytesTotal: null,
+      bytesEstimated: false,
+      networkQuality: null,
+    };
+
+    const makeEditedCallMessage = (overrides: Record<string, unknown> = {}) =>
+      makeMessage({
+        content: 'Appel audio · 00:30',
+        messageType: 'system',
+        messageSource: 'system',
+        metadata: terminalCallMetadata,
+        isEdited: false,
+        updatedAt: new Date('2026-07-11T10:00:00Z'),
+        sender: {
+          id: 'part-init',
+          userId: 'user-init',
+          displayName: 'Init',
+          type: 'member',
+          user: { id: 'user-init', username: 'init' },
+        },
+        ...overrides,
+      });
+
+    it('wires setMessageUpdateBroadcaster on the call handler at construction', () => {
+      expect(mockCallEventsHandlerInstance.setMessageUpdateBroadcaster).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    it('the wired callback routes to broadcastMessageEdited (MESSAGE_EDITED on the conversation room)', async () => {
+      const cb = mockCallEventsHandlerInstance.setMessageUpdateBroadcaster.mock.calls[0][0];
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+      prisma.message.findFirst.mockResolvedValue(null);
+      await cb(makeEditedCallMessage(), 'conv-123456789012');
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+      const events = ioState.toEmit.mock.calls.map((c: any) => c[0]);
+      expect(events).toContain(SERVER_EVENTS.MESSAGE_EDITED);
+    });
+
+    it('emits the FULL payload: metadata always present, editedAt = updatedAt, isEdited untouched', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+      prisma.message.findFirst.mockResolvedValue(null);
+      const updatedAt = new Date('2026-07-11T10:00:00Z');
+      await (manager as any).broadcastMessageEdited(makeEditedCallMessage({ updatedAt }), 'conv-123456789012');
+      const editedCall = ioState.toEmit.mock.calls.find((c: any) => c[0] === SERVER_EVENTS.MESSAGE_EDITED);
+      expect(editedCall).toBeDefined();
+      const payload = editedCall[1];
+      expect(payload.metadata).toEqual(terminalCallMetadata);
+      expect(payload.editedAt).toEqual(updatedAt);
+      expect(payload.updatedAt).toEqual(updatedAt);
+      expect(payload.isEdited).toBe(false);
+      expect(payload.content).toBe('Appel audio · 00:30');
+      expect(payload.messageType).toBe('system');
+      expect(payload.senderId).toBe('user-init');
+    });
+
+    it('fans a conversation preview update to participant USER rooms, without any unread bump', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'user-a' },
+        { id: 'p2', userId: 'user-b' },
+      ]);
+      prisma.message.findFirst.mockResolvedValue({
+        id: 'msg-123456789012',
+        content: 'Appel audio · 00:30',
+        senderId: 'part-init',
+        createdAt: new Date(),
+      });
+      await (manager as any).broadcastMessageEdited(makeEditedCallMessage(), 'conv-123456789012');
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-a'));
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-b'));
+      const events = ioState.toEmit.mock.calls.map((c: any) => c[0]);
+      expect(events).toContain(SERVER_EVENTS.CONVERSATION_UPDATED);
+      expect(events).not.toContain(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED);
+    });
+
+    it("enqueues the edit offline (eventType 'edited') for offline participants only", async () => {
+      const fakeQueue = { enqueue: jest.fn().mockResolvedValue(undefined), drain: jest.fn() };
+      manager.setDeliveryQueue(fakeQueue as any);
+      (manager as any).connectedUsers.set('user-online', {
+        id: 'user-online', socketId: 's1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'user-online' },
+        { id: 'p2', userId: 'user-offline' },
+      ]);
+      prisma.message.findFirst.mockResolvedValue(null);
+      await (manager as any).broadcastMessageEdited(makeEditedCallMessage(), 'conv-123456789012');
+      const enqueuedKeys = fakeQueue.enqueue.mock.calls.map((c: any) => c[0]);
+      expect(enqueuedKeys).toContain('user-offline');
+      expect(enqueuedKeys).not.toContain('user-online');
+      const entry = fakeQueue.enqueue.mock.calls.find((c: any) => c[0] === 'user-offline')[1];
+      expect(entry.eventType).toBe('edited');
+      expect(entry.payload.metadata).toEqual(terminalCallMetadata);
+      expect(entry.messageId).toBe('msg-123456789012');
+    });
+
+    it('never rejects even when the preview fan-out fails', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockRejectedValue(new Error('db down'));
+      prisma.message.findFirst.mockRejectedValue(new Error('db down'));
+      await expect(
+        (manager as any).broadcastMessageEdited(makeEditedCallMessage(), 'conv-123456789012')
+      ).resolves.not.toThrow();
     });
   });
 

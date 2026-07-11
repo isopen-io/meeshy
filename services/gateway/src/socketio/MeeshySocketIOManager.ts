@@ -62,6 +62,7 @@ import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
+import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
 // Logger dédié pour SocketIOManager
@@ -221,6 +222,11 @@ export class MeeshySocketIOManager {
     // the canonical message broadcast path when a call ends.
     this.callEventsHandler.setMessageBroadcaster(
       (message, conversationId) => this.broadcastMessage(message as Message, conversationId)
+    );
+    // Live-call message — let the terminal upsert EDIT the live message
+    // in-place (message:edited full payload + preview + offline enqueue).
+    this.callEventsHandler.setMessageUpdateBroadcaster(
+      (message, conversationId) => this.broadcastMessageEdited(message as Message, conversationId)
     );
 
     // CORRECTION: Configurer le callback de broadcast pour le MaintenanceService
@@ -561,7 +567,7 @@ export class MeeshySocketIOManager {
   async enqueueOfflineMessageMutation(params: {
     conversationId: string;
     actorUserId: string | null | undefined;
-    eventType: 'pinned' | 'unpinned';
+    eventType: 'pinned' | 'unpinned' | 'edited';
     messageId: string;
     payload: Record<string, unknown>;
   }): Promise<void> {
@@ -581,10 +587,10 @@ export class MeeshySocketIOManager {
           payload,
           enqueuedAt: new Date().toISOString(),
           eventType,
-        }).catch((err) => logger.warn('Failed to enqueue offline pin event', { userId: queueKey, eventType, error: err }));
+        }).catch((err) => logger.warn('Failed to enqueue offline message mutation', { userId: queueKey, eventType, error: err }));
       }
     } catch (err) {
-      logger.warn('Failed to fetch participants for offline pin enqueue', { conversationId, eventType, error: err });
+      logger.warn('Failed to fetch participants for offline mutation enqueue', { conversationId, eventType, error: err });
     }
   }
 
@@ -2125,6 +2131,87 @@ export class MeeshySocketIOManager {
       timestamp: message.createdAt || (message as unknown as { timestamp?: Date })['timestamp'] || new Date()
     };
     await this._broadcastNewMessage(messageWithTimestamp as Message, conversationId);
+  }
+
+  /**
+   * Server-authored in-place edition of a SYSTEM message — the live call
+   * message ("Appel … en cours") becoming its terminal summary. Emits
+   * `message:edited` to the conversation room with the FULL payload.
+   * Invariants relied upon by clients:
+   *   - `metadata` is ALWAYS present (the web cache merge `{...m, ...msg}`
+   *     only replaces metadata when the key exists in the payload);
+   *   - `editedAt = updatedAt` (never null — clients use it as the
+   *     stale-edit ordering guard);
+   *   - `isEdited` is NOT forced true: a state transition is not a user edit.
+   * Also fans the conversation-list preview to `user:<id>` rooms (NO unread
+   * bump — that was already paid when the live message was posted) and
+   * enqueues the edition for offline participants, so a callee offline for
+   * the whole call still receives the "Appel manqué" terminal state at
+   * reconnect. Best-effort: never throws.
+   */
+  public async broadcastMessageEdited(message: Message, conversationId: string): Promise<void> {
+    try {
+      const normalizedId = await this.normalizeConversationId(conversationId);
+
+      let messageTranslations: unknown[] = [];
+      if (message.id) {
+        try {
+          messageTranslations = transformTranslationsToArray(
+            message.id,
+            message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
+          );
+        } catch (error) {
+          logger.warn(`Translation transform failed for edited message ${message.id}`, { error });
+        }
+      }
+
+      const senderParticipant = message.sender;
+      const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
+      const updatedAt = message.updatedAt || new Date();
+      const editedPayload = {
+        id: message.id,
+        conversationId: normalizedId,
+        senderId: resolvedSenderId,
+        content: message.content,
+        originalLanguage: message.originalLanguage || 'fr',
+        messageType: (message.messageType || 'text') as MessageType,
+        messageSource: message.messageSource || undefined,
+        metadata: message.metadata ?? {},
+        isEdited: Boolean(message.isEdited),
+        editedAt: updatedAt,
+        createdAt: message.createdAt || new Date(),
+        updatedAt,
+        translations: messageTranslations,
+        sender: senderParticipant ? {
+          id: senderParticipant.id,
+          displayName: senderParticipant.nickname || senderParticipant.displayName,
+          avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
+          type: senderParticipant.type,
+          userId: senderParticipant.userId,
+          username: senderParticipant.user?.username,
+          firstName: senderParticipant.user?.firstName || '',
+          lastName: senderParticipant.user?.lastName || '',
+        } : undefined,
+        attachments: message.attachments ?? [],
+      };
+
+      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+
+      await emitConversationPreviewUpdate(
+        this.prisma, this.io, normalizedId, resolvedSenderId ?? '',
+        (err) => logger.warn('conversation preview fanout (call edit) failed', { error: err })
+      );
+
+      await this.enqueueOfflineMessageMutation({
+        conversationId: normalizedId,
+        actorUserId: null,
+        eventType: 'edited',
+        messageId: message.id,
+        payload: editedPayload as unknown as Record<string, unknown>,
+      });
+    } catch (error) {
+      logger.error('broadcast message:edited (call) failed', error);
+    }
   }
 
 
