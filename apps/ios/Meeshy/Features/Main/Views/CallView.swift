@@ -773,6 +773,34 @@ struct CallView: View {
             }
         }
         .onDisappear { showControls = true }
+        // Surfaces a start failure that `advanceCaptionsMode()` couldn't see at
+        // tap time (the start path is async — permission request + on-device
+        // recognizer/audio-engine checks all happen after the button already
+        // optimistically opened the transcript panel). Without this, a failed
+        // start (e.g. no on-device speech recognizer for the user's language —
+        // never falls back to Apple's server-side recognizer, privacy decision)
+        // left the panel open and empty with zero feedback — user-reported
+        // 2026-07-11: "on dirait que la transcription ne fonctionne pas".
+        .adaptiveOnChange(of: transcriptionService.lastError) { _, newError in
+            guard let newError else { return }
+            FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))
+            showTranscript = false
+            transcriptionService.isShowingOverlay = false
+        }
+    }
+
+    /// User-facing translation of `TranscriptionError` — `errorDescription` on
+    /// the error type itself is an untranslated diagnostic string for logs,
+    /// never meant for display (see its own doc comment).
+    private func transcriptionErrorMessage(for error: TranscriptionError) -> String {
+        switch error {
+        case .permissionDenied:
+            return String(localized: "call.transcription.error.permissionDenied", defaultValue: "Autorisez la reconnaissance vocale dans Réglages pour activer les sous-titres.", bundle: .main)
+        case .recognizerUnavailable, .onDeviceNotSupported:
+            return String(localized: "call.transcription.error.unavailable", defaultValue: "Sous-titres indisponibles pour votre langue sur cet appareil.", bundle: .main)
+        case .recognitionFailed, .audioEngineFailed:
+            return String(localized: "call.transcription.error.failed", defaultValue: "Impossible d'activer les sous-titres. Réessayez.", bundle: .main)
+        }
     }
 
     /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
