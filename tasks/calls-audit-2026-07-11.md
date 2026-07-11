@@ -38,7 +38,26 @@
 > « deux devices, un répond » — initiate→double ring→already-answered vers
 > le device passif seul→relais answer ciblé sans fuite. Dans
 > src/socketio/__tests__/ (integration/ est EXCLU du run jest — piège).
-> Restent : #5 (listeners ci-dessus), #9 (restartIce iOS).
+> #5 (listeners, solde) : Android écoute enfin les 4 side-channels —
+> `call:participant-left` / `call:quality-alert` / `call:screen-capture-alert`
+> / `call:translated-segment` (décodes purs CallSignalMapper + 4 SharedFlows
+> CallSignalManager ; `call:force-leave` délibérément ABSENT, jamais émis
+> serveur). App : CallViewModel → `isPeerQualityDegraded` (auto-reset 15 s,
+> parité iOS remoteQualityResetSeconds), `isPeerScreenCapturing` (bannière
+> privacy, meurt avec l'appel), `captionText` (sous-titre live,
+> translatedText ?? text) — surfaces CallScreen + strings 4 locales.
+> Dette mineure restante côté Android : l'EMIT `call:screen-capture-detected`
+> (détection de capture locale → alerte du pair) et `call:analytics`.
+> #9 : les creds TURN frais arrivés PENDANT `.reconnecting` ré-arment
+> immédiatement le restart ICE en vol (politique pure
+> `CallReliabilityPolicy.shouldRearmRestartOnCredentialRefresh` + branchement
+> du sink callIceServersRefreshed via le chemin coalesce, 0 budget brûlé) —
+> fin de la fenêtre morte « setConfiguration sans re-gather » jusqu'à
+> l'escalation du watchdog. Hors `.reconnecting` le refresh reste inerte par
+> construction (#8).
+> **L'audit est CLOS.** Dettes mineures hors audit : emits Android
+> `call:screen-capture-detected`/`call:analytics` ; device-test 2 appareils
+> réels jamais fait.
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,
