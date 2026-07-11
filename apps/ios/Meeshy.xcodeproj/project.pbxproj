@@ -376,6 +376,7 @@
 		8C71973F63C6D2DD7721589D /* ParticipantsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1989863051D4DF28F94E0A06 /* ParticipantsView.swift */; };
 		8D2A45C0450889CDF692DE61 /* StoryRepostEmbedCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A6566054CAE1DF7C738454 /* StoryRepostEmbedCell.swift */; };
 		8D91C05CCD4926F60A5555F8 /* UserProfileViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69DD9DBB3A09F4E86E0960B0 /* UserProfileViewModelTests.swift */; };
+		8E82674CA2FEB957EF24248F /* CallSummaryTranscriptSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E0145573F466F213BD3043 /* CallSummaryTranscriptSectionTests.swift */; };
 		8E877AD2FE6781764A828BE3 /* TaskTimeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBDACFDE79DAEAEADD661F01 /* TaskTimeout.swift */; };
 		8E88E0A25DDBFEB531227B71 /* DataStorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BED5467C7DF2902066B16BA /* DataStorageView.swift */; };
 		8EABAC270F7BF1069E9986DB /* MockStatusService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9386D07724CD1D763A8A5322 /* MockStatusService.swift */; };
@@ -811,6 +812,7 @@
 		21E73CA0469D1FCBA3E9F0A5 /* MessageReportDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageReportDetailView.swift; sourceTree = "<group>"; };
 		224D4A65AFB950CAA8D4146D /* CodecPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecPreferencesTests.swift; sourceTree = "<group>"; };
 		22F671DC4758376179976EFC /* EditProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileViewModel.swift; sourceTree = "<group>"; };
+		23E0145573F466F213BD3043 /* CallSummaryTranscriptSectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallSummaryTranscriptSectionTests.swift; sourceTree = "<group>"; };
 		2459C9439C3ECBA9783BCF63 /* iPadRootView+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Navigation.swift"; sourceTree = "<group>"; };
 		247D8F916952D54C5BD279C7 /* APIServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIServiceTests.swift; sourceTree = "<group>"; };
 		248A4CD91F884CC1887542B0 /* MockAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAuthManager.swift; sourceTree = "<group>"; };
@@ -1512,6 +1514,7 @@
 				06E65FE1E2F2B95EE5B8FBB0 /* CallEffectsOverlayTests.swift */,
 				6E66F2B22C2D0ABC25C0C9D2 /* CallQualityIndicatorsUITests.swift */,
 				165D0E87BF8D92C26813C330 /* CallsTabAccessibilityTests.swift */,
+				23E0145573F466F213BD3043 /* CallSummaryTranscriptSectionTests.swift */,
 				5A42665031076A137DF3317B /* CallViewAccessibilityTests.swift */,
 				C40EF22CA40AFFE889C7FB08 /* CallViewLayoutGuardTests.swift */,
 				A0F66B85F1E31FB71D57578F /* CallViewObservedObjectInjectionTests.swift */,
@@ -3185,6 +3188,7 @@
 				E165A30F6B8FB87610E6DA15 /* CallReconnectPolicyTests.swift in Sources */,
 				00E6C8A6BC1081108D73C4CE /* CallSignalIndicatorTests.swift in Sources */,
 				779B63E1100870F97D6D4789 /* CallStarterTests.swift in Sources */,
+				8E82674CA2FEB957EF24248F /* CallSummaryTranscriptSectionTests.swift in Sources */,
 				C0F30A7010BDE3A20736587D /* CallTranscriptionServiceTests.swift in Sources */,
 				81D3B1BB2F350EC8CA2EBF65 /* CallViewAccessibilityTests.swift in Sources */,
 				E7D56E1E0D4C77A410B912D0 /* CallViewLayoutGuardTests.swift in Sources */,
