@@ -108,13 +108,19 @@ struct TimelineSheetContent: View {
     let composer: StoryComposerViewModel
     @StateObject private var exportController = TimelineExportController()
 
+    /// L'export terminé se présente en PLEIN ÉCRAN — la vidéo se consulte
+    /// comme n'importe quelle vidéo : lecture immersive, Enregistrer dans
+    /// Photos, Partager (retour user 2026-07-11). Pin testé par
+    /// `TimelineExportPreviewTests`.
+    static let presentsFinishedExportFullscreen = true
+
     var body: some View {
         TimelineContainerSwitcher(
             viewModel: composer.timelineViewModel,
             onExport: { exportController.start(composer: composer) }
         )
         .overlay { exportProgressOverlay }
-        .sheet(item: finishedFileBinding, onDismiss: {
+        .fullScreenCover(item: finishedFileBinding, onDismiss: {
             exportController.acknowledgeFinished()
         }) { file in
             TimelineExportPreviewSheet(url: file.url)
@@ -189,40 +195,48 @@ struct TimelineSheetContent: View {
 
 /// Aperçu plein cadre du MP4 exporté + partage système. « Voir à quoi ça
 /// ressemble » : lecture immédiate en boucle de l'export watermarké.
+/// Visionneuse PLEIN ÉCRAN de la vidéo exportée — même langage visuel que
+/// `ImageViewerView` (X en haut à gauche, actions en haut à droite sur
+/// pastilles translucides) : lecture native en boucle, Enregistrer dans
+/// Photos avec états, Partager standard.
 struct TimelineExportPreviewSheet: View {
 
     let url: URL
     @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer
     @State private var loopObserver: NSObjectProtocol?
+    @State private var saveState: SaveState = .idle
+
+    internal enum SaveState { case idle, saving, saved, failed }
 
     init(url: URL) {
         self.url = url
         _player = State(initialValue: AVPlayer(url: url))
     }
 
+    /// Icône du bouton Enregistrer par état ; `nil` = ProgressView (saving).
+    /// Pure — testée sans monter la vue (`TimelineExportPreviewTests`).
+    static func saveIconName(for state: SaveState) -> String? {
+        switch state {
+        case .idle:   return "arrow.down.to.line"
+        case .saving: return nil
+        case .saved:  return "checkmark"
+        case .failed: return "xmark"
+        }
+    }
+
+    /// La vidéo déjà dans Photos ne se ré-enregistre pas ; un échec reste
+    /// réessayable.
+    static func isSaveDisabled(_ state: SaveState) -> Bool {
+        state == .saving || state == .saved
+    }
+
     var body: some View {
-        NavigationStack {
+        ZStack {
+            Color.black.ignoresSafeArea()
             VideoPlayer(player: player)
-                .background(Color.black)
-                .navigationTitle(String(localized: "story.timeline.export.previewTitle",
-                                        defaultValue: "Aperçu de l'export", bundle: .module))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(String(localized: "story.composer.done",
-                                      defaultValue: "OK", bundle: .module)) {
-                            dismiss()
-                        }
-                        .tint(MeeshyColors.indigo500)
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        ShareLink(item: url) {
-                            Image(systemName: "square.and.arrow.up")
-                        }
-                        .tint(MeeshyColors.indigo500)
-                    }
-                }
+                .ignoresSafeArea()
+            controlsOverlay
         }
         .onAppear {
             loopObserver = NotificationCenter.default.addObserver(
@@ -241,6 +255,86 @@ struct TimelineExportPreviewSheet: View {
             }
             loopObserver = nil
             player.pause()
+        }
+    }
+
+    private var controlsOverlay: some View {
+        VStack {
+            HStack(spacing: 8) {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.white.opacity(0.85))
+                        .padding()
+                }
+                .accessibilityLabel(String(localized: "story.timeline.export.preview.close",
+                                           defaultValue: "Fermer", bundle: .module))
+
+                Spacer()
+
+                saveButton
+
+                ShareLink(item: url) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Color.white.opacity(0.2)))
+                }
+                .accessibilityLabel(String(localized: "story.timeline.export.preview.share",
+                                           defaultValue: "Partager la vidéo", bundle: .module))
+                .padding(.trailing, 16)
+            }
+            Spacer()
+        }
+    }
+
+    private var saveButton: some View {
+        Button { saveToPhotos() } label: {
+            Group {
+                if let icon = Self.saveIconName(for: saveState) {
+                    Image(systemName: icon)
+                } else {
+                    ProgressView().tint(.white)
+                }
+            }
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundColor(.white.opacity(0.9))
+            .frame(width: 40, height: 40)
+            .background(Circle().fill(Color.white.opacity(0.2)))
+        }
+        .disabled(Self.isSaveDisabled(saveState))
+        .accessibilityLabel(String(localized: saveState == .saved
+            ? "story.timeline.export.preview.saved"
+            : "story.timeline.export.preview.save",
+            defaultValue: saveState == .saved
+                ? "Enregistrée dans Photos" : "Enregistrer dans Photos",
+            bundle: .module))
+    }
+
+    /// Le MP4 est un fichier temporaire LOCAL (purgé au dismiss) — pas de
+    /// cascade cache/téléchargement, on l'enregistre directement.
+    /// `MainActor.run` par cohérence avec le pattern éprouvé des renderers
+    /// (pièges d'isolation Swift 6).
+    private func saveToPhotos() {
+        saveState = .saving
+        HapticFeedback.light()
+        let fileURL = url
+        Task {
+            let ok = await PhotoLibraryManager.shared.saveVideo(at: fileURL)
+            await MainActor.run {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    saveState = ok ? .saved : .failed
+                }
+                if ok {
+                    HapticFeedback.success()
+                } else {
+                    HapticFeedback.error()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
+                    }
+                }
+            }
         }
     }
 }

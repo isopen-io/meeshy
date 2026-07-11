@@ -223,6 +223,17 @@ scalaire en plusieurs arguments — un run xcodebuild avec les filtres dans
 $TESTS a « réussi » en exécutant 0 test ; toujours valider sur
 « Executed N tests » avec N attendu.
 
+VAGUE PREVIEW EXPORT PLEIN ÉCRAN (2026-07-11, demande user) : l'export
+terminé se présente en fullScreenCover (pin presentsFinishedExportFullscreen
+testé) — visionneuse immersive au langage d'ImageViewerView : X, bouton
+Enregistrer dans Photos (PhotoLibraryManager.saveVideo réutilisé, états
+idle/saving/saved/failed, échec réessayable, saved persistant), ShareLink.
+MP4 tmp local → save direct sans cascade cache ; purge au dismiss inchangée ;
+permissions Photos déjà dans l'Info.plist. 4 clés xcstrings fr+en.
+TimelineExportPreviewTests 4/4 + non-régression export 11/11. Build app
+local INTERROMPU par contention (session parallèle build-for-testing même
+DerivedData) — SDK compile-prouvé par la passe de tests ; app target → CI.
+
 RESTES (différés, par priorité) — constats hors timeline + export TOUS réglés
 par la vague export MP4 (draft saveMedia, labels lane, xcstrings filters,
 script snapshot, export MP4+watermark+audio lanes) :
