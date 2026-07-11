@@ -75,7 +75,18 @@ export function parseMentions(
     const regex = new RegExp(pattern, 'giu');
     if (regex.test(remaining)) {
       resolved.add(p.userId);
-      remaining = remaining.replace(new RegExp(pattern, 'giu'), '');
+      // Remplacer le span matché par un caractère de nom (`_`) plutôt que de le
+      // SUPPRIMER : effacer `@DisplayName` donnerait à un `@handle` collé juste
+      // après une frontière gauche propre qu'il n'avait pas dans le texte
+      // original, faisant résoudre au fallback @username (et aux itérations
+      // displayName suivantes) un morceau d'adresse e-mail (`@Marie@atabeth.com`
+      // → atabeth). Le placeholder préserve `NAME_BOUNDARY_LEFT` : `@atabeth`
+      // reste précédé d'un caractère de nom, donc non résolu — parité stricte
+      // avec `extractMentions`/`hasMentions`. Un `_` ne peut que SUPPRIMER un
+      // match ultérieur (toutes les regex suivantes sont en lookbehind négatif
+      // de nom), jamais en créer un : une mention réellement séparée conserve
+      // son séparateur (espace/ponctuation) et se résout normalement.
+      remaining = remaining.replace(new RegExp(pattern, 'giu'), '_');
     }
   }
 

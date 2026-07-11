@@ -80,6 +80,29 @@ describe('parseMentions', () => {
       expect(parseMentions('écris à André@atabeth.com', participants)).toEqual([]);
       expect(parseMentions('Привет Влад@jcharlesnm bonjour', participants)).toEqual([]);
     });
+
+    it('ne résout PAS un @handle collé APRÈS un @mention résolu (domaine e-mail)', () => {
+      // Invariant NAME_BOUNDARY_LEFT : un `@` précédé d'un caractère de nom
+      // appartient à une adresse e-mail, pas à une mention. La résolution
+      // @DisplayName ne doit pas « décoller » le handle suivant en supprimant
+      // le span matché — sinon `@Marie@atabeth.com` résoudrait atabeth depuis
+      // le domaine e-mail. Parité stricte avec `extractMentions` / `hasMentions`
+      // (types/mention.ts) qui n'extraient QUE `Marie` sur la même entrée.
+      expect(parseMentions('@Marie@atabeth.com', participants)).toEqual(['u3']);
+      expect(parseMentions('@Marie@atabeth', participants)).toEqual(['u3']);
+    });
+
+    it('ne résout PAS un displayName collé APRÈS un autre displayName résolu', () => {
+      // `@Andre Tabeth@Marie` : le second `@` est collé à la lettre `h` de
+      // « Tabeth » → morceau d'adresse, pas une mention. La suppression du span
+      // `@Andre Tabeth` ne doit pas décoller `@Marie`. Seul Andre Tabeth est
+      // résolu (les mentions volontairement multiples s'écrivent séparées).
+      expect(parseMentions('@Andre Tabeth@Marie', participants)).toEqual(['u1']);
+      // Contrôle : correctement séparées, les deux se résolvent.
+      expect(parseMentions('@Andre Tabeth @Marie', participants)).toEqual(
+        expect.arrayContaining(['u1', 'u3'])
+      );
+    });
   });
 
   describe('@username fallback', () => {
