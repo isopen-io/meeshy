@@ -662,6 +662,19 @@ describe('computeStoryDurationMs', () => {
     expect(computeStoryDurationMs({ textObjects: [{ text: 'Bravo à vous' }] })).toBe(6000);
   });
 
+  it('grants reading time for long text encoded under the legacy `content` alias', () => {
+    // Legacy overlays (and the decoder-only alias) key the text under `content`.
+    // parseTextObjects reads `text ?? content`; the duration must mirror that.
+    const content = Array.from({ length: 42 }, (_, i) => `w${i}`).join(' '); // 42 words
+    expect(computeStoryDurationMs({ textObjects: [{ content }] })).toBe(8000);
+  });
+
+  it('prefers the canonical `text` key over the legacy `content` alias', () => {
+    const long = Array.from({ length: 42 }, (_, i) => `w${i}`).join(' '); // 42 words
+    // Canonical `text` is short → 6s; the long legacy `content` must be ignored.
+    expect(computeStoryDurationMs({ textObjects: [{ text: 'court', content: long }] })).toBe(6000);
+  });
+
   it('author pin (timelineDuration) wins over a longer video', () => {
     expect(
       computeStoryDurationMs({
