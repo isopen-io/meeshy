@@ -755,9 +755,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`languageStrip` field, pure/testable) and rendered in `FeedScreen` as an accent-coherent chip
       strip (flag + active native name in the language accent colour) replacing the old binary
       "Translated" label. +15 tests (13 `PostLanguageStripTest`, +2 `FeedPostBuilderTest`). Full
-      `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL. **Follow-up:** the interactive
-      `includeTranslatable` arm (tap a configured-but-absent language on a post to request it on demand),
-      inline secondary/original toggle, and the per-story timeline strip.
+      `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL.
+      **Interactive language switch shipped** (slice `feed-post-language-switch`, 2026-07-11): the strip
+      chips are now **tappable** — tap a chip to switch the post's displayed language, tap the active chip
+      to revert to the default Prisme resolution (mirrors the chat bubble's single-primary switch, keyed
+      per post). SSOT: the pure `LanguageFlagTapResolver` was **relocated `:feature:chat` → `:sdk-ui`**
+      (`me.meeshy.ui.component.bubble`) so chat + feed share one flag-tap rule; `FeedPostBuilder` gained an
+      override-aware `build(..., activeLanguageCode)` + `resolveActiveCode(post, prefs, override)` (both
+      pure, unit-tested) driving content + strip highlight; `FeedViewModel` holds a per-post
+      `activeLanguageOverride` StateFlow (kept outside the cache stream so the choice survives every
+      refresh/re-emit — instant-app) + `onPostFlagTap`. +19 tests (+8 `FeedPostBuilderTest`, +5
+      `FeedViewModelTest`, 10 relocated `LanguageFlagTapResolverTest` still green). `:sdk-ui` + `:feature:feed`
+      + `:feature:chat` `testDebugUnitTest` + `:app:assembleDebug` → BUILD SUCCESSFUL.
+      **Follow-up:** the interactive `includeTranslatable` arm (tap a configured-but-absent language on a
+      post to request it on demand — needs a post on-demand translation path), and the per-story timeline strip.
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`

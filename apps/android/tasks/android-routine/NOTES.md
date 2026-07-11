@@ -3,6 +3,21 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-11 (`feed-post-language-switch`): a pure rule engine used by two features belongs in `:sdk-ui`, not
+  in the first feature that happened to need it.** `LanguageFlagTapResolver` was born in `:feature:chat`
+  (`me.meeshy.app.chat.translation`); when feed needed the same switch/revert decision, `:feature:feed` could not
+  import it (features don't depend on each other). The right move is **relocation to `:sdk-ui`**, not duplication:
+  it takes opaque params (tappedCode, activeCode, originalLanguage, translations), reads no Meeshy singleton, and
+  decides no "when" — it is a stateless building block by the grain test, exactly like `MessageLanguageStrip`
+  beside it. Relocation is mechanical (move file + `public` + update the one chat import + move its test) and keeps
+  the diff inside `apps/android`. Pattern for next time: before copying a `:feature:*` pure helper into a second
+  feature, promote it to `:sdk-core`/`:sdk-ui` so both features share the one SSOT.
+- **2026-07-11 (`feed-post-language-switch`): a per-item view override must live OUTSIDE the cache stream or it
+  resets on every refresh.** The per-post active-language choice is a `MutableStateFlow<Map<postId,code>>` folded
+  into the feed `combine`, not derived from the `CacheResult`. A background sync re-emits the same posts; because
+  the override is an independent combine input (not recomputed from the payload), the viewer's switched language
+  survives the re-projection. Test it explicitly: tap → switch, push a fresh `CacheResult` for the same id, assert
+  the choice held. Same shape as `ChatViewModel.activeLanguageOverride`.
 - **2026-07-10 (`feed-post-language-strip`): the Gradle *wrapper* distribution download is policy-blocked in
   the web container — use the pre-installed system Gradle directly.** `./gradlew` (or `meeshy.sh check`) tries to
   fetch `gradle-8.11.1-bin.zip`; `services.gradle.org` 307-redirects to `github.com/gradle/gradle-distributions/...`

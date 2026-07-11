@@ -126,4 +126,83 @@ class FeedPostBuilderTest {
         assertThat(result.commentCount).isEqualTo(0)
         assertThat(result.repostCount).isEqualTo(0)
     }
+
+    // --- Prisme language switch (per-post active-language override) ---
+
+    private fun bilingualPost() = post(
+        translations = mapOf(
+            "en" to ApiPostTranslationEntry(text = "Hello"),
+            "es" to ApiPostTranslationEntry(text = "Hola"),
+        ),
+    )
+
+    // System=en, regional=es → default resolution picks en (first configured with
+    // content); both en and es are configured content languages carried by the post.
+    private val bilingualPrefs = Prefs(systemLanguage = "en", regionalLanguage = "es")
+
+    @Test
+    fun build_nullOverrideUsesDefaultPrismeResolution() {
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = null)
+        assertThat(result.content).isEqualTo("Hello")
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isTrue()
+        assertThat(result.languageStrip.first { it.code == "es" }.isActive).isFalse()
+    }
+
+    @Test
+    fun build_overrideSwitchesContentAndStripToAnotherConfiguredLanguage() {
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = "es")
+        assertThat(result.content).isEqualTo("Hola")
+        assertThat(result.languageStrip.first { it.code == "es" }.isActive).isTrue()
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isFalse()
+    }
+
+    @Test
+    fun build_overrideToOriginalShowsOriginalAndHighlightsOriginalChip() {
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = "fr")
+        assertThat(result.content).isEqualTo("Bonjour")
+        val original = result.languageStrip.first { it.code == "fr" }
+        assertThat(original.isOriginal).isTrue()
+        assertThat(original.isActive).isTrue()
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isFalse()
+    }
+
+    @Test
+    fun build_overrideToLanguageWithoutContentFallsBackToDefault() {
+        // "de" has no translation and is not configured → override ignored, default stands.
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = "de")
+        assertThat(result.content).isEqualTo("Hello")
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isTrue()
+    }
+
+    @Test
+    fun build_overrideMatchesCaseInsensitivelyAndTrims() {
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = "  ES ")
+        assertThat(result.content).isEqualTo("Hola")
+        assertThat(result.languageStrip.first { it.code == "es" }.isActive).isTrue()
+    }
+
+    @Test
+    fun resolveActiveCode_overrideWithContentWins() {
+        val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), bilingualPrefs, override = "es")
+        assertThat(code).isEqualTo("es")
+    }
+
+    @Test
+    fun resolveActiveCode_overrideWithoutContentFallsBackToPreferred() {
+        val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), bilingualPrefs, override = "de")
+        assertThat(code).isEqualTo("en")
+    }
+
+    @Test
+    fun resolveActiveCode_nullOverrideFallsBackToPreferred() {
+        val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), bilingualPrefs, override = null)
+        assertThat(code).isEqualTo("en")
+    }
+
+    @Test
+    fun resolveActiveCode_nullOverrideWithNoPreferredTranslationFallsBackToOriginal() {
+        // Prefs target a language the post does not carry → no preferred translation.
+        val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), Prefs(systemLanguage = "de"), override = null)
+        assertThat(code).isEqualTo("fr")
+    }
 }
