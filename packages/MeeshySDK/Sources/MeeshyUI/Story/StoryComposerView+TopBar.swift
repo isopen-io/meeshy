@@ -109,27 +109,31 @@ extension StoryComposerView {
         }
     }
 
+    /// Icône seule (directive user 2026-07-11 « enlever le terme Publier —
+    /// juste la flèche et la couleur primaire ») : cercle 36 pt aligné sur les
+    /// autres actions du header, le verre proéminent teinté brand restant le
+    /// SEUL marqueur d'action primaire. Le libellé survit en accessibilité.
     var publishButton: some View {
         let isPublishing = publishTask != nil
         return Button { publishAllSlides() } label: {
-            HStack(spacing: 4) {
+            Group {
                 if isPublishing {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(.white)
                         .scaleEffect(0.7)
                 } else {
-                    Text(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module)).font(.system(size: 13, weight: .bold)).lineLimit(1)
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
                 }
             }
-            .fixedSize()
-            .foregroundColor(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+            .frame(width: 36, height: 36)
+            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.brandPrimary)
+            .contentShape(Circle())
         }
         .disabled(isPublishing)
+        .accessibilityLabel(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module))
     }
 
     var visibilityMenu: some View {

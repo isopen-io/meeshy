@@ -647,9 +647,21 @@ extension StoryComposerView {
                 .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
                 .overlay { mediaLoadingOverlay }
                 .overlay(alignment: .topTrailing) { canvasZoomResetButton }
-                .overlay(alignment: .top) {
+                .overlay(alignment: .leading) {
+                    // Chips d'indication de couche (canvas / fond / premier
+                    // plan) — flanc GAUCHE, textes verticaux (directive user
+                    // 2026-07-11), miroir de la colonne annuler/rétablir du
+                    // flanc droit. Rotation -90° du rail entier : lecture de
+                    // bas en haut, convention « dos de livre ». `fixedSize`
+                    // fige la mesure horizontale naturelle avant rotation ;
+                    // le petit frame carré sert d'ancre de centrage — le
+                    // contenu tourné déborde symétriquement (overlay purement
+                    // informatif, non-interactif).
                     CanvasLayerIndicator(layer: manipulationLayer)
-                        .padding(.top, 6)
+                        .fixedSize()
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 24, height: 24)
+                        .padding(.leading, 8)
                         .allowsHitTesting(false)
                 }
                 // Mesure la frame globale du canvas 9:16 PRÉSENTÉE (post-scale) —
