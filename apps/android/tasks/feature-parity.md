@@ -1802,8 +1802,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       fields round-trip untouched but stay non-editable — product decision 2026-06-14). Reached from a
       new "Privacy & visibility" row at the top of Settings → Privacy (`Routes.PRIVACY`). +28 tests
       (catalog/codec 16, store 7, VM 5). EN/FR/ES/PT strings. This ships the fully-tested visibility/
-      contacts/media toggle surface + durable device-local persistence; a backend-sync path for the
-      server-authoritative visibility prefs (analogous to notification-prefs sync) is a follow-up.
+      contacts/media toggle surface + durable device-local persistence.
+      **Offline-queued backend sync landed** (`settings-privacy-preferences-sync`, 2026-07-11): the
+      privacy block now propagates to the gateway (`PATCH /me/preferences/privacy`) durably. Pure
+      `:core:model` `PrivacyPreferenceSyncBody.from(prefs)` projects **only the twelve editable
+      toggles** — the read-only encryption leg (`encryptionPreference`/`autoEncrypt…`/…) and local
+      `extras` are deliberately dropped, so because the gateway PATCH is a partial merge a sync never
+      stamps device defaults over server-side encryption prefs (a genuinely better contract than a
+      blind full-block push). `core/network` `PreferencesApi.updatePrivacy`; a **new**
+      `OutboxKind.UPDATE_PRIVACY_SETTINGS` on the shared `SETTINGS` lane (distinct kind from
+      notification's `UPDATE_SETTINGS` so the two coalesce independently and never clobber each other),
+      an `OutboxCoalescer` latest-snapshot rule, an `OutboxFlushWorker` `UPDATE_PRIVACY_SETTINGS`
+      sender; `:sdk-core` `PrivacyPreferencesSyncRepository` (session-gated durable enqueue keyed by
+      own user id; inert with no session). `PrivacySettingsViewModel.setToggle` now persists to the
+      device-local store instantly (UI SSOT) **then** enqueues the sync + wakes the worker on a real
+      `cmid` (a no-op re-set neither syncs nor wakes). The PATCH is idempotent, so a retry is harmless
+      (no rollback). +13 tests (SyncBody 3, SyncRepository 5, VM +3, Coalescer +2). Surpasses iOS,
+      whose privacy-preference write is online-only.
 - [x] Auto-download settings for media by type and connection (Wi-Fi/cellular) — **shipped** (slice
       `settings-media-auto-download`, 2026-07-11). Port of iOS `MediaDownloadSettingsView` +
       `MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor`. Pure `:core:model`

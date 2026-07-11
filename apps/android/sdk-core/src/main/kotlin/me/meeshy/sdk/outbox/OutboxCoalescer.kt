@@ -33,7 +33,9 @@ public sealed interface CoalesceDecision {
  * - a repeated profile edit (same user id) keeps only the latest snapshot
  *   (each carries the full PATCH body — the newest edit subsumes the pending one);
  * - a repeated settings update (same user id) keeps only the latest snapshot
- *   (each carries the full preference block — an offline toggle burst collapses to one PATCH).
+ *   (each carries the full preference block — an offline toggle burst collapses to one PATCH);
+ *   notification and privacy settings coalesce independently (distinct kinds share the settings
+ *   lane but never supersede one another).
  *
  * [pending] MUST contain only still-cancellable rows ([OutboxState.PENDING]);
  * an in-flight mutation cannot be undone.
@@ -52,6 +54,8 @@ public object OutboxCoalescer {
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PROFILE)
             OutboxKind.UPDATE_SETTINGS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_SETTINGS)
+            OutboxKind.UPDATE_PRIVACY_SETTINGS ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PRIVACY_SETTINGS)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
             OutboxKind.BLOCK_USER -> terminalToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)

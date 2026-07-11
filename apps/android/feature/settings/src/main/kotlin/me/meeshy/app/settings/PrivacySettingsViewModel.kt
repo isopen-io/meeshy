@@ -2,6 +2,7 @@ package me.meeshy.app.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -11,7 +12,9 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.PrivacyCatalog
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.PrivacyToggle
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
+import me.meeshy.sdk.privacy.PrivacyPreferencesSyncRepository
 import javax.inject.Inject
 
 /** Immutable UI state for the privacy & visibility settings screen (feature-parity §L). */
@@ -26,10 +29,17 @@ data class PrivacyUiState(
  * start without a flash), and writes a per-toggle change back through the store —
  * [PrivacyCatalog.set] edits exactly the chosen boolean, never clobbering the others. A re-set of
  * a toggle to its current value is an inert no-op.
+ *
+ * A real change is also propagated to the gateway through [PrivacyPreferencesSyncRepository] (a
+ * durable, offline-queued `PATCH /me/preferences/privacy`); the [OutboxFlushWorker] is woken only
+ * when the enqueue produced a real `cmid` (a session-less enqueue is inert and returns `null`).
+ * The device-local store stays the UI SSOT, so the sync never gates the instant repaint.
  */
 @HiltViewModel
 class PrivacySettingsViewModel @Inject constructor(
     private val store: PrivacyPreferencesStore,
+    private val syncRepository: PrivacyPreferencesSyncRepository,
+    private val workManager: WorkManager,
 ) : ViewModel() {
 
     val state: StateFlow<PrivacyUiState> =
@@ -47,7 +57,10 @@ class PrivacySettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val current = store.preferences.value
             if (PrivacyCatalog.isEnabled(current, toggle) == enabled) return@launch
-            store.setPreferences(PrivacyCatalog.set(current, toggle, enabled))
+            val updated = PrivacyCatalog.set(current, toggle, enabled)
+            store.setPreferences(updated)
+            val cmid = syncRepository.enqueueSync(updated)
+            if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
         }
     }
 }

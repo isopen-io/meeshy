@@ -2,7 +2,42 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync)** → rest`
+
+> On 2026-07-11 **privacy-preferences backend sync** landed (slice `settings-privacy-preferences-sync`,
+> feature-parity §L). Follow-up to `settings-privacy-preferences`: the device-local privacy block now
+> propagates durably to the gateway (`PATCH /me/preferences/privacy`) through the offline outbox — it
+> survives offline + process death instead of an online-first REST call a dropped connection would lose.
+> **Key contract call — sync only the editable leg.** The gateway PATCH is a *partial merge*
+> (`{...current, ...body}`), so the pure `:core:model` `PrivacyPreferenceSyncBody.from(prefs)` projects
+> **only the twelve editable toggles** the user can change on Android (the `PrivacyCatalog` set) and
+> deliberately **drops the read-only encryption leg** (`encryptionPreference`/`autoEncryptNewConversations`/
+> `showEncryptionStatus`/`warnOnUnencrypted`) + local `extras`. A blind full-block push would have stamped
+> the device's default encryption values over whatever the user set on web/iOS; omitting those keys leaves
+> the server's encryption prefs untouched — a genuinely better contract than mirroring the notification
+> full-block sync. **New `OutboxKind.UPDATE_PRIVACY_SETTINGS`** (not a reuse of notification's
+> `UPDATE_SETTINGS`): both share the `SETTINGS` lane, but coalescing is per-kind — a distinct kind means a
+> privacy sync can never supersede a pending notification sync for the same user (the collision a naive reuse
+> would have caused). Wiring: `core/network` `PreferencesApi.updatePrivacy`; `OutboxLaneMap` assignment;
+> `OutboxCoalescer` latest-snapshot replace rule; `OutboxFlushWorker` `UPDATE_PRIVACY_SETTINGS` sender
+> (decode → `updatePrivacy` → Success/TransientFailure, bad payload → PermanentFailure); `:sdk-core`
+> `PrivacyPreferencesSyncRepository` (session-gated durable enqueue keyed by own user id; inert/`null` with
+> no session or blank id — mirrors `NotificationPreferencesSyncRepository`). `PrivacySettingsViewModel.setToggle`
+> now persists to the device-local store instantly (UI SSOT) **then** enqueues the sync + wakes the worker on
+> a real `cmid`; a no-op re-set neither writes, syncs, nor wakes. The PATCH is idempotent, so a delivery retry
+> is harmless (no optimistic flip, no rollback on exhaustion). **+13 tests** (SyncBody 3 — per-field projection,
+> encryption/extras dropped from the serialized keys, all-default projection; SyncRepository 5 — lane/kind/target/
+> payload, distinct-kind guard, no-session/blank/superseded inert; VM +3 — persist-then-enqueue-then-wake,
+> no-op never syncs, superseded/sessionless never wakes; Coalescer +2 — privacy latest-snapshot replace, privacy
+> never coalesces a pending notification), all green; touched-module `testDebugUnitTest` + `assembleDebug` BUILD
+> SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only; **SDK purity** — pure opaque-param wire body in
+> `:core:model`, stateless outbox/API building blocks + durable sync repo in `:sdk-core`, "when to sync / wake"
+> orchestration in the VM; **SSOT** — one editable-toggle catalog drives both the local store and the wire body,
+> no re-implementation; **UDF/instant-app** — device-local store stays the UI SSOT, sync never gates the repaint;
+> **UX coherence** — unchanged accent-coherent switch screen; **no coverage floor lowered, no test weakened** —
+> the existing 5 VM tests were kept and hardened with the new deps, +3 added). **Next:** avatar/banner upload
+> (media pipeline) for §K profile edit, or another §L row (media cache management, GDPR export), or the live
+> `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of `MediaDownloadPolicyEngine`.
 
 > On 2026-07-11 **privacy & visibility settings** landed (slice `settings-privacy-preferences`,
 > feature-parity §L — "Privacy settings (visibility, contacts, media/data, encryption preference)").

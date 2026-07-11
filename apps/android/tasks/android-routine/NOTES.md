@@ -4,6 +4,27 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-11, `settings-privacy-preferences-sync`)
+- **A gateway `PATCH /me/preferences/{category}` is a *partial merge* — so the sync body should carry
+  only the fields this platform authoritatively edits, never the whole block.** The factory does
+  `schema.partial().parse(body)` then `{ ...current, ...validated }` (see
+  `services/gateway/src/routes/me/preferences/preference-router-factory.ts`). For privacy, Android
+  renders the encryption leg read-only (coming-soon), so `PrivacyPreferenceSyncBody` projects only the
+  12 editable toggles and **omits** `encryptionPreference`/`autoEncrypt…`/`extras`. A blind full-block
+  push (à la notification sync) would have stamped the device's *default* encryption values over
+  whatever the user set on web/iOS. Rule: sync ⊆ editable-on-this-platform, not the whole model. (The
+  full schema is the Zod one at `packages/shared/types/preferences/privacy.ts`; the `types.ts`
+  `UpdatePrivacyPreferencesDTO` there is stale docs, not the validator — trust the Zod schema.)
+- **Outbox coalescing is per-`(kind, targetId)`, so a second settings sync MUST get its own `OutboxKind`
+  or it will clobber the first.** Notification sync already owns `UPDATE_SETTINGS` keyed by the user id.
+  Reusing it for privacy would make a privacy PATCH *supersede* a pending notification PATCH (same kind +
+  same target → `replaceSameKind`). Added a distinct `UPDATE_PRIVACY_SETTINGS` that *shares* the
+  `SETTINGS` lane (fine — lanes only serialize drain order) but coalesces independently. `OutboxLaneMap`'s
+  `assignmentFor` is an exhaustive `when`, so a new kind is a *compile error* until you assign a lane —
+  a nice forcing function; the `every kind maps to a non-blank assignment` test then covers it for free.
+- **`/opt/gradle/bin/gradle` (8.14.3) — the wrapper's 8.11.1 zip still 403s.** Unchanged from prior runs;
+  `assembleDebug testDebugUnitTest` first-run ~2.5–5 min.
+
 ## Lesson (2026-07-11, `settings-privacy-preferences`)
 - **Before modelling a "new" preference block, grep `:core:model` for it — the iOS ports may already
   be there un-persisted.** `PrivacyPreferences` was already a full 16-field `@Serializable` data class
