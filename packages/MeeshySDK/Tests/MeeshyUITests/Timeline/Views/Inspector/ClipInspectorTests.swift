@@ -89,4 +89,67 @@ final class ClipInspectorTests: XCTestCase {
         XCTAssertEqual(ClipInspector.fadeRange.lowerBound, 0)
         XCTAssertEqual(ClipInspector.fadeRange.upperBound, 3)
     }
+
+    // MARK: - Sections visibles (modale allégée, retours user 2026-07-11)
+    // Par défaut la modale ne montre que l'essentiel ; les détails (début/
+    // durée, hints) vivent derrière le bouton (i), la configuration
+    // d'animation derrière l'icône losange.
+
+    func test_visibleSections_default_hidesDetailsAndAnimation() {
+        let sections = ClipInspector.visibleSections(
+            kind: .video, isDetailsExpanded: false, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .volume, .toggles, .actions])
+    }
+
+    func test_visibleSections_detailsExpanded_insertsDetailsAfterHeader() {
+        let sections = ClipInspector.visibleSections(
+            kind: .video, isDetailsExpanded: true, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .details, .volume, .toggles, .actions])
+    }
+
+    func test_visibleSections_animationExpanded_appendsConfigBelowActions() {
+        let sections = ClipInspector.visibleSections(
+            kind: .video, isDetailsExpanded: false, isAnimationExpanded: true)
+        XCTAssertEqual(sections, [.header, .volume, .toggles, .actions, .animation])
+    }
+
+    func test_visibleSections_textAndImageClips_haveNoVolume() {
+        for kind in [ClipInspector.ClipSnapshot.Kind.text, .image] {
+            let sections = ClipInspector.visibleSections(
+                kind: kind, isDetailsExpanded: false, isAnimationExpanded: false)
+            XCTAssertEqual(sections, [.header, .toggles, .actions],
+                           "\(kind) n'a pas de piste audio — pas de section volume")
+        }
+    }
+
+    func test_visibleSections_bothExpanded_showsEverythingInOrder() {
+        let sections = ClipInspector.visibleSections(
+            kind: .audio, isDetailsExpanded: true, isAnimationExpanded: true)
+        XCTAssertEqual(sections, [.header, .details, .volume, .toggles, .actions, .animation])
+    }
+
+    // MARK: - Confirmation de suppression (jamais de delete direct)
+
+    func test_deleteConfirmation_request_presentsAlert() {
+        var confirmation = ClipInspector.DeleteConfirmation()
+        XCTAssertFalse(confirmation.isPresented)
+        confirmation.request()
+        XCTAssertTrue(confirmation.isPresented)
+    }
+
+    func test_deleteConfirmation_cancel_dismissesWithoutSideEffect() {
+        var confirmation = ClipInspector.DeleteConfirmation()
+        confirmation.request()
+        confirmation.cancel()
+        XCTAssertFalse(confirmation.isPresented)
+    }
+
+    func test_deleteConfirmation_confirm_invokesDeleteOnceAndDismisses() {
+        var confirmation = ClipInspector.DeleteConfirmation()
+        confirmation.request()
+        var deleteCount = 0
+        confirmation.confirm { deleteCount += 1 }
+        XCTAssertEqual(deleteCount, 1)
+        XCTAssertFalse(confirmation.isPresented)
+    }
 }

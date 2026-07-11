@@ -45,6 +45,47 @@ public struct ClipInspector: View {
 
     public static let fadeRange: ClosedRange<Float> = 0...3
 
+    // MARK: - Sections (modale allégée)
+
+    /// Régions de la modale, dans l'ordre de rendu. La modale « surchargée »
+    /// (retour user 2026-07-11) n'expose plus que l'essentiel : les détails
+    /// (début/durée, hints) vivent derrière le bouton (i) du header, la
+    /// configuration d'animation (fondus + étape au playhead) derrière
+    /// l'icône losange de la rangée d'actions.
+    public enum Section: String, CaseIterable, Sendable, Equatable {
+        case header, details, volume, toggles, actions, animation
+    }
+
+    /// Résout les sections visibles pour un état donné. Pure — testée sans
+    /// monter la vue (voir `ClipInspectorTests.test_visibleSections_*`).
+    public static func visibleSections(kind: ClipSnapshot.Kind,
+                                       isDetailsExpanded: Bool,
+                                       isAnimationExpanded: Bool) -> [Section] {
+        var sections: [Section] = [.header]
+        if isDetailsExpanded { sections.append(.details) }
+        if hasAudioAffordances(kind: kind) { sections.append(.volume) }
+        sections.append(.toggles)
+        sections.append(.actions)
+        if isAnimationExpanded { sections.append(.animation) }
+        return sections
+    }
+
+    // MARK: - Confirmation de suppression
+
+    /// Machine d'état minimale du flux « supprimer » : le bouton corbeille ne
+    /// détruit JAMAIS directement — il présente une alerte ; seule la
+    /// confirmation explicite invoque `onDelete` (retour user 2026-07-11).
+    public struct DeleteConfirmation: Sendable, Equatable {
+        public private(set) var isPresented = false
+        public init() {}
+        public mutating func request() { isPresented = true }
+        public mutating func cancel() { isPresented = false }
+        public mutating func confirm(onDelete: () -> Void) {
+            isPresented = false
+            onDelete()
+        }
+    }
+
     public let presentation: InspectorPresentation
     public let clip: ClipSnapshot
     public let onVolumeChanged: (Float) -> Void
@@ -71,6 +112,10 @@ public struct ClipInspector: View {
     @State private var fadeOut: Float
     @State private var loop: Bool
     @State private var background: Bool
+    @State private var isDetailsExpanded = false
+    @State private var isAnimationExpanded = false
+    @State private var deleteConfirmation = DeleteConfirmation()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(presentation: InspectorPresentation,
                 clip: ClipSnapshot,
@@ -170,15 +215,22 @@ public struct ClipInspector: View {
     }
 
     public var body: some View {
+        let sections = Self.visibleSections(kind: clip.kind,
+                                            isDetailsExpanded: isDetailsExpanded,
+                                            isAnimationExpanded: isAnimationExpanded)
         VStack(alignment: .leading, spacing: 12) {
             header
-            metadataRow
-            if Self.hasAudioAffordances(kind: clip.kind) {
+            if sections.contains(.details) {
+                detailsSection
+            }
+            if sections.contains(.volume) {
                 volumeSlider
             }
-            fadeSliders
             togglesRow
             actionsRow
+            if sections.contains(.animation) {
+                animationConfig
+            }
         }
         .padding(presentation == .popover ? 14 : 18)
         .background(
@@ -195,6 +247,27 @@ public struct ClipInspector: View {
             loop = newClip.isLooping
             background = newClip.isBackground
         }
+        .alert(
+            String(localized: "story.timeline.inspector.delete.confirmTitle",
+                   defaultValue: "Supprimer ce clip ?", bundle: .module),
+            isPresented: Binding(
+                get: { deleteConfirmation.isPresented },
+                set: { if !$0 { deleteConfirmation.cancel() } }
+            )
+        ) {
+            Button(String(localized: "story.timeline.inspector.delete.confirm",
+                          defaultValue: "Supprimer", bundle: .module),
+                   role: .destructive) {
+                deleteConfirmation.confirm(onDelete: onDelete)
+            }
+            Button(String(localized: "story.timeline.inspector.delete.cancel",
+                          defaultValue: "Annuler", bundle: .module),
+                   role: .cancel) {}
+        } message: {
+            Text(String(localized: "story.timeline.inspector.delete.confirmMessage",
+                        defaultValue: "Le clip sera définitivement retiré de la timeline.",
+                        bundle: .module))
+        }
     }
 
     // MARK: - Sub-views
@@ -210,6 +283,23 @@ public struct ClipInspector: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
+            Button {
+                withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
+                    isDetailsExpanded.toggle()
+                }
+            } label: {
+                Image(systemName: isDetailsExpanded ? "info.circle.fill" : "info.circle")
+                    .font(.title3)
+                    .foregroundStyle(isDetailsExpanded ? MeeshyColors.indigo500 : .secondary)
+                    .contentShape(Rectangle().inset(by: -8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "story.timeline.inspector.details",
+                                       defaultValue: "Détails", bundle: .module))
+            .accessibilityHint(String(localized: "story.timeline.inspector.details.hint",
+                                      defaultValue: "Affiche le début, la durée et les informations du clip",
+                                      bundle: .module))
+            .accessibilityAddTraits(isDetailsExpanded ? [.isSelected] : [])
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title3)
@@ -220,6 +310,29 @@ public struct ClipInspector: View {
             .accessibilityLabel(String(localized: "story.timeline.inspector.close",
                                        defaultValue: "Fermer", bundle: .module))
         }
+    }
+
+    /// Panneau (i) : début/durée éditables + hints contextuels. Sorti du
+    /// corps de la modale — ces informations restent à un tap, sans charger
+    /// la surface par défaut.
+    private var detailsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            metadataRow
+            if background {
+                Text(String(localized: "story.timeline.inspector.background.hint",
+                            defaultValue: "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline.",
+                            bundle: .module))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(MeeshyColors.indigo500.opacity(0.08))
+        )
+        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 
     private var metadataRow: some View {
@@ -292,11 +405,12 @@ public struct ClipInspector: View {
         fadePresets.min(by: { abs($0 - value) < abs($1 - value) }) ?? 0
     }
 
-    /// Animations d'APPARITION / DISPARITION de l'élément — chips de durée
-    /// (Off / 0,3 / 0,5 / 1 / 2 s) au lieu des deux sliders anonymes « FADE
-    /// IN %@ » (format brut + réglage au pixel peu premium, retours user).
-    private var fadeSliders: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    /// Configuration d'animation dépliée par l'icône losange de la rangée
+    /// d'actions : apparition/disparition (chips de fondu) + étape
+    /// d'animation au playhead avec sa légende. Repliée par défaut — la
+    /// modale ne montre plus que l'essentiel (retour user 2026-07-11).
+    private var animationConfig: some View {
+        VStack(alignment: .leading, spacing: 10) {
             fadeChipRow(
                 title: String(localized: "story.timeline.inspector.fadeIn",
                               defaultValue: "Apparition (fondu)", bundle: .module),
@@ -311,7 +425,32 @@ public struct ClipInspector: View {
                 value: $fadeOut,
                 onCommit: { onFadeOutChanged(fadeOut) }
             )
+            Button(action: onAddKeyframe) {
+                Label(
+                    String(localized: "story.timeline.inspector.animate",
+                           defaultValue: "Animer au playhead", bundle: .module),
+                    systemImage: "diamond.fill"
+                )
+                .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(MeeshyColors.indigo500)
+            .accessibilityHint(String(localized: "story.timeline.inspector.animate.hint",
+                                      defaultValue: "Pose une étape d'animation à la position de lecture",
+                                      bundle: .module))
+            Text(String(localized: "story.timeline.inspector.animate.caption",
+                        defaultValue: "Étape d'animation : fige position, échelle et opacité à cet instant — l'élément glisse d'une étape à l'autre pendant la lecture.",
+                        bundle: .module))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(MeeshyColors.indigo500.opacity(0.08))
+        )
+        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 
     private func fadeChipRow(title: String, systemImage: String,
@@ -390,56 +529,57 @@ public struct ClipInspector: View {
                 .toggleStyle(.switch)
                 .tint(MeeshyColors.indigo500)
             }
-            // Un fond couvre TOUTE la slide : sa fenêtre début/durée est
-            // ignorée en lecture — sans cette phrase, déplacer le clip de
-            // fond sur la timeline laissait croire à un départ différé
-            // (retour user 2026-07-11). Désactiver « Fond » rend le clip
-            // foreground et sa fenêtre redevient effective.
-            if background {
-                Text(String(localized: "story.timeline.inspector.background.hint",
-                            defaultValue: "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline.",
-                            bundle: .module))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // Le hint « fond couvre toute la slide » vit désormais dans le
+            // panneau (i) — la modale par défaut reste légère.
         }
     }
 
+    /// Deux icônes, deux intentions : le losange déplie la configuration
+    /// d'animation PAR-DESSOUS (il n'anime rien lui-même), la corbeille
+    /// demande confirmation avant la suppression définitive.
     private var actionsRow: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
-                Button(action: onAddKeyframe) {
-                    Label(
-                        String(localized: "story.timeline.inspector.animate",
-                               defaultValue: "Animer au playhead", bundle: .module),
-                        systemImage: "diamond.fill"
-                    )
-                    .font(.subheadline.weight(.semibold))
+        HStack(spacing: 12) {
+            Button {
+                withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
+                    isAnimationExpanded.toggle()
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MeeshyColors.indigo500)
-                .accessibilityHint(String(localized: "story.timeline.inspector.animate.hint",
-                                          defaultValue: "Pose une étape d'animation à la position de lecture",
-                                          bundle: .module))
-
-                Spacer(minLength: 0)
-
-                Button(role: .destructive, action: onDelete) {
-                    Label(
-                        String(localized: "story.timeline.clip.delete", bundle: .module),
-                        systemImage: "trash"
+            } label: {
+                Image(systemName: "diamond.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isAnimationExpanded ? .white : MeeshyColors.indigo500)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle().fill(isAnimationExpanded
+                            ? AnyShapeStyle(MeeshyColors.indigo500)
+                            : AnyShapeStyle(MeeshyColors.indigo500.opacity(0.14)))
                     )
-                    .font(.subheadline.weight(.semibold))
-                }
-                .tint(MeeshyColors.error)
+                    .contentShape(Rectangle().inset(by: -4))
             }
-            Text(String(localized: "story.timeline.inspector.animate.caption",
-                        defaultValue: "Étape d'animation : fige position, échelle et opacité à cet instant — l'élément glisse d'une étape à l'autre pendant la lecture.",
-                        bundle: .module))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "story.timeline.inspector.animation",
+                                       defaultValue: "Animation", bundle: .module))
+            .accessibilityHint(String(localized: "story.timeline.inspector.animation.hint",
+                                      defaultValue: "Affiche les réglages d'animation du clip",
+                                      bundle: .module))
+            .accessibilityAddTraits(isAnimationExpanded ? [.isSelected] : [])
+
+            Spacer(minLength: 0)
+
+            Button {
+                deleteConfirmation.request()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.error)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(MeeshyColors.error.opacity(0.12)))
+                    .contentShape(Rectangle().inset(by: -4))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "story.timeline.clip.delete", bundle: .module))
+            .accessibilityHint(String(localized: "story.timeline.inspector.delete.hint",
+                                      defaultValue: "Demande une confirmation avant la suppression",
+                                      bundle: .module))
         }
     }
 
