@@ -391,6 +391,21 @@ describe('notification-helpers - Structure Groupée V2', () => {
       expect(getNotificationLink(n)).toBe('/story/s1');
     });
 
+    it('route friend_story_comment vers /story sans metadata (préfixe `friend_`)', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.FRIEND_STORY_COMMENT, context: { postId: 's3', commentId: 'c3' } });
+      expect(getNotificationLink(n)).toBe('/story/s3#comment-c3');
+    });
+
+    it('route story_new_comment vers /story#comment', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.STORY_NEW_COMMENT, context: { postId: 's4', commentId: 'c4' } });
+      expect(getNotificationLink(n)).toBe('/story/s4#comment-c4');
+    });
+
+    it('route story_thread_reply vers /story#comment', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.STORY_THREAD_REPLY, context: { postId: 's5', commentId: 'c5' } });
+      expect(getNotificationLink(n)).toBe('/story/s5#comment-c5');
+    });
+
     it('route status_reaction vers /mood/:postId (status partage mood)', () => {
       const n = makeNotif({ type: NotificationTypeEnum.STATUS_REACTION, context: { postId: 'st1' } });
       expect(getNotificationLink(n)).toBe('/mood/st1');

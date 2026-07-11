@@ -162,7 +162,10 @@ function resolveContentRoute(notification: Notification): '/post' | '/story' | '
   const type = notification.type;
   if (typeof type === 'string') {
     if (type === NotificationTypeEnum.STATUS_REACTION || type === NotificationTypeEnum.FRIEND_NEW_MOOD) return '/mood';
-    if (type === NotificationTypeEnum.FRIEND_NEW_STORY || type.startsWith('story')) return '/story';
+    // Tous les types portant `story` visent une story — y compris les variantes
+    // préfixées (`friend_story_comment`) que `startsWith('story')` manquait,
+    // ce qui les routait par erreur vers `/post`.
+    if (type.includes('story')) return '/story';
   }
   return '/post';
 }
