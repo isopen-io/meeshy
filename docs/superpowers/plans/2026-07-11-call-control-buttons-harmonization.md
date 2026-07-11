@@ -171,7 +171,10 @@ enum CaptionsMode: Equatable, Sendable {
 
 - [ ] **Step 4: Run test to verify it passes**
 
+`CaptionsMode.swift` (Step 3) is also a brand-new file — regenerate again before building:
+
 ```bash
+cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate && cd -
 cd /Users/smpceo/Documents/v2_meeshy
 xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
   -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build 2>&1 | tail -20
