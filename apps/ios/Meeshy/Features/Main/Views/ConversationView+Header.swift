@@ -253,14 +253,17 @@ private struct HeaderCallButtonsView: View {
 
     private func callGlyph(_ systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(MeeshyFont.relative(12, weight: .semibold))
+            .font(MeeshyFont.relative(13, weight: .semibold))
             .foregroundStyle(
                 LinearGradient(
                     colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
             )
-            .frame(width: 30, height: 30)
+            // Matches expandedHeaderSearchButton's circle exactly (28×28,
+            // font 13) — user-requested 2026-07-11: the two header buttons
+            // must read as the same size.
+            .frame(width: 28, height: 28)
             .meeshyTapTarget()
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
     }
