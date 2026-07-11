@@ -134,7 +134,9 @@ extension StoryCanvasUIView {
     /// `rebuildLayers()` (les layers `.edit` sont reconstruits à neuf à chaque
     /// mutation) et au flip du drapeau.
     func applyEditPlayback() {
-        guard mode == .edit, playsVideoInEditMode else { return }
+        // Preview timeline active → l'engine possède audio ET transport ;
+        // les boucles vidéo libres de l'édition reprennent à la sortie.
+        guard mode == .edit, playsVideoInEditMode, !isTimelinePreviewActive else { return }
         // Éditeur sonore (choix produit) : pose la session `.playback` pour que
         // l'audio des vidéos qui bouclent soit audible même silent-switch ON.
         // Idempotent / call-aware via la source unique.

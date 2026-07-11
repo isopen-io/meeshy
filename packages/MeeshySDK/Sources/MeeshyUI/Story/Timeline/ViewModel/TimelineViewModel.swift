@@ -44,8 +44,28 @@ public final class TimelineViewModel: ObservableObject {
     // MARK: - State observable by Views
 
     @Published public internal(set) var project: TimelineProject
-    @Published public private(set) var currentTime: Float = 0
-    @Published public private(set) var isPlaying: Bool = false
+    @Published public private(set) var currentTime: Float = 0 {
+        didSet { onPlayheadChanged?(currentTime) }
+    }
+    @Published public private(set) var isPlaying: Bool = false {
+        didSet {
+            guard oldValue != isPlaying else { return }
+            onPlaybackStateChanged?(isPlaying)
+        }
+    }
+
+    // MARK: - Preview bridge (Lot B — living preview)
+
+    /// Fired on EVERY playhead move — scrub frames and engine playback ticks
+    /// alike. The composer wires this to the canvas behind the timeline sheet
+    /// (via `StoryCanvasTimelineBridge`) so the canvas renders the slide at
+    /// the playhead, at UIKit level, without re-evaluating the composer's
+    /// SwiftUI body 60 times per second.
+    public var onPlayheadChanged: ((Float) -> Void)?
+    /// Fired when playback starts/stops (transport toggle, playback end).
+    /// The canvas uses it to switch between seek-paused (scrub) and
+    /// play-muted-in-sync (engine owns the audio) preview strategies.
+    public var onPlaybackStateChanged: ((Bool) -> Void)?
     /// Mirror of `engine.isMuted` so SwiftUI views (TransportBar mute button)
     /// re-render on toggle. The engine remains the audio-routing source of
     /// truth — this stored property is the @Published view-state seam that

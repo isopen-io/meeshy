@@ -129,7 +129,7 @@ extension StoryCanvasUIView {
         _ = backdropCapture.captureCanvasBackdrop(slide: slide,
                                                   geometry: geometry,
                                                   time: currentTime,
-                                                  mode: mode,
+                                                  mode: renderMode,
                                                   languages: readerContext.preferredLanguages)
 
         // Cache CALayer : actif dans LES DEUX modes depuis 2026-07-11.
@@ -147,14 +147,14 @@ extension StoryCanvasUIView {
         if let cacheForRender {
             cacheForRender.invalidateIfNeeded(slideId: slide.id,
                                               languages: readerContext.preferredLanguages,
-                                              mode: mode,
+                                              mode: renderMode,
                                               renderSize: geometry.renderSize)
         }
 
         let rendered = StoryRenderer.render(slide: slide,
                                             into: geometry,
                                             at: currentTime,
-                                            mode: mode,
+                                            mode: renderMode,
                                             languages: readerContext.preferredLanguages,
                                             resolver: readerContext.postMediaURLResolver,
                                             imageCache: readerContext.imageCache,
@@ -184,11 +184,11 @@ extension StoryCanvasUIView {
         let playheadSeconds = currentTime.seconds
         forEachMediaLayer {
             $0.slidePlayheadSeconds = playheadSeconds
-            $0.isMuted = isAudioMuted
+            $0.isMuted = effectiveAudioMuted
             $0.isPlaybackActive = foregroundVideosPlaybackActive
         }
         backgroundLayer.slidePlayheadSeconds = playheadSeconds
-        backgroundLayer.isMuted = isAudioMuted
+        backgroundLayer.isMuted = effectiveAudioMuted
 
         // Prune le cache des layers dont l'id n'est plus présent dans la
         // slide (élément supprimé) — libère les AVPlayer associés.

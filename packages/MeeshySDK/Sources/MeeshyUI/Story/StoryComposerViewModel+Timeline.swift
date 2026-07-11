@@ -14,6 +14,18 @@ extension StoryComposerViewModel {
         let stack = CommandStack()
         let snap = SnapEngine(toleranceSeconds: 0.06)
         let vm = TimelineViewModel(engine: engine, commandStack: stack, snapEngine: snap)
+        // Preview vivante : le canvas derrière la sheet suit le playhead
+        // (scrub + ticks engine) et l'état du transport. Gaté sur
+        // `isTimelineVisible` — un tick tardif après fermeture ne doit pas
+        // ré-armer la preview sur un canvas rendu à l'édition.
+        vm.onPlayheadChanged = { [weak self] time in
+            guard let self, self.isTimelineVisible else { return }
+            self.canvasTimelineBridge.scrub(seconds: Double(time))
+        }
+        vm.onPlaybackStateChanged = { [weak self] playing in
+            guard let self, self.isTimelineVisible else { return }
+            self.canvasTimelineBridge.setPlaying(playing)
+        }
         _timelineViewModel = vm
         return vm
     }

@@ -909,6 +909,22 @@ extension StoryBackgroundLayer {
         player.play()
     }
 
+    /// Scrub de preview timeline : pause puis cale le player de fond sur le
+    /// playhead unifié avec une tolérance large. Même règle que
+    /// `alignToTimelineThenPlay` pour un fond bouclé (`avPlayerLooper`) : sa
+    /// phase n'a aucun sens timeline, on le fige sans le recaler.
+    @MainActor
+    public func alignPausedToSlidePlayhead() {
+        guard let player = avPlayer else { return }
+        player.pause()
+        guard avPlayerLooper == nil else { return }
+        let target = max(0, slidePlayheadSeconds)
+        guard target.isFinite else { return }
+        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: tolerance, toleranceAfter: tolerance)
+    }
+
     @MainActor
     public func handleAppLifecycle(active: Bool) {
         guard let player = avPlayer else { return }
