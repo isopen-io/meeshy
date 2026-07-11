@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -21,8 +22,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
         confidence: Double = 0.9,
         language: String = "en",
         capturedAt: Date = Date()
-    ) -> TranscriptionSegment {
-        TranscriptionSegment(
+    ) -> Meeshy.TranscriptionSegment {
+        Meeshy.TranscriptionSegment(
             id: UUID(),
             text: text,
             speakerId: speakerId,
@@ -72,9 +73,22 @@ final class CallTranscriptionServiceTests: XCTestCase {
         sut.receiveTranslatedSegment(makeSegment(text: "hi", isFinal: true))
         XCTAssertFalse(sut.segments.isEmpty)
 
-        sut.resetForCallEnd()
+        sut.resetForCallEnd(callId: nil, conversationId: "conv-1", callStartedAt: nil, localUserId: "user-1", localSpeakerName: "Moi", remoteSpeakerName: "Bob")
 
         XCTAssertTrue(sut.segments.isEmpty)
+    }
+
+    func test_resetForCallEnd_nilCallId_doesNotPersist_evenWithSegments() async {
+        let socket = MockMessageSocket()
+        let sut = CallTranscriptionService(socket: socket)
+        sut.receiveTranslatedSegment(makeSegment(text: "Hello", speakerId: "remote-user", isFinal: true, capturedAt: Date()))
+        XCTAssertFalse(sut.persistedSegmentsForTesting.isEmpty, "Sanity: segments were captured despite no local callId.")
+
+        sut.resetForCallEnd(callId: nil, conversationId: "conv-1", callStartedAt: nil, localUserId: "user-1", localSpeakerName: "Moi", remoteSpeakerName: "Bob")
+        // Give the (should-never-fire) Task { } a beat, then confirm nothing landed under an empty-string key.
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        let loaded = await CallTranscriptStore.shared.transcript(for: "")
+        XCTAssertNil(loaded, "A nil callId must never produce a persisted transcript, empty-keyed or otherwise.")
     }
 
     func test_persistedSegments_retainsBeyondLiveDisplayCap() {
@@ -344,7 +358,7 @@ final class TranscriptionSegmentTests: XCTestCase {
     func test_segment_storesAllProperties() {
         let id = UUID()
         let capturedAt = Date()
-        let segment = TranscriptionSegment(
+        let segment = Meeshy.TranscriptionSegment(
             id: id,
             text: "hello world",
             speakerId: "user123",
@@ -372,7 +386,7 @@ final class TranscriptionSegmentTests: XCTestCase {
     }
 
     func test_segment_translationFieldsDefaultToNil() {
-        let segment = TranscriptionSegment(
+        let segment = Meeshy.TranscriptionSegment(
             id: UUID(),
             text: "test",
             speakerId: "s1",
@@ -391,8 +405,8 @@ final class TranscriptionSegmentTests: XCTestCase {
     func test_segment_equatable() {
         let id = UUID()
         let capturedAt = Date()
-        let a = TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
-        let b = TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
+        let a = Meeshy.TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
+        let b = Meeshy.TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
         XCTAssertEqual(a, b)
     }
 }

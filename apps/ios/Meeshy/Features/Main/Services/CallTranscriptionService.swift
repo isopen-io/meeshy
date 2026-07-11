@@ -285,12 +285,35 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         callsLogger.info("Call transcription stopped")
     }
 
-    /// Teardown de fin d'appel — purge INCONDITIONNELLE, y compris si ce
-    /// device n'a jamais transcrit lui-même (isTranscribing == false) mais a
-    /// reçu des segments traduits de l'autre participant via
-    /// `receiveTranslatedSegment`. Sans ce garde, le transcript de l'appel
-    /// précédent resterait visible au suivant.
-    func resetForCallEnd() {
+    /// End-of-call teardown — PERSISTS before purging. `callId`/`conversationId`/
+    /// `callStartedAt`/speaker names are threaded in as parameters (this
+    /// service has no stored `conversationId`/`callStartDate`, and its own
+    /// `callId` is nil whenever this device never called `startTranscribing`
+    /// — see the `callId: String?` guard below, which fixes a real bug: a
+    /// receive-only device (never transcribed locally, only received the
+    /// other participant's segments) must NOT persist under an empty-string
+    /// key. `CallManager` — the sole caller, always at definite end-of-call —
+    /// has every value in hand at its call site.
+    func resetForCallEnd(callId: String?, conversationId: String, callStartedAt: Date?, localUserId: String, localSpeakerName: String, remoteSpeakerName: String) {
+        if let callId, !persistedSegments.isEmpty {
+            let snapshot = CallTranscript(
+                callId: callId,
+                conversationId: conversationId,
+                callStartedAt: callStartedAt ?? Date(),
+                segments: persistedSegments.map { seg in
+                    CallTranscriptSegment(
+                        speakerId: seg.speakerId,
+                        speakerName: seg.speakerId == localUserId ? localSpeakerName : remoteSpeakerName,
+                        isLocal: seg.speakerId == localUserId,
+                        text: seg.text,
+                        translatedText: seg.translatedText,
+                        translatedLanguage: seg.translatedLanguage,
+                        capturedAt: seg.capturedAt
+                    )
+                }
+            )
+            Task { await CallTranscriptStore.shared.saveMerging(snapshot) }
+        }
         stopTranscribing()
         isShowingOverlay = false
     }

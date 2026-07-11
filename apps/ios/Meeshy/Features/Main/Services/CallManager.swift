@@ -3275,7 +3275,14 @@ final class CallManager: ObservableObject {
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
-        transcriptionService.resetForCallEnd()
+        transcriptionService.resetForCallEnd(
+            callId: currentCallId,
+            conversationId: conversationId ?? "",
+            callStartedAt: callStartDate,
+            localUserId: AuthManager.shared.currentUser?.id ?? "",
+            localSpeakerName: AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? "",
+            remoteSpeakerName: remoteUsername ?? ""
+        )
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
         sdpOfferTimeoutTask?.cancel()
