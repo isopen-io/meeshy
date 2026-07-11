@@ -282,12 +282,16 @@ class CallViewModel @Inject constructor(
         if (!awaitingIncomingIce) return
         awaitingIncomingIce = false
         coordinator.startIncoming(
-            viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo, ::onMediaConnected,
+            viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo,
+            ::onMediaConnected, ::onMediaStalled,
         )
     }
 
     /** WebRTC reports the media path is up → advance the FSM to Connected. */
     private fun onMediaConnected() = dispatch(CallEvent.MediaConnected)
+
+    /** WebRTC reports a mid-call ICE stall → FSM Reconnecting (« Reconnexion… »). */
+    private fun onMediaStalled() = dispatch(CallEvent.ConnectionStalled)
 
     /**
      * Begin a call for [config]. Inert unless the FSM is idle, so a re-entrant
@@ -325,7 +329,7 @@ class CallViewModel @Inject constructor(
                     callId = result.ack.callId
                     coordinator.startOutgoing(
                         viewModelScope, callId, result.ack.iceServers, config.peerId, selfId,
-                        config.isVideo, ::onMediaConnected,
+                        config.isVideo, ::onMediaConnected, ::onMediaStalled,
                     )
                 }
                 is CallInitiateResult.ServerError -> dispatch(CallEvent.ConnectionFailed(result.message))
@@ -351,7 +355,8 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = signalManager.emitJoinAwaitingAck(callId)) {
                 is CallJoinResult.Success -> coordinator.startIncoming(
-                    viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo, ::onMediaConnected,
+                    viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
+                    ::onMediaConnected, ::onMediaStalled,
                 )
                 is CallJoinResult.Failure -> dispatch(CallEvent.ConnectionFailed(result.message))
             }

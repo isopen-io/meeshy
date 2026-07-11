@@ -63,6 +63,15 @@
 > vers missed. Parité iOS MessageSocketManager / web checkForActiveCall ;
 > dédup par callId déjà en place (start() inerte en appel, offre du callId
 > actif ignorée).
+> Résilience réseau Android : le coordinateur WebRTC réagit enfin aux stalls
+> ICE mid-call (avant : handoff WiFi→LTE = média figé pour toujours, appel
+> « actif » côté serveur car les heartbeats socket survivent au média mort).
+> DISCONNECTED = stall (FSM Reconnecting + call:reconnecting, souvent
+> auto-guéri) ; FAILED = restart ICE (WebRtcEngine.restartIce, atome SDK) +
+> renégociation par l'APPELANT INITIAL seul (anti-glare, negotiationId+1) ;
+> retour CONNECTED = call:reconnected + MediaConnected. Les reconnexions
+> alimentent l'analytics (foldAnalytics comptait déjà les entrées en
+> Reconnecting). Pré-connexion jamais un stall (= phase Connecting FSM).
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
