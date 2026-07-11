@@ -34,8 +34,11 @@
 > appel actif (grâce 5 min effective) — fin des appels zombies jusqu'au GC 2 h.
 > Restent de #5 : listeners participant-left/quality-alert/
 > screen-capture-alert/segments (groupe/UX, non bloquants 1:1).
-> Restent : #5 (listeners ci-dessus), #9 (restartIce iOS), harnais e2e
-> 2-sockets.
+> Harnais e2e 2-sockets `f7b0388a2` (reco #3) : 3 vraies sockets, scénario
+> « deux devices, un répond » — initiate→double ring→already-answered vers
+> le device passif seul→relais answer ciblé sans fuite. Dans
+> src/socketio/__tests__/ (integration/ est EXCLU du run jest — piège).
+> Restent : #5 (listeners ci-dessus), #9 (restartIce iOS).
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,
