@@ -13,7 +13,7 @@
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
-import { buildCallSummaryWithMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
+import { buildCallSummaryWithMetadata, buildLiveCallMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
 import {
   buildCallHistoryItem,
@@ -2233,6 +2233,89 @@ export class CallService {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         // A concurrent terminal path already posted the summary — idempotent.
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Post the LIVE call message ("Appel audio/vidéo en cours", `kind:
+   * 'call-live'`) into the conversation at `call:initiate`, BEFORE any
+   * terminal fact exists. It shares the terminal summary's deterministic
+   * `clientMessageId`, so the terminal path later edits this same message
+   * in-place — one message per call, at its chronological position.
+   *
+   * Returns `null` (never throws P2002) when nothing should be posted:
+   * unknown call, call already terminal (a fast terminal path won the race —
+   * its own create posted the final summary), no initiator participant row,
+   * or the unique index rejected a duplicate.
+   */
+  async createLiveCallMessage(
+    callId: string
+  ): Promise<Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> | null> {
+    const call = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      select: {
+        id: true,
+        conversationId: true,
+        initiatorId: true,
+        status: true,
+        metadata: true
+      }
+    });
+    if (!call) {
+      return null;
+    }
+    if (TERMINAL_STATUSES.includes(call.status)) {
+      return null;
+    }
+
+    const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
+    const callType = typeof metadataType === 'string' ? metadataType : null;
+    const { summary, metadata: callMetadata } = buildLiveCallMetadata({
+      callId: call.id,
+      initiatorId: call.initiatorId,
+      callType
+    });
+
+    const initiatorParticipant = await this.prisma.participant.findFirst({
+      where: { userId: call.initiatorId, conversationId: call.conversationId },
+      select: { id: true }
+    });
+    if (!initiatorParticipant) {
+      logger.warn('Cannot attribute live call message: initiator has no participant row', {
+        callId,
+        conversationId: call.conversationId,
+        initiatorId: call.initiatorId
+      });
+      return null;
+    }
+
+    try {
+      const message = await this.prisma.message.create({
+        data: {
+          conversationId: call.conversationId,
+          senderId: initiatorParticipant.id,
+          content: summary.content,
+          originalLanguage: 'fr',
+          messageType: 'system',
+          messageSource: 'system',
+          metadata: callMetadata as unknown as Prisma.InputJsonValue,
+          clientMessageId: callSummaryClientMessageId(call.id)
+        },
+        include: CALL_SUMMARY_MESSAGE_INCLUDE
+      });
+      logger.info('Live call message posted', {
+        callId,
+        conversationId: call.conversationId,
+        callType: summary.callType
+      });
+      return message;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        // The call terminated concurrently and its terminal path already
+        // posted the final summary — the live message must not exist.
         return null;
       }
       throw error;
