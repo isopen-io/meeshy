@@ -396,6 +396,21 @@ nonisolated enum CallReliabilityPolicy {
         }
     }
 
+    /// Audit appels 2026-07-11 #9 — `updateIceServers` is setConfiguration-only
+    /// (no ICE re-gather), so TURN credentials landing MID-RECONNECT would only
+    /// take effect at the next allocation, i.e. once the `.reconnecting`
+    /// watchdog escalates seconds later. Re-arming the in-flight attempt's
+    /// restart the moment the fresh credentials are applied removes that dead
+    /// window. On every other phase the refresh stays inert by design: the
+    /// TURNCredentialService TTL clamp guarantees credentials always outlive
+    /// the call, so a healthy call never pays a gratuitous re-gather.
+    static func shouldRearmRestartOnCredentialRefresh(state: CallState) -> Bool {
+        switch state {
+        case .reconnecting: return true
+        case .idle, .ringing, .offering, .connecting, .connected, .ended: return false
+        }
+    }
+
     /// Duration-clock decision at the `.connected` transition. Reset on a fresh
     /// connect AND on a first-ever connect that transited through
     /// `.reconnecting` (pre-establishment ICE restart) — `durationTask` dies on

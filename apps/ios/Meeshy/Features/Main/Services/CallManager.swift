@@ -3995,6 +3995,18 @@ final class CallManager: ObservableObject {
                 self.webRTCService.updateIceServers(updated)
                 Logger.calls.info("TURN credentials refreshed — \(updated.count) ICE servers updated")
                 self.scheduleTURNCredentialRefresh(ttl: TimeInterval(event.ttl))
+                // Audit #9 — `updateIceServers` is setConfiguration-only. When
+                // these credentials were requested BY a reconnection cycle
+                // (attemptReconnection → requestFreshTurnCredentials), the
+                // in-flight restart may already be gathering with the
+                // near-expiry ones; re-arm it now (same coalesce path as a
+                // redundant network edge — no budget burned) so the re-gather
+                // runs with the credentials just applied instead of idling
+                // until the `.reconnecting` watchdog escalates.
+                if CallReliabilityPolicy.shouldRearmRestartOnCredentialRefresh(state: self.callState) {
+                    Logger.calls.info("fresh TURN credentials mid-reconnect — re-arming ICE restart (attempt \(self.reconnectAttempt))")
+                    self.scheduleICERestart(attempt: self.reconnectAttempt, backoffSeconds: 0)
+                }
             }
             .store(in: &cancellables)
 

@@ -468,4 +468,37 @@ final class CallClockPolicyTests: XCTestCase {
             wasReconnecting: true, hasExistingStartDate: false
         ))
     }
+
+}
+
+// MARK: - Fresh TURN credentials landing mid-reconnect (audit 2026-07-11 #9)
+
+/// `updateIceServers` is setConfiguration-only — no ICE re-gather. Fresh
+/// TURN credentials landing while an ICE-restart cycle is in flight must
+/// re-arm the attempt's restart (the coalesce path) so the re-gather runs
+/// with the credentials just applied, instead of idling until the
+/// `.reconnecting` watchdog escalates seconds later.
+final class CredentialRefreshRearmPolicyTests: XCTestCase {
+
+    func test_shouldRearmRestartOnCredentialRefresh_reconnecting_rearms() {
+        XCTAssertTrue(CallReliabilityPolicy.shouldRearmRestartOnCredentialRefresh(
+            state: .reconnecting(attempt: 1)
+        ))
+    }
+
+    /// Outside `.reconnecting` the periodic 80%-TTL refresh stays inert by
+    /// design: the TTL clamp guarantees credentials always outlive the call,
+    /// so a healthy call must never pay a gratuitous ICE re-gather.
+    func test_shouldRearmRestartOnCredentialRefresh_steadyPhases_stayInert() {
+        let steady: [CallState] = [
+            .idle, .ringing(isOutgoing: true), .offering, .connecting,
+            .connected, .ended(reason: .remote),
+        ]
+        for state in steady {
+            XCTAssertFalse(
+                CallReliabilityPolicy.shouldRearmRestartOnCredentialRefresh(state: state),
+                "\(state) must not re-arm"
+            )
+        }
+    }
 }
