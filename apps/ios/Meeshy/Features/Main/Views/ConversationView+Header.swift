@@ -1,5 +1,6 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 import os
@@ -215,6 +216,22 @@ private struct HeaderCallButtonsView: View {
         // tick (e.g. once a rejoin succeeds and callDuration starts ticking).
         .task(id: conversationId) {
             await reconcileActiveCall()
+        }
+        // Invalidation temps réel : le gateway fanout `call:ended` jusqu'aux
+        // user-rooms de TOUS les membres de la conversation
+        // (resolveCallEndedRooms) — un viewer non-participant le reçoit donc
+        // aussi. Sans ça, la pill « Rejoindre » (posée une seule fois au
+        // .task ci-dessus) resterait pointée sur un appel mort jusqu'au
+        // prochain passage dans la conversation, et un tap déclencherait un
+        // call:join rejeté « This call has already ended ». Match par callId :
+        // un appel qui finit dans une AUTRE conversation ne doit pas effacer
+        // la pill de celle-ci. Hop main obligatoire : le publisher émet
+        // depuis la queue du socket (classe SIGTRAP connue des surfaces
+        // d'appel).
+        .onReceive(MessageSocketManager.shared.callEnded.receive(on: DispatchQueue.main)) { event in
+            if reconciledActiveCall?.id == event.callId {
+                reconciledActiveCall = nil
+            }
         }
     }
 

@@ -37,6 +37,35 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         )
     }
 
+    func test_rejoinIndicator_clearsWhenCallEndedArrivesForThatCall() throws {
+        // Le gateway fanout `call:ended` jusqu'aux user-rooms de TOUS les
+        // membres de la conversation (resolveCallEndedRooms) — un viewer
+        // non-participant le reçoit donc aussi. Sans invalidation temps réel,
+        // la pill « Rejoindre » resterait affichée après la fin de l'appel
+        // (reconciledActiveCall n'est posé qu'au .task(id:)) et un tap
+        // lancerait un rejoin vers un appel mort (« already ended »).
+        let source = try headerSource()
+        guard let range = source.range(of: ".onReceive(MessageSocketManager.shared.callEnded") else {
+            XCTFail("HeaderCallButtonsView must subscribe to MessageSocketManager.callEnded to invalidate the rejoin pill"); return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains(".receive(on: DispatchQueue.main)"),
+            "callEnded fires from the socket queue — the subscription must hop to the main " +
+            "thread before touching @State (known SIGTRAP class on call surfaces)."
+        )
+        XCTAssertTrue(
+            body.contains("reconciledActiveCall?.id == event.callId"),
+            "The invalidation must match by callId — a call ending in ANOTHER conversation " +
+            "must not clear this conversation's rejoin pill."
+        )
+        XCTAssertTrue(
+            body.contains("reconciledActiveCall = nil"),
+            "On a matching call:ended, the rejoin pill must be cleared (back to startCallButtons)."
+        )
+    }
+
     func test_reconcileActiveCall_skipsNetworkCall_whenCallManagerAlreadyActive() throws {
         let source = try headerSource()
         guard let range = source.range(of: "private func reconcileActiveCall() async {") else {
