@@ -895,9 +895,20 @@ struct StoryCardView: View {
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
                     // Canvas sortant suit la carte (même cadrage) pendant le cross-fade.
+                    // clipShape AVANT scale/offset : appliqué après, le clip
+                    // restait sur les bounds NON déplacés — le contenu décalé
+                    // vers le bas gardait un bord HAUT brut (coins carrés) et
+                    // se faisait rogner en bas par les coins arrondis du rect
+                    // d'origine (bug user 2026-07-11 « haut carré, bas à
+                    // moitié arrondi »). Rayon compensé : le clip vit en
+                    // espace non-scalé.
+                    .clipShape(RoundedRectangle(
+                        cornerRadius: readerCanvasFraming.scale > 0
+                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
+                            : readerCanvasFraming.cornerRadius,
+                        style: .continuous))
                     .scaleEffect(readerCanvasFraming.scale)
                     .offset(y: readerCanvasFraming.offset.height)
-                    .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -985,9 +996,15 @@ struct StoryCardView: View {
                     )
                     // Carte → plein écran (mutualisé composer). Visuel pur (la frame
                     // reste `canvasFitSize` → projection design→render intacte).
+                    // clipShape AVANT scale/offset (cf. canvas sortant ci-dessus :
+                    // après, le haut restait carré et le bas à moitié arrondi).
+                    .clipShape(RoundedRectangle(
+                        cornerRadius: readerCanvasFraming.scale > 0
+                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
+                            : readerCanvasFraming.cornerRadius,
+                        style: .continuous))
                     .scaleEffect(readerCanvasFraming.scale)
                     .offset(y: readerCanvasFraming.offset.height)
-                    .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
                     // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
                     // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
                     // (demande user 2026-06-02 « bords arrondis + ThumbHash en fond »).
@@ -1035,9 +1052,14 @@ struct StoryCardView: View {
                     .clipped()
                     // Le loader suit la carte (même cadrage) → pas de saut entre le
                     // placeholder ThumbHash carté et le canvas carté.
+                    // clipShape AVANT scale/offset (même correctif que le canvas).
+                    .clipShape(RoundedRectangle(
+                        cornerRadius: readerCanvasFraming.scale > 0
+                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
+                            : readerCanvasFraming.cornerRadius,
+                        style: .continuous))
                     .scaleEffect(readerCanvasFraming.scale)
                     .offset(y: readerCanvasFraming.offset.height)
-                    .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)
