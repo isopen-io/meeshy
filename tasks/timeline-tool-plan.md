@@ -249,6 +249,18 @@ via sélection canvas + îlot DrawingEditToolOptions) — retrait différé.
 Code mort canvasIsInset/drawingDrawerHeight supprimé. Suites 65/65 vertes ;
 build app laissé à la CI (contention DerivedData session parallèle).
 
+VAGUE DESSIN 2 TEMPS + GLASS ADAPTATIF (2026-07-11, retours user v2) :
+(a) le plein écran de dessin ne s'active QU'À la sélection d'un pinceau
+(isDrawingImmersive) — l'outil dessin s'ouvre en mode LISTE (band
+drawingPanel, rien d'activé, canvas cardé interactif) ; surface de capture
+montée seulement en plein écran ; sortie = restauration complète.
+(b) CanvasChromeScheme (luminance WCAG du fond, gradient moyenné,
+média→dark, seuil 0.179, statiques nonisolated) épinglé via \.colorScheme
+sur le chrome posé sur canvas : composer (topBar, historique, bulles
+texte/dessin, FABs) ET reader (header Layer 7, sidebar Layer 8) — fix
+icônes indigo950 illisibles sur fond sombre (capture user). 66/66 verts ;
+build app → CI (contention DerivedData persistante).
+
 RESTES (différés, par priorité) — constats hors timeline + export TOUS réglés
 par la vague export MP4 (draft saveMedia, labels lane, xcstrings filters,
 script snapshot, export MP4+watermark+audio lanes) :
