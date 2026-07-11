@@ -79,7 +79,7 @@ struct SettingsView: View {
             if isLoggingOut {
                 ZStack {
                     Color.black.opacity(0.45).ignoresSafeArea()
-                    VStack(spacing: 14) {
+                    VStack(spacing: MeeshySpacing.md + 2) {
                         ProgressView()
                             .progressViewStyle(.circular)
                             .controlSize(.large)
@@ -176,7 +176,7 @@ struct SettingsView: View {
             HapticFeedback.light()
             router.push(.profile)
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.md + 2) {
                 MeeshyAvatar(
                     name: authManager.currentUser?.displayName ?? "?",
                     context: .conversationList,
@@ -184,7 +184,7 @@ struct SettingsView: View {
                     presenceState: .online
                 )
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
                     Text(authManager.currentUser?.displayName ?? String(localized: "settings.my_profile", bundle: .main))
                         .font(MeeshyFont.relative(17, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
@@ -269,7 +269,7 @@ struct SettingsView: View {
     private var appearanceSection: some View {
         settingsSection(title: String(localized: "settings.section.appearance", bundle: .main), icon: "paintbrush.fill", color: MeeshyColors.warningHex) {
             settingsRow(icon: theme.preference.icon, title: String(localized: "settings.theme", bundle: .main), color: theme.preference.tintColor) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(ThemePreference.allCases, id: \.self) { pref in
                         Button {
                             HapticFeedback.light()
@@ -279,17 +279,17 @@ struct SettingsView: View {
                             }
                             syncThemeToPrefs(pref)
                         } label: {
-                            VStack(spacing: 4) {
+                            VStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: pref.icon)
                                     .font(MeeshyFont.relative(14))
                                 Text(pref.label)
                                     .font(MeeshyFont.relative(9, weight: .medium))
                             }
                             .foregroundColor(theme.preference == pref ? Color(hex: pref.tintColor) : theme.textMuted)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.sm + 2)
+                            .padding(.vertical, MeeshySpacing.xs + 2)
                             .background(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                     .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(0.15) : Color.clear)
                             )
                         }
@@ -707,8 +707,8 @@ struct SettingsView: View {
 
             trailing()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md + 2)
+        .padding(.vertical, MeeshySpacing.sm + 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
     }

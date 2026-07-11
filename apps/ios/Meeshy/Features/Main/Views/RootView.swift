@@ -1603,7 +1603,7 @@ struct RootView: View {
             let pos = menuButtonPos
 
             // Calculate button position on screen
-            let minEdgePadding: CGFloat = 20
+            let minEdgePadding: CGFloat = MeeshySpacing.xl
             let topSafeZone: CGFloat = 50
             let bottomSafeZone: CGFloat = isScrollingDown ? 50 : 110
             let buttonSize: CGFloat = 52
