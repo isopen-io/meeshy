@@ -191,6 +191,10 @@ public struct QuickTimelineView: View {
         )
     }
 
+    private var hoistedKeyframeMarkers: [KeyframeMarker] {
+        KeyframeMarkerResolver.resolve(project: viewModel.project)
+    }
+
     // MARK: - Body
 
     public var body: some View {
@@ -287,6 +291,14 @@ public struct QuickTimelineView: View {
                         ForEach(track.clipIds, id: \.self) { clipId in
                             clipBar(for: clipId, geometry: geometry, laneHeight: 36)
                         }
+                        LaneKeyframeOverlays(
+                            markers: KeyframeMarkerResolver.markers(
+                                for: track.clipIds, in: hoistedKeyframeMarkers),
+                            selectedId: viewModel.selection.selectedClipId,
+                            geometry: geometry,
+                            laneHeight: 36,
+                            onSelect: { viewModel.selectClip(id: $0) }
+                        )
                         LaneTransitionOverlays(
                             junctions: TransitionJunctionResolver.junctions(
                                 for: track.clipIds, in: hoistedJunctions),

@@ -264,6 +264,10 @@ public struct ProTimelineView: View {
         )
     }
 
+    private var hoistedKeyframeMarkers: [KeyframeMarker] {
+        KeyframeMarkerResolver.resolve(project: viewModel.project)
+    }
+
     // MARK: - Body
 
     /// True when the host environment is a portrait phone (or any compact
@@ -392,6 +396,14 @@ public struct ProTimelineView: View {
                                             ForEach(track.clipIds, id: \.self) { clipId in
                                                 clipBar(for: clipId, geometry: geometry, laneHeight: 40)
                                             }
+                                            LaneKeyframeOverlays(
+                                                markers: KeyframeMarkerResolver.markers(
+                                                    for: track.clipIds, in: hoistedKeyframeMarkers),
+                                                selectedId: viewModel.selection.selectedClipId,
+                                                geometry: geometry,
+                                                laneHeight: 40,
+                                                onSelect: { viewModel.selectClip(id: $0) }
+                                            )
                                             LaneTransitionOverlays(
                                                 junctions: TransitionJunctionResolver.junctions(
                                                     for: track.clipIds, in: hoistedJunctions),
