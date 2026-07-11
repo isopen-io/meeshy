@@ -115,6 +115,15 @@ optiques — mesure au format rendu + encre CTLine, contrat cross-device amendé
 Tap-ruler scrub RE-VÉRIFIÉ OK (l'« inertie » était un tap mal visé sur le bord
 du transport). Total suite : 1813 verts.
 
+VAGUE INSPECTOR (2026-07-11, `bbd88a67d`, retours user à chaud) : modale
+fermable (X→désélection) + steppers ±0,1s Début/Durée ; labels fades réparés
+(« FADE IN %@ » brut → « Apparition/Disparition (fondu) » + valeur vive) ;
+« Animer au playhead » + légende du modèle keyframe ; groupes de pistes en
+clés dédiées trad fr+en (fini STORY.COMPOSER.EMPTY.TILE.FILTERS) ; clips de
+FOND VERROUILLÉS sur les lanes (badge cadenas, un fond couvre toute la slide
+— hint dans l'inspecteur, désactiver « Fond » libère la fenêtre) ; filmstrip
+vidéo auto-extrait (VideoFilmstrip, cache).
+
 RESTES (différés, par priorité) :
 1. SnapGuideView visuel pendant drags (l'aimant + haptique marchent déjà).
 2. F4 édition ms start/durée au ClipInspector (port branche amazing-bell par contenu).
