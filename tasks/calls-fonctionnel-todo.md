@@ -2749,3 +2749,45 @@ confirmés faux) avant de rapporter.
   vérification réelle des deux fixes ci-dessus (aucun Xcode/Swift dans ce sandbox, comme 36 vagues
   consécutives) ; PR #1825 (autre session, même mandat) à suivre séparément, aucun recouvrement avec cette
   vague.
+
+## Vague 37 — `call:signal` servait un participant déjà parti depuis le cache de session (audit #10 régression) (2026-07-11)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche dédiée
+déjà mergée (audit #9, `45a13ba`) → redémarrée depuis `origin/main` (§ règle "PR déjà mergée = travail
+neuf"). Aucun autre PR ouvert ne touche aux appels (`#1873` web realtime timers, `#1874` android media
+cache — vérifiés sans recouvrement). Un agent d'exploration dédié, briefé avec les 36 vagues + audit
+2026-07-11 (déjà CLOS) pour falsifier tout candidat contre le travail déjà fait, a ciblé le commit le plus
+récent non encore audité en profondeur (`3061b1f`, audit #10 — cache TTL 2s du hot-path `call:signal`).
+
+- **[BUG SÉCURITÉ RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** Le cache `signalSessionCache` (TTL 2s, audit
+  #10) ne force une relecture DB que dans deux cas : signal `answer`, ou participant **absent** de
+  l'instantané caché (garde-fou "join tout frais", `findSender`/`findTarget` retournent `undefined`).
+  Aucun garde-fou ne couvrait le cas inverse : un participant **présent** dans l'instantané caché
+  (`leftAt: null`) qui a réellement quitté DEPUIS l'écriture du cache — `call:leave`/`call:force-leave`/
+  `call:end`/l'expiry de la grâce de reconnexion déconnexion mettent tous à jour `CallParticipant.leftAt`
+  en DB mais ne touchaient jamais `signalSessionCache`. `findSender`/`findTarget` matchent alors
+  l'entrée périmée, et la vérification CVE-001 "sender est bien participant de l'appel" passe à tort.
+  **Scénario** : A et B en appel ; une rafale ICE prime le cache pour ce `callId` ; A quitte proprement
+  (`call:leave`, DB à jour, A hors de la room) ; pendant jusqu'à 2s, A (toujours connecté au gateway, plus
+  participant) peut émettre `call:signal` de type `offer`/`ice-restart`/`ice-candidate` (seul `answer`
+  contourne le cache) ciblant B — la session cachée périmée montre encore A actif, la vérification CVE-001
+  passe à tort, et le signal est relayé au socket de B (injection de signalisation par un participant
+  parti, exactement ce que CVE-001 durcit depuis 8+ vagues). **Fix** : nouvelle méthode privée
+  `invalidateSignalSession(callId)` appelée aux 4 sites qui écrivent `leftAt` dans ce handler —
+  `call:leave`, `call:force-leave`, `call:end`, et `leaveParticipationAndBroadcast` (chemin partagé
+  disconnect immédiat / expiry de grâce de reconnexion, succès `leaveCall` ET fallback d'écriture directe
+  Prisma si `leaveCall` lève). La CallCleanupService (GC/heartbeat, échelle 60-120s) n'est PAS concernée :
+  son délai est très supérieur au TTL de 2s, la fenêtre de risque a de toute façon déjà expiré par TTL
+  naturel avant que le GC n'agisse.
+- **Tests TDD** (`CallEventsHandler-signal-cache-invalidation.test.ts`, nouveau fichier) : RED confirmé
+  (les 3 tests d'éviction échouaient — `signalSessionCache.has(callId)` restait `true` après leave/end ;
+  le 4e test — signal post-leave rejeté plutôt que relayé — atteignait `TARGET_NOT_FOUND: no active
+  connection`, preuve qu'il passait bien au-delà du contrôle d'autorisation attendu `NOT_A_PARTICIPANT`)
+  avant le fix. GREEN après (4/4). Suite complète filtrée `Call` : 38/38 suites, 932/932 tests verts.
+  Suite gateway complète : 525/525 suites, 14139/14140 tests verts (1 skip pré-existant, sans rapport).
+  `tsc --noEmit` gateway : 0 erreur avant et après (`git stash` du seul fichier source, `packages/shared`
+  buildé au préalable comme l'exige CLAUDE.md pour un tsc gateway propre).
+- **Reste ouvert (inchangé)** : tout le backlog des vagues précédentes, plus — dette mineure résiduelle
+  de l'audit #10-#11 (emits Android `call:screen-capture-detected`/`call:analytics`, jamais testable dans
+  ce sandbox sans device 2 réel) ; aucun nouveau candidat gateway/web de confiance comparable trouvé après
+  ce passage (cf. rapport de l'agent d'exploration dédié).

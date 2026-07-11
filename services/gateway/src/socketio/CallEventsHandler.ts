@@ -194,6 +194,18 @@ export class CallEventsHandler {
     return session;
   }
 
+  /**
+   * The 2s TTL guards against DB re-reads within a burst, not against a
+   * participant leaving mid-burst — `findSender`/`findTarget` in the
+   * `call:signal` handler only force a fresh read when a participant is
+   * ABSENT from the cached snapshot, never when one is present but stale
+   * (already left). Every path that writes `CallParticipant.leftAt` for
+   * this call must evict the entry so the very next `call:signal` re-reads.
+   */
+  private invalidateSignalSession(callId: string): void {
+    this.signalSessionCache.delete(callId);
+  }
+
   constructor(private prisma: PrismaClient, callService?: CallService) {
     this.callService = callService ?? new CallService(prisma);
     // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
@@ -622,6 +634,7 @@ export class CallEventsHandler {
         userId,
         participantId: participation.participantId
       });
+      this.invalidateSignalSession(participation.callSessionId);
 
       io.to(ROOMS.call(participation.callSessionId)).emit(
         CALL_EVENTS.PARTICIPANT_LEFT,
@@ -679,6 +692,7 @@ export class CallEventsHandler {
 
       try {
         const now = new Date();
+        this.invalidateSignalSession(participation.callSessionId);
 
         // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
         // whose leftAt field was never written (pre-C5 participants).
@@ -2050,6 +2064,7 @@ export class CallEventsHandler {
           userId,
           participantId: leaveParticipantId || userId
         });
+        this.invalidateSignalSession(data.callId);
 
         // Phase 1 fix P2 — caller cancel or callee reject ends ringing
         this.callService.clearRingingTimeout(data.callId);
@@ -2281,6 +2296,7 @@ export class CallEventsHandler {
                 userId,
                 participantId: cleanupParticipantId || userId
               });
+              this.invalidateSignalSession(call.id);
 
               // Sibling-drift fix — mirrors the `call:leave` handler above:
               // this is an explicit leave just like `call:leave`, so it must
@@ -2942,6 +2958,7 @@ export class CallEventsHandler {
         const callSession = await this.callService.endCall(
           data.callId, userId, endParticipantId, isAnonymous, data.reason
         );
+        this.invalidateSignalSession(data.callId);
 
         // Phase 1 fix P2 — explicit end clears any pending ringing timeout
         this.callService.clearRingingTimeout(data.callId);
