@@ -730,7 +730,12 @@ struct CallView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    transcriptionToggleButton
+                    VStack(spacing: 12) {
+                        if transcriptionService.isTranscribing {
+                            translationToggleButton
+                        }
+                        transcriptionToggleButton
+                    }
                 }
             }
             .padding(.trailing, 16)
@@ -1796,7 +1801,32 @@ struct CallView: View {
             // wrong. Reading it before, at tap time, is always accurate.
             let willStart = !transcriptionService.isTranscribing
             showTranscript = willStart
+            // PERF-005: single authoritative place that flips this — the
+            // audio structural transcript panel and the video floating
+            // banner both key off it, so it must not depend on either
+            // view's own lifecycle (onAppear/onChange copies would drift).
+            transcriptionService.isShowingOverlay = willStart
             callManager.toggleTranscription()
+        }
+    }
+
+    /// Global original/translated toggle for the interlocutor's captions —
+    /// my own speech never needs this (already in my language). Visible only
+    /// while transcription is active, matching the transcript panel's own
+    /// visibility condition.
+    private var translationToggleButton: some View {
+        callControlButton(
+            icon: showOriginalText ? "character.bubble.fill" : "character.bubble",
+            color: showOriginalText ? MeeshyColors.indigo400 : .white,
+            bgColor: showOriginalText ? MeeshyColors.indigo400 : .white,
+            isActive: showOriginalText,
+            caption: String(localized: "call.control.translation.caption", defaultValue: "Traduction", bundle: .main),
+            label: showOriginalText
+                ? String(localized: "call.control.translation.showTranslated", defaultValue: "Afficher la traduction", bundle: .main)
+                : String(localized: "call.control.translation.showOriginal", defaultValue: "Afficher le texte original", bundle: .main),
+            isToggle: true
+        ) {
+            showOriginalText.toggle()
         }
     }
 

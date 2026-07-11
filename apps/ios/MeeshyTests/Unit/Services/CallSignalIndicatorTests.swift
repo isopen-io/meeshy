@@ -231,6 +231,36 @@ final class CallHangupFastPathTests: XCTestCase {
             "not just a colored dot — user-requested 2026-07-11."
         )
     }
+
+    func test_translationToggleButton_togglesShowOriginalText() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "private var translationToggleButton: some View {") else {
+            XCTFail("CallView must define translationToggleButton")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 1500, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("showOriginalText.toggle()"),
+            "translationToggleButton must toggle showOriginalText on tap."
+        )
+    }
+
+    func test_connectedView_showsTranslationButton_nextToTranscriptionToggle() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "transcriptionToggleButton") else {
+            XCTFail("CallView must reference transcriptionToggleButton")
+            return
+        }
+        // Search backward up to 500 chars from the reference for translationToggleButton,
+        // confirming both buttons live in the same floating stack.
+        let searchStart = view.index(range.lowerBound, offsetBy: -500, limitedBy: view.startIndex) ?? view.startIndex
+        let body = String(view[searchStart ..< range.lowerBound])
+        XCTAssertTrue(
+            body.contains("translationToggleButton"),
+            "translationToggleButton must be wired into the same floating trailing-edge stack as transcriptionToggleButton."
+        )
+    }
 }
 
 // MARK: - CallSignalGlyph Reduce Motion (source inspection)
