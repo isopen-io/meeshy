@@ -36,9 +36,13 @@ final class CallViewAccessibilityTests: XCTestCase {
     }
 
     func test_videoDurationBadge_hasUpdatesFrequentlyTrait() throws {
+        // Anchored on the composed-label call site, not the raw "call.duration.a11y.label"
+        // key — that key also appears earlier, inside videoDurationBadgeAccessibilityLabel's
+        // own body (a plain computed property with no SwiftUI modifiers nearby), which
+        // would make this window search land on the wrong occurrence.
         let source = try callViewSource()
-        let badgeRange = source.range(of: "call.duration.a11y.label")
-        XCTAssertNotNil(badgeRange, "Duration badge must have accessibility label")
+        let badgeRange = source.range(of: ".accessibilityLabel(videoDurationBadgeAccessibilityLabel)")
+        XCTAssertNotNil(badgeRange, "Duration badge must use the composed accessibility label")
         if let r = badgeRange {
             let window = source.index(r.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
             let vicinity = String(source[r.lowerBound ..< window])
@@ -441,14 +445,29 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    /// TransientCallSignalGlyph is mounted TWICE (audio capsule status area + this video
+    /// overlay badge, cf. test_signalGlyph_isMountedInDurationBadges) — these two tests must
+    /// scope their search to the SECOND (video) occurrence, inside videoCallLayout, or they'd
+    /// silently inspect the unrelated audio-layout mount instead.
+    private func videoDurationBadgeVicinity(_ source: String, window: Int = 1400) -> String {
+        guard let layoutRange = source.range(of: "private var videoCallLayout: some View {") else {
+            XCTFail("CallView must define videoCallLayout")
+            return ""
+        }
+        guard let badgeRange = source.range(
+            of: "TransientCallSignalGlyph(strength: signalStrength)",
+            range: layoutRange.upperBound..<source.endIndex
+        ) else {
+            XCTFail("CallView must mount TransientCallSignalGlyph in the video duration badge")
+            return ""
+        }
+        let end = source.index(badgeRange.lowerBound, offsetBy: window, limitedBy: source.endIndex) ?? source.endIndex
+        return String(source[badgeRange.lowerBound ..< end])
+    }
+
     func test_videoDurationBadge_isExplicitOpaqueAccessibilityElement() throws {
         let source = try callViewSource()
-        guard let badgeRange = source.range(of: "TransientCallSignalGlyph(strength: signalStrength)") else {
-            XCTFail("CallView must mount TransientCallSignalGlyph in the video duration badge")
-            return
-        }
-        let end = source.index(badgeRange.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[badgeRange.lowerBound ..< end])
+        let vicinity = videoDurationBadgeVicinity(source)
         XCTAssertTrue(
             vicinity.contains(".accessibilityElement(children: .ignore)"),
             "The badge must explicitly declare children: .ignore — implicit collapsing from " +
@@ -462,12 +481,7 @@ final class CallViewAccessibilityTests: XCTestCase {
         // opaque element) — leaving it in place after the fix would be
         // misleading dead code implying VoiceOver reads it directly.
         let source = try callViewSource()
-        guard let badgeRange = source.range(of: "TransientCallSignalGlyph(strength: signalStrength)") else {
-            XCTFail("CallView must mount TransientCallSignalGlyph in the video duration badge")
-            return
-        }
-        let end = source.index(badgeRange.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[badgeRange.lowerBound ..< end])
+        let vicinity = videoDurationBadgeVicinity(source)
         XCTAssertFalse(
             vicinity.contains("wifi.exclamationmark") && vicinity.contains("call.status.peer.network"),
             "The badge's wifi.exclamationmark icon must not carry its own .accessibilityLabel " +
