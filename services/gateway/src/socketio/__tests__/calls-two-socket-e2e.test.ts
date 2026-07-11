@@ -85,6 +85,8 @@ const callServiceStub = {
   clearRingingTimeout: () => undefined,
   updateCallStatus: async () => undefined,
   createCallSummaryMessage: async () => null,
+  createLiveCallMessage: async () => null,
+  endCall: async () => ({ ...session, status: 'ended', endReason: 'completed', duration: 30 }),
   persistCallStats: async () => undefined,
 } as unknown as CallService;
 
@@ -336,6 +338,62 @@ describe('Appels — e2e 2 sockets « deux devices, un répond »', () => {
         )
       )
     ).resolves.toBe(true);
+  }, 20_000);
+
+  // Message d'appel VIVANT (feature 2026-07-11) — cycle complet sur vraies
+  // sockets : l'initiate poste le message kind:'call-live' via le broadcaster
+  // message:new (fire-and-forget, après l'ack), puis le terminal l'édite
+  // in-place via le broadcaster message:edited (upsert {kind:'updated'}).
+  // Clôt aussi le déroulé séquentiel : l'appel des scénarios précédents finit
+  // par un vrai call:end.
+  it('cycle du message vivant : initiate → broadcast live (message:new) → end → broadcast édité (message:edited)', async () => {
+    const liveMessage = {
+      id: 'msg-call-1',
+      conversationId: CONV_ID,
+      content: 'Appel audio en cours',
+      metadata: { kind: 'call-live', callId: CALL_ID, initiatorId: USER_A, callType: 'audio' },
+    };
+    const terminalMessage = {
+      id: 'msg-call-1',
+      conversationId: CONV_ID,
+      content: 'Appel audio · 00:30',
+      metadata: { kind: 'call', callId: CALL_ID, initiatorId: USER_A, callType: 'audio', outcome: 'completed' },
+    };
+    (callServiceStub as { createLiveCallMessage: unknown }).createLiveCallMessage =
+      async () => liveMessage;
+    (callServiceStub as { createCallSummaryMessage: unknown }).createCallSummaryMessage =
+      async () => ({ kind: 'updated', message: terminalMessage });
+
+    const newBroadcasts: Array<{ metadata: { kind: string } }> = [];
+    const editBroadcasts: Array<{ metadata: { kind: string } }> = [];
+    handler.setMessageBroadcaster(async (message) => {
+      newBroadcasts.push(message as { metadata: { kind: string } });
+    });
+    handler.setMessageUpdateBroadcaster(async (message) => {
+      editBroadcasts.push(message as { metadata: { kind: string } });
+    });
+
+    // A (ré)initie — l'ack ne doit jamais être gaté par le message vivant.
+    const initiateAck = await new Promise<{ success: boolean }>((resolve) => {
+      clientA.emit(CALL_EVENTS.INITIATE, { conversationId: CONV_ID, type: 'audio' }, resolve);
+    });
+    expect(initiateAck.success).toBe(true);
+
+    await expect(waitUntil(() => newBroadcasts.length === 1)).resolves.toBe(true);
+    expect(newBroadcasts[0].metadata.kind).toBe('call-live');
+    expect(editBroadcasts).toHaveLength(0);
+
+    // A raccroche : le terminal édite le MÊME message (jamais un second post).
+    const endAck = await new Promise<{ success: boolean }>((resolve) => {
+      clientA.emit(CALL_EVENTS.END, { callId: CALL_ID }, resolve);
+    });
+    expect(endAck.success).toBe(true);
+
+    await expect(waitUntil(() => editBroadcasts.length === 1)).resolves.toBe(true);
+    expect(editBroadcasts[0].metadata.kind).toBe('call');
+    expect((editBroadcasts[0] as { id?: string }).id).toBe('msg-call-1');
+    // Un seul message par appel : le terminal n'a rien posté via message:new.
+    expect(newBroadcasts).toHaveLength(1);
   }, 20_000);
 });
 
