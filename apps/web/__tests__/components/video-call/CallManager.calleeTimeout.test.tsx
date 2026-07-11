@@ -11,6 +11,11 @@
  * returns before ever clearing the local `incomingCall` banner state — the
  * ringing notification (Accept/Reject) is stuck forever unless a `call:ended`
  * broadcast happens to arrive. See tasks/calls-fonctionnel-todo.md Vague 30.
+ *
+ * Timeout value updated 2026-07-11 (Vague 38): the caller-side and callee-side
+ * timers share `CALL_TIMEOUT_MS`, which was 30s — 15s tighter than iOS's own
+ * documented 45s `outgoingRingTimeoutSeconds` (WebRTCTypes.swift, deliberately
+ * "15s headroom under the gateway's 60s hard cap"). Bumped to 45s to match.
  */
 
 import { render, screen } from '@testing-library/react';
@@ -56,7 +61,7 @@ import { useCallStore } from '@/stores/call-store';
 import { CallManager } from '@/components/video-call/CallManager';
 
 const CALL_ID = 'call-callee-timeout-abc';
-const CALL_TIMEOUT_MS = 30000;
+const CALL_TIMEOUT_MS = 45000;
 
 type Handler = (...args: unknown[]) => void;
 
@@ -109,7 +114,7 @@ describe('CallManager — callee no-answer timeout', () => {
     jest.useRealTimers();
   });
 
-  it('clears the stuck incoming-call banner after 30s even though the callee never joined (isInCall/currentCall stay unset)', async () => {
+  it('clears the stuck incoming-call banner after 45s even though the callee never joined (isInCall/currentCall stay unset)', async () => {
     const socket = makeFakeSocket();
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
 

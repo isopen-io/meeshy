@@ -2791,3 +2791,40 @@ récent non encore audité en profondeur (`3061b1f`, audit #10 — cache TTL 2s 
   de l'audit #10-#11 (emits Android `call:screen-capture-detected`/`call:analytics`, jamais testable dans
   ce sandbox sans device 2 réel) ; aucun nouveau candidat gateway/web de confiance comparable trouvé après
   ce passage (cf. rapport de l'agent d'exploration dédié).
+
+## Vague 38 — timeout no-answer web à 30s, 15s plus court que la convention iOS documentée (2026-07-11)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche déjà
+au niveau d'`origin/main` (aucune divergence, dépôt shallow re-déshallow pour confirmer). Vague 37 avait
+conclu à aucun nouveau candidat gateway/web — un second agent d'exploration dédié, briefé avec l'historique
+complet des 37 vagues + l'audit clos, a ciblé un angle différent (asymétrie de budget de sonnerie côté
+client) plutôt que ré-auditer l'autorisation/les handlers déjà couverts.
+
+- **[MOYEN, web, CONFIRMÉ + CORRIGÉ]** `CallManager.tsx` (`CALL_TIMEOUT_MS`, ligne 28) coupait l'appel
+  côté web après **30s** sans réponse — 15s plus tôt que le budget iOS documenté
+  (`WebRTCTypes.swift:outgoingRingTimeoutSeconds = 45.0`, commentaire explicite « 15s headroom under the
+  gateway's hard cap » de 60s, `CallService.RINGING_TIMEOUT_MS`). Android n'a aucun timer client propre
+  (attend le frame serveur, donc tolère de fait ~60s). **Scénario concret** : A appelle B depuis le web ;
+  B est lent à répondre (distraction, push en retard) mais aurait décroché à 38s — largement dans le
+  budget iOS (45s) et serveur (60s), et le genre de cas qu'Android tolère par construction. Parce que
+  l'appelant est sur web, `CallManager.tsx` émet `call:leave` à 30s : `CallService.leaveCall` (chemin
+  pré-answer) résout la session en `missed` avant que B ait pu la rejoindre — tout `call:join` ultérieur
+  de B est rejeté. Le même callee lent aurait pu se connecter avec un appelant iOS ou Android. C'est une
+  extension de l'item #7 déjà documenté (« budgets de sonnerie incohérents, pas de source de vérité
+  unique ») qui ne mentionnait jamais la vraie valeur web (30s) ni ne remettait en cause si 30s était la
+  bonne valeur — les deux fixes web précédents sur ce timer (Vague 16, Vague 30) ne faisaient que le
+  réparer pour qu'il se déclenche correctement, jamais reconsidérer sa valeur. **Fix** : `CALL_TIMEOUT_MS`
+  30000 → 45000, commentaire documentant l'alignement sur la convention iOS. Web-only (aucun changement
+  gateway/iOS/Android — les deux autres plateformes étaient déjà correctes/tolérantes).
+- **Tests** : `CallManager.calleeTimeout.test.tsx` + `CallManager.initiatorTimeout.test.tsx` mis à jour
+  (constante locale + libellés 30s→45s) ; les deux étaient déjà des reproductions fidèles du comportement
+  réel (asserts sur `CALL_TIMEOUT_MS + 1`), donc le changement de valeur suffit à les garder verts sans
+  changer leur structure. 18 suites / 122 tests verts sur `apps/web/**/*video-call*`. `tsc --noEmit` :
+  34 erreurs préexistantes dans `CallManager.tsx` (typage `socket as unknown`, sans rapport, confirmées
+  identiques avant/après via `git stash`) ; 0 nouvelle erreur introduite. Lint (`eslint`) cassé dans ce
+  sandbox après `bun install --ignore-scripts` (config circulaire, environnement, sans rapport avec ce
+  diff) — non bloquant, pas re-tenté.
+- **Reste ouvert (inchangé)** : tout ce qui précède. Envisagé mais non fait : hisser la valeur en constante
+  partagée `packages/shared` consommée par iOS/Android — reporté (aucun toolchain Swift/Kotlin dans ce
+  sandbox pour vérifier une modification cross-platform ; iOS/Android ont déjà chacun leur propre valeur
+  correcte documentée, seul web dérivait).

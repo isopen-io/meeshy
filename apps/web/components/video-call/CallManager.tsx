@@ -25,7 +25,14 @@ import type {
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 
-const CALL_TIMEOUT_MS = 30000; // 30 seconds
+// Caller/callee no-answer timeout. The gateway has its own 60s server-side
+// ringing timeout (CallService.RINGING_TIMEOUT_MS), and iOS deliberately
+// rings for 45s client-side (WebRTCTypes.outgoingRingTimeoutSeconds — "15s
+// headroom under the gateway's hard cap"). Web used to cut off at 30s, 15s
+// tighter than iOS for the exact same call: a callee who would have answered
+// between 30s-45s connects fine from an iOS caller but gets hung up on by a
+// web caller. Aligned to 45s (2026-07-11, Vague 38) to match that convention.
+const CALL_TIMEOUT_MS = 45000; // 45 seconds
 
 export function CallManager() {
   const { t } = useI18n('calls');
@@ -74,7 +81,7 @@ export function CallManager() {
   }, []);
 
   /**
-   * Start call timeout - auto-cleanup after 30s if no one joins
+   * Start call timeout - auto-cleanup after 45s if no one joins
    */
   const startCallTimeout = useCallback((callId: string) => {
     // Clear any existing timeout
@@ -131,7 +138,7 @@ export function CallManager() {
    * gateway deliberately never re-emits that event back to the initiator's
    * own socket, so `startCall`'s ack handler (use-video-call.ts) sets
    * `currentCall` directly instead. That path has no reference to
-   * `startCallTimeout`, so the initiator's 30s no-answer auto-cleanup never
+   * `startCallTimeout`, so the initiator's 45s no-answer auto-cleanup never
    * armed for the caller — only the callee (via `handleIncomingCall`) had
    * one. Arm it here, reactively, the moment the initiator's own call
    * becomes current in `initiated` status; `handleParticipantJoined` already
