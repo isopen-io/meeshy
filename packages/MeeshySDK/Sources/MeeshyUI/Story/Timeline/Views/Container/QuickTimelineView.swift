@@ -234,11 +234,17 @@ public struct QuickTimelineView: View {
             duration: viewModel.project.slideDuration,
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
+            // Quick n'a pas de TimelineToolbar — l'undo/redo vit dans le
+            // transport (le Pro passe nil et garde sa toolbar dédiée).
+            canUndo: viewModel.canUndo,
+            canRedo: viewModel.canRedo,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
             onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
             onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
-            onZoomReset: { viewModel.zoomScale = 1.0 }
+            onZoomReset: { viewModel.zoomScale = 1.0 },
+            onUndo: { viewModel.undo() },
+            onRedo: { viewModel.redo() }
         )
     }
 
@@ -261,6 +267,7 @@ public struct QuickTimelineView: View {
                 isDark: colorScheme == .dark,
                 minLaneWidth: 200,
                 rulerHeight: 22,               // unified with ProTimelineView
+                isPlaying: viewModel.isPlaying,
                 onScrub: { viewModel.scrub(to: $0) },
                 onScrubBegan: { viewModel.beginScrub() },
                 onScrubEnded: { viewModel.endScrub() }

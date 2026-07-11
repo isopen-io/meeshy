@@ -35,10 +35,17 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     public let isDark: Bool
     public let minLaneWidth: CGFloat
     public let rulerHeight: CGFloat
+    /// True pendant la lecture — active le suivi automatique du playhead
+    /// (auto-scroll) pour qu'il ne sorte jamais du viewport à droite.
+    public let isPlaying: Bool
     public let onScrub: (Float) -> Void
     public let onScrubBegan: () -> Void
     public let onScrubEnded: () -> Void
     private let tracks: (CGFloat) -> TracksContent
+
+    /// Dernier temps sur lequel l'auto-follow a scrollé — throttle pour ne
+    /// pas émettre un scrollTo par frame (60 Hz).
+    @State private var lastFollowedTime: Float = -1
 
     /// `tracks` receives the resolved lane width so every `TrackBarView` row
     /// spans exactly the same horizontal extent as the ruler above it.
@@ -49,6 +56,7 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         isDark: Bool,
         minLaneWidth: CGFloat,
         rulerHeight: CGFloat = 22,
+        isPlaying: Bool = false,
         onScrub: @escaping (Float) -> Void,
         onScrubBegan: @escaping () -> Void = {},
         onScrubEnded: @escaping () -> Void = {},
@@ -60,35 +68,67 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         self.isDark = isDark
         self.minLaneWidth = minLaneWidth
         self.rulerHeight = rulerHeight
+        self.isPlaying = isPlaying
         self.onScrub = onScrub
         self.onScrubBegan = onScrubBegan
         self.onScrubEnded = onScrubEnded
         self.tracks = tracks
     }
 
+    private nonisolated static var playheadAnchorId: String { "timeline-playhead-anchor" }
+
     public var body: some View {
         let laneWidth = Self.laneWidth(totalDuration: totalDuration,
                                        geometry: geometry,
                                        minLaneWidth: minLaneWidth)
-        ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                RulerView(
-                    totalDuration: totalDuration,
-                    geometry: geometry,
-                    isDark: isDark,
-                    height: rulerHeight,
-                    onTapTime: onScrub,
-                    onScrubBegan: onScrubBegan,
-                    onScrubEnded: onScrubEnded
-                )
-                .equatable()
-                .frame(width: laneWidth, alignment: .leading)
-                .padding(.leading, Self.laneLabelWidth)
-                tracks(laneWidth)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    RulerView(
+                        totalDuration: totalDuration,
+                        geometry: geometry,
+                        isDark: isDark,
+                        height: rulerHeight,
+                        onTapTime: onScrub,
+                        onScrubBegan: onScrubBegan,
+                        onScrubEnded: onScrubEnded
+                    )
+                    .equatable()
+                    .frame(width: laneWidth, alignment: .leading)
+                    .padding(.leading, Self.laneLabelWidth)
+                    tracks(laneWidth)
+                }
+                .padding(.horizontal, Self.horizontalPadding)
+                .overlay(alignment: .topLeading) { playheadOverlay }
+                .background(alignment: .topLeading) { playheadAnchor }
             }
-            .padding(.horizontal, Self.horizontalPadding)
-            .overlay(alignment: .topLeading) { playheadOverlay }
+            .adaptiveOnChange(of: currentTime) { _, time in
+                followPlayheadIfPlaying(time: time, proxy: proxy)
+            }
         }
+    }
+
+    /// Ancre invisible qui suit le playhead dans l'espace du contenu —
+    /// cible du `scrollTo` de l'auto-follow.
+    private var playheadAnchor: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .offset(x: Self.playheadLeadingInset + geometry.x(for: currentTime))
+            .id(Self.playheadAnchorId)
+    }
+
+    /// Suit le playhead PENDANT LA LECTURE uniquement (un scrub = le doigt de
+    /// l'utilisateur décide déjà de la position ; un drag de clip ne doit pas
+    /// voir la timeline bouger sous lui). Throttlé à ~0.5s de timeline pour
+    /// ne pas émettre 60 scrollTo/s.
+    private func followPlayheadIfPlaying(time: Float, proxy: ScrollViewProxy) {
+        guard isPlaying else {
+            lastFollowedTime = -1
+            return
+        }
+        guard abs(time - lastFollowedTime) > 0.5 else { return }
+        lastFollowedTime = time
+        proxy.scrollTo(Self.playheadAnchorId, anchor: UnitPoint(x: 0.35, y: 0))
     }
 
     private var playheadOverlay: some View {

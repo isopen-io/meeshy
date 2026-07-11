@@ -372,6 +372,7 @@ public struct ProTimelineView: View {
                 isDark: colorScheme == .dark,
                 minLaneWidth: 320,
                 rulerHeight: 22,
+                isPlaying: viewModel.isPlaying,
                 onScrub: { viewModel.scrub(to: $0) },
                 onScrubBegan: { viewModel.beginScrub() },
                 onScrubEnded: { viewModel.endScrub() }

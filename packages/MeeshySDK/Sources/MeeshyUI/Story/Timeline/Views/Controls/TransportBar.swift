@@ -10,23 +10,34 @@ public struct TransportBar: View {
     public let duration: Float
     public let zoomScale: CGFloat
     public let isMuted: Bool
+    /// Undo/redo compacts pour le mode Quick (pas de TimelineToolbar dédiée).
+    /// nil = masqués — le Pro garde sa toolbar et passe nil ici.
+    public let canUndo: Bool?
+    public let canRedo: Bool?
     public let onPlayToggle: () -> Void
     public let onMuteToggle: () -> Void
     public let onZoomIn: () -> Void
     public let onZoomOut: () -> Void
     public let onZoomReset: () -> Void
+    public let onUndo: () -> Void
+    public let onRedo: () -> Void
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,
                 zoomScale: CGFloat, isMuted: Bool,
+                canUndo: Bool? = nil, canRedo: Bool? = nil,
                 onPlayToggle: @escaping () -> Void,
                 onMuteToggle: @escaping () -> Void,
                 onZoomIn: @escaping () -> Void,
                 onZoomOut: @escaping () -> Void,
-                onZoomReset: @escaping () -> Void) {
+                onZoomReset: @escaping () -> Void,
+                onUndo: @escaping () -> Void = {},
+                onRedo: @escaping () -> Void = {}) {
         self.isPlaying = isPlaying; self.currentTime = currentTime; self.duration = duration
         self.zoomScale = zoomScale; self.isMuted = isMuted
+        self.canUndo = canUndo; self.canRedo = canRedo
         self.onPlayToggle = onPlayToggle; self.onMuteToggle = onMuteToggle
         self.onZoomIn = onZoomIn; self.onZoomOut = onZoomOut; self.onZoomReset = onZoomReset
+        self.onUndo = onUndo; self.onRedo = onRedo
     }
 
     public static func formatTime(seconds: Float) -> String {
@@ -71,6 +82,7 @@ public struct TransportBar: View {
             playButton
             timeReadout
             Spacer(minLength: 4)
+            undoRedoCluster
             zoomCluster
             muteButton
         }
@@ -152,6 +164,36 @@ public struct TransportBar: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(format: String(localized: "story.timeline.transport.timeReadout",
                                                  bundle: .module), nowPrecise, totalPrecise))
+    }
+
+    @ViewBuilder
+    private var undoRedoCluster: some View {
+        if let canUndo, let canRedo {
+            HStack(spacing: 6) {
+                Button(action: onUndo) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle().inset(by: -7))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canUndo)
+                .opacity(canUndo ? 1 : 0.35)
+                .accessibilityLabel(String(localized: "story.timeline.toolbar.undo",
+                                           defaultValue: "Annuler", bundle: .module))
+
+                Button(action: onRedo) {
+                    Image(systemName: "arrow.uturn.forward")
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle().inset(by: -7))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canRedo)
+                .opacity(canRedo ? 1 : 0.35)
+                .accessibilityLabel(String(localized: "story.timeline.toolbar.redo",
+                                           defaultValue: "Rétablir", bundle: .module))
+            }
+            .foregroundStyle(MeeshyColors.indigo600)
+        }
     }
 
     private var zoomCluster: some View {
