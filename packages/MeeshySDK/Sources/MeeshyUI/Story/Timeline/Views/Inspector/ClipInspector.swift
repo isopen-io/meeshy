@@ -54,6 +54,17 @@ public struct ClipInspector: View {
     public let onBackgroundToggled: (Bool) -> Void
     public let onAddKeyframe: () -> Void
     public let onDelete: () -> Void
+    /// Ferme l'inspecteur (désélection) — la modale était infermable :
+    /// aucune affordance, seul un tap hasardeux hors clip la faisait
+    /// disparaître (retour user 2026-07-11).
+    public let onClose: () -> Void
+    /// Ajustement du DÉBUT par pas (déplace le clip, durée constante).
+    public let onStartAdjusted: (Float) -> Void
+    /// Ajustement de la DURÉE par pas (la fin bouge, le début reste).
+    public let onDurationAdjusted: (Float) -> Void
+
+    /// Pas des steppers début/durée.
+    public static let timeStep: Float = 0.1
 
     @State private var volume: Float
     @State private var fadeIn: Float
@@ -69,7 +80,10 @@ public struct ClipInspector: View {
                 onLoopToggled: @escaping (Bool) -> Void,
                 onBackgroundToggled: @escaping (Bool) -> Void,
                 onAddKeyframe: @escaping () -> Void,
-                onDelete: @escaping () -> Void) {
+                onDelete: @escaping () -> Void,
+                onClose: @escaping () -> Void = {},
+                onStartAdjusted: @escaping (Float) -> Void = { _ in },
+                onDurationAdjusted: @escaping (Float) -> Void = { _ in }) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -79,6 +93,9 @@ public struct ClipInspector: View {
         self.onBackgroundToggled = onBackgroundToggled
         self.onAddKeyframe = onAddKeyframe
         self.onDelete = onDelete
+        self.onClose = onClose
+        self.onStartAdjusted = onStartAdjusted
+        self.onDurationAdjusted = onDurationAdjusted
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
@@ -190,32 +207,64 @@ public struct ClipInspector: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle().inset(by: -8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "story.timeline.inspector.close",
+                                       defaultValue: "Fermer", bundle: .module))
         }
     }
 
     private var metadataRow: some View {
-        HStack(spacing: 24) {
-            metadataField(
-                title: String(localized: "story.timeline.inspector.start", bundle: .module),
-                value: Self.formatTime(seconds: clip.startTime)
+        HStack(spacing: 16) {
+            steppableTimeField(
+                title: String(localized: "story.timeline.inspector.start",
+                              defaultValue: "Début", bundle: .module),
+                value: clip.startTime,
+                onAdjust: onStartAdjusted
             )
-            metadataField(
-                title: String(localized: "story.timeline.inspector.duration", bundle: .module),
-                value: Self.formatTime(seconds: clip.duration)
+            steppableTimeField(
+                title: String(localized: "story.timeline.inspector.duration",
+                              defaultValue: "Durée", bundle: .module),
+                value: clip.duration,
+                onAdjust: onDurationAdjusted
             )
         }
     }
 
-    private func metadataField(title: String, value: String) -> some View {
+    /// Champ temps éditable par pas de ±0,1 s — l'affichage seul rendait la
+    /// modale « peu compréhensible » : des valeurs qu'on lit mais qu'on ne
+    /// peut pas toucher (retour user 2026-07-11).
+    private func steppableTimeField(title: String, value: Float,
+                                    onAdjust: @escaping (Float) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title.uppercased())
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(.body, design: .monospaced))
+            HStack(spacing: 6) {
+                stepButton(systemName: "minus.circle.fill") { onAdjust(-Self.timeStep) }
+                Text(Self.formatTime(seconds: value))
+                    .font(.system(.callout, design: .monospaced))
+                    .monospacedDigit()
+                stepButton(systemName: "plus.circle.fill") { onAdjust(Self.timeStep) }
+            }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title) \(value)")
+        .accessibilityLabel("\(title) \(Self.formatTime(seconds: value))")
+    }
+
+    private func stepButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.body)
+                .foregroundStyle(MeeshyColors.indigo400)
+                .contentShape(Rectangle().inset(by: -6))
+        }
+        .buttonStyle(.plain)
     }
 
     private var volumeSlider: some View {
@@ -231,15 +280,21 @@ public struct ClipInspector: View {
         }
     }
 
+    /// Effets d'APPARITION / DISPARITION de l'élément (fondu d'entrée et de
+    /// sortie, en secondes). Les anciens labels réutilisaient les clés de
+    /// TOOLTIP (« FADE IN %@ ») — le format brut s'affichait tel quel et rien
+    /// n'indiquait qu'il s'agissait des effets d'apparition (retour user).
     private var fadeSliders: some View {
         HStack(spacing: 12) {
             fadeSlider(
-                title: String(localized: "story.timeline.clip.tooltip.fadeIn", bundle: .module),
+                title: String(localized: "story.timeline.inspector.fadeIn",
+                              defaultValue: "Apparition (fondu)", bundle: .module),
                 value: $fadeIn,
                 onCommit: { onFadeInChanged(fadeIn) }
             )
             fadeSlider(
-                title: String(localized: "story.timeline.clip.tooltip.fadeOut", bundle: .module),
+                title: String(localized: "story.timeline.inspector.fadeOut",
+                              defaultValue: "Disparition (fondu)", bundle: .module),
                 value: $fadeOut,
                 onCommit: { onFadeOutChanged(fadeOut) }
             )
@@ -248,9 +303,18 @@ public struct ClipInspector: View {
 
     private func fadeSlider(title: String, value: Binding<Float>, onCommit: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased())
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                Text(title.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Text(value.wrappedValue > 0
+                     ? String(format: "%.2f s", value.wrappedValue)
+                     : String(localized: "story.timeline.inspector.fade.off",
+                              defaultValue: "off", bundle: .module))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(value.wrappedValue > 0 ? MeeshyColors.indigo400 : .secondary)
+            }
             Slider(value: value, in: Self.fadeRange, step: 0.05) { editing in
                 if !editing { onCommit() }
             }
@@ -261,52 +325,80 @@ public struct ClipInspector: View {
 
     @ViewBuilder
     private var togglesRow: some View {
-        HStack(spacing: 24) {
-            if Self.supportsLoop(kind: clip.kind) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 24) {
+                if Self.supportsLoop(kind: clip.kind) {
+                    Toggle(isOn: Binding(
+                        get: { loop },
+                        set: { loop = $0; onLoopToggled($0) }
+                    )) {
+                        Text(String(localized: "story.timeline.inspector.loop",
+                                    defaultValue: "Boucle", bundle: .module))
+                    }
+                    .toggleStyle(.switch)
+                    .tint(MeeshyColors.indigo500)
+                }
+
                 Toggle(isOn: Binding(
-                    get: { loop },
-                    set: { loop = $0; onLoopToggled($0) }
+                    get: { background },
+                    set: { background = $0; onBackgroundToggled($0) }
                 )) {
-                    Text(String(localized: "story.timeline.inspector.loop", bundle: .module))
+                    Text(String(localized: "story.timeline.inspector.background",
+                                defaultValue: "Fond", bundle: .module))
                 }
                 .toggleStyle(.switch)
                 .tint(MeeshyColors.indigo500)
             }
-
-            Toggle(isOn: Binding(
-                get: { background },
-                set: { background = $0; onBackgroundToggled($0) }
-            )) {
-                Text(String(localized: "story.timeline.inspector.background", bundle: .module))
+            // Un fond couvre TOUTE la slide : sa fenêtre début/durée est
+            // ignorée en lecture — sans cette phrase, déplacer le clip de
+            // fond sur la timeline laissait croire à un départ différé
+            // (retour user 2026-07-11). Désactiver « Fond » rend le clip
+            // foreground et sa fenêtre redevient effective.
+            if background {
+                Text(String(localized: "story.timeline.inspector.background.hint",
+                            defaultValue: "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline.",
+                            bundle: .module))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .toggleStyle(.switch)
-            .tint(MeeshyColors.indigo500)
         }
     }
 
     private var actionsRow: some View {
-        HStack(spacing: 12) {
-            Button(action: onAddKeyframe) {
-                Label(
-                    String(localized: "story.timeline.keyframe.add", bundle: .module),
-                    systemImage: "diamond.fill"
-                )
-                .font(.subheadline.weight(.semibold))
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(MeeshyColors.indigo500)
-            .accessibilityHint(String(localized: "story.timeline.keyframe.add", bundle: .module))
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                Button(action: onAddKeyframe) {
+                    Label(
+                        String(localized: "story.timeline.inspector.animate",
+                               defaultValue: "Animer au playhead", bundle: .module),
+                        systemImage: "diamond.fill"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MeeshyColors.indigo500)
+                .accessibilityHint(String(localized: "story.timeline.inspector.animate.hint",
+                                          defaultValue: "Pose une étape d'animation à la position de lecture",
+                                          bundle: .module))
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
 
-            Button(role: .destructive, action: onDelete) {
-                Label(
-                    String(localized: "story.timeline.clip.delete", bundle: .module),
-                    systemImage: "trash"
-                )
-                .font(.subheadline.weight(.semibold))
+                Button(role: .destructive, action: onDelete) {
+                    Label(
+                        String(localized: "story.timeline.clip.delete", bundle: .module),
+                        systemImage: "trash"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                }
+                .tint(MeeshyColors.error)
             }
-            .tint(MeeshyColors.error)
+            Text(String(localized: "story.timeline.inspector.animate.caption",
+                        defaultValue: "Étape d'animation : fige position, échelle et opacité à cet instant — l'élément glisse d'une étape à l'autre pendant la lecture.",
+                        bundle: .module))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

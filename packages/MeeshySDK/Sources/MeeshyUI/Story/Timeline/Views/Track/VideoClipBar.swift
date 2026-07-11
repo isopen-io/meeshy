@@ -19,6 +19,7 @@ public struct VideoClipBar: View, Equatable {
             && lhs.geometry == rhs.geometry
             && lhs.laneHeight == rhs.laneHeight
             && lhs.frames.count == rhs.frames.count
+            && lhs.videoURL == rhs.videoURL
     }
 
     public let clipId: String
@@ -33,6 +34,11 @@ public struct VideoClipBar: View, Equatable {
     public let geometry: TimelineGeometry
     public let laneHeight: CGFloat
     public let frames: [UIImage]
+    /// URL locale de la vidéo — quand `frames` est vide, la barre extrait
+    /// elle-même son filmstrip (async, caché par `VideoFilmstrip`). Les
+    /// vignettes manquantes rendaient les clips vidéo illisibles (retour
+    /// user 2026-07-11 : « je ne vois pas les thumbnails »).
+    public let videoURL: URL?
     public let onTap: () -> Void
     public let onDoubleTap: () -> Void
     public let onLongPress: () -> Void
@@ -47,6 +53,14 @@ public struct VideoClipBar: View, Equatable {
 
     private var width: CGFloat { geometry.width(for: duration) }
     private var xOrigin: CGFloat { geometry.x(for: startTime) }
+
+    /// Filmstrip auto-extrait quand l'hôte ne fournit pas de frames (vidéos).
+    /// Exclu de `==` (état interne, pas une prop visuelle d'entrée).
+    @State private var loadedFrames: [UIImage] = []
+
+    private var effectiveFrames: [UIImage] {
+        frames.isEmpty ? loadedFrames : frames
+    }
 
     public var accessibilityComposed: String {
         String(
@@ -68,6 +82,7 @@ public struct VideoClipBar: View, Equatable {
         geometry: TimelineGeometry,
         laneHeight: CGFloat,
         frames: [UIImage],
+        videoURL: URL? = nil,
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
         onLongPress: @escaping () -> Void,
@@ -88,6 +103,7 @@ public struct VideoClipBar: View, Equatable {
         self.geometry = geometry
         self.laneHeight = laneHeight
         self.frames = frames
+        self.videoURL = videoURL
         self.onTap = onTap
         self.onDoubleTap = onDoubleTap
         self.onLongPress = onLongPress
@@ -130,6 +146,11 @@ public struct VideoClipBar: View, Equatable {
             startTime, duration
         ))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .task(id: videoURL) {
+            guard frames.isEmpty, let videoURL else { return }
+            loadedFrames = await VideoFilmstrip.frames(url: videoURL, count: 6,
+                                                       maxHeight: laneHeight)
+        }
     }
 
     // MARK: - Subviews
@@ -193,11 +214,11 @@ public struct VideoClipBar: View, Equatable {
 
     private var framesStrip: some View {
         HStack(spacing: 0) {
-            ForEach(Array(frames.enumerated()), id: \.offset) { _, image in
+            ForEach(Array(effectiveFrames.enumerated()), id: \.offset) { _, image in
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: max(8, width / CGFloat(max(frames.count, 1))),
+                    .frame(width: max(8, width / CGFloat(max(effectiveFrames.count, 1))),
                            height: laneHeight - 4)
                     .clipped()
             }

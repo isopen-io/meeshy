@@ -404,6 +404,12 @@ public struct QuickTimelineView: View {
     private func clipBar(for clipId: String, geometry: TimelineGeometry, laneHeight: CGFloat) -> some View {
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == clipId }) {
             let isSynthetic = StoryComposerViewModel.isSyntheticTimelineClipId(media.id)
+            // Un FOND couvre toute la slide : sa fenêtre début/durée est
+            // ignorée en lecture. Le verrouiller sur la timeline évite le
+            // mensonge « je déplace le début mais rien ne change » (retour
+            // user 2026-07-11) — l'inspecteur permet de désactiver « Fond »
+            // pour rendre la fenêtre effective.
+            let isImmovableBackground = isSynthetic || media.isBackground == true
             let mediaFrames: [UIImage] = {
                 if media.kind == .image, let img = viewModel.loadedImage(for: media.id) {
                     return [img]
@@ -421,11 +427,12 @@ public struct QuickTimelineView: View {
                 fadeIn: Float(media.fadeIn ?? 0),
                 fadeOut: Float(media.fadeOut ?? 0),
                 isSelected: viewModel.selection.selectedClipId == media.id,
-                isLocked: isSynthetic,
+                isLocked: isImmovableBackground,
                 isDark: colorScheme == .dark,
                 geometry: geometry,
                 laneHeight: laneHeight,
                 frames: mediaFrames,
+                videoURL: media.kind == .video ? viewModel.loadedURL(for: media.id) : nil,
                 onTap: { viewModel.selectClip(id: media.id) },
                 onDoubleTap: {
                     viewModel.selectClip(id: media.id)

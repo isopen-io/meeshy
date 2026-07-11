@@ -67,10 +67,14 @@ public struct ProTimelineView: View {
             default: return false
             }
         }
+        // Clés DÉDIÉES aux groupes de pistes — la réutilisation des clés de
+        // tuiles du composer affichait « STORY.COMPOSER.EMPTY.TILE.FILTERS »
+        // brut sur le groupe Texte (clé sans entrée) et mentait sémantiquement
+        // (le groupe contient les TEXTES, pas les filtres).
         return [
-            TrackGroup(section: .media, titleKey: "story.composer.empty.tile.media", tracks: media),
-            TrackGroup(section: .son,   titleKey: "story.composer.empty.tile.son",   tracks: son),
-            TrackGroup(section: .filters,  titleKey: "story.composer.empty.tile.filters",  tracks: filters)
+            TrackGroup(section: .media, titleKey: "story.timeline.group.media", tracks: media),
+            TrackGroup(section: .son,   titleKey: "story.timeline.group.sound", tracks: son),
+            TrackGroup(section: .filters, titleKey: "story.timeline.group.text", tracks: filters)
         ]
     }
 
@@ -503,7 +507,14 @@ public struct ProTimelineView: View {
                 viewModel.setClipBackground(id: clipId, isBackground: bg)
             },
             onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
-            onDelete: { viewModel.deleteClip(id: clipId) }
+            onDelete: { viewModel.deleteClip(id: clipId) },
+            onClose: { viewModel.selectClip(id: nil) },
+            onStartAdjusted: { [viewModel] delta in
+                viewModel.dragClip(id: clipId, deltaTimeSeconds: delta, isCommitted: true)
+            },
+            onDurationAdjusted: { [viewModel] delta in
+                viewModel.trimClipEnd(id: clipId, deltaTimeSeconds: delta)
+            }
         )
         .padding(12)
         .transition(.opacity)
@@ -613,11 +624,12 @@ public struct ProTimelineView: View {
     private func clipBar(for clipId: String, geometry: TimelineGeometry, laneHeight: CGFloat) -> some View {
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == clipId }) {
             let isSynthetic = StoryComposerViewModel.isSyntheticTimelineClipId(media.id)
+            // Un FOND couvre toute la slide (fenêtre ignorée en lecture) —
+            // verrouillé sur la lane ; l'inspecteur « Fond » le libère.
+            let isImmovableBackground = isSynthetic || media.isBackground == true
             // Image clips get a single bitmap stretched across the strip;
-            // VideoClipBar's framesStrip divides `width / frames.count` so
-            // a one-element array fills the bar. Video clips still receive
-            // an empty array — extracting per-zoom video frames is the next
-            // wave (would call `VideoFrameExtractor` keyed on URL + duration).
+            // video clips self-extract their filmstrip from `videoURL`
+            // (VideoFilmstrip, cached).
             let mediaFrames: [UIImage] = {
                 if media.kind == .image, let img = viewModel.loadedImage(for: media.id) {
                     return [img]
@@ -635,11 +647,12 @@ public struct ProTimelineView: View {
                 fadeIn: Float(media.fadeIn ?? 0),
                 fadeOut: Float(media.fadeOut ?? 0),
                 isSelected: viewModel.selection.selectedClipId == media.id,
-                isLocked: isSynthetic,
+                isLocked: isImmovableBackground,
                 isDark: colorScheme == .dark,
                 geometry: geometry,
                 laneHeight: laneHeight,
                 frames: mediaFrames,
+                videoURL: media.kind == .video ? viewModel.loadedURL(for: media.id) : nil,
                 onTap: { viewModel.selectClip(id: media.id) },
                 onDoubleTap: {
                     viewModel.selectClip(id: media.id)
