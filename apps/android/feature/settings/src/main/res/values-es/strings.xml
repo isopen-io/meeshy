@@ -169,4 +169,22 @@
     <string name="data_export_share">Compartir</string>
     <string name="data_export_error_network">Sin conexión. Comprueba tu red e inténtalo de nuevo.</string>
     <string name="data_export_error_generic">Algo salió mal. Inténtalo de nuevo.</string>
+
+    <!-- Media cache management -->
+    <string name="media_cache_title">Caché de medios</string>
+    <string name="media_cache_info_title">Medios en caché</string>
+    <string name="media_cache_info_body">La caché acelera la carga de los medios y ahorra datos. Vaciarla es seguro: los archivos se vuelven a descargar cuando se necesitan.</string>
+    <string name="media_cache_total_label">Caché total usada</string>
+    <string name="media_cache_category_images">Imágenes</string>
+    <string name="media_cache_category_audio">Audio</string>
+    <string name="media_cache_category_video">Vídeo</string>
+    <string name="media_cache_category_thumbnails">Miniaturas</string>
+    <string name="media_cache_clear_category">Vaciar</string>
+    <string name="media_cache_clear_all">Vaciar caché</string>
+    <string name="media_cache_confirm_title">Vaciar caché</string>
+    <string name="media_cache_confirm_message">Esto eliminará todos los medios almacenados localmente. Se volverán a descargar si es necesario.</string>
+    <string name="media_cache_confirm_clear">Vaciar</string>
+    <string name="media_cache_confirm_cancel">Cancelar</string>
+    <string name="media_cache_error_scan">No se pudo leer el tamaño de la caché. Desliza para actualizar.</string>
+    <string name="media_cache_error_clear">No se pudo vaciar la caché. Inténtalo de nuevo.</string>
 </resources>

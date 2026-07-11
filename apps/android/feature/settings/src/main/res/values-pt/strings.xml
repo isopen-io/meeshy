@@ -169,4 +169,22 @@
     <string name="data_export_share">Compartilhar</string>
     <string name="data_export_error_network">Sem conexão. Verifique sua rede e tente novamente.</string>
     <string name="data_export_error_generic">Algo deu errado. Tente novamente.</string>
+
+    <!-- Media cache management -->
+    <string name="media_cache_title">Cache de mídia</string>
+    <string name="media_cache_info_title">Mídia em cache</string>
+    <string name="media_cache_info_body">O cache acelera o carregamento das mídias e economiza dados. Limpá-lo é seguro: os arquivos são baixados novamente quando necessário.</string>
+    <string name="media_cache_total_label">Cache total usado</string>
+    <string name="media_cache_category_images">Imagens</string>
+    <string name="media_cache_category_audio">Áudio</string>
+    <string name="media_cache_category_video">Vídeo</string>
+    <string name="media_cache_category_thumbnails">Miniaturas</string>
+    <string name="media_cache_clear_category">Limpar</string>
+    <string name="media_cache_clear_all">Limpar cache</string>
+    <string name="media_cache_confirm_title">Limpar cache</string>
+    <string name="media_cache_confirm_message">Isso removerá todas as mídias armazenadas localmente. Elas serão baixadas novamente se necessário.</string>
+    <string name="media_cache_confirm_clear">Limpar</string>
+    <string name="media_cache_confirm_cancel">Cancelar</string>
+    <string name="media_cache_error_scan">Não foi possível ler o tamanho do cache. Puxe para atualizar.</string>
+    <string name="media_cache_error_clear">Não foi possível limpar o cache. Tente novamente.</string>
 </resources>

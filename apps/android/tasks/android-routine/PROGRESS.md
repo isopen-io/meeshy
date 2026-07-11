@@ -2,7 +2,47 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management)** → rest`
+
+> On 2026-07-11 **media cache management** landed (slice `settings-media-cache`, feature-parity §L — "Media
+> cache management (clear cached images/audio/video/thumbnails)"). Port of iOS `DataStorageView` +
+> `CacheCoordinator.clearAll`, **surpassing iOS**: iOS shows **no sizes** and offers only a single "clear all"
+> (its own audit note flags a size readout as a future TODO — `DiskCacheStore.estimatedDiskBytes()` is wired to
+> nothing); Android shows the **total + every per-category size** and clears **per-category or all**. Two pure
+> `:core:model` SSOTs — (1) `ByteSizeFormatter.format(bytes) → String`: the human-readable cache-size formatter,
+> porting the shared iOS `ByteCountFormatter` convention (base **1024**, units KB/MB/GB only — no bytes unit, no
+> TB, adaptive ~1 decimal with a trailing `.0` dropped and a space before the unit), negatives clamped to 0 and
+> sub-KB still shown in KB; (2) `MediaCacheReport`/`MediaCacheCategory` (IMAGES/AUDIO/VIDEO/THUMBNAILS mirroring
+> the iOS `CacheCoordinator` stores): per-category `Long` bytes with `of(map)` normalising every category present +
+> negatives clamped, derived `totalBytes`/`isEmpty`/`nonEmptyCategories`, and an optimistic `withCleared(set)`
+> projection. `:feature:settings` pure `MediaCacheScanner` — `sizeOf(File)` recursive `walkTopDown` sum (missing
+> dir = 0) + `clear(File)` content-wipe-keep-dir (missing dir = no-op), exercised on **real temp directories** in
+> the JVM tests. `MediaCacheStore`/`AndroidMediaCacheStore` (coverage-exempt I/O glue) maps the 4 categories to
+> `cacheDir/image_cache` (Coil 2's default disk cache, **populated today**) + `cacheDir/media/{audio,video,
+> thumbnails}` (pipeline-ready folders — scanning/clearing a not-yet-created folder is a graceful no-op, so the
+> feature is honest today and forward-compatible), reads/deletes on `Dispatchers.IO`. `MediaCacheViewModel` (UDF
+> immutable `MediaCacheUiState`): init scan; `refresh()` is stale-while-revalidate (keeps the prior report visible
+> while re-scanning); a clear is **optimistic** — the target categories are zeroed in state immediately (snapshot
+> kept), the disk delete runs, then a re-scan reconciles; clearing an already-empty category is inert, a second
+> clear while one is in flight is ignored (single-flight `clearing` guard), any failure rolls the report back and
+> raises a targeted `MediaCacheError` (SCAN/CLEAR), and `viewModelScope` work rethrows `CancellationException` so a
+> torn-down scope never leaves a spurious error. `MediaCacheScreen` (glue): amber info card (mirroring iOS copy),
+> Indigo total card, per-category rows (icon + label + size + an inline destructive clear that becomes a spinner
+> while clearing), a destructive `ErrorStrong` clear-all button gated on `canClear` behind an `AlertDialog`
+> confirmation (mirroring iOS's confirm). Wired the **two** previously no-op Settings → Data rows ("Clear media
+> cache" + "Storage used") to the new `Routes.MEDIA_CACHE`. **+43 tests** (ByteSizeFormatter 15, MediaCacheReport
+> 11, MediaCacheScanner 6, MediaCacheViewModel 11), all green; full `assembleDebug` + all-module
+> `testDebugUnitTest` run for verification. Reviewer **PASS** (diff `apps/android` only — `:core:model`,
+> `:feature:settings` [store/scanner/VM/screen/DI module], `:app` nav wiring, EN/FR/ES/PT strings; no production
+> logic outside; **SDK purity** — pure formatter + report in `:core:model`, pure opaque-`File` scanner + product
+> orchestration (dir layout, "when to clear", cache→re-scan cascade) in `:feature:settings`, no SDK leakage;
+> **SSOT** — one `ByteSizeFormatter` formats every size, one `MediaCacheReport` owns the derivations, no
+> re-implementation; **UDF/instant-app** — immutable `StateFlow<UiState>`, SWR refresh keeps data visible, skeleton
+> only on cold empty; **colour/UX coherence** — amber storage-info + Indigo total + `ErrorStrong` destructive
+> actions, natural row→screen→back, confirmation before the sweep, no dead end; **no coverage floor lowered, no
+> test weakened**). **Next slice:** the live `ConnectivityManager`-backed `NetworkConditionMonitor` + first
+> media-pipeline consumer of `MediaDownloadPolicyEngine`; avatar/banner upload (media pipeline) for §K profile
+> edit; or another §L row (crash-report diagnostics viewer, static screens: Help/ToS/Privacy/licenses/About).
 
 > On 2026-07-11 **GDPR data export** landed (slice `settings-data-export`, feature-parity §L — "GDPR data
 > export (JSON/CSV, selectable scope, share/save file)"). Port of iOS `DataExportView` + `DataExportService`,
