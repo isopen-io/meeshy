@@ -61,4 +61,27 @@ final class CacheCoordinatorLogoutPurgeTests: XCTestCase {
 
         await assertPreferenceStoresEmpty(c, "after invalidateAll()")
     }
+
+    /// Local-only call transcripts (never sent to the Meeshy server) must be
+    /// swept on logout the same as every other disk-backed store — leaving
+    /// them populated would expose user A's call transcripts to user B on
+    /// the next login, the same cross-user leak class this file exists to
+    /// guard against for the preference stores.
+    func test_reset_purgesCallTranscripts() async throws {
+        let db = try makeDB()
+        let c = makeCoordinator(db: db)
+        let transcript = CallTranscript(
+            callId: "call-1", conversationId: "conv-1",
+            callStartedAt: Date(timeIntervalSince1970: 0), segments: []
+        )
+        try await c.callTranscripts.save([transcript], for: "call-1")
+
+        await c.reset()
+
+        let result = await c.callTranscripts.load(for: "call-1")
+        switch result {
+        case .empty: break
+        default: XCTFail("Expected callTranscripts empty after reset() (logout), got \(result)")
+        }
+    }
 }
