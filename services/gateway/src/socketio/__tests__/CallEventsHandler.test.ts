@@ -176,14 +176,6 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  ROOMS: {
-    call: (id: string) => `call:${id}`,
-    conversation: (id: string) => `conversation:${id}`,
-    user: (id: string) => `user:${id}`,
-  },
-}));
-
 import { CallEventsHandler } from '../CallEventsHandler';
 import { logger } from '../../utils/logger';
 
@@ -1273,8 +1265,8 @@ describe('CallEventsHandler', () => {
         expect(pushService.sendToUser).toHaveBeenCalledWith(
           expect.objectContaining({
             userId: USER_ID,
-            types: ['apns'],
-            platforms: ['ios'],
+            types: ['apns', 'fcm'],
+            platforms: ['ios', 'android'],
             payload: expect.objectContaining({
               silent: true,
               data: expect.objectContaining({ type: 'call_answered_elsewhere', callId: CALL_ID }),
@@ -1746,8 +1738,8 @@ describe('CallEventsHandler', () => {
         expect(pushService.sendToUser).toHaveBeenCalledWith(
           expect.objectContaining({
             userId: 'ringing-callee-id',
-            types: ['apns'],
-            platforms: ['ios'],
+            types: ['apns', 'fcm'],
+            platforms: ['ios', 'android'],
             payload: expect.objectContaining({
               silent: true,
               data: expect.objectContaining({ type: 'call_cancel', callId: CALL_ID }),
