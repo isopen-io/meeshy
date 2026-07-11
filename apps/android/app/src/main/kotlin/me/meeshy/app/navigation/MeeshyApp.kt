@@ -60,6 +60,7 @@ import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.settings.ChangePasswordScreen
 import me.meeshy.app.settings.MediaDownloadScreen
+import me.meeshy.app.settings.PrivacySettingsScreen
 import me.meeshy.app.settings.SettingsScreen
 import me.meeshy.app.stories.StoryComposerScreen
 import me.meeshy.app.stories.StoryTray
@@ -83,6 +84,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val CHANGE_PASSWORD = "settings/change-password"
     const val MEDIA_DOWNLOAD = "settings/media-download"
+    const val PRIVACY = "settings/privacy"
     const val STARRED = "starred"
     const val PROFILE_USER = "profile/{userId}"
     const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
@@ -323,6 +325,7 @@ fun MeeshyApp(
                     onOpenStarred = { navController.navigate(Routes.STARRED) },
                     onOpenChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
                     onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
+                    onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
                 )
             }
             composable(Routes.CHANGE_PASSWORD) {
@@ -330,6 +333,9 @@ fun MeeshyApp(
             }
             composable(Routes.MEDIA_DOWNLOAD) {
                 MediaDownloadScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.PRIVACY) {
+                PrivacySettingsScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.STARRED) {
                 StarredMessagesScreen(

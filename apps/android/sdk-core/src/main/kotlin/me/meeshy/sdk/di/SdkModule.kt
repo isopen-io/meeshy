@@ -27,6 +27,8 @@ import me.meeshy.sdk.media.DataStoreMediaDownloadPreferencesStore
 import me.meeshy.sdk.media.MediaDownloadPreferencesStore
 import me.meeshy.sdk.notification.DataStoreNotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationPreferencesStore
+import me.meeshy.sdk.privacy.DataStorePrivacyPreferencesStore
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.SharedPrefsEmojiUsageStore
 import me.meeshy.sdk.theme.DataStoreThemeStore
@@ -104,6 +106,16 @@ object SdkModule {
             context.preferencesDataStoreFile("meeshy_media_download")
         }
         return DataStoreMediaDownloadPreferencesStore(dataStore, scope)
+    }
+
+    @Provides
+    @Singleton
+    fun providesPrivacyPreferencesStore(@ApplicationContext context: Context): PrivacyPreferencesStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_privacy")
+        }
+        return DataStorePrivacyPreferencesStore(dataStore, scope)
     }
 
     @Provides

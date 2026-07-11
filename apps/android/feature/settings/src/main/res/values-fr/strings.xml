@@ -111,4 +111,25 @@
     <string name="media_policy_wifi_good_cellular">Wi-Fi et bon réseau mobile</string>
     <string name="media_policy_wifi_only">Wi-Fi uniquement</string>
     <string name="media_policy_never">Jamais</string>
+    <!-- Confidentialité & visibilité (§L) -->
+    <string name="settings_privacy">Confidentialité et visibilité</string>
+    <string name="privacy_title">Confidentialité et visibilité</string>
+    <string name="privacy_section_visibility">Visibilité</string>
+    <string name="privacy_section_contacts">Contacts et groupes</string>
+    <string name="privacy_section_media">Média et données</string>
+    <string name="privacy_section_encryption">Chiffrement</string>
+    <string name="privacy_online_status">Statut en ligne</string>
+    <string name="privacy_last_seen">Dernière connexion</string>
+    <string name="privacy_read_receipts">Accusés de lecture</string>
+    <string name="privacy_typing_indicator">Indicateur de frappe</string>
+    <string name="privacy_hide_from_search">Masquer de la recherche</string>
+    <string name="privacy_contact_requests">Demandes de contact</string>
+    <string name="privacy_group_invites">Invitations de groupe</string>
+    <string name="privacy_calls_non_contacts">Appels hors contacts</string>
+    <string name="privacy_save_media">Enregistrer les médias dans la galerie</string>
+    <string name="privacy_analytics">Analytique</string>
+    <string name="privacy_share_data">Partage des données d\'usage</string>
+    <string name="privacy_block_screenshots">Bloquer les captures d\'écran</string>
+    <string name="privacy_encryption_coming_soon">Bientôt disponible</string>
+    <string name="privacy_encryption_disabled">Désactivé</string>
 </resources>
