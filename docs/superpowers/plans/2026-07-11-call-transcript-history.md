@@ -280,12 +280,12 @@ drafts: GRDBCacheStore<String, ConversationDraft>` declaration and add immediate
     public let callTranscripts: GRDBCacheStore<String, CallTranscript>
 ```
 
-Find that property's initialization inside `CacheCoordinator`'s `init` (wherever `drafts =
-GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")` — or equivalent — is assigned) and
-add immediately after it:
+Find that property's initialization inside `CacheCoordinator`'s `init` (wherever `self.drafts =
+GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")` — or equivalent — is assigned,
+confirmed `self.`-prefixed at that call site) and add immediately after it:
 
 ```swift
-        callTranscripts = GRDBCacheStore(policy: .callTranscripts, db: db, namespace: "calltx", encrypted: true)
+        self.callTranscripts = GRDBCacheStore(policy: .callTranscripts, db: db, namespace: "calltx", encrypted: true)
 ```
 
 Find `func reset()` and add `callTranscripts` to its enumeration, in the same style as every other
@@ -509,7 +509,7 @@ the factory signature differs from what's shown below):
     func test_persistedSegments_retainsBeyondLiveDisplayCap() {
         let sut = CallTranscriptionService()
         for i in 0..<60 {
-            sut.applyRecognitionResult(  // or whatever the existing test-only append seam is named — read the file's other tests for the exact call
+            sut.receiveTranslatedSegment(
                 makeSegment(text: "segment \(i)", isFinal: true, capturedAt: Date(timeIntervalSince1970: TimeInterval(i)))
             )
         }
@@ -518,11 +518,16 @@ the factory signature differs from what's shown below):
     }
 ```
 
-(The exact append seam name — `applyRecognitionResult`, a test-only `appendSegmentForTesting`, or
-similar — and `persistedSegmentsForTesting`'s exact `#if DEBUG` visibility must match this file's
-established `#if DEBUG` test-seam convention, already used for `setTranscribingForTesting` per the
-design research this session — read the file's existing `#if DEBUG` block before writing this
-step and adapt the call accordingly.)
+**Correction (plan review)** — use `receiveTranslatedSegment` (public, calls `appendSegment`
+directly, no guard) rather than `applyRecognitionResult`, which has a
+`guard isTranscribing else { return }` (`CallTranscriptionService.swift:542`) and would silently
+no-op here without first calling `setTranscribingForTesting(true)`. `receiveTranslatedSegment` is
+exactly the seam Task 5's own new tests already use. `isFinal: true` is required — Task 4's
+`appendSegment` only feeds `persistedSegments` for final segments.
+
+`persistedSegmentsForTesting`'s visibility must match the file's existing `#if DEBUG` test-seam
+convention, already used for `setTranscribingForTesting` — read that existing block before writing
+this step and place the new seam alongside it.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -800,7 +805,8 @@ git commit -m "fix(ios/calls): resetForCallEnd persists a guarded, speaker-resol
 
 **Interfaces:**
 - Consumes: `CallTranscriptStore.shared.invalidate(for:)` (Task 3), `Message.callSummary` (already
-  exists, `MessageModels.swift:421`).
+  exists — `MeeshyMessage.callSummary` at `CoreModels.swift:671`; `APIMessage.callSummary` at
+  `MessageModels.swift:421` is the API-layer decode source it's built from).
 
 Two independent sweeps, both using `Message.callSummary?.callId` to resolve which local
 transcripts a set of messages corresponds to — no new secondary index needed, since the existing
@@ -849,10 +855,17 @@ In `ConversationSyncEngine.swift`, `handleDeletedMessage(_:)` currently reads:
             msg.content = ""
         }
         _messagesDidChange.send(event.conversationId)
+        // If the deleted message was the conversation's last message, the list-row
+        // preview still shows the (now-deleted) text — recompute it from the most
+        // recent surviving message, mirroring the gateway's `deletedAt: null` REST list.
         await recomputeLastMessagePreviewAfterDeletion(
             conversationId: event.conversationId, deletedMessageId: event.messageId)
     }
 ```
+
+(Correction, plan review: the 3-line comment above `recomputeLastMessagePreviewAfterDeletion` is
+part of the real file — included here so a literal find/replace against the actual source
+matches.)
 
 `MessageDeletedEvent` carries no `callId` — resolve it from the message's current (pre-wipe) state
 by reading the cache **before** the patch, since the patch clears `content` but leaves `metadata`/
@@ -1007,10 +1020,15 @@ git commit -m "fix(calls): sweep local call transcripts on message delete (autho
 - Test: new file `apps/ios/MeeshyTests/Unit/Views/CallDetailRoutingTests.swift`
 
 **Interfaces:**
-- Produces: `overlayState.callDetailMessage: Message?` (new `@Published` property, separate from
-  the existing `detailSheetMessage` which stays wired to `MessageMoreSheet` for regular messages),
-  a `.sheet(item: $overlayState.callDetailMessage)` presenting `CallSummaryDetailSheet` — Task 8
-  extends that sheet's content with the Transcript section.
+- Produces: `overlayState.callDetailMessage: Message?` (new plain `var` — **correction, plan
+  review**: `overlayState` (`ConversationOverlayState`) is a plain `struct` behind `@State var
+  overlayState`, not an `ObservableObject`; its siblings `overlayMessage`/`detailSheetMessage` are
+  plain `var`s too, so this new property must **not** be `@Published`, which only compiles inside
+  a class. `$overlayState.callDetailMessage` still works as a binding via `@State`'s projection,
+  exactly like the existing `$overlayState.detailSheetMessage` at `ConversationView.swift:667`),
+  separate from the existing `detailSheetMessage` which stays wired to `MessageMoreSheet` for
+  regular messages, a `.sheet(item: $overlayState.callDetailMessage)` presenting
+  `CallSummaryDetailSheet` — Task 8 extends that sheet's content with the Transcript section.
 
 This task threads a new `onLongPress: (() -> Void)?` closure through the exact same 4-file chain
 `onCallBack` already uses (confirmed during planning by reading each file) — `BubbleCallNoticeView`
@@ -1121,6 +1139,13 @@ with:
             )
 ```
 
+**Correction (plan review) — a second `showDetails = true` site exists and must also change.**
+`BubbleCallNoticeView` sets it in two places, not one: the `highPriorityGesture` just replaced
+above, AND inside `.accessibilityAction(named: "Détails de l'appel") { showDetails = true }`
+(lines 74-76). Change that closure's body from `showDetails = true` to `onLongPress?()` too —
+otherwise removing `@State private var showDetails` in this same step leaves that accessibility
+action referencing a symbol that no longer exists, a compile error.
+
 Remove the now-unused `@State private var showDetails = false` and the trailing
 `.sheet(isPresented: $showDetails) { CallSummaryDetailSheet(...) }` block — presentation moves to
 `ConversationView` (Step 3e). Leave `CallSummaryDetailSheet` itself (the struct, further down in
@@ -1183,16 +1208,25 @@ In both `makeUIViewController` and `updateUIViewController`, next to each existi
 
 - [ ] **Step 3e: `ConversationView` — the decision point + new `overlayState` property + sheet**
 
-Find `overlayState`'s definition (near `var detailSheetMessage: Message? = nil`, line 40) and add:
+Find `overlayState`'s definition (near `var detailSheetMessage: Message? = nil`, line 40) and add
+a **plain property, not `@Published`** — `ConversationOverlayState` is a plain `struct` held via
+`@State var overlayState`, exactly like its sibling `detailSheetMessage`; `@Published` only
+compiles inside a class and would break this build:
 
 ```swift
-    @Published var callDetailMessage: Message? = nil
+    var callDetailMessage: Message? = nil
 ```
 
 Find the existing `.sheet(item: $overlayState.detailSheetMessage) { msg in ... }` (line 667) and
 add a new, separate sheet modifier immediately after its closing brace (Task 8 fills in the
 `CallSummaryDetailSheet` construction's new transcript-aware initializer; for this task, wire the
-existing initializer signature as-is):
+existing initializer signature as-is). **Correction (plan review) — the original draft's
+`onCallBack` closure was broken**: it referenced `resolvedCalleeName`, which is `private` on a
+different file (`ConversationView+Header.swift:70`, inaccessible here), and reimplemented the
+callback logic incorrectly (empty `userId` when the current user was the original initiator). The
+codebase already has the correct, existing mechanism — `ConversationViewModel.callBack(for:)`
+(`ConversationViewModel.swift:1877`), the same one `MessageListView.swift:368,420` already uses
+for the regular call-back button:
 
 ```swift
             .sheet(item: $overlayState.callDetailMessage) { msg in
@@ -1202,7 +1236,7 @@ existing initializer signature as-is):
                         isOutgoing: summary.initiatorId == viewModel.currentUserIdForView,
                         accentHex: accentColor,
                         timestamp: msg.createdAt,
-                        onCallBack: { s in CallManager.shared.startCall(conversationId: viewModel.conversationId, userId: s.initiatorId == viewModel.currentUserIdForView ? "" : s.initiatorId, displayName: resolvedCalleeName, isVideo: s.callType == .video) }
+                        onCallBack: { s in viewModel.callBack(for: s) }
                     )
                 }
             }
@@ -1345,10 +1379,15 @@ Expected: all 3 fail (none of the new content exists yet).
 - [ ] **Step 3: Add the Transcript section**
 
 In `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleCallNoticeView.swift`'s
-`CallSummaryDetailSheet`, add new state and a `.task`:
+`CallSummaryDetailSheet`, add new state and a `.task`. **Correction (plan review)** —
+`transcript` needs an explicit `= nil`: an optional `@State` with no initializer either fails to
+compile or gets pulled into the struct's synthesized memberwise initializer as a required
+parameter, which would silently break Task 7's `CallSummaryDetailSheet(summary:isOutgoing
+:accentHex:timestamp:onCallBack:)` call site (that task runs first and has no `transcript:`
+argument):
 
 ```swift
-    @State private var transcript: CallTranscript?
+    @State private var transcript: CallTranscript? = nil
     @State private var showOriginalText = false
     @State private var showDeleteConfirmation = false
 ```
@@ -1386,7 +1425,10 @@ Add the new views:
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(transcript.segments, id: \.capturedAt) { segment in
+                // id: \.offset, not \.capturedAt (recommended, plan review) — saveMerging's dedup
+                // key deliberately allows two segments to share a capturedAt (different
+                // speaker/text at the same instant), which would collide as a ForEach id.
+                ForEach(Array(transcript.segments.enumerated()), id: \.offset) { _, segment in
                     transcriptRow(segment, callStartedAt: transcript.callStartedAt)
                 }
             }
