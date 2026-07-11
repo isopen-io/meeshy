@@ -55,12 +55,14 @@ extension StoryComposerViewModel {
         CGFloat(currentEffects.canvasAspect.ratio)
     }
 
-    /// Ratio de canvas à PERSISTER (`nil` = portrait 9:16 par défaut) dérivé de
-    /// l'image de fond d'un slide : « l'import de l'image de fond impose le cadre
-    /// et forme du Canvas ». Un fond **image paysage** impose un canvas 16:9 ;
-    /// tout le reste (fond portrait/carré, vidéo, ou aucun fond) reste vertical.
+    /// Ratio de canvas à PERSISTER (`nil` = portrait 9:16 par défaut) dérivé du
+    /// fond d'un slide : « l'import du fond impose le cadre et forme du Canvas ».
+    /// Un fond **image OU vidéo paysage** impose un canvas 16:9 — étendu aux
+    /// vidéos 2026-07-11 (rapporté : un fond vidéo paysage restait ignoré,
+    /// laissant la vidéo mal centrée/intégrée dans un cadre portrait 9:16 par
+    /// défaut). Fond portrait/carré, ou aucun fond, reste vertical.
     static func canvasAspectRatio(forBackgroundOf effects: StoryEffects) -> Double? {
-        guard let bg = effects.resolvedBackgroundMedia, bg.kind == .image else { return nil }
+        guard let bg = effects.resolvedBackgroundMedia else { return nil }
         let aspect = StoryCanvasAspect.from(ratio: bg.aspectRatio)
         return aspect == .landscape ? aspect.ratio : nil
     }
