@@ -9,11 +9,11 @@ import MeeshySDK
 // MARK: - StoryComposerView + Canvas
 
 extension StoryComposerView {
-    /// Canvas gestures disabled only during drawing (PKCanvasView needs exclusive touch control).
-    /// For all other modes, child element gestures naturally take priority via SwiftUI's
-    /// gesture hierarchy (.gesture on child beats .gesture on parent).
+    /// Canvas gestures disabled only while the DRAWING SURFACE is mounted
+    /// (plein écran de tracé — the capture layer needs exclusive touch
+    /// control). List mode keeps the canvas fully interactive.
     var isCanvasGestureEnabled: Bool {
-        !viewModel.isDrawingActive
+        !isImmersiveDrawingSurface
     }
 
     /// Pan always available when zoomed — uses high minimumDistance to avoid accidental triggers
@@ -69,6 +69,7 @@ extension StoryComposerView {
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showTopBar)
             .opacity(viewModel.textEditingMode == .inactive ? 1 : 0)
             .allowsHitTesting(viewModel.textEditingMode == .inactive)
+            .environment(\.colorScheme, canvasChromeScheme)
 
             // Bottom: toolbar + active panel.
             // When the composer is empty (no content + no tool selected) we
@@ -101,11 +102,13 @@ extension StoryComposerView {
             .animation(.spring(response: 0.3, dampingFraction: 0.85),
                        value: showTopBar)
             .allowsHitTesting(showTopBar)
+            .environment(\.colorScheme, canvasChromeScheme)
 
             // Floating text edit overlay — sits above every composer control.
             // Empty view when `textEditingMode == .inactive`.
             StoryTextEditToolbar(viewModel: viewModel)
                 .padding(.bottom, keyboardHeight)
+                .environment(\.colorScheme, canvasChromeScheme)
 
             // Le dessin utilise le band PARTAGÉ (`ComposerBottomBand` →
             // `drawingPanel` = liste éditable des traits), comme tous les autres
@@ -117,21 +120,23 @@ extension StoryComposerView {
             // épaisseur/lissage) flottent sur le canvas, levées au-dessus du band
             // partagé (`bottomInset`).
             StoryDrawingToolbar(viewModel: viewModel, bottomInset: presentedSheetHeight)
+                .environment(\.colorScheme, canvasChromeScheme)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.textEditingMode)
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.drawingEditingMode)
         .adaptiveOnChange(of: viewModel.activeTool) { oldTool, newTool in
-            // Mode dessin IMMERSIF (user 2026-07-11) : entrer = canvas plein
-            // écran + bulles flottantes SEULES — on replie tout band ouvert
-            // (aucune sheet pendant le dessin ; remplace l'ouverture forcée
-            // du drawingPanel, spec 2026-06-01). Quitter = restauration du
-            // système initial : chrome/FABs de retour, band dessin refermé.
+            // Dessin en DEUX temps (user 2026-07-11 v2) : entrer = mode
+            // LISTE (band ouvert sur la liste des traits, rien d'activé) ;
+            // le plein écran de tracé ne s'active qu'à la sélection d'un
+            // pinceau (cf. onChange de `isDrawingImmersive` ci-dessous).
+            // Quitter = restauration du système initial : chrome/FABs de
+            // retour, band dessin refermé, zoom remis à 1 (VM).
             if newTool == .drawing {
                 viewModel.enterDrawingEditingMode()
-                if bandStateMachine.state != .hidden {
-                    bandStateMachine.reset()
+                if bandStateMachine.state.activeCategory != .drawing {
+                    bandStateMachine.tapTile(.drawing)
                 }
             } else {
                 viewModel.exitDrawingEditingMode()
@@ -141,6 +146,20 @@ extension StoryComposerView {
                 if oldTool == .drawing {
                     areFabsVisible = true
                 }
+            }
+        }
+        .adaptiveOnChange(of: viewModel.isDrawingImmersive) { _, immersive in
+            // Bascule liste ⇄ plein écran : le pinceau sélectionné replie le
+            // band (canvas full-bleed, bulles seules) ; retomber en mode
+            // liste (sortie) rouvre la liste si l'outil dessin est toujours
+            // actif.
+            if immersive {
+                if bandStateMachine.state != .hidden {
+                    bandStateMachine.reset()
+                }
+            } else if viewModel.activeTool == .drawing,
+                      bandStateMachine.state.activeCategory != .drawing {
+                bandStateMachine.tapTile(.drawing)
             }
         }
         .statusBarHidden()
@@ -269,13 +288,30 @@ extension StoryComposerView {
     /// content additions (text / media / sticker / drawing) flip the slide
     /// out of empty state.
     /// Un éditeur flottant plein-canvas est ouvert → le band compact standard
-    /// est masqué et non-interactif. TEXTE : depuis toujours. DESSIN : mode
-    /// IMMERSIF (user 2026-07-11) — canvas plein écran, bulles flottantes
-    /// seules, plus aucune sheet (remplace le correctif 2026-06-01 « dessin
-    /// devrait afficher le ComposerBottomBand aussi »).
+    /// est masqué et non-interactif. TEXTE : depuis toujours. DESSIN : en
+    /// PLEIN ÉCRAN de tracé uniquement (user 2026-07-11 v2) — le mode liste
+    /// garde le band visible (liste des traits).
     var isFloatingEditorActive: Bool {
         viewModel.textEditingMode != .inactive
-            || viewModel.drawingEditingMode.isActive
+            || viewModel.isDrawingImmersive
+    }
+
+    /// La surface de TRACÉ est montée : outil dessin actif ET plein écran
+    /// (pinceau sélectionné). En mode liste, le canvas reste interactif
+    /// normalement et rend son propre drawingLayer.
+    var isImmersiveDrawingSurface: Bool {
+        viewModel.isDrawingActive && viewModel.isDrawingImmersive
+    }
+
+    /// Scheme épinglé sur le chrome posé sur le canvas (header, bulles,
+    /// FABs) : suit la luminance du FOND de la slide, pas le thème de l'app
+    /// — icônes claires sur fond sombre, sombres sur fond clair (capture
+    /// user 2026-07-11 : indigo950 illisible sur bleu nuit).
+    var canvasChromeScheme: ColorScheme {
+        CanvasChromeScheme.scheme(
+            background: viewModel.backgroundColor,
+            hasMediaBackground: viewModel.hasBackgroundImage
+        )
     }
 
     var isComposerEmpty: Bool {
@@ -508,12 +544,10 @@ extension StoryComposerView {
                 // so controls appear immediately when the empty-state picker
                 // transitions out. Without this, the band stayed .hidden and
                 // the user had to manually tap a FAB to reveal controls.
-                // EXCEPTION dessin : mode immersif (user 2026-07-11) — aucune
-                // sheet, les bulles flottantes suffisent.
-                if tool != .drawing {
-                    bandStateMachine.tapFAB(specialCategory ?? tool.bandCategory)
-                    bandStateMachine.tapTile(tool)
-                }
+                // (Le dessin s'ouvre lui aussi sur son panneau : la LISTE des
+                // traits — le plein écran n'arrive qu'au choix d'un pinceau.)
+                bandStateMachine.tapFAB(specialCategory ?? tool.bandCategory)
+                bandStateMachine.tapTile(tool)
                 pickerSelectedTool = nil
             }
         } label: {
@@ -871,7 +905,7 @@ extension StoryComposerView {
             // son drawingLayer persisté — sinon double rendu (ancien drawing
             // au mauvais endroit dans le design space + nouveau drawing live
             // du PKCanvasView en bounds space). Bug "écrit en double", 2026-05-27.
-            isDrawingOverlayActive: viewModel.isDrawingActive,
+            isDrawingOverlayActive: isImmersiveDrawingSurface,
             // Pont vers `StoryCanvasUIView.readerContext.imageCache` —
             // `StoryMediaLayer.configureImage` consulte d'abord ce cache
             // (clé = media.id) avant le file:// path, donc le main canvas
@@ -883,9 +917,9 @@ extension StoryComposerView {
             canvasCornerRadius: cornerRadius,
             timelineBridge: viewModel.canvasTimelineBridge
         )
-        .allowsHitTesting(!viewModel.isDrawingActive)
+        .allowsHitTesting(!isImmersiveDrawingSurface)
         .overlay {
-            if viewModel.isDrawingActive {
+            if isImmersiveDrawingSurface {
                 // Refonte dessin (2026-05-30) : capture single-stroke (PencilKit) +
                 // rendu live des traits éditables (avec halo sélection). Le canvas
                 // sous-jacent suppress son propre drawingLayer pendant ce temps

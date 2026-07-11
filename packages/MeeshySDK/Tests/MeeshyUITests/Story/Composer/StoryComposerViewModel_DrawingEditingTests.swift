@@ -25,12 +25,41 @@ final class StoryComposerViewModel_DrawingEditingTests: XCTestCase {
         XCTAssertEqual(makeSubject().drawingEditingMode, .inactive)
     }
 
-    func test_enterDrawingEditingMode_whenNoStrokes_expandsColorPalette() {
+    func test_enterDrawingEditingMode_startsInListMode_nothingActivated() {
+        // « Par défaut rien n'est activé quand on sélectionne l'outil dessin,
+        // c'est la liste des éléments de traits » (user 2026-07-11 v2) : pas
+        // de panneau déplié, pas de plein écran — le band montre la liste.
         let vm = makeSubject()
         vm.enterDrawingEditingMode()
         XCTAssertTrue(vm.drawingEditingMode.isActive)
         XCTAssertNil(vm.drawingEditingMode.selectedStrokeId)
-        XCTAssertEqual(vm.drawingEditingMode.expandedTool, .color)
+        XCTAssertNil(vm.drawingEditingMode.expandedTool)
+        XCTAssertFalse(vm.isDrawingImmersive)
+    }
+
+    // MARK: - Plein écran au pinceau (user 2026-07-11 v2)
+
+    func test_enterImmersiveDrawing_activatesFullscreenMode() {
+        let vm = makeSubject()
+        vm.enterDrawingEditingMode()
+        vm.enterImmersiveDrawing()
+        XCTAssertTrue(vm.isDrawingImmersive)
+        XCTAssertTrue(vm.drawingEditingMode.isActive)
+    }
+
+    func test_enterImmersiveDrawing_withoutPriorEnter_activatesBoth() {
+        let vm = makeSubject()
+        vm.enterImmersiveDrawing()
+        XCTAssertTrue(vm.isDrawingImmersive)
+        XCTAssertTrue(vm.drawingEditingMode.isActive)
+    }
+
+    func test_exitDrawingEditingMode_clearsImmersive() {
+        let vm = makeSubject()
+        vm.enterImmersiveDrawing()
+        vm.exitDrawingEditingMode()
+        XCTAssertFalse(vm.isDrawingImmersive)
+        XCTAssertEqual(vm.drawingEditingMode, .inactive)
     }
 
     func test_enterDrawingEditingMode_whenStrokesExist_noExpandedPanel() {

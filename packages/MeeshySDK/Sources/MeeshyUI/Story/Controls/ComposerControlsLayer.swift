@@ -62,14 +62,20 @@ public struct ComposerControlsLayer: View {
     /// se cacher entièrement sur chaque outil, comme le dessin (2026-06-02).
     private var isBandResizable: Bool { effectiveBandState.allowsCollapsibleDrawer }
 
-    /// État effectif du band. Mode dessin IMMERSIF (user 2026-07-11) : le
-    /// dessin n'ouvre PLUS le band partagé — canvas plein écran, bulles
-    /// flottantes seules, réglages via l'îlot `DrawingEditToolOptions`
-    /// (sélection-aware pour l'édition par-trait). Remplace le forçage
-    /// `.toolPanel(.drawing)` de la spec 2026-06-01 « dessin devrait afficher
-    /// le ComposerBottomBand aussi ».
+    /// État effectif du band — dessin en DEUX temps (user 2026-07-11 v2) :
+    /// l'outil dessin s'ouvre en mode LISTE (band forcé sur `drawingPanel`
+    /// = liste des traits, comme la spec 2026-06-01) ; la sélection d'un
+    /// pinceau bascule en PLEIN ÉCRAN (`isDrawingImmersive`) — le band
+    /// disparaît alors entièrement, bulles flottantes seules.
     private var effectiveBandState: BandState {
-        bandStateMachine.state
+        if viewModel.drawingEditingMode.isActive, !viewModel.isDrawingImmersive,
+           bandStateMachine.state == .hidden {
+            return .toolPanel(.drawing)
+        }
+        if viewModel.isDrawingImmersive {
+            return .hidden
+        }
+        return bandStateMachine.state
     }
 
     /// C-DIR2 (d) : FABs et header partagent la MÊME règle (ComposerChromePolicy)
@@ -133,6 +139,12 @@ public struct ComposerControlsLayer: View {
                 }
                 .padding(.bottom, 16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+                // FABs posés SUR le canvas : leur lisibilité suit la
+                // luminance du FOND de la slide, pas le thème de l'app
+                // (capture user 2026-07-11 — indigo sombre sur bleu nuit).
+                .environment(\.colorScheme, CanvasChromeScheme.scheme(
+                    background: viewModel.backgroundColor,
+                    hasMediaBackground: viewModel.hasBackgroundImage))
             }
 
             // C3 — état « chrome caché » (barre d'outils masquée par
