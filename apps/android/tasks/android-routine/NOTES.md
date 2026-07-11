@@ -3,6 +3,17 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-11 (`settings-change-password`): not every account write reuses the optimistic outbox — a
+  server-verified action must stay online, and its wrong-input signal is the HTTP status, not the envelope.**
+  Regional language / notification prefs went through `enqueueProfileEdit`/`enqueueSync` (optimistic + durable)
+  because the client already holds the truth and the PATCH is idempotent. Change-password is the opposite: the
+  gateway must compare the *current* password against the stored bcrypt hash, so an offline/optimistic path is
+  meaningless (there's nothing to paint, and a queued wrong password would just fail later). It's a plain
+  `apiCall` returning `NetworkResult`. Retrofit throws `HttpException` for a 4xx (the `ApiResponse` body is
+  never parsed), so `apiCall` folds a wrong-current-password 400 into `ApiError(httpStatus = 400)` — map on
+  `httpStatus == 400`, NOT on the envelope `error` string (which is empty on the exception path). Mirror iOS's
+  `.serverError(400, _)` branch. Keep the failure kind an enum the *screen* localizes (`ChangePasswordError`),
+  never a raw string in the VM — keeps the VM pure-testable and the strings i18n-clean.
 - **2026-07-11 (`feed-post-language-switch`): a pure rule engine used by two features belongs in `:sdk-ui`, not
   in the first feature that happened to need it.** `LanguageFlagTapResolver` was born in `:feature:chat`
   (`me.meeshy.app.chat.translation`); when feed needed the same switch/revert decision, `:feature:feed` could not

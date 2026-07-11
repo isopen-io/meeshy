@@ -97,6 +97,7 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenStarred: () -> Unit = {},
+    onOpenChangePassword: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -263,6 +264,12 @@ fun SettingsScreen(
                 icon = Icons.Filled.Lock,
                 iconColor = MeeshyPalette.Purple600,
             ) {
+                SettingsRow(
+                    label = stringResource(R.string.settings_change_password),
+                    detail = null,
+                    onClick = onOpenChangePassword,
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_two_factor), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_active_sessions), detail = null, onClick = {})

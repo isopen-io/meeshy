@@ -79,4 +79,25 @@
     <string name="settings_privacy_policy">Privacy Policy</string>
     <string name="settings_log_out">Log out</string>
     <string name="settings_delete_account">Delete account</string>
+    <!-- Change password (§L) -->
+    <string name="settings_change_password">Change password</string>
+    <string name="change_password_title">Change password</string>
+    <string name="change_password_current_label">Current password</string>
+    <string name="change_password_new_label">New password</string>
+    <string name="change_password_confirm_label">Confirm password</string>
+    <string name="change_password_submit">Change password</string>
+    <string name="change_password_show">Show password</string>
+    <string name="change_password_hide">Hide password</string>
+    <string name="change_password_hint_length">At least 8 characters</string>
+    <string name="change_password_hint_match">Passwords match</string>
+    <string name="change_password_hint_different">Different from your current password</string>
+    <string name="change_password_error_current">Current password is incorrect</string>
+    <string name="change_password_error_network">No connection. Check your network and try again.</string>
+    <string name="change_password_error_generic">Something went wrong. Please try again.</string>
+    <string name="change_password_strength_0">Too weak</string>
+    <string name="change_password_strength_1">Weak</string>
+    <string name="change_password_strength_2">Fair</string>
+    <string name="change_password_strength_3">Good</string>
+    <string name="change_password_strength_4">Strong</string>
+    <string name="change_password_strength_5">Excellent</string>
 </resources>
