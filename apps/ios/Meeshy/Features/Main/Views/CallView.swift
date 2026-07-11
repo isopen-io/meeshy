@@ -787,6 +787,15 @@ struct CallView: View {
             showTranscript = false
             transcriptionService.isShowingOverlay = false
         }
+        // First segment ever received this call (local OR remote) reveals the
+        // panel even if captionsCycleButton was never tapped — a device must
+        // never silently accumulate the other participant's words with
+        // nothing visible. See docs/superpowers/specs/2026-07-11-call-transcript-history-design.md §4.
+        .adaptiveOnChange(of: transcriptionService.segments.isEmpty) { wasEmpty, isEmpty in
+            if wasEmpty, !isEmpty, !showTranscript {
+                showTranscript = true
+            }
+        }
     }
 
     /// User-facing translation of `TranscriptionError` — `errorDescription` on

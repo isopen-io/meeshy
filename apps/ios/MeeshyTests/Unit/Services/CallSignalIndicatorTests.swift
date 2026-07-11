@@ -417,6 +417,22 @@ final class CallHangupFastPathTests: XCTestCase {
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
     }
+
+    func test_showTranscript_autoRevealsOnFirstPassiveSegment_notOnlyLocalToggle() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.segments.isEmpty)") else {
+            XCTFail("CallView must observe transcriptionService.segments.isEmpty to auto-reveal the panel")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 400, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("showTranscript = true"),
+            "The panel must become visible the first time segments arrive, even if the local " +
+            "captionsCycleButton was never tapped — closes the consent-transparency gap where a " +
+            "device silently accumulates the other participant's words with nothing shown."
+        )
+    }
 }
 
 // MARK: - CallSignalGlyph Reduce Motion (source inspection)
