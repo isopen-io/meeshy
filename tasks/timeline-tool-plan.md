@@ -131,9 +131,19 @@ refait (titre lisible au lieu des UUID, X, durée avec valeur vive, easing
 loop = BACKGROUND UNIQUEMENT (supportsLoop(kind:isBackground:), Fond off ⇒
 loop off). Préview engine : AudioMixer ne boucle pas encore (reader OK) — noté.
 
+VAGUE FINITION (2026-07-11, `29299df33` + `bc21287c5`) : DurationHandle montée
+(losange fin de ruler, pin timelineDuration, drag ancré, clamp 1–600 s,
+playhead ramené si rognage) ; SnapGuideView monté (guide magenta + label
+pendant un drag aimanté) ; fix reader coins carte (clip AVANT scale/offset,
+rayon compensé — haut carré/bas arrondi réparé, vérifié au pixel). Vérifié
+simu à 51 % de zoom : poignée + badge transition + poignées trim coexistent.
+
 RESTES (différés, par priorité) :
-1. SnapGuideView visuel pendant drags (l'aimant + haptique marchent déjà).
-2. F4 édition ms start/durée au ClipInspector (port branche amazing-bell par contenu).
+1. Boucle audio bg dans la PREVIEW engine (AudioMixer ne re-arme pas ; reader OK).
+2. F4 saisie ms clavier au ClipInspector (steppers ±0,1 s livrés ; port branche
+   amazing-bell par contenu si besoin plus fin).
+3. Filmstrip perdu sur les moitiés d'un SPLIT (nouveaux ids sans URL de session
+   — remapper loadedVideoURLs dans SplitClipCommand ou résoudre par postMediaId).
 4. F5 DurationHandle (pin direct durée slide) ; drag temporel des keyframes/durée
    badge transition (nécessite drag ancré anti-drift).
 5. Vignettes filmstrip clips vidéo (frames: []) ; G1 rotation keyframes ;
