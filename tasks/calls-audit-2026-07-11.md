@@ -29,7 +29,13 @@
 > translated-segment + emits call:backgrounded/foregrounded (grâce heartbeat
 > in-call) ; s'abonner à call:force-leave est INUTILE tant que le serveur ne
 > l'émet pas (vérifié : jamais émis).
-> Restent : #5 (reste ci-dessus), #9 (restartIce iOS), harnais e2e 2-sockets.
+> #5 (liveness) `ee1760615` : Android émet enfin call:heartbeat (ticker 10 s,
+> fenêtre Connected/Reconnecting) + call:backgrounded/foregrounded pendant un
+> appel actif (grâce 5 min effective) — fin des appels zombies jusqu'au GC 2 h.
+> Restent de #5 : listeners participant-left/quality-alert/
+> screen-capture-alert/segments (groupe/UX, non bloquants 1:1).
+> Restent : #5 (listeners ci-dessus), #9 (restartIce iOS), harnais e2e
+> 2-sockets.
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,
