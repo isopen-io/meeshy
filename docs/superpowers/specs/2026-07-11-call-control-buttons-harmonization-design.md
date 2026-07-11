@@ -37,11 +37,16 @@ Replace `transcriptionToggleButton` + `translationToggleButton` (2 buttons, 1 fl
 - `.translated` (the sane default once captions turn on — never surprise the user by opening straight into "original"): icon `captions.bubble.fill`, indigo tint. Tap advances to `.original` (no service call — transcription keeps running, only the display flag flips).
 - `.original`: icon `character.bubble.fill`, indigo tint. Tap advances to `.off`, which stops transcription and resets the local "show original" flag so the *next* activation starts clean at `.translated` again.
 
-State is derived, not stored redundantly:
+State is derived, not stored redundantly. `CallView` derives `captionsMode` from the two flags that already exist (`transcriptionService.isTranscribing`, `showOriginalText`) rather than adding a third source of truth. The derivation is a **pure init on the enum itself** (not a computed property buried in the View), so it's testable with plain XCTest independent of any SwiftUI host:
 
 ```swift
 private enum CaptionsMode: Equatable {
     case off, translated, original
+
+    init(isTranscribing: Bool, showOriginalText: Bool) {
+        guard isTranscribing else { self = .off; return }
+        self = showOriginalText ? .original : .translated
+    }
 
     var next: CaptionsMode {
         switch self {
@@ -53,16 +58,15 @@ private enum CaptionsMode: Equatable {
 }
 ```
 
-`CallView` computes `captionsMode` from the two flags that already exist (`transcriptionService.isTranscribing`, `showOriginalText`) rather than adding a third source of truth:
+`CallView` just calls it:
 
 ```swift
 private var captionsMode: CaptionsMode {
-    guard transcriptionService.isTranscribing else { return .off }
-    return showOriginalText ? .original : .translated
+    CaptionsMode(isTranscribing: transcriptionService.isTranscribing, showOriginalText: showOriginalText)
 }
 ```
 
-The button's action applies `captionsMode.next` by driving the existing two flags — no new service API, no CallManager change:
+The button's action applies `captionsMode.next` by driving the existing two flags — no new service API, no CallManager change. **Known pre-existing edge case, not introduced by this change**: if `toggleTranscription()`'s async start path fails (permission denied, recognizer unavailable), `showTranscript`/`isShowingOverlay` are set optimistically before that failure surfaces, so the transcript surface can briefly show empty — the current `transcriptionToggleButton` has the exact same behavior today. `captionsMode` itself stays correct either way (falls back to `.off` once `isTranscribing` settles false), so the cycle never gets stuck; only the transcript-panel-visibility edge case is pre-existing and out of scope here.
 
 ```swift
 private func advanceCaptionsMode() {
@@ -84,11 +88,67 @@ private func advanceCaptionsMode() {
 }
 ```
 
-`CaptionsMode.next` is a pure enum method — genuinely unit-testable with plain XCTest (not just a source-pattern guard), which is the stronger test this codebase's TDD standard asks for whenever the logic is extractable from the View body.
+Both `CaptionsMode.next` and the `init(isTranscribing:showOriginalText:)` derivation are pure enum members — genuinely unit-testable with plain XCTest (not just a source-pattern guard), which is the stronger test this codebase's TDD standard asks for whenever logic is extractable from the View body.
 
-**Accessibility**: `accessibilityLabel` stays constant ("Sous-titres" — the feature name); `accessibilityValue` reflects the live state ("Désactivés" / "Traduction" / "Texte original"); add `.accessibilityAdjustable()` with increment/decrement actions both calling `advanceCaptionsMode()` (a 3-state cycle has no natural "decrement", so both directions simply advance — better for VoiceOver users than forcing 3 double-taps with no swipe shortcut). This is a net accessibility improvement over today's two-plain-toggles setup.
+The button view itself — this is where the accessibility semantics actually live, so it's specified in full rather than left to the implementer to improvise:
 
-The floating trailing-edge stack shrinks from up-to-2 buttons to exactly 1, and gets wrapped in `AdaptiveGlassContainer` (fixing finding #2) even though it's a single button today — cheap correctness fix, and future-proofs the spot if another floating control ever joins it.
+```swift
+private var captionsCycleButton: some View {
+    let mode = captionsMode
+    let (icon, tint): (String, Color) = {
+        switch mode {
+        case .off: return ("captions.bubble", .white)
+        case .translated: return ("captions.bubble.fill", MeeshyColors.indigo400)
+        case .original: return ("character.bubble.fill", MeeshyColors.indigo400)
+        }
+    }()
+    let valueLabel: String = {
+        switch mode {
+        case .off: return String(localized: "call.control.captions.state.off", defaultValue: "Désactivés", bundle: .main)
+        case .translated: return String(localized: "call.control.captions.state.translated", defaultValue: "Traduction", bundle: .main)
+        case .original: return String(localized: "call.control.captions.state.original", defaultValue: "Texte original", bundle: .main)
+        }
+    }()
+
+    return Button(action: advanceCaptionsMode) {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundColor(mode == .off ? .white.opacity(0.9) : tint)
+                .callControlGlass(diameter: 56, isActive: mode != .off, tint: tint)
+            Text(String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main))
+                .font(.caption2.weight(.medium))
+                .foregroundColor(.white.opacity(0.7))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(width: 68)
+    }
+    .pressable()
+    // Constant label (the feature's name) + a live value (its current state) —
+    // NOT `.callToggleAccessibility(isToggle: true, ...)`: that helper's
+    // `.isToggle` trait + on/off value is for binary toggles. This is a
+    // 3-state cycle, so VoiceOver hears "Sous-titres, Traduction" today and
+    // "Sous-titres, Texte original" after the next double-tap — the default
+    // `Button` action already IS the cycle-forward gesture, so no
+    // `.accessibilityAdjustableAction` is added: a 3-state cycle has no
+    // natural "backward", and mapping both increment AND decrement to the
+    // same forward step would teach a VoiceOver user that swiping down also
+    // advances — worse than just not offering the swipe gesture at all.
+    .accessibilityLabel(String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main))
+    .accessibilityValue(valueLabel)
+}
+```
+
+`AdaptiveGlassContainer` wraps this single button at the exact spot the current `VStack(spacing: 12)` occupies (call site inside `connectedView`, trailing-edge floating stack) — fixing finding #2 even though the stack now holds one button instead of up to two, and future-proofing the spot if another floating control ever joins it:
+
+```swift
+AdaptiveGlassContainer(spacing: 12) {
+    VStack(spacing: 12) {
+        captionsCycleButton
+    }
+}
+```
 
 ### 2. One shared adaptive-glass button primitive, used everywhere
 
@@ -103,7 +163,7 @@ private func pipFrameButton(icon: String, label: String, hint: String? = nil, ac
         Image(systemName: icon)
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(.white.opacity(0.95))
-            .callControlGlass(diameter: 32, isActive: false, tint: .white)
+            .callControlGlass(diameter: 28, isActive: false, tint: .white)
             .frame(width: 44, height: 44)   // HIG hit-target floor, unchanged
             .contentShape(Rectangle())
     }
@@ -114,22 +174,23 @@ private func pipFrameButton(icon: String, label: String, hint: String? = nil, ac
 
 `callControlGlass` already delegates to the SDK's `adaptiveGlass`, which is precedented over live video content in this same file (`transcriptOverlay` already floats glass over the video stream), so legibility over an arbitrary self-preview frame is not a new risk. The two `pipFrameButton` call sites (flip camera, effects toggle) get this for free — no call-site changes beyond the shared function body.
 
-No new diameter constant needed beyond the literal `32` (matches the existing precedent of inlining diameters at call sites — `56`, `64` are already both inlined, not centralized).
+Diameter stays `28` (unchanged from today) — the fix changes the visual *treatment* (real adaptive glass vs. a flat dot), not the *size*; `28` is still what the existing comment at this call site dictates ("the 100×140 tile has no room for a 44pt circle"). No new diameter constant needed (matches the existing precedent of inlining diameters at call sites — `56`/`64`/`28` are all already inlined, not centralized). Modifier order is precedented and safe: the chevron minimize button already does `callControlGlass(diameter: 40, ...)` followed by an outer `.frame(44, 44)` tap-box, and it ships correctly today — the glass circle renders at its own diameter, centered inside the larger hit-frame.
 
-### 3. `effectsToggleButton` stays two call sites, now provably consistent
+### 3. `effectsToggleButton` stays two call sites, both now in the `adaptiveGlass` family
 
-`effectsToggleButton` (pre-connect, 64pt `callControlGlass`) and the connected-video `pipFrameButton` "filters" entry point remain two different call sites (this mirrors reality: before the call connects there is no self-preview frame to pin a button to, so a row button is the only option). What changes is that *both* now route through the shared `adaptiveGlass` family — the user no longer sees a "real" Liquid Glass control before connecting and a flat dot after. No further consolidation attempted (would require inventing a frame overlay during ringing, which doesn't exist and isn't part of this task).
+`effectsToggleButton` (pre-connect, 64pt `callControlGlass`) and the connected-video `pipFrameButton` "filters" entry point remain two different call sites (this mirrors reality: before the call connects there is no self-preview frame to pin a button to, so a row button is the only option). What changes is that *both* now route through the shared `adaptiveGlass` family instead of one being a real Liquid Glass control and the other a flat dot. This is **not** full visual parity — they still differ in diameter (64 vs 28, each dictated by their own layout constraint) and in whether they reflect `hasActiveEffects` as an active tint (the row button does; the frame button stays a neutral `isActive: false`, matching its current behavior) — only the *material family* is unified. No further consolidation attempted (would require inventing a frame overlay during ringing, which doesn't exist and isn't part of this task).
 
 ## Non-goals
 
 - No change to `controlButtonsRow` membership, order, or position.
 - No change to where effects/flip-camera live (self-preview frame once connected, row before).
 - No change to `CallManager` or the gateway/translation pipeline — this is styling + a local state-machine collapse, nothing crosses the socket.
-- No new xcstrings keys beyond replacing 2 existing caption strings (`call.control.transcript.*`, `call.control.translation.*`) with 3 state-labeled ones for the merged button — old keys retired, not kept as dead aliases (5 locales: de/en/es/fr/pt-BR).
+- xcstrings inventory (5 locales: de/en/es/fr/pt-BR) — **5 keys retired** (confirmed via grep: no other call site references them): `call.control.transcript.off`, `call.control.transcript.on`, `call.control.translation.caption`, `call.control.translation.showTranslated`, `call.control.translation.showOriginal`. **1 key reused as-is**: `call.control.transcript.caption` ("Sous-titres") — doubles as both the button's visible caption text and its `accessibilityLabel`. **3 keys added**: `call.control.captions.state.off` ("Désactivés"), `call.control.captions.state.translated` ("Traduction"), `call.control.captions.state.original` ("Texte original") — used as `accessibilityValue`. Net: −5 +3 = 2 fewer keys, matching the 2-buttons-into-1 collapse.
 
 ## Testing
 
-- New `CaptionsModeTests` (plain XCTest, no source-pattern guard needed): `next` cycles `.off → .translated → .original → .off`; `captionsMode` computed property matches `(isTranscribing, showOriginalText)` combinations.
-- Source-pattern guards (same style as `CallViewAccessibilityTests`/`CallSignalIndicatorTests`) for: the merged button replaces both old properties; `pipFrameButton` uses `.callControlGlass`, not `Color.black.opacity`; the floating stack is wrapped in `AdaptiveGlassContainer`.
+- New `CaptionsModeTests` (plain XCTest, no source-pattern guard needed — both members are pure): `next` cycles `.off → .translated → .original → .off`; `init(isTranscribing:showOriginalText:)` matches all 4 `(Bool, Bool)` combinations (`showOriginalText: true` while `isTranscribing: false` must still resolve to `.off`, not `.original` — the guard takes priority).
+- Source-pattern guards (same style as `CallViewAccessibilityTests`/`CallSignalIndicatorTests`) for: `captionsCycleButton` exists and its action is `advanceCaptionsMode`; it does **not** use `.callToggleAccessibility(isToggle: true, ...)`; `pipFrameButton` uses `.callControlGlass`, not `Color.black.opacity`; the floating stack wraps `captionsCycleButton` in `AdaptiveGlassContainer`.
+- **Existing tests to rewrite, not just add to** — these currently hard-assert the two properties this design removes, and will fail the build otherwise: `CallSignalIndicatorTests.test_transcriptionToggleButton_wiresToCallManager`, `test_translationToggleButton_togglesShowOriginalText`, `test_connectedView_showsTranslationButton_nextToTranscriptionToggle` (all in `apps/ios/MeeshyTests/Unit/Services/CallSignalIndicatorTests.swift`) → replace with equivalent guards on `captionsCycleButton`/`advanceCaptionsMode`. `CallViewAccessibilityTests`'s `pipFrameButton` hit-target test survives unchanged (still asserts `.frame(44, 44)` + `.contentShape(Rectangle())`, both untouched) but its "28pt" comment must stay accurate since the diameter is NOT changing (§2/R3).
 - Full `meeshy.sh test` targeted subset + `build-for-testing` on the existing iOS 18.2 verification simulator (same pattern as the multi-speaker-captions and pill-fix chantiers earlier this session).
-- Manual device verification (queued, not blocking commit): confirm the cyclic button reads correctly with VoiceOver's increment/decrement gesture, and that the PiP frame buttons still hit-test correctly at the smaller glass diameter over real video.
+- Manual device verification (queued, not blocking commit): confirm the cyclic button's `accessibilityValue` reads correctly with VoiceOver across all 3 states via plain double-tap (no swipe gesture to test — none is added, see §1); confirm the PiP frame buttons still hit-test correctly; **check glyph contrast** of the smaller glass circle over a bright, close-up front-camera self-view (known past failure mode in this app: white-on-glass legibility over bright call surfaces) — not just the hit-test.
