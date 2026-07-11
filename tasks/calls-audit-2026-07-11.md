@@ -1,5 +1,13 @@
 # Audit bout-en-bout système d'appels — 2026-07-11
 
+> **Statut 2026-07-11 soir — findings #1, #2, #3 CORRIGÉS sur main** :
+> #1 `d690eecd9` (web écoute `call:already-answered`, dismiss scopé au callId),
+> #2+#3 `d74f18fca`+`2a436deb5` (politique pure `call-push-mirroring` :
+> pushes stop-ring apns+fcm/ios+android, mirror answered-elsewhere aussi
+> dans la branche TARGET_NOT_FOUND). Reste côté client Android : handler
+> FCM des data-pushes `call_cancel`/`call_answered_elsewhere` (le gateway
+> les délivre désormais aux tokens fcm). Findings #4-#11 ouverts.
+
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,
 missed-call anchor) sont vérifiés présents — non re-signalés.
