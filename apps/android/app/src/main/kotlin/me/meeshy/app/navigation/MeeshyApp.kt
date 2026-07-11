@@ -60,6 +60,7 @@ import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
+import me.meeshy.app.settings.AccountDeletionScreen
 import me.meeshy.app.settings.ChangePasswordScreen
 import me.meeshy.app.settings.MediaDownloadScreen
 import me.meeshy.app.settings.PrivacySettingsScreen
@@ -87,6 +88,7 @@ object Routes {
     const val CHANGE_PASSWORD = "settings/change-password"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val PRIVACY = "settings/privacy"
+    const val DELETE_ACCOUNT = "settings/delete-account"
     const val STARRED = "starred"
     const val PROFILE_USER = "profile/{userId}"
     const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
@@ -331,10 +333,14 @@ fun MeeshyApp(
                     onOpenChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
                     onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
                     onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
+                    onOpenDeleteAccount = { navController.navigate(Routes.DELETE_ACCOUNT) },
                 )
             }
             composable(Routes.CHANGE_PASSWORD) {
                 ChangePasswordScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.DELETE_ACCOUNT) {
+                AccountDeletionScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.MEDIA_DOWNLOAD) {
                 MediaDownloadScreen(onBack = { navController.popBackStack() })

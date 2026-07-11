@@ -8,6 +8,8 @@ import me.meeshy.sdk.model.ChangePasswordRequest
 import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
+import me.meeshy.sdk.model.DeleteAccountRequest
+import me.meeshy.sdk.model.DeleteAccountResponse
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
@@ -19,6 +21,7 @@ import me.meeshy.sdk.model.VerifyPhoneChangeRequest
 import me.meeshy.sdk.model.VerifyPhoneChangeResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.HTTP
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -91,6 +94,11 @@ interface UserApi {
 
     @PATCH("users/me/password")
     suspend fun changePassword(@Body body: ChangePasswordRequest): ApiResponse<ChangePasswordResponse>
+
+    // Retrofit needs @HTTP(hasBody = true) to attach a body to a DELETE — gateway route
+    // `DELETE /api/v1/me/delete-account` (routes/me/delete-account.ts).
+    @HTTP(method = "DELETE", path = "me/delete-account", hasBody = true)
+    suspend fun deleteAccount(@Body body: DeleteAccountRequest): ApiResponse<DeleteAccountResponse>
 
     @POST("users/me/change-phone")
     suspend fun changePhone(@Body body: ChangePhoneRequest): ApiResponse<ChangePhoneResponse>

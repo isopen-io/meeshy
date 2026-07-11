@@ -4,6 +4,26 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-11, `settings-account-deletion`)
+- **Retrofit cannot attach a body to `@DELETE` — use `@HTTP(method="DELETE", path="…", hasBody=true)`.** The
+  gateway `DELETE /api/v1/me/delete-account` takes a JSON body (`{ confirmationPhrase }`). `@DELETE("…")` +
+  `@Body` compiles but throws at runtime ("Non-body HTTP method cannot contain @Body"); `@HTTP(hasBody=true)` is
+  the supported form. Note `@HTTP`'s `path` is on the annotation, not a separate value arg.
+- **A typed-phrase deletion gate has a subtle SSOT invariant: the gate string *is* the wire string.** The gateway
+  validates against `z.literal('SUPPRIMER MON COMPTE')` (`.strict()`), so the match must be **verbatim** — no
+  `.trim()`, no case-fold — and the request body must send the canonical constant, never the raw typed buffer.
+  Making both read from one `AccountDeletionConfirmation.REQUIRED_PHRASE` means a future gate-loosening can never
+  desync the client check from the server literal. Mirrors the iOS `requiredPhrase` (it sends `requiredPhrase`,
+  not `confirmationText`).
+- **Deletion is online-only like change-password, and does NOT log the user out.** The gateway soft-deletes into a
+  90-day grace period and mails a confirm/cancel link, so the correct success UX is an in-place "check your inbox"
+  state (iOS `showEmailConfirmation`), not a session teardown. The `409 ALREADY_PENDING` path (a deletion already
+  in progress) deserves its own error state — iOS folds it into a single generic message.
+- **`val x by vm.state.collectAsStateWithLifecycle()` needs `import androidx.compose.runtime.getValue`** — the
+  `by`-delegate `getValue` is an extension. Its absence compiles everything else then fails only at the delegate
+  site with "State<…> has no method getValue(...) so it cannot serve as a delegate". Easy to miss when hand-writing
+  a new screen; copy the import block from a sibling screen (`ChangePasswordScreen`).
+
 ## Lesson (2026-07-11, `profile-share`)
 - **A "share/QR" feature is really a link-SSOT feature — build the deep-link contract first, and reuse
   the app's existing `DeepLinkParser` shape, don't invent a URL.** iOS `DeepLinkParser`
