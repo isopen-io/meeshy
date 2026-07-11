@@ -20,6 +20,8 @@ import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/s
 import { ROOMS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
+import { notificationString } from '@meeshy/shared/utils/notification-strings';
+import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
   socketInitiateCallSchema,
@@ -180,6 +182,34 @@ export class CallEventsHandler {
         }
       }
     }, 60_000).unref();
+  }
+
+  /**
+   * Langue de notification résolue (Prisme-first) pour chaque callee d'un
+   * push d'appel. Un seul findMany ; toute erreur retourne une Map vide —
+   * notificationString(undefined) retombe sur 'fr', le push part toujours.
+   */
+  private async resolveNotificationLangs(userIds: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (userIds.length === 0) return out;
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: {
+          id: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          deviceLocale: true,
+        },
+      });
+      for (const u of users) {
+        out.set(u.id, resolveUserLanguage(u, { deviceLocale: u.deviceLocale ?? undefined }));
+      }
+    } catch (error) {
+      logger.error('Notification language resolution failed — falling back to fr', { error });
+    }
+    return out;
   }
 
   /** Release the periodic cleanup interval. Call when shutting down the handler. */
@@ -1590,6 +1620,11 @@ export class CallEventsHandler {
             uid => uid !== userId && !foregroundUserIds.has(uid)
           );
 
+          // Prisme linguistique (audit 2026-07-11 #11) : titre/corps du push
+          // VoIP à la langue résolue de CHAQUE callee, plus de français codé
+          // en dur. La résolution ne bloque jamais le push (fallback 'fr').
+          const offlineLangs = await this.resolveNotificationLangs(offlineUserIds);
+
           for (const offlineUserId of offlineUserIds) {
             // Per-user TURN credentials so the answerer's RTCPeerConnection has
             // TURN at construction time (VoIPPushManager.didReceiveIncomingPush
@@ -1599,8 +1634,10 @@ export class CallEventsHandler {
             this.pushService.sendToUser({
               userId: offlineUserId,
               payload: {
-                title: `${callerName} vous appelle`,
-                body: data.type === 'video' ? 'Appel vidéo' : 'Appel audio',
+                title: notificationString(offlineLangs.get(offlineUserId), 'call.incoming.title', { actor: callerName }),
+                body: notificationString(offlineLangs.get(offlineUserId), 'call.incoming.body', {
+                  callType: data.type === 'video' ? 'video' : 'audio',
+                }),
                 callId: callSession.id,
                 callerName,
                 callerAvatar,
