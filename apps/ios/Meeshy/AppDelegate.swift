@@ -60,6 +60,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         registerNotificationCategories()
         BackgroundTaskManager.shared.registerTasks()
 
+        // VoIP push registration MUST happen unconditionally, on every
+        // process launch (including background launches iOS triggers to
+        // deliver a VoIP push itself), per Apple's PushKit contract —
+        // PKPushRegistry has to exist with its delegate wired before a VoIP
+        // push can even reach `didReceiveIncomingPushWith`, let alone report
+        // it to CallKit in time. This used to live ONLY inside a SwiftUI
+        // `.task` gated on `authManager.isAuthenticated` (MeeshyApp.swift) —
+        // on a fresh install (not yet logged in) the registry was never
+        // created at all, and even once logged in, a `.task` isn't a
+        // reliable place for launch-time OS contracts. `register()` is
+        // idempotent (no-ops if already registered), so this is safe
+        // alongside the existing call in MeeshyApp.swift's push bootstrap.
+        Task { @MainActor in
+            VoIPPushManager.shared.register()
+        }
+
         // Masquer le spinner natif d'iOS pour les pull-to-refresh
         // SwiftUI `.refreshable`. `.tint(.clear)` au site d'utilisation
         // ne suffit pas sur iOS 17+ — l'UIRefreshControl sous-jacent
