@@ -149,6 +149,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var recognitionTask: SFSpeechRecognitionTask?
     private var rotationCount = 0
     private var configurationChangeObserver: NSObjectProtocol?
+    private var interruptionObserver: NSObjectProtocol?
 
     init(socket: any MessageSocketProviding = MessageSocketManager.shared) {
         self.socket = socket
@@ -237,6 +238,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     func stopTranscribing() {
         removeConfigurationObserver()
+        removeInterruptionObserver()
         stopLocalCapture()
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -302,12 +304,23 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         audioEngine.prepare()
         try audioEngine.start()
         observeConfigurationChanges()
+        observeAudioInterruptions()
     }
 
     private func stopLocalCapture() {
-        guard audioEngine.isRunning else { return }
+        // removeTap(onBus:) must run unconditionally, NOT only while the
+        // engine is running. An AVAudioSession interruption (Siri, an
+        // incoming GSM call, an alarm — all common mid-call) auto-stops the
+        // engine on its own, so `isRunning` is already false by the time a
+        // call ends normally. Gating removeTap behind `isRunning` used to
+        // skip it in that case, leaving the tap installed on bus 0; the next
+        // startLocalCapture()'s installTap(onBus: 0, …) on an already-tapped
+        // bus raises an uncatchable NSInternalInconsistencyException. Apple
+        // documents removeTap as safe to call even with no tap installed.
         audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.stop()
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
     }
 
     /// A route change mid-capture (Bluetooth connect/disconnect, headphones,
@@ -350,6 +363,76 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             NotificationCenter.default.removeObserver(configurationChangeObserver)
         }
         configurationChangeObserver = nil
+    }
+
+    /// iOS auto-stops `AVAudioEngine` on ANY `AVAudioSession` interruption
+    /// (Siri, an incoming GSM call, an alarm — all common mid-call), unlike
+    /// `.AVAudioEngineConfigurationChange` (hardware/route reconfiguration
+    /// only, handled above). Without this observer, captions silently stop
+    /// producing segments for the rest of the call: no recognizer error
+    /// fires (no audio buffers ≠ an error callback), so `isTranscribing`
+    /// stays `true` and the captions UI keeps claiming they're live.
+    private func observeAudioInterruptions() {
+        removeInterruptionObserver()
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+            Task { @MainActor [weak self] in
+                self?.handleAudioInterruption(type: type)
+            }
+        }
+    }
+
+    private func handleAudioInterruption(type: AVAudioSession.InterruptionType) {
+        let action = Self.evaluateInterruptionAction(
+            type: type,
+            isTranscribing: isTranscribing,
+            engineIsRunning: audioEngine.isRunning
+        )
+        guard action == .restartEngine, let request else { return }
+        reinstallTap(for: request)
+        do {
+            try audioEngine.start()
+            callsLogger.info("Restarted transcription capture after audio interruption ended")
+        } catch {
+            callsLogger.error("Failed to restart transcription capture after interruption: \(error.localizedDescription)")
+        }
+    }
+
+    private func removeInterruptionObserver() {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+        interruptionObserver = nil
+    }
+
+    /// Pure decision extracted from `handleAudioInterruption` so it's unit
+    /// testable without a real `AVAudioEngine`/`AVAudioSession` (unavailable
+    /// in the unit test host — see `applyRecognitionResult`'s doc comment
+    /// for the same constraint).
+    enum InterruptionAction: Equatable {
+        case none
+        case restartEngine
+    }
+
+    static func evaluateInterruptionAction(
+        type: AVAudioSession.InterruptionType,
+        isTranscribing: Bool,
+        engineIsRunning: Bool
+    ) -> InterruptionAction {
+        guard isTranscribing else { return .none }
+        switch type {
+        case .began:
+            return .none
+        case .ended:
+            return engineIsRunning ? .none : .restartEngine
+        @unknown default:
+            return .none
+        }
     }
 
     /// See `startLocalCapture`'s doc comment — same `@Sendable`-typed-local

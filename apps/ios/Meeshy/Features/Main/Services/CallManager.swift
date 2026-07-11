@@ -1133,7 +1133,7 @@ final class CallManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await APIClient.shared.urlSession.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else { return }
 
             if httpResponse.statusCode == 404 {

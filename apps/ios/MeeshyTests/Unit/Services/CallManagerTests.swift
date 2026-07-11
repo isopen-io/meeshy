@@ -2232,6 +2232,27 @@ final class VoIPFreshnessSourceGuardTests: XCTestCase {
             "voipFreshnessTimeoutSeconds must be ≤10s — a slow freshness check delays the CallKit UI"
         )
     }
+
+    func test_freshness_usesCertificatePinnedSession_notURLSessionShared() throws {
+        // Every other network call in the app goes through APIClient.shared,
+        // whose URLSession is built with CertificatePinningDelegate. This is
+        // the one call in the whole call stack that carries the user's live
+        // bearer token — it must not fall back to the plain, unpinned
+        // URLSession.shared, or a MITM behind a device-trusted rogue CA can
+        // harvest the token / spoof the terminal-status response.
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertFalse(
+            body.contains("URLSession.shared"),
+            "Security: VoIP freshness check must not use the unpinned URLSession.shared"
+        )
+        XCTAssertTrue(
+            body.contains("APIClient.shared.urlSession"),
+            "Security: VoIP freshness check must route through APIClient.shared's certificate-pinned session"
+        )
+    }
 }
 
 // MARK: - endCurrentAndAnswerPending race condition guard
