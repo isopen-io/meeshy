@@ -1899,7 +1899,8 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated'
+            message: 'User not authenticated',
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -1921,7 +1922,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined
+            details: validationDetails ? { issues: validationDetails } : undefined,
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -2063,7 +2065,8 @@ export class CallEventsHandler {
 
         socket.emit(CALL_EVENTS.ERROR, {
           code: errorCode,
-          message
+          message,
+          callId: data?.callId
         } as CallError);
       }
     });
@@ -2525,7 +2528,8 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated'
+            message: 'User not authenticated',
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -2547,7 +2551,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined
+            details: validationDetails ? { issues: validationDetails } : undefined,
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -2567,7 +2572,8 @@ export class CallEventsHandler {
         if (!audioParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call'
+            message: 'You are not a participant in this call',
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -2604,7 +2610,7 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling audio', error);
 
-        socket.emit(CALL_EVENTS.ERROR, this.mapMediaToggleError(error, 'Failed to toggle audio'));
+        socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, 'Failed to toggle audio'), callId: data?.callId } as CallError);
       }
     });
 
@@ -2619,7 +2625,8 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated'
+            message: 'User not authenticated',
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -2641,7 +2648,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined
+            details: validationDetails ? { issues: validationDetails } : undefined,
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -2658,7 +2666,8 @@ export class CallEventsHandler {
         if (!videoParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call'
+            message: 'You are not a participant in this call',
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -2694,7 +2703,7 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling video', error);
 
-        socket.emit(CALL_EVENTS.ERROR, this.mapMediaToggleError(error, 'Failed to toggle video'));
+        socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, 'Failed to toggle video'), callId: data?.callId } as CallError);
       }
     });
 
@@ -2708,7 +2717,8 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated'
+            message: 'User not authenticated',
+            callId: data?.callId
           } as CallError);
           ack?.({ success: false });
           return;
@@ -2732,7 +2742,8 @@ export class CallEventsHandler {
           const { error: validationError } = validation;
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validationError
+            message: validationError,
+            callId: data?.callId
           } as CallError);
           ack?.({ success: false });
           return;
@@ -2775,7 +2786,8 @@ export class CallEventsHandler {
           // force-end a call on an unauthorized caller's behalf.
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this conversation'
+            message: 'You are not a participant in this conversation',
+            callId: data?.callId
           } as CallError);
           ack?.({ success: false });
           return;
@@ -2887,7 +2899,7 @@ export class CallEventsHandler {
           await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, endedByUserId, data.reason);
         }
         ack?.({ success: false });
-        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
+        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message, callId: data?.callId } as CallError);
       }
     });
 
@@ -3132,7 +3144,8 @@ export class CallEventsHandler {
         if (!participantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call'
+            message: 'You are not a participant in this call',
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -3199,7 +3212,8 @@ export class CallEventsHandler {
         if (!socket.rooms.has(ROOMS.call(data.callId))) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'Not in call room'
+            message: 'Not in call room',
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -3215,7 +3229,8 @@ export class CallEventsHandler {
         if (!iceParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'Not a participant in this call'
+            message: 'Not a participant in this call',
+            callId: data?.callId
           } as CallError);
           return;
         }
