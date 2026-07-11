@@ -30,6 +30,20 @@ final class WebRTCVideoViewAccessibilityTests: XCTestCase {
         )
     }
 
+    func test_liveVideoTrack_hasAccessibilityLabel() throws {
+        let source = try webRTCVideoViewSource()
+        guard let range = source.range(of: "WebRTCVideoView(track: rtcTrack") else {
+            XCTFail("WebRTCVideoView.swift must render WebRTCVideoView for a resolved RTCVideoTrack"); return
+        }
+        let vicinity = String(source[range.lowerBound...].prefix(200))
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityLabel("),
+            "The live video surface itself had no accessibility label — only its " +
+            "black-screen fallback did, so VoiceOver announced nothing while a call's " +
+            "video was actually rendering."
+        )
+    }
+
     func test_noWebRTCFallback_usesDynamicTypeTextStyle_notFixedFontSize() throws {
         let source = try webRTCVideoViewSource()
         guard let range = source.range(of: "call.video.unavailable") else {
