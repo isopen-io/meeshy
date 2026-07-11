@@ -41,13 +41,21 @@
 > re-implementation; **UDF/instant-app** — immutable `StateFlow<UiState>`, pure transitions; **colour/UX
 > coherence** — Indigo brand card + accent-neutral toggles, Success-green ready card, natural row→screen→back,
 > Share only shown once an artifact exists so no dead end; **no coverage floor lowered, no test weakened**).
-> **Merge status (2026-07-11):** slice code-complete and pushed; **PR #1870** open against `main` with CI
-> triggered. The GitHub MCP token **expired mid-run** and REST fell back to "GitHub access is not enabled for
-> this session", so this run could **not** observe CI status nor perform the squash-merge — the merge is left
-> **⚠ pending** (not blocked on the code: local `:app:assembleDebug` + all touched-module tests are green, diff
-> is `apps/android` only, reviewer PASS). **Next run: re-check PR #1870 — once CI is green, squash-merge to
-> `main`, then advance.** Do NOT force-merge via `git push origin HEAD:main` (bypasses the CI gate). The code
-> below is done and needs no rework.
+> **Merge status (2026-07-11): ⚠ BLOCKED on a pre-existing `main`-side CI failure — NOT this slice's code.**
+> **PR #1870** is open against `main`; local `:app:assembleDebug` + all touched-module tests are green, diff is
+> `apps/android` only, reviewer PASS. CI is **red** solely on the **"Test gateway"** job:
+> `CallEventsHandler.test.ts` throws `TypeError: Cannot read properties of undefined (reading 'PRESENCE_APP_STATE')`
+> at `services/gateway/src/socketio/CallEventsHandler.ts:1275` — `CLIENT_EVENTS.PRESENCE_APP_STATE` is not defined
+> in `packages/shared` (the shared events source/dist lacks the constant that `socket-rate-limiter.ts` + the tests
+> already reference; likely a missing `packages/shared` build or an un-added constant). **This is reproduced on
+> `main`'s own push CI** (run #6992, sha `286e25f8` — its *sole* failed job is "Test gateway"), so it is a
+> pre-existing gateway/shared breakage, **not** caused by this PR (`git diff --name-only origin/main...HEAD` = 100%
+> `apps/android`, zero TS/gateway/shared files). Per the hard rules the merge is held: **never merge past red CI**,
+> and the fix lives in `services/gateway`/`packages/shared` — **production logic outside `apps/android`** this
+> slice may not touch. **Next run: re-check PR #1870 — once `main`'s "Test gateway" job is green again (someone
+> fixes the gateway/shared `PRESENCE_APP_STATE` constant, outside this Android track), squash-merge #1870, then
+> advance.** Do NOT force-merge via `git push origin HEAD:main`, and do NOT fix the gateway bug from an
+> `apps/android` slice. The Android code below is done and needs no rework.
 > **Next slice (after the merge):** media cache management (§L — clear cached images/audio/video/thumbnails),
 > the live `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of
 > `MediaDownloadPolicyEngine`, or avatar/banner upload (media pipeline) for §K profile edit.
