@@ -34,6 +34,7 @@ data class ProfileUiState(
     val isSaving: Boolean = false,
     val stats: UserStatsPresentation? = null,
     val timeline: StatsTimelinePresentation? = null,
+    val isOwnProfile: Boolean = true,
 )
 
 @HiltViewModel
@@ -71,6 +72,7 @@ class ProfileViewModel @Inject constructor(
                 }
             }
         } else {
+            _state.update { it.copy(isOwnProfile = false) }
             loadProfile(userId)
         }
     }

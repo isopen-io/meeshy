@@ -665,6 +665,37 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
     });
 
+    // Scoping par appel (contrat CallError.callId, packages/shared/types/video-call.ts) —
+    // un client avec un appel actif DOIT ignorer un call:error qui nomme un AUTRE
+    // appel ; sans callId, le garde iOS (CallManager, audit 2026-07-08) ne peut pas
+    // s'appliquer et l'erreur est traitée comme non-scopée. Chemin prod réel
+    // (incident 2026-07-03) : call:join arrivé après la fin → CALL_ENDED.
+    it('scopes the join-failure call:error to the callId (dead-call rejoin path)', async () => {
+      mockCallServiceJoinCall.mockRejectedValue(new Error('CALL_ENDED: This call has already ended'));
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      const ack = jest.fn();
+      await socket._trigger('call:join', validData, ack);
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'CALL_ENDED',
+        callId: CALL_ID,
+      }));
+    });
+
+    it('scopes the not-a-participant join error to the callId', async () => {
+      const { socket } = setupWithSocket({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+      await socket._trigger('call:join', validData);
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'NOT_A_PARTICIPANT',
+        callId: CALL_ID,
+      }));
+    });
+
     it('joins call, ACKs, broadcasts participant-joined, notifies other devices', async () => {
       const participant = makeParticipant();
       const callSession = makeCallSession({ participants: [participant] });
@@ -788,6 +819,21 @@ describe('CallEventsHandler', () => {
       getUserId.mockReturnValue(undefined);
       await socket._trigger('call:leave', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_AUTHENTICATED' }));
+    });
+
+    // Scoping par appel (contrat CallError.callId) — même exigence que le
+    // handler join (43d4d7b7e) : le garde client par appel ne s'applique
+    // qu'aux erreurs qui nomment leur appel.
+    it('scopes the leave-failure call:error to the callId', async () => {
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
+      mockCallServiceLeaveCall.mockRejectedValue(new Error('LEAVE_FAIL: storage down'));
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+      await socket._trigger('call:leave', validData);
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'LEAVE_FAIL',
+        callId: CALL_ID,
+      }));
     });
 
     it('returns early when user is not in the call', async () => {
@@ -1315,7 +1361,11 @@ describe('CallEventsHandler', () => {
       mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [] }));
       const { socket } = setupWithSocket();
       await socket._trigger('call:toggle-audio', validData);
-      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
+      // Scoping par appel (contrat CallError.callId) — cf. 43d4d7b7e.
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'NOT_A_PARTICIPANT',
+        callId: CALL_ID,
+      }));
     });
 
     it('updates media and uses socket.to (excludes sender)', async () => {
@@ -1341,7 +1391,8 @@ describe('CallEventsHandler', () => {
       await socket._trigger('call:toggle-audio', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', {
         code: 'CALL_NOT_FOUND',
-        message: 'Call session not found'
+        message: 'Call session not found',
+        callId: CALL_ID
       });
     });
 
@@ -1352,7 +1403,8 @@ describe('CallEventsHandler', () => {
       await socket._trigger('call:toggle-audio', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', {
         code: 'MEDIA_TOGGLE_FAILED',
-        message: 'Failed to toggle audio'
+        message: 'Failed to toggle audio',
+        callId: CALL_ID
       });
     });
   });
@@ -1394,7 +1446,8 @@ describe('CallEventsHandler', () => {
       await socket._trigger('call:toggle-video', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', {
         code: 'NOT_A_PARTICIPANT',
-        message: 'You are not a participant in this conversation'
+        message: 'You are not a participant in this conversation',
+        callId: CALL_ID
       });
     });
 
@@ -1405,12 +1458,27 @@ describe('CallEventsHandler', () => {
       await socket._trigger('call:toggle-video', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', {
         code: 'MEDIA_TOGGLE_FAILED',
-        message: 'Failed to toggle video'
+        message: 'Failed to toggle video',
+        callId: CALL_ID
       });
     });
   });
 
   // ── call:end ─────────────────────────────────────────────────────────────
+
+  describe('call:request-ice-servers', () => {
+    // Scoping par appel (contrat CallError.callId) — cf. 43d4d7b7e. Le refus
+    // « pas dans la call room » doit nommer l'appel : un client avec un appel
+    // actif A ne doit pas interpréter le refus d'un refresh pour l'appel B.
+    it('scopes the not-in-room rejection to the callId', async () => {
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'NOT_A_PARTICIPANT',
+        callId: CALL_ID,
+      }));
+    });
+  });
 
   describe('call:end', () => {
     const validData = { callId: CALL_ID };
@@ -1571,7 +1639,11 @@ describe('CallEventsHandler', () => {
       const ack = jest.fn();
       await socket._trigger('call:end', validData, ack);
       expect(ack).toHaveBeenCalledWith({ success: false });
-      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.any(Object));
+      // Scoping par appel (contrat CallError.callId) — cf. 43d4d7b7e.
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'END_CALL_FAIL',
+        callId: CALL_ID,
+      }));
     });
 
     it('force-ends the orphaned session when endCall throws after the fast-path optimistic broadcast', async () => {

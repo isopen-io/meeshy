@@ -37,6 +37,35 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         )
     }
 
+    func test_rejoinIndicator_clearsWhenCallEndedArrivesForThatCall() throws {
+        // Le gateway fanout `call:ended` jusqu'aux user-rooms de TOUS les
+        // membres de la conversation (resolveCallEndedRooms) — un viewer
+        // non-participant le reçoit donc aussi. Sans invalidation temps réel,
+        // la pill « Rejoindre » resterait affichée après la fin de l'appel
+        // (reconciledActiveCall n'est posé qu'au .task(id:)) et un tap
+        // lancerait un rejoin vers un appel mort (« already ended »).
+        let source = try headerSource()
+        guard let range = source.range(of: ".onReceive(MessageSocketManager.shared.callEnded") else {
+            XCTFail("HeaderCallButtonsView must subscribe to MessageSocketManager.callEnded to invalidate the rejoin pill"); return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains(".receive(on: DispatchQueue.main)"),
+            "callEnded fires from the socket queue — the subscription must hop to the main " +
+            "thread before touching @State (known SIGTRAP class on call surfaces)."
+        )
+        XCTAssertTrue(
+            body.contains("reconciledActiveCall?.id == event.callId"),
+            "The invalidation must match by callId — a call ending in ANOTHER conversation " +
+            "must not clear this conversation's rejoin pill."
+        )
+        XCTAssertTrue(
+            body.contains("reconciledActiveCall = nil"),
+            "On a matching call:ended, the rejoin pill must be cleared (back to startCallButtons)."
+        )
+    }
+
     func test_reconcileActiveCall_skipsNetworkCall_whenCallManagerAlreadyActive() throws {
         let source = try headerSource()
         guard let range = source.range(of: "private func reconcileActiveCall() async {") else {
@@ -77,6 +106,40 @@ final class HeaderCallButtonsViewTests: XCTestCase {
             "Tapping the rejoin indicator must call CallManager.rejoinActiveCall — a bare " +
             "displayMode flip (like returnToCallIndicator) would do nothing since this device " +
             "was never actually in the call session to return to."
+        )
+    }
+
+    func test_callGlyph_appliesAdaptiveGlassBeforeMeeshyTapTarget() throws {
+        // Regression guard (2026-07-11, user-reported "la taille du bouton
+        // d'appel doit être de la taille du bouton loupe de recherche"):
+        // `.adaptiveGlass(in: Circle(), ...)` sizes its Circle to the CURRENT
+        // view bounds — applying it AFTER `.meeshyTapTarget()` (which grows
+        // the frame to a 44×44 minimum) drew the glass circle at 44pt instead
+        // of the declared 28×28, even though both header buttons declared
+        // identical frame/font numbers. `.adaptiveGlass` must come first.
+        let source = try headerSource()
+        guard let range = source.range(of: "private func callGlyph(") else {
+            XCTFail("callGlyph not found"); return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1400, limitedBy: source.endIndex) ?? source.endIndex
+        let rawBody = String(source[range.lowerBound..<end])
+        // The doc comment itself mentions both modifiers by name (explaining
+        // WHY the order matters) — strip comment lines first so those
+        // mentions can't satisfy the range(of:) search in place of the real
+        // modifier applications.
+        let body = rawBody
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        guard let glassRange = body.range(of: ".adaptiveGlass(in: Circle()"),
+              let tapTargetRange = body.range(of: ".meeshyTapTarget()") else {
+            XCTFail("callGlyph must apply both .adaptiveGlass and .meeshyTapTarget"); return
+        }
+        XCTAssertTrue(
+            glassRange.lowerBound < tapTargetRange.lowerBound,
+            "callGlyph must apply .adaptiveGlass BEFORE .meeshyTapTarget — matching " +
+            "expandedHeaderSearchButton's order — so the visible glass circle stays 28×28 " +
+            "instead of ballooning to meeshyTapTarget's 44×44 minimum hit area."
         )
     }
 

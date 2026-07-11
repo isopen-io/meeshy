@@ -55,8 +55,15 @@ public nonisolated enum StoryCanvasFraming {
     }
 
     /// Truth-table helper for `canvasIsCarded`.
+    ///
+    /// Mode dessin IMMERSIF (user 2026-07-11) : `drawingActive` ne carde PLUS —
+    /// pendant le dessin le canvas reste plein écran (`.free`), dessinable
+    /// jusqu'aux angles, avec les seules bulles flottantes par-dessus (aucune
+    /// sheet). Remplace la spec 2026-06-02 « identique pour tous les outils,
+    /// dessin inclus ». Le paramètre est conservé pour documenter la table de
+    /// vérité (testée par `StoryCanvasFramingTests.test_isCarded_truthTable`).
     public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool) -> Bool {
-        bandPresent || drawingActive || textActive
+        bandPresent || textActive
     }
 
     /// Présentation du canvas **reader** selon la visibilité du chrome.

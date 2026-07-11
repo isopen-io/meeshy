@@ -1701,8 +1701,40 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
       `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
       over/under-fills the ring), plus a "Profile N% complete" label. 22 `ProfileHeaderBuilderTest` cases.
-- [ ] Profile QR code display + save/share; share profile via message/email/copy link
-- [ ] Block / unblock users; report a user (reason + details)
+- [x] Profile QR code display + save/share; share profile via message/email/copy link —
+      **shipped** (slice `profile-share`, 2026-07-11), and it **surpasses iOS**, which has no
+      profile-share affordance. Pure `:core:model` `ProfileShareLink` is the cross-platform link SSOT:
+      `https://meeshy.me/u/{username}` Universal Link + `meeshy://u/{username}` custom scheme, mirroring
+      the iOS `DeepLinkParser` contract (`u` = the AASA-claimed user segment) so a QR/link made on
+      Android resolves in every client. `canonicalUsername` trims + strips a display-only leading `@`
+      (blank / lone-`@` → `null`); `webLink`/`appLink` percent-encode the handle as an RFC 3986 path
+      segment (unreserved passthrough, space→`%20`, non-ASCII→uppercase UTF-8 bytes, reserved→`%XX`).
+      Pure `:feature:profile` `ProfileShareBuilder.build(user) → ProfileSharePresentation?` (precedent
+      `ProfileHeaderBuilder`) projects `effectiveDisplayName`, `@handle` (same `canonicalUsername` SSOT
+      so handle ⇄ link never diverge) and both links; `null` when the handle is blank so the affordance
+      hides instead of emitting a dead URL. Glue (exempt): `ProfileShareSheet` (ModalBottomSheet with a
+      zxing-rendered QR of the web link on a white card + Copy-link + system Share-chooser), a **Share**
+      app-bar action on both own and other profiles, EN/FR/ES/PT strings; added `com.google.zxing:core`.
+      +22 tests (ProfileShareLink 16, ProfileShareBuilder 6). **Pending:** save the QR image to a file.
+- [x] Block / unblock users; report a user (reason + details) — **complete**. Block/unblock shipped
+      earlier (durable `BlockRepository` + `BlockedTab`). **Report a user shipped** (slice `report-user`,
+      2026-07-11): port of iOS `ReportUserView`, corrected to the gateway contract. Pure `:core:model`
+      `ReportReason` (5 reasons, each carrying the **lowercase** gateway `reportType` token —
+      spam/harassment/inappropriate/impersonation/other) fixes an iOS bug where `ReportReason.rawValue`
+      is UPPERCASE (`"SPAM"`…), values the gateway `createReportSchema` zod enum rejects (an iOS user
+      report is silently a `400`). Pure `ReportRequestBuilder.forUser(userId, reason, details) →
+      CreateReportRequest?` SSOT: blank id → `null` (inert), details trimmed + blank→null + capped at 500
+      (iOS editor-cap parity), `explicitNulls=false` so a null note is omitted from the wire body.
+      `:core:network` `ReportApi` (`POST admin/reports`, any authenticated user). `:sdk-core`
+      `ReportRepository.reportUser` — **deliberately online** (not a durable outbox action like block: a
+      report expects explicit confirmation/error, a silently-deferred report is worse UX), session-gated
+      so a signed-out caller can't fire a guaranteed `401` (inert `null`). `:feature:profile`
+      `ReportUserViewModel` (UDF immutable `ReportUserUiState`, `canSubmit` guards a double-tap / re-submit
+      after success, error is retryable, details cap enforced on input) + `ReportUserScreen` (accent/error
+      red reason radios + details field + counter) reached from a **Report** action in the other-user
+      profile's app bar (own profile shows Edit instead). +28 tests (ReportReason 6, ReportRequestBuilder 9,
+      ReportRepository 5, ReportUserViewModel 8). EN/FR/ES/PT strings. Surpasses iOS (correct wire token +
+      testable UDF + retryable error state).
 - [ ] Change email / phone (two-step verification)
 - [ ] Two-factor auth: QR enrollment, code verification, backup codes (view + regenerate), disable
 - [ ] Active device sessions: list, revoke one, revoke all others
@@ -1802,8 +1834,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       fields round-trip untouched but stay non-editable — product decision 2026-06-14). Reached from a
       new "Privacy & visibility" row at the top of Settings → Privacy (`Routes.PRIVACY`). +28 tests
       (catalog/codec 16, store 7, VM 5). EN/FR/ES/PT strings. This ships the fully-tested visibility/
-      contacts/media toggle surface + durable device-local persistence; a backend-sync path for the
-      server-authoritative visibility prefs (analogous to notification-prefs sync) is a follow-up.
+      contacts/media toggle surface + durable device-local persistence.
+      **Offline-queued backend sync landed** (`settings-privacy-preferences-sync`, 2026-07-11): the
+      privacy block now propagates to the gateway (`PATCH /me/preferences/privacy`) durably. Pure
+      `:core:model` `PrivacyPreferenceSyncBody.from(prefs)` projects **only the twelve editable
+      toggles** — the read-only encryption leg (`encryptionPreference`/`autoEncrypt…`/…) and local
+      `extras` are deliberately dropped, so because the gateway PATCH is a partial merge a sync never
+      stamps device defaults over server-side encryption prefs (a genuinely better contract than a
+      blind full-block push). `core/network` `PreferencesApi.updatePrivacy`; a **new**
+      `OutboxKind.UPDATE_PRIVACY_SETTINGS` on the shared `SETTINGS` lane (distinct kind from
+      notification's `UPDATE_SETTINGS` so the two coalesce independently and never clobber each other),
+      an `OutboxCoalescer` latest-snapshot rule, an `OutboxFlushWorker` `UPDATE_PRIVACY_SETTINGS`
+      sender; `:sdk-core` `PrivacyPreferencesSyncRepository` (session-gated durable enqueue keyed by
+      own user id; inert with no session). `PrivacySettingsViewModel.setToggle` now persists to the
+      device-local store instantly (UI SSOT) **then** enqueues the sync + wakes the worker on a real
+      `cmid` (a no-op re-set neither syncs nor wakes). The PATCH is idempotent, so a retry is harmless
+      (no rollback). +13 tests (SyncBody 3, SyncRepository 5, VM +3, Coalescer +2). Surpasses iOS,
+      whose privacy-preference write is online-only.
 - [x] Auto-download settings for media by type and connection (Wi-Fi/cellular) — **shipped** (slice
       `settings-media-auto-download`, 2026-07-11). Port of iOS `MediaDownloadSettingsView` +
       `MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor`. Pure `:core:model`
@@ -1840,7 +1887,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       a new "Change password" row in the Settings → Privacy section (`Routes.CHANGE_PASSWORD`). +32 tests
       (PasswordStrength 14, ChangePasswordForm 9, ChangePasswordViewModel 9). EN/FR/ES/PT strings.
 - [ ] GDPR data export (JSON/CSV, selectable scope, share/save file)
-- [ ] Account deletion (typed-phrase confirmation + email-confirmation flow)
+- [x] Account deletion (typed-phrase confirmation + email-confirmation flow) — **shipped** (slice
+      `settings-account-deletion`, 2026-07-11). Port of iOS `DeleteAccountView` + `AccountService.deleteAccount`.
+      Pure `:core:model` `AccountDeletionConfirmation` SSOT: `REQUIRED_PHRASE = "SUPPRIMER MON COMPTE"` (the gateway
+      `z.literal` contract, delete-account-schemas.ts) + `isConfirmed(typed)` — a **verbatim** match (no trim, no
+      case-fold: any leniency that cleared the client gate would be a guaranteed server `400 INVALID_CONFIRMATION`);
+      the wire always carries the canonical `REQUIRED_PHRASE`, never the raw buffer, so gate ⇄ body can never
+      diverge. `:core:model` `DeleteAccountRequest`/`DeleteAccountResponse`; `:core:network`
+      `UserApi.deleteAccount` (`@HTTP(method="DELETE", hasBody=true)` on `me/delete-account` — Retrofit needs the
+      explicit `@HTTP` to attach a body to a DELETE); `:sdk-core` `UserRepository.deleteAccount` (online-only
+      `apiCall` — the gateway opens a 90-day grace period and mails a confirmation link, so it can't be
+      optimistic/offline). `:feature:settings` `AccountDeletionViewModel` (+ `AccountDeletionUiState`,
+      `AccountDeletionError`): gates the destructive submit behind the verbatim phrase, double-tap safe
+      (`isDeleting` set synchronously), flips `isEmailSent` on success (no logout — mirrors iOS's email-confirmation
+      view), maps failure → `409 = ALREADY_PENDING` / transport = NETWORK / else GENERIC. `AccountDeletionScreen`
+      (glue): red danger warning card enumerating what is lost + monospace confirmation field + gated destructive
+      button, swapping to a "check your inbox" state on success; reached from the (previously no-op) "Delete
+      account" row in Settings → Danger zone (`Routes.DELETE_ACCOUNT`). +18 tests (AccountDeletionConfirmation 8,
+      AccountDeletionViewModel 10). EN/FR/ES/PT strings. Surpasses iOS with the distinct `ALREADY_PENDING` (409)
+      error state iOS folds into a single generic message.
 - [ ] Media cache management (clear cached images/audio/video/thumbnails)
 - [ ] Crash-report diagnostics viewer with share
 - [ ] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),

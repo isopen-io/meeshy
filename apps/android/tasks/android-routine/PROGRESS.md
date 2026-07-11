@@ -2,7 +2,126 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion)** → rest`
+
+> On 2026-07-11 **account deletion** landed (slice `settings-account-deletion`, feature-parity §L — "Account
+> deletion (typed-phrase confirmation + email-confirmation flow)"). Port of iOS `DeleteAccountView` +
+> `AccountService.deleteAccount`, wiring the previously no-op Settings → Danger zone "Delete account" row. Pure
+> `:core:model` `AccountDeletionConfirmation` SSOT — `REQUIRED_PHRASE = "SUPPRIMER MON COMPTE"` (the gateway
+> `z.literal` contract) + a **verbatim** `isConfirmed` gate (no trim/case-fold — a near-miss would be a guaranteed
+> server `400`); the wire always carries the canonical literal, never the raw buffer, so gate ⇄ body can't diverge.
+> `:core:network` `UserApi.deleteAccount` uses `@HTTP(method="DELETE", hasBody=true)` (Retrofit needs `@HTTP` to
+> attach a body to a DELETE); `:sdk-core` `UserRepository.deleteAccount` is online-only (the gateway opens a 90-day
+> grace period + mails a confirmation link — not optimistic/offline). `AccountDeletionViewModel` gates the
+> destructive submit behind the phrase (double-tap safe), flips `isEmailSent` on success (no logout, mirroring
+> iOS's email-confirmation state), and maps `409 → ALREADY_PENDING` / transport → NETWORK / else GENERIC — the
+> distinct `ALREADY_PENDING` state surpasses iOS's single generic error. `AccountDeletionScreen` (glue): red
+> danger warning card + monospace confirmation field + gated delete button, swapping to a "check your inbox"
+> state. **+18 tests** (AccountDeletionConfirmation 8, AccountDeletionViewModel 10), `:app:assembleDebug` BUILD
+> SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only; SDK purity — pure gate in `:core:model`, online repo in
+> `:sdk-core`, orchestration in the VM; SSOT — one gate drives match + wire literal; UDF; Error-red destructive UX,
+> natural row→screen→back, no dead end; no coverage floor lowered, no test weakened). **Next:** media cache
+> management (§L — clear cached images/audio/video/thumbnails), GDPR data export (§L), the live
+> `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of
+> `MediaDownloadPolicyEngine`, or avatar/banner upload (media pipeline) for §K profile edit.
+
+> On 2026-07-11 **profile share + QR code** landed (slice `profile-share`, feature-parity §K —
+> "Profile QR code display + save/share; share profile via message/email/copy link"). This one
+> **surpasses iOS**, which has no profile-share affordance at all. **(1) Pure `:core:model`
+> `ProfileShareLink`** — the cross-platform link SSOT, mirroring the iOS `DeepLinkParser` contract
+> (`https://meeshy.me/u/{username}` Universal Link + `meeshy://u/{username}` custom scheme, `u` = the
+> AASA-claimed user segment) so a QR/link produced on Android resolves in every Meeshy client.
+> `canonicalUsername` trims + strips a display-only leading `@` + blank/lone-`@` → `null`; `webLink`/
+> `appLink` percent-encode the handle as an RFC 3986 path segment (unreserved passthrough, space→`%20`,
+> non-ASCII→uppercase UTF-8 bytes, reserved delimiters→`%XX`) so an unusual handle can never emit a
+> malformed URL. **(2) Pure `:feature:profile` `ProfileShareBuilder.build(user) →
+> ProfileSharePresentation?`** (precedent `ProfileHeaderBuilder`) — projects `effectiveDisplayName`,
+> `@handle` (from the same `canonicalUsername` SSOT, so handle ⇄ link never diverge), and both links;
+> `null` when the username yields no shareable handle (share affordance stays hidden, no dead URL).
+> **(3) Glue (coverage-exempt)** — `ProfileShareSheet` (ModalBottomSheet: zxing-rendered QR of the web
+> link on a white card + `@handle` + link text + Copy-link/Share-chooser buttons), a **Share** app-bar
+> action shown on both own and other profiles when a shareable link exists, EN/FR/ES/PT strings. Added
+> the `com.google.zxing:core` dep (pure-Java QR encoder) to the profile module + version catalog.
+> **+22 tests** (ProfileShareLink 16, ProfileShareBuilder 6), all green; `:app:assembleDebug` BUILD
+> SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — `:core:model` link SSOT, `:feature:profile`
+> builder+sheet+nav, version catalog + profile `build.gradle`, EN/FR/ES/PT strings; no production logic
+> outside; **SDK purity** — pure opaque-string link primitive in `:core:model`, `MeeshyUser`-shaped
+> projection in `:feature:profile`, QR/clipboard/intent orchestration in the exempt Compose glue;
+> **SSOT** — one `canonicalUsername` drives handle + both links, link shape matches the iOS deep-link
+> contract, no re-implementation; **UDF** — the sheet is derived from `state.user`, no VM change;
+> **colour/UX coherence** — QR on a fixed-white card (scannability), accent-neutral outlined action
+> buttons, natural bottom-sheet dismiss returns to the profile, Share shown wherever a profile is
+> viewable so no dead end; **no coverage floor lowered, no test weakened**). **Next:** avatar/banner
+> upload (media pipeline) for §K profile edit, or another §L row (media cache management, GDPR export),
+> or the live `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of
+> `MediaDownloadPolicyEngine`.
+
+> On 2026-07-11 **report a user** landed (slice `report-user`, feature-parity §K — "Block / unblock
+> users; report a user (reason + details)", closing that box: block/unblock shipped earlier). Port of
+> iOS `ReportUserView`, **corrected to the gateway contract**: iOS sends UPPERCASE `reportType` raw
+> values (`"SPAM"`, `"HARASSMENT"`, `"INAPPROPRIATE_CONTENT"`…) that the gateway `createReportSchema`
+> zod enum (`spam|harassment|inappropriate|…`) rejects — so an iOS user report is silently a `400`.
+> Android's pure `:core:model` `ReportReason` carries the correct **lowercase** wire token per case;
+> the pure `ReportRequestBuilder.forUser` SSOT projects (userId + reason + details) into the
+> `POST /admin/reports` body — blank id → `null` (inert), details trimmed / blank→null / capped at 500
+> (iOS editor-cap parity), null note omitted from the wire (`explicitNulls=false`). `:core:network`
+> `ReportApi`; `:sdk-core` `ReportRepository.reportUser` is **deliberately online** (not a durable
+> outbox action like block — a report expects an explicit "sent"/error, a silently-deferred one is
+> worse UX), **session-gated** so a signed-out caller can't fire a guaranteed `401` (inert `null`).
+> `:feature:profile` `ReportUserViewModel` (UDF immutable `ReportUserUiState`; `canSubmit` blocks a
+> double-tap and a re-submit after success; failure/inert → retryable error; details cap enforced on
+> input so field + wire agree) + `ReportUserScreen` (error-red reason radios + details field + live
+> counter), reached from a **Report** app-bar action shown only on **another** user's profile (own
+> profile keeps Edit). **+28 tests** (ReportReason 6, ReportRequestBuilder 9, ReportRepository 5,
+> ReportUserViewModel 8), all green; `:app:assembleDebug` BUILD SUCCESSFUL; the two `:sdk-core`
+> DataStore-store tests that flaked under full-suite parallel load are the **documented** pre-existing
+> flake (NOTES §DataStore-under-parallel-load) — each green in isolation, rotating victim between runs,
+> and untouched by this slice. Reviewer **PASS** (diff `apps/android` only — `:core:model`,
+> `:core:network`, `:sdk-core`, `:feature:profile`, `:app` nav, EN/FR/ES/PT strings; no production
+> logic outside; **SDK purity** — pure opaque-param builder in `:core:model`, online repository in
+> `:sdk-core`, "when to submit / retryable" orchestration in the VM; **SSOT** — one `ReportReason`
+> wire-token map + one `ReportRequestBuilder`, no re-implementation; **UDF** — immutable
+> `StateFlow<UiState>`, pure transitions; **colour/UX coherence** — error-red destructive action,
+> natural back/dismiss returns to the profile, Report only on foreign profiles so no dead end; **no
+> coverage floor lowered, no test weakened**). **Next:** avatar/banner upload (media pipeline) for §K
+> profile edit, or Profile QR code / share-profile (§K), or another §L row (media cache management,
+> GDPR export), or the live `ConnectivityManager`-backed `NetworkConditionMonitor` + first
+> media-pipeline consumer of `MediaDownloadPolicyEngine`.
+
+> On 2026-07-11 **privacy-preferences backend sync** landed (slice `settings-privacy-preferences-sync`,
+> feature-parity §L). Follow-up to `settings-privacy-preferences`: the device-local privacy block now
+> propagates durably to the gateway (`PATCH /me/preferences/privacy`) through the offline outbox — it
+> survives offline + process death instead of an online-first REST call a dropped connection would lose.
+> **Key contract call — sync only the editable leg.** The gateway PATCH is a *partial merge*
+> (`{...current, ...body}`), so the pure `:core:model` `PrivacyPreferenceSyncBody.from(prefs)` projects
+> **only the twelve editable toggles** the user can change on Android (the `PrivacyCatalog` set) and
+> deliberately **drops the read-only encryption leg** (`encryptionPreference`/`autoEncryptNewConversations`/
+> `showEncryptionStatus`/`warnOnUnencrypted`) + local `extras`. A blind full-block push would have stamped
+> the device's default encryption values over whatever the user set on web/iOS; omitting those keys leaves
+> the server's encryption prefs untouched — a genuinely better contract than mirroring the notification
+> full-block sync. **New `OutboxKind.UPDATE_PRIVACY_SETTINGS`** (not a reuse of notification's
+> `UPDATE_SETTINGS`): both share the `SETTINGS` lane, but coalescing is per-kind — a distinct kind means a
+> privacy sync can never supersede a pending notification sync for the same user (the collision a naive reuse
+> would have caused). Wiring: `core/network` `PreferencesApi.updatePrivacy`; `OutboxLaneMap` assignment;
+> `OutboxCoalescer` latest-snapshot replace rule; `OutboxFlushWorker` `UPDATE_PRIVACY_SETTINGS` sender
+> (decode → `updatePrivacy` → Success/TransientFailure, bad payload → PermanentFailure); `:sdk-core`
+> `PrivacyPreferencesSyncRepository` (session-gated durable enqueue keyed by own user id; inert/`null` with
+> no session or blank id — mirrors `NotificationPreferencesSyncRepository`). `PrivacySettingsViewModel.setToggle`
+> now persists to the device-local store instantly (UI SSOT) **then** enqueues the sync + wakes the worker on
+> a real `cmid`; a no-op re-set neither writes, syncs, nor wakes. The PATCH is idempotent, so a delivery retry
+> is harmless (no optimistic flip, no rollback on exhaustion). **+13 tests** (SyncBody 3 — per-field projection,
+> encryption/extras dropped from the serialized keys, all-default projection; SyncRepository 5 — lane/kind/target/
+> payload, distinct-kind guard, no-session/blank/superseded inert; VM +3 — persist-then-enqueue-then-wake,
+> no-op never syncs, superseded/sessionless never wakes; Coalescer +2 — privacy latest-snapshot replace, privacy
+> never coalesces a pending notification), all green; touched-module `testDebugUnitTest` + `assembleDebug` BUILD
+> SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only; **SDK purity** — pure opaque-param wire body in
+> `:core:model`, stateless outbox/API building blocks + durable sync repo in `:sdk-core`, "when to sync / wake"
+> orchestration in the VM; **SSOT** — one editable-toggle catalog drives both the local store and the wire body,
+> no re-implementation; **UDF/instant-app** — device-local store stays the UI SSOT, sync never gates the repaint;
+> **UX coherence** — unchanged accent-coherent switch screen; **no coverage floor lowered, no test weakened** —
+> the existing 5 VM tests were kept and hardened with the new deps, +3 added). **Next:** avatar/banner upload
+> (media pipeline) for §K profile edit, or another §L row (media cache management, GDPR export), or the live
+> `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of `MediaDownloadPolicyEngine`.
 
 > On 2026-07-11 **privacy & visibility settings** landed (slice `settings-privacy-preferences`,
 > feature-parity §L — "Privacy settings (visibility, contacts, media/data, encryption preference)").
@@ -2246,6 +2365,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-11 — slice `settings-account-deletion` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/settings-account-deletion` (off latest `main`).
+- **What:** feature-parity §L "Account deletion (typed-phrase confirmation + email-confirmation flow)" — port of
+  iOS `DeleteAccountView` + `AccountService.deleteAccount`. Wires the previously no-op "Delete account" row in
+  Settings → Danger zone.
+- **Added (production):**
+  - `:core:model` `AccountDeletionConfirmation` — the typed-phrase gate SSOT. `REQUIRED_PHRASE =
+    "SUPPRIMER MON COMPTE"` is the gateway `z.literal` contract (delete-account-schemas.ts); `isConfirmed(typed)`
+    is a **verbatim** match (no trim, no case-fold — a near-miss that cleared the client gate would be a
+    guaranteed server `400`). The wire always carries the canonical `REQUIRED_PHRASE`, never the raw buffer.
+  - `:core:model` `DeleteAccountRequest`/`DeleteAccountResponse`; `:core:network` `UserApi.deleteAccount`
+    (`@HTTP(method="DELETE", path="me/delete-account", hasBody=true)` — Retrofit needs `@HTTP` to attach a body to
+    a DELETE); `:sdk-core` `UserRepository.deleteAccount` (online-only `apiCall` — the gateway opens a 90-day grace
+    period + mails a confirmation link, so it cannot be optimistic/offline; mirrors `changePassword`).
+  - `:feature:settings` `AccountDeletionViewModel` (+ `AccountDeletionUiState`, `AccountDeletionError`) — gates the
+    destructive submit behind the verbatim phrase, double-tap safe (`isDeleting` set synchronously before the
+    launch), flips `isEmailSent` on success (no logout — matches iOS's email-confirmation state), maps failure →
+    `409` = ALREADY_PENDING / transport = NETWORK / else GENERIC.
+  - `:feature:settings` `AccountDeletionScreen` (glue, coverage-exempt) — red danger warning card (irreversible +
+    5 loss bullets) + monospace confirmation field with an inline check when confirmed + gated Error-red delete
+    button; swaps to a "check your inbox" (MarkEmailRead + OK-pops-back) state on success. `app`
+    `Routes.DELETE_ACCOUNT` + composable + `SettingsScreen.onOpenDeleteAccount` (wired the dead danger-zone row).
+  - EN/FR/ES/PT strings (18 keys ×4 locales).
+- **Tests (RED→GREEN):** +18 — `AccountDeletionConfirmationTest` 8 (exact match, empty, different phrase, lowercase,
+  leading/trailing whitespace, partial prefix, and the `REQUIRED_PHRASE` ⇄ gateway-literal contract pin),
+  `AccountDeletionViewModelTest` 10 (initial not-confirmed, exact-phrase enables, near-miss disabled, not-confirmed
+  submit inert, success flips `isEmailSent` + sends the canonical phrase, 409/network/generic mapping, edit clears
+  error, in-flight double-tap guard). All 0 failures. RED-verified: the tests reference symbols absent on `main`.
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; new suites green (`AccountDeletionConfirmationTest` 8/8,
+  `AccountDeletionViewModelTest` 10/10). The full `assembleDebug testDebugUnitTest` gate's lone red was
+  `:sdk-core MediaDownloadPreferencesStoreTest.dataStore_hydrates…` (`TimeoutCancellationException` 15 s) — the
+  documented DataStore-under-parallel-load flake (NOTES 2026-07-10), green on isolated `--rerun-tasks` (BUILD
+  SUCCESSFUL 28 s); my `:sdk-core` change is a one-line `deleteAccount` passthrough that never touches DataStore.
+- **Reviewer:** **PASS** — diff is `apps/android` only (pure `:core:model` gate SSOT + request/response models +
+  interface/repo method + feature VM/screen/strings + one `app` route + the dead-row wiring); no production logic
+  outside; **SDK purity** — the verbatim gate is a stateless `:core:model` building block, the online deletion is
+  a low-level `:sdk-core` repo service, the "when to submit / success→email / error mapping" orchestration stays
+  in the feature VM; **SSOT** — one `AccountDeletionConfirmation` drives the gate *and* the wire literal, matching
+  the gateway `z.literal`, no re-implementation; **UDF** — immutable `StateFlow<UiState>` with pure derived
+  `isConfirmed`/`canSubmit`; **UX coherence** — Error-red destructive affordance, natural danger-row → screen →
+  back gesture, success swaps to a coherent "check inbox" state (no dead end, no surprise logout); **no coverage
+  floor lowered, no existing test weakened**.
 
 ### 2026-07-11 — slice `settings-change-password` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/settings-change-password` (off latest `main`).

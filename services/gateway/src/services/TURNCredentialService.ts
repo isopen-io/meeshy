@@ -112,8 +112,29 @@ export class TURNCredentialService {
     // value and crash-looped the gateway (Traefik 404 on every route). Clamp
     // everywhere; log at error level in production/staging so monitoring
     // still surfaces the misconfiguration, warn in dev/test.
-    const requestedTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '86400', 10);
+    const rawTTL = process.env.TURN_CREDENTIAL_TTL;
+    const parsedTTL = parseInt(rawTTL || '86400', 10);
     const minTTL = CallCleanupService.MAX_ACTIVE_MS / 1000;
+    // A non-numeric env value (typo, placeholder like "null"/"unset") makes
+    // parseInt return NaN. `NaN < minTTL` is `false`, so the clamp-warning
+    // branch below never fires, and `Math.max(NaN, minTTL)` itself evaluates
+    // to `NaN` — every minted username becomes `"NaN:<userId>"` and coturn
+    // rejects it outright, silently failing every TURN-relayed call with none
+    // of the alerting the floor clamp exists to guarantee. Reject NaN before
+    // it ever reaches the floor comparison and fall back to the safe default.
+    let requestedTTL = parsedTTL;
+    if (Number.isNaN(requestedTTL)) {
+      const invalidMessage =
+        `⚠️ TURN_CREDENTIAL_TTL ("${rawTTL}") is not a valid number — falling back to the ` +
+        '86400s default. An unvalidated NaN here would silently mint invalid TURN credentials ' +
+        '(username "NaN:<userId>") and fail every TURN-relayed call with no alert.';
+      if (isProductionOrStaging) {
+        logger.error(invalidMessage);
+      } else {
+        logger.warn(invalidMessage);
+      }
+      requestedTTL = 86400;
+    }
     if (requestedTTL < minTTL) {
       const clampMessage =
         `⚠️ TURN_CREDENTIAL_TTL (${requestedTTL}s) is below the ${minTTL}s floor ` +

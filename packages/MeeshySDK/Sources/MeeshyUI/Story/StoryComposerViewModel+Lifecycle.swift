@@ -78,6 +78,7 @@ extension StoryComposerViewModel {
         activeBrushTool = .pen
         activeBrushSmoothing = .raw
         drawingEditingMode = .inactive
+        isDrawingImmersive = false
         backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())"
         openingEffect = nil
         closingEffect = nil

@@ -9,12 +9,10 @@ import MeeshyUI
 struct MessageOverlayMenu: View {
     let message: Message
     let contactColor: String
-    let conversationId: String
     let messageBubbleFrame: CGRect
     @Binding var isPresented: Bool
     var canDelete: Bool = false
     var canEdit: Bool = false
-    var onReply: (() -> Void)?
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
     var onPin: (() -> Void)?
@@ -23,17 +21,11 @@ struct MessageOverlayMenu: View {
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
-    var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
-    var onSelectAudioLanguage: ((String?) -> Void)? = nil
-    var onRequestTranslation: ((String, String) -> Void)? = nil
     var onReact: ((String) -> Void)?
-    var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
-    var onDeleteAttachment: ((String) -> Void)?
     /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
     /// (message à exactement un attachment enregistrable).
     var onSaveMedia: (() -> Void)? = nil
-    var onShowThread: (() -> Void)?
 
     // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
     // overlay renders a REAL `ThemedMessageBubble` at the source position
@@ -60,9 +52,16 @@ struct MessageOverlayMenu: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
-    @State private var dragOffset: CGFloat = 0
-    @State private var forceTab: DetailTab? = nil
     @State private var isEmojiPickerOpen = false
+    /// Offset vertical du cluster native-lean pendant le drag (suivi du doigt,
+    /// amorti au-delà des seuils par `MessageOverlayDragLaw.displayOffset`).
+    /// `@GestureState` : reset automatique (spring) au release ET à
+    /// l'annulation système du geste (appel entrant, background) — le cluster
+    /// ne reste jamais figé hors position.
+    @GestureState(resetTransaction: Transaction(animation: .spring(response: 0.35, dampingFraction: 0.75)))
+    private var clusterDragOffset: CGFloat = 0
+    /// Haptic d'armement émis une seule fois par geste ; réarmé au release.
+    @State private var dragHapticArmed = false
 
     private let previewCharLimit = 500
     // Expanded emoji set — far more than fits in the viewport, so the
@@ -76,16 +75,6 @@ struct MessageOverlayMenu: View {
         "🤣", "✨", "👏", "🤔", "🥺", "😍",
         "🫶", "💪"
     ]
-
-    // Panel takes ~56% of screen, but grid shows 2.5 rows (scrollable)
-    // Bottom sheet height — bumped up so two full action rows are
-    // visible at rest (was 143 → 195). The pressed bubble preview is
-    // still the visual focal point because the previewer floats above
-    // the panel with shadow + scale, but the grid no longer feels
-    // hidden / "too low". Pull up via the drag handle to expand to the
-    // full MessageDetailSheet (translations, full react picker, every
-    // action).
-    private let gridVisibleHeight: CGFloat = 195
 
     // Accent couleur de la conversation — sert de teinte de marque pour
     // les lueurs, contours et ombres du chrome de l'overlay (panneau,
@@ -144,54 +133,6 @@ struct MessageOverlayMenu: View {
             message.reactions,
             currentUserId: currentUserId
         )
-    }
-
-    // MARK: - Quick Action Bar (au-dessus de la bulle)
-
-    /// Capsule horizontale d'actions rapides affichée AU-DESSUS de la
-    /// bulle quand le long-press surfaces le menu. Réutilise les facteurs
-    /// `ContextAction.copy/edit/translate/delete`. Filtre les actions
-    /// selon le contexte (canEdit, canDelete, contenu non vide).
-    private var quickActions: [ContextAction] {
-        var actions: [ContextAction] = []
-        if !message.content.isEmpty {
-            actions.append(.copy())
-        }
-        if canEdit && message.isMe {
-            actions.append(.edit())
-        }
-        actions.append(.translate())
-        if canDelete {
-            actions.append(.delete())
-        }
-        return actions
-    }
-
-    /// Palette utilisée par la quick action bar — dérivée de `contactColor`
-    /// (couleur d'accent de la conversation, règle CLAUDE.md).
-    private var quickActionPalette: ConversationColorPalette {
-        ConversationColorPalette(
-            primary: contactColor,
-            secondary: contactColor,
-            accent: contactColor,
-            saturationBoost: 0
-        )
-    }
-
-    private func handleQuickAction(_ kind: ContextAction.Kind) {
-        switch kind {
-        case .copy:
-            onCopy?()
-        case .edit:
-            onEdit?()
-        case .translate:
-            onShowTranslate?()
-        case .delete:
-            onDelete?()
-        case .reply, .forward, .react, .pin, .star, .thread, .info:
-            break
-        }
-        dismiss()
     }
 
     // MARK: - Primary Actions (liste verticale native-lean)
@@ -255,15 +196,6 @@ struct MessageOverlayMenu: View {
             let safeBottom = geometry.safeAreaInsets.bottom
             let screenH = geometry.size.height
 
-            // Cluster vertical au-dessus du `dismissBackground` :
-            //   - quick action bar (capsule horizontale d'actions rapides)
-            //   - gap 12pt
-            //   - bulle (à sa position source, lift si nécessaire)
-            //   - gap 12pt
-            //   - barre d'emojis rapides
-            // Le panneau reste ANCRÉ au bas mais sa hauteur s'auto-étend
-            // pour combler l'espace entre le cluster et le bas — pas de
-            // grand vide quand le message est court / haut sur l'écran.
             let useSourceFrame = messageBubbleFrame != .zero
             let bubbleRect = messageBubbleFrame
 
@@ -276,62 +208,6 @@ struct MessageOverlayMenu: View {
                 ? max(0.55, maxPreviewHeight / bubbleRect.height)
                 : 1.0
             let scaledBubbleHeight = bubbleRect.height * bubblePreviewScale
-
-            // Mesures du cluster — gaps tightement contrôlés. Heights basées
-            // sur les rendus réels mesurés en simulateur.
-            let quickActionsCount = quickActions.count
-            // Hauteur réelle = ContextActionMenu.estimatedSize().height
-            // (buttonHeight 40 + verticalPadding 5*2 = 50pt). Source unique
-            // de vérité : changer la valeur via les statics du menu, jamais
-            // dupliquer le calcul ici.
-            let quickActionMenuHeight: CGFloat = quickActionsCount > 0
-                ? ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).height
-                : 0
-            let quickActionToBubbleGap: CGFloat = quickActionsCount > 0 ? 14 : 0
-            let bubbleToEmojiGap: CGFloat = 14
-            let emojiBarHeight: CGFloat = 44
-            let clusterClearance: CGFloat = 12
-            let clusterTotalHeight = quickActionMenuHeight + quickActionToBubbleGap
-                                   + scaledBubbleHeight
-                                   + bubbleToEmojiGap + emojiBarHeight
-
-            // Hauteur naturelle du panel (base avant resize manuel)
-            let naturalPanelBaseHeight = gridVisibleHeight + safeBottom + 60
-            let naturalPanelTopY = screenH - naturalPanelBaseHeight
-
-            // Position cible du cluster : la bulle reste à sa source. Le
-            // cluster top = bubble.minY - (quick action menu + gap). Si la
-            // bulle est trop haute pour laisser de la place à la quick
-            // action bar au-dessus de safeTop, on pousse le cluster vers le
-            // bas (la bulle décale légèrement). Si le cluster dépasse en
-            // bas dans la zone du panel, on lifte.
-            let minClusterTopY = safeTop + 24
-            let maxClusterTopY = naturalPanelTopY - clusterClearance - clusterTotalHeight
-            let desiredClusterTopY = bubbleRect.minY - (quickActionMenuHeight + quickActionToBubbleGap)
-            let clampedClusterTopY = max(minClusterTopY, min(desiredClusterTopY, maxClusterTopY))
-            let clusterBottomY = clampedClusterTopY + clusterTotalHeight
-
-            // Panel auto-expand : si le cluster termine plus haut que le
-            // panel naturel, le panel s'agrandit pour combler le gap (le
-            // top du panel monte jusqu'à clusterBottom + clearance).
-            let expandedPanelTopY = useSourceFrame ? (clusterBottomY + clusterClearance) : naturalPanelTopY
-            let panelBaseHeight = max(naturalPanelBaseHeight, screenH - expandedPanelTopY)
-
-            // Drag range : 0 = base, négatif = expansion vers le haut.
-            // L'utilisateur peut tirer le drag handle pour agrandir (jusqu'à
-            // safeTop + 20pt) ou laisser au repos (panel à sa base auto-
-            // étendue).
-            let maxExpandUp = -(screenH - panelBaseHeight - safeTop - 20)
-            let clampedDrag = min(0, max(maxExpandUp, dragOffset))
-
-            // Fade out de la cluster (action bar + bulle + emoji bar) quand
-            // l'utilisateur déplie le panneau via le drag handle. Au-delà de
-            // 80pt de drag, la cluster est masquée + non-interactive pour
-            // laisser place au panneau en plein écran. Comportement type
-            // WhatsApp / iMessage.
-            let clusterFadeThreshold: CGFloat = 80
-            let clusterFadeOpacity: CGFloat = max(0, 1 - abs(clampedDrag) / clusterFadeThreshold)
-            let clusterIsInteractive = clusterFadeOpacity > 0.5
 
             // ── Géométrie native-lean : barre réactions (haut) + bulle + liste verticale (bas) ──
             let nlEmojiBarHeight: CGFloat = 52
@@ -430,8 +306,15 @@ struct MessageOverlayMenu: View {
                         x: nlMenuX,
                         y: isVisible ? nlMenuY : (bubbleRect.maxY + 8)
                     )
+                    .offset(y: clusterDragOffset)
                     .opacity(isVisible ? 1 : 0)
                     .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
+                    // highPriorityGesture : en `.gesture` simple, les Button
+                    // des rows gagnent les drags lents (vérifié simulateur —
+                    // un swipe faible amorcé sur « Pin » épinglait au lieu de
+                    // snap back). Le seuil minimumDistance 12 laisse les taps
+                    // simples aux rows.
+                    .highPriorityGesture(clusterDragGesture)
 
                     // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
                     // paramètres que la cellule live de la liste : rendu
@@ -475,6 +358,7 @@ struct MessageOverlayMenu: View {
                         x: nlAnchorX,
                         y: isVisible ? nlBubbleMidY : bubbleRect.midY
                     )
+                    .offset(y: clusterDragOffset)
                     .opacity(isVisible ? 1 : 0)
                     .allowsHitTesting(false)
 
@@ -484,6 +368,7 @@ struct MessageOverlayMenu: View {
                             x: nlEmojiX,
                             y: isVisible ? nlEmojiY : bubbleRect.minY
                         )
+                        .offset(y: clusterDragOffset)
                         .opacity(isVisible ? 1 : 0)
                         .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
                         .allowsHitTesting(true)
@@ -493,13 +378,11 @@ struct MessageOverlayMenu: View {
         .ignoresSafeArea()
         .onAppear {
             HapticFeedback.medium()
-            // Entree spring — courbe de reponse de qualite iMessage. Le
-            // panneau demarre REPLIE (`dragOffset = 0`) pour laisser le
-            // preview de bulle occuper la scene. La cascade d'emojis est
-            // jouee par `EmojiReactionPicker` lui-meme via `WaveTileModifier`.
+            // Entree spring — courbe de reponse de qualite iMessage. La
+            // cascade d'emojis est jouee par `EmojiReactionPicker` lui-meme
+            // via `WaveTileModifier`.
             withAnimation(.spring(response: 0.42, dampingFraction: 0.74)) {
                 isVisible = true
-                dragOffset = 0
             }
         }
     }
@@ -562,6 +445,39 @@ struct MessageOverlayMenu: View {
         }
         .animation(.easeOut(duration: 0.26), value: isVisible)
         .onTapGesture { dismiss() }
+    }
+
+    // MARK: - Cluster Drag (swipe-up → Menu 2, swipe-down → fermeture)
+
+    private var clusterDragGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($clusterDragOffset) { value, state, _ in
+                guard isVisible else { return }
+                state = MessageOverlayDragLaw.displayOffset(for: value.translation.height)
+            }
+            .onChanged { value in
+                guard isVisible else { return }
+                if MessageOverlayDragLaw.isArmed(translation: value.translation.height),
+                   !dragHapticArmed {
+                    dragHapticArmed = true
+                    HapticFeedback.medium()
+                }
+            }
+            .onEnded { value in
+                defer { dragHapticArmed = false }
+                guard isVisible else { return }
+                switch MessageOverlayDragLaw.outcome(
+                    translation: value.translation.height,
+                    predicted: value.predictedEndTranslation.height
+                ) {
+                case .openMore:
+                    handlePrimaryAction(.more)
+                case .dismiss:
+                    dismiss()
+                case .snapBack:
+                    break // reset auto du @GestureState (spring resetTransaction)
+                }
+            }
     }
 
     // MARK: - Message Preview (aligned left/right)
@@ -856,206 +772,6 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    // MARK: - Detail Panel (scrollable grid, 2.5 rows visible)
-
-    private func detailPanel(safeBottom: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            panelDragHandle
-
-            // Scrollable grid showing ~2.5 rows
-            ScrollView(.vertical, showsIndicators: false) {
-                MessageDetailSheet(
-                    message: message,
-                    contactColor: contactColor,
-                    conversationId: conversationId,
-                    initialTab: .language,
-                    canDelete: canDelete,
-                    actions: overlayActions,
-                    textTranslations: textTranslations,
-                    transcription: transcription,
-                    translatedAudios: translatedAudios,
-                    onSelectTranslation: onSelectTranslation,
-                    onSelectAudioLanguage: onSelectAudioLanguage,
-                    onRequestTranslation: onRequestTranslation,
-                    onDismissAction: { dismiss() },
-                    onReact: { emoji in onReact?(emoji) },
-                    onReport: { type, reason in onReport?(type, reason) },
-                    onDelete: { onDelete?() },
-                    externalTabSelection: $forceTab
-                )
-            }
-
-            Spacer(minLength: safeBottom)
-        }
-        .background(panelBackground)
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 26,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 26,
-                style: .continuous
-            )
-        )
-        .gesture(panelDragGesture)
-    }
-
-    private var panelDragHandle: some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(overlayAccent.opacity(0.45))
-                .frame(width: 40, height: 5)
-                .padding(.top, 10)
-                .padding(.bottom, 5)
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-    }
-
-    private var panelDragGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                withAnimation(.interactiveSpring()) {
-                    dragOffset = value.translation.height
-                }
-            }
-            .onEnded { value in
-                let velocity = value.predictedEndTranslation.height - value.translation.height
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    if value.translation.height < -80 || velocity < -200 {
-                        // Expanded: pull up to max
-                        dragOffset = -400
-                    } else if value.translation.height > 80 || velocity > 200 {
-                        // Collapsed: push down to normal
-                        dragOffset = 0
-                    } else {
-                        // Snap back
-                        dragOffset = dragOffset < -100 ? -400 : 0
-                    }
-                }
-            }
-    }
-
-    private var panelBackground: some View {
-        // Chrome verre du panneau : `.ultraThinMaterial` + voile de
-        // tonalite, liseré accent en haut et lueur de marque douce. Les
-        // coins continus (26pt) et l'ombre montante donnent l'illusion
-        // d'une feuille qui monte depuis le bas de l'ecran.
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 26,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: 26,
-            style: .continuous
-        )
-        return shape
-            .fill(.ultraThinMaterial)
-            .overlay(
-                shape.fill(isDark ? Color.black.opacity(0.30) : Color.white.opacity(0.72))
-            )
-            .overlay(
-                shape.fill(
-                    LinearGradient(
-                        colors: [
-                            overlayAccent.opacity(isDark ? 0.16 : 0.10),
-                            Color.clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .center
-                    )
-                )
-            )
-            .overlay(
-                shape.stroke(
-                    LinearGradient(
-                        colors: [
-                            overlayAccent.opacity(isDark ? 0.40 : 0.26),
-                            (isDark ? Color.white : Color.black).opacity(isDark ? 0.10 : 0.05)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 0.75
-                )
-            )
-            .shadow(color: overlayAccent.opacity(0.20), radius: 26, y: -6)
-            .shadow(color: .black.opacity(0.22), radius: 20, y: -4)
-    }
-
-    // MARK: - Quick Actions for Grid
-
-    private var overlayActions: [MessageAction] {
-        var actions: [MessageAction] = []
-        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-        actions.append(MessageAction(
-            id: "reply", icon: "arrowshape.turn.up.left.fill",
-            label: String(localized: "action.reply", defaultValue: "Répondre", bundle: .main),
-            color: MeeshyColors.indigo400,
-            handler: { dismissThen { onReply?() } }
-        ))
-
-        actions.append(MessageAction(
-            id: "thread", icon: "bubble.left.and.bubble.right.fill",
-            label: String(localized: "action.thread", defaultValue: "Discussion", bundle: .main),
-            color: MeeshyColors.warning,
-            handler: { dismissThen { onShowThread?() } }
-        ))
-
-        if hasText {
-            actions.append(MessageAction(
-                id: "copy", icon: "doc.on.doc.fill",
-                label: String(localized: "action.copy", defaultValue: "Copier", bundle: .main),
-                color: MeeshyColors.indigo500,
-                handler: { dismissThen { onCopy?() } }
-            ))
-        }
-
-        actions.append(MessageAction(
-            id: "pin",
-            icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
-            label: message.pinnedAt != nil
-                ? String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
-                : String(localized: "action.pin", defaultValue: "Épingler", bundle: .main),
-            color: MeeshyColors.info,
-            handler: { dismissThen { onPin?() } }
-        ))
-
-        // Star / bookmark — local-only favourite list (see StarredMessagesView).
-        actions.append(MessageAction(
-            id: "star",
-            icon: isStarred ? "star.slash.fill" : "star.fill",
-            label: isStarred
-                ? String(localized: "action.unstar", defaultValue: "Retirer des favoris", bundle: .main)
-                : String(localized: "action.star", defaultValue: "Ajouter aux favoris", bundle: .main),
-            color: MeeshyColors.warning,
-            handler: { dismissThen { onToggleStar?() } }
-        ))
-
-        if canEdit && hasText {
-            actions.append(MessageAction(
-                id: "edit", icon: "pencil",
-                label: String(localized: "action.edit", defaultValue: "Modifier", bundle: .main),
-                color: MeeshyColors.warning,
-                handler: { dismissThen { onEdit?() } }
-            ))
-        }
-
-        if canDelete && !message.attachments.isEmpty, let onDeleteAttachment {
-            if message.attachments.count == 1 {
-                let attId = message.attachments[0].id
-                actions.append(MessageAction(
-                    id: "deleteAttachment", icon: "paperclip.badge.ellipsis",
-                    label: String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main),
-                    color: MeeshyColors.error,
-                    handler: { dismissThen { onDeleteAttachment(attId) } }
-                ))
-            }
-        }
-
-        return actions
-    }
-
     // MARK: - Helpers
 
     private func formatFileSize(_ bytes: Int) -> String {
@@ -1081,18 +797,6 @@ struct MessageOverlayMenu: View {
         }
     }
 
-    private func dismissThen(_ action: @escaping () -> Void) {
-        HapticFeedback.light()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-            isVisible = false
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
-            isPresented = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                action()
-            }
-        }
-    }
 }
 
 // MARK: - Preview Audio Player (interactive)

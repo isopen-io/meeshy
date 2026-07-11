@@ -249,7 +249,7 @@ ThemedMessageBubble
   ├── secondaryContent → Contenu traduit/original pour la langue secondaire selectionnee
   └── secondaryContentView → Panneau inline (fond pastel, separateur colore, texte)
 
-MessageDetailSheet (onglet Language)
+MessageMoreSheet → vue detail Langue (MessageLanguageDetailView)
   ├── Listing des langues avec preview de chaque traduction
   ├── Indicateurs de disponibilite (checkmark / bouton Traduire)
   ├── Selection d'une langue → callback vers ViewModel → mise a jour bulle
@@ -271,15 +271,15 @@ Toute évolution de la logique de normalisation doit toucher les **trois** sites
 - **Drapeaux** : Bande de drapeaux en bas du texte (original + systeme + regional/custom + deviceLocale, max 4, dedupliques)
 - **Tap drapeau** : Affiche le contenu secondaire inline (fond pastel couleur langue, separateur colore)
 - **Tap meme drapeau** : Masque le contenu secondaire avec animation
-- **Long press** : Ouvre le MessageDetailSheet sur l'onglet Language (previews, langues, retraduction)
-- **Tap icone translate** : Ouvre directement l'onglet Language
+- **Long press** : Ouvre le menu unifie (`MessageOverlayMenu` : barre de reactions + bulle elevee + liste d'actions glass) ; « Traduire » ouvre la vue Langue du menu complet (`MessageMoreSheet`) ; swipe-up fort = « Plus… » (menu complet), swipe-down = fermeture (loi : `MessageOverlayDragLaw`)
+- **Tap icone translate** : Ouvre directement la vue Langue
 - **Selection langue** : Met a jour la bulle via `activeTranslationOverrides` dans le ViewModel
 
 ### Regles
 - Ne JAMAIS afficher de popup ou banniere pour indiquer une traduction — c'est un indicateur subtil dans le meta row
 - Le contenu traduit doit s'afficher EXACTEMENT comme du contenu natif (meme style, meme layout)
 - La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
-- L'onglet Language du MessageDetailSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
+- La vue Langue du MessageMoreSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
 
 ## Attachment Size Display Before Download
 

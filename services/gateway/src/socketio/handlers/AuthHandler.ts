@@ -457,6 +457,32 @@ export class AuthHandler {
     }
   }
 
+  // Retries beyond the initial attempt for a rejected conversation room join.
+  // Total attempts per room = 1 + JOIN_RETRY_ATTEMPTS. Bounded so a permanently
+  // broken adapter can never spin forever; each retry re-attempts only the rooms
+  // that STILL failed, so a room that joined on the first try is never re-joined.
+  private static readonly JOIN_RETRY_ATTEMPTS = 2;
+
+  /**
+   * Joins the socket to each conversation room, retrying only the rooms whose
+   * join rejected (transient adapter hiccup). Returns the conversation ids that
+   * remained un-joined after all retries were exhausted.
+   *
+   * A failed-and-un-retried join is silent message loss: the delivery gate
+   * (`connectedUsers.has(userId)`) treats the recipient as online and skips the
+   * offline queue, yet the missed room means the live `message:new` never
+   * arrives either. Retrying closes the common transient case.
+   */
+  private async _joinConversationRoomsWithRetry(socket: Socket, conversationIds: string[]): Promise<string[]> {
+    const maxAttempts = 1 + AuthHandler.JOIN_RETRY_ATTEMPTS;
+    let pending = conversationIds;
+    for (let attempt = 1; attempt <= maxAttempts && pending.length > 0; attempt++) {
+      const results = await Promise.allSettled(pending.map(id => socket.join(ROOMS.conversation(id))));
+      pending = pending.filter((_, i) => results[i].status === 'rejected');
+    }
+    return pending;
+  }
+
   private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
       let conversations: { conversationId: string }[] = [];
@@ -473,12 +499,22 @@ export class AuthHandler {
         });
       }
 
-      const joinResults = await Promise.allSettled(conversations.map(conv => socket.join(ROOMS.conversation(conv.conversationId))));
-      const failedJoins = joinResults.filter(r => r.status === 'rejected');
-      if (failedJoins.length > 0) {
-        logger.warn('some conversation room joins failed', { userId, failed: failedJoins.length, total: conversations.length });
+      const conversationIds = conversations.map(conv => conv.conversationId);
+      const stillFailed = await this._joinConversationRoomsWithRetry(socket, conversationIds);
+      if (stillFailed.length > 0) {
+        // Escalated to error: after retries, these room joins are genuinely
+        // broken. Because delivery gates the offline queue purely on
+        // `connectedUsers.has(userId)`, this recipient now looks online but is
+        // absent from these rooms — a message sent to them lands nowhere (no
+        // live emit, no offline enqueue) until a later reconnect re-joins them.
+        logger.error('conversation room joins failed after retries — recipient may miss live messages until reconnect', {
+          userId,
+          failed: stillFailed.length,
+          total: conversationIds.length,
+          conversationIds: stillFailed,
+        });
       }
-      logger.debug('user joined conversation rooms', { userId, count: conversations.length - failedJoins.length });
+      logger.debug('user joined conversation rooms', { userId, count: conversationIds.length - stillFailed.length });
     } catch (error) {
       logger.error('error joining conversations for user', { userId, error });
     }

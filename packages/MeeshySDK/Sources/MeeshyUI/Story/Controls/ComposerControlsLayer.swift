@@ -62,19 +62,18 @@ public struct ComposerControlsLayer: View {
     /// se cacher entièrement sur chaque outil, comme le dessin (2026-06-02).
     private var isBandResizable: Bool { effectiveBandState.allowsCollapsibleDrawer }
 
-    /// État effectif du band : le dessin utilise le band PARTAGÉ comme tous les
-    /// outils (`drawingPanel` = liste éditable des traits). On force donc l'affichage
-    /// du panneau dessin dès que l'outil dessin est actif, même si la machine d'état
-    /// est restée `.hidden` (chemin d'entrée FAB, état restauré…). Sans ça le band
-    /// partagé ne s'affichait pas pour le dessin (bug user 2026-06-01 « dessin devrait
-    /// afficher le ComposerBottomBand aussi »).
+    /// État effectif du band — dessin en DEUX temps (user 2026-07-11 v2) :
+    /// l'outil dessin s'ouvre en mode LISTE (band forcé sur `drawingPanel`
+    /// = liste des traits, comme la spec 2026-06-01) ; la sélection d'un
+    /// pinceau bascule en PLEIN ÉCRAN (`isDrawingImmersive`) — le band
+    /// disparaît alors entièrement, bulles flottantes seules.
     private var effectiveBandState: BandState {
-        // On se cale sur `drawingEditingMode.isActive` (et non `activeTool`) car
-        // c'est lui qui pilote l'affichage des contrôleurs flottants : tant que les
-        // bulles de dessin sont à l'écran, le band partagé doit l'être aussi —
-        // les deux états peuvent diverger selon le chemin d'entrée.
-        if viewModel.drawingEditingMode.isActive, bandStateMachine.state == .hidden {
+        if viewModel.drawingEditingMode.isActive, !viewModel.isDrawingImmersive,
+           bandStateMachine.state == .hidden {
             return .toolPanel(.drawing)
+        }
+        if viewModel.isDrawingImmersive {
+            return .hidden
         }
         return bandStateMachine.state
     }
@@ -140,6 +139,12 @@ public struct ComposerControlsLayer: View {
                 }
                 .padding(.bottom, 16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+                // FABs posés SUR le canvas : leur lisibilité suit la
+                // luminance du FOND de la slide, pas le thème de l'app
+                // (capture user 2026-07-11 — indigo sombre sur bleu nuit).
+                .environment(\.colorScheme, CanvasChromeScheme.scheme(
+                    background: viewModel.backgroundColor,
+                    hasMediaBackground: viewModel.hasBackgroundImage))
             }
 
             // C3 — état « chrome caché » (barre d'outils masquée par

@@ -55,6 +55,9 @@ class OutboxLaneMapTest {
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.PROFILE))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_SETTINGS))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
+        // Privacy sync shares the settings lane but is a distinct kind (independent coalescing).
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPDATE_PRIVACY_SETTINGS))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.PUBLISH_STORY))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.STORY))
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UPLOAD_MEDIA))

@@ -119,12 +119,40 @@ final class CallTranscriptionServiceTests: XCTestCase {
         // unit-testable — validated by the Task 1 device spike instead).
         sut.applyRecognitionResult(
             text: "Bonjour", speakerId: "user-1", startMs: 0, endMs: 1000,
-            isFinal: true, confidence: 0.9, language: "fr"
+            isFinal: true, confidence: 0.9, language: "fr", capturedAt: Date()
         )
         // isTranscribing is false here (startTranscribing was never called),
         // so applyRecognitionResult's guard drops it — this documents that
         // the guard is load-bearing, not a bug in the test.
         XCTAssertEqual(socket.emitCallTranscriptionSegmentCallCount, 0)
+    }
+
+    func test_applyRecognitionResult_stampsSegmentWithProvidedCapturedAt_notApplicationTime() {
+        // Regression: handleRecognizerCallback's Task.detached hop to
+        // MainActor gives no ordering guarantee between two independently
+        // detached callbacks (unlike the recognizer's own serial queue that
+        // calls handleRecognizerCallback itself). Stamping `Date()` inside
+        // applyRecognitionResult (application time) would let a
+        // later-arriving-but-earlier-applied callback sort ahead of one that
+        // truly arrived first, corrupting the caption order documented on
+        // TranscriptionSegment.capturedAt. capturedAt must therefore be
+        // captured at arrival time in handleRecognizerCallback and threaded
+        // through as a parameter, not re-stamped here.
+        //
+        // isFinal: false (with isShowingOverlay true to clear the display
+        // guard) deliberately avoids the isFinal branch, which calls
+        // rotateRecognitionRequest → reinstallTap → a real
+        // AVAudioEngine.inputNode.installTap — unavailable in the unit test
+        // host (same constraint documented on setTranscribingForTesting).
+        let (sut, _) = makeSUT()
+        sut.setTranscribingForTesting(true)
+        sut.isShowingOverlay = true
+        let arrivalTime = Date(timeIntervalSince1970: 1_000)
+        sut.applyRecognitionResult(
+            text: "Bonjour", speakerId: "user-1", startMs: 0, endMs: 1000,
+            isFinal: false, confidence: 0.9, language: "fr", capturedAt: arrivalTime
+        )
+        XCTAssertEqual(sut.segments.first?.capturedAt, arrivalTime)
     }
 
     // MARK: - Recognizer Error Path

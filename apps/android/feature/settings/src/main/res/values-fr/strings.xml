@@ -132,4 +132,22 @@
     <string name="privacy_block_screenshots">Bloquer les captures d\'écran</string>
     <string name="privacy_encryption_coming_soon">Bientôt disponible</string>
     <string name="privacy_encryption_disabled">Désactivé</string>
+    <!-- Account deletion (§L) -->
+    <string name="delete_account_title">Supprimer le compte</string>
+    <string name="delete_account_warning_title">Action irréversible</string>
+    <string name="delete_account_warning_intro">La suppression de votre compte entraîne la perte définitive de :</string>
+    <string name="delete_account_warning_conversations">Toutes vos conversations</string>
+    <string name="delete_account_warning_messages">Tous vos messages</string>
+    <string name="delete_account_warning_media">Tous vos médias partagés</string>
+    <string name="delete_account_warning_contacts">Votre liste de contacts</string>
+    <string name="delete_account_warning_preferences">Vos préférences et paramètres</string>
+    <string name="delete_account_confirm_prompt">Tapez %1$s pour confirmer</string>
+    <string name="delete_account_confirm_label">Phrase de confirmation</string>
+    <string name="delete_account_button">Supprimer définitivement mon compte</string>
+    <string name="delete_account_error_pending">Une demande de suppression est déjà en cours. Vérifiez votre boîte de réception.</string>
+    <string name="delete_account_error_network">Pas de connexion. Vérifiez votre réseau et réessayez.</string>
+    <string name="delete_account_error_generic">Une erreur est survenue. Veuillez réessayer.</string>
+    <string name="delete_account_email_title">Un email de confirmation vous a été envoyé</string>
+    <string name="delete_account_email_body">Vérifiez votre boîte de réception pour confirmer la suppression de votre compte.</string>
+    <string name="delete_account_email_ok">Compris</string>
 </resources>

@@ -286,7 +286,7 @@ internal struct _FullscreenOverlayControls: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .adaptiveGlass(in: Circle(), interactive: true)
                 }
             }
             if let fileName, !fileName.isEmpty {
@@ -306,7 +306,7 @@ internal struct _FullscreenOverlayControls: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .adaptiveGlass(in: Circle(), interactive: true)
                 }
             }
             if controls.contains(.save) {
@@ -324,7 +324,7 @@ internal struct _FullscreenOverlayControls: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white.opacity(0.9))
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.2)))
+                    .adaptiveGlass(in: Circle(), interactive: true)
                 }
                 .disabled(saveState == .saving || saveState == .saved)
             }

@@ -143,6 +143,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// `StoryComposerViewModel+DrawingEditing.swift`).
     @Published var drawingEditingMode: DrawingEditingMode = .inactive
 
+    /// Plein écran de TRACÉ (user 2026-07-11 v2) : l'outil dessin s'ouvre en
+    /// mode LISTE (band avec les traits, rien d'activé) ; la sélection d'un
+    /// pinceau bascule ce flag — canvas plein écran dessinable jusqu'aux
+    /// angles, bulles seules, pinch-zoom. Retombe à `false` à la sortie du
+    /// mode dessin (`exitDrawingEditingMode`).
+    @Published var isDrawingImmersive = false
+
     /// Trait en cours de tracé (WYSIWYG, C4). Rendu live PAR-DESSUS `drawingStrokes` via
     /// un `MeeshyStrokeCanvas` dédié dans `StoryComposerView`, avec notre moteur
     /// largeur-variable — l'aperçu correspond EXACTEMENT au trait commité au lift-up.

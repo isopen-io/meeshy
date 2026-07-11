@@ -22,6 +22,7 @@ import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
+import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.NetworkResult
@@ -241,6 +242,14 @@ class OutboxFlushWorker @AssistedInject constructor(
             val body = runCatching { json.decodeFromString<NotificationPreferenceSyncBody>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
             when (apiCall { preferencesApi.updateNotification(body) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UPDATE_PRIVACY_SETTINGS to MutationSender { row ->
+            val body = runCatching { json.decodeFromString<PrivacyPreferenceSyncBody>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            when (apiCall { preferencesApi.updatePrivacy(body) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
