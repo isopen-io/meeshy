@@ -38,7 +38,16 @@
 > « deux devices, un répond » — initiate→double ring→already-answered vers
 > le device passif seul→relais answer ciblé sans fuite. Dans
 > src/socketio/__tests__/ (integration/ est EXCLU du run jest — piège).
-> Restent : #5 (listeners ci-dessus), #9 (restartIce iOS).
+> #5 (listeners) : Android écoute désormais call:quality-alert (pill
+> « connexion de X instable », auto-clear 15 s ré-armé par alerte — parité
+> iOS scheduleRemoteQualityReset), call:screen-capture-alert (chip privacy,
+> teinte error, tenu jusqu'au stop/fin d'appel) et call:participant-left
+> (inerte au FSM 1:1 — parité iOS où le publisher n'a aucun consommateur ;
+> prêt pour le roster groupe). Alertes gâtées strictement au callId actif +
+> phases CONNECTED/RECONNECTING (presenter). translated-segment RESTE déféré :
+> exige la feature sous-titres in-call (UI + pipeline transcription) absente
+> d'Android — s'abonner sans UI = code mort.
+> Restent : #5 translated-segment (feature captions Android), #9 (restartIce iOS).
 
 Audit lecture seule (agent), croisé avec git log récent. Les fixes déjà livrés
 (TURN TTL NaN `bf3d1c1fb`, eviction call-room #1863, watchdog `.offering`,
