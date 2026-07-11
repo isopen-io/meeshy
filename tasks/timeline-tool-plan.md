@@ -158,7 +158,18 @@ CacheCoordinator.imageLocalFileURL(postMediaId) quand loadedImages est vide.
 Tests : AudioWaveformTests (CAF silence→fort), StoryComposerBackgroundLive-
 ApplyTests (3 comportements). Suite 1825/1825, build app vert.
 
-VAGUE EXPORT MP4 + CONSTATS HORS TIMELINE (2026-07-11, en cours) :
+VAGUE EXPORT MP4 + CONSTATS HORS TIMELINE (2026-07-11, LIVRÉE — commits
+9d1b8ad44/74d70744d/c8dfe999b/44f036e74/1f2ef1706/c973d6949 + 198476b7d/
+debbcc076/1a82ff2b7 ; suite complète 0 failed, build app vert ; VÉRIFIÉE
+SIMULATEUR : composer → texte → timeline → bouton export (header) → « Export
+preview » : MP4 6 s en lecture bouclée, texte serif baké fidèle, WATERMARK
+MEESHY dashes+wordmark net bas-droite, ShareLink présent, Done → timeline
+intacte, Quit sans publier. Incident annexe réparé pendant la vérif : gateway
+PROD en crash-loop — PR #1825 exige TURN_CREDENTIAL_TTL ≥ 7200 mais l'env prod
+avait le défaut 3600 → TURN_CREDENTIAL_TTL=7200 ajouté dans
+/opt/meeshy/production/.env (backup .env.bak-turnttl-*) + compose up -d
+gateway + docker start meeshy-frontend resté « Created » ; web+gateway
+healthy re-vérifiés) :
 (a) Bouton export en HEADER du TimelineContainerSwitcher (trailing, pattern
 CapCut/InShot — le transport Quick portrait est déjà saturé, un 8e bouton
 débordait ; masqué si onExport nil) → TimelineSheetContent (wrapper des 2
@@ -189,9 +200,10 @@ cf6001fd5 + 1331c2955 + 0a3ff37b6 + 928a7415c ; suites ciblées 70/70 vertes,
 build app 165 s vert, rendu VÉRIFIÉ sur simulateur iOS 26.1 réel — glass sans
 artefact, layout identique au fallback 18.2 ; baselines restaurées 18.2 après
 le banc d'essai 26.1) :
-(a) Vue simple SANS timer : TransportBar.showsTimeReadout (défaut true),
-Quick passe false (pin statique transportShowsTimeReadout testé), Pro garde
-true — la position se lit au playhead/règle en Quick. (b) ClipInspector
+(a) TransportBar.showsTimeReadout (défaut true) : Quick l'a masqué un temps,
+puis le user l'a REDEMANDÉ à chaud (« remet le time dans la vue simple ! »)
+→ Quick repasse à true (pin statique transportShowsTimeReadout testé dans
+les deux sens de l'histoire) ; le paramètre reste le point de bascule. (b) ClipInspector
 allégé : par défaut header (icône+nom+(i)+X) / volume (kinds audio) /
 toggles / 2 icônes d'action. Détails (steppers Début/Durée + hint fond)
 derrière le (i) ; « Animer au playhead » réduit à l'icône losange qui

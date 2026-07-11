@@ -86,9 +86,9 @@ final class TransportBarTests: XCTestCase {
         XCTAssertTrue(makeSUT().showsTimeReadout)
     }
 
-    func test_quickTimeline_transportHidesTimeReadout() {
-        XCTAssertFalse(QuickTimelineView.transportShowsTimeReadout,
-                       "La vue simple (Quick) n'affiche pas le timer dans le transport")
+    func test_quickTimeline_transportShowsTimeReadout() {
+        XCTAssertTrue(QuickTimelineView.transportShowsTimeReadout,
+                      "Le timer est affiché en Quick — retiré puis redemandé par le user (2026-07-11)")
     }
 
     func test_proTimeline_transportKeepsTimeReadout() {

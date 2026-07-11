@@ -227,10 +227,11 @@ public struct QuickTimelineView: View {
 
     // MARK: - Sub-views
 
-    /// La vue simple ne montre pas le timer : la position se lit sur le
-    /// playhead et la règle — le readout chiffré est un artefact Pro
-    /// (retour user 2026-07-11).
-    public static let transportShowsTimeReadout = false
+    /// Le readout temps est AFFICHÉ en Quick : masqué un temps (vague modale
+    /// allégée), il a été redemandé à chaud — « remet le time dans la vue
+    /// simple ! » (user, 2026-07-11). Le paramètre TransportBar reste : c'est
+    /// le point de bascule si le produit retranche à nouveau.
+    public static let transportShowsTimeReadout = true
 
     private var transport: some View {
         TransportBar(
