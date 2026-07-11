@@ -174,6 +174,18 @@ export class SocketIOOrchestrator {
     this.processPendingMessages();
   }
 
+  // Annule et oublie le timeout individuel d'un message en attente. Appelé sur
+  // chaque chemin qui retire un message de la file (traité, expulsé, cleanup) —
+  // sans quoi le timer resterait armé et l'entrée de la Map fuiterait sur onglet
+  // longue durée.
+  private clearPendingTimeout(clientMessageId: string): void {
+    const timeout = this.pendingMessageTimeouts.get(clientMessageId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.pendingMessageTimeouts.delete(clientMessageId);
+    }
+  }
+
   /**
    * Process pending messages queue after socket is connected
    */
@@ -197,11 +209,7 @@ export class SocketIOOrchestrator {
       if (!pending) continue;
 
       // Annuler le timeout individuel puisqu'on traite maintenant le message
-      const pendingTimeout = this.pendingMessageTimeouts.get(pending.clientMessageId);
-      if (pendingTimeout) {
-        clearTimeout(pendingTimeout);
-        this.pendingMessageTimeouts.delete(pending.clientMessageId);
-      }
+      this.clearPendingTimeout(pending.clientMessageId);
 
       // Check if message has expired
       if (Date.now() - pending.timestamp > this.MESSAGE_QUEUE_TIMEOUT) {
@@ -400,6 +408,7 @@ export class SocketIOOrchestrator {
         logger.warn('[SocketIOOrchestrator]', 'Message queue full, oldest message will be discarded');
         const oldest = this.pendingMessages.shift();
         if (oldest) {
+          this.clearPendingTimeout(oldest.clientMessageId);
           oldest.resolve({ success: false });
         }
       }
@@ -733,10 +742,11 @@ export class SocketIOOrchestrator {
   // ============ CLEANUP ============
 
   cleanup(): void {
-    // Reject all pending messages
+    // Reject all pending messages and clear their armed timers
     while (this.pendingMessages.length > 0) {
       const pending = this.pendingMessages.shift();
       if (pending) {
+        this.clearPendingTimeout(pending.clientMessageId);
         pending.resolve({ success: false });
       }
     }

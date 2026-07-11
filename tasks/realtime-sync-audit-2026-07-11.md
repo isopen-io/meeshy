@@ -68,3 +68,28 @@ le test ci-dessus. Décision propriétaire requise — non traité dans ce cycle
   le proxy) ; `bun install --ignore-scripts` complète le linking des binaires.
 - Tests `packages/shared` : `bun x vitest run <file>`.
 - Tests `services/gateway` : `bun x jest --config=jest.config.json <file>`.
+
+## Cycle 2 (2026-07-11) — fuite timer/Map corrigée dans l'orchestrateur web
+
+Passage suivant : ré-audit ciblé des surfaces NON couvertes par le cycle 1
+(reconnexion/backoff, offline queue/outbox, dédup d'events, helpers purs). Deux
+audits indépendants confirment : le cœur temps-réel TS reste correct et bien
+testé — **aucun défaut de correction (wrong-output)** à corriger.
+
+**Un défaut de HYGIÈNE réel corrigé** (hors « wrong-output », mais fuite mémoire
+sur onglet longue durée — pipeline de livraison, Phase 3/9) :
+
+`apps/web/services/socketio/orchestrator.service.ts` — la file d'attente hors-ligne
+arme un `setTimeout` par message (`pendingMessageTimeouts`), nettoyé sur le chemin
+« traité » (`processPendingMessages`) mais **PAS** sur deux autres chemins de retrait :
+1. **Expulsion file pleine** (`MAX_QUEUE_SIZE`) : l'ancien message était `shift`+résolu
+   sans `clearTimeout` ni `.delete()` → timer resté armé 2 min, puis, à son
+   déclenchement, `indexOf === -1` → le bloc de suppression (dont le `.delete()`)
+   était sauté → **entrée de Map orpheline permanente**.
+2. **`cleanup()`** : tous les pending résolus sans annuler leurs timers → N timers
+   restent armés après teardown, N entrées de Map persistent.
+
+**Fix** : helper `clearPendingTimeout(clientMessageId)` (annule + oublie), appelé
+sur les 3 chemins de retrait (traité / expulsé / cleanup) — source unique, la fuite
+ne peut plus réapparaître. TDD : 2 tests RED d'abord (`jest.getTimerCount()` +
+taille de Map), puis GREEN. Suite orchestrateur 104/104, socketio web 423/423.
