@@ -4,7 +4,23 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-media-cache` ✅
+## This loop (Phase: Profile §K) — slice `profile-avatar-banner-upload` ✅
+**Avatar + banner upload** — port of iOS `AttachmentUploader` + `UserService.updateAvatar`, generalised to a
+banner (iOS uploads only a single compressed JPEG avatar). Four pure `:core:model` SSOTs: `ImageUploadTarget`
+(AVATAR/BANNER + per-target `maxBytes` 8/12 MiB), `ImageUploadValidator` (priority gate empty → non-image →
+oversize → Accepted; MIME parsed before `;` + case-folded; a 10 MiB image passes as banner, fails as avatar),
+`AvatarBannerUpload.firstUploadedUrl` (first non-blank URL else null), `AvatarBannerApply` (optimistic-paint
+merge mirroring `ProfileEditApply`). Dedicated `AvatarBannerUploadViewModel` validates (reject → typed
+`ImageUploadError`, no network) → uploads via the existing `MediaRepository`/`MediaApi` → optimistic session
+paint → confirms via existing `UserRepository.updateAvatar`/`updateBanner` → adopts server user / rolls back on
+failure; single-flight + cancellation-safe. `ProfileScreen`: tappable edit-mode avatar (Indigo camera badge +
+spinner) via `PickVisualMedia` + "Change cover photo" banner button, snackbar errors, EN/FR/ES/PT; added
+`androidx.activity.compose` to the module. +36 tests (validator 14, apply 4, url-select 4, VM 14); one-mutation
+RED check on the size branch confirmed the size tests. Full `assembleDebug` + all-module tests green, diff =
+`apps/android` only. Next: crop/resize/compress before upload (§K polish); live `ConnectivityManager` monitor
+(§L); or another §K/§L row (crash diagnostics, static pages, device-sessions/2FA/voice-cloning).
+
+## Prior loop (Phase: Settings §L) — slice `settings-media-cache` ✅
 **Media cache management** — port of iOS `DataStorageView` + `CacheCoordinator.clearAll`, **surpassing iOS**: iOS
 shows **no sizes** and offers only a single "clear all" (its own audit flags a size readout as a future TODO;
 `estimatedDiskBytes()` is unused); Android shows the **total + every per-category size** and clears **per-category

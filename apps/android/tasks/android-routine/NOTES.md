@@ -4,6 +4,34 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-11, `profile-avatar-banner-upload`)
+- **Reuse beat rebuild: the avatar/banner upload was almost entirely wiring.** The multipart
+  `MediaApi`/`MediaRepository` (pure `MediaUpload.formPart`, JVM-tested), the `PickVisualMedia` +
+  `readMediaUploadItem` picker precedent (from stories), and the `UserRepository.updateAvatar`/`updateBanner`
+  URL-taking endpoints all existed. The only *new* pure logic was the validator + the optimistic-paint merge +
+  the URL-select — so the whole slice added 4 tiny `:core:model` objects + one VM, and no new endpoint. When a
+  feature "needs a media pipeline", check what's already built before adding surface.
+- **Keep the pure validator on primitives, not the sdk-core `MediaUploadItem`.** `:core:model` cannot depend on
+  `:sdk-core` (reverse dependency). `ImageUploadValidator.validate(target, byteCount: Int, mimeType: String)`
+  takes `item.bytes.size` + `item.mimeType` at the call site, so the branch table stays in `:core:model` and
+  JVM-testable with no Android/sdk-core coupling.
+- **"Which REST endpoint" is orchestration, not model.** `ImageUploadTarget` is a pure enum carrying only its
+  `maxBytes`; the `AVATAR → updateAvatar` / `BANNER → updateBanner` routing lives in the VM. Putting the
+  endpoint choice on the enum would drag `UserRepository` into `:core:model`. The grain test: the enum takes
+  opaque data (a byte ceiling) and stays agnostic → model; the "call this repo method" decision → feature.
+- **The `PickVisualMedia` launcher needs `androidx.activity.compose` explicitly.** It is NOT in the
+  `bundles.compose` set (that bundle is `compose-ui`/`graphics`/`tooling-preview`/`material3`/`material-icons`
+  only). Stories/calls/app already list `implementation(libs.androidx.activity.compose)`; the profile module
+  did not, so `rememberLauncherForActivityResult` was unresolved until I added it. Check the module's own
+  `build.gradle.kts` before using an activity-compose API.
+- **Use CORE material icons only.** `Icons.Default.PhotoCamera` is in the *extended* icon set (not depended on
+  here). The camera badge reuses `Icons.Default.Edit` (already imported, part of the core set) — no new
+  dependency. The core set present in this app: Edit, Share, Flag, Lock, ArrowBack, ArrowDropDown.
+- **Cheap, honest RED without many gradle cycles:** author the behavioural tests + the real implementation,
+  run once to GREEN, then do a single one-line mutation (here: delete the `TOO_LARGE` size branch) and rerun —
+  it must fail exactly the size tests, then restore. One extra ~5s `:core:model` run proves the tests are not
+  tautological, which the reviewer rubric demands.
+
 ## Lesson (2026-07-11, `settings-media-cache`)
 - **Kotlin block comments NEST — a `/*` inside a KDoc opens a nested comment that must be
   closed.** A doc comment mentioning a path like `media/*` (or any `/*` glob) makes the whole

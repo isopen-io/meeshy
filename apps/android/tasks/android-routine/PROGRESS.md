@@ -2,7 +2,42 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload)** → rest`
+
+> On 2026-07-11 **avatar + banner upload** landed (slice `profile-avatar-banner-upload`, feature-parity §K —
+> "Edit profile (avatar + banner upload …)", the last unshipped leg of profile editing). Port of iOS
+> `AttachmentUploader` + `UserService.updateAvatar`, generalised to a banner (iOS uploads only a single
+> compressed JPEG avatar, no banner). Four pure `:core:model` SSOTs: `ImageUploadTarget` (AVATAR/BANNER with
+> per-target `maxBytes` — 8 MiB / 12 MiB), `ImageUploadValidator` (priority-ordered gate: empty → non-image →
+> oversize → Accepted; MIME parsed before any `;` param + case-folded, so `video/mp4`/blank are rejected and a
+> 10 MiB image passes as a banner yet fails as an avatar), `AvatarBannerUpload.firstUploadedUrl` (first
+> non-blank uploaded URL else `null`, so a degenerate response is treated as a failure not a blank link), and
+> `AvatarBannerApply.apply` (the optimistic-paint merge SSOT mirroring `ProfileEditApply` — overwrites only the
+> targeted `avatar`/`banner` field). Orchestration: a dedicated `AvatarBannerUploadViewModel`
+> (`:feature:profile`, UDF immutable `AvatarBannerUploadUiState`) validates the pick (reject → typed
+> `ImageUploadError`, **no network touched**) → uploads via the **existing** `MediaRepository`/`MediaApi`
+> (reused unchanged) → paints the returned URL optimistically onto the session → confirms with the **existing**
+> `UserRepository.updateAvatar`/`updateBanner` PATCH (the "which endpoint" routing is the VM's orchestration,
+> not the pure enum) → adopts the server's canonical identity, or rolls the session back to the snapshot on
+> failure; a single-flight guard drops a second pick mid-flight and `viewModelScope` work rethrows
+> `CancellationException`. `ProfileScreen` glue (coverage-exempt): the edit-mode avatar is tappable (Indigo
+> camera badge + spinner overlay while uploading) via `PickVisualMedia` image-only, plus a "Change cover photo"
+> banner button; errors surface in the snackbar. Added `androidx.activity.compose` to the profile module for
+> the picker. **+36 tests** (ImageUploadValidator 14, AvatarBannerApply 4, AvatarBannerUpload 4,
+> AvatarBannerUploadViewModel 14), all green; full `:app:assembleDebug` + all-module `testDebugUnitTest`
+> BUILD SUCCESSFUL. A one-mutation RED check (removing the size branch) failed exactly the two size tests,
+> confirming they are not tautological. Reviewer **PASS** (diff `apps/android` only — `:core:model`,
+> `:feature:profile` [VM + screen glue + build.gradle picker dep + EN/FR/ES/PT strings]; no production logic
+> outside; **SDK purity** — pure validator/apply/url-select in `:core:model`, "when to upload / which endpoint
+> / cache→confirm cascade" orchestration in the VM, `MediaRepository` reused unchanged; **SSOT** —
+> `AvatarBannerApply` mirrors `ProfileEditApply`, one validator gate, `MediaUpload` reused, no re-implementation;
+> **UDF/instant-app** — immutable `StateFlow<UiState>`, optimistic URL paint before confirm with snapshot
+> rollback; **colour/UX coherence** — Indigo accent camera badge, natural tap-to-change gesture, snackbar
+> errors, stays in the edit form so no dead end; **no coverage floor lowered, no test weakened**).
+> **Next slice:** the in-place crop/resize/compress step before upload (§K polish), the live
+> `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of
+> `MediaDownloadPolicyEngine` (§L), or another §K/§L row (crash-report diagnostics viewer; static screens:
+> Help/ToS/Privacy/licenses/About; §K device-sessions / 2FA / voice-cloning).
 
 > On 2026-07-11 **media cache management** landed (slice `settings-media-cache`, feature-parity §L — "Media
 > cache management (clear cached images/audio/video/thumbnails)"). Port of iOS `DataStorageView` +

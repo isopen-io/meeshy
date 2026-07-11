@@ -1664,7 +1664,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Last name `OutlinedTextField`s above Display name (Words capitalization, EN/FR/ES/PT). +6 tests
       (ProfileEditRequestBuilder +3, ProfileViewModelEdit +3; existing save/cancel cases hardened to assert the
       name legs too). Reuses the whole optimistic/offline machinery — no new store, no new outbox kind.
-      **Pending:** avatar + banner upload (media pipeline).
+      **Avatar + banner upload shipped** (slice `profile-avatar-banner-upload`, 2026-07-11): the media
+      pipeline is now wired to the profile image. Pure `:core:model` SSOTs: `ImageUploadTarget`
+      (AVATAR/BANNER, each with a per-target `maxBytes` ceiling — 8 MiB / 12 MiB), `ImageUploadValidator`
+      (priority-ordered gate: empty → non-image → oversize → Accepted; MIME parsed before any `;` param,
+      case-folded; so a `video/mp4` or blank type is rejected and a 10 MiB file passes as a banner yet fails
+      as an avatar), `AvatarBannerUpload.firstUploadedUrl` (first non-blank uploaded URL, else `null`), and
+      `AvatarBannerApply.apply(user, target, url)` — the optimistic-paint merge SSOT mirroring
+      `ProfileEditApply` (overwrites only the targeted field). Orchestration: a dedicated
+      `AvatarBannerUploadViewModel` (`:feature:profile`) validates the pick (reject → typed
+      `ImageUploadError`, no network touched) → uploads via the existing `MediaRepository`/`MediaApi` (reused
+      unchanged) → paints the returned URL optimistically onto the session → confirms with the existing
+      `UserRepository.updateAvatar`/`updateBanner` PATCH → adopts the server's canonical identity, or rolls
+      the session back to the snapshot on failure. Single-flight guard drops a second pick mid-flight;
+      `viewModelScope` work rethrows `CancellationException`. `ProfileScreen` glue: the edit-mode avatar is
+      tappable (Indigo camera badge, spinner overlay while uploading) via `PickVisualMedia` (image-only), and
+      a "Change cover photo" button uploads the banner; errors surface in the snackbar (EN/FR/ES/PT). Reuses
+      the media pipeline entirely — no new endpoint. Surpasses iOS, which uploads only a single compressed
+      JPEG avatar (no banner). +36 tests (ImageUploadValidator 14, AvatarBannerApply 4, AvatarBannerUpload 4,
+      AvatarBannerUploadViewModel 14). **Pending:** in-place crop/resize/compress step before upload.
 - [~] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges —
       **stats projection SSOT + read-only dashboard shipped** (slice `profile-stats-presentation`,
       2026-07-05): the pure `UserStatsBuilder.build(stats) → UserStatsPresentation` (`:feature:profile`,
