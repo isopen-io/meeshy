@@ -401,6 +401,38 @@ describe('CallEventsHandler — call:end handler', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Room-membership leak: forceEndOrphanedCallAfterOptimisticBroadcast (the
+  // recovery path shared by call:end/call:leave/call:force-leave's catch
+  // blocks) terminates the call session but, unlike their happy paths, never
+  // evicted straggling sockets from the call room — leaking Socket.IO room
+  // membership for any device that never explicitly left. Regression guard.
+  // -------------------------------------------------------------------------
+  describe('error path: endCall throws, orphaned-session recovery actually ends the call', () => {
+    it('evicts every remaining socket from the call room', async () => {
+      mockEndCall.mockRejectedValue(new Error('CALL_NOT_FOUND: call does not exist'));
+      mockForceEndOrphanedCallSession.mockResolvedValue({
+        conversationId: CONV_ID,
+        duration: 30,
+        endReason: 'connectionLost',
+        status: 'ended',
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io, fetchSockets } = makeIo();
+      const staleSocket = { id: 'stale-device', leave: jest.fn() };
+      fetchSockets.mockResolvedValue([staleSocket]);
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect(staleSocket.leave).toHaveBeenCalledWith(`call:${CALL_ID}`);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Security fix 2026-07-10: endCall() rejecting the caller's own
   // authorization (NOT_A_PARTICIPANT / PERMISSION_DENIED) must NOT trigger
   // the orphaned-call force-end recovery — that recovery previously let a
