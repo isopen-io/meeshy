@@ -85,6 +85,7 @@ const callServiceStub = {
   clearRingingTimeout: () => undefined,
   updateCallStatus: async () => undefined,
   createCallSummaryMessage: async () => null,
+  persistCallStats: async () => undefined,
 } as unknown as CallService;
 
 const prismaStub = {
@@ -242,4 +243,108 @@ describe('Appels — e2e 2 sockets « deux devices, un répond »', () => {
     // Le signal est ciblé : l'autre device du callee ne doit rien recevoir.
     expect(signalLeakedToB2).toBe(false);
   }, 20_000);
+
+  // Les scénarios suivants RÉUTILISENT l'état du premier (A et B1 membres de
+  // la call room après initiate/join) — c'est un déroulé séquentiel, comme un
+  // vrai appel. Ils verrouillent le contrat des side-channels que les 3
+  // plateformes consomment/émettent désormais (parité livrée post-audit).
+
+  it('relaie screen-capture-detected avec le participantId résolu SERVEUR (anti-usurpation)', async () => {
+    const alertAtA = nextEvent<{ callId: string; participantId: string; isCapturing: boolean }>(
+      clientA,
+      CALL_EVENTS.SCREEN_CAPTURE_ALERT
+    );
+    let echoedToReporter = false;
+    clientB1.once(CALL_EVENTS.SCREEN_CAPTURE_ALERT, () => {
+      echoedToReporter = true;
+    });
+
+    // B1 tente d'usurper l'identité de son pair dans le payload — le serveur
+    // doit relayer avec le participantId RÉSOLU depuis la socket authentifiée.
+    clientB1.emit(CALL_EVENTS.SCREEN_CAPTURE_DETECTED, {
+      callId: CALL_ID,
+      participantId: 'pa-forge',
+      isCapturing: true,
+    });
+
+    const alert = await alertAtA;
+    expect(alert.callId).toBe(CALL_ID);
+    expect(alert.participantId).toBe('pb');
+    expect(alert.isCapturing).toBe(true);
+    // Le reporter ne reçoit jamais sa propre alerte (socket.to, pas io.to).
+    expect(echoedToReporter).toBe(false);
+  }, 20_000);
+
+  it('émet quality-alert au pair — et au pair seul — après 2 rapports dégradés soutenus', async () => {
+    const alertAtA = nextEvent<{ callId: string; metric: string; participantId: string }>(
+      clientA,
+      CALL_EVENTS.QUALITY_ALERT
+    );
+    let alertedReporter = false;
+    clientB1.once(CALL_EVENTS.QUALITY_ALERT, () => {
+      alertedReporter = true;
+    });
+    let alertedIdleDevice = false;
+    clientB2.once(CALL_EVENTS.QUALITY_ALERT, () => {
+      alertedIdleDevice = true;
+    });
+
+    const degradedStats = { rtt: 420, packetLoss: 1, level: 'poor' as const };
+    clientB1.emit(CALL_EVENTS.QUALITY_REPORT, { callId: CALL_ID, stats: degradedStats });
+    clientB1.emit(CALL_EVENTS.QUALITY_REPORT, { callId: CALL_ID, stats: degradedStats });
+
+    const alert = await alertAtA;
+    expect(alert.callId).toBe(CALL_ID);
+    expect(alert.metric).toBe('rtt');
+    expect(alert.participantId).toBe('pb');
+    // Le reporter garde sa pill locale ; l'alerter aussi serait contradictoire.
+    expect(alertedReporter).toBe(false);
+    // B2 n'a jamais rejoint la call room : le fanout ne doit pas fuiter.
+    expect(alertedIdleDevice).toBe(false);
+  }, 20_000);
+
+  it('accepte le payload call:analytics complet (fire-and-forget, validé Zod)', async () => {
+    clientB1.emit(CALL_EVENTS.ANALYTICS, {
+      callId: CALL_ID,
+      setupTimeMs: 3200,
+      durationSeconds: 42,
+      reconnectionCount: 1,
+      networkTransitions: 0,
+      averageRtt: 180.5,
+      averagePacketLoss: 0.8,
+      maxPacketLoss: 4.2,
+      codec: 'unknown',
+      effectsUsed: [],
+      filtersUsed: false,
+      transcriptionUsed: false,
+      qualityDistribution: { excellent: 0.7, good: 0.2, fair: 0.1, poor: 0 },
+      platform: 'android',
+      deviceModel: 'Pixel 8',
+      isVideo: false,
+      endReason: 'local',
+    });
+
+    // Fire-and-forget : le seul effet observable est le log structuré du
+    // gateway (le logger est mocké en tête de fichier).
+    const { logger } = jest.requireMock('../../utils/logger') as {
+      logger: { info: jest.Mock };
+    };
+    await expect(
+      waitUntil(() =>
+        logger.info.mock.calls.some(
+          ([message]) => typeof message === 'string' && message.includes('call:analytics received')
+        )
+      )
+    ).resolves.toBe(true);
+  }, 20_000);
 });
+
+/** Boucle jusqu'à ce que [condition] soit vraie, ou échoue après ~5 s. */
+async function waitUntil(condition: () => boolean): Promise<boolean> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (condition()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return condition();
+}
