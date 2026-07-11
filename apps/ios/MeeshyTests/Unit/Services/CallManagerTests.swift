@@ -6029,4 +6029,68 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             "renegotiation tasks."
         )
     }
+
+    // MARK: - answerCall()/answerCallReady() buffered-offer paths must join the chain
+
+    /// Audit finding — both `answerCall()`'s and `answerCallReady()`'s
+    /// buffered-offer branches called `webRTCService.createAnswer()` from an
+    /// untracked (answerCall) or bare inline (answerCallReady) code path,
+    /// unserialized against the videoToggleTask/holdVideoTask/survivalVideoTask/
+    /// iceRestartTask/signalOfferAnswerTask family. A `CXSetHeldCallAction`
+    /// (a cellular call pre-empting a still-ringing Meeshy video call) can drive
+    /// `holdVideoTask` concurrently with the user accepting the call, racing two
+    /// actuations on the same RTCPeerConnection — exactly the hazard every other
+    /// site in this family already guards against.
+    func test_answerCall_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
+        let body = try body(
+            from: "func answerCall() {",
+            to: "private func scheduleSdpOfferTimeout(callId: String) {",
+            in: try callManagerSource()
+        )
+        for expected in [
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                body.contains(expected),
+                "answerCall()'s buffered-offer branch must \(expected) before calling createAnswer() — " +
+                "a concurrent hold/toggle/ICE-restart must not race it on the same RTCPeerConnection."
+            )
+        }
+        XCTAssertTrue(
+            body.contains("signalOfferAnswerTask = Task"),
+            "answerCall()'s buffered-offer branch must track its createAnswer() Task in " +
+            "signalOfferAnswerTask so later renegotiations/actuations chain onto it."
+        )
+    }
+
+    func test_answerCallReady_bufferedOfferBranch_chainsOntoVideoTransitionFamily() throws {
+        let body = try body(
+            from: "func answerCallReady() async {",
+            to: "// MARK: - Reject Call",
+            in: try callManagerSource()
+        )
+        for expected in [
+            "await previousToggle?.value",
+            "await previousHold?.value",
+            "await previousSurvival?.value",
+            "await previousICERestart?.value",
+            "await previousAnswer?.value",
+        ] {
+            XCTAssertTrue(
+                body.contains(expected),
+                "answerCallReady()'s buffered-offer branch must \(expected) before calling createAnswer() — " +
+                "a concurrent hold/toggle/ICE-restart must not race it on the same RTCPeerConnection."
+            )
+        }
+        XCTAssertTrue(
+            body.contains("signalOfferAnswerTask = task") && body.contains("await task.value"),
+            "answerCallReady()'s buffered-offer branch must track its createAnswer() Task in " +
+            "signalOfferAnswerTask (so later actuations chain onto it) and await its completion before " +
+            "returning, preserving the CXAnswerCallAction settlement ordering documented on this method."
+        )
+    }
 }

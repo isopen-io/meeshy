@@ -13,6 +13,7 @@
 
 import crypto from 'crypto';
 import { logger } from '../utils/logger';
+import { CallCleanupService } from './CallCleanupService';
 
 export interface TURNServerConfig {
   host: string;
@@ -98,7 +99,31 @@ export class TURNCredentialService {
     // headroom above the 2h hard cap. The blast radius of a leaked, per-user,
     // relay-only credential is bandwidth use on our own TURN server, not data
     // exposure. Operators can still tighten/loosen via env (must stay ≥ 2h).
-    this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '86400', 10);
+    //
+    // The 2026-06-25 incident happened because that constraint was only
+    // documented in prose — nothing actually enforced it, so a bad env value
+    // silently reintroduced the outage. Enforce the floor here: reject it
+    // outright in production/staging (same treatment as a weak TURN_SECRET
+    // above), clamp-and-warn in dev/test so local overrides for other
+    // purposes don't need to think about this floor.
+    const requestedTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '86400', 10);
+    const minTTL = CallCleanupService.MAX_ACTIVE_MS / 1000;
+    if (requestedTTL < minTTL) {
+      if (isProductionOrStaging) {
+        throw new Error(
+          `[SECURITY] TURN_CREDENTIAL_TTL (${requestedTTL}s) must be at least ${minTTL}s ` +
+          '(CallCleanupService.MAX_ACTIVE_MS) in production/staging — a lower value expires ' +
+          'TURN-relayed calls mid-call once the credential outlives its embedded expiry ' +
+          '(see the 2026-06-25 incident note above).'
+        );
+      }
+      logger.warn(
+        `⚠️ TURN_CREDENTIAL_TTL (${requestedTTL}s) is below the ${minTTL}s floor — clamping. ` +
+        'This value would drop TURN-relayed calls mid-call in production; fine to override for ' +
+        'local testing, but never carry it into a shared/staging environment.'
+      );
+    }
+    this.credentialTTL = Math.max(requestedTTL, minTTL);
 
     // TURN-over-TLS port (coturn `tls-listening-port`, default 5349). Plain
     // `turn:` (UDP/TCP) is blocked outright by some corporate/mobile-carrier

@@ -165,11 +165,37 @@ describe('TURNCredentialService — credential TTL covers max call duration', ()
     );
   });
 
-  it('still honours an explicit TURN_CREDENTIAL_TTL override', () => {
+  it('still honours an explicit TURN_CREDENTIAL_TTL override above the floor', () => {
     withEnv({ TURN_CREDENTIAL_TTL: '99999', NODE_ENV: 'test' }, () => {
       const service = new TURNCredentialService();
       expect(service.getStatus().credentialTTL).toBe(99999);
     });
+  });
+
+  it('clamps a below-floor TURN_CREDENTIAL_TTL to MAX_ACTIVE_MS in dev/test instead of reintroducing the 2026-06-25 incident', () => {
+    withEnv({ TURN_CREDENTIAL_TTL: '600', NODE_ENV: 'test' }, () => {
+      const service = new TURNCredentialService();
+      expect(service.getStatus().credentialTTL).toBe(MAX_ACTIVE_CALL_SECONDS);
+      expect(warnMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
+    });
+  });
+
+  it('throws in production when TURN_CREDENTIAL_TTL is below MAX_ACTIVE_MS', () => {
+    withEnv(
+      { TURN_CREDENTIAL_TTL: '600', NODE_ENV: 'production', TURN_SECRET: STRONG_SECRET },
+      () => {
+        expect(() => new TURNCredentialService()).toThrow('TURN_CREDENTIAL_TTL');
+      }
+    );
+  });
+
+  it('throws in staging when TURN_CREDENTIAL_TTL is below MAX_ACTIVE_MS', () => {
+    withEnv(
+      { TURN_CREDENTIAL_TTL: '7199', NODE_ENV: 'staging', TURN_SECRET: STRONG_SECRET },
+      () => {
+        expect(() => new TURNCredentialService()).toThrow('TURN_CREDENTIAL_TTL');
+      }
+    );
   });
 });
 
@@ -452,7 +478,7 @@ describe('TURNCredentialService — generateCredentials', () => {
     const svc = buildService({
       TURN_SECRET: 'test-secret',
       TURN_SERVERS: 'turn.example.com:3478',
-      TURN_CREDENTIAL_TTL: '600',
+      TURN_CREDENTIAL_TTL: undefined,
       NODE_ENV: 'development',
     });
     const now = Math.floor(Date.now() / 1000);
@@ -461,7 +487,7 @@ describe('TURNCredentialService — generateCredentials', () => {
     const [expirationStr] = ((turnEntry as any).username as string).split(':');
     const expiration = parseInt(expirationStr, 10);
     expect(expiration).toBeGreaterThan(now);
-    expect(expiration).toBeLessThanOrEqual(now + 660); // 600s TTL + 60s slack
+    expect(expiration).toBeLessThanOrEqual(now + 86400 + 60); // default 24h TTL + 60s slack
   });
 
   it('credential is valid HMAC-SHA1 of username using the configured secret', () => {
@@ -586,7 +612,7 @@ describe('TURNCredentialService — getStatus', () => {
   });
 
   it('exposes credentialTTL in seconds', () => {
-    const svc = buildService({ TURN_CREDENTIAL_TTL: '300', NODE_ENV: 'test' });
-    expect(svc.getStatus().credentialTTL).toBe(300);
+    const svc = buildService({ TURN_CREDENTIAL_TTL: undefined, NODE_ENV: 'test' });
+    expect(svc.getStatus().credentialTTL).toBe(86400);
   });
 });

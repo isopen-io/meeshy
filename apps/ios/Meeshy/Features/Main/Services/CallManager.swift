@@ -1572,8 +1572,27 @@ final class CallManager: ObservableObject {
         }
 
         if let remoteOffer = pendingRemoteOffer {
-            // SDP offer already received while ringing — create answer immediately
-            Task { [weak self] in
+            // SDP offer already received while ringing — create answer immediately.
+            //
+            // Audit finding — this used to spawn an untracked `Task` here,
+            // unserialized against videoToggleTask/holdVideoTask/survivalVideoTask/
+            // iceRestartTask: a `CXSetHeldCallAction` (e.g. a cellular call
+            // pre-empting a still-ringing Meeshy video call) can drive
+            // `holdVideoTask` while the user simultaneously accepts this call,
+            // racing two actuations on the same RTCPeerConnection. Chained onto
+            // `signalOfferAnswerTask` like every other WebRTC-actuating site —
+            // see the doc-comment on `survivalVideoTask`.
+            let previousToggle = videoToggleTask
+            let previousHold = holdVideoTask
+            let previousSurvival = survivalVideoTask
+            let previousICERestart = iceRestartTask
+            let previousAnswer = signalOfferAnswerTask
+            signalOfferAnswerTask = Task { [weak self] in
+                await previousToggle?.value
+                await previousHold?.value
+                _ = await previousSurvival?.value
+                await previousICERestart?.value
+                await previousAnswer?.value
                 guard let self else { return }
                 // Phase 2 fix — Bug 2: wait for local media transceivers
                 // (emitCallJoin is now decoupled from startLocalMedia).
@@ -1641,28 +1660,50 @@ final class CallManager: ObservableObject {
 
         if let remoteOffer = pendingRemoteOffer {
             self.pendingRemoteOffer = nil
-            // Phase 2 fix — Bug 2: wait for local media transceivers before
-            // createAnswer. CallKit gives ample time for CXAnswerCallAction
-            // (10s+), so awaiting camera/mic warmup here is safe.
-            await self.localMediaTask?.value
-            guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
-                guard self.currentCallId == callId else { return }
-                // Local SDP generation failure is invisible to the peer — without
-                // this signal the caller sits in .connecting/.ringing until the
-                // gateway's CallCleanupService cron reaps the zombie (~60s).
-                MessageSocketManager.shared.emitCallEnd(callId: callId)
-                self.failCall("Failed to create SDP answer")
-                return
+            // Audit finding — this used to call createAnswer() directly here,
+            // unserialized against videoToggleTask/holdVideoTask/survivalVideoTask/
+            // iceRestartTask: a `CXSetHeldCallAction` racing this CallKit answer
+            // could drive `holdVideoTask` concurrently with this createAnswer()
+            // on the same RTCPeerConnection. Chained onto `signalOfferAnswerTask`
+            // like every other WebRTC-actuating site — see the doc-comment on
+            // `survivalVideoTask`.
+            let previousToggle = videoToggleTask
+            let previousHold = holdVideoTask
+            let previousSurvival = survivalVideoTask
+            let previousICERestart = iceRestartTask
+            let previousAnswer = signalOfferAnswerTask
+            let task = Task { [weak self] in
+                await previousToggle?.value
+                await previousHold?.value
+                _ = await previousSurvival?.value
+                await previousICERestart?.value
+                await previousAnswer?.value
+                guard let self else { return }
+                // Phase 2 fix — Bug 2: wait for local media transceivers before
+                // createAnswer. CallKit gives ample time for CXAnswerCallAction
+                // (10s+), so awaiting camera/mic warmup here is safe.
+                await self.localMediaTask?.value
+                guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
+                    guard self.currentCallId == callId else { return }
+                    // Local SDP generation failure is invisible to the peer — without
+                    // this signal the caller sits in .connecting/.ringing until the
+                    // gateway's CallCleanupService cron reaps the zombie (~60s).
+                    MessageSocketManager.shared.emitCallEnd(callId: callId)
+                    self.failCall("Failed to create SDP answer")
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] CallKit answer discarded: call ended during createAnswer")
+                    return
+                }
+                // PERF-004: await the gateway ACK (3s) so when answerCallReady
+                // returns, the CXAnswerCallAction fulfill is paired with an SDP
+                // answer that has actually been relayed to the peer.
+                await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+                Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
             }
-            guard self.currentCallId == callId else {
-                Logger.calls.info("[CALL] CallKit answer discarded: call ended during createAnswer")
-                return
-            }
-            // PERF-004: await the gateway ACK (3s) so when answerCallReady
-            // returns, the CXAnswerCallAction fulfill is paired with an SDP
-            // answer that has actually been relayed to the peer.
-            await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
-            Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
+            signalOfferAnswerTask = task
+            await task.value
         } else {
             Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
             scheduleSdpOfferTimeout(callId: callId)
