@@ -32,6 +32,27 @@ final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
         }
     }
 
+    func test_controlsOverlay_chrome_usesAdaptiveGlass() throws {
+        let source = try gallerySource()
+        guard let start = source.range(of: "private var controlsOverlay") else {
+            XCTFail("controlsOverlay not found"); return
+        }
+        let end = source.index(start.lowerBound, offsetBy: 2600, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[start.lowerBound..<end])
+        XCTAssertFalse(
+            body.contains("xmark.circle.fill"),
+            "Le X doit être un glyphe xmark dans un cercle .adaptiveGlass, pas le xmark.circle.fill plein."
+        )
+        XCTAssertGreaterThanOrEqual(
+            body.components(separatedBy: ".adaptiveGlass(").count - 1, 3,
+            "X, compteur et save doivent porter chacun leur surface .adaptiveGlass."
+        )
+        XCTAssertFalse(
+            body.contains("Circle().fill(Color.white.opacity(0.2))"),
+            "Plus de cercle blanc opaque 0.2 : chrome Liquid Glass uniquement."
+        )
+    }
+
     func test_galleryVideoPage_posterButton_usesAdaptiveGlass() throws {
         let source = try gallerySource()
         guard let start = source.range(of: "private var playOrDownloadButton") else {
