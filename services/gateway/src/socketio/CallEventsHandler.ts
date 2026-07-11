@@ -168,6 +168,32 @@ export class CallEventsHandler {
   // all observe the same in-memory ringingTimeouts/heartbeats/
   // backgroundedParticipants maps. Falls back to a private instance when
   // omitted (unit tests construct this handler standalone).
+  /**
+   * Cache TTL court du hot-path call:signal (audit appels 2026-07-11 #10) :
+   * une rafale d'ICE candidates faisait un findUnique+include lourd PAR
+   * signal. Les entrées expirent vite (participants/answeredAt quasi-frais)
+   * et le handler re-lit la DB avant tout rejet si un participant manque.
+   */
+  private static readonly SIGNAL_SESSION_TTL_MS = 2_000;
+  private readonly signalSessionCache = new Map<
+    string,
+    { session: Awaited<ReturnType<CallService['getCallSession']>>; fetchedAt: number }
+  >();
+
+  private async getSignalSession(callId: string): Promise<Awaited<ReturnType<CallService['getCallSession']>>> {
+    const hit = this.signalSessionCache.get(callId);
+    if (hit && Date.now() - hit.fetchedAt < CallEventsHandler.SIGNAL_SESSION_TTL_MS) {
+      return hit.session;
+    }
+    return this.refreshSignalSession(callId);
+  }
+
+  private async refreshSignalSession(callId: string): Promise<Awaited<ReturnType<CallService['getCallSession']>>> {
+    const session = await this.callService.getCallSession(callId);
+    this.signalSessionCache.set(callId, { session, fetchedAt: Date.now() });
+    return session;
+  }
+
   constructor(private prisma: PrismaClient, callService?: CallService) {
     this.callService = callService ?? new CallService(prisma);
     // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
@@ -179,6 +205,11 @@ export class CallEventsHandler {
       for (const [key, entry] of this.bufferedOffers) {
         if (now - entry.bufferedAt > CallEventsHandler.OFFER_BUFFER_TTL_MS) {
           this.bufferedOffers.delete(key);
+        }
+      }
+      for (const [callId, entry] of this.signalSessionCache) {
+        if (now - entry.fetchedAt >= CallEventsHandler.SIGNAL_SESSION_TTL_MS) {
+          this.signalSessionCache.delete(callId);
         }
       }
     }, 60_000).unref();
@@ -222,6 +253,7 @@ export class CallEventsHandler {
       clearTimeout(timer);
     }
     this.disconnectGraceTimers.clear();
+    this.signalSessionCache.clear();
   }
 
   /**
@@ -2412,11 +2444,32 @@ export class CallEventsHandler {
           }
         }
 
-        // CVE-001: Verify sender is actually a participant in the call
-        const callSession = await this.callService.getCallSession(data.callId);
-        const senderParticipant = callSession.participants.find(
-          p => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
-        );
+        // CVE-001: Verify sender is actually a participant in the call.
+        // Audit #10 — session servie du cache TTL court pendant les rafales
+        // ICE. Deux garde-fous de correction : un `answer` lit TOUJOURS
+        // frais (isFirstAnswer dépend du answeredAt pré-update), et un
+        // participant absent du cache force UNE re-lecture avant tout rejet
+        // (join tout frais pas encore visible dans l'entrée cachée).
+        const findSender = (session: Awaited<ReturnType<CallService['getCallSession']>>) =>
+          session.participants.find(
+            p => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
+          );
+        const findTarget = (session: Awaited<ReturnType<CallService['getCallSession']>>) =>
+          session.participants.find(
+            p => ((p.participant?.userId || p.participantId) === data.signal.to) && !p.leftAt
+          );
+
+        const freshRead = data.signal.type === 'answer';
+        let callSession = freshRead
+          ? await this.refreshSignalSession(data.callId)
+          : await this.getSignalSession(data.callId);
+        let senderParticipant = findSender(callSession);
+        let targetParticipant = findTarget(callSession);
+        if ((!senderParticipant || !targetParticipant) && !freshRead) {
+          callSession = await this.refreshSignalSession(data.callId);
+          senderParticipant = findSender(callSession);
+          targetParticipant = findTarget(callSession);
+        }
 
         if (!senderParticipant) {
           logger.warn('⚠️ Socket: Sender not a participant in call', {
@@ -2446,11 +2499,7 @@ export class CallEventsHandler {
           return;
         }
 
-        // CVE-001: Find and validate target participant
-        const targetParticipant = callSession.participants.find(
-          p => ((p.participant?.userId || p.participantId) === data.signal.to) && !p.leftAt
-        );
-
+        // CVE-001: Validate target participant (resolved above, cache-aware)
         if (!targetParticipant) {
           logger.warn('⚠️ Socket: Target participant not found', {
             callId: data.callId,
