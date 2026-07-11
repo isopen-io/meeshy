@@ -159,8 +159,10 @@ Tests : AudioWaveformTests (CAF silence→fort), StoryComposerBackgroundLive-
 ApplyTests (3 comportements). Suite 1825/1825, build app vert.
 
 VAGUE EXPORT MP4 + CONSTATS HORS TIMELINE (2026-07-11, en cours) :
-(a) Bouton export dans le transport timeline (Quick+Pro, square.and.arrow.up,
-masqué si onExport nil) → TimelineSheetContent (wrapper des 2 mount sites) →
+(a) Bouton export en HEADER du TimelineContainerSwitcher (trailing, pattern
+CapCut/InShot — le transport Quick portrait est déjà saturé, un 8e bouton
+débordait ; masqué si onExport nil) → TimelineSheetContent (wrapper des 2
+mount sites) →
 TimelineExportController : commit timeline → exportableCurrentSlide() (mediaURL
 vidéos patchés session, bg image composer injecté en media object éphémère
 tmp jpg) → StoryExporter.export(watermark:audioResolver:) → overlay progression
