@@ -124,6 +124,150 @@ final class CallTranscriptionServiceTests: XCTestCase {
     }
 }
 
+// MARK: - Audio Interruption Policy
+
+/// `AVAudioSession` interruptions (Siri, an incoming GSM call, an alarm) are
+/// common mid-call and auto-stop `AVAudioEngine` on their own. Unlike the
+/// `.AVAudioEngineConfigurationChange` path (hardware/route changes), nothing
+/// previously observed session interruptions at all, so captions silently
+/// stopped producing segments for the rest of the call while `isTranscribing`
+/// stayed `true`. `evaluateInterruptionAction` is the pure decision extracted
+/// from `handleAudioInterruption` — real `AVAudioEngine`/`AVAudioSession`
+/// aren't available in the unit test host, so the imperative restart itself
+/// is validated on-device, matching this file's existing pattern for
+/// `applyRecognitionResult`.
+@MainActor
+final class CallTranscriptionInterruptionPolicyTests: XCTestCase {
+
+    func test_notTranscribing_neverRestarts() {
+        XCTAssertEqual(
+            CallTranscriptionService.evaluateInterruptionAction(
+                type: .ended, isTranscribing: false, engineIsRunning: false
+            ),
+            .none
+        )
+    }
+
+    func test_began_neverRestarts_evenWhileTranscribing() {
+        XCTAssertEqual(
+            CallTranscriptionService.evaluateInterruptionAction(
+                type: .began, isTranscribing: true, engineIsRunning: true
+            ),
+            .none
+        )
+        XCTAssertEqual(
+            CallTranscriptionService.evaluateInterruptionAction(
+                type: .began, isTranscribing: true, engineIsRunning: false
+            ),
+            .none
+        )
+    }
+
+    func test_ended_whileTranscribing_engineAlreadyRunning_isNoOp() {
+        // Some interruptions (e.g. a very short one) may not stop the engine
+        // at all — restarting an already-running engine would throw.
+        XCTAssertEqual(
+            CallTranscriptionService.evaluateInterruptionAction(
+                type: .ended, isTranscribing: true, engineIsRunning: true
+            ),
+            .none
+        )
+    }
+
+    func test_ended_whileTranscribing_engineStopped_restarts() {
+        XCTAssertEqual(
+            CallTranscriptionService.evaluateInterruptionAction(
+                type: .ended, isTranscribing: true, engineIsRunning: false
+            ),
+            .restartEngine
+        )
+    }
+
+    func test_ended_notTranscribing_engineStopped_isNoOp() {
+        // A stale/late interruption notification after the call (and
+        // transcription) already ended must not resurrect capture.
+        XCTAssertEqual(
+            CallTranscriptionService.evaluateInterruptionAction(
+                type: .ended, isTranscribing: false, engineIsRunning: false
+            ),
+            .none
+        )
+    }
+}
+
+// MARK: - Source Guards (AVAudioEngine paths unreachable from the unit test host)
+
+@MainActor
+final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
+
+    private func serviceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_stopLocalCapture_removesTapUnconditionally() throws {
+        // Regression: `guard audioEngine.isRunning else { return }` used to
+        // gate removeTap(onBus:) too, so a call ending right after an
+        // AVAudioSession interruption (which auto-stops the engine) skipped
+        // the removeTap entirely. The stale tap left on bus 0 makes the next
+        // startLocalCapture()'s installTap on that bus raise an uncatchable
+        // NSInternalInconsistencyException — a guaranteed crash on the next
+        // captions attempt for the rest of the app session (CallTranscriptionService
+        // is a CallManager-owned singleton, not per-call).
+        let source = try serviceSource()
+        guard let range = source.range(of: "private func stopLocalCapture") else {
+            XCTFail("stopLocalCapture not found"); return
+        }
+        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
+            ?? source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[range.lowerBound..<nextFunc])
+        XCTAssertFalse(
+            body.contains("guard audioEngine.isRunning else { return }"),
+            "Crash risk: stopLocalCapture must not early-return on !isRunning before removeTap(onBus:) — " +
+            "removeTap must run unconditionally (Apple documents it as safe with no tap installed)."
+        )
+        XCTAssertTrue(
+            body.contains("removeTap(onBus: 0)"),
+            "stopLocalCapture must still remove the tap"
+        )
+    }
+
+    func test_startLocalCapture_registersInterruptionObserver() throws {
+        let source = try serviceSource()
+        guard let range = source.range(of: "private func startLocalCapture") else {
+            XCTFail("startLocalCapture not found"); return
+        }
+        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[range.lowerBound..<nextFunc])
+        XCTAssertTrue(
+            body.contains("observeAudioInterruptions()"),
+            "startLocalCapture must register the AVAudioSession interruption observer, " +
+            "or captions silently die on the next Siri/GSM-call/alarm interruption and never resume."
+        )
+    }
+
+    func test_stopTranscribing_removesInterruptionObserver() throws {
+        let source = try serviceSource()
+        guard let range = source.range(of: "func stopTranscribing() {") else {
+            XCTFail("stopTranscribing not found"); return
+        }
+        let nextFunc = source.range(of: "\n    /// Teardown", range: range.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[range.lowerBound..<nextFunc])
+        XCTAssertTrue(
+            body.contains("removeInterruptionObserver()"),
+            "stopTranscribing must remove the interruption observer to avoid a dangling observer firing after teardown"
+        )
+    }
+}
+
 // MARK: - TranscriptionSegment Data Model Tests
 
 @MainActor
