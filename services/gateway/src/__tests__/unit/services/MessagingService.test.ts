@@ -893,6 +893,74 @@ describe('MessagingService', () => {
         })
       );
     });
+
+    // Regression guard: the socket schema is `originalLanguage: z.string().optional()`,
+    // so an EMPTY STRING is a valid value — a common outcome when client-side
+    // detection fails and the client sends `originalLanguage: ''`. A nullish
+    // (`??`) guard lets `''` through, skipping detection and persisting
+    // `originalLanguage=''`. Downstream that broadcasts as `'fr'` (Prisme
+    // corruption): a French-preference recipient sees the untranslated original.
+    // The empty/whitespace claim MUST fall through to language detection.
+    it('should detect language when originalLanguage is an empty string', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ language: 'es' })
+      }) as any;
+
+      const request: MessageRequest = {
+        ...validRequest,
+        content: 'Hola qué tal',
+        originalLanguage: ''
+      };
+
+      const response = await service.handleMessage(
+        request,
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect(global.fetch).toHaveBeenCalled();
+      expect(mockPrisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            originalLanguage: 'es'
+          })
+        })
+      );
+    });
+
+    it('should detect language when originalLanguage is whitespace only', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ language: 'de' })
+      }) as any;
+
+      const request: MessageRequest = {
+        ...validRequest,
+        content: 'Guten Tag',
+        originalLanguage: '   '
+      };
+
+      const response = await service.handleMessage(
+        request,
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect(global.fetch).toHaveBeenCalled();
+      expect(mockPrisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            originalLanguage: 'de'
+          })
+        })
+      );
+      expect(mockPrisma.message.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ originalLanguage: '   ' })
+        })
+      );
+    });
   });
 
   describe('getReadStatusService', () => {
