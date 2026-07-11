@@ -138,12 +138,19 @@ final class CallTranscriptionServiceTests: XCTestCase {
         // TranscriptionSegment.capturedAt. capturedAt must therefore be
         // captured at arrival time in handleRecognizerCallback and threaded
         // through as a parameter, not re-stamped here.
+        //
+        // isFinal: false (with isShowingOverlay true to clear the display
+        // guard) deliberately avoids the isFinal branch, which calls
+        // rotateRecognitionRequest → reinstallTap → a real
+        // AVAudioEngine.inputNode.installTap — unavailable in the unit test
+        // host (same constraint documented on setTranscribingForTesting).
         let (sut, _) = makeSUT()
         sut.setTranscribingForTesting(true)
+        sut.isShowingOverlay = true
         let arrivalTime = Date(timeIntervalSince1970: 1_000)
         sut.applyRecognitionResult(
             text: "Bonjour", speakerId: "user-1", startMs: 0, endMs: 1000,
-            isFinal: true, confidence: 0.9, language: "fr", capturedAt: arrivalTime
+            isFinal: false, confidence: 0.9, language: "fr", capturedAt: arrivalTime
         )
         XCTAssertEqual(sut.segments.first?.capturedAt, arrivalTime)
     }
