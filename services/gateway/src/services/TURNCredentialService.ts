@@ -102,26 +102,29 @@ export class TURNCredentialService {
     //
     // The 2026-06-25 incident happened because that constraint was only
     // documented in prose — nothing actually enforced it, so a bad env value
-    // silently reintroduced the outage. Enforce the floor here: reject it
-    // outright in production/staging (same treatment as a weak TURN_SECRET
-    // above), clamp-and-warn in dev/test so local overrides for other
-    // purposes don't need to think about this floor.
+    // silently reintroduced the outage. Enforce the floor here by clamping UP
+    // to it. Unlike a weak TURN_SECRET (unfixable at runtime → refuse to
+    // start), a low TTL has a strictly-safe correction — a higher TTL still
+    // guarantees credentials outlive any active call — so throwing here buys
+    // no protection and turns a stale env file into a total platform outage:
+    // that is exactly what happened on 2026-07-11, when the previous
+    // throw-on-startup guard met a prod .env still carrying the old 3600s
+    // value and crash-looped the gateway (Traefik 404 on every route). Clamp
+    // everywhere; log at error level in production/staging so monitoring
+    // still surfaces the misconfiguration, warn in dev/test.
     const requestedTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '86400', 10);
     const minTTL = CallCleanupService.MAX_ACTIVE_MS / 1000;
     if (requestedTTL < minTTL) {
+      const clampMessage =
+        `⚠️ TURN_CREDENTIAL_TTL (${requestedTTL}s) is below the ${minTTL}s floor ` +
+        '(CallCleanupService.MAX_ACTIVE_MS) — clamping to the floor. A lower value expires ' +
+        'TURN-relayed calls mid-call once the credential outlives its embedded expiry ' +
+        '(see the 2026-06-25 incident note above). Fix the environment value.';
       if (isProductionOrStaging) {
-        throw new Error(
-          `[SECURITY] TURN_CREDENTIAL_TTL (${requestedTTL}s) must be at least ${minTTL}s ` +
-          '(CallCleanupService.MAX_ACTIVE_MS) in production/staging — a lower value expires ' +
-          'TURN-relayed calls mid-call once the credential outlives its embedded expiry ' +
-          '(see the 2026-06-25 incident note above).'
-        );
+        logger.error(clampMessage);
+      } else {
+        logger.warn(clampMessage);
       }
-      logger.warn(
-        `⚠️ TURN_CREDENTIAL_TTL (${requestedTTL}s) is below the ${minTTL}s floor — clamping. ` +
-        'This value would drop TURN-relayed calls mid-call in production; fine to override for ' +
-        'local testing, but never carry it into a shared/staging environment.'
-      );
     }
     this.credentialTTL = Math.max(requestedTTL, minTTL);
 

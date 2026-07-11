@@ -180,20 +180,29 @@ describe('TURNCredentialService — credential TTL covers max call duration', ()
     });
   });
 
-  it('throws in production when TURN_CREDENTIAL_TTL is below MAX_ACTIVE_MS', () => {
+  // A below-floor TTL is self-correctable in the safe direction (clamping UP
+  // preserves the "credentials outlive any active call" invariant), so unlike
+  // a weak TURN_SECRET it must never take the whole gateway down: the
+  // 2026-07-11 incident was a production crash-loop (total platform outage)
+  // caused by the previous throw-on-startup guard meeting a stale prod env.
+  it('clamps (does NOT throw) in production when TURN_CREDENTIAL_TTL is below MAX_ACTIVE_MS, and logs an error', () => {
     withEnv(
       { TURN_CREDENTIAL_TTL: '600', NODE_ENV: 'production', TURN_SECRET: STRONG_SECRET },
       () => {
-        expect(() => new TURNCredentialService()).toThrow('TURN_CREDENTIAL_TTL');
+        const service = new TURNCredentialService();
+        expect(service.getStatus().credentialTTL).toBe(MAX_ACTIVE_CALL_SECONDS);
+        expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
       }
     );
   });
 
-  it('throws in staging when TURN_CREDENTIAL_TTL is below MAX_ACTIVE_MS', () => {
+  it('clamps (does NOT throw) in staging when TURN_CREDENTIAL_TTL is below MAX_ACTIVE_MS, and logs an error', () => {
     withEnv(
       { TURN_CREDENTIAL_TTL: '7199', NODE_ENV: 'staging', TURN_SECRET: STRONG_SECRET },
       () => {
-        expect(() => new TURNCredentialService()).toThrow('TURN_CREDENTIAL_TTL');
+        const service = new TURNCredentialService();
+        expect(service.getStatus().credentialTTL).toBe(MAX_ACTIVE_CALL_SECONDS);
+        expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
       }
     );
   });
