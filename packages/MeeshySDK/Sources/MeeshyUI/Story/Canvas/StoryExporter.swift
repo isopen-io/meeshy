@@ -56,6 +56,13 @@ public enum StoryExporter {
     ///   - languages: Preferred languages threaded to `StoryRenderer.render`
     ///     so text overlays bake in the chosen language (Prisme Linguistique).
     ///     Empty array bakes the slide's original source text.
+    ///   - watermark: Optional watermark baked bottom-trailing over every
+    ///     frame (see `StoryExportWatermark`). `nil` exports unbranded.
+    ///   - audioResolver: Optional resolver mapping each
+    ///     `StoryAudioPlayerObject` (lanes musique/voix, référencées par
+    ///     `postMediaId`) to a playable local URL. `nil` skips lane audio —
+    ///     only the background video's embedded audio is baked. Unresolved
+    ///     entries are omitted silently (parity with the preview engine).
     ///   - progress: Optional callback receiving the export progress fraction
     ///     in `0.0...1.0`. Polled at ~10Hz against
     ///     `AVAssetExportSession.progress` while the export is running, then
@@ -70,6 +77,8 @@ public enum StoryExporter {
     public static func export(_ slide: StorySlide,
                               to outputURL: URL,
                               languages: [String] = [],
+                              watermark: StoryExportWatermark? = nil,
+                              audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)? = nil,
                               progress: (@Sendable (Double) -> Void)? = nil) async throws {
         let composition = AVMutableComposition()
         // Use the deterministic total duration so every element on the slide
@@ -181,19 +190,32 @@ public enum StoryExporter {
         //      capture l'audio embedded dans le background video (cas le
         //      plus courant pour les vlogs / clips capturés caméra).
         //
-        //      **Sources additionnelles non encore couvertes** — les
-        //      `audioPlayerObjects` (audios fg + bg + voice) référencent
-        //      leurs assets par `postMediaId` plutôt que `mediaURL` direct.
-        //      Les inclure dans l'export nécessite d'injecter un resolver
-        //      `(postMediaId) -> URL?` dans `StoryExporter.export` (et de
-        //      le brancher au StoryItem.media côté caller). Suivi dans
-        //      un commit dédié (cf. PR #283).
-        let audioMix = try await composeBackgroundVideoAudio(
+        //      Les `audioPlayerObjects` (audios fg + bg + voice) référencent
+        //      leurs assets par `postMediaId` : quand l'appelant fournit
+        //      `audioResolver`, ils sont composés en pistes dédiées avec
+        //      fenêtre timeline + volume + fades + loop (bg uniquement).
+        let bgVideoAudioMix = try await composeBackgroundVideoAudio(
             slide: slide,
             composition: composition,
             totalDuration: totalDuration,
             backgroundVideoAsset: backgroundVideoAsset
         )
+        var mixParameters: [AVAudioMixInputParameters] =
+            bgVideoAudioMix?.inputParameters ?? []
+        if let audioResolver {
+            mixParameters += try await composeAudioLanes(
+                slide: slide,
+                composition: composition,
+                totalDuration: totalDuration,
+                resolver: audioResolver
+            )
+        }
+        let audioMix: AVAudioMix? = {
+            guard !mixParameters.isEmpty else { return nil }
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = mixParameters
+            return mix
+        }()
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.frameDuration = CMTime(value: 1, timescale: 60) // 60 fps master
@@ -203,7 +225,8 @@ public enum StoryExporter {
             StoryCompositionInstruction(
                 slide: slide,
                 languages: languages,
-                timeRange: CMTimeRange(start: .zero, duration: totalDuration)
+                timeRange: CMTimeRange(start: .zero, duration: totalDuration),
+                watermark: watermark
             )
         ]
 
@@ -357,6 +380,113 @@ public enum StoryExporter {
         params.setVolume(bgVolume, at: .zero)
         mix.inputParameters = [params]
         return mix
+    }
+
+    // MARK: - Audio lanes (audioPlayerObjects)
+
+    /// Composes the slide's `audioPlayerObjects` (musique, voix — lanes de la
+    /// timeline) into dedicated audio tracks, honouring the timeline window
+    /// (`startTime`/`duration`), `volume`, `fadeIn`/`fadeOut`.
+    ///
+    /// RÈGLE PRODUIT : loop = background uniquement. Un audio background avec
+    /// `loop == true` est répété jusqu'à couvrir sa fenêtre ; un foreground
+    /// portant un flag `loop` hérité joue UNE fois.
+    ///
+    /// Returns the `AVMutableAudioMixInputParameters` needed by tracks whose
+    /// volume/fades differ from nominal — tracks at plain volume 1.0 need no
+    /// entry (AVFoundation plays unlisted tracks at nominal volume).
+    static func composeAudioLanes(
+        slide: StorySlide,
+        composition: AVMutableComposition,
+        totalDuration: CMTime,
+        resolver: @Sendable (StoryAudioPlayerObject) -> URL?
+    ) async throws -> [AVMutableAudioMixInputParameters] {
+        var parameters: [AVMutableAudioMixInputParameters] = []
+
+        for audio in slide.effects.audioPlayerObjects ?? [] {
+            guard let url = resolver(audio) else { continue }
+            let asset = AVURLAsset(url: url)
+            guard let assetTrack = (try? await asset.loadTracks(withMediaType: .audio))?.first,
+                  let assetDuration = try? await asset.load(.duration),
+                  assetDuration > .zero else { continue }
+
+            let start = CMTime(seconds: Double(max(0, audio.startTime ?? 0)),
+                               preferredTimescale: 600)
+            guard start < totalDuration else { continue }
+            let available = totalDuration - start
+            let window: CMTime = {
+                guard let declared = audio.duration, declared > 0 else { return available }
+                return CMTimeMinimum(
+                    CMTime(seconds: Double(declared), preferredTimescale: 600),
+                    available
+                )
+            }()
+            let loopsAsBackground = audio.isBackground == true && audio.loop == true
+
+            guard let track = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else {
+                throw StoryExporterError.sessionCreationFailed
+            }
+
+            let insertedEnd: CMTime
+            if loopsAsBackground {
+                var inserted = CMTime.zero
+                while inserted < window {
+                    let remaining = window - inserted
+                    let chunk = CMTimeMinimum(assetDuration, remaining)
+                    try track.insertTimeRange(
+                        CMTimeRange(start: .zero, duration: chunk),
+                        of: assetTrack,
+                        at: start + inserted
+                    )
+                    inserted = inserted + chunk
+                }
+                insertedEnd = start + window
+            } else {
+                let playable = CMTimeMinimum(assetDuration, window)
+                try track.insertTimeRange(
+                    CMTimeRange(start: .zero, duration: playable),
+                    of: assetTrack,
+                    at: start
+                )
+                insertedEnd = start + playable
+            }
+
+            let baseVolume = max(0, min(1, audio.volume))
+            let fadeIn = Double(audio.fadeIn ?? 0)
+            let fadeOut = Double(audio.fadeOut ?? 0)
+            let needsMix = abs(baseVolume - 1.0) > 0.001 || fadeIn > 0.01 || fadeOut > 0.01
+            guard needsMix else { continue }
+
+            let params = AVMutableAudioMixInputParameters(track: track)
+            params.setVolume(baseVolume, at: .zero)
+            if fadeIn > 0.01 {
+                params.setVolumeRamp(
+                    fromStartVolume: 0,
+                    toEndVolume: baseVolume,
+                    timeRange: CMTimeRange(
+                        start: start,
+                        duration: CMTime(seconds: fadeIn, preferredTimescale: 600)
+                    )
+                )
+            }
+            if fadeOut > 0.01 {
+                let rampDuration = CMTime(seconds: fadeOut, preferredTimescale: 600)
+                let rampStart = insertedEnd - rampDuration
+                if rampStart > start {
+                    params.setVolumeRamp(
+                        fromStartVolume: baseVolume,
+                        toEndVolume: 0,
+                        timeRange: CMTimeRange(start: rampStart, duration: rampDuration)
+                    )
+                }
+            }
+            parameters.append(params)
+        }
+
+        return parameters
     }
 
     // MARK: - Synthetic video track (static-only slides)

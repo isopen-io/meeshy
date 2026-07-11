@@ -122,7 +122,6 @@ public final class StoryDraftStore: @unchecked Sendable {
         audioURLs: [String: URL]
     ) {
         ensureMediaDir()
-        let fm = FileManager.default
 
         do {
             try db.write { db in
