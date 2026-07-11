@@ -323,9 +323,48 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
+    func test_transcriptOverlay_callSite_isGatedOnVideoUIActive() throws {
+        // Regression guard for the 2026-07-11 fix: transcriptOverlay used to
+        // run unconditionally, so on an audio call with captions on, the SAME
+        // transcriptSegmentsList rendered TWICE — once via the structural
+        // transcriptPanel, once via the floating transcriptOverlay.
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "if callManager.isVideoUIActive {\n                transcriptOverlay\n            }") else {
+            XCTFail("transcriptOverlay's call site must be gated on callManager.isVideoUIActive")
+            return
+        }
+        _ = range
+    }
+
+    func test_transcriptSegmentRow_showsElapsedTimeSinceCallStart() throws {
+        // User-requested 2026-07-11: each line carries a small "since call
+        // start" timestamp, derived from capturedAt (wall clock) against
+        // callManager.callStartDate — never from startTime/endTime (those are
+        // ASR-buffer-relative, see TranscriptionSegment.capturedAt).
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+            XCTFail("CallView must define transcriptSegmentRow(_:)")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("segment.capturedAt.timeIntervalSince(callManager.callStartDate"),
+            "transcriptSegmentRow must compute elapsed time from segment.capturedAt against " +
+            "callManager.callStartDate, not from the ASR-relative startTime/endTime."
+        )
+        XCTAssertTrue(
+            body.contains("CallManager.formatDuration"),
+            "transcriptSegmentRow must reuse CallManager.formatDuration for the elapsed-time label " +
+            "instead of a new formatter."
+        )
+    }
+
     func test_connectedView_stillReferencesUnmovedElements() throws {
         // Regression guard: the layout restructuring must not drop or relocate
-        // pipView / reconnectingBanner / showEffectsToolbar's trigger — spec risk table.
+        // pipView / showEffectsToolbar's trigger — spec risk table. (The
+        // reconnectingBanner this guard used to also name was removed
+        // 2026-07-11 — see test_reconnecting_usesCompactStatusPill_notFullScreenBanner.)
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
         guard let range = view.range(of: "private var connectedView: some View {") else {
             XCTFail("CallView must define connectedView")

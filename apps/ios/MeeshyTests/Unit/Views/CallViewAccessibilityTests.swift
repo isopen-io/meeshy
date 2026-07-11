@@ -155,49 +155,22 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     // MARK: - Reduce Motion in FloatingCallPillView
 
-    private func islandEmergingBannerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/IslandEmergingBanner.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    func test_reconnectingBanner_usesReduceMotionForTransition() throws {
-        // The banner's motion moved into IslandEmergingBanner (Dynamic Island
-        // emergence). The a11y invariant survives relocated: the builder must
-        // hand `reduceMotion` to the wrapper, and the wrapper must collapse to
-        // a static fade-only presentation when it is set — the emergence
-        // movement can trigger vestibular discomfort.
+    func test_reconnecting_usesCompactStatusPill_notFullScreenBanner() throws {
+        // Regression guard for the 2026-07-11 fix: callState == .reconnecting
+        // used to overlay a full-screen IslandEmergingBanner (with an
+        // unconstrained ProgressView) that a real device showed covering the
+        // whole screen. It must now render as a small, bounded statusPill
+        // alongside the other call status indicators instead.
         let source = try callViewSource()
-        guard let builderRange = source.range(of: "private var reconnectingBanner") else {
-            XCTFail("CallView must have a reconnectingBanner builder")
-            return
-        }
-        let end = source.index(builderRange.lowerBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[builderRange.lowerBound ..< end])
-        XCTAssertTrue(
-            vicinity.contains("IslandEmergingBanner"),
-            "The reconnecting banner must be wrapped in IslandEmergingBanner so its " +
-            "motion policy is centralised with the other call banners."
+        XCTAssertFalse(
+            source.contains("private var reconnectingBanner"),
+            "The full-screen reconnecting banner must be removed — .reconnecting now " +
+            "renders via the compact statusPill row, matching the other call indicators."
         )
         XCTAssertTrue(
-            vicinity.contains("reduceMotion"),
-            "The reconnecting banner must forward `reduceMotion` to IslandEmergingBanner " +
-            "so motion-sensitive users get a static presentation."
-        )
-
-        let wrapper = try islandEmergingBannerSource()
-        XCTAssertTrue(
-            wrapper.contains("reduceMotion"),
-            "IslandEmergingBanner must honour the forwarded reduceMotion flag."
-        )
-        XCTAssertTrue(
-            wrapper.contains("!reduceMotion"),
-            "IslandEmergingBanner must disable the emergence animation when " +
-            "reduceMotion is set (render directly at the settled position)."
+            source.contains("if case .reconnecting = callManager.callState {"),
+            "The .reconnecting state must be handled inline where the other status " +
+            "pills live (audioCallLayout status row / videoCallLayout duration badge)."
         )
     }
 
@@ -449,7 +422,7 @@ final class CallViewAccessibilityTests: XCTestCase {
     /// overlay badge, cf. test_signalGlyph_isMountedInDurationBadges) — these two tests must
     /// scope their search to the SECOND (video) occurrence, inside videoCallLayout, or they'd
     /// silently inspect the unrelated audio-layout mount instead.
-    private func videoDurationBadgeVicinity(_ source: String, window: Int = 1400) -> String {
+    private func videoDurationBadgeVicinity(_ source: String, window: Int = 2200) -> String {
         guard let layoutRange = source.range(of: "private var videoCallLayout: some View {") else {
             XCTFail("CallView must define videoCallLayout")
             return ""
@@ -549,7 +522,7 @@ final class IslandBannerEmergenceTransitionTests: XCTestCase {
 
     func test_callSites_haveNoExternalTransition_thatWouldOverrideEmergence() throws {
         let callView = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let start = callView.range(of: "showsReconnectingBanner: Bool"),
+        guard let start = callView.range(of: "if showRemoteQualityAlertPill {"),
               let end = callView.range(of: "Effects overlay") else {
             XCTFail("CallView banner block markers not found")
             return

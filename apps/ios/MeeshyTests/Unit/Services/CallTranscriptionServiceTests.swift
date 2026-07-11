@@ -19,7 +19,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
         endTime: TimeInterval = 1,
         isFinal: Bool = false,
         confidence: Double = 0.9,
-        language: String = "en"
+        language: String = "en",
+        capturedAt: Date = Date()
     ) -> TranscriptionSegment {
         TranscriptionSegment(
             id: UUID(),
@@ -29,7 +30,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
             endTime: endTime,
             isFinal: isFinal,
             confidence: confidence,
-            language: language
+            language: language,
+            capturedAt: capturedAt
         )
     }
 
@@ -73,6 +75,33 @@ final class CallTranscriptionServiceTests: XCTestCase {
         sut.resetForCallEnd()
 
         XCTAssertTrue(sut.segments.isEmpty)
+    }
+
+    func test_displayedSegments_doesNotTruncateBeyondFive() {
+        // Regression guard for the 2026-07-11 fix: displayedSegments used to
+        // cap at the last 5 (`maxDisplayedSegments`), which made older lines
+        // vanish instead of scrolling — wrong now that the transcript panel
+        // is a real scrollable surface, not a floating overlay.
+        let (sut, _) = makeSUT()
+        for i in 0 ..< 8 {
+            sut.receiveTranslatedSegment(makeSegment(text: "segment-\(i)", speakerId: "remote-user", isFinal: true, capturedAt: Date(timeIntervalSince1970: Double(i))))
+        }
+        XCTAssertEqual(sut.displayedSegments.count, 8)
+        XCTAssertEqual(sut.displayedSegments.first?.text, "segment-0")
+        XCTAssertEqual(sut.displayedSegments.last?.text, "segment-7")
+    }
+
+    func test_appendSegment_sortsByCapturedAt_notByAsrRelativeStartTime() {
+        // startTime is ASR-buffer-relative and resets on every recognition
+        // rotation — sorting on it would scramble a speaker's own consecutive
+        // utterances. capturedAt (wall clock) must drive the order instead.
+        let (sut, _) = makeSUT()
+        let earlier = Date(timeIntervalSince1970: 100)
+        let later = Date(timeIntervalSince1970: 200)
+        // "second" has a LOWER startTime (buffer reset) but a LATER capturedAt.
+        sut.receiveTranslatedSegment(makeSegment(text: "first", startTime: 10, isFinal: true, capturedAt: earlier))
+        sut.receiveTranslatedSegment(makeSegment(text: "second", startTime: 0, isFinal: true, capturedAt: later))
+        XCTAssertEqual(sut.segments.map(\.text), ["first", "second"])
     }
 
     func test_receiveTranslatedSegment_appendsToSegments() {
@@ -275,6 +304,7 @@ final class TranscriptionSegmentTests: XCTestCase {
 
     func test_segment_storesAllProperties() {
         let id = UUID()
+        let capturedAt = Date()
         let segment = TranscriptionSegment(
             id: id,
             text: "hello world",
@@ -285,7 +315,8 @@ final class TranscriptionSegmentTests: XCTestCase {
             confidence: 0.95,
             language: "en",
             translatedText: "bonjour le monde",
-            translatedLanguage: "fr"
+            translatedLanguage: "fr",
+            capturedAt: capturedAt
         )
 
         XCTAssertEqual(segment.id, id)
@@ -298,6 +329,7 @@ final class TranscriptionSegmentTests: XCTestCase {
         XCTAssertEqual(segment.language, "en")
         XCTAssertEqual(segment.translatedText, "bonjour le monde")
         XCTAssertEqual(segment.translatedLanguage, "fr")
+        XCTAssertEqual(segment.capturedAt, capturedAt)
     }
 
     func test_segment_translationFieldsDefaultToNil() {
@@ -309,7 +341,8 @@ final class TranscriptionSegmentTests: XCTestCase {
             endTime: 1,
             isFinal: false,
             confidence: 0.8,
-            language: "en"
+            language: "en",
+            capturedAt: Date()
         )
 
         XCTAssertNil(segment.translatedText)
@@ -318,8 +351,9 @@ final class TranscriptionSegmentTests: XCTestCase {
 
     func test_segment_equatable() {
         let id = UUID()
-        let a = TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en")
-        let b = TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en")
+        let capturedAt = Date()
+        let a = TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
+        let b = TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
         XCTAssertEqual(a, b)
     }
 }

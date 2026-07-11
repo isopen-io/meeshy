@@ -390,7 +390,11 @@ final class CallManager: ObservableObject {
     /// is fulfilled. Calling reportOutgoingCall on the callee silently no-ops
     /// and the Phone-app Recents entry shows no duration.
     private var lastCallWasOutgoing: Bool = false
-    private var callStartDate: Date?
+    /// `private(set)` (not `private`) so CallView can compute a "since call
+    /// start" elapsed time for each live-caption row — the only other
+    /// existing consumer of call timing is `callDuration`, which is a ticking
+    /// counter, not a fixed reference point captions can anchor to.
+    private(set) var callStartDate: Date?
     /// True dès que la PREMIÈRE connexion média de cet appel a eu lieu (chrono
     /// démarré). CallView s'en sert pour ne rendre le layout connecté en
     /// `.reconnecting` que si un média a réellement existé — un ICE restart
@@ -3565,8 +3569,12 @@ final class CallManager: ObservableObject {
     /// `text` ALWAYS carries the ORIGINAL (untranslated) text — never overwritten by
     /// `translatedText` — so the UI can offer an original/translated toggle
     /// (`docs/superpowers/specs/2026-07-11-call-captions-multispeaker-design.md`).
-    /// `static` and pure (no captured state) so it's directly unit-testable without
-    /// standing up a full `CallManager` + mock socket.
+    /// `static` and testable without standing up a full `CallManager` + mock
+    /// socket — the only non-deterministic input is `capturedAt` (wall clock
+    /// at receipt, used for ordering + the "since call start" timestamp
+    /// shown per row; `startMs`/`endMs` are the ORIGINATING device's
+    /// ASR-buffer-relative timings and unsuitable for either — see
+    /// `TranscriptionSegment.capturedAt` doc comment).
     static func makeTranscriptionSegment(from event: CallTranslatedSegmentData) -> TranscriptionSegment {
         let seg = event.segment
         return TranscriptionSegment(
@@ -3579,7 +3587,8 @@ final class CallManager: ObservableObject {
             confidence: seg.confidence,
             language: seg.targetLanguage,
             translatedText: seg.translatedText,
-            translatedLanguage: seg.translatedText != nil ? seg.targetLanguage : nil
+            translatedLanguage: seg.translatedText != nil ? seg.targetLanguage : nil,
+            capturedAt: Date()
         )
     }
 

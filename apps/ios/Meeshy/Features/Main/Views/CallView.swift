@@ -152,49 +152,35 @@ struct CallView: View {
             // `.padding(.horizontal, 56)` garde la capsule à droite du chevron
             // minimize (leading, 40 pt + marges) — le texte long wrappe sur 2
             // lignes au lieu de passer dessous.
-            let showsReconnectingBanner: Bool = {
-                if case .reconnecting = callManager.callState { return callManager.hasEstablishedMedia }
-                return false
-            }()
-
-            // §4.3 — reconnecting banner over the frozen last frame while an ICE
-            // restart recovers. Même gate que le layout : pré-établissement,
-            // connectingView affiche déjà "Connexion…" — pas de bannière.
-            if showsReconnectingBanner {
-                // P2-iOS-9 / 2026-07-03 — le mouvement (émergence de l'île À
-                // L'INSERTION, retour dans l'île AU RETRAIT) est porté par la
-                // transition interne d'IslandEmergingBanner. Ne PAS reposer de
-                // .transition ici : une transition externe écrase l'interne et
-                // la capsule disparaîtrait en fondu sur place.
-                reconnectingBanner
-                    .padding(.horizontal, 56)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
+            //
+            // §4.3 — l'ancien bandeau plein-écran "Reconnexion…" (IslandEmergingBanner
+            // + ProgressView) a été retiré (user-reported 2026-07-11 : l'indicateur
+            // jaune couvrait tout l'écran). L'état `.reconnecting` est maintenant
+            // porté UNIQUEMENT par une pill compacte dans la même "queue" que les
+            // autres indicateurs de statut (statusPill dans audioCallLayout, glyphe
+            // inline dans le badge durée de videoCallLayout) — jamais par un overlay
+            // plein-écran. VoiceOver reste notifié via l'annonce a11y ci-dessous.
 
             // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
             // when the remote end reports sustained poor stats; CallManager sets
             // `isRemoteQualityDegraded`. La pill est TRANSITOIRE (auto-retrait
             // après `qualityAlertPillSeconds`) — l'état qui persiste vit dans le
             // glyphe signal + la status pill « Réseau faible (contact) ».
-            // Stacked below the reconnecting banner so both can coexist.
             if showRemoteQualityAlertPill {
                 remoteQualityDegradedBanner
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, showsReconnectingBanner ? 52 : 0)
             }
 
             // EXIGENCE №1 — signaling dégradé : le socket est tombé pendant un
             // appel établi. Le média P2P continue ; annonce ponctuelle, empilée
-            // sous les bannières reconnexion/qualité éventuelles — l'état
-            // persistant est porté par la status pill dédiée.
+            // sous la bannière qualité éventuelle — l'état persistant est porté
+            // par la status pill dédiée.
             if showSignalingAlertPill {
-                let stackedOffset: CGFloat = (showsReconnectingBanner ? 52 : 0)
-                    + (showRemoteQualityAlertPill ? 44 : 0)
                 signalingDegradedBanner
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, stackedOffset)
+                    .padding(.top, showRemoteQualityAlertPill ? 44 : 0)
             }
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement
@@ -731,8 +717,15 @@ struct CallView: View {
                     .animation(.easeInOut(duration: 0.25), value: showControls)
             }
 
-            // Transcript overlay
-            transcriptOverlay
+            // Transcript overlay — video calls ONLY (transcriptOverlay's own doc
+            // comment). Audio calls use the structural transcriptPanel instead
+            // (rendered above, in the VStack). This call site used to run
+            // unconditionally, so on an audio call with captions on, the SAME
+            // transcriptSegmentsList rendered TWICE (once in transcriptPanel,
+            // once here) — user-reported 2026-07-11.
+            if callManager.isVideoUIActive {
+                transcriptOverlay
+            }
 
             // Live captions toggle — floating vertical control on the trailing
             // edge, kept OUT of controlButtonsRow (user feedback 2026-07-10:
@@ -860,6 +853,12 @@ struct CallView: View {
 
             // Status indicators
             HStack(spacing: 12) {
+                // §4.3 — reconnexion ICE en cours : remplace l'ancien bandeau
+                // plein-écran (user-reported 2026-07-11) par une pill compacte,
+                // au même endroit que les autres indicateurs de statut.
+                if case .reconnecting = callManager.callState {
+                    statusPill(icon: "arrow.triangle.2.circlepath", text: String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main), color: MeeshyColors.warning)
+                }
                 if callManager.isMuted {
                     statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupe", bundle: .main), color: MeeshyColors.error)
                 }
@@ -963,40 +962,15 @@ struct CallView: View {
         if callManager.isRemoteQualityDegraded {
             parts.append(String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main))
         }
+        if case .reconnecting = callManager.callState {
+            parts.append(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
+        }
         return parts.joined(separator: ", ")
     }
 
     /// §4.3 — reconnecting banner shown over the frozen call layout while an
     /// ICE restart recovers a dropped connection (warning-tinted capsule with a
     /// spinner). The call is NOT torn down; the peer's last frame stays visible.
-    private var reconnectingBanner: some View {
-        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.92), reduceMotion: reduceMotion) {
-            HStack(spacing: 8) {
-                // Explicit frame — ProgressView(.circular) has no bounded
-                // intrinsic size and expands to fill whatever it's proposed;
-                // under this banner's ancestor .frame(maxWidth: .infinity,
-                // maxHeight: .infinity) (line ~170), an unconstrained
-                // ProgressView (and its IslandEmergingBanner background
-                // Capsule with it) grew to cover the whole screen. .scaleEffect
-                // is a pure render transform (see IslandEmergingBanner's own
-                // doc comment) — it never constrains layout size, so it did
-                // not protect against this. Found 2026-07-10 on a real device
-                // during a reconnecting call.
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .frame(width: 14, height: 14)
-                Text(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
-    }
-
     /// §4.4 — remote peer quality alert. Présentée PONCTUELLEMENT (flag
     /// `showRemoteQualityAlertPill`, auto-expirant) quand `call:quality-alert`
     /// fait basculer `isRemoteQualityDegraded` ; l'état persistant vit dans la
@@ -1097,6 +1071,17 @@ struct CallView: View {
                             Image(systemName: "wifi.exclamationmark")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(MeeshyColors.warning)
+                        }
+                        // §4.3 — même remplacement pill-compacte qu'en audio
+                        // (voir audioCallLayout) : pas de bandeau plein-écran.
+                        // No per-icon .accessibilityLabel — the badge is one
+                        // opaque element (children: .ignore below); this
+                        // state is folded into videoDurationBadgeAccessibilityLabel.
+                        if case .reconnecting = callManager.callState {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(MeeshyColors.warning)
+                                .accessibilityHidden(true)
                         }
                     }
                     // The parent's own .accessibilityLabel below already makes this
@@ -1471,6 +1456,11 @@ struct CallView: View {
     /// My own speech is never translated for myself (`text` is already in my
     /// language); the interlocutor's speech shows `translatedText ?? text` by
     /// default, or `text` (original) when `showOriginalText` is on.
+    /// Each row also carries a small "since call start" timestamp (mm:ss)
+    /// above the text — user-requested 2026-07-11 — computed from
+    /// `segment.capturedAt` (wall clock) against `callManager.callStartDate`,
+    /// never from `startTime`/`endTime` (ASR-buffer-relative, see
+    /// `TranscriptionSegment.capturedAt` doc comment).
     @ViewBuilder
     private func transcriptSegmentRow(_ segment: TranscriptionSegment) -> some View {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
@@ -1480,18 +1470,27 @@ struct CallView: View {
         let speakerName = isLocal ? localName : remoteName
         let speakerColor = isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
         let displayText = isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
+        let elapsed = segment.capturedAt.timeIntervalSince(callManager.callStartDate ?? segment.capturedAt)
+        let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
 
         VStack(alignment: .leading, spacing: 2) {
-            Text(speakerName)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(speakerColor)
+            HStack(spacing: 6) {
+                Text(speakerName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(speakerColor)
+                Spacer()
+                Text(elapsedLabel)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundColor(.white.opacity(0.45))
+                    .accessibilityHidden(true)
+            }
             Text(displayText)
                 .font(.callout.weight(segment.isFinal ? .regular : .light))
                 .foregroundColor(.white)
                 .opacity(segment.isFinal ? 1.0 : 0.7)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(speakerName) : \(displayText)")
+        .accessibilityLabel("\(speakerName), \(elapsedLabel) : \(displayText)")
     }
 
     // MARK: - Ended

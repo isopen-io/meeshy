@@ -6141,6 +6141,8 @@ final class CallManagerTranscriptionMappingTests: XCTestCase {
         XCTAssertTrue(segment.isFinal)
         XCTAssertEqual(segment.confidence, 0.95, accuracy: 0.001)
         XCTAssertEqual(segment.language, "en")
+        XCTAssertEqual(segment.capturedAt.timeIntervalSinceNow, 0, accuracy: 2.0,
+                        "capturedAt must be stamped at receipt time (wall clock), not derived from the ASR-relative startMs/endMs")
     }
 
     func test_makeTranscriptionSegment_withoutTranslation_translatedFieldsAreNil() throws {

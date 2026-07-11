@@ -27,6 +27,16 @@ struct TranscriptionSegment: Identifiable, Equatable {
     let language: String
     let translatedText: String?
     let translatedLanguage: String?
+    /// Wall-clock capture time — LOCAL segments stamp it when the ASR result
+    /// arrives, REMOTE segments stamp it on socket receipt (see
+    /// `CallManager.makeTranscriptionSegment`). Used for chronological
+    /// ordering and for the "since call start" timestamp shown per row —
+    /// `startTime`/`endTime` are ASR-buffer-relative (they reset every time
+    /// `CallTranscriptionService.rotateRecognitionRequest` rotates the
+    /// recognition request) and are unsuitable for either. No default: every
+    /// call site must decide this deliberately rather than inherit a stale
+    /// `Date()` evaluated at type-definition time.
+    let capturedAt: Date
 
     init(
         id: UUID,
@@ -38,7 +48,8 @@ struct TranscriptionSegment: Identifiable, Equatable {
         confidence: Double,
         language: String,
         translatedText: String? = nil,
-        translatedLanguage: String? = nil
+        translatedLanguage: String? = nil,
+        capturedAt: Date
     ) {
         self.id = id
         self.text = text
@@ -50,6 +61,7 @@ struct TranscriptionSegment: Identifiable, Equatable {
         self.language = language
         self.translatedText = translatedText
         self.translatedLanguage = translatedLanguage
+        self.capturedAt = capturedAt
     }
 }
 
@@ -120,7 +132,6 @@ protocol CallTranscriptionServiceProviding {
 final class CallTranscriptionService: ObservableObject, CallTranscriptionServiceProviding {
 
     private enum Constants {
-        static let maxDisplayedSegments = 5
         static let segmentRetentionLimit = 50
     }
 
@@ -134,8 +145,13 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// emitted regardless, since they also feed the other participant's view.
     @Published var isShowingOverlay: Bool = false
 
+    /// The full retained history (bounded only by `segmentRetentionLimit`),
+    /// not a short tail — the transcript panel is a real scrollable surface
+    /// now (not a floating overlay with limited space), so segments must
+    /// scroll out of view rather than vanish once more than a handful pile
+    /// up. User-reported 2026-07-11.
     var displayedSegments: [TranscriptionSegment] {
-        Array(segments.suffix(Constants.maxDisplayedSegments))
+        segments
     }
 
     private let socket: any MessageSocketProviding
@@ -518,7 +534,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         let segment = TranscriptionSegment(
             id: UUID(), text: text, speakerId: speakerId,
             startTime: Double(startMs) / 1000, endTime: Double(endMs) / 1000,
-            isFinal: isFinal, confidence: confidence, language: language
+            isFinal: isFinal, confidence: confidence, language: language,
+            capturedAt: Date()
         )
         appendSegment(segment)
 
@@ -577,7 +594,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         if allSegments.count > Constants.segmentRetentionLimit {
             allSegments = Array(allSegments.suffix(Constants.segmentRetentionLimit))
         }
-        segments = allSegments.sorted { $0.startTime < $1.startTime }
+        // Sorted on capturedAt (wall clock), not startTime — startTime is
+        // ASR-buffer-relative and resets on every recognition-request
+        // rotation, which would scramble the order of a local speaker's own
+        // consecutive utterances once more than one final segment has fired.
+        segments = allSegments.sorted { $0.capturedAt < $1.capturedAt }
     }
 
     private func mapAuthorizationStatus(_ status: SFSpeechRecognizerAuthorizationStatus) -> TranscriptionPermission {
