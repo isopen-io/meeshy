@@ -1297,6 +1297,40 @@ export class CallEventsHandler {
   }
 
   /**
+   * Live-call message — post the "Appel audio/vidéo en cours" system message
+   * right after `call:initiate` succeeds (`kind: 'call-live'`, same
+   * deterministic clientMessageId as the terminal summary, which will edit it
+   * in-place). Same retry envelope as `postCallSummary`; failures are logged
+   * and NEVER affect call setup — the terminal path then simply falls back to
+   * creating the summary, the exact pre-live behaviour.
+   */
+  private async postLiveCallMessage(callId: string, attempt = 1): Promise<void> {
+    const MAX_ATTEMPTS = 3;
+    const BASE_DELAY_MS = 1000;
+    try {
+      const message = await this.callService.createLiveCallMessage(callId);
+      if (!message || !this.messageBroadcaster) {
+        return;
+      }
+      await this.messageBroadcaster(message, message.conversationId);
+    } catch (error) {
+      logger.error('[CallEventsHandler] Failed to post live call message', {
+        callId,
+        attempt,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise<void>(resolve => setTimeout(resolve, BASE_DELAY_MS * attempt));
+        return this.postLiveCallMessage(callId, attempt + 1);
+      }
+      logger.error('[CallEventsHandler] Giving up on live call message after max attempts', {
+        callId,
+        maxAttempts: MAX_ATTEMPTS
+      });
+    }
+  }
+
+  /**
    * Setup call-related event listeners on socket
    * CVE-004: Added getUserInfo callback to check if user is anonymous
    */
@@ -1591,6 +1625,13 @@ export class CallEventsHandler {
             iceServers: initiatorIceServers,
             ttl: this.callService.getIceServerTtl(),
           }
+        });
+
+        // Live-call message — fire-and-forget, AFTER the ack: the "Appel …
+        // en cours" bubble must never gate (or fail) the call setup.
+        /* istanbul ignore next -- postLiveCallMessage has its own internal catch and never rejects */
+        this.postLiveCallMessage(callSession.id).catch((err) => {
+          logger.error('❌ postLiveCallMessage failed after initiate', { callId: callSession.id, err });
         });
 
         // Get all conversation participants to notify (excluding initiator)

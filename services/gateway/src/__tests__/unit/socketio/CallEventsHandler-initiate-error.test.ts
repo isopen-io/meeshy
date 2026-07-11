@@ -26,6 +26,7 @@ jest.mock('../../../services/CallService', () => ({
     generateIceServers: mockGenerateIceServers4,
     scheduleRingingTimeout: mockScheduleRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage4,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     clearRingingTimeout: jest.fn<any>(),
     endCall: jest.fn<any>(),
     leaveCall: jest.fn<any>(),

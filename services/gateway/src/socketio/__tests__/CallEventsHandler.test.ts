@@ -29,6 +29,7 @@ const mockCallServicePersistCallStats = jest.fn() as jest.Mock<any>;
 const mockCallServiceRecordParticipantBackgrounded = jest.fn() as jest.Mock<any>;
 const mockCallServiceClearParticipantBackgrounded = jest.fn() as jest.Mock<any>;
 const mockCallServiceCreateCallSummaryMessage = jest.fn() as jest.Mock<any>;
+const mockCallServiceCreateLiveCallMessage = jest.fn() as jest.Mock<any>;
 const mockCallServiceReleaseActiveCallClaim = jest.fn() as jest.Mock<any>;
 const mockCallServiceForceEndOrphanedCallSession = jest.fn() as jest.Mock<any>;
 
@@ -50,6 +51,7 @@ jest.mock('../../services/CallService', () => ({
     recordHeartbeat: (...a: unknown[]) => mockCallServiceRecordHeartbeat(...a),
     persistCallStats: (...a: unknown[]) => mockCallServicePersistCallStats(...a),
     createCallSummaryMessage: (...a: unknown[]) => mockCallServiceCreateCallSummaryMessage(...a),
+    createLiveCallMessage: (...a: unknown[]) => mockCallServiceCreateLiveCallMessage(...a),
     recordParticipantBackgrounded: (...a: unknown[]) => mockCallServiceRecordParticipantBackgrounded(...a),
     clearParticipantBackgrounded: (...a: unknown[]) => mockCallServiceClearParticipantBackgrounded(...a),
     releaseActiveCallClaim: (...a: unknown[]) => mockCallServiceReleaseActiveCallClaim(...a),
@@ -338,6 +340,7 @@ describe('CallEventsHandler', () => {
     mockCallServiceRecordHeartbeat.mockReturnValue(undefined);
     mockCallServicePersistCallStats.mockResolvedValue(undefined);
     mockCallServiceCreateCallSummaryMessage.mockResolvedValue(null);
+    mockCallServiceCreateLiveCallMessage.mockResolvedValue(null);
     mockCallServiceRecordParticipantBackgrounded.mockReturnValue(undefined);
     mockCallServiceClearParticipantBackgrounded.mockReturnValue(undefined);
   });
@@ -549,6 +552,55 @@ describe('CallEventsHandler', () => {
       expect(socket.join).toHaveBeenCalledWith(`call:${CALL_ID}`);
       expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
       expect(memberSocket.emit).toHaveBeenCalledWith('call:initiated', expect.objectContaining({ callId: CALL_ID }));
+      expect(mockCallServiceScheduleRingingTimeout).toHaveBeenCalled();
+    });
+
+    it('poste le message d\'appel vivant après l\'ack et le broadcast via messageBroadcaster', async () => {
+      const callSession = makeCallSession();
+      mockCallServiceInitiateCall.mockResolvedValue(callSession);
+      const liveMessage = { id: 'msg-live', conversationId: CONV_ID };
+      mockCallServiceCreateLiveCallMessage.mockResolvedValue(liveMessage);
+      const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
+      const ack = jest.fn();
+
+      const { handler, socket, io } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([{ userId: USER_ID }]),
+        },
+      });
+      handler.setMessageBroadcaster(broadcaster);
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:initiate', validData, ack);
+      await new Promise(r => setImmediate(r));
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+      expect(mockCallServiceCreateLiveCallMessage).toHaveBeenCalledWith(CALL_ID);
+      expect(broadcaster).toHaveBeenCalledWith(liveMessage, CONV_ID);
+    });
+
+    it('un message vivant null (course terminale déjà gagnée) n\'affecte ni l\'ack ni le setup', async () => {
+      const callSession = makeCallSession();
+      mockCallServiceInitiateCall.mockResolvedValue(callSession);
+      mockCallServiceCreateLiveCallMessage.mockResolvedValue(null);
+      const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
+      const ack = jest.fn();
+
+      const { handler, socket, io } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([{ userId: USER_ID }]),
+        },
+      });
+      handler.setMessageBroadcaster(broadcaster);
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:initiate', validData, ack);
+      await new Promise(r => setImmediate(r));
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+      expect(broadcaster).not.toHaveBeenCalled();
       expect(mockCallServiceScheduleRingingTimeout).toHaveBeenCalled();
     });
 

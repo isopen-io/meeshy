@@ -17,6 +17,8 @@ import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals
 const mockEndCall = jest.fn<any>();
 const mockClearRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
+const mockCreateLiveCallMessage = jest.fn<any>();
+const mockInitiateCall = jest.fn<any>();
 const mockGetCallSession = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
@@ -24,10 +26,12 @@ jest.mock('../../../services/CallService', () => ({
     endCall: mockEndCall,
     clearRingingTimeout: mockClearRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
-    initiateCall: jest.fn<any>(),
+    createLiveCallMessage: mockCreateLiveCallMessage,
+    initiateCall: mockInitiateCall,
     joinCall: jest.fn<any>(),
     getCallSession: mockGetCallSession,
     generateIceServers: jest.fn<any>().mockReturnValue([]),
+    getIceServerTtl: jest.fn<any>().mockReturnValue(300),
     scheduleRingingTimeout: jest.fn<any>(),
     listHistory: jest.fn<any>(),
     handleMissedCall: jest.fn<any>(),
@@ -118,6 +122,7 @@ function makePrisma() {
     },
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
   } as unknown as PrismaClient;
 }
@@ -131,6 +136,7 @@ function makeSocket() {
       handlers[event] = fn;
     }),
     emit: directEmit,
+    join: jest.fn<any>().mockResolvedValue(undefined),
     to: jest.fn().mockReturnValue({ emit: jest.fn() }),
     rooms: new Set<string>(['socket-retry-1']),
     data: {},
@@ -253,6 +259,44 @@ describe('CallEventsHandler — postCallSummary retry', () => {
   // -------------------------------------------------------------------------
   // ack must not be gated behind postCallSummary's retry backoff
   // -------------------------------------------------------------------------
+
+  it("acks call:initiate before the live-message retries resolve, and never gates the setup on them", async () => {
+    // postLiveCallMessage keeps failing — the initiate ack and fanout must
+    // settle on their own; the 1s/2s backoff retries stay on the timer queue.
+    mockCreateLiveCallMessage.mockRejectedValue(new Error('transient DB error'));
+    mockInitiateCall.mockResolvedValue({
+      id: CALL_ID,
+      conversationId: CONV_ID,
+      mode: 'p2p',
+      metadata: { type: 'audio' },
+      initiator: { id: CALLER_ID, username: 'caller', displayName: 'Caller', avatar: null },
+      participants: [],
+    });
+
+    const messageBroadcaster = jest.fn<any>().mockResolvedValue(undefined);
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const { io } = makeIo();
+    const ack = jest.fn<any>();
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setMessageBroadcaster(messageBroadcaster);
+    handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+
+    await handlers[CALL_EVENTS.INITIATE](
+      { conversationId: CONV_ID, type: 'audio', settings: {} },
+      ack
+    );
+
+    expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    // Only the first attempt ran; the backoff retries are still pending.
+    expect(mockCreateLiveCallMessage).toHaveBeenCalledTimes(1);
+
+    handler.destroy();
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(mockCreateLiveCallMessage).toHaveBeenCalledTimes(3);
+    expect(messageBroadcaster).not.toHaveBeenCalled();
+  });
 
   it('acks call:end before postCallSummary retries resolve', async () => {
     // Always fail — if the ack were gated on this settling, the handler

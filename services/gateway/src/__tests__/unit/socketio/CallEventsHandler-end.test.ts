@@ -29,6 +29,7 @@ jest.mock('../../../services/CallService', () => ({
     endCall: mockEndCall,
     clearRingingTimeout: mockClearRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
     getCallSession: mockGetCallSession,
   })),
