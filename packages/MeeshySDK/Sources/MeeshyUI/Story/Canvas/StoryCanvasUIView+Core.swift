@@ -122,6 +122,12 @@ extension StoryCanvasUIView {
         // pour ne pas servir un layer obsolète.
         if didChange { rendererCache.invalidate() }
         rebuildLayers()
+        // L'état de closing (opacité / sublayerTransform / mask du rootLayer)
+        // est re-dérivé du playhead à chaque tick de lecture ; entrer dans un
+        // mode repart de l'état neutre pour qu'un replay — ou un retour en
+        // `.edit` après la frame de sortie — n'hérite jamais de l'exit frame
+        // de la lecture précédente.
+        StoryRenderer.resetClosing(rootLayer: rootLayer)
         // Apply slide opening animation when transitioning edit→play at t=0.
         // Runs after rebuildLayers() so the layer tree is fresh.
         if newMode == .play && !wasPlay {

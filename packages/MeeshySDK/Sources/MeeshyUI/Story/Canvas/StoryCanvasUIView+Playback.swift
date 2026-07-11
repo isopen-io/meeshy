@@ -250,6 +250,13 @@ extension StoryCanvasUIView {
         // `clamped >= effectiveDuration` qui fire `onCompletion`.
         onPlaybackTime?(clamped)
         rebuildLayers()
+        // Closing de slide piloté par le playhead : l'état de sortie est
+        // re-dérivé à chaque tick depuis `clamped` (aucune CAAnimation
+        // autonome), donc pause / stall / seek restent frame-exacts.
+        StoryRenderer.applyClosing(slide.effects.closing,
+                                   rootLayer: rootLayer,
+                                   elapsed: clamped,
+                                   totalDuration: effectiveDuration)
         if clamped >= effectiveDuration {
             stopPlayback()
             if !completionFired {
@@ -419,6 +426,10 @@ extension StoryCanvasUIView {
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
         onPlaybackTime?(clamped)
         rebuildLayers()
+        StoryRenderer.applyClosing(slide.effects.closing,
+                                   rootLayer: rootLayer,
+                                   elapsed: clamped,
+                                   totalDuration: effectiveDuration)
         if !completionFired,
            mode == .play,
            currentTime.seconds >= effectiveDuration {

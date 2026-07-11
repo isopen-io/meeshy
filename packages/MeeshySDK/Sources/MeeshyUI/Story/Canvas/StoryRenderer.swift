@@ -200,22 +200,34 @@ public enum StoryRenderer {
             // place (le layer caché garde l'opacité du tick précédent) et le
             // facteur 1.0 hors fenêtre restaure la base. Base fidèle à l'ordre
             // du build : fade envelope (écrase) > opacité keyframes > 1.
-            if mode == .play,
-               let media = item as? StoryMediaObject,
-               let transitions = slide.effects.clipTransitions,
-               transitions.contains(where: { $0.fromClipId == media.id || $0.toClipId == media.id }) {
-                let factor = ReaderTransitionResolver.opacity(
-                    for: media,
-                    transitions: transitions,
-                    currentTime: Float(time.seconds)
-                )
-                let kfOverrides = applyKeyframes(
-                    keyframes: media.keyframes ?? [],
-                    at: time.seconds,
-                    startTime: media.startTime ?? 0
-                )
-                let base = fadeOpacity(item: media, at: time.seconds) ?? kfOverrides.opacity ?? 1.0
-                layer.opacity = Float(base * Double(factor))
+            //
+            // C1 — la même post-passe couvre les médias foreground porteurs
+            // d'une enveloppe fadeIn/fadeOut SANS clipTransition : l'enveloppe
+            // n'entre pas dans l'ItemSignature (même raison que le facteur de
+            // transition), donc l'appliquer seulement au build figerait
+            // l'opacité du tick de construction sur le layer caché.
+            if mode == .play, let media = item as? StoryMediaObject {
+                let transitions = slide.effects.clipTransitions ?? []
+                let isTransitioning = transitions.contains {
+                    $0.fromClipId == media.id || $0.toClipId == media.id
+                }
+                let fade = fadeOpacity(item: media, at: time.seconds)
+                if isTransitioning || fade != nil {
+                    let factor: Float = isTransitioning
+                        ? ReaderTransitionResolver.opacity(
+                            for: media,
+                            transitions: transitions,
+                            currentTime: Float(time.seconds)
+                        )
+                        : 1.0
+                    let kfOverrides = applyKeyframes(
+                        keyframes: media.keyframes ?? [],
+                        at: time.seconds,
+                        startTime: media.startTime ?? 0
+                    )
+                    let base = fade ?? kfOverrides.opacity ?? 1.0
+                    layer.opacity = Float(base * Double(factor))
+                }
             }
 
             // A cached layer might still be attached to the previous frame's
@@ -546,13 +558,32 @@ extension StoryRenderer {
 
 extension StoryRenderer {
 
+    /// Shared duration (seconds) of the slide opening AND closing transitions.
+    public nonisolated static let slideTransitionDuration: Double = 0.5
+
+    /// Peak scale of the `.zoom` transition (opening settles 1.08 → 1.0,
+    /// closing ramps 1.0 → 1.08).
+    nonisolated static let zoomTransitionScale: CGFloat = 1.08
+
+    /// Horizontal travel of the `.slide` transition, as a fraction of the
+    /// canvas width (opening enters from +travel → 0, closing exits 0 → −travel).
+    nonisolated static let slideTransitionTravelFraction: CGFloat = 0.08
+
     /// Applies a slide-opening animation to `rootLayer` at playback position `elapsed`.
     ///
     /// - `.reveal`: attaches a circular `CAShapeLayer` mask and animates its `path`
     ///   from a 1-pt circle to a circle that fully covers the layer bounds.
     /// - `.fade`: adds a `CABasicAnimation` on `opacity` keyed `"opening-fade"`.
-    /// - `.zoom`, `.slide`: reserved for future implementation; currently no-op.
+    /// - `.zoom`: animates `sublayerTransform` from a 1.08 scale down to identity,
+    ///   keyed `"opening-zoom"`.
+    /// - `.slide`: animates `sublayerTransform` from a light horizontal offset
+    ///   (+8% of the canvas width) back to identity, keyed `"opening-slide"`.
     /// - `nil`: no-op.
+    ///
+    /// `.zoom` / `.slide` animate `sublayerTransform` rather than `transform` so
+    /// the model-layer `transform` stays identity: `layoutSubviews` re-assigns
+    /// `rootLayer.frame` and setting `frame` on a transformed layer corrupts its
+    /// geometry.
     ///
     /// Call only when transitioning into `.play` at `elapsed = 0`. The animations use
     /// `fillMode = .forwards` + `isRemovedOnCompletion = false` so the final state
@@ -561,7 +592,7 @@ extension StoryRenderer {
     public static func applyOpening(_ effect: StoryTransitionEffect?,
                                     rootLayer: CALayer,
                                     elapsed: Double) {
-        guard let effect, elapsed < 0.5 else { return }
+        guard let effect, elapsed < slideTransitionDuration else { return }
         switch effect {
         case .reveal:
             let mask = CAShapeLayer()
@@ -579,7 +610,7 @@ extension StoryRenderer {
             let anim = CABasicAnimation(keyPath: "path")
             anim.fromValue = startPath
             anim.toValue = endPath
-            anim.duration = 0.5
+            anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
             mask.add(anim, forKey: "opening-reveal")
@@ -588,13 +619,140 @@ extension StoryRenderer {
             let anim = CABasicAnimation(keyPath: "opacity")
             anim.fromValue = 0
             anim.toValue = 1
-            anim.duration = 0.5
+            anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
             rootLayer.add(anim, forKey: "opening-fade")
 
-        case .zoom, .slide:
-            break   // reserved — no-op in current phase
+        case .zoom:
+            let anim = CABasicAnimation(keyPath: "sublayerTransform")
+            anim.fromValue = NSValue(caTransform3D: CATransform3DMakeScale(
+                zoomTransitionScale, zoomTransitionScale, 1))
+            anim.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+            anim.duration = slideTransitionDuration
+            anim.fillMode = .forwards
+            anim.isRemovedOnCompletion = false
+            rootLayer.add(anim, forKey: "opening-zoom")
+
+        case .slide:
+            let travel = rootLayer.bounds.width * slideTransitionTravelFraction
+            let anim = CABasicAnimation(keyPath: "sublayerTransform")
+            anim.fromValue = NSValue(caTransform3D: CATransform3DMakeTranslation(travel, 0, 0))
+            anim.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+            anim.duration = slideTransitionDuration
+            anim.fillMode = .forwards
+            anim.isRemovedOnCompletion = false
+            rootLayer.add(anim, forKey: "opening-slide")
+        }
+    }
+}
+
+// MARK: - applyClosing
+
+extension StoryRenderer {
+
+    nonisolated static let closingRevealMaskName = "closing-reveal-mask"
+
+    /// Linear exit progress in `[0, 1]` of the slide-closing transition at
+    /// `elapsed`: `0` before `totalDuration − slideTransitionDuration`, ramping
+    /// to `1` at `totalDuration`. Pure arithmetic — `nonisolated` so tests can
+    /// call it without hopping to `@MainActor`.
+    public nonisolated static func closingProgress(totalDuration: Double,
+                                                   at elapsed: Double) -> Double {
+        guard totalDuration.isFinite, totalDuration > 0 else { return 0 }
+        let start = totalDuration - slideTransitionDuration
+        guard elapsed > start else { return 0 }
+        return min(1, (elapsed - start) / slideTransitionDuration)
+    }
+
+    /// Applies the slide-closing transition to `rootLayer` as a pure snapshot of
+    /// the playhead — the symmetric counterpart of `applyOpening`, but driven by
+    /// `render(at:)`-style ticks instead of an autonomous `CAAnimation`. The exit
+    /// state is re-derived from `elapsed` on every call, so pauses, stalls and
+    /// seeks stay frame-exact and Reduce-Motion-safe (no runtime-animated
+    /// transition, opacity/transform are tied to the playhead).
+    ///
+    /// - `.fade`: root opacity ramps `1 → 0`.
+    /// - `.zoom`: `sublayerTransform` scales `1.0 → 1.08` (inverse of the opening).
+    /// - `.slide`: sublayers translate `0 → −8%` of the canvas width.
+    /// - `.reveal`: a circular mask shrinks from covering the canvas to 1 pt.
+    /// - `nil`: no-op.
+    ///
+    /// Before the closing window every call restores the neutral value for the
+    /// configured effect, so a cached/reused root layer never keeps a stale exit
+    /// frame after a seek back or a replay. `sublayerTransform` is used instead
+    /// of `transform` for the same `layoutSubviews` frame-assignment reason as
+    /// the opening.
+    @MainActor
+    public static func applyClosing(_ effect: StoryTransitionEffect?,
+                                    rootLayer: CALayer,
+                                    elapsed: Double,
+                                    totalDuration: Double) {
+        guard let effect else { return }
+        let progress = closingProgress(totalDuration: totalDuration, at: elapsed)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        switch effect {
+        case .fade:
+            rootLayer.opacity = Float(1 - progress)
+
+        case .zoom:
+            let scale = 1 + (zoomTransitionScale - 1) * CGFloat(progress)
+            rootLayer.sublayerTransform = CATransform3DMakeScale(scale, scale, 1)
+
+        case .slide:
+            let travel = rootLayer.bounds.width * slideTransitionTravelFraction
+            rootLayer.sublayerTransform = CATransform3DMakeTranslation(
+                -travel * CGFloat(progress), 0, 0)
+
+        case .reveal:
+            applyClosingReveal(progress: progress, rootLayer: rootLayer)
+        }
+    }
+
+    /// Restores the neutral root-layer state that `applyClosing` may have
+    /// altered (opacity, sublayerTransform, closing mask). Called when a canvas
+    /// (re)enters a mode so a replay — or the next slide reusing the same canvas
+    /// with a different `closing` — never inherits the previous exit frame. Only
+    /// the closing-owned mask is removed; an opening `.reveal` mask is preserved.
+    @MainActor
+    public static func resetClosing(rootLayer: CALayer) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        rootLayer.opacity = 1
+        rootLayer.sublayerTransform = CATransform3DIdentity
+        if rootLayer.mask?.name == closingRevealMaskName {
+            rootLayer.mask = nil
+        }
+    }
+
+    @MainActor
+    private static func applyClosingReveal(progress: Double, rootLayer: CALayer) {
+        guard progress > 0 else {
+            if rootLayer.mask?.name == closingRevealMaskName {
+                rootLayer.mask = nil
+            }
+            return
+        }
+        let mask: CAShapeLayer
+        if let existing = rootLayer.mask as? CAShapeLayer,
+           existing.name == closingRevealMaskName {
+            mask = existing
+        } else {
+            mask = CAShapeLayer()
+            mask.name = closingRevealMaskName
+        }
+        mask.frame = rootLayer.bounds
+        let center = CGPoint(x: rootLayer.bounds.midX, y: rootLayer.bounds.midY)
+        let maxRadius = hypot(rootLayer.bounds.width, rootLayer.bounds.height) / 2
+        let radius = max(1, maxRadius * (1 - CGFloat(progress)))
+        mask.path = UIBezierPath(arcCenter: center, radius: radius,
+                                 startAngle: 0, endAngle: .pi * 2,
+                                 clockwise: true).cgPath
+        if rootLayer.mask !== mask {
+            rootLayer.mask = mask
         }
     }
 }
