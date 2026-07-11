@@ -231,7 +231,13 @@ export function computeStoryDurationMs(effects: Record<string, unknown> | undefi
 
   // Component 2 — long text earns reading time (>30 words → 6s + 1s per 6 words).
   const totalWords = textObjects.reduce((acc, t) => {
-    const text = typeof t.text === 'string' ? t.text.trim() : '';
+    // Mirror parseTextObjects: the canonical key is `text`, `content` is the
+    // decoder-only legacy alias. Without the fallback, legacy overlays keyed
+    // under `content` count as 0 words and the slide auto-advances at 6s.
+    const raw = typeof t.text === 'string'
+      ? t.text
+      : typeof t.content === 'string' ? t.content : '';
+    const text = raw.trim();
     return acc + (text ? text.split(/\s+/).length : 0);
   }, 0);
   const textDur = totalWords > LONG_TEXT_THRESHOLD_WORDS
