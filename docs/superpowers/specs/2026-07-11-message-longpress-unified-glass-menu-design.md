@@ -79,10 +79,17 @@ enum MessageOverlayDragLaw {
 }
 ```
 
-Règles d'outcome :
-- `translation ≤ -80` **ou** `predicted ≤ -160` → `.openMore`
-- `translation ≥ 80` **ou** `predicted ≥ 160` → `.dismiss`
+Règles d'outcome (cohérence de signe — la vélocité seule ne compte que dans la
+direction du drag, ce qui rend les plages disjointes par construction) :
+- `translation ≤ -80` **ou** (`predicted ≤ -160` **et** `translation < 0`) → `.openMore`
+- `translation ≥ 80` **ou** (`predicted ≥ 160` **et** `translation > 0`) → `.dismiss`
 - sinon → `.snapBack`
+
+Preuve de disjonction : chaque branche exige un signe strict de `translation`
+incompatible avec l'autre. Le cas croisé « drag up au-delà du seuil puis fling
+down au relâchement » retombe sur la règle position (`translation ≤ -80` →
+`.openMore`) ; pour annuler, l'utilisateur ramène le doigt sous le seuil avant
+de relâcher (slide-off-to-cancel standard).
 
 Les seuils sont cohérents avec l'existant du fichier (fade threshold 80 pt) et
 l'ancien `swipeDownGesture` (predicted > 60) durci à 80 pour symétrie.
@@ -95,7 +102,12 @@ l'ancien `swipeDownGesture` (predicted > 60) durci à 80 pour symétrie.
   sur la bulle (elle est `allowsHitTesting(false)` pour laisser le tap-fond fermer).
 - Pendant le drag : le **cluster entier** (barre emoji + bulle + menu) suit
   `displayOffset` en `.offset(y:)` — cohésion visuelle ; état local
-  `@State clusterDragOffset: CGFloat`.
+  `@State clusterDragOffset: CGFloat`. Les trois éléments sont des enfants
+  séparés du ZStack positionnés par `.position(...)` : appliquer l'offset aux
+  trois (ou les regrouper dans un `Group`).
+- Si le `DragGesture` posé via `.gesture` avale le feedback de pression des
+  `Button` de la liste, replier sur `.simultaneousGesture` (à valider au
+  simulateur).
 - Franchissement du seuil up (`isArmed` passe à true) : `HapticFeedback.medium()`
   **une seule fois par geste** (flag local réarmé au release).
 - Release : `outcome(translation:predicted:)` →
@@ -107,7 +119,12 @@ l'ancien `swipeDownGesture` (predicted > 60) durci à 80 pour symétrie.
 
 ### Purge du code mort
 
-À supprimer (vérifié : zéro call site hors d'eux-mêmes) :
+**La purge est atomique** : `MessageOverlayMenu.swift` référence encore
+`ContextActionMenu.estimatedSize` (:288) et le type `ContextAction` (:155-195)
+dans son code résiduel jamais rendu — supprimer les fichiers ET purger ces
+résidus dans le même commit, sinon la compile casse entre les deux.
+
+À supprimer (aucun call site vivant — audit revu 2026-07-11) :
 - `apps/ios/Meeshy/Features/Main/Views/MessageContextOverlay.swift` (y compris
   `OverlayPhase` et `withAnimationCompletion`, uniquement consommés par ce chemin)
 - `apps/ios/Meeshy/Features/Main/Views/ContextActionMenu.swift` (y compris le type
@@ -119,15 +136,37 @@ l'ancien `swipeDownGesture` (predicted > 60) durci à 80 pour symétrie.
   suppression ; si un autre usage apparaît à la compile, la relocaliser dans le SDK
   (`ColorGeneration.swift`) plutôt que garder le fichier.
 - Champs `contextOverlay*` de `ConversationOverlayState`
+  (`ConversationView.swift:49-62`) — **préserver** `longPressEnabled` (:39) et
+  `quickReactionAnchorFrame` (:66), qui restent vivants.
 - Dans `MessageOverlayMenu.swift` : `quickActions`, `handleQuickAction`,
-  `quickActionPalette`, la géométrie panneau legacy (`gridVisibleHeight`,
-  `naturalPanelBaseHeight`… jusqu'à `clusterIsInteractive`), `detailPanel`,
-  `panelDragHandle`, `panelDragGesture`, `panelBackground`, `overlayActions`,
-  `@State forceTab`, et l'état `dragOffset` legacy (remplacé par
-  `clusterDragOffset`).
+  `quickActionPalette`, la géométrie panneau legacy — bloc :282-334
+  (`quickActionMenuHeight`… jusqu'à `clusterIsInteractive`) en **préservant**
+  `maxPreviewHeight` / `bubblePreviewScale` / `scaledBubbleHeight` (:274-278,
+  consommés par le chemin native-lean) —, `detailPanel`, `panelDragHandle`,
+  `panelDragGesture`, `panelBackground`, `overlayActions`, `@State forceTab`,
+  l'état `dragOffset` legacy (remplacé par `clusterDragOffset`, y compris le
+  reset dans `onAppear` :502).
+- Props de `MessageOverlayMenu` orphelines après purge (uniquement consommées
+  par `detailPanel`/`overlayActions`) + leurs arguments au call site
+  `ConversationView.swift:1590-1678` : `conversationId`, `onReply`,
+  `onShowThread`, `onReport`, `onDeleteAttachment`, `onSelectTranslation`,
+  `onSelectAudioLanguage`, `onRequestTranslation`. (Répondre / Discussion /
+  Signaler restent accessibles via le menu 2 et les swipes latéraux.)
 - `BubbleAnimations.swift` est **conservé** (`overlayRevealCrossfade` utilisé par
-  `MessageListView`) ; retirer seulement les constantes devenues orphelines si la
-  compile le confirme.
+  `MessageListView`) ; purge des statics orphelins **par grep** (la compile ne
+  signale pas les statics inutilisés) : `overlaySpring`, `overlayDismiss`,
+  `overlayDismissBubble` (orphelins après purge) et `standard`,
+  `reactionFeedback`, `overlayBubble`, `overlayLift`, `overlayMenu`,
+  `overlayMenuScale` (déjà orphelins) ; mettre à jour le doc-comment :29 qui
+  cite `withAnimationCompletion`.
+
+### Projet Xcode (XcodeGen)
+
+`apps/ios/project.yml` globbe les sources, mais le `project.pbxproj` committé
+référence les fichiers supprimés (20 références) et `meeshy.sh` ne lance pas
+XcodeGen. Après toute suppression/ajout de fichier :
+`cd apps/ios && xcodegen generate`, restaurer `CURRENT_PROJECT_VERSION` si
+écrasé, et committer le pbxproj régénéré avec le même commit.
 
 Garder : le chemin legacy `!useSourceFrame` minimal (fallback quand la frame de la
 bulle est inconnue) — sans gestes verticaux.
@@ -148,16 +187,23 @@ bulle est inconnue) — sans gestes verticaux.
 - Menu 1 ouvert sans frame source (`.zero`) → chemin legacy, pas de gestes
   verticaux (hors scope).
 - Le drag ne doit jamais déclencher `.openMore` ET `.dismiss` : les plages sont
-  disjointes par construction (signes opposés).
+  disjointes par construction (chaque branche exige un signe strict de
+  `translation`, la vélocité seule ne compte que dans la direction du drag).
+- Drag up au-delà du seuil puis fling down au relâchement → `.openMore` (règle
+  position) ; l'annulation passe par le slide-off (ramener le doigt sous le
+  seuil avant de relâcher).
 
 ## Tests
 
 - `apps/ios/MeeshyTests/Unit/Components/MessageOverlayDragLawTests.swift` (TDD,
   à côté de `MessageActionResolverTests`) : outcome up fort / up faible / vélocité
-  seule / down fort / down faible / zéro ; `displayOffset` 1:1 sous le seuil,
-  amorti et monotone au-delà ; `isArmed` exactement au seuil.
+  seule (dans le sens du drag) / **cas croisé translation ≤ -80 avec fling down**
+  (→ `.openMore`) / **vélocité inverse au drag ignorée** / down fort / down
+  faible / zéro ; `displayOffset` 1:1 sous le seuil, amorti et monotone au-delà ;
+  `isArmed` exactement au seuil.
 - Suppression de `MessageOverlayLayoutEngineTests` (avec le moteur).
-- `./apps/ios/meeshy.sh build` vert + suite ciblée sur simulateur 18.2.
+- `xcodegen generate` après ajout/suppression de fichiers, puis
+  `./apps/ios/meeshy.sh build` vert + suite ciblée sur simulateur 18.2.
 - Vérification visuelle simulateur : long-press → menu 1 unifié ; swipe-up fort →
   menu 2 ; swipe-up faible → retour ; swipe-down → fermeture ; taps rows intacts ;
   scroll barre emoji intact.
