@@ -171,8 +171,17 @@ export class MessagingService {
       //    claim in observed prod traffic. The detector is now ONLY invoked
       //    when the client omits `originalLanguage` entirely (anon flows,
       //    legacy clients).
-      const originalLanguage = request.originalLanguage
-        ?? (request.content
+      //
+      //    The socket schema is `originalLanguage: z.string().optional()`, so an
+      //    EMPTY / whitespace-only string is a valid payload (common when
+      //    client-side detection fails). A nullish (`??`) guard would let `''`
+      //    through and persist `Message.originalLanguage = ''`, which downstream
+      //    broadcasts as `'fr'` (Prisme corruption). Trim-then-truthy is what
+      //    forces those blank claims back onto the detector.
+      const claimedLanguage = request.originalLanguage?.trim();
+      const originalLanguage = claimedLanguage
+        ? claimedLanguage
+        : (request.content
             ? await performanceLogger.withTiming(
                 'messaging.detectLanguage',
                 () => this.validator.detectLanguage(request.content!),
