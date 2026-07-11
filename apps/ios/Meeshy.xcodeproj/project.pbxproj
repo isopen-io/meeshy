@@ -207,6 +207,7 @@
 		4F30ED8BDBD5DA61D1CC7918 /* DiscoverTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8401852DCBB3967CE245882 /* DiscoverTab.swift */; };
 		4F55CB5902DF999645F914C6 /* E2ESessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B353DF82B4D3FEDC27560A46 /* E2ESessionManager.swift */; };
 		503E14F79A058B99A2A995B7 /* IncomingCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B15D54F4340ADC471EF388 /* IncomingCallView.swift */; };
+		506B9153BD97B4EBC2660D08 /* ConversationMediaGalleryVideoControlsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C8BED2823468BC4BFB95640 /* ConversationMediaGalleryVideoControlsTests.swift */; };
 		5174F8A83070768F7358F768 /* CommentComposerMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1866016F8D9563CEB1DC28D1 /* CommentComposerMedia.swift */; };
 		518A6A2660A8F9CBB6970655 /* StarredMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55C0554FD34388B676A52EF8 /* StarredMessagesStoreTests.swift */; };
 		518BEAAA0D71DBF014541AA5 /* ConversationViewLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C2AB5EF1AE4950D62F8FDE /* ConversationViewLifecycleTests.swift */; };
@@ -1017,6 +1018,7 @@
 		6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
 		6B84B2D89B8A1CB4FC846BFD /* RequestsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsTab.swift; sourceTree = "<group>"; };
 		6BFB3F40B369C76F00BCF1A6 /* ConversationComposerStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationComposerStateTests.swift; sourceTree = "<group>"; };
+		6C8BED2823468BC4BFB95640 /* ConversationMediaGalleryVideoControlsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMediaGalleryVideoControlsTests.swift; sourceTree = "<group>"; };
 		6E2EF7C09D0880608470DD82 /* CallBubbleGestureResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallBubbleGestureResolver.swift; sourceTree = "<group>"; };
 		6E5163F11A13A9D7CCB7E3B3 /* E2EEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2EEService.swift; sourceTree = "<group>"; };
 		6E65DF73A206A9474663F628 /* StarredMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStore.swift; sourceTree = "<group>"; };
@@ -1516,6 +1518,7 @@
 				CC24FC30326F7124BACBB7EC /* ConversationChipAutoScrollTests.swift */,
 				059D368419DFCA9F491C45B0 /* ConversationChipDropResolverTests.swift */,
 				6BFB3F40B369C76F00BCF1A6 /* ConversationComposerStateTests.swift */,
+				6C8BED2823468BC4BFB95640 /* ConversationMediaGalleryVideoControlsTests.swift */,
 				E763877694E8FAD9AF7D4931 /* ConversationMenuSystemDesignGuardTests.swift */,
 				EAAC50019F0609CE2AC8D0D4 /* ConversationReplyContextTests.swift */,
 				B982C6622EC9CA6D8DEB7657 /* ConversationRowMetricsTests.swift */,
@@ -3209,6 +3212,7 @@
 				07759D14018DE6F0B667BEC8 /* ConversationListViewModelTests.swift in Sources */,
 				BE0304B870D8192E8894846D /* ConversationLoadingPhaseTests.swift in Sources */,
 				CB07A2071F1CBBD37BC64DBB /* ConversationLockManagerTests.swift in Sources */,
+				506B9153BD97B4EBC2660D08 /* ConversationMediaGalleryVideoControlsTests.swift in Sources */,
 				B7F661303A11FCC59C4E8395 /* ConversationMenuSystemDesignGuardTests.swift in Sources */,
 				D9A2D6918BCB224F00C0E379 /* ConversationOptionsViewModelTests.swift in Sources */,
 				44769C09E540848B573DAACC /* ConversationReplyContextTests.swift in Sources */,

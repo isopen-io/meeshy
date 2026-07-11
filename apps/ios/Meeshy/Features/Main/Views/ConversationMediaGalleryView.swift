@@ -552,7 +552,12 @@ private struct GalleryVideoPage: View {
                 }
             }
 
-            if !isPlayerActive {
+            // Un seul contrôleur : une fois le player attaché à cette URL
+            // (lecture OU pause), play/pause appartient au transport partagé
+            // (`VideoTransportControls`). Gater sur `!isPlayerActive` faisait
+            // réapparaître ce poster 64pt PENDANT la pause, empilé sur le
+            // play/pause 64pt du transport (double contrôleur, bug user).
+            if !isPlayerAttached {
                 playOrDownloadButton
             }
         }
@@ -604,16 +609,9 @@ private struct GalleryVideoPage: View {
                 break
             }
         } label: {
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 64, height: 64)
-                Circle()
-                    .fill(Color(hex: accentColor).opacity(0.85))
-                    .frame(width: 56, height: 56)
-                buttonContent
-            }
-            .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+            buttonContent
+                .frame(width: 64, height: 64)
+                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(0.85))
         }
         .disabled({
             if case .downloading = availability { return true }
