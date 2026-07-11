@@ -454,13 +454,9 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // OPTIMISATION: Filtrer les langues cibles pour éviter les traductions inutiles
-      const filteredTargetLanguages = targetLanguages.filter(targetLang => {
-        const sourceLang = message.originalLanguage;
-        if (sourceLang && sourceLang !== 'auto' && sourceLang === targetLang) {
-          return false;
-        }
-        return true;
-      });
+      const filteredTargetLanguages = targetLanguages.filter(
+        (targetLang) => !this._isSelfTranslation(message.originalLanguage, targetLang)
+      );
 
       // Si aucune langue cible après filtrage, ne pas envoyer de requête
       if (filteredTargetLanguages.length === 0) {
@@ -599,15 +595,11 @@ export class MessageTranslationService extends EventEmitter {
       }
       
       // OPTIMISATION: Filtrer les langues cibles pour éviter les traductions inutiles
-      const filteredTargetLanguages = targetLanguages.filter(targetLang => {
-        const sourceLang = existingMessage.originalLanguage;
-        if (sourceLang && sourceLang !== 'auto' && sourceLang === targetLang) {
-          return false;
-        }
-        return true;
-      });
-      
-      
+      const filteredTargetLanguages = targetLanguages.filter(
+        (targetLang) => !this._isSelfTranslation(existingMessage.originalLanguage, targetLang)
+      );
+
+
       // Si aucune langue cible après filtrage, ne pas envoyer de requête
       if (filteredTargetLanguages.length === 0) {
         return;
@@ -706,6 +698,30 @@ export class MessageTranslationService extends EventEmitter {
   private _isStaleTranslationResult(messageId: string, taskId: string): boolean {
     const latest = this.latestRetranslationTask.get(messageId);
     return latest !== undefined && latest.taskId !== taskId;
+  }
+
+  /**
+   * Détermine si `targetLang` est en réalité la langue source du message —
+   * auquel cas traduire serait inutile ET une violation du Prisme (règle #1) :
+   * un aller-retour NLLB `fr→fr` réécrirait les mots exacts de l'auteur en une
+   * paraphrase machine, et le client — ne trouvant pas de traduction distincte —
+   * retomberait sur cette paraphrase au lieu de l'original.
+   *
+   * `originalLanguage` est stocké verbatim depuis le client (schema socket
+   * `z.string().optional()`, jamais normalisé) : il peut valoir `'FR'` ou
+   * `'fr-FR'`. Les langues cibles, elles, sont déjà lowercase/normalisées par
+   * `_extractConversationLanguages`. On normalise donc la source avant de
+   * comparer, en miroir exact de la branche participant anonyme de cette même
+   * méthode (`normalizeLanguageCode(x) ?? x.toLowerCase()`).
+   */
+  private _isSelfTranslation(
+    rawSourceLang: string | null | undefined,
+    targetLang: string
+  ): boolean {
+    if (!rawSourceLang) return false;
+    const sourceLang = normalizeLanguageCode(rawSourceLang) ?? rawSourceLang.toLowerCase();
+    if (sourceLang === 'auto') return false;
+    return sourceLang === targetLang;
   }
 
   /**

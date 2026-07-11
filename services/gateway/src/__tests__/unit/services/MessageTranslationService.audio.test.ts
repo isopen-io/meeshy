@@ -716,6 +716,89 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       await flushAsync(5);
       expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
     });
+
+    // Prisme rule #1 — the source language is stored verbatim from the client
+    // (`z.string().optional()`, un-normalised) while target languages are already
+    // lowercase/normalised. An uppercase or locale-cased `originalLanguage` must
+    // still be recognised as the source and filtered out; otherwise a self-
+    // translation NLLB round-trip paraphrases the author's own words.
+    it('skips ZMQ when source lang is uppercase but matches target (case-insensitive)', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: 'msg-upper',
+        conversationId: 'conv-1',
+        content: 'Bonjour',
+        originalLanguage: 'FR'
+      } as any);
+      prisma.message.findUnique.mockResolvedValue({ id: 'msg-upper', translations: {} });
+
+      await svc.handleNewMessage({
+        id: 'msg-upper',
+        conversationId: 'conv-1',
+        senderId: 'user-1',
+        content: 'Bonjour',
+        originalLanguage: 'FR',
+        targetLanguage: 'fr'
+      });
+      await flushAsync(5);
+      expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+    });
+
+    it('skips ZMQ when source lang is a locale variant of the target (fr-FR → fr)', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: 'msg-locale',
+        conversationId: 'conv-1',
+        content: 'Bonjour',
+        originalLanguage: 'fr-FR'
+      } as any);
+      prisma.message.findUnique.mockResolvedValue({ id: 'msg-locale', translations: {} });
+
+      await svc.handleNewMessage({
+        id: 'msg-locale',
+        conversationId: 'conv-1',
+        senderId: 'user-1',
+        content: 'Bonjour',
+        originalLanguage: 'fr-FR',
+        targetLanguage: 'fr'
+      });
+      await flushAsync(5);
+      expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // _isSelfTranslation — normalisation de la langue source (Prisme rule #1)
+  // =========================================================================
+  describe('_isSelfTranslation', () => {
+    const call = (source: string | null | undefined, target: string): boolean =>
+      (svc as any)._isSelfTranslation(source, target);
+
+    it('matches an exact lowercase source', () => {
+      expect(call('fr', 'fr')).toBe(true);
+    });
+
+    it('matches an uppercase source against a normalised target', () => {
+      expect(call('FR', 'fr')).toBe(true);
+    });
+
+    it('matches a locale-cased source (fr-FR → fr)', () => {
+      expect(call('fr-FR', 'fr')).toBe(true);
+      expect(call('en-US', 'en')).toBe(true);
+    });
+
+    it('does not match a different language', () => {
+      expect(call('en', 'fr')).toBe(false);
+    });
+
+    it('never filters an "auto" source (any case)', () => {
+      expect(call('auto', 'fr')).toBe(false);
+      expect(call('AUTO', 'fr')).toBe(false);
+    });
+
+    it('never filters an absent source', () => {
+      expect(call(null, 'fr')).toBe(false);
+      expect(call(undefined, 'fr')).toBe(false);
+      expect(call('', 'fr')).toBe(false);
+    });
   });
 
   // =========================================================================
