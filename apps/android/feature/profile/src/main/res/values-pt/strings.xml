@@ -16,6 +16,13 @@
     <string name="profile_save">Salvar</string>
     <string name="profile_unknown">Desconhecido</string>
     <string name="profile_avatar">Avatar</string>
+    <string name="profile_change_avatar">Alterar foto</string>
+    <string name="profile_change_banner">Alterar foto de capa</string>
+    <string name="profile_image_error_empty">Esse arquivo está vazio. Escolha outra foto.</string>
+    <string name="profile_image_error_type">Aqui só é possível usar imagens.</string>
+    <string name="profile_image_error_too_large">Essa imagem é muito grande. Escolha uma menor.</string>
+    <string name="profile_image_error_upload">Falha no envio. Verifique sua conexão e tente novamente.</string>
+    <string name="profile_image_error_update">Não foi possível atualizar sua foto de perfil. Tente novamente.</string>
     <string name="profile_e2ee">Encriptado de ponta a ponta</string>
     <string name="profile_member_since">Membro desde %1$s</string>
     <string name="profile_completion">Perfil %1$d%% completo</string>
