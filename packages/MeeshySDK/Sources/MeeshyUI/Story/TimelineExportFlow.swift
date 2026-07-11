@@ -47,6 +47,18 @@ final class TimelineExportController: ObservableObject {
             .appendingPathComponent("meeshy-timeline-\(UUID().uuidString).mp4")
 
         phase = .exporting(0)
+        // Trampoline @Sendable → @MainActor : le closure progress de
+        // StoryExporter est @Sendable et ne peut pas capturer `self`
+        // (@MainActor, non-Sendable). Le box n'est invoqué QUE via le hop
+        // Task { @MainActor } — même pattern que StoryVideoExportService.
+        final class ProgressSinkBox: @unchecked Sendable {
+            let sink: (Double) -> Void
+            init(_ sink: @escaping (Double) -> Void) { self.sink = sink }
+        }
+        let box = ProgressSinkBox { [weak self] fraction in
+            guard let self, self.isExporting else { return }
+            self.phase = .exporting(fraction)
+        }
         exportTask = Task { [weak self] in
             do {
                 try await StoryExporter.export(
@@ -54,11 +66,8 @@ final class TimelineExportController: ObservableObject {
                     to: outputURL,
                     watermark: watermark,
                     audioResolver: { audio in mediaURLs[audio.id] },
-                    progress: { fraction in
-                        Task { @MainActor [weak self] in
-                            guard let self, self.isExporting else { return }
-                            self.phase = .exporting(fraction)
-                        }
+                    progress: { @Sendable fraction in
+                        Task { @MainActor in box.sink(fraction) }
                     }
                 )
                 guard !Task.isCancelled else { return }
