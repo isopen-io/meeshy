@@ -245,6 +245,7 @@
         "mongodb": "^7.5.0",
         "prisma": "^6.19.3",
         "reflect-metadata": "^0.2.2",
+        "socket.io-client": "^4.8.3",
         "ts-jest": "^29.4.11",
         "ts-node": "^10.9.2",
         "tsc-alias": "^1.9.0",

@@ -237,10 +237,13 @@ export class SocketRateLimiter {
   private cleanupInterval: NodeJS.Timeout;
 
   constructor() {
-    // Clean up expired entries every minute
+    // Clean up expired entries every minute. unref: ce timer d'hygiène ne
+    // doit jamais maintenir le process en vie (jest/outillage) — même
+    // pattern que les intervals de CallEventsHandler/NotificationService.
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, 60000);
+    this.cleanupInterval.unref?.();
   }
 
   /**
