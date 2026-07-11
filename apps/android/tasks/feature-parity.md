@@ -1887,7 +1887,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       a new "Change password" row in the Settings → Privacy section (`Routes.CHANGE_PASSWORD`). +32 tests
       (PasswordStrength 14, ChangePasswordForm 9, ChangePasswordViewModel 9). EN/FR/ES/PT strings.
 - [ ] GDPR data export (JSON/CSV, selectable scope, share/save file)
-- [ ] Account deletion (typed-phrase confirmation + email-confirmation flow)
+- [x] Account deletion (typed-phrase confirmation + email-confirmation flow) — **shipped** (slice
+      `settings-account-deletion`, 2026-07-11). Port of iOS `DeleteAccountView` + `AccountService.deleteAccount`.
+      Pure `:core:model` `AccountDeletionConfirmation` SSOT: `REQUIRED_PHRASE = "SUPPRIMER MON COMPTE"` (the gateway
+      `z.literal` contract, delete-account-schemas.ts) + `isConfirmed(typed)` — a **verbatim** match (no trim, no
+      case-fold: any leniency that cleared the client gate would be a guaranteed server `400 INVALID_CONFIRMATION`);
+      the wire always carries the canonical `REQUIRED_PHRASE`, never the raw buffer, so gate ⇄ body can never
+      diverge. `:core:model` `DeleteAccountRequest`/`DeleteAccountResponse`; `:core:network`
+      `UserApi.deleteAccount` (`@HTTP(method="DELETE", hasBody=true)` on `me/delete-account` — Retrofit needs the
+      explicit `@HTTP` to attach a body to a DELETE); `:sdk-core` `UserRepository.deleteAccount` (online-only
+      `apiCall` — the gateway opens a 90-day grace period and mails a confirmation link, so it can't be
+      optimistic/offline). `:feature:settings` `AccountDeletionViewModel` (+ `AccountDeletionUiState`,
+      `AccountDeletionError`): gates the destructive submit behind the verbatim phrase, double-tap safe
+      (`isDeleting` set synchronously), flips `isEmailSent` on success (no logout — mirrors iOS's email-confirmation
+      view), maps failure → `409 = ALREADY_PENDING` / transport = NETWORK / else GENERIC. `AccountDeletionScreen`
+      (glue): red danger warning card enumerating what is lost + monospace confirmation field + gated destructive
+      button, swapping to a "check your inbox" state on success; reached from the (previously no-op) "Delete
+      account" row in Settings → Danger zone (`Routes.DELETE_ACCOUNT`). +18 tests (AccountDeletionConfirmation 8,
+      AccountDeletionViewModel 10). EN/FR/ES/PT strings. Surpasses iOS with the distinct `ALREADY_PENDING` (409)
+      error state iOS folds into a single generic message.
 - [ ] Media cache management (clear cached images/audio/video/thumbnails)
 - [ ] Crash-report diagnostics viewer with share
 - [ ] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),

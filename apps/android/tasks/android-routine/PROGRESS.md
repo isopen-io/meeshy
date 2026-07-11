@@ -2,7 +2,28 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion)** → rest`
+
+> On 2026-07-11 **account deletion** landed (slice `settings-account-deletion`, feature-parity §L — "Account
+> deletion (typed-phrase confirmation + email-confirmation flow)"). Port of iOS `DeleteAccountView` +
+> `AccountService.deleteAccount`, wiring the previously no-op Settings → Danger zone "Delete account" row. Pure
+> `:core:model` `AccountDeletionConfirmation` SSOT — `REQUIRED_PHRASE = "SUPPRIMER MON COMPTE"` (the gateway
+> `z.literal` contract) + a **verbatim** `isConfirmed` gate (no trim/case-fold — a near-miss would be a guaranteed
+> server `400`); the wire always carries the canonical literal, never the raw buffer, so gate ⇄ body can't diverge.
+> `:core:network` `UserApi.deleteAccount` uses `@HTTP(method="DELETE", hasBody=true)` (Retrofit needs `@HTTP` to
+> attach a body to a DELETE); `:sdk-core` `UserRepository.deleteAccount` is online-only (the gateway opens a 90-day
+> grace period + mails a confirmation link — not optimistic/offline). `AccountDeletionViewModel` gates the
+> destructive submit behind the phrase (double-tap safe), flips `isEmailSent` on success (no logout, mirroring
+> iOS's email-confirmation state), and maps `409 → ALREADY_PENDING` / transport → NETWORK / else GENERIC — the
+> distinct `ALREADY_PENDING` state surpasses iOS's single generic error. `AccountDeletionScreen` (glue): red
+> danger warning card + monospace confirmation field + gated delete button, swapping to a "check your inbox"
+> state. **+18 tests** (AccountDeletionConfirmation 8, AccountDeletionViewModel 10), `:app:assembleDebug` BUILD
+> SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only; SDK purity — pure gate in `:core:model`, online repo in
+> `:sdk-core`, orchestration in the VM; SSOT — one gate drives match + wire literal; UDF; Error-red destructive UX,
+> natural row→screen→back, no dead end; no coverage floor lowered, no test weakened). **Next:** media cache
+> management (§L — clear cached images/audio/video/thumbnails), GDPR data export (§L), the live
+> `ConnectivityManager`-backed `NetworkConditionMonitor` + first media-pipeline consumer of
+> `MediaDownloadPolicyEngine`, or avatar/banner upload (media pipeline) for §K profile edit.
 
 > On 2026-07-11 **profile share + QR code** landed (slice `profile-share`, feature-parity §K —
 > "Profile QR code display + save/share; share profile via message/email/copy link"). This one
@@ -2344,6 +2365,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-11 — slice `settings-account-deletion` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/settings-account-deletion` (off latest `main`).
+- **What:** feature-parity §L "Account deletion (typed-phrase confirmation + email-confirmation flow)" — port of
+  iOS `DeleteAccountView` + `AccountService.deleteAccount`. Wires the previously no-op "Delete account" row in
+  Settings → Danger zone.
+- **Added (production):**
+  - `:core:model` `AccountDeletionConfirmation` — the typed-phrase gate SSOT. `REQUIRED_PHRASE =
+    "SUPPRIMER MON COMPTE"` is the gateway `z.literal` contract (delete-account-schemas.ts); `isConfirmed(typed)`
+    is a **verbatim** match (no trim, no case-fold — a near-miss that cleared the client gate would be a
+    guaranteed server `400`). The wire always carries the canonical `REQUIRED_PHRASE`, never the raw buffer.
+  - `:core:model` `DeleteAccountRequest`/`DeleteAccountResponse`; `:core:network` `UserApi.deleteAccount`
+    (`@HTTP(method="DELETE", path="me/delete-account", hasBody=true)` — Retrofit needs `@HTTP` to attach a body to
+    a DELETE); `:sdk-core` `UserRepository.deleteAccount` (online-only `apiCall` — the gateway opens a 90-day grace
+    period + mails a confirmation link, so it cannot be optimistic/offline; mirrors `changePassword`).
+  - `:feature:settings` `AccountDeletionViewModel` (+ `AccountDeletionUiState`, `AccountDeletionError`) — gates the
+    destructive submit behind the verbatim phrase, double-tap safe (`isDeleting` set synchronously before the
+    launch), flips `isEmailSent` on success (no logout — matches iOS's email-confirmation state), maps failure →
+    `409` = ALREADY_PENDING / transport = NETWORK / else GENERIC.
+  - `:feature:settings` `AccountDeletionScreen` (glue, coverage-exempt) — red danger warning card (irreversible +
+    5 loss bullets) + monospace confirmation field with an inline check when confirmed + gated Error-red delete
+    button; swaps to a "check your inbox" (MarkEmailRead + OK-pops-back) state on success. `app`
+    `Routes.DELETE_ACCOUNT` + composable + `SettingsScreen.onOpenDeleteAccount` (wired the dead danger-zone row).
+  - EN/FR/ES/PT strings (18 keys ×4 locales).
+- **Tests (RED→GREEN):** +18 — `AccountDeletionConfirmationTest` 8 (exact match, empty, different phrase, lowercase,
+  leading/trailing whitespace, partial prefix, and the `REQUIRED_PHRASE` ⇄ gateway-literal contract pin),
+  `AccountDeletionViewModelTest` 10 (initial not-confirmed, exact-phrase enables, near-miss disabled, not-confirmed
+  submit inert, success flips `isEmailSent` + sends the canonical phrase, 409/network/generic mapping, edit clears
+  error, in-flight double-tap guard). All 0 failures. RED-verified: the tests reference symbols absent on `main`.
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; new suites green (`AccountDeletionConfirmationTest` 8/8,
+  `AccountDeletionViewModelTest` 10/10). The full `assembleDebug testDebugUnitTest` gate's lone red was
+  `:sdk-core MediaDownloadPreferencesStoreTest.dataStore_hydrates…` (`TimeoutCancellationException` 15 s) — the
+  documented DataStore-under-parallel-load flake (NOTES 2026-07-10), green on isolated `--rerun-tasks` (BUILD
+  SUCCESSFUL 28 s); my `:sdk-core` change is a one-line `deleteAccount` passthrough that never touches DataStore.
+- **Reviewer:** **PASS** — diff is `apps/android` only (pure `:core:model` gate SSOT + request/response models +
+  interface/repo method + feature VM/screen/strings + one `app` route + the dead-row wiring); no production logic
+  outside; **SDK purity** — the verbatim gate is a stateless `:core:model` building block, the online deletion is
+  a low-level `:sdk-core` repo service, the "when to submit / success→email / error mapping" orchestration stays
+  in the feature VM; **SSOT** — one `AccountDeletionConfirmation` drives the gate *and* the wire literal, matching
+  the gateway `z.literal`, no re-implementation; **UDF** — immutable `StateFlow<UiState>` with pure derived
+  `isConfirmed`/`canSubmit`; **UX coherence** — Error-red destructive affordance, natural danger-row → screen →
+  back gesture, success swaps to a coherent "check inbox" state (no dead end, no surprise logout); **no coverage
+  floor lowered, no existing test weakened**.
 
 ### 2026-07-11 — slice `settings-change-password` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/settings-change-password` (off latest `main`).
