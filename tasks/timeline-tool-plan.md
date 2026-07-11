@@ -184,6 +184,26 @@ SNAPSHOT_SIMULATOR_ID, listing PNG -newer stamp, exit 1 si 0 PNG frais).
 Piège rencontré : trailing closure des appels export existants matchait le
 nouveau param audioResolver (forward-scan) → appels étiquetés progress:.
 
+VAGUE MODALE ALLÉGÉE + LIQUID GLASS (2026-07-11, /loop, en cours) :
+(a) Vue simple SANS timer : TransportBar.showsTimeReadout (défaut true),
+Quick passe false (pin statique transportShowsTimeReadout testé), Pro garde
+true — la position se lit au playhead/règle en Quick. (b) ClipInspector
+allégé : par défaut header (icône+nom+(i)+X) / volume (kinds audio) /
+toggles / 2 icônes d'action. Détails (steppers Début/Durée + hint fond)
+derrière le (i) ; « Animer au playhead » réduit à l'icône losange qui
+déplie la config d'animation PAR-DESSOUS (chips fondus + action + légende) ;
+corbeille → alerte « Supprimer ce clip ? » (machine DeleteConfirmation pure,
+confirm = seul chemin vers onDelete). visibleSections(kind:isDetails:
+isAnimation:) pure et testée. (c) Compatibility/Liquid Glass (demande user) :
+contrôles d'action en adaptiveGlass/adaptiveGlassProminent groupés dans
+AdaptiveGlassContainer ; SURFACE de modale volontairement en matériau (le
+verre n'échantillonne pas le verre) ; sheet déjà via
+StoryTimelinePresentationStyle. 9 clés xcstrings fr+en (insertion localisée,
+153 lignes de diff — le tri alphabétique global créait 14,5k lignes, annulé).
+Baselines snapshot ré-enregistrées : inspecteur ×8, Quick ×10 (transport sans
+readout), Pro inspectorOpen ×2. Suites ciblées 44/44 vertes avant glass ;
+re-record post-glass en cours.
+
 RESTES (différés, par priorité) :
 1. Boucle audio bg dans la PREVIEW engine (AudioMixer ne re-arme pas ; reader OK).
 2. F4 saisie ms clavier au ClipInspector (steppers ±0,1 s livrés ; port branche
