@@ -298,6 +298,16 @@ class CallSignalManager @Inject constructor(
         )
 
     /**
+     * Télémétrie de cycle de vie émise UNE fois à la fin de l'appel (parité iOS
+     * `emitCallAnalytics`, fire-and-forget — le gateway log/persiste pour les
+     * dashboards qualité). Le payload est décidé une seule fois par le pur
+     * [me.meeshy.sdk.model.call.CallAnalytics.fields] ; cette méthode ne possède
+     * que le transport (l'enveloppe JSON + la clé `callId`).
+     */
+    fun emitAnalytics(callId: String, fields: Map<String, Any>) =
+        socketManager.emit("call:analytics", JSONObject(fields).put("callId", callId))
+
+    /**
      * Liveness beat the gateway uses to detect a dead peer (heartbeat timeout →
      * zombie-call cleanup) instead of waiting for the multi-hour GC. Parity with
      * iOS `emitCallHeartbeat` — the gateway resolves the participant from the

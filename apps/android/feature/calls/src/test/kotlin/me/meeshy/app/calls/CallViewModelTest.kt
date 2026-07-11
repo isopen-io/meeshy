@@ -5,6 +5,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -97,6 +98,12 @@ class CallViewModelTest {
         override val states: Flow<Boolean> = screenRecordingFlow
     }
 
+    /** Pinned wall clock: assign [clockNowMs] to move time for the analytics anchors. */
+    private var clockNowMs = 0L
+    private val clock = object : CallClock {
+        override fun nowMs(): Long = clockNowMs
+    }
+
     private val outgoingVideo =
         CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val incomingAudio =
@@ -148,7 +155,7 @@ class CallViewModelTest {
 
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector,
+        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock,
     )
 
     @Test
@@ -612,6 +619,95 @@ class CallViewModelTest {
         screenRecordingFlow.emit(true)
 
         verify(exactly = 0) { signalManager.emitScreenCaptureDetected(any(), any(), any()) }
+    }
+
+    // --- call:analytics: one terminal lifecycle report per call (parité iOS) ---
+
+    private fun analyticsFields(): Map<String, Any> {
+        val fields = slot<Map<String, Any>>()
+        verify(exactly = 1) { signalManager.emitAnalytics("call-9", capture(fields)) }
+        return fields.captured
+    }
+
+    @Test
+    fun `hanging up a connected call reports the lifecycle analytics once`() = runTest {
+        clockNowMs = 5_000
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.onSignal(CallEvent.LocalAnswer)
+        clockNowMs = 8_200
+        vm.onSignal(CallEvent.MediaConnected)
+        tick(3)
+
+        vm.hangUp()
+
+        val fields = analyticsFields()
+        assertThat(fields["setupTimeMs"]).isEqualTo(3_200L)
+        assertThat(fields["durationSeconds"]).isEqualTo(3L)
+        assertThat(fields["endReason"]).isEqualTo("local")
+        assertThat(fields["platform"]).isEqualTo("android")
+        assertThat(fields["isVideo"]).isEqualTo(false)
+    }
+
+    @Test
+    fun `a declined call reports analytics with the -1 setup sentinel`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        vm.decline()
+
+        val fields = analyticsFields()
+        assertThat(fields["setupTimeMs"]).isEqualTo(-1L)
+        assertThat(fields["durationSeconds"]).isEqualTo(0L)
+        assertThat(fields["endReason"]).isEqualTo("rejected")
+    }
+
+    @Test
+    fun `reconnect cycles are counted in the terminal report`() = runTest {
+        val vm = connectedIncoming()
+        vm.onSignal(CallEvent.ConnectionStalled)
+        vm.onSignal(CallEvent.MediaConnected)
+        vm.onSignal(CallEvent.ConnectionStalled)
+        vm.onSignal(CallEvent.ReconnectFailed)
+
+        vm.hangUp()
+
+        assertThat(analyticsFields()["reconnectionCount"]).isEqualTo(3)
+    }
+
+    @Test
+    fun `quality samples aggregate into the terminal report`() = runTest {
+        val vm = connectedIncoming()
+        qualityFlow.emit(CallQualitySample(rttMs = 100.0, packetLoss = 0.0))
+        qualityFlow.emit(CallQualitySample(rttMs = 300.0, packetLoss = 8.0))
+
+        vm.hangUp()
+
+        val fields = analyticsFields()
+        assertThat(fields["averageRtt"]).isEqualTo(200.0)
+        assertThat(fields["maxPacketLoss"]).isEqualTo(8.0)
+    }
+
+    @Test
+    fun `settling the ended screen never re-emits the analytics`() = runTest {
+        val vm = connectedIncoming()
+        vm.hangUp()
+
+        vm.dismiss()
+
+        verify(exactly = 1) { signalManager.emitAnalytics(any(), any()) }
+    }
+
+    @Test
+    fun `a call that never minted an id reports nothing`() = runTest {
+        coEvery { signalManager.emitInitiate(any(), any()) } returns
+            CallInitiateResult.ServerError("busy")
+        val vm = vm()
+
+        vm.start(outgoingVideo)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+        verify(exactly = 0) { signalManager.emitAnalytics(any(), any()) }
     }
 
     @Test

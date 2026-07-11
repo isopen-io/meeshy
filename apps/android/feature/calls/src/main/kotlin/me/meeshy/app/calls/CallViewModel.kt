@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.call.CallAnalytics
+import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
@@ -64,6 +66,7 @@ class CallViewModel @Inject constructor(
     private val appStatePresence: AppStatePresenceReporter,
     private val qualityResetTimer: CallQualityResetTimer,
     private val screenRecordingDetector: ScreenRecordingDetector,
+    private val clock: CallClock,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -124,6 +127,13 @@ class CallViewModel @Inject constructor(
 
     /** The latest live caption from the remote speaker (`call:translated-segment`). */
     private var caption: String? = null
+
+    /**
+     * The pure once-per-call telemetry accumulator behind `call:analytics`,
+     * created by [start] and folded on FSM edges + quality samples; `null`
+     * after the terminal report so a settle can never re-emit.
+     */
+    private var analytics: CallAnalytics? = null
 
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
@@ -266,6 +276,7 @@ class CallViewModel @Inject constructor(
         this.elapsedSeconds = 0L
         this.connectionQuality = null
         this.waiting = CallWaitingState.EMPTY
+        this.analytics = CallAnalytics(startedAtMs = clock.nowMs())
         stopTicker()
         stopQuality()
         stopWaitingTimer()
@@ -476,6 +487,7 @@ class CallViewModel @Inject constructor(
         callState = CallStateMachine.reduce(previous, event)
         driveTone(previous, callState)
         driveTelecom(previous, callState)
+        foldAnalytics(previous, callState)
         syncTicker()
         syncQuality()
         syncHeartbeat()
@@ -483,6 +495,47 @@ class CallViewModel @Inject constructor(
         syncPeerIndicators()
         publish()
     }
+
+    /**
+     * Folds the FSM edge into the pure [CallAnalytics] accumulator and fires the
+     * ONE terminal `call:analytics` on entry into Ended (iOS parity:
+     * `emitCallAnalyticsSnapshot` at teardown). A settle (Ended → Idle) can never
+     * re-emit — the accumulator is consumed by the report.
+     */
+    private fun foldAnalytics(previous: CallState, next: CallState) {
+        if (previous !is CallState.Connected && next is CallState.Connected) {
+            analytics = analytics?.connected(clock.nowMs())
+        }
+        if (next is CallState.Reconnecting && previous != next) {
+            analytics = analytics?.reconnecting()
+        }
+        if (previous !is CallState.Ended && next is CallState.Ended) {
+            reportAnalytics(next.reason)
+        }
+    }
+
+    /**
+     * Inert without a minted [callId] (an initiate rejected before the ACK has
+     * nothing the gateway could attach the telemetry to). Fire-and-forget.
+     */
+    private fun reportAnalytics(reason: CallEndReason) {
+        val report = analytics ?: return
+        analytics = null
+        if (callId.isBlank()) return
+        signalManager.emitAnalytics(
+            callId,
+            report.fields(
+                durationSeconds = elapsedSeconds,
+                isVideo = config.isVideo,
+                endReason = reason,
+                deviceModel = deviceModel(),
+            ),
+        )
+    }
+
+    /** `Build.MODEL` is null on plain-JVM unit tests — "unknown" beats a crash. */
+    private fun deviceModel(): String =
+        runCatching { android.os.Build.MODEL }.getOrNull() ?: "unknown"
 
     /**
      * Peer indicators (quality/capture/caption) die with the call: a terminal or
@@ -564,6 +617,7 @@ class CallViewModel @Inject constructor(
         qualityJob = viewModelScope.launch {
             qualitySampler.samples.collect { sample ->
                 connectionQuality = ConnectionQuality.from(sample.level())
+                analytics = analytics?.plusSample(sample)
                 publish()
             }
         }

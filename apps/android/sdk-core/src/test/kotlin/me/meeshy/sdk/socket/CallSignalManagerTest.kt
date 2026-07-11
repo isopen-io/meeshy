@@ -285,6 +285,28 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `emitAnalytics wraps the pure fields map and keys it by callId`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitAnalytics(
+            "call-9",
+            mapOf(
+                "platform" to "android",
+                "durationSeconds" to 42L,
+                "qualityDistribution" to mapOf("excellent" to 1.0, "good" to 0.0, "fair" to 0.0, "poor" to 0.0),
+                "effectsUsed" to emptyList<String>(),
+            ),
+        )
+        verify { socket.emit("call:analytics", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("platform")).isEqualTo("android")
+        assertThat(payload.captured.getLong("durationSeconds")).isEqualTo(42L)
+        assertThat(payload.captured.getJSONObject("qualityDistribution").getDouble("excellent")).isEqualTo(1.0)
+        assertThat(payload.captured.getJSONArray("effectsUsed").length()).isEqualTo(0)
+    }
+
+    @Test
     fun `emitScreenCaptureDetected sends callId, self participant id and capture flag`() {
         val (managerAndSocket, _) = managerWithHandlers()
         val (manager, socket) = managerAndSocket
