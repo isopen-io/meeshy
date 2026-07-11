@@ -1785,7 +1785,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Privacy settings (visibility, contacts, media/data, encryption preference)
 - [ ] Auto-download settings for media by type and connection (Wi-Fi/cellular)
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync
-- [ ] Change password with strength meter + validation
+- [x] Change password with strength meter + validation — **shipped** (slice `settings-change-password`,
+      2026-07-11). Port of iOS `ChangePasswordView` + `PasswordStrengthIndicator`, surpassing it with one SOTA
+      gate iOS lacks (the new password must differ from the current one). Two pure `:core:model` SSOTs:
+      `PasswordStrength.evaluate(password) → PasswordStrengthLevel` (the 6-band meter — length≥8, length≥12,
+      upper, lower, digit, symbol; capped at 5, empty → TOO_WEAK) and `ChangePasswordForm.validate(current, new,
+      confirm) → ChangePasswordValidation` (per-rule flags `isCurrentPresent`/`isNewLongEnough`/`passwordsMatch`/
+      `isNewDifferent` + composite `canSubmit`). Online-only network path (the gateway must verify the current
+      password against the stored hash — cannot be optimistic/offline): `ChangePasswordRequest`/`ChangePasswordResponse`
+      (`:core:model`), `UserApi.changePassword` (`PATCH /users/me/password`), `UserRepository.changePassword`.
+      `ChangePasswordViewModel` (`:feature:settings`) holds the three buffers, derives the live strength + validation
+      off the pure SSOTs, submits with a synchronous double-tap guard, clears the plaintext buffers on success, and
+      maps the failure to a targeted `ChangePasswordError` (HTTP 400 → INCORRECT_CURRENT, transport → NETWORK, else
+      GENERIC). `ChangePasswordScreen` (glue, coverage-exempt): current/new/confirm fields with per-field visibility
+      toggles, a 5-bar accent-coherent strength meter, per-rule hint rows, submit gated on `canSubmit`, reachable via
+      a new "Change password" row in the Settings → Privacy section (`Routes.CHANGE_PASSWORD`). +32 tests
+      (PasswordStrength 14, ChangePasswordForm 9, ChangePasswordViewModel 9). EN/FR/ES/PT strings.
 - [ ] GDPR data export (JSON/CSV, selectable scope, share/save file)
 - [ ] Account deletion (typed-phrase confirmation + email-confirmation flow)
 - [ ] Media cache management (clear cached images/audio/video/thumbnails)

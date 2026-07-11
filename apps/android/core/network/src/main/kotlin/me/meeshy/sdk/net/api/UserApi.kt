@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ChangeEmailRequest
 import me.meeshy.sdk.model.ChangeEmailResponse
+import me.meeshy.sdk.model.ChangePasswordRequest
+import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
 import me.meeshy.sdk.model.MeeshyUser
@@ -86,6 +88,9 @@ interface UserApi {
 
     @POST("users/me/resend-email-change-verification")
     suspend fun resendEmailChangeVerification(): ApiResponse<ChangeEmailResponse>
+
+    @PATCH("users/me/password")
+    suspend fun changePassword(@Body body: ChangePasswordRequest): ApiResponse<ChangePasswordResponse>
 
     @POST("users/me/change-phone")
     suspend fun changePhone(@Body body: ChangePhoneRequest): ApiResponse<ChangePhoneResponse>

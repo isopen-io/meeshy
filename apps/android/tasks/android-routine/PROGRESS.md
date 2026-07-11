@@ -2,7 +2,28 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter)** → rest`
+
+> On 2026-07-11 **change password with strength meter + validation** landed (slice
+> `settings-change-password`, feature-parity §L). Port of iOS `ChangePasswordView` +
+> `PasswordStrengthIndicator`, surpassing it with a SOTA gate iOS lacks (new password must differ from
+> current). **(1) Pure `:core:model` SSOTs** — `PasswordStrength.evaluate(password) →
+> PasswordStrengthLevel` (the 6-band meter, each of 6 heuristics +1, `min(score,5)`, empty → TOO_WEAK,
+> a verbatim port of iOS's char-set/length scoring) and `ChangePasswordForm.validate(current, new,
+> confirm) → ChangePasswordValidation` (per-rule flags + composite `canSubmit`). **(2) Online network
+> path** — change-password can't be optimistic/offline (the gateway verifies the current password
+> against the stored bcrypt hash), so it's a straight `apiCall`: `ChangePasswordRequest`/`Response`
+> (`:core:model`), `UserApi.changePassword` (`PATCH /users/me/password`), `UserRepository.changePassword`.
+> **(3) VM** — `ChangePasswordViewModel` (`:feature:settings`) derives the live strength + validation off
+> the pure SSOTs, submits with a synchronous double-tap guard (`isSaving` set before the launch), clears
+> the plaintext buffers on success, and maps failure → a targeted `ChangePasswordError` the screen
+> localizes (HTTP 400 → INCORRECT_CURRENT, transport → NETWORK, else GENERIC). **(4) Screen + wiring**
+> (glue, coverage-exempt) — `ChangePasswordScreen` (visibility toggles, 5-bar accent-coherent meter,
+> per-rule hint rows, gated submit), reachable from a new "Change password" row in Settings → Privacy
+> (`Routes.CHANGE_PASSWORD`). **+32 tests** (PasswordStrength 14, ChangePasswordForm 9,
+> ChangePasswordViewModel 9), all green; `:app:assembleDebug` + all touched-module `testDebugUnitTest`
+> BUILD SUCCESSFUL. Reviewer **PASS**. **Next:** avatar/banner upload (media pipeline) for §K profile
+> edit, or another §L row — Privacy settings, auto-download preferences, or media cache management.
 
 > On 2026-07-11 **interactive per-post language switching** landed (slice `feed-post-language-switch`,
 > Translation §D — feature-parity.md "Per-post and per-story translation" interactive-switch arm now shipped).
@@ -2151,6 +2172,48 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-11 — slice `settings-change-password` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/settings-change-password` (off latest `main`).
+- **What:** feature-parity §L "Change password with strength meter + validation" — port of iOS
+  `ChangePasswordView` + `PasswordStrengthIndicator`, surpassing it with the "new must differ from current"
+  gate iOS lacks.
+- **Added (production):**
+  - `:core:model` `PasswordStrength.evaluate(password) → PasswordStrengthLevel` — the 6-band strength meter
+    (length≥8, length≥12, upper, lower, digit, symbol; `min(score,5)`; empty → TOO_WEAK). Verbatim port of the
+    iOS char-set/length scoring; `MAX_SCORE = 5` bars.
+  - `:core:model` `ChangePasswordForm.validate(current, new, confirm) → ChangePasswordValidation` — per-rule
+    flags (`isCurrentPresent`/`isNewLongEnough`/`passwordsMatch`/`isNewDifferent`) + composite `canSubmit`;
+    `MIN_LENGTH = 8` matches the gateway contract.
+  - `:core:model` `ChangePasswordRequest`/`ChangePasswordResponse`; `:core:network` `UserApi.changePassword`
+    (`PATCH /users/me/password`); `:sdk-core` `UserRepository.changePassword` (online-only `apiCall` — the
+    gateway verifies the current password against the stored bcrypt hash, so it cannot be optimistic/offline).
+  - `:feature:settings` `ChangePasswordViewModel` (+ `ChangePasswordUiState`, `ChangePasswordError`) — derives
+    the live strength + validation off the pure SSOTs, submits with a synchronous double-tap guard, clears the
+    plaintext buffers on success, maps failure → HTTP 400 = INCORRECT_CURRENT / transport = NETWORK / else GENERIC.
+  - `:feature:settings` `ChangePasswordScreen` (glue, coverage-exempt) — per-field visibility toggles, 5-bar
+    accent-coherent strength meter, per-rule hint rows, gated submit; reached via a new "Change password" row in
+    Settings → Privacy. `app` `Routes.CHANGE_PASSWORD` + composable + `SettingsScreen.onOpenChangePassword`.
+  - EN/FR/ES/PT strings (22 keys ×4 locales).
+- **Tests (RED→GREEN):** +32 — `PasswordStrengthTest` 14 (each band boundary + each char-class contribution +
+  cap + hyphen/bracket-as-symbol + space-not-symbol + ordinal scores), `ChangePasswordFormTest` 9 (each rule +
+  MIN_LENGTH boundary + differ-gate + empty-new inert), `ChangePasswordViewModelTest` 9 (buffer→strength,
+  validation, invalid-submit inert, success clears buffers, 400/network/generic mapping, edit clears error,
+  in-flight double-tap guard). All 0 failures. RED-verified: the tests reference symbols absent on `main`
+  (compile-RED).
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model` + `:feature:settings` + `:core:network`
+  + `:sdk-core` `testDebugUnitTest` green (the lone `:sdk-core ThemeStoreTest.dataStore_setThemeMode_…` failure
+  under the parallel run is the known DataStore IO-contention flake — NOTES.md 2026-07-05/06; my diff never
+  touches `:sdk-core`; green on isolated `--rerun-tasks`). `UserRepositoryTest` (4/4) confirms the new
+  `UserApi.changePassword` interface method broke no existing fake (it's a relaxed mockk).
+- **Reviewer:** **PASS** — diff is `apps/android` only (2 pure `:core:model` SSOTs + interface/repo method +
+  feature VM/screen/strings + one `app` route); **SDK purity** — strength/validation are stateless building
+  blocks in `:core:model`, the online change-password is a low-level repo service, the "when to submit / how to
+  map errors" orchestration stays in the feature VM; **SSOT** — one `PasswordStrength` + one `ChangePasswordForm`
+  reused by VM & screen, the request mirrors the gateway Zod contract; **UDF** — immutable `StateFlow<UiState>`
+  with pure derived `strength`/`validation`/`canSubmit`; **UX coherence** — accent-coherent meter (Indigo submit,
+  semantic Success/Warning/Error), natural row→screen→back gesture, no dead end (success pops back), plaintext
+  never retained; **no coverage floor lowered, no existing test weakened**.
 
 ### 2026-07-09 — slice `chat-bubble-audio` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/chat-bubble-audio` (off latest `main`, `#1776` gateway realtime merged).

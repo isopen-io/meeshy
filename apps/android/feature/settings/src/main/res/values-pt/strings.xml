@@ -79,4 +79,25 @@
     <string name="settings_privacy_policy">Política de Privacidade</string>
     <string name="settings_log_out">Sair</string>
     <string name="settings_delete_account">Excluir conta</string>
+    <!-- Change password (§L) -->
+    <string name="settings_change_password">Alterar senha</string>
+    <string name="change_password_title">Senha</string>
+    <string name="change_password_current_label">Senha atual</string>
+    <string name="change_password_new_label">Nova senha</string>
+    <string name="change_password_confirm_label">Confirmar senha</string>
+    <string name="change_password_submit">Alterar senha</string>
+    <string name="change_password_show">Mostrar senha</string>
+    <string name="change_password_hide">Ocultar senha</string>
+    <string name="change_password_hint_length">Pelo menos 8 caracteres</string>
+    <string name="change_password_hint_match">As senhas coincidem</string>
+    <string name="change_password_hint_different">Diferente da sua senha atual</string>
+    <string name="change_password_error_current">A senha atual está incorreta</string>
+    <string name="change_password_error_network">Sem conexão. Verifique sua rede e tente novamente.</string>
+    <string name="change_password_error_generic">Algo deu errado. Tente novamente.</string>
+    <string name="change_password_strength_0">Muito fraca</string>
+    <string name="change_password_strength_1">Fraca</string>
+    <string name="change_password_strength_2">Razoável</string>
+    <string name="change_password_strength_3">Boa</string>
+    <string name="change_password_strength_4">Forte</string>
+    <string name="change_password_strength_5">Excelente</string>
 </resources>
